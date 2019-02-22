@@ -9,6 +9,8 @@ inline r32 Score(ExpressionContext* context, AIAction* action, r32 bonus, r32 mi
         result *= EvaluateConsideration(context, consideration);
     }
     
+    
+    
     return result;
 }
 
