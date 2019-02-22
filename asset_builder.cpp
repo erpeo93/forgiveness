@@ -34,7 +34,7 @@
 #include "stb_truetype.h"
 #endif
 
-#define VERY_LARGE_NUMBER 256
+#define VERY_LARGE_NUMBER 512
 #define EVEN_BIGGER_NUMBER 2048
 struct Assets
 {
