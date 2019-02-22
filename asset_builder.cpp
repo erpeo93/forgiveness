@@ -15,6 +15,7 @@
 #include "win32_file.cpp"
 #include "forg_token.cpp"
 
+
 #define MAX_IMAGE_DIM 256
 
 #define STB_IMAGE_IMPLEMENTATION 1
@@ -33,7 +34,7 @@
 #include "stb_truetype.h"
 #endif
 
-#define VERY_LARGE_NUMBER 256
+#define VERY_LARGE_NUMBER 512
 #define EVEN_BIGGER_NUMBER 2048
 struct Assets
 {
