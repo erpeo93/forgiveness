@@ -1,0 +1,3 @@
+extensions=".c.cpp.h.hpp";
+
+open_recursively=true;
