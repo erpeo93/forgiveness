@@ -119,16 +119,17 @@ inline void UIRenderAutocomplete(UIState* UI, UIAutocomplete* autocomplete, Edit
 
 inline UIAutocomplete* UIFindAutocomplete(UIState* UI, u64 hash)
 {
+    UIAutocomplete* result = 0;
 	for(u32 autoIndex = 0; autoIndex < UI->autocompleteCount; ++autoIndex)
     {
         UIAutocomplete* test = UI->autocompletes + autoIndex;
-        if(StrEqual(name, test->name))
+        if(hash == test->hash)
         {
             result = test;
             break;
         }
     }
-
+    
 	return result;
 }
 
@@ -138,9 +139,9 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, char* name)
 	if(StrEqual(name, "animationName"))
 	{
 		TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
-		hash = GetSkeletonFor(slot);
+		hash = GetSkeletonForTaxonomy(UI->table, slot);
 	}
-
+    
 	UIAutocomplete* result = UIFindAutocomplete(UI, hash);
     
     return result;
@@ -150,8 +151,7 @@ inline UIAutocomplete* UIAddAutocomplete(UIState* UI, char* name)
 {
     Assert(UI->autocompleteCount < ArrayCount(UI->autocompletes));
     UIAutocomplete* result = UI->autocompletes + UI->autocompleteCount++;
-    FormatString(result->name, sizeof(result->name), "%s", name);
-    
+    result->hash = StringHash(name);
     return result;
 }
 
@@ -686,11 +686,11 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     FormatString(timerElement->value, sizeof(timerElement->value), "%f", timer);
                     test.animation.totalTime = timer;
                     
-                    PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, V2(50, 50), 0, P, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 10, true, timer, forcedNameHashID);
-
+                    PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, V2(50, 50), 0, P, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 10, true, timer, nameHashID);
+                    
                     if(play)
                     {
-                        PlaySoundForAnimation(UI->worldMode, UI->group->assets, animationSlot, (EntityAction) action, oldTimer, timer);
+                        PlaySoundForAnimation(UI->worldMode, UI->group->assets, animationSlot, nameHashID, oldTimer, timer);
                     }
                 }
             } break;

@@ -2206,8 +2206,12 @@ internal void WriteAnimations(char* folder, char* name)
     
     u64 hashID = StringHash(name);
     
-    BeginAssetType(assets, Asset_standing);
+    BeginAssetType(assets, Asset_rig);
     AddEveryAnimationThatStartsWith(completePath, hashID, "rig");
+    EndAssetType();
+    
+    BeginAssetType(assets, Asset_standing);
+    AddEveryAnimationThatStartsWith(completePath, hashID, "idle");
     EndAssetType();
     
     BeginAssetType(assets, Asset_moving);
@@ -2407,6 +2411,42 @@ internal void RecursiveWriteBitmaps(char* path)
     free(subdir);
 }
 
+internal void WriteAnimationAutocompleteFile(char* path, char* skeletonName)
+{
+    char completePath[128];
+    FormatString(completePath, sizeof(completePath), "%s/%s/side", path, skeletonName);
+    
+    char* outputPath = "assets";
+    
+    char output[128];
+    FormatString(output, sizeof(output), "%s/%s.autocomplete", outputPath, skeletonName);
+    
+    
+    char* buffer = (char*) malloc(MegaBytes(2));
+    char* writeHere = buffer;
+    
+    
+    PlatformFileGroup animationGroup = Win32GetAllFilesBegin(PlatformFile_animation, completePath);
+    for(u32 fileIndex = 0; fileIndex < animationGroup.fileCount; ++fileIndex)
+	{
+        PlatformFileHandle fileHandle = Win32OpenNextFile(&animationGroup, completePath);
+		char* fileName = fileHandle.name;
+		u32 animationCount = CountAnimationInFile(completePath, fileName);
+		for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
+		{
+			char animationName[32];
+			GetAnimationName(completePath, fileName, animationIndex, animationName, sizeof(animationName));
+			writeHere += sprintf(writeHere, "%s,", animationName);
+		}
+        Win32CloseHandle(&fileHandle);
+    }
+    
+    Win32GetAllFilesEnd(&animationGroup);
+    
+    DEBUGWin32WriteFile(completePath, buffer, StrLen(buffer));
+    free(buffer);
+}
+
 internal void WriteBitmapsAndAnimations()
 {
     char* bitmapPath = "definition/root";
@@ -2421,7 +2461,7 @@ internal void WriteBitmapsAndAnimations()
     {
 		char* skeletonName = subdir->subdirs[subdirIndex];
         WriteAnimations(animationPath, skeletonName);
-		WriteAnimationAutocompleteFile(animationpath, skeletonName);
+		WriteAnimationAutocompleteFile(animationPath, skeletonName);
     }
     free(subdir);
     
@@ -2660,32 +2700,6 @@ internal void WriteMusic()
     
 }
 
-internal void WriteAnimationAutocompleteFile(char* path, char* skeletonName)
-{
-   char* outputPath = "assets";
-   char completePath[128];
-   FormatString(completePath, sizeof(completePath), "%s/%s.autocomplete", outputPath, skeletonName);
-    
-
-    char* buffer = (char*) malloc(MegaBytes(2));
-    char* writeHere = buffer;
-    
-
-	OpenAllFiles(Animation)
-	{
-		char* fileName = ?;
-		u32 animationCount = CountAnimationInFile(path, fileName);
-		for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
-		{
-			char animationName[32];
-			GetAnimationName(path, filename, animationIndex, animationName, sizeof(animationName));
-			writeHere += sprintf(writeHere, "%s,", animationName);
-		}
-	}
-    
-    DEBUGWin32WriteFile(completePath, buffer, StrLen(buffer));
-    free(buffer);
-}
 
 internal void OutputAutocompleteFile(char* filename, char* path)
 {

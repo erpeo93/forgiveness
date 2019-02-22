@@ -827,32 +827,44 @@ inline b32 IsLabel(u32 ID)
     return result;
 }
 
-inline u32 FindAnimationByName(Assets* assets, u64 skeletonHashID, u64 animationNameHashID)
+struct FindAnimationResult
 {
-	for(u32 assetType = Asset_Rig; assetType < ?; ++assetType)
+    AnimationId ID;
+    AssetTypeId assetType;
+};
+
+inline FindAnimationResult FindAnimationByName(Assets* assets, u64 skeletonHashID, u64 animationNameHashID)
+{
+    FindAnimationResult result = {};
+    
+	for(u32 assetType = Asset_rig; assetType < Asset_equipmentRig && !result.assetType; ++assetType)
 	{
+        AssetType* type = assets->types + assetType;
 		for(u32 assetIndex = type->firstAssetIndex; 
-        assetIndex < type->onePastLastAssetIndex;
-        assetIndex++)
+            assetIndex < type->onePastLastAssetIndex;
+            assetIndex++)
 		{
 			Asset* asset = assets->assets + assetIndex;
 			if(asset->paka.stringHashID == skeletonHashID)
 			{
-				if(asset->state == Asset_Loaded)
+				if(asset->state == Asset_loaded)
 				{
-					if(asset->animation.nameHash == animationNameHashID)
+					if(asset->header->animation.header->nameHash == animationNameHashID)
 					{
-						result = assetIndex;
+                        result.assetType = (AssetTypeId) assetType;
+						result.ID = {assetIndex};
 						break;
 					}
 				}
 				else
 				{
-					LoadAnimation();
+					LoadAnimation(assets, {assetIndex});
 				}
 			}
 		}
 	}
+    
+    return result;
 }
 
 inline u32 GetMatchingAsset_(Assets* assets, u32 assetID, u64 stringHashID,

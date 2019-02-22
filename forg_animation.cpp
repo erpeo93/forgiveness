@@ -1576,18 +1576,21 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
     
 }
 
-inline u64 GetSkeletonForTaxonomy()
+inline u64 GetSkeletonForTaxonomy(TaxonomyTable* table, TaxonomySlot* slot)
 {
-	    while(skeletonSlot->taxonomy)
+    u64 result = 0;
+    while(slot->taxonomy)
     {
-        if(skeletonSlot->skeletonHashID)
+        if(slot->skeletonHashID)
         {
-            
+            result = slot->skeletonHashID;
             break;
         }
         
-        skeletonSlot = GetParentSlot(taxTable, skeletonSlot);
+        slot = GetParentSlot(table, slot);
     }
+    
+    return result;
 }
 
 struct GetAIDResult
@@ -1601,32 +1604,33 @@ struct GetAIDResult
 inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy, u32 action, b32 drawOpened, u64 forcedNameHashID = 0)
 {
     GetAIDResult result = {};
-   
+    
     ObjectState state = drawOpened ? ObjectState_Open : ObjectState_Ground;
     TaxonomySlot* slot = GetSlotForTaxonomy(taxTable, taxonomy);
     
     result.entityHashID = slot->stringHashID;
-	result.skeletonHashID = GetSkeletonFor();
+	result.skeletonHashID = GetSkeletonForTaxonomy(taxTable, slot);
     
     if(forcedNameHashID)
 	{
-		result.assetType = ?;
-		result.AID = GetAnimationByName();	
+        FindAnimationResult find = FindAnimationByName(assets, result.skeletonHashID, forcedNameHashID);
+		result.assetID = find.assetType;
+		result.AID = find.ID;	
 	}
 	else
 	{
 		result.assetID = GetAssetIDForEntity(assets, taxTable, taxonomy, action);
 		Assert(result.assetID);
-
-		if(!skeletonHashID)
+        
+		if(!result.skeletonHashID)
 		{
-			result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, result.assetID, &entityHashID, state);
+			result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, result.assetID, &result.entityHashID, state);
 		}
 		else
 		{
 			TagVector match = {};
 			TagVector weight = {};
-			result.AID = GetMatchingAnimation(assets, result.assetID, skeletonSlot->skeletonHashID, &match, &weight);
+			result.AID = GetMatchingAnimation(assets, result.assetID, result.skeletonHashID, &match, &weight);
 		}
 	}
     
@@ -1706,7 +1710,7 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
             {
                 animationState->bounds = animationBounds;
             }
-            UpdateAndRenderAnimation(&input, group, animation, AID.skeletonSlot->skeletonHashID, entityC->P, animationState, &params, timeToAdvance);
+            UpdateAndRenderAnimation(&input, group, animation, AID.skeletonHashID, entityC->P, animationState, &params, timeToAdvance);
         }
         else
         {

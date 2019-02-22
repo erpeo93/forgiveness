@@ -170,6 +170,7 @@ char* MetaTable_AssetTypeId[] =
 "font",
 "glyph",
 "openingCutscene",
+"rig",
 "standing",
 "moving",
 "attacking",

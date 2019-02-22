@@ -66,6 +66,8 @@ struct AnimationHeader
     u16 durationMS;
     u16 spawningMS;
     
+    u64 nameHash;
+    
     u32 loopingType;
     u16 startingPreparationTimeLine;
     u16 endingPreparationTimeLine;

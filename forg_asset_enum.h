@@ -73,6 +73,7 @@ printTable(noPrefix) enum AssetTypeId
     
     Asset_openingCutscene = 19,
     
+    Asset_rig,
     Asset_standing,
     Asset_moving,
     Asset_attacking,

@@ -501,7 +501,7 @@ struct UIAutocompleteBlock
 
 struct UIAutocomplete
 {
-    char name[32];
+    u64 hash;
     UIAutocompleteBlock* firstBlock;
 };
 
