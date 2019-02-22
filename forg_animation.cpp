@@ -1576,51 +1576,64 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
     
 }
 
-struct GetAIDResult
+inline u64 GetSkeletonForTaxonomy()
 {
-    AssetTypeId assetID;
-    AnimationId AID;
-    u64 entityHashID;
-    TaxonomySlot* skeletonSlot;
-};
-
-inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy, u32 action, b32 drawOpened)
-{
-    GetAIDResult result = {};
-    
-    result.assetID = GetAssetIDForEntity(assets, taxTable, taxonomy, action);
-    Assert(result.assetID);
-    ObjectState state = drawOpened ? ObjectState_Open : ObjectState_Ground;
-    TaxonomySlot* slot = GetSlotForTaxonomy(taxTable, taxonomy);
-    
-    u64 entityHashID = slot->stringHashID;
-    
-    TaxonomySlot* skeletonSlot = slot;
-    while(skeletonSlot->taxonomy)
+	    while(skeletonSlot->taxonomy)
     {
         if(skeletonSlot->skeletonHashID)
         {
-            TagVector match = {};
-            TagVector weight = {};
-            result.AID = GetMatchingAnimation(assets, result.assetID, skeletonSlot->skeletonHashID, &match, &weight);
+            
             break;
         }
         
         skeletonSlot = GetParentSlot(taxTable, skeletonSlot);
     }
+}
+
+struct GetAIDResult
+{
+    AssetTypeId assetID;
+    AnimationId AID;
+    u64 entityHashID;
+    u64 skeletonHashID;
+};
+
+inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy, u32 action, b32 drawOpened, u64 forcedNameHashID = 0)
+{
+    GetAIDResult result = {};
+   
+    ObjectState state = drawOpened ? ObjectState_Open : ObjectState_Ground;
+    TaxonomySlot* slot = GetSlotForTaxonomy(taxTable, taxonomy);
     
-    if(!IsValid(result.AID))
-    {
-        result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, result.assetID, &entityHashID, state);
-    }
+    result.entityHashID = slot->stringHashID;
+	result.skeletonHashID = GetSkeletonFor();
     
-    result.entityHashID = entityHashID;
-    result.skeletonSlot = skeletonSlot;
+    if(forcedNameHashID)
+	{
+		result.assetType = ?;
+		result.AID = GetAnimationByName();	
+	}
+	else
+	{
+		result.assetID = GetAssetIDForEntity(assets, taxTable, taxonomy, action);
+		Assert(result.assetID);
+
+		if(!skeletonHashID)
+		{
+			result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, result.assetID, &entityHashID, state);
+		}
+		else
+		{
+			TagVector match = {};
+			TagVector weight = {};
+			result.AID = GetMatchingAnimation(assets, result.assetID, skeletonSlot->skeletonHashID, &match, &weight);
+		}
+	}
     
     return result;
 }
 
-internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, ClientEntity* entityC, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, b32 ortho = false, r32 modTime = 0.0f)
+internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, ClientEntity* entityC, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, b32 ortho = false, r32 modTime = 0.0f, u64 forcedNameHashID = 0)
 {
     AnimationOutput result = {};
     TaxonomyTable* taxTable = worldMode->table;
@@ -1633,7 +1646,7 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
         PrefetchAnimation(group->assets, prefetchAID.AID);
     }
     
-    GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, drawOpened);
+    GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, drawOpened, forcedNameHashID);
     
     AnimationFixedParams input;
     

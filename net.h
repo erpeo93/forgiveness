@@ -591,7 +591,7 @@ struct NetworkBuffer
     u32 size;
 };
 
-#define SLIDING_WINDOW_SIZE 32
+#define SLIDING_WINDOW_SIZE 256
 struct NetworkChannelInfo
 {
     u16 nextProgressiveIndexSend;

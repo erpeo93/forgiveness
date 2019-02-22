@@ -148,6 +148,12 @@ inline u32 Win32GetNonBlockingSockedDescriptorClient(char* serverHost, char* ser
                 InvalidCodePath;
             }
             
+            n = 1024 * 1024 * 8;
+            if(setsockopt(result, SOL_SOCKET, SO_SNDBUF, (const char*) &n, sizeof(n)) == -1) 
+            {
+                InvalidCodePath;
+            }
+            
             
             u_long nonblocking_enabled = TRUE;
             ioctlsocket(sockfd, FIONBIO, &nonblocking_enabled);
@@ -263,12 +269,9 @@ NETWORK_SEND_DATA(Win32SendData)
                     sprintf(resendString, "Resending: %u\n", resendHeader.progressiveIndex);
                     OutputDebugString(resendString);
                     
-                    while(sendto(network->fd, (const char*) packet, packetSize, 0,
-                                 (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
-					{
-						
-					}
-                    
+                    sendto(network->fd, (const char*) packet, packetSize, 0,
+                           (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize);
+					
 					if(++unackedPacketSendIndex == ArrayC(channelInfo->unackedPackets))
 					{
 						unackedPacketSendIndex = 0;
@@ -289,7 +292,6 @@ NETWORK_SEND_DATA(Win32SendData)
         
         if(size)
         {
-            b32 inserted = false;
             Assert(totalSize < ArrayC(channelInfo->unackedPackets[0]));
             u32 insertIndex = channelInfo->runningUnackedIndex;
             while(true)
@@ -300,7 +302,6 @@ NETWORK_SEND_DATA(Win32SendData)
                     u8* dest = channelInfo->unackedPackets[insertIndex];
                     memcpy(dest, buff_, totalSize);
                     channelInfo->unackedPacketsSize[insertIndex] = totalSize;
-                    inserted = true;
                     break;
                 }
                 
@@ -311,21 +312,17 @@ NETWORK_SEND_DATA(Win32SendData)
                 
                 if(insertIndex == channelInfo->runningUnackedIndex)
                 {
+					InvalidCodePath;
                     break;
                 }
             } 
-            Assert(inserted);
         }
     }
     
     if(size)
     {
-        while(sendto(network->fd, (const char*) buff_, totalSize, 0,
-                     (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
-        {
-            
-        }
-        
+        sendto(network->fd, (const char*) buff_, totalSize, 0,
+               (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize);
     }
 	
     return true;

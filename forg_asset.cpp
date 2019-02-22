@@ -827,6 +827,34 @@ inline b32 IsLabel(u32 ID)
     return result;
 }
 
+inline u32 FindAnimationByName(Assets* assets, u64 skeletonHashID, u64 animationNameHashID)
+{
+	for(u32 assetType = Asset_Rig; assetType < ?; ++assetType)
+	{
+		for(u32 assetIndex = type->firstAssetIndex; 
+        assetIndex < type->onePastLastAssetIndex;
+        assetIndex++)
+		{
+			Asset* asset = assets->assets + assetIndex;
+			if(asset->paka.stringHashID == skeletonHashID)
+			{
+				if(asset->state == Asset_Loaded)
+				{
+					if(asset->animation.nameHash == animationNameHashID)
+					{
+						result = assetIndex;
+						break;
+					}
+				}
+				else
+				{
+					LoadAnimation();
+				}
+			}
+		}
+	}
+}
+
 inline u32 GetMatchingAsset_(Assets* assets, u32 assetID, u64 stringHashID,
                              TagVector* values, TagVector* weights, LabelVector* labels)
 {

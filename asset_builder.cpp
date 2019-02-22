@@ -899,7 +899,8 @@ char* AdvanceToLastSlash( char* name )
     return result;
 }
 
-internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animationIndex )
+
+internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animationIndex)
 {
     u32 currentIndex = 0;
     LoadedAnimation result = {};
@@ -2418,7 +2419,9 @@ internal void WriteBitmapsAndAnimations()
     
     for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
     {
-        WriteAnimations(animationPath, subdir->subdirs[subdirIndex]);
+		char* skeletonName = subdir->subdirs[subdirIndex];
+        WriteAnimations(animationPath, skeletonName);
+		WriteAnimationAutocompleteFile(animationpath, skeletonName);
     }
     free(subdir);
     
@@ -2655,6 +2658,33 @@ internal void WriteMusic()
     EndAssetType();
     WritePak(assets, "forgivenessS.pak" );
     
+}
+
+internal void WriteAnimationAutocompleteFile(char* path, char* skeletonName)
+{
+   char* outputPath = "assets";
+   char completePath[128];
+   FormatString(completePath, sizeof(completePath), "%s/%s.autocomplete", outputPath, skeletonName);
+    
+
+    char* buffer = (char*) malloc(MegaBytes(2));
+    char* writeHere = buffer;
+    
+
+	OpenAllFiles(Animation)
+	{
+		char* fileName = ?;
+		u32 animationCount = CountAnimationInFile(path, fileName);
+		for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
+		{
+			char animationName[32];
+			GetAnimationName(path, filename, animationIndex, animationName, sizeof(animationName));
+			writeHere += sprintf(writeHere, "%s,", animationName);
+		}
+	}
+    
+    DEBUGWin32WriteFile(completePath, buffer, StrLen(buffer));
+    free(buffer);
 }
 
 internal void OutputAutocompleteFile(char* filename, char* path)

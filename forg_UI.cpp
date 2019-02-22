@@ -117,10 +117,9 @@ inline void UIRenderAutocomplete(UIState* UI, UIAutocomplete* autocomplete, Edit
     }
 }
 
-inline UIAutocomplete* UIFindAutocomplete(UIState* UI, char* name)
+inline UIAutocomplete* UIFindAutocomplete(UIState* UI, u64 hash)
 {
-    UIAutocomplete* result = 0;
-    for(u32 autoIndex = 0; autoIndex < UI->autocompleteCount; ++autoIndex)
+	for(u32 autoIndex = 0; autoIndex < UI->autocompleteCount; ++autoIndex)
     {
         UIAutocomplete* test = UI->autocompletes + autoIndex;
         if(StrEqual(name, test->name))
@@ -129,6 +128,20 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, char* name)
             break;
         }
     }
+
+	return result;
+}
+
+inline UIAutocomplete* UIFindAutocomplete(UIState* UI, char* name)
+{
+	u64 hash = StringHash(name);
+	if(StrEqual(name, "animationName"))
+	{
+		TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
+		hash = GetSkeletonFor(slot);
+	}
+
+	UIAutocomplete* result = UIFindAutocomplete(UI, hash);
     
     return result;
 }
@@ -366,6 +379,8 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
         
         Rect2 nameBounds = GetUIOrthoTextBounds(UI, name, layout->fontScale, layout->P);
         Vec4 textColor = V4(1, 1, 1, 1);
+        
+		b32 nameHot = false;
         if(PointInRect(nameBounds, UI->relativeScreenMouse))
         {
             textColor = V4(1, 0, 0, 1);
@@ -373,6 +388,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             u32 finalFlags = IsSet(root, EditorElem_Expanded) ? (root->flags & ~EditorElem_Expanded) : (root->flags | EditorElem_Expanded);
             
             UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &root->flags, finalFlags));
+			nameHot = true;
         }
         
         Vec2 nameP = layout->P;
@@ -424,6 +440,39 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         }
                     }
                     
+					if(root == UI->copying)
+                    {
+						Vec4 outlineColor = V4(0, 0, 1, 1);
+						r32 thickness = 2;
+						ObjectTransform nameTranform = FlatTransform();
+						nameTranform.additionalZBias = layout->additionalZBias;
+						PushRectOutline(UI->group, nameTranform, nameBounds, outlineColor, thickness);
+                    }
+                    else
+                    {
+                        if(!UI->hotStructThisFrame && PointInRect(nameBounds, UI->relativeScreenMouse))
+                        {
+                            UI->hotStructThisFrame = true;
+                            UI->hotStructBounds = nameBounds;
+                            UI->hotStructZ = layout->additionalZBias;
+                            UI->hotStructColor = V4(0, 1, 0, 1);
+                            
+                            UIAddInteraction(UI, input, copyButton, UISetValueInteraction(UI_Trigger, &UI->copying, root));
+                            if(UI->copying)
+                            {
+                                b32 matches = StrEqual(root->name, UI->copying->name);
+                                if(matches)
+                                {
+                                    UIAddInteraction(UI, input, pasteButton, UISetValueInteraction(UI_Trigger, &root->flags, root->flags | EditorElem_Pasted));
+                                }
+                                else
+                                {
+                                    UI->hotStructColor.a = 0;
+                                }
+                            }
+                        }
+                    }
+                    
                     b32 canDeleteElements = !IsSet(root, EditorElem_CantBeDeleted);
                     result = Union(result, UIRenderEditorTree(UI, widget, layout, root->firstInList, input, canDeleteElements));
                     
@@ -456,7 +505,9 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         structBounds = Union(structBounds, UIDrawButton(UI, input, &deleteButton));
                     }
                     
-                    Rect2 realBounds = AddRadius(structBounds, 0 * GetDim(structBounds));
+					r32 padding = 5;
+					layout->P += V2(0, -padding);
+                    Rect2 realBounds = AddRadius(structBounds, V2(padding, padding));
                     
                     
                     r32 thickness = 1.0f;
@@ -505,6 +556,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     
                     result = Union(result, realBounds);
                     layout->P += V2(-layout->nameValueDistance, 0);
+					layout->P += V2(0, -padding);
                     
                     Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
                     PushLine(UI->group, V4(1, 1, 1, 1), verticalStartP, verticalEndP, 1);
@@ -614,8 +666,8 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     
                     EditorElement* animationElement = pause->next;
                     
-                    char* actionString = GetValue(animationElement, "action");
-                    u32 action = GetValuePreprocessor(EntityAction, actionString);
+                    char* animationName = GetValue(animationElement, "animationName");
+					u64 nameHashID = StringHash(animationName);
                     r32 timer = ToR32(GetValue(animationElement, "time"));
                     r32 oldTimer = timer;
                     
@@ -632,14 +684,10 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     
                     EditorElement* timerElement = GetElement(animationElement, "time");
                     FormatString(timerElement->value, sizeof(timerElement->value), "%f", timer);
-                    
-                    test.action = (EntityAction) action;
-                    test.action = Action_None;
-                    test.animation.action = action;
                     test.animation.totalTime = timer;
                     
-                    PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, V2(50, 50), 0, P, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 10, true, timer);
-                    
+                    PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, V2(50, 50), 0, P, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 10, true, timer, forcedNameHashID);
+
                     if(play)
                     {
                         PlaySoundForAnimation(UI->worldMode, UI->group->assets, animationSlot, (EntityAction) action, oldTimer, timer);
@@ -894,7 +942,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                 Vec2 saveP = UIFollowingP(&rightButton, 10.0f);
                 UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), " SAVE ");
                 UIButtonInteraction(&saveButton, SendRequestInteraction(UI_Trigger, SaveTaxonomyTabRequest()));
-                UIDrawButton(UI, input, &rightButton);
+                UIDrawButton(UI, input, &saveButton);
             } break;
             
             case 3:

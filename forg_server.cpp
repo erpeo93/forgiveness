@@ -923,7 +923,7 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     
     
     server->networkPool.allocationFlags = PlatformMemory_NotRestored;
-    server->sendPakBufferSize = KiloBytes(512);
+    server->sendPakBufferSize = KiloBytes(128);
     server->sendPakBuffer = PushArray(&server->networkPool, char, server->sendPakBufferSize);
     server->players = PushArray( &server->networkPool, ServerPlayer, MAXIMUM_SERVER_PLAYERS );
     //server->otherServers = PushArray( &server->pool, Server, MAX_OTHER_SERVERS );
@@ -940,7 +940,7 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     for(u16 connectionIndex = 0; connectionIndex < maxConnectionCount; ++connectionIndex)
     {
         NetworkConnection* connection = connections + connectionIndex;
-        u32 recvBufferSize = KiloBytes(128);
+        u32 recvBufferSize = MegaBytes(1);
         connection->appRecv = ForgAllocateNetworkBuffer(&server->networkPool, recvBufferSize);
     }
     
