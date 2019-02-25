@@ -1,3 +1,5 @@
+#include "miniz.c"
+
 inline ShortcutSlot* SaveShortcut(TaxonomyTable* table, char* name, u32 nameLength, MemoryPool* pool)
 {
     if(!nameLength)
@@ -1080,26 +1082,66 @@ internal void ReadAnimationData()
 
 
 
-inline TaxonomySound* AddSoundEffect(char* actionIn, char* threesoldIn, char* soundName)
+inline TaxonomySound* AddSoundEffect(char* animationName, char* threesoldIn, char* eventName)
 {
-    EntityAction action = Action_None;
     r32 threesold = ToR32(threesoldIn);
-    u64 soundHashID = StringHash(soundName);
-    
+    u64 animationHash = StringHash(animationName);
+    u64 eventHash = StringHash(eventName);
     
     TaxonomySound* dest;
     TAXTABLE_ALLOC(dest, TaxonomySound);
     
-    dest->action = action;
+    dest->animationNameHash = animationHash;
     dest->threesold = threesold;
-    dest->stringHashID = soundHashID;
-    
+    dest->eventNameHash = eventHash;
     
     FREELIST_INSERT(dest, currentSlot_->firstSound);
     
     return dest;
 }
 
+inline SoundContainer* AddSoundEvent(char* eventName)
+{
+    Assert(taxTable_->eventCount < ArrayCount(taxTable_->events));
+    
+    SoundEvent* event = taxTable_->events + taxTable_->eventCount++;
+    event->eventNameHash = StringHash(eventName);
+    SoundContainer* result = &event->rootContainer;
+    
+    event->rootContainer.soundCount = 0;
+    event->rootContainer.containerCount = 0;
+    return result;
+}
+
+inline void AddSoundToContainer(SoundContainer* container, char* soundType, char* soundName)
+{
+    ++container->soundCount;
+    
+    LabeledSound* sound;
+    TAXTABLE_ALLOC(sound, LabeledSound);
+    
+    sound->typeHash = StringHash(soundType);
+    sound->nameHash = StringHash(soundName);
+    
+    FREELIST_INSERT(sound, container->firstSound);
+}
+
+inline SoundContainer* AddChildContainer(SoundContainer* container)
+{
+    ++container->containerCount;
+    
+    SoundContainer* newContainer;
+    TAXTABLE_ALLOC(newContainer, SoundContainer);
+    
+    newContainer->soundCount = 0;
+    newContainer->containerCount = 0;
+    
+    FREELIST_INSERT(newContainer, container->firstChildContainer);
+    
+    return newContainer;
+}
+
+#if 0
 inline void AddLabel(TaxonomySound* sound, char* labelName, char* labelValue)
 {
     r32 valueReal = labelValue ? ToR32(labelValue) : 0;
@@ -1111,9 +1153,27 @@ inline void AddLabel(TaxonomySound* sound, char* labelName, char* labelValue)
     Label* label = sound->labels + sound->labelCount++;
     label->hashID = hashIndex;
     label->value = valueReal;
-    
-    
 }
+#endif
+
+
+
+inline SoundEvent* GetSoundEvent(TaxonomyTable* table, u64 eventHash)
+{
+    SoundEvent* result = 0;
+    for(u32 eventIndex = 0; eventIndex < table->eventCount; ++eventIndex)
+    {
+        SoundEvent* event = table->events + eventIndex;
+        if(event->eventNameHash == eventHash)
+        {
+            result = event;
+            break;
+        }
+    }
+    
+    return result;
+}
+
 
 
 
@@ -1938,14 +1998,11 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                     Token value = Stringize(t);
                     StrCpy(value.text, value.textLength, newElement->value, sizeof(newElement->value));
                     
-                    if(mode == LoadElements_Asset)
+                    if(TokenEquals(firstToken, "eventName"))
                     {
-                        if(TokenEquals(firstToken, "name"))
-                        {
-                            AddFlags(newElement, EditorElem_AlwaysEditable);
-                        }
+                        AddFlags(newElement, EditorElem_AlwaysEditable);
                     }
-				} break;
+                } break;
                 
                 case Token_Number:
                 {
@@ -1975,22 +2032,14 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                     StrCpy(t.text, t.textLength, newElement->value, sizeof(newElement->value));
                 } break;
                 
-				case Token_OpenParen:
-				{
-					newElement->type = EditorElement_List;
-                    
-                    if(mode == LoadElements_Asset)
-                    {
-                        if(!TokenEquals(firstToken, "labels"))
-                        {
-                            AddFlags(newElement, EditorElem_CantBeDeleted);
-                        }
-                    }
+                case Token_OpenParen:
+                {
+                    newElement->type = EditorElement_List;
                     
                     if(NextTokenIs(tokenizer, Token_Identifier))
                     {
                         newElement->emptyElement = LoadElementInMemory(mode, tokenizer, end);
-					}
+                    }
                     
                     if(NextTokenIs(tokenizer, Token_CloseParen))
                     {
@@ -2005,29 +2054,29 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                             InvalidCodePath;
                         }
                     }
-				} break;
+                } break;
                 
-				case Token_OpenBraces:
-				{
-					newElement->type = EditorElement_Struct;
-					newElement->firstValue = LoadElementInMemory(mode, tokenizer, end);
+                case Token_OpenBraces:
+                {
+                    newElement->type = EditorElement_Struct;
+                    newElement->firstValue = LoadElementInMemory(mode, tokenizer, end);
                     
-					if(!RequireToken(tokenizer, Token_CloseBraces))
-					{
-						InvalidCodePath;
-					}
-				}
-			}
-		}
-		else
-		{
-			InvalidCodePath;
-		}
-	}
-	else
-	{
-		newElement->name[0] = 0;
-		if(firstToken.type == Token_OpenBraces)
+                    if(!RequireToken(tokenizer, Token_CloseBraces))
+                    {
+                        InvalidCodePath;
+                    }
+                }
+            }
+        }
+        else
+        {
+            InvalidCodePath;
+        }
+    }
+    else
+    {
+        newElement->name[0] = 0;
+        if(firstToken.type == Token_OpenBraces)
         {
             newElement->type = EditorElement_Struct;
             newElement->firstValue = LoadElementInMemory(mode, tokenizer, end);
@@ -2037,11 +2086,11 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                 InvalidCodePath;
             }
         }
-	}
+    }
     
     
-	if(NextTokenIs(tokenizer, Token_Comma))
-	{
+    if(NextTokenIs(tokenizer, Token_Comma))
+    {
         Token comma = GetToken(tokenizer);
         
         if(NextTokenIs(tokenizer, Token_Identifier) || 
@@ -2056,7 +2105,7 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
         *end = true;
     }
     
-	return newElement;
+    return newElement;
 }
 
 inline void FreeElement(EditorElement* element)
@@ -2106,7 +2155,7 @@ inline void FreeElement(EditorElement* element)
 
 internal void LoadTabInTaxonomySlot(char* content)
 {
-	Tokenizer tokenizer = {};
+    Tokenizer tokenizer = {};
     tokenizer.at = content;
     
     for(u32 tabIndex = 0; tabIndex < currentSlot_->tabCount; ++tabIndex)
@@ -2239,6 +2288,32 @@ inline EditorElement* GetList(EditorElement* element, char* listName)
     
     return result;
 }
+
+#ifndef FORG_SERVER
+inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer, EditorElement* root)
+{
+    EditorElement* sounds = GetList(root, "sounds");
+    while(sounds)
+    {
+        char* soundType = GetValue(sounds, "soundType");
+        char* soundName = GetValue(sounds, "sound");
+        if(soundType && soundName)
+        {
+            AddSoundToContainer(rootContainer, soundType, soundName);
+        }
+        sounds = sounds->next;
+    }
+    
+    EditorElement* childs = GetList(root, "childs");
+    while(childs)
+    {
+        SoundContainer* childContainer = AddChildContainer(rootContainer);
+        AddSoundAndChildContainersRecursively(childContainer, childs);
+        
+        childs = childs->next;
+    }
+}
+#endif
 
 internal void Import(TaxonomySlot* slot, EditorElement* root)
 {
@@ -2630,14 +2705,16 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         EditorElement* effects = root->firstInList;
         while(effects)
         {
-            char* action = GetValue(effects, "action");
+            char* animationName = GetValue(effects, "animationName");
             char* time = GetValue(effects, "time");
-            char* asset = GetValue(effects, "soundType");
+            char* event = GetValue(effects, "eventName");
             
             
-            TaxonomySound* sound = AddSoundEffect(action, time, asset);
+            TaxonomySound* sound = AddSoundEffect(animationName, time, event);
+            
+            
+#if 0            
             EditorElement* labels = GetList(effects, "labels");
-            
             while(labels)
             {
                 char* labelName = GetValue(labels, "name");
@@ -2647,18 +2724,32 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 
                 labels = labels->next;
             }
+#endif
             
             effects = effects->next;
+        }
+    }
+    else if(StrEqual(name, "soundEvents"))
+    {
+        EditorElement* events = root->firstInList;
+        while(events)
+        {
+            char* eventName = GetValue(events, "eventName");
+            SoundContainer* rootContainer = AddSoundEvent(eventName);
+            
+            AddSoundAndChildContainersRecursively(rootContainer, events);
+            
+            events = events->next;
         }
     }
 #endif
     
     
     
-	if(root->next)
-	{
-		Import(slot, root->next);
-	}
+    if(root->next)
+    {
+        Import(slot, root->next);
+    }
 }
 
 inline Token GetFileTaxonomyName(char* content)
@@ -2752,11 +2843,17 @@ internal void ImportAllAssetFiles(GameModeWorld* worldMode, char* dataPath, Memo
         Tokenizer tokenizer = {};
         tokenizer.at = (char*) buffer;
         
+        b32 ign = false;
         if(StrEqual(handle.name, "sound.fad"))
         {
-            b32 ign = false;
-            FreeElement(worldMode->UI->soundsRoot);
-            worldMode->UI->soundsRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
+            FreeElement(worldMode->UI->soundNamesRoot);
+            worldMode->UI->soundNamesRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
+        }
+        else if(StrEqual(handle.name, "soundEvents.fad"))
+        {
+            FreeElement(worldMode->UI->soundEventsRoot);
+            worldMode->UI->soundEventsRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
+            Import(0, worldMode->UI->soundEventsRoot);
         }
         
         platformAPI.CloseHandle(&handle);
@@ -2790,33 +2887,50 @@ internal void WriteToFile(TaxonomyTable* table, TaxonomySlot* slot)
     writeHere += FormatString(writeHere, remainingSize, "definition/");
     
     TaxonomySlot* toWrite = &table->root;
-    do
+    while(true)
     {
         u32 written = (u32) FormatString(writeHere, remainingSize, "%s/", toWrite->name);
         remainingSize -= written;
         writeHere += written;
         
+        if(toWrite->taxonomy == slot->taxonomy)
+        {
+            break;
+        }
+        
+        
         toWrite = GetChildSlot(table, toWrite, slot->taxonomy);
     } 
-    while(toWrite->taxonomy != slot->taxonomy);
     
     
     
     
     
-    char buffer[1024] = {};
-    u32 size = sizeof(buffer);
+    char buffer[KiloBytes(16)] = {};
+    u32 remaining = sizeof(buffer);
+    u32 writtenTotal = 0;
     
+    char* currentBuffer = buffer;
     for(u32 tabIndex = 0; tabIndex < slot->tabCount; ++tabIndex)
     {
-        WriteElements(buffer, &size, slot->tabs[tabIndex]);
+        u32 newRemaining = remaining;
+        WriteElements(currentBuffer, &newRemaining, slot->tabs[tabIndex]);
+        u32 written = remaining - newRemaining;
+        writtenTotal += written;
+        
+        currentBuffer += written;
+        remaining = newRemaining;
+        
+        
+        *currentBuffer++ = ' ';
+        *currentBuffer++ = '\n';
+        remaining -= 2;
+        writtenTotal += 2;
     }
-	
-    u32 written = sizeof(buffer) - size;
     
-    char filename[64];
-    FormatString(filename, sizeof(filename), "%s.fed", slot->name);
-    platformAPI.DEBUGWriteFile(filename, buffer, written);
+    
+    FormatString(writeHere, remainingSize, "%s.fed", slot->name);
+    platformAPI.DEBUGWriteFile(path, buffer, writtenTotal);
 }
 
 inline void PatchLocalServer()
@@ -2905,79 +3019,108 @@ internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player,
 }
 #endif
 
-internal void WriteAllFiles(char* dataPath, DataFileArrived* firstArrived)
+internal void WriteAllFiles(MemoryPool* tempPool, char* dataPath, DataFileArrived* firstArrived, b32 compressed)
 {
+    
+    
     while(firstArrived)
     {
+        TempMemory fileMemory = BeginTemporaryMemory(tempPool);
+        
         Assert(firstArrived->runningFileSize == firstArrived->fileSize);
         char completeName[128];
         FormatString(completeName, sizeof(completeName), "%s/%s", dataPath, firstArrived->name);
-        platformAPI.DEBUGWriteFile(completeName, firstArrived->data, firstArrived->fileSize);
+        
+        u8* data = firstArrived->data;
+        u32 fileSize = firstArrived->fileSize;
+        
+        if(compressed)
+        {
+            uLong uncompressedSize = *((uLong*) firstArrived->data);
+            fileSize = uncompressedSize;
+            
+            u8* uncompressed = PushArray(tempPool, u8, uncompressedSize);
+            
+            u8* compressedSource = (u8*) firstArrived->data + 4;
+            uLong compressedLen = firstArrived->fileSize - 4;
+            
+            int cmp_status = uncompress(uncompressed, &uncompressedSize, compressedSource, compressedLen);
+            Assert(cmp_status == Z_OK);
+            Assert(uncompressedSize == fileSize);
+            
+            data = uncompressed;
+        }
+        
+        platformAPI.DEBUGWriteFile(completeName, data, fileSize);
         
         firstArrived = firstArrived->next;
+        
+        
+        EndTemporaryMemory(fileMemory);
     }
+    
 }
 
 
 #if 0
 internal void Merge()
 {
-	GetAllFiles(f1);
-	GetAllFiles(f2);
+    GetAllFiles(f1);
+    GetAllFiles(f2);
     
-	for(everyf2File)
-	{
-		if(!existsInf1)
-		{
-			Add();
-		}
-		else
-		{
-			if(file.type == type_Fed)
-			{
-				MergeDefinitionFiles();
-			}
-			else
-			{
-				Assert(fileAreEquals);
-			}
-		}
-	}
+    for(everyf2File)
+    {
+        if(!existsInf1)
+        {
+            Add();
+        }
+        else
+        {
+            if(file.type == type_Fed)
+            {
+                MergeDefinitionFiles();
+            }
+            else
+            {
+                Assert(fileAreEquals);
+            }
+        }
+    }
     
-	for(everyFolder1)
-	{
-		MergeSubFolder();
-	}
+    for(everyFolder1)
+    {
+        MergeSubFolder();
+    }
 }
 
 internal void Merge()
 {
-	MyDefinition = ?;
-	GetAllSubDirectories()
-	{
-		if(subDirectoryStartsWith(root))
-		{
-			MergeDefinitions();
-		}
-	}
+    MyDefinition = ?;
+    GetAllSubDirectories()
+    {
+        if(subDirectoryStartsWith(root))
+        {
+            MergeDefinitions();
+        }
+    }
 }
 
 internal void ProduceOutput(folder)
 {
-	if(everythingIsValid)
-	{
-		for(everyFile)
-		{
-			CopyFile(completeBuild);
-			if(file->dirty)
-			{
-				CopyFile(patch);
-			}
-		}
-		for(everyFoder)
-		{
-			ProduceOutput(subfoolder);
-		}
-	}	
+    if(everythingIsValid)
+    {
+        for(everyFile)
+        {
+            CopyFile(completeBuild);
+            if(file->dirty)
+            {
+                CopyFile(patch);
+            }
+        }
+        for(everyFoder)
+        {
+            ProduceOutput(subfoolder);
+        }
+    }	
 }
 #endif

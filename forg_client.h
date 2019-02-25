@@ -257,12 +257,12 @@ struct ClientEntity
 
 #include "forg_UI.h"
 
-
 #define ALPHABET_LETTER_COUNT 24
 struct GameModeWorld
 {
     b32 editingEnabled;
     b32 gamePaused;
+    r32 originalTimeToAdvance;
     
     MemoryPool filePool;
     struct DataFileArrived* firstDataFileArrived;

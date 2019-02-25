@@ -591,6 +591,13 @@ struct NetworkBuffer
     u32 size;
 };
 
+struct UnackedPacket
+{
+    u16 size;
+    u16 touchedCount;
+    u8 data[2048];
+};
+
 #define SLIDING_WINDOW_SIZE 256
 struct NetworkChannelInfo
 {
@@ -598,8 +605,7 @@ struct NetworkChannelInfo
     u16 nextProgressiveIndexRecv;
     
 	u32 runningUnackedIndex;
-    u16 unackedPacketsSize[SLIDING_WINDOW_SIZE * 64];
-    u8 unackedPackets[SLIDING_WINDOW_SIZE * 64][2048];
+    UnackedPacket unackedPackets[SLIDING_WINDOW_SIZE * 64];
     
     u16 packetSize[SLIDING_WINDOW_SIZE];
     u8 receivingSlidingWindow[SLIDING_WINDOW_SIZE][2048];

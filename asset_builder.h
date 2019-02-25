@@ -63,10 +63,10 @@ struct LoadedSound
 
 struct AnimationHeader
 {
+    u64 nameHash;
+    
     u16 durationMS;
     u16 spawningMS;
-    
-    u64 nameHash;
     
     u32 loopingType;
     u16 startingPreparationTimeLine;

@@ -133,7 +133,7 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, u64 hash)
 	return result;
 }
 
-inline UIAutocomplete* UIFindAutocomplete(UIState* UI, char* name)
+inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElement* parent, char* name)
 {
 	u64 hash = StringHash(name);
 	if(StrEqual(name, "animationName"))
@@ -141,6 +141,13 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, char* name)
 		TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
 		hash = GetSkeletonForTaxonomy(UI->table, slot);
 	}
+    else if(StrEqual(name, "sound"))
+    {
+        Assert(parent);
+        
+        char* soundType = GetValue(parent, "soundType");
+        hash = StringHash(soundType);
+    }
     
 	UIAutocomplete* result = UIFindAutocomplete(UI, hash);
     
@@ -209,43 +216,59 @@ inline void UIAddAutocompleteFromTable_(UIState* UI, char** values, u32 valueCou
     }
 }
 
-inline void UIAddAutocompleteFromFile(UIState* UI, char* name)
+
+
+inline void UIAddAutocompleteFromFiles(UIState* UI)
 {
     char* assetPath = "assets";
-    char completeName[128];
-    FormatString(completeName, sizeof(completeName), "%s/%s.autocomplete", assetPath, name);
-    
-    UIAutocomplete* autocomplete = UIAddAutocomplete(UI, name);
-    PlatformFile file = platformAPI.DEBUGReadFile(completeName);
-    
-    Tokenizer tokenizer = {};
-    tokenizer.at = (char*) file.content;
-    
-    b32 parsing = true;
-    while(parsing)
+    PlatformFileGroup autoGroup = platformAPI.GetAllFilesBegin(PlatformFile_autocomplete, assetPath);
+    for(u32 fileIndex = 0; fileIndex < autoGroup.fileCount; ++fileIndex)
     {
-        Token value = GetToken(&tokenizer);
+        char buffer[KiloBytes(2)];
+        u32 bufferSize = sizeof(buffer);
         
-        switch(value.type)
+        PlatformFileHandle handle = platformAPI.OpenNextFile(&autoGroup, assetPath);
+        
+        Assert(handle.fileSize <= bufferSize);
+        platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
+        buffer[handle.fileSize] = 0;
+        
+        
+        char nameNoPoint[64];
+        GetNameWithoutPoint(nameNoPoint, sizeof(nameNoPoint), handle.name);
+        
+        UIAutocomplete* autocomplete = UIAddAutocomplete(UI, nameNoPoint);
+        
+        Tokenizer tokenizer = {};
+        tokenizer.at = (char*) buffer;
+        
+        b32 parsing = true;
+        while(parsing)
         {
-            case Token_Identifier:
-            {
-                UIAddOption(UI, autocomplete, value.text, value.textLength);
-            } break;
+            Token value = GetToken(&tokenizer);
             
-            case Token_Comma:
+            switch(value.type)
             {
+                case Token_String:
+                {
+                    Token s = Stringize(value);
+                    UIAddOption(UI, autocomplete, s.text, s.textLength);
+                } break;
                 
-            } break;
-            
-            default:
-            {
-                parsing = false;
-            } break;
+                case Token_Comma:
+                {
+                    
+                } break;
+                
+                default:
+                {
+                    parsing = false;
+                } break;
+            }
         }
+        platformAPI.CloseHandle(&handle);
     }
-    
-    platformAPI.DEBUGFreeFile(&file);
+    platformAPI.GetAllFilesEnd(&autoGroup);
 }
 
 struct UIAddTabResult
@@ -254,7 +277,7 @@ struct UIAddTabResult
     Vec4 color;
 };
 
-inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, PlatformInput* input, EditorElement* root, Vec2 P, EditorLayout* layout, char* text)
+inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget, PlatformInput* input, EditorElement* parent, EditorElement* root, Vec2 P, EditorLayout* layout, char* text)
 {
     UIAddTabResult result = {};
     result.bounds = InvertedInfinityRect2();
@@ -293,7 +316,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, PlatformInput* input
                     }
                     else
                     {
-                        UIAutocomplete* autocomplete = UIFindAutocomplete(UI, root->name);
+                        UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parent, root->name);
                         if(autocomplete)
                         {
                             canEdit = true;
@@ -305,7 +328,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, PlatformInput* input
                 {
                     result.color = V4(1, 0, 1, 1);
                     mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
-                    UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+                    UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, parent);    UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                 }
             }
             
@@ -321,16 +344,27 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, PlatformInput* input
             result.color = V4(0, 1, 0, 1);
             
             UIInteraction confirmInteraction = {};
-            UIAddStandardAction(&confirmInteraction, UI_Trigger, sizeof(root->value), ColdPointer(root->value), ColdPointer(UI->keyboardBuffer));
-            UIAddRequestAction(&confirmInteraction, UI_Trigger, SendDataFileRequest());
+            UIAddStandardAction(&confirmInteraction, UI_Trigger, root->value, ColdPointer(root->value), ColdPointer(UI->keyboardBuffer));
             UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->active, 0);    
+            UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeParent, 0);    
+            
+            
+            if(StrEqual(widget->name, "taxonomy tabs"))
+            {
+                UIAddRequestAction(&confirmInteraction, UI_Trigger, SendDataFileRequest());
+            }
+            else if(StrEqual(widget->name, "soundEvents"))
+            {
+                UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->table->eventCount, 0);
+                UIAddReloadElementAction(&confirmInteraction, UI_Trigger, UI->soundEventsRoot);
+            }
             
             UIAddInteraction(UI, input, confirmButton, confirmInteraction);
         }
         
         if(root->type == EditorElement_String)
         {
-            UIAutocomplete* autocomplete = UIFindAutocomplete(UI, root->name);
+            UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parent, root->name);
             if(autocomplete)
             {
                 UIRenderAutocomplete(UI, autocomplete, layout, P -V2(0, layout->childStandardHeight), UI->keyboardBuffer);
@@ -343,7 +377,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, PlatformInput* input
 
 
 
-inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElement* root_, PlatformInput* input, b32 canDelete)
+inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElement* parent, EditorElement* root_, PlatformInput* input, b32 canDelete)
 {
     Rect2 totalResult = InvertedInfinityRect2();
     for(EditorElement* root = root_; root; root = root->next)
@@ -414,7 +448,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 Vec2 valueP = nameP + V2(layout->nameValueDistance, 0);
                 char* text = (root == UI->active) ? UI->showBuffer : root->value;
                 
-                UIAddTabResult addTab = UIAddTabValueInteraction(UI, input, root, valueP, layout, text);
+                UIAddTabResult addTab = UIAddTabValueInteraction(UI, widget, input, parent, root, valueP, layout, text);
                 
                 PushUIOrthoText(UI, text, layout->fontScale, valueP, addTab.color, layout->additionalZBias);
                 result = Union(result, addTab.bounds);
@@ -474,7 +508,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     }
                     
                     b32 canDeleteElements = !IsSet(root, EditorElem_CantBeDeleted);
-                    result = Union(result, UIRenderEditorTree(UI, widget, layout, root->firstInList, input, canDeleteElements));
+                    result = Union(result, UIRenderEditorTree(UI, widget, layout, root, root->firstInList, input, canDeleteElements));
                     
                     Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
                     PushLine(UI->group, V4(1, 1, 1, 1), verticalStartP, verticalEndP, 1);
@@ -496,13 +530,34 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     Vec3 verticalStartP = V3(lineStartP, 0);
                     layout->P += V2(layout->nameValueDistance, 0);
                     
-                    Rect2 structBounds = UIRenderEditorTree(UI, widget, layout, root->firstValue, input, false);
+                    Rect2 structBounds = UIRenderEditorTree(UI, widget, layout, root, root->firstValue, input, false);
                     
                     if(canDelete)
                     {
                         UIButton deleteButton = UIBtn(UI, GetCenter(structBounds) + V2(30, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(1, 0, 0, 1), "delete");
                         UIButtonInteraction(&deleteButton, UISetValueInteraction(UI_Trigger, &root->flags, (root->flags | EditorElem_Deleted)));
                         structBounds = Union(structBounds, UIDrawButton(UI, input, &deleteButton));
+                    }
+                    
+                    
+                    if(root->firstValue && StrEqual(root->firstValue->name, "soundName"))
+                    {
+                        UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(70, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
+                        
+                        u64 soundTypeHash = StringHash(parent->name);
+                        u64 soundNameHash = StringHash(root->firstValue->value);
+                        
+                        UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
+                        structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
+                    }
+                    else if(root->firstValue && StrEqual(root->firstValue->name, "eventName"))
+                    {
+                        UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(20, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
+                        
+                        u64 eventNameHash = StringHash(root->firstValue->value);
+                        
+                        UIButtonInteraction(&playButton, UIPlaySoundEventInteraction(UI_Trigger, eventNameHash));
+                        structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
                     }
                     
 					r32 padding = 5;
@@ -597,7 +652,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     Vec3 verticalStartP = V3(lineStartP, 0);
                     
                     layout->P += V2(layout->nameValueDistance, 0);
-                    result = Union(result, UIRenderEditorTree(UI, widget, layout, root->firstChild, input, false));
+                    result = Union(result, UIRenderEditorTree(UI, widget, layout, root, root->firstChild, input, false));
                     layout->P += V2(-layout->nameValueDistance, 0);
                     
                     Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
@@ -617,6 +672,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     if(PointInRect(nameBounds, UI->relativeScreenMouse))
                     {
                         UIInteraction mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
+                        UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, parent); 
                         UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                         UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
                         addColor = V4(1, 0, 0, 1);
@@ -636,6 +692,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         addColor = V4(0, 1, 0, 1);
                         UIInteraction buttonInteraction = SendRequestInteraction(UI_Trigger, AddTaxonomyRequest(root->parentTaxonomy, UI->keyboardBuffer));
                         UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->active, 0);    
+                        UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->activeParent, 0);    
                         UIAddInteraction(UI, input, confirmButton, buttonInteraction);
                     }
                     
@@ -673,7 +730,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     
                     if(play)
                     {
-                        timer += input->timeToAdvance * speed;
+                        timer += UI->worldMode->originalTimeToAdvance * speed;
                     }
                     
                     if(timer > 1.0f)
@@ -727,10 +784,12 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     tabWidget->root = editingSlot->tabs[UI->editingTabIndex];
     
     UI->widgets[0].root = UI->editorTaxonomyTree;
-    UI->widgets[3].root = UI->soundsRoot;
+    UI->widgets[3].root = UI->soundNamesRoot;
+    UI->widgets[5].root = UI->soundEventsRoot;
     
     
     UIInteraction esc = UISetValueInteraction(UI_Trigger, &UI->active, 0);
+    UIAddSetValueAction(&esc, UI_Trigger, &UI->activeParent, 0);
     UIAddClearAction(&esc, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
     UIAddSetValueAction(&esc, UI_Trigger, &UI->copying, 0);
     UIAddInteraction(UI, input, escButton, esc);
@@ -779,7 +838,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             
             case EditorElement_String:
             {
-                UIAutocomplete* options = UIFindAutocomplete(UI, UI->active->name);
+                UIAutocomplete* options = UIFindAutocomplete(UI, UI->activeParent, UI->active->name);
                 if(options)
                 {
                     UIAutocompleteBlock* block = options->firstBlock;
@@ -969,6 +1028,16 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                 UIDrawButton(UI, input, &patchButton);
                 
             } break;
+            
+            case 5:
+            {
+                Vec2 saveP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
+                
+                
+                UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), " SAVE ");
+                UIButtonInteraction(&saveButton, SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("soundEvents", widget->root)));
+                UIDrawButton(UI, input, &saveButton);
+            } break;
         }
         
         
@@ -977,7 +1046,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         Rect2 widgetBounds = InvertedInfinityRect2();
         if(widget->expanded && widget->root)
         {
-            widgetBounds = UIRenderEditorTree(UI, widget, layout, widget->root, input, false);
+            widgetBounds = UIRenderEditorTree(UI, widget, layout, 0, widget->root, input, false);
         }
         
         ObjectTransform widgetBoundsTransform = FlatTransform();
@@ -1502,7 +1571,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             editingTab->layout.fontScale = 0.42f;
             editingTab->layout.nameValueDistance = 150;
             editingTab->layout.childStandardHeight = 30;
-            FormatString(editingTab->name, sizeof(editingTab->name), "hello world 2");
+            FormatString(editingTab->name, sizeof(editingTab->name), "taxonomy tabs");
             
             
             EditorElement* animationStruct;
@@ -1519,7 +1588,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             FREELIST_ALLOC(animationActionTimer, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
             animationActionTimer->type = EditorElement_Struct;
             UIAddChild(UI->table, animationActionTimer, EditorElement_Real, "time", "0.0");
-            UIAddChild(UI->table, animationActionTimer, EditorElement_String, "action", "Move");
+            UIAddChild(UI->table, animationActionTimer, EditorElement_String, "animationName", "rig");
             
             EditorElement* playButton;
             FREELIST_ALLOC(playButton, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
@@ -1541,9 +1610,10 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             animation->layout.childStandardHeight = 30;
             FormatString(animation->name, sizeof(animation->name), "animation");
             
+            
             EditorWidget* sounds = UI->widgets + 3;
             sounds->P = V2(300, 200);
-            sounds->root = UI->soundsRoot;
+            sounds->root = UI->soundNamesRoot;
             sounds->layout.fontScale = 0.42f;
             sounds->layout.nameValueDistance = 150;
             sounds->layout.childStandardHeight = 30;
@@ -1553,12 +1623,21 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             EditorWidget* standardActions = UI->widgets + 4;
             standardActions->P = V2(200, 100);
             standardActions->root = 0;
-            standardActions->layout.fontScale = 0.72f;
+            standardActions->layout.fontScale = 0.47f;
             standardActions->layout.nameValueDistance = 150;
             standardActions->layout.childStandardHeight = 30;
             FormatString(standardActions->name, sizeof(standardActions->name), "Actions: ");
             
-            UI->widgetCount = 5;
+            
+            EditorWidget* soundEvents = UI->widgets + 5;
+            soundEvents->P = V2(-200, 100);
+            soundEvents->root = UI->soundEventsRoot;
+            soundEvents->layout.fontScale = 0.42f;
+            soundEvents->layout.nameValueDistance = 150;
+            soundEvents->layout.childStandardHeight = 30;
+            FormatString(soundEvents->name, sizeof(soundEvents->name), "soundEvents");
+            
+            UI->widgetCount = 6;
             Assert(UI->widgetCount < ArrayCount(UI->widgets));
         }
         
@@ -1621,7 +1700,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTaxonomy(UI, "equipment");
         UIAddAutocompleteFromTable(UI, SlotName, "slot");
         UIAddAutocompleteFromTable(UI, EntityAction, "action");
-        UIAddAutocompleteFromFile(UI, "soundType");
+        UIAddAutocompleteFromFiles(UI);
         
         FormatString(UI->trueString, sizeof(UI->trueString), "true");
         FormatString(UI->falseString, sizeof(UI->falseString), "false");

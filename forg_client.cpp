@@ -14,7 +14,6 @@ global_variable ClientPlayer* myPlayer;
 #include "forg_world_generation.cpp"
 #include "forg_network.cpp"
 
-
 inline void AddFlags(ClientEntity* entity, u32 flags)
 {
     entity->flags |= flags;
@@ -597,6 +596,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         worldMode->gamePaused = !worldMode->gamePaused;
         SendPauseToggleMessage();
     }
+    
+    worldMode->originalTimeToAdvance = input->timeToAdvance;
     if(worldMode->gamePaused)
     {
         input->timeToAdvance = 0;
@@ -728,7 +729,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 worldMode->allDataFilesArrived = false;
                 ++worldMode->patchSectionArrived;
                 
-                WriteAllFiles(filePath, worldMode->firstDataFileArrived);
+                WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstDataFileArrived, false);
                 worldMode->firstDataFileArrived = 0;
                 
                 InitTaxonomyReadWrite(worldMode->table);
@@ -769,7 +770,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 ++worldMode->patchSectionArrived;
                 CloseAllHandles(gameState->assets);
                 
-                WriteAllFiles(filePath, worldMode->firstPakFileArrived);
+                WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstPakFileArrived, true);
                 worldMode->firstPakFileArrived = 0;
                 
                 
@@ -1023,7 +1024,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         {
                             entity->P = Subtract(entity->universeP, player->universeP);
                             entity->timeFromLastUpdate += input->timeToAdvance;
-                            if(entity->timeFromLastUpdate >= 1.0f)
+                            if(entity->timeFromLastUpdate >= 8.0f)
                             {
                                 AddFlags(entity, Flag_deleted);
                                 DeleteEntityClient(worldMode, entity);

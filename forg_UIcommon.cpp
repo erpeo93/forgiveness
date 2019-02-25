@@ -851,6 +851,38 @@ inline UIInteraction UIAddEmptyElementToListInteraction(u32 flags, EditorElement
     return result;
 }
 
+inline UIInteraction UIPlaySoundInteraction(u32 flags, u64 soundTypeHash, u64 soundNameHash)
+{
+    UIInteraction result = {};
+    UIInteractionAction* dest = UIGetFreeAction(&result);
+    dest->type = UIInteractionAction_PlaySound;
+    dest->flags = flags;
+    dest->soundTypeHash = soundTypeHash;
+    dest->soundNameHash = soundNameHash;
+    
+    return result;
+}
+
+
+inline UIInteraction UIPlaySoundEventInteraction(u32 flags, u64 eventNameHash)
+{
+    UIInteraction result = {};
+    UIInteractionAction* dest = UIGetFreeAction(&result);
+    dest->type = UIInteractionAction_PlaySoundEvent;
+    dest->flags = flags;
+    dest->eventNameHash = eventNameHash;
+    
+    return result;
+}
+
+inline void UIAddReloadElementAction(UIInteraction* interaction, u32 flags, EditorElement* toReload)
+{
+    UIInteractionAction* dest = UIGetFreeAction(interaction);
+    dest->type = UIInteractionAction_ReloadElement;
+    dest->flags = flags;
+    dest->toReload = ColdPointer(toReload);
+}
+
 inline UIInteraction NullInteraction()
 {
     UIInteraction result;
@@ -1018,7 +1050,15 @@ inline EditorElement* CopyEditorElement(TaxonomyTable* table, EditorElement* sou
         
         case EditorElement_List:
         {
-            result->firstChild = CopyEditorElement(table, source->firstChild);
+            if(source->emptyElement)
+            {
+                result->emptyElement = CopyEditorElement(table, source->emptyElement);
+            }
+            
+            if(source->firstChild)
+            {
+                result->firstChild = CopyEditorElement(table, source->firstChild);
+            }
         } break;
         
         case EditorElement_Struct:
@@ -1122,6 +1162,40 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         newElement->next = list->firstChild;
                         list->firstChild = newElement;
                     } break;
+                    
+                    
+                    case UIInteractionAction_PlaySound:
+                    {
+                        u64 soundTypeHash = action->soundTypeHash;
+                        u64 soundNameHash = action->soundNameHash;
+                        
+                        SoundId ID = FindSoundByName(UI->group->assets, soundTypeHash, soundNameHash);
+                        
+                        if(IsValid(ID))
+                        {
+                            PlaySound(UI->worldMode->soundState, ID);
+                        }
+                    } break;
+                    
+                    case UIInteractionAction_PlaySoundEvent:
+                    {
+                        SoundEvent* event = GetSoundEvent(UI->table, action->eventNameHash);
+                        
+                        u32 labelCount = 0;
+                        SoundLabel* labels = 0;
+                        
+                        SoundId ID = PickSoundFromEvent(UI->group->assets, event, labelCount, labels, &UI->table->eventSequence);
+                        if(IsValid(ID))
+                        {
+                            PlaySound(UI->worldMode->soundState, ID);
+                        }
+                    } break;
+                    
+                    case UIInteractionAction_ReloadElement:
+                    {
+                        EditorElement* root = (EditorElement*) GetValue(action->toReload, &interaction->data);
+                        Import(0, root);
+                    }
                 }
                 
                 action->flags |= UI_Activated;

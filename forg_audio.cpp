@@ -26,6 +26,105 @@ internal void InitializeSoundState( SoundState* soundState, MemoryPool* pool )
     soundState->masterVolume = V2(1.0f, 1.0f);
 }
 
+inline r32 LabelsDelta(u32 referenceLabelCount, SoundLabel* referenceLabels, u32 myLabelCount, SoundLabel* myLabels)
+{
+    r32 result = 0;
+    return result;
+}
+
+inline LabeledSound* PickSoundChild(SoundContainer* container, u32 labelCount, SoundLabel* labels, RandomSequence* sequence)
+{
+    LabeledSound* result = 0;
+    
+    if(true)
+    {
+        u32 totalChoiceCount = container->soundCount + container->containerCount;
+        Assert(totalChoiceCount > 0);
+        
+        u32 index = RandomChoice(sequence, totalChoiceCount);
+        if(index < container->soundCount)
+        {
+            u32 listIndex = 0;
+            for(LabeledSound* sound = container->firstSound; sound; sound = sound->next)
+            {
+                if(listIndex++ == index)
+                {
+                    result = sound;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            index -= container->soundCount;
+            
+            u32 childIndex = 0;
+            for(SoundContainer* child = container->firstChildContainer; child; child = child->next)
+            {
+                if(childIndex++ == index)
+                {
+                    result = PickSoundChild(child, labelCount, labels, sequence);
+                    break;
+                }
+            }
+        }
+    }
+    else
+    {
+        LabeledSound* bestSound = 0;
+        SoundContainer* bestContainer = 0;
+        r32 bestDelta = R32_MAX;
+        
+        for(LabeledSound* sound = container->firstSound; sound; sound = sound->next)
+        {
+            r32 delta = LabelsDelta(labelCount, labels, sound->labelCount, sound->labels);
+            if(delta < bestDelta)
+            {
+                bestDelta = delta;
+                bestContainer = 0;
+                bestSound = sound;
+            }
+        }
+        
+        for(SoundContainer* child = container->firstChildContainer; child; child = child->next)
+        {
+            r32 delta = LabelsDelta(labelCount, labels, child->labelCount, child->labels);
+            if(delta < bestDelta)
+            {
+                bestDelta = delta;
+                bestContainer = child;
+                bestSound = 0;
+            }
+        }
+        
+        
+        if(bestSound)
+        {
+            result = bestSound;
+        }
+        else if(bestContainer)
+        {
+            result = PickSoundChild(bestContainer, labelCount, labels, sequence);
+        }
+    }
+    
+    return result;
+}
+
+inline SoundId PickSoundFromEvent(Assets* assets, SoundEvent* event, u32 labelCount, SoundLabel* labels, RandomSequence* sequence)
+{
+    SoundId result = {};
+    
+    LabeledSound* sound = PickSoundChild(&event->rootContainer, labelCount, labels, sequence);
+    if(sound)
+    {
+        result = FindSoundByName(assets, sound->typeHash, sound->nameHash);
+    }
+    
+    return result;
+}
+
+
 internal PlayingSound* PlaySound(SoundState* soundState, SoundId ID, r32 frequency = 1.0f)
 {
     if( !soundState->firstFreeSound )

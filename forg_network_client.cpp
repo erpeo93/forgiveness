@@ -1037,6 +1037,12 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                     *element = {};
                     
                     Unpack("sL", element->name, &element->type);
+                    
+                    if(StrEqual(element->name, "eventName"))
+                    {
+                        AddFlags(element, EditorElem_AlwaysEditable);
+                    }
+                    
                     if(element->type < EditorElement_List)
                     {
                         Unpack("s", element->value);
@@ -1049,6 +1055,8 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                     EditorTabStack* stack = &myPlayer->editorStack;
                     EditorElement* current;
                     u32 currentStackIndex = 0;
+                    
+                    
                     
 					if(!stack->counter)
 					{

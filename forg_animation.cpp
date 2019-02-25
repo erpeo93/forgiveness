@@ -387,14 +387,7 @@ inline r32 AssFinalAngle(Bone* parentBone, PieceAss* ass)
 inline b32 PushNewAction(AnimationState* animation, u32 action)
 {
     b32 result = false;
-    
-    if(!animation->action)
-    {
-        animation->action = action;
-        animation->totalTime = 0;
-        animation->normalizedTime = 0;
-    }
-    else if(animation->action != action)
+    if(animation->action != action)
     {
         animation->stopAtNextBarrier = true;
         animation->nextAction = action;
@@ -1668,6 +1661,8 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
         Animation* animation = GetAnimation(group->assets, AID.AID);
         if(animation)
         {
+            result.playedAnimationNameHash = animation->header->nameHash;
+            
             r32 quicknessCoeff = 1.0f;
             timeToAdvance *= quicknessCoeff;
             
@@ -1964,8 +1959,9 @@ inline void RenderWater(RenderGroup* group, Vec2 P, TileInfo tile, TileInfo adia
     }
 }
 
-inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, TaxonomySlot* slot, EntityAction soundAction, r32 oldSoundTime, r32 soundTime)
+inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, TaxonomySlot* slot, u64 nameHash, r32 oldSoundTime, r32 soundTime)
 {
+    SoundState* soundState = worldMode->soundState;
     u32 soundTaxonomy = slot->taxonomy;
     b32 found = false;
     while(soundTaxonomy && !found)
@@ -1973,34 +1969,38 @@ inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, Taxo
         TaxonomySlot* soundSlot = GetSlotForTaxonomy(worldMode->table, soundTaxonomy);
         for(TaxonomySound* sound = slot->firstSound; sound; sound = sound->next)
         {
-            if(soundAction == sound->action && oldSoundTime <= sound->threesold && (soundTime >= sound->threesold || soundTime < oldSoundTime))
+            if(nameHash == sound->animationNameHash)
             {
-                u64 stringHashID = sound->stringHashID;
-                u32 hashIndex =  stringHashID & (HASHED_ASSET_SLOTS - 1);
-                u32 assetIndex = Asset_count + hashIndex;
-                
-                TagVector match = {};
-                TagVector weight = {};
-                LabelVector labels;
-                labels.labelCount = 0;
-                
-                Assert(sound->labelCount < ArrayCount(labels.IDs));
-                
-                for(u32 labelIndex = 0; labelIndex < sound->labelCount; ++labelIndex)
+                b32 play;
+                if(oldSoundTime <= sound->threesold)
                 {
-                    Label* label = sound->labels + labelIndex;
-                    
-                    u32 destIndex = labels.labelCount++;
-                    
-                    labels.IDs[destIndex] = label->hashID;
-                    labels.values[destIndex] = label->value;
+                    play = (soundTime > sound->threesold || soundTime < oldSoundTime);
+                }
+                else
+                {
+                    play = (soundTime > sound->threesold && soundTime < oldSoundTime);
                 }
                 
-                SoundId soundToPlay = GetMatchingSound(assets, assetIndex, stringHashID, &match, &weight, &labels);
-                soundToPlay.value += 0;
-                PlaySound(worldMode->soundState, soundToPlay);
-                found = true;
-                break;
+                if(play)
+                {
+                    u64 eventHash = sound->eventNameHash;
+                    
+                    SoundEvent* event = GetSoundEvent(worldMode->table, eventHash);
+                    if(event)
+                    {
+                        u32 labelCount = 0;
+                        SoundLabel* labels = 0;
+                        
+                        SoundId soundToPlay = PickSoundFromEvent(assets, event, labelCount, labels, &worldMode->table->eventSequence);
+                        
+                        if(IsValid(soundToPlay))
+                        {
+                            PlaySound(worldMode->soundState, soundToPlay);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
             }
         }
         
@@ -2161,7 +2161,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     //PushCubeOutline(group, bounds, V4(1, 1, 1, 1), 0.05f);
     
     
-    PlaySoundForAnimation(worldMode, group->assets, slot, soundAction, oldSoundTime, soundTime);
+    PlaySoundForAnimation(worldMode, group->assets, slot, result.playedAnimationNameHash, oldSoundTime, soundTime);
     
     return result;
 }

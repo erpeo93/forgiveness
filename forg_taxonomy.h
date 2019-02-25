@@ -213,20 +213,12 @@ struct TaxonomyConsideration
     };
 };
 
-struct Label
-{
-    u32 hashID;
-    r32 value;
-};
-
 struct TaxonomySound
 {
-    EntityAction action;
     r32 threesold;
-    u64 stringHashID;
+    u64 animationNameHash;
     
-    u32 labelCount;
-    Label labels[8];
+    u64 eventNameHash;
     
     union
     {
@@ -321,6 +313,54 @@ struct TaxonomySlot
     struct EditorElement* tabs[8];
 };
 
+struct SoundLabel
+{
+    u64 labelHashID;
+    r32 value;
+};
+
+struct LabeledSound
+{
+    u64 typeHash;
+    u64 nameHash;
+    
+    union
+    {
+        LabeledSound* next;
+        LabeledSound* nextFree;
+    };
+    
+    u32 labelCount;
+    SoundLabel labels[8];
+};
+
+struct SoundContainer
+{
+    b32 pickRandomly;
+    
+    u32 soundCount;
+    LabeledSound* firstSound;
+    
+    u32 containerCount;
+    SoundContainer* firstChildContainer;
+    
+    union
+    {
+        SoundContainer* next;
+        SoundContainer* nextFree;
+    };
+    
+    u32 labelCount;
+    SoundLabel labels[8];
+};
+
+struct SoundEvent
+{
+    u64 eventNameHash;
+    
+    SoundContainer rootContainer;
+};
+
 struct TaxonomyTable
 {
     MemoryPool pool;
@@ -361,6 +401,8 @@ struct TaxonomyTable
     VisualTag* firstFreeVisualTag;
     AnimationEffect* firstFreeAnimationEffect;
     TaxonomySound* firstFreeTaxonomySound;
+    LabeledSound* firstFreeLabeledSound;
+    SoundContainer* firstFreeSoundContainer;
 #endif
     
     
@@ -371,6 +413,10 @@ struct TaxonomyTable
     TaxonomyBehavior* firstFreeTaxonomyBehavior;
     TaxonomyMemBehavior* firstFreeTaxonomyMemBehavior;
     NakedHandReq* firstFreeNakedHandReq;
+    
+    RandomSequence eventSequence;
+    u32 eventCount;
+    SoundEvent events[64];
 };
 
 inline u32 GetObjectTaxonomy(TaxonomyTable* table, Object* object)

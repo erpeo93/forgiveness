@@ -401,6 +401,9 @@ enum UIInteractionActionType
     UIInteractionAction_SendRequestDirectly,
     UIInteractionAction_OffsetV2,
     UIInteractionAction_AddEmptyEditorElement,
+    UIInteractionAction_PlaySound,
+    UIInteractionAction_ReloadElement,
+    UIInteractionAction_PlaySoundEvent,
 };
 
 struct UIInteractionAction
@@ -421,6 +424,19 @@ struct UIInteractionAction
             UIMemoryReference offset;
             r32 speed;
         };
+        
+        struct
+        {
+            u64 soundTypeHash;
+            u64 soundNameHash;
+        };
+        
+        struct
+        {
+            u64 eventNameHash;
+        };
+        
+        UIMemoryReference toReload;
     };
     
     r32 timer;
@@ -614,6 +630,7 @@ struct UIState
     char keyboardBuffer[32];
     char showBuffer[64];
     EditorElement* active;
+    EditorElement* activeParent;
     
     u32 widgetCount;
     EditorWidget widgets[16];
@@ -632,7 +649,8 @@ struct UIState
     u32 autocompleteCount;
     UIAutocomplete autocompletes[64];
     
-    EditorElement* soundsRoot;
+    EditorElement* soundNamesRoot;
+    EditorElement* soundEventsRoot;
     
     MemoryPool autocompletePool;
     UIAutocompleteBlock* firstFreeAutocompleteBlock;

@@ -234,13 +234,16 @@ NETWORK_SEND_DATA(Win32SendData)
     NetworkChannelInfo* channelInfo = connection->channelInfo + channelIndex;
     
     u16 totalSize = 0;
+    u16 sendingIndex = 0;
+    
     unsigned char* buff_ = 0;
     if(size)
     {
         buff_ = network->sendBuffer;
         Assert((size + sizeof(PacketHeader) + sizeof(PacketTrailer)) <= sizeof(network->sendBuffer));
         
-        unsigned char* buff = PackHeader_(buff_, STARTNUMBER, connection->counterpartConnectionSlot, channelIndex, channelInfo->nextProgressiveIndexSend++);
+        sendingIndex = channelInfo->nextProgressiveIndexSend++;
+        unsigned char* buff = PackHeader_(buff_, STARTNUMBER, connection->counterpartConnectionSlot, channelIndex, sendingIndex);
         
         memcpy(buff, data, size);
         buff += size;
@@ -256,52 +259,61 @@ NETWORK_SEND_DATA(Win32SendData)
 			u32 unackedPacketSendIndex = channelInfo->runningUnackedIndex;
 			while(true)
 			{
-				u16 packetSize = channelInfo->unackedPacketsSize[unackedPacketSendIndex];
-                if(packetSize)
+                UnackedPacket* unacked = channelInfo->unackedPackets + unackedPacketSendIndex;
+                u16 packetSize = unacked->size;
+                if(packetSize && unacked->touchedCount++ >= 2)
                 {
-                    u8* packet = channelInfo->unackedPackets[unackedPacketSendIndex];
+                    unacked->touchedCount = 0;
+                    
+                    u8* packet = unacked->data;
                     PacketHeader resendHeader;
                     UnpackHeader_(packet, &resendHeader);
                     
                     Assert(resendHeader.totalPacketSize);
                     
                     char resendString[64];
-                    sprintf(resendString, "Resending: %u\n", resendHeader.progressiveIndex);
+                    if(sendto(network->fd, (const char*) packet, packetSize, 0,
+                              (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
+                    {
+                        sprintf(resendString, "ERROR Resending: %u\n", resendHeader.progressiveIndex);
+                    }
+                    else
+                    {
+                        sprintf(resendString, "SUCCESS Resending: %u\n", resendHeader.progressiveIndex);
+                    }
                     OutputDebugString(resendString);
                     
-                    sendto(network->fd, (const char*) packet, packetSize, 0,
-                           (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize);
-					
-					if(++unackedPacketSendIndex == ArrayC(channelInfo->unackedPackets))
-					{
-						unackedPacketSendIndex = 0;
-					}
+                    if(++unackedPacketSendIndex == ArrayC(channelInfo->unackedPackets))
+                    {
+                        unackedPacketSendIndex = 0;
+                    }
                     
-					if(unackedPacketSendIndex == channelInfo->runningUnackedIndex)
-					{
-						break;
-					}
+                    if(unackedPacketSendIndex == channelInfo->runningUnackedIndex)
+                    {
+                        break;
+                    }
                 }
-				else
-				{
-					break;
-				}
-			} 
+                else
+                {
+                    break;
+                }
+            } 
         }
         
         
         if(size)
         {
-            Assert(totalSize < ArrayC(channelInfo->unackedPackets[0]));
+            Assert(totalSize < ArrayC(channelInfo->unackedPackets[0].data));
             u32 insertIndex = channelInfo->runningUnackedIndex;
             while(true)
             {
-                u16 packetSize = channelInfo->unackedPacketsSize[insertIndex];
-                if(!packetSize)
+                UnackedPacket* unacked = channelInfo->unackedPackets + insertIndex;
+                if(!unacked->size)
                 {
-                    u8* dest = channelInfo->unackedPackets[insertIndex];
+                    u8* dest = unacked->data;
                     memcpy(dest, buff_, totalSize);
-                    channelInfo->unackedPacketsSize[insertIndex] = totalSize;
+                    unacked->size = totalSize;
+                    unacked->touchedCount = 0;
                     break;
                 }
                 
@@ -312,7 +324,7 @@ NETWORK_SEND_DATA(Win32SendData)
                 
                 if(insertIndex == channelInfo->runningUnackedIndex)
                 {
-					InvalidCodePath;
+                    InvalidCodePath;
                     break;
                 }
             } 
@@ -321,10 +333,19 @@ NETWORK_SEND_DATA(Win32SendData)
     
     if(size)
     {
-        sendto(network->fd, (const char*) buff_, totalSize, 0,
-               (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize);
+        char sendString[64];
+        if(sendto(network->fd, (const char*) buff_, totalSize, 0,
+                  (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
+        {
+            sprintf(sendString, "ERROR Sending: %u\n", sendingIndex);
+        }
+        else
+        {
+            sprintf(sendString, "SUCCESS Sending: %u\n", sendingIndex);
+        }
+        OutputDebugString(sendString);
     }
-	
+    
     return true;
 }
 
@@ -368,10 +389,11 @@ NETWORK_CLOSE_CONNECTION(Win32CloseConnection)
         NetworkChannelInfo* info = connection->channelInfo + channelIndex;
         info->nextProgressiveIndexSend = 0;
         info->nextProgressiveIndexRecv = 0;
-		info->runningUnackedIndex = 0;
-        for(u32 packetIndex = 0; packetIndex < ArrayC(info->unackedPacketsSize); ++packetIndex)
+        info->runningUnackedIndex = 0;
+        for(u32 packetIndex = 0; packetIndex < ArrayC(info->unackedPackets); ++packetIndex)
         {
-            info->unackedPacketsSize[packetIndex] = 0;
+            UnackedPacket* unacked = info->unackedPackets + packetIndex;
+            unacked->size = 0;
         }
     }
 }
@@ -414,10 +436,11 @@ NETWORK_OPEN_CONNECTION(Win32OpenConnection)
         NetworkChannelInfo* channelInfo = network->clientConnection.channelInfo + channelIndex;
         channelInfo->nextProgressiveIndexRecv = 0;
         channelInfo->nextProgressiveIndexSend = 0;
-		channelInfo->runningUnackedIndex = 0;
-        for(u32 packetIndex = 0; packetIndex < ArrayC(channelInfo->unackedPacketsSize); ++packetIndex)
+        channelInfo->runningUnackedIndex = 0;
+        for(u32 packetIndex = 0; packetIndex < ArrayC(channelInfo->unackedPackets); ++packetIndex)
         {
-            channelInfo->unackedPacketsSize[packetIndex] = 0;
+            UnackedPacket* unacked = channelInfo->unackedPackets + packetIndex;
+            unacked->size = 0;
         }
     }
     
@@ -433,9 +456,9 @@ NETWORK_OPEN_CONNECTION(Win32OpenConnection)
         u32 totalSize = PackTrailer_(helloMsg_, endHelloMsg);
         
         if(sendto(network->fd, (const char*) helloMsg_, totalSize, 0, &sockinfo, (int) addrlen) < 0)
-		{
-			InvalidCodePath;
-		}
+        {
+            InvalidCodePath;
+        }
         
         sockaddr_storage server;
         int size = sizeof(server);
@@ -496,10 +519,10 @@ inline void DispatchToApplicationBuffer(NetworkInterface* network, NetworkConnec
         i64 expected = (i64) info->nextProgressiveIndexRecv;
         i64 arrived = (i64) progressiveIndex;
         
-		if(arrived == 53)
-		{
-			int a = 5;
-		}
+        if(arrived == 53)
+        {
+            int a = 5;
+        }
         
         char debug[64];
         sprintf(debug, "expected: %u, arrived: %u\n", info->nextProgressiveIndexRecv, progressiveIndex); 
@@ -518,9 +541,9 @@ inline void DispatchToApplicationBuffer(NetworkInterface* network, NetworkConnec
             memcpy(dest, msg, dataSize);
             info->packetSize[delta] = dataSize;
         }
-		else
-		{
-		}
+        else
+        {
+        }
         
         
         u16 packetCopyied = 0;
@@ -569,7 +592,7 @@ inline void DispatchToApplicationBuffer(NetworkInterface* network, NetworkConnec
                     }
                     else
                     {
-						OutputDebugString("recv buffer full!\n");
+                        OutputDebugString("recv buffer full!\n");
                         copyPackets = false;
                     }
                 }
@@ -581,8 +604,8 @@ inline void DispatchToApplicationBuffer(NetworkInterface* network, NetworkConnec
         }
         
         char debugString[64];
-		sprintf(debugString, "Sending Ack: %d\n", ack);
-		OutputDebugString(debugString);
+        sprintf(debugString, "Sending Ack: %d\n", ack);
+        OutputDebugString(debugString);
         
         unsigned char ackPacket[64];
         unsigned char* packet = PackHeader_(ackPacket, ACKNUMBER, connection->counterpartConnectionSlot, channelIndex, ack);
@@ -674,10 +697,10 @@ NETWORK_RECEIVE_DATA_ACCEPT(Win32ReceiveDataAccept)
             {
                 PacketHeader header = {};
                 unsigned char* start = UnpackHeader_(network->recvBuffer, &header);
-				if(header.progressiveIndex == 53 && header.channelIndex == 1)
-				{
-					int a = 5;
-				}
+                if(header.progressiveIndex == 53 && header.channelIndex == 1)
+                {
+                    int a = 5;
+                }
                 
                 if(header.totalPacketSize <= sizeof(network->recvBuffer))
                 {
@@ -749,62 +772,62 @@ NETWORK_RECEIVE_DATA_ACCEPT(Win32ReceiveDataAccept)
                             sprintf(ackedString, "arrived ack: %u\n", header.progressiveIndex);
                             OutputDebugString(ackedString);
                             
-							u16 arrived = header.progressiveIndex;
+                            u16 arrived = header.progressiveIndex;
                             NetworkConnection* connection = network->connections + header.connectionSlot;
                             NetworkChannelInfo* channelInfo = connection->channelInfo + header.channelIndex;
                             
-							u32 startingIndex = channelInfo->runningUnackedIndex;
-							while(true)
-							{
-								u16 packetSize = channelInfo->unackedPacketsSize[startingIndex];
-								if(packetSize)
-								{
-									u8* packet = channelInfo->unackedPackets[startingIndex];
+                            u32 startingIndex = channelInfo->runningUnackedIndex;
+                            while(true)
+                            {
+                                UnackedPacket* unacked = channelInfo->unackedPackets + startingIndex;
+                                if(unacked->size)
+                                {
+                                    u8* packet = unacked->data;
                                     PacketHeader unackedHeader;
                                     UnpackHeader_(packet, &unackedHeader);
                                     sprintf(ackedString, "matching: %u\n", unackedHeader.progressiveIndex);
                                     OutputDebugString(ackedString);
                                     
-									if(unackedHeader.progressiveIndex <= arrived ||
+                                    if(unackedHeader.progressiveIndex <= arrived ||
                                        (unackedHeader.progressiveIndex - arrived >= (0xffff >> 1)))
                                     {
                                         sprintf(ackedString, "acked packet number: %u\n", unackedHeader.progressiveIndex);
                                         OutputDebugString(ackedString);
-                                        channelInfo->unackedPacketsSize[startingIndex] = 0;
+                                        unacked->size = 0;
                                         
                                         
-										if(arrived == unackedHeader.progressiveIndex)
-										{
+                                        if(arrived == unackedHeader.progressiveIndex)
+                                        {
                                             if(++startingIndex == ArrayC(channelInfo->unackedPackets))
                                             {
                                                 startingIndex = 0;
                                             }
                                             break;
-										}
+                                        }
                                     }
                                     else
                                     {
                                         break;
                                     }
                                     
-									if(++startingIndex == ArrayC(channelInfo->unackedPackets))
-									{
-										startingIndex = 0;
-									}
+                                    if(++startingIndex == ArrayC(channelInfo->unackedPackets))
+                                    {
+                                        startingIndex = 0;
+                                    }
                                     
-									if(startingIndex == channelInfo->runningUnackedIndex)
-									{
+                                    if(startingIndex == channelInfo->runningUnackedIndex)
+                                    {
                                         InvalidCodePath;
-										break;
-									}
-								}
-								else
-								{
-									break;
-								}
-							}
+                                        break;
+                                    }
+                                }
+                                else
+                                {
+                                    break;
+                                }
+                            }
                             
-							channelInfo->runningUnackedIndex = startingIndex;
+                            channelInfo->runningUnackedIndex = startingIndex;
                         }
                         else if(header.magicNumber == STARTNUMBER)
                         {

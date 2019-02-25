@@ -14,6 +14,7 @@
 #include "asset_builder.h"
 #include "win32_file.cpp"
 #include "forg_token.cpp"
+#include "miniz.c"
 
 
 #define MAX_IMAGE_DIM 256
@@ -1538,7 +1539,8 @@ internal BitmapId AddBitmapAsset(char* path, char* filename, u64 stringHash = 0,
     
     asset.dest->bitmap.align[0] = alignX;
     asset.dest->bitmap.align[1] = alignY;
-    asset.dest->stringHashID = stringHash;
+    asset.dest->typeHashID = stringHash;
+    asset.dest->nameHashID = 0;
     
     LoadedBitmap bitmap = LoadBitmap(path, filename, false);
     asset.dest->bitmap.nativeHeight = bitmap.downsampleFactor * bitmap.height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
@@ -1559,7 +1561,8 @@ internal BitmapId AddCharacterAsset(LoadedFont* font, u32 codePoint )
     asset.source->glyph.font = font;
     
     // NOTE(Leonardo ): alignment is set later!
-    asset.dest->stringHashID = 0;
+    asset.dest->typeHashID = 0;
+    asset.dest->nameHashID = 0;
     asset.dest->bitmap.align[0] = 0.0f;
     asset.dest->bitmap.align[1] = 0.0f;
     asset.dest->bitmap.nativeHeight = 0.0f;
@@ -1589,7 +1592,8 @@ internal FontId AddFontAsset(LoadedFont* font )
     asset.source->type = Pak_font;
     asset.source->font.font = font;
     
-    asset.dest->stringHashID = 0;
+    asset.dest->typeHashID = 0;
+    asset.dest->nameHashID = 0;
     asset.dest->font.glyphsCount = font->glyphsCount;
     asset.dest->font.ascenderHeight = font->ascenderHeight;
     asset.dest->font.descenderHeight = font->descenderHeight;
@@ -1612,7 +1616,8 @@ internal AnimationId AddAnimationAsset(char* path, char* filename, u32 animation
     AddedAsset asset = AddAsset(assets );
     
     asset.source->type = Pak_animation;
-    asset.dest->stringHashID = stringHashID;
+    asset.dest->typeHashID = stringHashID;
+    asset.dest->nameHashID = stringHashID;
     StrCpy(path, StrLen(path ), asset.source->animation.path, ArrayCount(asset.source->animation.path ) );
     StrCpy(filename, StrLen(filename ), asset.source->animation.filename, ArrayCount(asset.source->animation.filename ) );
     asset.source->animation.animationIndex = animationIndex;
@@ -1654,15 +1659,18 @@ internal void AddEveryAnimationThatStartsWith(char* path, u64 hashID, char* anim
     Win32GetAllFilesEnd(&fileGroup );
 }
 
-internal SoundId AddSoundAsset(char* filename, u64 stringHash = 0, i32 firstSampleIndex = 0, i32 sampleCount = 0 )
+internal SoundId AddSoundAsset(char* filename, u64 stringHash, i32 firstSampleIndex = 0, i32 sampleCount = 0)
 {
+    char* soundName = AdvanceToLastSlash(filename);
+    
     Assets* assets = currentAssets_;
     AddedAsset asset = AddAsset(assets );
     
     asset.source->type = Pak_sound;
     asset.source->sound.firstSampleIndex = firstSampleIndex;
     StrCpy(filename, StrLen(filename), asset.source->sound.filename, ArrayCount(asset.source->bitmap.filename));
-    asset.dest->stringHashID = stringHash;
+    asset.dest->typeHashID = stringHash;
+    asset.dest->nameHashID = StringHash(soundName);
     
     asset.dest->sound.sampleCount = sampleCount;
     asset.dest->sound.chain = Chain_none;
@@ -1816,17 +1824,15 @@ internal void WritePak(Assets* assets, char* fileName_)
                         }
                         
                         source->animation.header.durationMS = animation.durationMS;
+                        source->animation.header.nameHash = animation.stringHashID;
+                        dest->nameHashID = animation.stringHashID;
                         //source->animation.header.singleCycle = animation.singleCycle;
-                        if(!dest->stringHashID)
+                        if(!dest->typeHashID)
                         {
-                            dest->stringHashID = animation.stringHashID;
+                            dest->typeHashID = animation.stringHashID;
                         }
-                        dest->animation.spriteCount = animation.spriteInfoCount;
                         
-                        if(animation.spriteInfoCount == 19)
-                        {
-                            int a = 5;
-                        }
+                        dest->animation.spriteCount = animation.spriteInfoCount;
                         
                         dest->animation.frameCount = animation.frameCount;
                         dest->animation.boneCount = countTotalBones;
@@ -1852,13 +1858,30 @@ internal void WritePak(Assets* assets, char* fileName_)
             fwrite(&assets->assets, header.assetcount * sizeof(PakAsset), 1, out);
             
             fclose(out );
+            
+            PlatformFile uncompressed = DEBUGWin32ReadFile(outputpak);
+            
+            uLong uncompressedSize = (uLong) uncompressed.size;
+            uLong compressedLen = compressBound(uncompressedSize);
+            
+            u8* compressed = (u8*) malloc((size_t) compressedLen + 4);
+            
+            Assert(uncompressedSize <= 0xffffffff);
+            *((u32*) compressed) = uncompressedSize;
+            
+            int cmp_status = compress(compressed + 4, &compressedLen, (const unsigned char *) uncompressed.content, uncompressedSize);
+            Assert(cmp_status == Z_OK);
+            
+            
+            DEBUGWin32FreeFile(&uncompressed);
+            DEBUGWin32WriteFile(outputpak, compressed, compressedLen + 4);
+            free(compressed);
         }
         else
         {
             InvalidCodePath;
         }
     }
-    
 }
 
 internal void InitializeAssets(Assets* assets )
@@ -2436,14 +2459,14 @@ internal void WriteAnimationAutocompleteFile(char* path, char* skeletonName)
 		{
 			char animationName[32];
 			GetAnimationName(completePath, fileName, animationIndex, animationName, sizeof(animationName));
-			writeHere += sprintf(writeHere, "%s,", animationName);
+			writeHere += sprintf(writeHere, "\"%s\",", animationName);
 		}
         Win32CloseHandle(&fileHandle);
     }
     
     Win32GetAllFilesEnd(&animationGroup);
     
-    DEBUGWin32WriteFile(completePath, buffer, StrLen(buffer));
+    DEBUGWin32WriteFile(output, buffer, StrLen(buffer));
     free(buffer);
 }
 
@@ -2460,8 +2483,11 @@ internal void WriteBitmapsAndAnimations()
     for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
     {
 		char* skeletonName = subdir->subdirs[subdirIndex];
-        WriteAnimations(animationPath, skeletonName);
-		WriteAnimationAutocompleteFile(animationPath, skeletonName);
+        if(!StrEqual(skeletonName, ".") && !StrEqual(skeletonName, ".."))
+        {
+            WriteAnimations(animationPath, skeletonName);
+            WriteAnimationAutocompleteFile(animationPath, skeletonName);
+        }
     }
     free(subdir);
     
@@ -2609,6 +2635,15 @@ internal void WriteSounds(PlatformFile labelsFile, char* folder, char* name_)
     FormatString(completePath, sizeof(completePath), "%s/%s", folder, name_);
     
     
+    char* outputPath = "assets";
+    char autocompletePath[128];
+    FormatString(autocompletePath, sizeof(autocompletePath), "%s/%s.autocomplete", outputPath, name_);
+    
+    
+    char* buffer = (char*) malloc(MegaBytes(2));
+    char* writeHere = buffer;
+    
+    
     u64 hashID = StringHash(name);
     
     u32 hashIndex =  hashID & (HASHED_ASSET_SLOTS - 1);
@@ -2626,15 +2661,18 @@ internal void WriteSounds(PlatformFile labelsFile, char* folder, char* name_)
             
             
             AddSoundAsset(completeSoundName, hashID);
-            AddLabelsFromFile(labelsFile, soundHandle.name);
+            //AddLabelsFromFile(labelsFile, soundHandle.name);
+            
+            writeHere += sprintf(writeHere, "\"%s\",", soundHandle.name);
             
             Win32CloseHandle(&soundHandle);
         }
         EndAssetType();
     }
-    
     Win32GetAllFilesEnd(&soundGroup);
     
+    DEBUGWin32WriteFile(autocompletePath, buffer, StrLen(buffer));
+    free(buffer);
     
     char pakName[128];
     FormatString(pakName, sizeof(pakName), "%sS.pak", name);
@@ -2701,12 +2739,11 @@ internal void WriteMusic()
 }
 
 
-internal void OutputAutocompleteFile(char* filename, char* path)
+internal void OutputFoldersAutocompleteFile(char* filename, char* path)
 {
     char* outputPath = "assets";
     char completePath[128];
     FormatString(completePath, sizeof(completePath), "%s/%s.autocomplete", outputPath, filename);
-    
     
     
     char* buffer = (char*) malloc(MegaBytes(2));
@@ -2719,9 +2756,8 @@ internal void OutputAutocompleteFile(char* filename, char* path)
         char* folderName = subdir->subdirs[subdirIndex];
         if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
         {
-            writeHere += sprintf(writeHere, "%s,", folderName);
+            writeHere += sprintf(writeHere, "\"%s\",", folderName);
         }
-        
     }
     free(subdir);
     
@@ -2746,12 +2782,12 @@ inline char* AddFolderToFile(char* addHere, char* fileEnd, char* folder)
     return result;
 }
 
-inline void AddAssetToFile(char* addHere, char* fileEnd, char* assetName)
+inline void AddAssetToFile(char* addHere, char* fileEnd, char* tag, char* assetName)
 {
     u32 sizeToEnd = (u32) (fileEnd - addHere);
     
     char toAdd[256];
-    FormatString(toAdd, sizeof(toAdd), "{name = \"%s\", labels = (empty = {name = \"invalid\", value = 1.0})},", assetName);
+    FormatString(toAdd, sizeof(toAdd), "{%s = \"%s\"},", tag, assetName);
     u32 roomToMake = StrLen(toAdd);
     Assert(roomToMake <= sizeToEnd);
     
@@ -2821,7 +2857,7 @@ internal void WriteAssetDefinitionFile(char* path, char* filename)
                 
                 if(!StringPresentInFile(folderPtr, soundHandle.name))
                 {
-                    AddAssetToFile(folderPtr, endFile, soundHandle.name);
+                    AddAssetToFile(folderPtr, endFile, "soundName", soundHandle.name);
                 }
                 
                 Win32CloseHandle(&soundHandle);
@@ -2849,17 +2885,28 @@ internal void WriteSounds()
 {
     char* assetFile = "sound.fad";
     char* soundPath = "definition/sound";
-    char labelsFile[512];
-    FormatString(labelsFile, sizeof(labelsFile), "%s/%s", soundPath, assetFile);
+    char databaseFile[512];
+    FormatString(databaseFile, sizeof(databaseFile), "%s/%s", soundPath, assetFile);
     
-    OutputAutocompleteFile("soundType", soundPath);
+    OutputFoldersAutocompleteFile("soundType", soundPath);
     WriteAssetDefinitionFile(soundPath, assetFile);
     
-    PlatformFile labels = DEBUGWin32ReadFile(labelsFile);
+    PlatformFile database = DEBUGWin32ReadFile(databaseFile);
+    RecursiveWriteSounds(database, soundPath);
+    DEBUGWin32FreeFile(&database);
     
-    RecursiveWriteSounds(labels, soundPath);
+    char* eventFile = "soundEvents.fad";
+    char* eventPath = "definition/soundEvents";
+    char* eventDestPath = "assets";
     
-    DEBUGWin32FreeFile(&labels);
+    char eventSourceCompletePath[128];
+    FormatString(eventSourceCompletePath, sizeof(eventSourceCompletePath), "%s/%s", eventPath, eventFile);
+    char eventDestCompletePath[128];
+    FormatString(eventDestCompletePath, sizeof(eventDestCompletePath), "%s/%s", eventDestPath, eventFile);
+    
+    PlatformFile events = DEBUGWin32ReadFile(eventSourceCompletePath);
+    DEBUGWin32WriteFile(eventDestCompletePath, events.content, events.size);
+    DEBUGWin32FreeFile(&events);
 }
 
 

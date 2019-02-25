@@ -110,9 +110,14 @@ internal PLATFORM_GET_ALL_FILE_BEGIN(Win32GetAllFilesBegin)
     char* extension = 0;
     switch( type )
     {
-        case PlatformFile_asset:
+        case PlatformFile_compressedAsset:
         {
             extension = "*.pak";
+        } break;
+        
+        case PlatformFile_uncompressedAsset:
+        {
+            extension = "*.upak";
         } break;
         
         case PlatformFile_savedGame:

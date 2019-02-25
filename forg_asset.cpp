@@ -657,7 +657,7 @@ internal Assets* InitAssets(GameState* gameState,  PlatformTextureOpQueue* textu
     assets->assetSentinel.assetIndex = 0;
     
     char* assetPath = "assets";
-    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_asset, assetPath);
+    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, assetPath);
     
     assets->fileCount = fileGroup.fileCount;
     assets->files = PushArray(&gameState->assetPool, AssetFile, assets->fileCount);
@@ -845,27 +845,41 @@ inline FindAnimationResult FindAnimationByName(Assets* assets, u64 skeletonHashI
             assetIndex++)
 		{
 			Asset* asset = assets->assets + assetIndex;
-			if(asset->paka.stringHashID == skeletonHashID)
+			if(asset->paka.typeHashID == skeletonHashID && asset->paka.nameHashID == animationNameHashID)
 			{
-				if(asset->state == Asset_loaded)
-				{
-					if(asset->header->animation.header->nameHash == animationNameHashID)
-					{
-                        result.assetType = (AssetTypeId) assetType;
-						result.ID = {assetIndex};
-						break;
-					}
-				}
-				else
-				{
-					LoadAnimation(assets, {assetIndex});
-				}
+                result.assetType = (AssetTypeId) assetType;
+                result.ID = {assetIndex};
+                break;
 			}
 		}
 	}
     
     return result;
 }
+
+inline SoundId FindSoundByName(Assets* assets, u64 typeHashID, u64 nameHashID)
+{
+    SoundId result = {};
+    
+    u32 assetID = Asset_count + (typeHashID & (HASHED_ASSET_SLOTS - 1));
+    AssetType* type = assets->types + assetID;
+    
+    for(u32 assetIndex = type->firstAssetIndex; 
+        assetIndex < type->onePastLastAssetIndex;
+        assetIndex++)
+    {
+        Asset* asset = assets->assets + assetIndex;
+        if(asset->paka.typeHashID == typeHashID && asset->paka.nameHashID == nameHashID)
+        {
+            result = {assetIndex};
+            break;
+        }
+	}
+    
+    return result;
+}
+
+
 
 inline u32 GetMatchingAsset_(Assets* assets, u32 assetID, u64 stringHashID,
                              TagVector* values, TagVector* weights, LabelVector* labels)
@@ -879,7 +893,7 @@ inline u32 GetMatchingAsset_(Assets* assets, u32 assetID, u64 stringHashID,
         assetIndex++)
     {
         Asset* asset = assets->assets + assetIndex;
-        if(asset->paka.stringHashID == stringHashID)
+        if(asset->paka.typeHashID == stringHashID)
         {
             r32 currentDiff = 0.0f;
             for(u32 tagIndex = asset->paka.firstTagIndex; 

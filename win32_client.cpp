@@ -1449,7 +1449,14 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         
 						if(GetAsyncKeyState(VK_OEM_MINUS) & 0x8000)
                         {
-                            gameInput.isDown['-'] = true;
+                            if(gameInput.shiftDown)
+                            {
+                                gameInput.isDown['_'] = true;
+                            }
+                            else
+                            {
+                                gameInput.isDown['-'] = true;
+                            }
                         }
                         
 						if(GetAsyncKeyState(VK_OEM_PERIOD) & 0x8000)

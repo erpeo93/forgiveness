@@ -383,8 +383,8 @@ inline u64 AddRandomEntity(SimRegion* region, RandomSequence* sequence, Vec3 P, 
 
 internal void BuildSimpleTestWorld(ServerState* server)
 {
-#define GENERATE_ENEMIES 0
-#define GENERATE_ENVIRONMENT 0
+#define GENERATE_ENEMIES 1
+#define GENERATE_ENVIRONMENT 1
 #define GENERATE_OBJECTS 0
     
     

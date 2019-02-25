@@ -50,6 +50,8 @@ struct EquipmentAnimationSlot
 
 struct AnimationOutput
 {
+    u64 playedAnimationNameHash;
+    
     EquipInfo nearestCompatibleSlot;
     EquipInfo focusSlots;
     i32 focusObjectIndex;

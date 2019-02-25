@@ -109,7 +109,8 @@ struct PakAsset
     u64 dataOffset;
     u32 firstTagIndex;
     u32 onePastLastTagIndex;
-    u64 stringHashID;
+    u64 typeHashID;
+    u64 nameHashID;
     
     union
     {

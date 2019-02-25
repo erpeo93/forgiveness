@@ -308,27 +308,33 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
 #if 1
                 u32 chunkSize = KiloBytes(1);
                 
-                PlatformFileGroup pakGroup = platformAPI.GetAllFilesBegin(PlatformFile_asset, clientDataPath);
+                PlatformFileGroup pakGroup = platformAPI.GetAllFilesBegin(PlatformFile_compressedAsset, clientDataPath);
                 
-                b32 sending = true;
-                for(u32 fileIndex = 0; fileIndex < pakGroup.fileCount && sending; ++fileIndex)
+                u32 toSendSize = server->sendPakBufferSize;
+                
+                for(u32 fileIndex = 0; fileIndex < pakGroup.fileCount && toSendSize > 0; ++fileIndex)
                 {
                     PlatformFileHandle handle = platformAPI.OpenNextFile(&pakGroup, clientDataPath);
                     if(fileIndex == player->pakFileIndex)
                     {
-                        u32 sizeToRead = Min(server->sendPakBufferSize, handle.fileSize - player->pakFileOffset);
+                        u32 sizeToRead = Min(toSendSize, handle.fileSize - player->pakFileOffset);
                         
                         platformAPI.ReadFromFile(&handle, player->pakFileOffset, sizeToRead, server->sendPakBuffer);
                         
                         if(player->pakFileOffset == 0)
                         {
-                            SendPakFileHeader(player, handle.name, handle.fileSize, chunkSize);
+                            char nameWithoutPoint[64];
+                            GetNameWithoutPoint(nameWithoutPoint, sizeof(nameWithoutPoint), handle.name);
+                            
+                            char uncompressedName[64];
+                            FormatString(uncompressedName, sizeof(uncompressedName), "%s.upak", nameWithoutPoint);
+                            
+                            
+                            SendPakFileHeader(player, uncompressedName, handle.fileSize, chunkSize);
                         }
                         
                         SendFileChunks(player, server->sendPakBuffer, sizeToRead, chunkSize);
                         player->pakFileOffset += sizeToRead;
-                        
-                        
                         
                         if(player->pakFileOffset >= handle.fileSize)
                         {
@@ -340,7 +346,16 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                             }
                         }
                         
-                        sending = false;
+                        u32 modSizeToRead = sizeToRead;
+                        
+                        if(modSizeToRead % chunkSize != 0)
+                        {
+                            modSizeToRead += chunkSize - (sizeToRead % chunkSize);
+                        }
+                        Assert(modSizeToRead % chunkSize == 0);
+                        
+                        
+                        toSendSize -= modSizeToRead;
                     }
                     platformAPI.CloseHandle(&handle);
                 }
@@ -923,7 +938,7 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     
     
     server->networkPool.allocationFlags = PlatformMemory_NotRestored;
-    server->sendPakBufferSize = KiloBytes(128);
+    server->sendPakBufferSize = MegaBytes(1);
     server->sendPakBuffer = PushArray(&server->networkPool, char, server->sendPakBufferSize);
     server->players = PushArray( &server->networkPool, ServerPlayer, MAXIMUM_SERVER_PLAYERS );
     //server->otherServers = PushArray( &server->pool, Server, MAX_OTHER_SERVERS );
@@ -940,7 +955,7 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     for(u16 connectionIndex = 0; connectionIndex < maxConnectionCount; ++connectionIndex)
     {
         NetworkConnection* connection = connections + connectionIndex;
-        u32 recvBufferSize = MegaBytes(1);
+        u32 recvBufferSize = MegaBytes(3);
         connection->appRecv = ForgAllocateNetworkBuffer(&server->networkPool, recvBufferSize);
     }
     

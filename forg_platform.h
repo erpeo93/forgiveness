@@ -505,7 +505,8 @@ typedef DEBUG_PLATFORM_GET_PROCESS_STATE( platform_get_process_state );
 
 typedef enum PlatformFileType
 {
-    PlatformFile_asset,
+    PlatformFile_compressedAsset,
+    PlatformFile_uncompressedAsset,
     PlatformFile_savedGame,
     PlatformFile_image,
     PlatformFile_animation,
