@@ -23,7 +23,8 @@ enum EditorElementFlags
     EditorElem_Editable = (1 << 3),
     EditorElem_Expanded = (1 << 4),
     EditorElem_CantBeDeleted = (1 << 5),
-    EditorElem_AlwaysEditable = (1 << 6)
+    EditorElem_AlwaysEditable = (1 << 6),
+    EditorElem_LabelsEditable = (1 << 7),
 };
 
 struct EditorElement

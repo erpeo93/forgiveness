@@ -314,54 +314,57 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
     {
         result.bounds = GetUIOrthoTextBounds(UI, text, layout->fontScale, P);
         result.color = V4(0, 1, 0, 1);
-        if(PointInRect(result.bounds, UI->relativeScreenMouse))
+        if(!UI->activeLabel)
         {
-            UIInteraction mouseInteraction = {};
-            if(StrEqual(text, "true"))
+            if(PointInRect(result.bounds, UI->relativeScreenMouse))
             {
-                result.color = V4(1, 0, 1, 1);
-                UIAddStandardAction_(&mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(root->value), ColdPointer(UI->falseString));
-                
-            }
-            else if(StrEqual(text, "false"))
-            {
-                result.color = V4(1, 0, 1, 1);
-                UIAddStandardAction_(&mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(root->value), ColdPointer(UI->trueString));
-            }
-            else
-            {
-                b32 canEdit = false;
-                if(root->type == EditorElement_Signed || root->type == EditorElement_Unsigned ||
-                   root->type == EditorElement_Real)
+                UIInteraction mouseInteraction = {};
+                if(StrEqual(text, "true"))
                 {
-                    canEdit = true;
+                    result.color = V4(1, 0, 1, 1);
+                    UIAddStandardAction_(&mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(root->value), ColdPointer(UI->falseString));
+                    
+                }
+                else if(StrEqual(text, "false"))
+                {
+                    result.color = V4(1, 0, 1, 1);
+                    UIAddStandardAction_(&mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(root->value), ColdPointer(UI->trueString));
                 }
                 else
                 {
-                    if(IsSet(root, EditorElem_AlwaysEditable))
+                    b32 canEdit = false;
+                    if(root->type == EditorElement_Signed || root->type == EditorElement_Unsigned ||
+                       root->type == EditorElement_Real)
                     {
                         canEdit = true;
                     }
                     else
                     {
-                        UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parent, root->name);
-                        if(autocomplete)
+                        if(IsSet(root, EditorElem_AlwaysEditable))
                         {
                             canEdit = true;
                         }
+                        else
+                        {
+                            UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parent, root->name);
+                            if(autocomplete)
+                            {
+                                canEdit = true;
+                            }
+                        }
+                    }
+                    
+                    if(canEdit)
+                    {
+                        result.color = V4(1, 0, 1, 1);
+                        mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
+                        UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, parent);
+                        UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->currentAutocompleteSelectedIndex, -1);   UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                     }
                 }
                 
-                if(canEdit)
-                {
-                    result.color = V4(1, 0, 1, 1);
-                    mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
-                    UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, parent);
-                    UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->currentAutocompleteSelectedIndex, -1);   UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
-                }
+                UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
             }
-            
-            UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
         }
     }
     else
@@ -444,20 +447,33 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
         Vec4 textColor = V4(1, 1, 1, 1);
         
 		b32 nameHot = false;
+        char* nameToShow = name;
+        b32 showName = (nameToShow[0]);
+        
         if(PointInRect(nameBounds, UI->relativeScreenMouse))
         {
-            textColor = V4(1, 0, 0, 1);
-            
+            textColor = V4(1, 1, 0, 1);
             u32 finalFlags = IsSet(root, EditorElem_Expanded) ? (root->flags & ~EditorElem_Expanded) : (root->flags | EditorElem_Expanded);
             
             UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &root->flags, finalFlags));
-			nameHot = true;
+            
+            if(!UI->active && parent && (parent->flags & EditorElem_LabelsEditable))
+            {
+                textColor = V4(1, 0, 0, 1);
+                UIAddInteraction(UI, input, mouseRight, UISetValueInteraction(UI_Trigger, &UI->activeLabel, root));
+			}
+            nameHot = true;
+        }
+        
+        if(root == UI->activeLabel)
+        {
+            nameToShow = UI->keyboardBuffer;
         }
         
         Vec2 nameP = layout->P;
-        if(root->name[0])
+        if(showName)
         {
-            PushUIOrthoText(UI, name, layout->fontScale, nameP, textColor, layout->additionalZBias);
+            PushUIOrthoText(UI, nameToShow, layout->fontScale, nameP, textColor, layout->additionalZBias);
             layout->P += V2(0, -layout->childStandardHeight);
         }
         
@@ -537,8 +553,18 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         }
                     }
                     
+                    b32 moveHorizontally = (root->firstInList && root->firstInList->name[0]);
+                    if(moveHorizontally)
+                    {
+                        layout->P += V2(layout->nameValueDistance, 0);
+                    }
                     b32 canDeleteElements = !IsSet(root, EditorElem_CantBeDeleted);
                     result = Union(result, UIRenderEditorTree(UI, widget, layout, root, root->firstInList, input, canDeleteElements));
+                    
+                    if(moveHorizontally)
+                    {
+                        layout->P -= V2(layout->nameValueDistance, 0);
+                    }
                     
                     Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
                     PushLine(UI->group, V4(1, 1, 1, 1), verticalStartP, verticalEndP, 1);
@@ -839,6 +865,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     
     UIInteraction esc = UISetValueInteraction(UI_Trigger, &UI->active, 0);
     UIAddSetValueAction(&esc, UI_Trigger, &UI->activeParent, 0);
+    UIAddSetValueAction(&esc, UI_Trigger, &UI->activeLabel, 0);
     UIAddClearAction(&esc, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
     UIAddSetValueAction(&esc, UI_Trigger, &UI->copying, 0);
     UIAddSetValueAction(&esc, UI_Trigger, &UI->currentAutocompleteSelectedIndex, -1);
@@ -877,7 +904,18 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     }
     
     UI->bufferValid = false;
-    if(UI->keyboardBuffer[0] && UI->active)
+    
+    if(UI->keyboardBuffer[0] && UI->activeLabel)
+    {
+        UI->bufferValid = true;
+        
+        UIInteraction confirmInteraction = {};
+        UIAddStandardAction(&confirmInteraction, UI_Trigger, UI->activeLabel->name, ColdPointer(UI->activeLabel->name), ColdPointer(UI->keyboardBuffer));
+        UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeLabel, 0);    
+        UIAddClearAction(&confirmInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+        UIAddInteraction(UI, input, confirmButton, confirmInteraction);
+    }
+    else if(UI->keyboardBuffer[0] && UI->active)
     {
         switch(UI->active->type)
         {

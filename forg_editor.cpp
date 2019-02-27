@@ -2047,21 +2047,25 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                         {
                             Token pound = GetToken(tokenizer);
                             Token paramName = GetToken(tokenizer);
-                            if(RequireToken(tokenizer, Token_EqualSign))
+                            if(TokenEquals(paramName, "empty"))
                             {
-                                if(TokenEquals(paramName, "empty"))
+                                if(RequireToken(tokenizer, Token_EqualSign))
                                 {
                                     newElement->emptyElement = LoadElementInMemory(mode, tokenizer, end);
                                     FormatString(newElement->emptyElement->name, sizeof(newElement->emptyElement->name), "empty");
                                 }
-                                else if(TokenEquals(paramName, "recursiveEmpty"))
-                                {
-                                    
-                                }
-                                else
-                                {
-                                    InvalidCodePath;
-                                }
+                            }
+                            else if(TokenEquals(paramName, "recursiveEmpty"))
+                            {
+                                
+                            }
+                            else if(TokenEquals(paramName, "editableLabels"))
+                            {
+                                newElement->flags |= EditorElem_LabelsEditable;
+                            }
+                            else
+                            {
+                                InvalidCodePath;
                             }
                         }
                         else
@@ -2078,10 +2082,6 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                     }
                     else
                     {
-                        if(!NextTokenIs(tokenizer, Token_OpenBraces))
-                        {
-                            InvalidCodePath;
-                        }
                         newElement->firstInList = LoadElementInMemory(mode, tokenizer, end);
                         if(!RequireToken(tokenizer, Token_CloseParen))
                         {
