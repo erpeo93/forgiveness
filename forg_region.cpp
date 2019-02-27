@@ -1408,8 +1408,8 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
         {
             InstantiateRequest request;
             unpack(data, "LV", &request.taxonomy, &request.offset);
-            RandomSequence seq = Seed(2000);
-            AddRandomEntity(region, &seq, entity->P + request.offset, request.taxonomy);
+            RandomSequence* seq = &server->instantiateSequence;
+            AddRandomEntity(region, seq, entity->P + request.offset, request.taxonomy);
         } break;
         
         case Type_DeleteEntity:

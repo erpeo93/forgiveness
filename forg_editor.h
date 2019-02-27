@@ -76,16 +76,6 @@ inline void AddFlags(EditorElement* element, u32 flags)
     element->flags |= flags;
 }
 
-enum EditorTabType
-{
-    Tab_Bounds,
-    Tab_PlayerMappings,
-    Tab_Components,
-    Tab_Effects,
-    
-    Tab_Count,
-};
-
 #define MAX_DATA_FILE_NAME_LENGTH 64
 struct DataFileArrived
 {
@@ -102,6 +92,7 @@ struct DataFileArrived
 struct EditorTabStack
 {
     u32 counter;
+    b32 currentTabEditable;
     EditorElement* result;
     struct EditorElement* stack[16];
     u32 previousElementType;
@@ -118,17 +109,42 @@ struct EditorLayout
     r32 childStandardHeight;
 };
 
+enum EditorRole
+{
+    EditorRole_SoundDesigner = (1 << 1),
+    EditorRole_GameDesigner = (1 << 2),
+    
+    EditorRole_Everyone = 0xffffffff,
+};
+
+enum EditorWidgetType
+{
+    EditorWidget_TaxonomyTree,
+    EditorWidget_EditingTaxonomyTabs,
+    EditorWidget_Animation,
+    EditorWidget_SoundDatabase,
+    EditorWidget_GeneralButtons,
+    EditorWidget_SoundEvents,
+    
+    EditorWidget_Count,
+};
+
+struct WidgetPermanent
+{
+    Vec2 P;
+    b32 expanded;
+};
+
 struct EditorWidget
 {
     u32 buttonCount;
+    u32 necessaryRole;
     
-    Vec2 P;
-    Vec2 dataOffset;
+    WidgetPermanent permanent;
+    
     EditorLayout layout;
     
-    b32 expanded;
     
     char name[32];
     EditorElement* root;
 };
-

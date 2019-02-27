@@ -270,9 +270,10 @@ struct GameModeWorld
     struct DataFileArrived* currentFile;
     
     b32 allDataFilesArrived;
+    b32 loadTaxonomies;
+    
     b32 allPakFilesArrived;
     u32 patchSectionArrived;
-    b32 canRender;
     
     
     r32 currentPhaseTimer;

@@ -86,7 +86,7 @@ inline void FreeTaxonomySlot(TaxonomyTable* table, TaxonomySlot* slot)
     
     
     u32 oldTabCount = slot->tabCount;
-    EditorElement* oldTabs[8];
+    EditorTab oldTabs[8];
     Assert(oldTabCount <= ArrayCount(oldTabs));
     for(u32 tabIndex = 0; tabIndex < oldTabCount; ++tabIndex)
     {

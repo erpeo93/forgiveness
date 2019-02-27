@@ -227,6 +227,12 @@ struct TaxonomySound
     };
 };
 
+struct EditorTab
+{
+    b32 editable;
+    struct EditorElement* root;
+};
+
 struct TaxonomySlot
 {
     u32 taxonomy;
@@ -310,7 +316,9 @@ struct TaxonomySlot
     
     
     u32 tabCount;
-    struct EditorElement* tabs[8];
+    EditorTab tabs[16];
+    
+    
 };
 
 struct SoundLabel

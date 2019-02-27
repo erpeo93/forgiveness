@@ -2038,8 +2038,38 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                     
                     if(NextTokenIs(tokenizer, Token_Identifier))
                     {
-                        newElement->emptyElement = LoadElementInMemory(mode, tokenizer, end);
                     }
+                    
+                    b32 parsingParams = true;
+                    while(parsingParams)
+                    {
+                        if(NextTokenIs(tokenizer, Token_Pound))
+                        {
+                            Token pound = GetToken(tokenizer);
+                            Token paramName = GetToken(tokenizer);
+                            if(RequireToken(tokenizer, Token_EqualSign))
+                            {
+                                if(TokenEquals(paramName, "empty"))
+                                {
+                                    newElement->emptyElement = LoadElementInMemory(mode, tokenizer, end);
+                                    FormatString(newElement->emptyElement->name, sizeof(newElement->emptyElement->name), "empty");
+                                }
+                                else if(TokenEquals(paramName, "recursiveEmpty"))
+                                {
+                                    
+                                }
+                                else
+                                {
+                                    InvalidCodePath;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            parsingParams = false;
+                        }
+                    }
+                    
                     
                     if(NextTokenIs(tokenizer, Token_CloseParen))
                     {
@@ -2048,6 +2078,10 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                     }
                     else
                     {
+                        if(!NextTokenIs(tokenizer, Token_OpenBraces))
+                        {
+                            InvalidCodePath;
+                        }
                         newElement->firstInList = LoadElementInMemory(mode, tokenizer, end);
                         if(!RequireToken(tokenizer, Token_CloseParen))
                         {
@@ -2152,16 +2186,33 @@ inline void FreeElement(EditorElement* element)
     }
 }
 
+inline b32 IsEditableByRole(EditorElement* root, u32 role)
+{
+    char* tabName = root->name;
+    
+    b32 result = false;
+    if(StrEqual(tabName, "soundEffects"))
+    {
+        result = (role & EditorRole_SoundDesigner);
+    }
+    else
+    {
+        result = (role == EditorRole_Everyone);
+    }
+    
+    return result;
+}
 
-internal void LoadTabInTaxonomySlot(char* content)
+internal void LoadFileInTaxonomySlot(char* content)
 {
     Tokenizer tokenizer = {};
     tokenizer.at = content;
     
     for(u32 tabIndex = 0; tabIndex < currentSlot_->tabCount; ++tabIndex)
     {
-        EditorElement* root = currentSlot_->tabs[currentSlot_->tabCount++];
-        FreeElement(root);
+        EditorTab* tab = currentSlot_->tabs + tabIndex;
+        FreeElement(tab->root);
+        tab->editable = 0;
     }
     currentSlot_->tabCount = 0;
     
@@ -2170,7 +2221,9 @@ internal void LoadTabInTaxonomySlot(char* content)
     while(true)
     {
         Assert(currentSlot_->tabCount < ArrayCount(currentSlot_->tabs));
-        currentSlot_->tabs[currentSlot_->tabCount++] = LoadElementInMemory(LoadElements_Tab, &tokenizer, &end);
+        
+        EditorTab* newTab = currentSlot_->tabs + currentSlot_->tabCount++;
+        newTab->root = LoadElementInMemory(LoadElements_Tab, &tokenizer, &end);
         
         if(end)
         {
@@ -2797,16 +2850,16 @@ internal void ImportAllFiles(char* dataPath, MemoryPool* tempPool, b32 freeTab)
             currentSlot_ = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName);
             if(currentSlot_)
             {
-                LoadTabInTaxonomySlot(source);
+                LoadFileInTaxonomySlot(source);
                 for(u32 tabIndex = 0; tabIndex < currentSlot_->tabCount; ++tabIndex)
                 {
-                    EditorElement* tabRoot = currentSlot_->tabs[tabIndex];
-                    Import(currentSlot_, tabRoot);
+                    EditorTab* tab = currentSlot_->tabs + tabIndex;
+                    Import(currentSlot_, tab->root);
                     
                     if(freeTab)
                     {
-                        FreeElement(tabRoot);
-                        currentSlot_->tabs[tabIndex] = 0;
+                        FreeElement(tab->root);
+                        tab->root = 0;
                     }
                 }
                 
@@ -2914,7 +2967,7 @@ internal void WriteToFile(TaxonomyTable* table, TaxonomySlot* slot)
     for(u32 tabIndex = 0; tabIndex < slot->tabCount; ++tabIndex)
     {
         u32 newRemaining = remaining;
-        WriteElements(currentBuffer, &newRemaining, slot->tabs[tabIndex]);
+        WriteElements(currentBuffer, &newRemaining, slot->tabs[tabIndex].root);
         u32 written = remaining - newRemaining;
         writtenTotal += written;
         
@@ -2942,33 +2995,36 @@ inline void PatchLocalServer()
 }
 
 
-internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player, MemoryPool* tempPool, char* singleFileNameToSend = 0)
+internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player, MemoryPool* tempPool, b32 sendTaxonomyFiles, char* singleFileNameToSend = 0)
 {
     TempMemory fileMemory = BeginTemporaryMemory(tempPool);
     
     u32 bufferSize = MegaBytes(64);
     char* buffer = (char*) PushSize(tempPool, bufferSize, NoClear());
     
-    PlatformFileGroup definitionGroup = platformAPI.GetAllFilesBegin(PlatformFile_entityDefinition, path);
-    for(u32 fileIndex = 0; fileIndex < definitionGroup.fileCount; ++fileIndex)
-    {
-        PlatformFileHandle handle = platformAPI.OpenNextFile(&definitionGroup, path);
-        
-        if(!singleFileNameToSend || StrEqual(singleFileNameToSend, handle.name))
-        {
-            Assert(handle.fileSize <= bufferSize);
-            platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
-            buffer[handle.fileSize] = 0;
-            char* source = (char*) buffer;
-            
-            
-            SendDataFile(player, handle.name, source, handle.fileSize);
-        }
-        
-        platformAPI.CloseHandle(&handle);
-    }
-    platformAPI.GetAllFilesEnd(&definitionGroup);
     
+    if(sendTaxonomyFiles)
+    {
+        PlatformFileGroup definitionGroup = platformAPI.GetAllFilesBegin(PlatformFile_entityDefinition, path);
+        for(u32 fileIndex = 0; fileIndex < definitionGroup.fileCount; ++fileIndex)
+        {
+            PlatformFileHandle handle = platformAPI.OpenNextFile(&definitionGroup, path);
+            
+            if(!singleFileNameToSend || StrEqual(singleFileNameToSend, handle.name))
+            {
+                Assert(handle.fileSize <= bufferSize);
+                platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
+                buffer[handle.fileSize] = 0;
+                char* source = (char*) buffer;
+                
+                
+                SendDataFile(player, handle.name, source, handle.fileSize);
+            }
+            
+            platformAPI.CloseHandle(&handle);
+        }
+        platformAPI.GetAllFilesEnd(&definitionGroup);
+    }
     
     if(editorMode)
     {
@@ -3014,7 +3070,7 @@ internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player,
         platformAPI.GetAllFilesEnd(&assetGroup);
     }
     
-    SendAllDataFileSentMessage(player);
+    SendAllDataFileSentMessage(player, sendTaxonomyFiles);
     EndTemporaryMemory(fileMemory);
 }
 #endif

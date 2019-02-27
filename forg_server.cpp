@@ -219,7 +219,7 @@ inline void TranslateServerPlayers(ServerState* server)
         if(player->connectionSlot)
         {
             TranslatePlayer(server->oldTable, server->activeTable, player);
-            SendAllDataFiles(server->editor, clientDataPath, player, &server->tempPool, "taxonomies.fed");
+            SendAllDataFiles(server->editor, clientDataPath, player, &server->tempPool, true, "taxonomies.fed");
         }
     }
 }
@@ -305,6 +305,12 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
         {
             if(player->allDataFileSent && !player->allPakFileSent)
             {
+                
+                if(player->assetsReloaded)
+                {
+                    SendAllDataFiles(server->editor, clientDataPath, player, &server->tempPool, false);
+                    player->assetsReloaded = false;
+                }
 #if 1
                 u32 chunkSize = KiloBytes(1);
                 
@@ -432,8 +438,9 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                             unpack(packetPtr, "L", &clientReq.challenge ); 
 							if(challenge == clientReq.challenge)
                             {
-                                SendAllDataFiles(server->editor, clientDataPath, player, &server->tempPool);
+                                SendAllDataFiles(server->editor, clientDataPath, player, &server->tempPool, true);
                                 player->allDataFileSent = true;
+                                player->assetsReloaded = false;
                                 //EntitySQL ep = SQLRetriveHero( server->conn, newPlayer->username, newPlayer->heroSlot );
                                 SimRegion* region = GetServerRegion( server, 0, 0 );
                                 Vec3 P = V3( 0.5f, 10.0f, 0 );
@@ -477,14 +484,18 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                             if(server->editor)
                             {
                                 u32 taxonomy;
-                                packetPtr = unpack(packetPtr, "L", &taxonomy);
+                                u32 role;
+                                packetPtr = unpack(packetPtr, "LL", &taxonomy, &role);
                                 TaxonomySlot* slot = GetSlotForTaxonomy(server->activeTable, taxonomy);
                                 
                                 
                                 for(u32 tabIndex = 0; tabIndex < slot->tabCount; ++tabIndex)
                                 {
-                                    EditorElement* tab = slot->tabs[tabIndex];
-                                    SendNewTabMessage(player);
+                                    EditorElement* tab = slot->tabs[tabIndex].root;
+                                    
+                                    b32 canEdit = IsEditableByRole(tab, role);
+                                    SendNewTabMessage(player, canEdit);
+                                    
                                     SendEditorElements(player, tab);
                                 }
                             }
@@ -634,16 +645,16 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                                 
                                 TaxonomySlot* editingSlot = GetSlotForTaxonomy(taxTable, taxonomy);
                                 
-                                FreeElement(editingSlot->tabs[tab]);
-                                editingSlot->tabs[tab] = stack->result;
+                                FreeElement(editingSlot->tabs[tab].root);
+                                editingSlot->tabs[tab].root = stack->result;
                                 stack->counter = 0;
                                 
                                 FreeTaxonomySlot(taxTable, editingSlot);
                                 
                                 for(u32 tabIndex = 0; tabIndex < editingSlot->tabCount; ++tabIndex)
                                 {
-                                    EditorElement* root = editingSlot->tabs[tabIndex];
-                                    Import(editingSlot, root);
+                                    EditorTab* tabToReload = editingSlot->tabs + tabIndex;
+                                    Import(editingSlot, tabToReload->root);
                                 }
                             }
                         } break;
@@ -709,6 +720,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                                     if(toReset->connectionSlot)
                                     {
                                         toReset->allPakFileSent = false;
+                                        toReset->assetsReloaded = true;
                                         toReset->pakFileIndex = 0;
                                         toReset->pakFileOffset = 0;
                                     }

@@ -618,6 +618,7 @@ struct UIState
     
     b32 reloadingAssets;
     
+    EditorElement uneditableTabRoot;
     i32 editingTabIndex;
     u32 editingTaxonomy;
     
@@ -632,8 +633,9 @@ struct UIState
     EditorElement* active;
     EditorElement* activeParent;
     
-    u32 widgetCount;
-    EditorWidget widgets[16];
+    r32 saveWidgetLayoutTimer;
+    u32 editorRoles;
+    EditorWidget widgets[EditorWidget_Count];
     
     
     b32 hotStructThisFrame;
@@ -646,6 +648,7 @@ struct UIState
     char trueString[32];
     char falseString[32];
     
+    i32 currentAutocompleteSelectedIndex;
     u32 autocompleteCount;
     UIAutocomplete autocompletes[64];
     

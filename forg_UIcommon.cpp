@@ -52,7 +52,6 @@ inline Rect2 GetUIOrthoTextBounds(UIState* UI, char* text, r32 fontScale, Vec2 s
     return bounds;
 }
 
-
 inline void PushUIOrthoText(UIState* UI, char* text, r32 fontScale, Vec2 screenP, Vec4 color, r32 additionalZ = 0.0f)
 {
     UIOrthoTextOp(UI->group, UI->font, UI->fontInfo, text, fontScale, V3(screenP, additionalZ), TextOp_draw, color);
@@ -589,15 +588,15 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
                 TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, request->taxonomy);
                 for(u32 tabIndex = 0; tabIndex < slot->tabCount; ++tabIndex)
                 {
-                    EditorElement* tabRoot = slot->tabs[tabIndex];
-                    FreeElement(tabRoot);
-                    slot->tabs[tabIndex] = 0;
+                    EditorTab* tab = slot->tabs + tabIndex;
+                    FreeElement(tab->root);
+                    tab->root = 0;
                 }
                 slot->tabCount = 0;
                 
                 UI->editingTabIndex = 0;
                 UI->editingTaxonomy = request->taxonomy;
-                SendEditRequest(UI->editingTaxonomy);
+                SendEditRequest(UI->editingTaxonomy, UI->editorRoles);
             }
         } break;
         
@@ -615,18 +614,18 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         {
             TaxonomySlot* editingSlot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
             u32 sendingIndex = UI->editingTabIndex;
-            EditorElement* toSend = editingSlot->tabs[sendingIndex];
-            if(toSend)
+            EditorTab* toSend = editingSlot->tabs + sendingIndex;
+            if(toSend->root)
             {
                 SendNewTabMessage();
-                SendEditorElements(toSend);
+                SendEditorElements(toSend->root);
                 SendReloadEditingMessage(UI->editingTaxonomy, sendingIndex);
                 FreeTaxonomySlot(UI->table, editingSlot);
                 
                 for(u32 tabIndex = 0; tabIndex < editingSlot->tabCount; ++tabIndex)
                 {
-                    EditorElement* root = editingSlot->tabs[tabIndex];
-                    Import(editingSlot, root);
+                    EditorTab* tab = editingSlot->tabs + tabIndex;
+                    Import(editingSlot, tab->root);
                 }
             }
         } break;

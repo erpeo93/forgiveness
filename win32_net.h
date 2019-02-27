@@ -361,39 +361,44 @@ NETWORK_CLOSE_CONNECTION(Win32CloseConnection)
         Assert(connectionSlot);
     }
     NetworkConnection* connection = network->connections + connectionSlot;
-    connection->connected = false;
     
-    
-    unsigned char disconnectMsg_[64];
-    unsigned char* disconnectMsg = PackHeader_(disconnectMsg_, DISCONNECTNUMBER, connection->counterpartConnectionSlot, 0, 0);
-    disconnectMsg += pack(disconnectMsg, "L", connection->salt);
-    u32 totalSize = PackTrailer_(disconnectMsg_, disconnectMsg);
-    
-    for(u32 i = 0; i < 10; ++i)
+    if(connection)
     {
-        if(sendto(network->fd, (const char*) disconnectMsg_, totalSize, 0, (sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
+        connection->connected = false;
+        
+        
+        unsigned char disconnectMsg_[64];
+        unsigned char* disconnectMsg = PackHeader_(disconnectMsg_, DISCONNECTNUMBER, connection->counterpartConnectionSlot, 0, 0);
+        disconnectMsg += pack(disconnectMsg, "L", connection->salt);
+        u32 totalSize = PackTrailer_(disconnectMsg_, disconnectMsg);
+        
+        for(u32 i = 0; i < 10; ++i)
         {
-            InvalidCodePath;
+            if(sendto(network->fd, (const char*) disconnectMsg_, totalSize, 0, (sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
+            {
+                InvalidCodePath;
+            }
         }
-    }
-    
-    
-    
-    
-    connection->counterpartConnectionSlot = 0;
-    connection->contextFirstPacketOffset = 0;
-    connection->filledRecvBufferSize = 0;
-    
-    for(u32 channelIndex = 0; channelIndex < network->channelCount; ++channelIndex)
-    {
-        NetworkChannelInfo* info = connection->channelInfo + channelIndex;
-        info->nextProgressiveIndexSend = 0;
-        info->nextProgressiveIndexRecv = 0;
-        info->runningUnackedIndex = 0;
-        for(u32 packetIndex = 0; packetIndex < ArrayC(info->unackedPackets); ++packetIndex)
+        
+        
+        
+        
+        connection->counterpartConnectionSlot = 0;
+        connection->contextFirstPacketOffset = 0;
+        connection->filledRecvBufferSize = 0;
+        
+        
+        for(u32 channelIndex = 0; channelIndex < network->channelCount; ++channelIndex)
         {
-            UnackedPacket* unacked = info->unackedPackets + packetIndex;
-            unacked->size = 0;
+            NetworkChannelInfo* info = connection->channelInfo + channelIndex;
+            info->nextProgressiveIndexSend = 0;
+            info->nextProgressiveIndexRecv = 0;
+            info->runningUnackedIndex = 0;
+            for(u32 packetIndex = 0; packetIndex < ArrayC(info->unackedPackets); ++packetIndex)
+            {
+                UnackedPacket* unacked = info->unackedPackets + packetIndex;
+                unacked->size = 0;
+            }
         }
     }
 }

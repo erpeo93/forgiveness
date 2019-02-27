@@ -53,6 +53,7 @@ struct ServerPlayer
     b32 connectionClosed;
     u16 connectionSlot;
     
+    b32 assetsReloaded;
     b32 allPakFileSent;
     b32 allDataFileSent;
     u32 pakFileIndex;
@@ -186,6 +187,7 @@ struct DeletedEntity
 struct AIOperationNode;
 struct ServerState
 {
+    RandomSequence instantiateSequence;
     
     EditorTabStack editorStack;
     b32 editor;

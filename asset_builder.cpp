@@ -2798,23 +2798,14 @@ inline void AddAssetToFile(char* addHere, char* fileEnd, char* tag, char* assetN
 internal void WriteAssetDefinitionFile(char* path, char* filename)
 {
     char* assetPath = "assets";
-    char completeName[512];
-    FormatString(completeName, sizeof(completeName), "%s/%s", path, filename);
     
     char assetDest[512];
     FormatString(assetDest, sizeof(assetDest), "%s/%s", assetPath, filename);
     
-	PlatformFile assetFile = DEBUGWin32ReadFile(completeName);
-    
-    Assert(assetFile.size < MegaBytes(3));
     u32 newFileSize = MegaBytes(4);
     char* newFile = (char*) malloc(newFileSize);
     memset(newFile, 0, newFileSize);
     char* endFile = newFile + newFileSize;
-    
-    memcpy(newFile, assetFile.content, assetFile.size);
-    
-    DEBUGWin32FreeFile(&assetFile);
     
     
     PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
@@ -2877,7 +2868,6 @@ internal void WriteAssetDefinitionFile(char* path, char* filename)
         
     }
     free(subdir);
-    DEBUGWin32WriteFile(completeName, newFile, StrLen(newFile));
     DEBUGWin32WriteFile(assetDest, newFile, StrLen(newFile));
 }
 

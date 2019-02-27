@@ -57,11 +57,13 @@ inline Rect2 UIDrawButton(UIState* UI, PlatformInput* input, UIButton* button)
 }
 
 
-inline void UIRenderAutocomplete(UIState* UI, UIAutocomplete* autocomplete, EditorLayout* layout, Vec2 P, char* nameIn)
+inline void UIRenderAutocomplete(UIState* UI, PlatformInput* input, UIAutocomplete* autocomplete, EditorLayout* layout, Vec2 P, char* nameIn)
 {
     UIAutocompleteBlock* block = autocomplete->firstBlock;
     
-    u32 nameCount = 0;
+    
+    i32 nameCount = 0;
+    i32 runningIndex = 0;
     while(block)
     {
         for(u32 nameIndex = 0; nameIndex < block->count; ++nameIndex)
@@ -77,16 +79,25 @@ inline void UIRenderAutocomplete(UIState* UI, UIAutocomplete* autocomplete, Edit
                 Vec2 dim = GetDim(bounds) + V2(layout->nameValueDistance, 0);
                 dim.y = layout->childStandardHeight;
                 
-                Vec4 color = V4(1, 1, 1, 1);
                 
-                PushUIOrthoText(UI, name, layout->fontScale, P, color, layout->additionalZBias + 1.1f);
+                Vec4 autocompleteColor = V4(1, 1, 1, 1);
+                if(runningIndex++ == UI->currentAutocompleteSelectedIndex)
+                {
+                    autocompleteColor = V4(0, 1, 0, 1);
+                    
+                    UIInteraction autoInteraction = {};
+                    UIAddStandardAction(&autoInteraction, UI_Trigger, block->names[nameIndex], ColdPointer(UI->keyboardBuffer), ColdPointer(block->names[nameIndex]));
+                    UIAddInteraction(UI, input, switchButton, autoInteraction);
+                }
+                
+                PushUIOrthoText(UI, name, layout->fontScale, P, autocompleteColor, layout->additionalZBias + 1.1f);
                 PushUIOrthoText(UI, nameIn, layout->fontScale, P, V4(0.5f, 0.5f, 0.5f, 1.0f), layout->additionalZBias + 1.11f);
                 
                 ObjectTransform autoTranform = FlatTransform();
                 autoTranform.additionalZBias = layout->additionalZBias + 1.0f;
                 
                 PushRect(UI->group, autoTranform, RectMinDim(boundsMin, dim), V4(0, 0, 0, 1));
-                PushRectOutline(UI->group, autoTranform, RectMinDim(boundsMin, dim), V4(1, 1, 1, 1), 1);
+                PushRectOutline(UI->group, autoTranform, RectMinDim(boundsMin, dim), autocompleteColor, 1);
                 P.y -= layout->childStandardHeight;
                 
                 ++nameCount;
@@ -96,7 +107,24 @@ inline void UIRenderAutocomplete(UIState* UI, UIAutocomplete* autocomplete, Edit
         block = block->next;
     }
     
-    if(!nameCount)
+    
+    if(nameCount)
+    {
+        i32 nextIndex = UI->currentAutocompleteSelectedIndex + 1;
+        if(UI->currentAutocompleteSelectedIndex == (nameCount - 1))
+        {
+            nextIndex = 0;
+        }
+        
+        i32 prevIndex = UI->currentAutocompleteSelectedIndex - 1;
+        if(UI->currentAutocompleteSelectedIndex <= 0)
+        {
+            prevIndex = nameCount - 1;
+        }
+        UIAddInteraction(UI, input, actionDown, UISetValueInteraction(UI_Trigger, &UI->currentAutocompleteSelectedIndex, nextIndex));
+        UIAddInteraction(UI, input, actionUp, UISetValueInteraction(UI_Trigger, &UI->currentAutocompleteSelectedIndex, prevIndex));
+    }
+    else
     {
         char* text = "no match";
         Rect2 bounds = GetUIOrthoTextBounds(UI, text, layout->fontScale, P);
@@ -328,7 +356,8 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                 {
                     result.color = V4(1, 0, 1, 1);
                     mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
-                    UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, parent);    UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+                    UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, parent);
+                    UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->currentAutocompleteSelectedIndex, -1);   UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                 }
             }
             
@@ -367,7 +396,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
             UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parent, root->name);
             if(autocomplete)
             {
-                UIRenderAutocomplete(UI, autocomplete, layout, P -V2(0, layout->childStandardHeight), UI->keyboardBuffer);
+                UIRenderAutocomplete(UI, input, autocomplete, layout, P -V2(0, layout->childStandardHeight), UI->keyboardBuffer);
             }
         }
     }
@@ -445,7 +474,8 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             case EditorElement_Signed:
             case EditorElement_Unsigned:
             {
-                Vec2 valueP = nameP + V2(layout->nameValueDistance, 0);
+                r32 xAdvance = Max(layout->nameValueDistance, GetDim(nameBounds).x + 10.0f);
+                Vec2 valueP = nameP + V2(xAdvance, 0);
                 char* text = (root == UI->active) ? UI->showBuffer : root->value;
                 
                 UIAddTabResult addTab = UIAddTabValueInteraction(UI, widget, input, parent, root, valueP, layout, text);
@@ -770,6 +800,21 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / width, 0.0f, 0.0f), V3(0.0f, 2.0f / width, 0.0f), V3( 0, 0, 1));
     
     
+    UI->saveWidgetLayoutTimer += UI->worldMode->originalTimeToAdvance;
+    if(UI->saveWidgetLayoutTimer >= 10.0f)
+    {
+        UI->saveWidgetLayoutTimer = 0;
+        
+        WidgetPermanent toSave[EditorWidget_Count];
+        
+        for(u32 widgetIndex = 0; widgetIndex < EditorWidget_Count; ++widgetIndex)
+        {
+            toSave[widgetIndex] = UI->widgets[widgetIndex].permanent;
+        }
+        
+        platformAPI.DEBUGWriteFile("widget", toSave, sizeof(toSave));
+    }
+    
     if(UI->reloadingAssets)
     {
         
@@ -780,8 +825,12 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     
     TaxonomySlot* editingSlot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
     UI->editingTabIndex = Wrap(0, UI->editingTabIndex, editingSlot->tabCount);
+    
+    EditorTab* editingTab = editingSlot->tabs + UI->editingTabIndex;
+    EditorElement* editingRoot = editingTab->editable ? editingTab->root : &UI->uneditableTabRoot;
+    
     EditorWidget* tabWidget = UI->widgets + 1;
-    tabWidget->root = editingSlot->tabs[UI->editingTabIndex];
+    tabWidget->root = editingRoot;
     
     UI->widgets[0].root = UI->editorTaxonomyTree;
     UI->widgets[3].root = UI->soundNamesRoot;
@@ -792,6 +841,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     UIAddSetValueAction(&esc, UI_Trigger, &UI->activeParent, 0);
     UIAddClearAction(&esc, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
     UIAddSetValueAction(&esc, UI_Trigger, &UI->copying, 0);
+    UIAddSetValueAction(&esc, UI_Trigger, &UI->currentAutocompleteSelectedIndex, -1);
     UIAddInteraction(UI, input, escButton, esc);
     
     
@@ -811,6 +861,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             {
                 *appendHere++ = charIndex;
                 --maxToCopy;
+                UI->currentAutocompleteSelectedIndex = -1;
             }
         }
     }
@@ -868,74 +919,74 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                 UI->bufferValid = true;
                 
                 b32 encounteredPoint = false;
-				b32 signEncountered = false;
+                b32 signEncountered = false;
                 
-				char* test = UI->keyboardBuffer;
-				if(*test == '-' || *test == '+')
-				{
-					signEncountered = true;
-					++test;
-				}
+                char* test = UI->keyboardBuffer;
+                if(*test == '-' || *test == '+')
+                {
+                    signEncountered = true;
+                    ++test;
+                }
                 
-				if(*test == '.')
-				{
-					UI->bufferValid = false;
-				}
-				else
-				{
-					for(; *test; ++test)
-					{
-						if(*test == '.')
-						{
+                if(*test == '.')
+                {
+                    UI->bufferValid = false;
+                }
+                else
+                {
+                    for(; *test; ++test)
+                    {
+                        if(*test == '.')
+                        {
                             if(encounteredPoint)
-							{
+                            {
                                 UI->bufferValid = false;
                                 break;
-							}
-							else
-							{
-								encounteredPoint = true;
-							}
-						}
-						else if(*test < '0' || *test > '9')
-						{
-							UI->bufferValid = false;
-							break;
-						}
-					}
-				}
+                            }
+                            else
+                            {
+                                encounteredPoint = true;
+                            }
+                        }
+                        else if(*test < '0' || *test > '9')
+                        {
+                            UI->bufferValid = false;
+                            break;
+                        }
+                    }
+                }
             } break;
             
-			case EditorElement_Signed:
-			{
-				UI->bufferValid = true;
-				char* test = UI->keyboardBuffer;
-				if(*test == '-' || *test == '+')
-				{
-					++test;
-				}
+            case EditorElement_Signed:
+            {
+                UI->bufferValid = true;
+                char* test = UI->keyboardBuffer;
+                if(*test == '-' || *test == '+')
+                {
+                    ++test;
+                }
                 
-				for(; *test; ++test)
-				{
-					if(*test < '0' || *test > '9')
-					{
-						UI->bufferValid = false;
-						break;
-					}
-				}
-			} break;
+                for(; *test; ++test)
+                {
+                    if(*test < '0' || *test > '9')
+                    {
+                        UI->bufferValid = false;
+                        break;
+                    }
+                }
+            } break;
             
-			case EditorElement_Unsigned:
-			{
-				for(char* test = UI->keyboardBuffer; *test; ++test)
-				{
-					if(*test < '0' || *test > '9')
-					{
-						UI->bufferValid = false;
-						break;
-					}
-				}
-			} break;
+            case EditorElement_Unsigned:
+            {
+                for(char* test = UI->keyboardBuffer; *test; ++test)
+                {
+                    if(*test < '0' || *test > '9')
+                    {
+                        UI->bufferValid = false;
+                        break;
+                    }
+                }
+            } break;
             
             InvalidDefaultCase;
         }
@@ -944,121 +995,146 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     
     
     r32 widgetZ = 0.0f;
-    for(u32 widgetIndex = 0; widgetIndex < UI->widgetCount; ++widgetIndex)
+    for(u32 widgetIndex = 0; widgetIndex < EditorWidget_Count; ++widgetIndex)
     {
         EditorWidget* widget = UI->widgets + widgetIndex;
-        Vec2 resizeP = widget->P;
-        Vec2 widgetP = resizeP + V2(20, -8);
-        Vec2 resizeDim = V2(8, 8);
-        Rect2 rect = RectCenterDim(resizeP, resizeDim);
-        Vec4 color = V4(1, 1, 1, 1);
-        if(PointInRect(rect, UI->relativeScreenMouse))
+        
+        if(widget->necessaryRole & UI->editorRoles)
         {
-            UIInteraction moveInteraction = {};
-            UIAddStandardAction(&moveInteraction, UI_Idle, Vec2, ColdPointer(&widget->P),ColdPointer(&UI->relativeScreenMouse));
-            UIAddInteraction(UI, input, mouseLeft, moveInteraction);
-            color = V4(1, 0, 0, 1);
-        }
-        
-        ObjectTransform sizeTranform = FlatTransform();
-        sizeTranform.additionalZBias = widgetZ;
-        
-        PushRect(UI->group, sizeTranform, rect, color);
-        
-        
-        EditorLayout* layout = &widget->layout;
-        layout->P = widgetP;
-        layout->additionalZBias = widgetZ;
-        
-        Rect2 widgetTitleBounds = GetUIOrthoTextBounds(UI, widget->name, layout->fontScale, widgetP);
-        
-        Vec4 widgetColor = widget->expanded ? V4(0, 1, 0, 1) : V4(1, 1, 0, 1);
-        if(PointInRect(widgetTitleBounds, UI->relativeScreenMouse))
-        {
-            widgetColor = V4(1, 0, 0, 1);
-            UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &widget->expanded, !widget->expanded));
-        }
-        PushUIOrthoText(UI, widget->name, layout->fontScale, widgetP, widgetColor, layout->additionalZBias);
-        
-        switch(widgetIndex)
-        {
-            case 1:
+            Vec2 resizeP = widget->permanent.P;
+            Vec2 widgetP = resizeP + V2(20, -8);
+            Vec2 resizeDim = V2(8, 8);
+            Rect2 rect = RectCenterDim(resizeP, resizeDim);
+            Vec4 color = V4(1, 1, 1, 1);
+            if(PointInRect(rect, UI->relativeScreenMouse))
             {
-                Vec2 leftP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
-                
-                
-                UIButton leftButton = UIBtn(UI, leftP, &widget->layout, V4(1, 0, 0, 1), " << ");
-                UIButtonInteraction(&leftButton, UISetValueInteraction(UI_Trigger, &UI->editingTabIndex, UI->editingTabIndex - 1));
-                UIDrawButton(UI, input, &leftButton);
-                
-                Vec2 rightP = UIFollowingP(&leftButton, 10.0f);
-                UIButton rightButton = UIBtn(UI, rightP, &widget->layout, V4(1, 0, 0, 1), " >> ");
-                UIButtonInteraction(&rightButton, UISetValueInteraction(UI_Trigger, &UI->editingTabIndex, UI->editingTabIndex + 1));
-                UIDrawButton(UI, input, &rightButton);
-                
-                
-                
-                Vec2 saveP = UIFollowingP(&rightButton, 10.0f);
-                UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), " SAVE ");
-                UIButtonInteraction(&saveButton, SendRequestInteraction(UI_Trigger, SaveTaxonomyTabRequest()));
-                UIDrawButton(UI, input, &saveButton);
-            } break;
+                UIInteraction moveInteraction = {};
+                UIAddStandardAction(&moveInteraction, UI_Idle, Vec2, ColdPointer(&widget->permanent.P),ColdPointer(&UI->relativeScreenMouse));
+                UIAddInteraction(UI, input, mouseLeft, moveInteraction);
+                color = V4(1, 0, 0, 1);
+            }
             
-            case 3:
-            {
-                Vec2 saveP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
-                
-                
-                UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), " SAVE ");
-                UIButtonInteraction(&saveButton, SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("sound", widget->root)));
-                UIDrawButton(UI, input, &saveButton);
-            } break;
+            ObjectTransform sizeTranform = FlatTransform();
+            sizeTranform.additionalZBias = widgetZ;
             
-            case 4:
-            {
-                Vec2 reloadP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
-                UIButton reloadButton = UIBtn(UI, reloadP, &widget->layout, V4(1, 0, 0, 1), " RELOAD ASSETS ");
-                UIButtonInteraction(&reloadButton, SendRequestInteraction(UI_Trigger, ReloadAssetsRequest()));
-                UIDrawButton(UI, input, &reloadButton);
-                
-                
-                Vec2 patchP = UIFollowingP(&reloadButton, 20);
-                UIButton patchButton = UIBtn(UI, patchP, &widget->layout, V4(1, 0, 0, 1), " PATCH SERVER ");
-                UIButtonInteraction(&patchButton, SendRequestInteraction(UI_Trigger, PatchServerRequest()));
-                UIDrawButton(UI, input, &patchButton);
-                
-            } break;
+            PushRect(UI->group, sizeTranform, rect, color);
             
-            case 5:
+            
+            EditorLayout* layout = &widget->layout;
+            layout->P = widgetP;
+            layout->additionalZBias = widgetZ;
+            
+            Rect2 widgetTitleBounds = GetUIOrthoTextBounds(UI, widget->name, layout->fontScale, widgetP);
+            
+            r32 widgetAlpha = widget->permanent.expanded ? 1.0f : 0.1f;
+            Vec4 widgetColor = V4(0, 1, 0, widgetAlpha);
+            if(PointInRect(widgetTitleBounds, UI->relativeScreenMouse))
             {
-                Vec2 saveP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
-                
-                
-                UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), " SAVE ");
-                UIButtonInteraction(&saveButton, SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("soundEvents", widget->root)));
-                UIDrawButton(UI, input, &saveButton);
-            } break;
+                widgetColor = V4(1, 0, 0, 1);
+                UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &widget->permanent.expanded, !widget->permanent.expanded));
+            }
+            PushUIOrthoText(UI, widget->name, layout->fontScale, widgetP, widgetColor, layout->additionalZBias);
+            
+            if(widget->permanent.expanded)
+            {
+                switch(widgetIndex)
+                {
+                    case EditorWidget_EditingTaxonomyTabs:
+                    {
+                        if(UI->editingTaxonomy)
+                        {
+                            Vec2 leftP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
+                            
+                            
+                            UIButton leftButton = UIBtn(UI, leftP, &widget->layout, V4(1, 0, 0, 1), " << ");
+                            UIButtonInteraction(&leftButton, UISetValueInteraction(UI_Trigger, &UI->editingTabIndex, UI->editingTabIndex - 1));
+                            UIDrawButton(UI, input, &leftButton);
+                            
+                            Vec2 rightP = UIFollowingP(&leftButton, 10.0f);
+                            UIButton rightButton = UIBtn(UI, rightP, &widget->layout, V4(1, 0, 0, 1), " >> ");
+                            UIButtonInteraction(&rightButton, UISetValueInteraction(UI_Trigger, &UI->editingTabIndex, UI->editingTabIndex + 1));
+                            UIDrawButton(UI, input, &rightButton);
+                            
+                            
+                            
+                            Vec2 saveP = UIFollowingP(&rightButton, 30.0f);
+                            
+                            char saveText[128];
+                            FormatString(saveText, sizeof(saveText), "Save %s", editingSlot->name);
+                            UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), saveText);
+                            UIButtonInteraction(&saveButton, SendRequestInteraction(UI_Trigger, SaveTaxonomyTabRequest()));
+                            UIDrawButton(UI, input, &saveButton);
+                            
+                            u32 parentTaxonomy = GetParentTaxonomy(UI->table, editingSlot->taxonomy);
+                            if(parentTaxonomy)
+                            {
+                                Vec2 editParentP = UIFollowingP(&saveButton, 30.0f);
+                                UIButton editParentButton = UIBtn(UI, editParentP, &widget->layout, V4(1, 0, 0, 1), "Edit Parent");
+                                
+                                
+                                UIButtonInteraction(&editParentButton, SendRequestInteraction(UI_Trigger, EditRequest(parentTaxonomy))); 
+                                UIDrawButton(UI, input, &editParentButton);
+                            }
+                        }
+                    } break;
+                    
+                    case EditorWidget_SoundDatabase:
+                    {
+                        Vec2 saveP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
+                        
+                        
+                        UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), " SAVE ");
+                        UIButtonInteraction(&saveButton, SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("sound", widget->root)));
+                        UIDrawButton(UI, input, &saveButton);
+                    } break;
+                    
+                    case EditorWidget_GeneralButtons:
+                    {
+                        Vec2 reloadP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
+                        UIButton reloadButton = UIBtn(UI, reloadP, &widget->layout, V4(1, 0, 0, 1), " RELOAD ASSETS ");
+                        UIButtonInteraction(&reloadButton, SendRequestInteraction(UI_Trigger, ReloadAssetsRequest()));
+                        UIDrawButton(UI, input, &reloadButton);
+                        
+                        
+                        Vec2 patchP = UIFollowingP(&reloadButton, 20);
+                        UIButton patchButton = UIBtn(UI, patchP, &widget->layout, V4(1, 0, 0, 1), " PATCH SERVER ");
+                        UIButtonInteraction(&patchButton, SendRequestInteraction(UI_Trigger, PatchServerRequest()));
+                        UIDrawButton(UI, input, &patchButton);
+                        
+                    } break;
+                    
+                    case EditorWidget_SoundEvents:
+                    {
+                        Vec2 saveP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
+                        
+                        
+                        UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), " SAVE ");
+                        UIButtonInteraction(&saveButton, SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("soundEvents", widget->root)));
+                        UIDrawButton(UI, input, &saveButton);
+                    } break;
+                }
+            }
+            
+            
+            layout->P.y -= layout->childStandardHeight;
+            
+            Rect2 widgetBounds = InvertedInfinityRect2();
+            if(widget->permanent.expanded && widget->root)
+            {
+                widgetBounds = UIRenderEditorTree(UI, widget, layout, 0, widget->root, input, false);
+            }
+            
+            ObjectTransform widgetBoundsTransform = FlatTransform();
+            widgetBoundsTransform.additionalZBias = widgetZ - 0.001f;
+            
+            PushRect(UI->group, widgetBoundsTransform, widgetBounds, V4(0, 0, 0, 0.5f));
+            if(PointInRect(widgetBounds, UI->relativeScreenMouse))
+            {
+                widget->permanent.P.y -= input->mouseWheelOffset * 10.0f;
+            }
+            
+            widgetZ += 1.0f;
         }
-        
-        
-        layout->P.y -= layout->childStandardHeight;
-        
-        Rect2 widgetBounds = InvertedInfinityRect2();
-        if(widget->expanded && widget->root)
-        {
-            widgetBounds = UIRenderEditorTree(UI, widget, layout, 0, widget->root, input, false);
-        }
-        
-        ObjectTransform widgetBoundsTransform = FlatTransform();
-        widgetBoundsTransform.additionalZBias = widgetZ - 0.001f;
-        
-        PushRect(UI->group, widgetBoundsTransform, widgetBounds, V4(0, 0, 0, 0.5f));
-        if(PointInRect(widgetBounds, UI->relativeScreenMouse))
-        {
-            widget->P.y -= input->mouseWheelOffset * 10.0f;
-        }
-        
-        widgetZ += 1.0f;
     }
     
     if(UI->hotStructThisFrame)
@@ -1547,31 +1623,40 @@ inline void UIAddChild(TaxonomyTable* table, EditorElement* element, EditorEleme
     element->firstChild = newElement;
 }
 
+inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, EditorRole necessaryRole, char* name)
+{
+    EditorWidget* result = UI->widgets + widget;
+    *result = {};
+    result->permanent.expanded = true;
+    result->necessaryRole = necessaryRole;
+    result->layout.fontScale = 0.42f;
+    result->layout.nameValueDistance = 50;
+    result->layout.childStandardHeight = 30;
+    FormatString(result->name, sizeof(result->name), name);
+    
+    return result;
+}
+
 inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, ClientEntity* player, PlatformInput* input, r32 fontCoeff)
 {
     UI->table = worldMode->table;
     if(!UI->initialized)
     {
         UI->initialized = true;
-        
-        
         if(worldMode->editingEnabled)
         {
-            EditorWidget* taxonomyTree = UI->widgets + 0;
-            taxonomyTree->P = V2(-800, -100);
-            taxonomyTree->layout.fontScale = 0.42f;
-            taxonomyTree->layout.nameValueDistance = 50;
-            taxonomyTree->layout.childStandardHeight = 30;
-            FormatString(taxonomyTree->name, sizeof(taxonomyTree->name), "hello world");
+            UI->editorRoles = (u32) EditorRole_SoundDesigner;
+            
+            UI->uneditableTabRoot.type = EditorElement_String;
+            FormatString(UI->uneditableTabRoot.name, sizeof(UI->uneditableTabRoot.name), "YOU CAN'T EDIT THIS");
             
             
-            EditorWidget* editingTab = UI->widgets + 1;
-            editingTab->P = V2(100, -100);
-            editingTab->root = 0;
-            editingTab->layout.fontScale = 0.42f;
-            editingTab->layout.nameValueDistance = 150;
-            editingTab->layout.childStandardHeight = 30;
-            FormatString(editingTab->name, sizeof(editingTab->name), "taxonomy tabs");
+            EditorWidget* taxonomyTree = StartWidget(UI, EditorWidget_TaxonomyTree, EditorRole_GameDesigner, "Taxonomy Tree");
+            taxonomyTree->permanent.P = V2(-800, -100);
+            
+            
+            EditorWidget* taxonomyEditing = StartWidget(UI, EditorWidget_EditingTaxonomyTabs, EditorRole_Everyone, "Editing Tabs");
+            taxonomyEditing->permanent.P = V2(100, -100);
             
             
             EditorElement* animationStruct;
@@ -1602,43 +1687,41 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             animationStruct->firstValue = animationRoot;
             
             
-            EditorWidget* animation = UI->widgets + 2;
-            animation->P = V2(-300, -300);
+            EditorWidget* animation = StartWidget(UI, EditorWidget_Animation, EditorRole_Everyone, "Animation");
+            animation->permanent.P = V2(-300, -300);
             animation->root = animationRoot;
-            animation->layout.fontScale = 0.42f;
-            animation->layout.nameValueDistance = 150;
-            animation->layout.childStandardHeight = 30;
-            FormatString(animation->name, sizeof(animation->name), "animation");
             
             
-            EditorWidget* sounds = UI->widgets + 3;
-            sounds->P = V2(300, 200);
-            sounds->root = UI->soundNamesRoot;
-            sounds->layout.fontScale = 0.42f;
-            sounds->layout.nameValueDistance = 150;
-            sounds->layout.childStandardHeight = 30;
-            FormatString(sounds->name, sizeof(sounds->name), "sounds");
+            EditorWidget* soundDatabase = StartWidget(UI, EditorWidget_SoundDatabase, EditorRole_SoundDesigner, "Sound Database");
+            soundDatabase->permanent.P = V2(300, 200);
+            soundDatabase->root = UI->soundNamesRoot;
             
             
-            EditorWidget* standardActions = UI->widgets + 4;
-            standardActions->P = V2(200, 100);
-            standardActions->root = 0;
-            standardActions->layout.fontScale = 0.47f;
-            standardActions->layout.nameValueDistance = 150;
-            standardActions->layout.childStandardHeight = 30;
-            FormatString(standardActions->name, sizeof(standardActions->name), "Actions: ");
+            EditorWidget* actions = StartWidget(UI, EditorWidget_GeneralButtons, EditorRole_Everyone, "Actions:");
+            actions->permanent.P = V2(200, 100);
             
             
-            EditorWidget* soundEvents = UI->widgets + 5;
-            soundEvents->P = V2(-200, 100);
+            EditorWidget* soundEvents = StartWidget(UI, EditorWidget_SoundEvents, EditorRole_SoundDesigner, "Sound Events");
+            soundEvents->permanent.P = V2(-200, 100);
             soundEvents->root = UI->soundEventsRoot;
-            soundEvents->layout.fontScale = 0.42f;
-            soundEvents->layout.nameValueDistance = 150;
-            soundEvents->layout.childStandardHeight = 30;
-            FormatString(soundEvents->name, sizeof(soundEvents->name), "soundEvents");
             
-            UI->widgetCount = 6;
-            Assert(UI->widgetCount < ArrayCount(UI->widgets));
+            
+            PlatformFile layoutFile = platformAPI.DEBUGReadFile("widget");
+            if(layoutFile.content)
+            {
+                if(layoutFile.size == sizeof(WidgetPermanent) * EditorWidget_Count)
+                {
+                    WidgetPermanent* layouts = (WidgetPermanent*) layoutFile.content;
+                    
+                    for(u32 widgetIndex = 0; widgetIndex < EditorWidget_Count; ++widgetIndex)
+                    {
+                        EditorWidget* widget = UI->widgets + widgetIndex;
+                        widget->permanent = layouts[widgetIndex];
+                    }
+                }
+            }
+            
+            platformAPI.DEBUGFreeFile(&layoutFile);
         }
         
         

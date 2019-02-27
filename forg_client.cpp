@@ -446,14 +446,6 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->currentPhase = DayPhase_Sunset;
     
     result->soundState = &gameState->soundState;
-#if 0    
-    MemoryPool testPool = {};
-    
-    EditorTab tab = {};
-	LoadInMemory(&tab, "testTab.fen");
-    result->UI->element = tab.firstElement;
-	WriteToFile(&tab, "outputTab.fen");
-#endif
     
 }
 
@@ -718,48 +710,52 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             char* filePath = "assets";
             if(worldMode->allDataFilesArrived)
             {
-                TaxonomyTable* old = worldMode->oldTable;
-                
-				Clear(&old->pool);
-                ZeroStruct(*old);
-                
-                worldMode->oldTable = worldMode->table;
-                worldMode->table = old;
-                
-                worldMode->allDataFilesArrived = false;
-                ++worldMode->patchSectionArrived;
-                
                 WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstDataFileArrived, false);
                 worldMode->firstDataFileArrived = 0;
                 
-                InitTaxonomyReadWrite(worldMode->table);
-                ReadTaxonomiesFromFile();
-                ImportAllFiles(filePath, &worldMode->filePool, true);
-                ImportAllAssetFiles(worldMode, filePath, &worldMode->filePool);
-                ReadPlantChart();
+                if(worldMode->loadTaxonomies)
                 
-                TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(worldMode->table, "goblins");
-                TaxonomySlot* test = GetSlotForTaxonomy(worldMode->table, slot->taxonomy);
-                Assert(slot->taxonomy == test->taxonomy);
-                
-                
-				for(u32 entityIndex = 0; entityIndex < ArrayCount(worldMode->entities); ++entityIndex)
-				{
-                    ClientEntity* entity = worldMode->entities[entityIndex];
-                    while(entity)
+                {
+                    TaxonomyTable* old = worldMode->oldTable;
+                    
+                    Clear(&old->pool);
+                    ZeroStruct(*old);
+                    
+                    worldMode->oldTable = worldMode->table;
+                    worldMode->table = old;
+                    
+                    ++worldMode->patchSectionArrived;
+                    
+                    
+                    InitTaxonomyReadWrite(worldMode->table);
+                    ReadTaxonomiesFromFile();
+                    ImportAllFiles(filePath, &worldMode->filePool, true);
+                    ReadPlantChart();
+                    
+                    TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(worldMode->table, "goblins");
+                    TaxonomySlot* test = GetSlotForTaxonomy(worldMode->table, slot->taxonomy);
+                    Assert(slot->taxonomy == test->taxonomy);
+                    
+                    
+                    for(u32 entityIndex = 0; entityIndex < ArrayCount(worldMode->entities); ++entityIndex)
                     {
-                        TranslateClientEntity(worldMode->oldTable, worldMode->table, entity);
-                        entity = entity->next;
+                        ClientEntity* entity = worldMode->entities[entityIndex];
+                        while(entity)
+                        {
+                            TranslateClientEntity(worldMode->oldTable, worldMode->table, entity);
+                            entity = entity->next;
+                        }
                     }
+                    
+                    TranslateClientPlayer(worldMode->oldTable, worldMode->table, myPlayer);
+                    TranslateUI(worldMode->oldTable, worldMode->table, worldMode->UI);
+                    
+                    UI->editorTaxonomyTree = 0;
+                    
+                    TaxonomySlot* rootSlot = &worldMode->table->root;
+                    UI->editorTaxonomyTree = BuildEditorTaxonomyTree(worldMode->table, rootSlot);
                 }
-                
-                TranslateClientPlayer(worldMode->oldTable, worldMode->table, myPlayer);
-                TranslateUI(worldMode->oldTable, worldMode->table, worldMode->UI);
-                
-                UI->editorTaxonomyTree = 0;
-                
-                TaxonomySlot* rootSlot = &worldMode->table->root;
-                UI->editorTaxonomyTree = BuildEditorTaxonomyTree(worldMode->table, rootSlot);
+                worldMode->allDataFilesArrived = false;
             }
             
             if(worldMode->allPakFilesArrived)
@@ -771,6 +767,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 CloseAllHandles(gameState->assets);
                 
                 WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstPakFileArrived, true);
+                
+                ImportAllAssetFiles(worldMode, filePath, &worldMode->filePool);
+                
                 worldMode->firstPakFileArrived = 0;
                 
                 
@@ -791,19 +790,14 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
             }
             
-            if(worldMode->patchSectionArrived >= 2)
-            {
-                worldMode->canRender = true;
-            }
+            b32 canRender = (worldMode->patchSectionArrived >= 2);
             
-            
-            if(worldMode->canRender)
+            if(canRender)
             {
                 player->identifier = myPlayer->identifier;
                 player->targetID = myPlayer->targetIdentifier;
                 player->P = V3(0, 0, 0);
                 
-                //Assert(worldMode->cameraWorldOffset.z > 0);
                 ResetUI(UI, worldMode, group, player, input, worldMode->cameraWorldOffset.z / worldMode->defaultCameraZ);
                 
                 
@@ -1514,26 +1508,101 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
 }
 
 
-
 internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* group, PlatformInput* input)
 {
-    Clear( group, V4( 0.25f, 0.25f, 0.25f, 1.0f ) );
-    if(Pressed(&input->mouseLeft))
+    GameRenderCommands* commands = group->commands;
+    
+    Vec2 relativeScreenMouse = V2(input->relativeMouseX, input->relativeMouseY);
+    
+    Clear( group, V4( 0.25f, 0.25f, 0.25f, 1.0f));
+    
+    r32 width = (r32) commands->settings.width;
+    r32 height = (r32) commands->settings.height;
+    
+    SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / width, 0.0f, 0.0f), V3(0.0f, 2.0f / width, 0.0f), V3( 0, 0, 1));
+    char* serverText = "start server";
+    char* editorText = "start editor";
+    char* joinText = "join local server";
+    r32 fontScale = 0.52f;
+    Vec2 serverP = V2(300, 100);
+    Vec2 editorP = V2(-300, 100);
+    Vec2 joinP = V2(0, 100);
+    
+    
+    TagVector matchVector = {};
+    TagVector weightVector = {};
+    weightVector.E[Tag_fontType] = 1.0f;
+    matchVector.E[Tag_fontType] = ( r32 ) Font_default;
+    FontId fontId = GetMatchingFont(group->assets, Asset_font, &matchVector, &weightVector);
+    
+    Rect2 serverRect = InvertedInfinityRect2();
+    Rect2 editorRect = InvertedInfinityRect2();
+    Rect2 joinRect = InvertedInfinityRect2();
+    if(IsValid(fontId))
     {
-        //LaunchServer();
-        platformAPI.DEBUGExecuteSystemCommand("../server", "../build/win32_server.exe", "");
-        PlayGame(gameState, input);
+        Font* font = PushFont(group, fontId);
+        
+        if(font)
+        {
+            PakFont* fontInfo = GetFontInfo(group->assets, fontId);
+            if(fontInfo)
+            {
+                serverRect = UIOrthoTextOp(group, font, fontInfo, serverText, fontScale, V3(serverP, 0), TextOp_getSize, V4(1, 1, 1, 1));
+                editorRect = UIOrthoTextOp(group, font, fontInfo, editorText, fontScale, V3(editorP, 0), TextOp_getSize, V4(1, 1, 1, 1));
+                
+                joinRect = UIOrthoTextOp(group, font, fontInfo, joinText, fontScale, V3(joinP, 0), TextOp_getSize, V4(1, 1, 1, 1));
+                
+                
+                UIOrthoTextOp(group, font, fontInfo, serverText, fontScale, V3(serverP, 1.0f), TextOp_draw, V4(1, 1, 1, 1));
+                UIOrthoTextOp(group, font, fontInfo, editorText, fontScale, V3(editorP, 1.0f), TextOp_draw, V4(1, 1, 1, 1));
+                UIOrthoTextOp(group, font, fontInfo, joinText, fontScale, V3(joinP, 1.0f), TextOp_draw, V4(1, 1, 1, 1));
+            }
+        }
     }
-    else if(Pressed(&input->mouseRight))
+    else
     {
-        //LaunchEditor();
-        platformAPI.DEBUGExecuteSystemCommand("../editor", "../build/win32_server.exe", " editor");
-        PlayGame(gameState, input);
+        editorRect = RectMinDim(V2(-300, 100), V2(200, 50));
+        serverRect = RectMinDim(V2(0, 100), V2(200, 50));
+        joinRect = RectMinDim(V2(300, 100), V2(200, 50));
     }
-    else if(Pressed(&input->mouseCenter))
+    
+    ObjectTransform rectTransform = FlatTransform();
+    
+    Vec4 serverColor = V4(1, 0, 0, 0.5f);
+    Vec4 editorColor = V4(0, 1, 0, 0.5f);
+    Vec4 joinColor = V4(0, 0, 1, 0.5f);
+    
+    if(PointInRect(serverRect, relativeScreenMouse))
     {
-        PlayGame(gameState, input);
+        serverColor.a = 1.0f;
+        if(Pressed(&input->mouseLeft))
+        {
+            platformAPI.DEBUGExecuteSystemCommand("../server", "../build/win32_server.exe", "");
+            PlayGame(gameState, input);
+        }
     }
+    else if(PointInRect(editorRect, relativeScreenMouse))
+    {
+        editorColor.a = 1.0f;
+        if(Pressed(&input->mouseLeft))
+        {
+            platformAPI.DEBUGExecuteSystemCommand("../editor", "../build/win32_server.exe"," editor");
+            PlayGame(gameState, input);
+        }
+    }
+    else if(PointInRect(joinRect, relativeScreenMouse))
+    {
+        joinColor.a = 1.0f;
+        if(Pressed(&input->mouseLeft))
+        {
+            PlayGame(gameState, input);
+        }
+    }
+    
+    PushRect(group, rectTransform, serverRect, serverColor);
+    PushRect(group, rectTransform, editorRect, editorColor);
+    PushRect(group, rectTransform, joinRect, joinColor);
+    
     return 0;
 }
 
@@ -1602,25 +1671,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     }
     
     
-#if FORGIVENESS_INTERNAL    
-    if(memory->tranState && Pressed(&input->reloadButton))
-    {
-        CloseAllHandles(memory->tranState->assets);
-        Clear(&memory->tranState->transientPool);
-        PlatformProcessHandle rebuildHandle = platformAPI.DEBUGExecuteSystemCommand(".", "asset_builder.exe", "test");
-        while(true)
-        {
-            PlatformProcessState rebuildState = platformAPI.DEBUGGetProcessState(rebuildHandle);
-            if(!rebuildState.isRunning)
-            {
-                break;
-            }
-            
-        }
-        memory->tranState = 0;
-    }
-#endif
-    
     TempMemory renderMemory = BeginTemporaryMemory(&gameState->framePool);
     RenderGroup group = BeginRenderGroup(gameState->assets, commands);
     
@@ -1631,7 +1681,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         {
             case GameMode_Launcher:
             {
-                //PlayGame(gameState, input);
                 rerun = UpdateAndRenderLauncherScreen(gameState, &group, input);
             } break;
             

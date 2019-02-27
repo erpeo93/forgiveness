@@ -839,9 +839,10 @@ internal void SendDataFile(ServerPlayer* player, char* name, char* source, u32 f
     SendFileChunks(player, source, fileSize, chunkSize);
 }
 
-internal void SendAllDataFileSentMessage(ServerPlayer* player)
+internal void SendAllDataFileSentMessage(ServerPlayer* player, b32 loadTaxonomies)
 {
     StartStandardPacket(AllDataFileSent);
+    Pack("l", loadTaxonomies);
     CloseAndStoreStandardPacket(player, ReliableOrdered);
 }
 
@@ -851,9 +852,10 @@ internal void SendAllPakFileSentMessage(ServerPlayer* player)
     CloseAndStoreStandardPacket(player, ReliableOrdered);
 }
 
-inline void SendNewTabMessage(ServerPlayer* player)
+inline void SendNewTabMessage(ServerPlayer* player, b32 editable)
 {
     StartStandardPacket(NewEditorTab);
+    Pack("l", editable);
     CloseAndStoreStandardPacket(player, ReliableOrdered);
 }
 

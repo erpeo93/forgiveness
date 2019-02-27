@@ -243,10 +243,10 @@ internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
     CloseAndSendStandardPacket();
 }
 
-internal void SendEditRequest(u32 taxonomy)
+internal void SendEditRequest(u32 taxonomy, u32 role)
 {
     StartStandardPacket(EditRequest);
-    Pack("L", taxonomy);
+    Pack("LL", taxonomy, role);
     CloseAndSendStandardPacket();
 }
 
@@ -1012,6 +1012,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                 {
                     CompletePastWritesBeforeFutureWrites;
                     worldMode->allDataFilesArrived = true;
+                    Unpack("l", &worldMode->loadTaxonomies);
                 } break;
                 
                 case Type_AllPakFileSent:
@@ -1022,8 +1023,12 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                 
                 case Type_NewEditorTab:
                 {
+                    b32 editable;
+                    Unpack("l", &editable);
+                    
                     EditorTabStack* stack = &myPlayer->editorStack;
                     stack->counter = 0;
+                    stack->currentTabEditable = editable;
                     stack->previousElementType = EditorElement_Count;
                 } break;
                 
@@ -1109,7 +1114,9 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                             
                             case EditorElement_Count:
                             {
-                                editingSlot->tabs[editingSlot->tabCount++] = current;
+                                EditorTab* tab = editingSlot->tabs +editingSlot->tabCount++;
+                                tab->root = current;
+                                tab->editable = stack->currentTabEditable;
                             } break;
                             
                             InvalidDefaultCase;

@@ -321,7 +321,7 @@ struct PlatformButton
 };
 
 
-#define MAX_BUTTON_COUNT 32
+#define MAX_BUTTON_COUNT 64
 
 struct PlatformInput
 {
@@ -352,9 +352,15 @@ struct PlatformInput
             PlatformButton moveRight;
             PlatformButton moveLeft;
             
+            PlatformButton actionUp;
+            PlatformButton actionDown;
+            PlatformButton actionRight;
+            PlatformButton actionLeft;
+            
             PlatformButton escButton;
             PlatformButton confirmButton;
             PlatformButton backButton;
+            
             PlatformButton switchButton;
             PlatformButton inventoryButton;
             PlatformButton equipmentButton;

@@ -656,27 +656,27 @@ internal void Win32ProcessKeyboardMessage( HWND window, PlatformInput* input, MS
             {
                 Win32ProcessButton( &input->actionDown, isDown );
             } break;
+#endif
             
             case VK_UP:
             {
-                Win32ProcessMainButton(input, 0, isDown, Movement_Arrows);
+                Win32ProcessButton(&input->actionUp, isDown);
             } break;
             
             case VK_DOWN:
             {
-                Win32ProcessMainButton(input, 1, isDown, Movement_Arrows);
+                Win32ProcessButton(&input->actionDown, isDown);
             } break;
             
             case VK_RIGHT:
             {
-                Win32ProcessMainButton(input, 2, isDown, Movement_Arrows);
+                Win32ProcessButton(&input->actionRight, isDown);
             } break;
             
             case VK_LEFT:
             {
-                Win32ProcessMainButton(input, 3, isDown, Movement_Arrows);
+                Win32ProcessButton(&input->actionLeft, isDown);
             } break;
-#endif
             
             
             case VK_DELETE:
