@@ -1940,8 +1940,46 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
 			case EditorElement_List:
 			{
 				buffer = OutputToBuffer(buffer, bufferSize, " (");
-                buffer = WriteElements(buffer, bufferSize, element->emptyElement);
-				buffer = WriteElements(buffer, bufferSize, element->firstInList);
+                
+                if(element->emptyElement)
+                {
+                    buffer = OutputToBuffer(buffer, bufferSize, "#");
+                    buffer = WriteElements(buffer, bufferSize, element->emptyElement);
+                }
+                
+                if(element->flags & EditorElem_RecursiveEmpty)
+                {
+                    buffer = OutputToBuffer(buffer, bufferSize, "#recursiveEmpty ");
+                }
+                
+                if(element->flags & EditorElem_LabelsEditable)
+                {
+                    buffer = OutputToBuffer(buffer, bufferSize, "#editableLabels ");
+                }
+                
+                if(element->flags & EditorElem_CantBeDeleted)
+                {
+                    buffer = OutputToBuffer(buffer, bufferSize, "#cantBeDeleted ");
+                }
+                
+                if(element->flags & EditorElem_PlaySoundButton)
+                {
+                    buffer = OutputToBuffer(buffer, bufferSize, "#playSound ");
+                }
+                
+                if(element->flags & EditorElem_PlayEventButton)
+                {
+                    buffer = OutputToBuffer(buffer, bufferSize, "#playEvent ");
+                }
+                
+                if(element->elementName[0])
+                {
+                    char outputElementName[64];
+                    FormatString(outputElementName, sizeof(outputElementName), "#elementName = %s ", element->elementName);
+                    buffer = OutputToBuffer(buffer, bufferSize, outputElementName);
+                }
+                
+                buffer = WriteElements(buffer, bufferSize, element->firstInList);
 				buffer = OutputToBuffer(buffer, bufferSize, ") ");
 			} break;
             
@@ -2057,12 +2095,32 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                             }
                             else if(TokenEquals(paramName, "recursiveEmpty"))
                             {
-                                
+                                newElement->flags |= EditorElem_RecursiveEmpty;
                             }
                             else if(TokenEquals(paramName, "editableLabels"))
                             {
                                 newElement->flags |= EditorElem_LabelsEditable;
                             }
+							else if(TokenEquals(paramName, "cantBeDeleted"))
+							{
+								newElement->flags |= EditorElem_CantBeDeleted;
+							}
+							else if(TokenEquals(paramName, "playSound"))
+							{
+								newElement->flags |= EditorElem_PlaySoundButton;
+							}
+                            else if(TokenEquals(paramName, "playEvent"))
+							{
+								newElement->flags |= EditorElem_PlayEventButton;
+							}
+							else if(TokenEquals(paramName, "elementName"))
+							{
+								if(RequireToken(tokenizer, Token_EqualSign))
+                                {
+									Token elementName = GetToken(tokenizer);
+                                    FormatString(newElement->elementName, sizeof(newElement->elementName), "%.*s", elementName.textLength, elementName.text);
+                                }
+							}
                             else
                             {
                                 InvalidCodePath;
@@ -2345,6 +2403,16 @@ inline EditorElement* GetList(EditorElement* element, char* listName)
 #ifndef FORG_SERVER
 inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer, EditorElement* root)
 {
+    char* type = GetValue(root, "type");
+    if(type)
+    {
+        rootContainer->type = (SoundContainerType) GetValuePreprocessor(SoundContainerType, type);
+    }
+    else
+    {
+        InvalidCodePath;
+    }
+    
     EditorElement* sounds = GetList(root, "sounds");
     while(sounds)
     {
@@ -2787,7 +2855,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         EditorElement* events = root->firstInList;
         while(events)
         {
-            char* eventName = GetValue(events, "eventName");
+            char* eventName = events->name;
             SoundContainer* rootContainer = AddSoundEvent(eventName);
             
             AddSoundAndChildContainersRecursively(rootContainer, events);

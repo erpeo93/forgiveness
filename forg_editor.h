@@ -25,21 +25,24 @@ enum EditorElementFlags
     EditorElem_CantBeDeleted = (1 << 5),
     EditorElem_AlwaysEditable = (1 << 6),
     EditorElem_LabelsEditable = (1 << 7),
+    EditorElem_PlaySoundButton = (1 << 8),
+    EditorElem_PlayEventButton = (1 << 9),
+    EditorElem_RecursiveEmpty = (1 << 10),
 };
 
 struct EditorElement
 {
 	char name[32];
-    
     u32 flags;
 	u32 type;
-	union
+    union
 	{
 		char value[32];
         
         struct
         {
             EditorElement* firstInList;
+            char elementName[16];
             EditorElement* emptyElement;
 		};
         

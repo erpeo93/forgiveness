@@ -870,11 +870,17 @@ inline void SendPopMessage(ServerPlayer* player, b32 list, b32 pop = true)
 internal void SendEditorElements(ServerPlayer* player, EditorElement* root)
 {
     StartStandardPacket(EditorElement);
-    Pack("sL", root->name, root->type);
+    Pack("sLL", root->name, root->type, root->flags);
     if(root->type < EditorElement_List)
     {
         Pack("s", root->value);
-        
+    }
+    else
+    {
+        if(root->type == EditorElement_List)
+        {
+            Pack("s", root->elementName);
+        }
     }
     CloseAndStoreStandardPacket(player, ReliableOrdered);
     

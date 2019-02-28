@@ -342,9 +342,15 @@ struct LabeledSound
     SoundLabel labels[8];
 };
 
+printTable(noPrefix) enum SoundContainerType
+{
+    SoundContainer_Random,
+    SoundContainer_Labeled,
+};
+
 struct SoundContainer
 {
-    b32 pickRandomly;
+    SoundContainerType type;
     
     u32 soundCount;
     LabeledSound* firstSound;

@@ -261,10 +261,18 @@ inline void SendPopMessage(b32 list, b32 pop = true)
 internal void SendEditorElements(EditorElement* root)
 {
     StartStandardPacket(EditorElement);
-    Pack("sL", root->name, root->type);
+    Pack("sLL", root->name, root->type, root->flags);
     if(root->type < EditorElement_List)
     {
         Pack("s", root->value);
+    }
+    else
+    {
+        
+        if(root->type == EditorElement_List)
+        {
+            Pack("s", root->elementName);
+        }
     }
     CloseAndSendStandardPacket();
     
@@ -1041,12 +1049,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                     FREELIST_ALLOC(element, taxTable->firstFreeElement, PushStruct(&taxTable->pool, EditorElement));
                     *element = {};
                     
-                    Unpack("sL", element->name, &element->type);
-                    
-                    if(StrEqual(element->name, "eventName"))
-                    {
-                        AddFlags(element, EditorElem_AlwaysEditable);
-                    }
+                    Unpack("sLL", element->name, &element->type, &element->flags);
                     
                     if(element->type < EditorElement_List)
                     {
@@ -1054,6 +1057,11 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                     }
                     else
                     {
+                        if(element->type == EditorElement_List)
+                        {
+                            Unpack("s", element->elementName);
+                        }
+                        
                         element->value[0] = 0;
                     }
                     

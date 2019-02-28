@@ -1156,7 +1156,31 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         EditorElement* list = (EditorElement*) GetValue(action->value, &interaction->data);
                         
                         EditorElement* newElement = CopyEditorElement(UI->table, list->emptyElement);
-                        newElement->name[0] = 0;
+                        
+                        if(list->flags & EditorElem_RecursiveEmpty)
+                        {
+                            EditorElement* firstValue = newElement->firstValue;
+                            while(firstValue)
+                            {
+                                if(firstValue->type == EditorElement_List)
+                                {
+                                    firstValue->emptyElement = CopyEditorElement(UI->table, list->emptyElement);
+                                    firstValue->flags |= EditorElem_RecursiveEmpty;
+                                    break;
+                                }
+                                
+                                firstValue = firstValue->next;
+                            }
+                        }
+                        
+                        if(list->flags & EditorElem_LabelsEditable)
+                        {
+                            FormatString(newElement->name, sizeof(newElement->name), "unnamed");
+                        }
+                        else
+                        {
+                            newElement->name[0] = 0;
+                        }
                         
                         newElement->next = list->firstChild;
                         list->firstChild = newElement;

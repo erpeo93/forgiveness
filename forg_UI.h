@@ -456,7 +456,7 @@ struct UIInteraction
     UIInteractionButtonGroup* excludeFromReset;
     
     u32 actionCount;
-    UIInteractionAction actions[6];
+    UIInteractionAction actions[8];
     
     u32 checkCount;
     UIInteractionCheck checks[4];
@@ -632,6 +632,7 @@ struct UIState
     char showBuffer[64];
     EditorElement* active;
     EditorElement* activeParent;
+    EditorElement* activeGrandParent;
     
     EditorElement* activeLabel;
     

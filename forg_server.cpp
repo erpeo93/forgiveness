@@ -524,7 +524,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                                 FREELIST_ALLOC(element, taxTable->firstFreeElement, PushStruct(&taxTable->pool, EditorElement));
                                 *element = {};
                                 
-                                packetPtr = unpack(packetPtr, "sL", element->name, &element->type);
+                                packetPtr = unpack(packetPtr, "sLL", element->name, &element->type, &element->flags);
                                 if(element->type < EditorElement_List)
                                 {
                                     packetPtr =  unpack(packetPtr, "s", element->value);
@@ -532,6 +532,10 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                                 else
                                 {
                                     element->value[0] = 0;
+                                    if(element->type == EditorElement_List)
+                                    {
+                                        packetPtr = unpack(packetPtr, "s", element->elementName);
+                                    }
                                 }
                                 
                                 EditorTabStack* stack = &server->editorStack;

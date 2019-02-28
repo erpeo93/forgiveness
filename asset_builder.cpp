@@ -2766,11 +2766,11 @@ internal void OutputFoldersAutocompleteFile(char* filename, char* path)
     free(buffer);
 }
 
-inline char* AddFolderToFile(char* addHere, char* fileEnd, char* folder)
+inline char* AddFolderToFile(char* addHere, char* fileEnd, char* folder, char* params)
 {
     u32 sizeToEnd = (u32) (fileEnd - addHere);
     char toAdd[128];
-    FormatString(toAdd, sizeof(toAdd), "\"%s\" = (),", folder);
+    FormatString(toAdd, sizeof(toAdd), "\"%s\" = (%s),", folder, params);
     
     u32 roomToMake = StrLen(toAdd);
     Assert(roomToMake <= sizeToEnd);
@@ -2795,7 +2795,7 @@ inline void AddAssetToFile(char* addHere, char* fileEnd, char* tag, char* assetN
     memcpy(addHere, toAdd, roomToMake);
 }
 
-internal void WriteAssetDefinitionFile(char* path, char* filename)
+internal void WriteAssetDefinitionFile(char* path, char* filename, char* definitionParams)
 {
     char* assetPath = "assets";
     
@@ -2835,7 +2835,7 @@ internal void WriteAssetDefinitionFile(char* path, char* filename)
             char* folderPtr = StringPresentInFile(newFile, folderNameNoWhiteSpaces);
             if(!folderPtr)
             {
-                folderPtr = AddFolderToFile(newFile, endFile, folderNameNoWhiteSpaces);
+                folderPtr = AddFolderToFile(newFile, endFile, folderNameNoWhiteSpaces, definitionParams);
             }
             
             char folderPath[512];
@@ -2879,7 +2879,9 @@ internal void WriteSounds()
     FormatString(databaseFile, sizeof(databaseFile), "%s/%s", soundPath, assetFile);
     
     OutputFoldersAutocompleteFile("soundType", soundPath);
-    WriteAssetDefinitionFile(soundPath, assetFile);
+    
+    char* definitionParams = "#cantBeDeleted #playSound";
+    WriteAssetDefinitionFile(soundPath, assetFile, definitionParams);
     
     PlatformFile database = DEBUGWin32ReadFile(databaseFile);
     RecursiveWriteSounds(database, soundPath);
