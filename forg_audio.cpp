@@ -35,10 +35,12 @@ inline r32 LabelsDelta(u32 referenceLabelCount, SoundLabel* referenceLabels, u32
 inline LabeledSound* PickSoundChild(SoundContainer* container, u32 labelCount, SoundLabel* labels, RandomSequence* sequence)
 {
     LabeledSound* result = 0;
-    
-    if(true)
-    {
-        u32 totalChoiceCount = container->soundCount + container->containerCount;
+
+	switch(container->type)
+	{
+		case SoundContainer_Random:
+		{
+		        u32 totalChoiceCount = container->soundCount + container->containerCount;
         Assert(totalChoiceCount > 0);
         
         u32 index = RandomChoice(sequence, totalChoiceCount);
@@ -68,10 +70,11 @@ inline LabeledSound* PickSoundChild(SoundContainer* container, u32 labelCount, S
                 }
             }
         }
-    }
-    else
-    {
-        LabeledSound* bestSound = 0;
+		} break;
+
+		case SoundContainer_Labeled:
+		{
+			LabeledSound* bestSound = 0;
         SoundContainer* bestContainer = 0;
         r32 bestDelta = R32_MAX;
         
@@ -106,7 +109,10 @@ inline LabeledSound* PickSoundChild(SoundContainer* container, u32 labelCount, S
         {
             result = PickSoundChild(bestContainer, labelCount, labels, sequence);
         }
-    }
+		} break;
+
+		InvalidDefaultCase;
+	}
     
     return result;
 }

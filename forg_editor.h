@@ -28,6 +28,7 @@ enum EditorElementFlags
     EditorElem_PlaySoundButton = (1 << 8),
     EditorElem_PlayEventButton = (1 << 9),
     EditorElem_RecursiveEmpty = (1 << 10),
+    EditorElem_DontRender = (1 << 11),
 };
 
 struct EditorElement

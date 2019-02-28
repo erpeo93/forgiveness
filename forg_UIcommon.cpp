@@ -1204,8 +1204,26 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                     {
                         SoundEvent* event = GetSoundEvent(UI->table, action->eventNameHash);
                         
+                        EditorWidget* widget = UI->widgets + EditorWidget_SoundEvents;
+                        EditorElement* activeLabels = widget->root->next->firstInList;
+                        
                         u32 labelCount = 0;
-                        SoundLabel* labels = 0;
+                        SoundLabel labels[32];
+                        
+                        while(activeLabels)
+                        {
+                            char* labelName = GetValue(activeLabels, "name");
+                            char* labelValue = GetValue(activeLabels, "value");
+                            
+                            Assert(labelCount < ArrayCount(labels));
+                            SoundLabel* label = labels + labelCount++;
+                            
+                            label->labelHashID = StringHash(labelName);
+                            label->value = ToR32(labelValue);
+                            
+                            activeLabels = activeLabels->next;
+                        }
+                        
                         
                         SoundId ID = PickSoundFromEvent(UI->group->assets, event, labelCount, labels, &UI->table->eventSequence);
                         if(IsValid(ID))

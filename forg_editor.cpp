@@ -1113,7 +1113,7 @@ inline SoundContainer* AddSoundEvent(char* eventName)
     return result;
 }
 
-inline void AddSoundToContainer(SoundContainer* container, char* soundType, char* soundName)
+inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundType, char* soundName)
 {
     ++container->soundCount;
     
@@ -1124,6 +1124,8 @@ inline void AddSoundToContainer(SoundContainer* container, char* soundType, char
     sound->nameHash = StringHash(soundName);
     
     FREELIST_INSERT(sound, container->firstSound);
+    
+    return sound;
 }
 
 inline SoundContainer* AddChildContainer(SoundContainer* container)
@@ -1141,20 +1143,28 @@ inline SoundContainer* AddChildContainer(SoundContainer* container)
     return newContainer;
 }
 
-#if 0
-inline void AddLabel(TaxonomySound* sound, char* labelName, char* labelValue)
+inline void SetLabel(SoundLabel* label, char* labelName, char* labelValue)
 {
-    r32 valueReal = labelValue ? ToR32(labelValue) : 0;
+    r32 value = labelValue ? ToR32(labelValue) : 0;
+    u64 hash = StringHash(labelName);
     
-    u32 hash = (u32) (StringHash(labelName) >> 32);
-    u32 hashIndex = (hash & (LABEL_HASH_COUNT - 1)) + Tag_count;
-    
-    Assert(sound->labelCount < ArrayCount(sound->labels));
-    Label* label = sound->labels + sound->labelCount++;
-    label->hashID = hashIndex;
-    label->value = valueReal;
+    label->labelHashID = hash;
+    label->value = value;
 }
-#endif
+
+inline void AddSoundLabel(SoundContainer* container, char* labelName, char* labelValue)
+{
+    Assert(container->labelCount < ArrayCount(container->labels));
+    SoundLabel* label = container->labels + container->labelCount++;
+    SetLabel(label, labelName, labelValue);
+}
+
+inline void AddSoundLabel(LabeledSound* sound, char* labelName, char* labelValue)
+{
+    Assert(sound->labelCount < ArrayCount(sound->labels));
+    SoundLabel* label = sound->labels + sound->labelCount++;
+    SetLabel(label, labelName, labelValue);
+}
 
 
 
@@ -2036,7 +2046,7 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                     Token value = Stringize(t);
                     StrCpy(value.text, value.textLength, newElement->value, sizeof(newElement->value));
                     
-                    if(TokenEquals(firstToken, "eventName"))
+                    if(TokenEquals(firstToken, "name"))
                     {
                         AddFlags(newElement, EditorElem_AlwaysEditable);
                     }
@@ -2413,6 +2423,17 @@ inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer,
         InvalidCodePath;
     }
     
+	EditorElement* containerLabels = GetList(root, "labels");
+    
+	while(containerLabels)
+	{
+        char* labelName = GetValue(containerLabels, "name");
+        char* labelValue = GetValue(containerLabels, "value");
+        
+        AddSoundLabel(rootContainer, labelName, labelValue);
+		containerLabels = containerLabels->next;
+	}
+    
     EditorElement* sounds = GetList(root, "sounds");
     while(sounds)
     {
@@ -2420,7 +2441,17 @@ inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer,
         char* soundName = GetValue(sounds, "sound");
         if(soundType && soundName)
         {
-            AddSoundToContainer(rootContainer, soundType, soundName);
+            LabeledSound* sound = AddSoundToContainer(rootContainer, soundType, soundName);
+            
+			EditorElement* soundLabels = GetList(root, "labels");
+			while(soundLabels)
+			{
+                char* labelName = GetValue(containerLabels, "name");
+                char* labelValue = GetValue(containerLabels, "value");
+                
+                AddSoundLabel(sound, labelName, labelValue);
+				soundLabels = soundLabels->next;
+			}
         }
         sounds = sounds->next;
     }
@@ -2828,7 +2859,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         {
             char* animationName = GetValue(effects, "animationName");
             char* time = GetValue(effects, "time");
-            char* event = GetValue(effects, "eventName");
+            char* event = GetValue(effects, "name");
             
             
             TaxonomySound* sound = AddSoundEffect(animationName, time, event);

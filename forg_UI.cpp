@@ -423,404 +423,428 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
     Rect2 totalResult = InvertedInfinityRect2();
     for(EditorElement* root = root_; root; root = root->next)
     {
-        if(IsSet(root, EditorElem_Pasted))
-        {
-            Assert(root->type == EditorElement_Struct);
-            for(EditorElement* toFree = root->firstChild; toFree;)
+		if(root->flags & EditorElem_DontRender)
+		{
+            root->flags &= ~EditorElem_DontRender;
+		}
+		else
+		{
+			if(IsSet(root, EditorElem_Pasted))
             {
-                EditorElement* nextToFree = toFree->next;
-                
-                FreeElement(toFree);
-                
-                toFree = nextToFree;
-            }
-            root->firstChild = CopyEditorElement(UI->table, UI->copying->firstChild);
-            
-            ClearFlags(root, EditorElem_Pasted);
-        }
-        
-        Rect2 result = InvertedInfinityRect2();
-        char name[128];
-        if(root->type == EditorElement_List)
-        {
-            FormatString(name, sizeof(name), "%s (list)", root->name);
-        }
-        else
-        {
-            FormatString(name, sizeof(name), "%s", root->name);
-        }
-        
-        
-        
-        Rect2 nameBounds = GetUIOrthoTextBounds(UI, name, layout->fontScale, layout->P);
-        Vec4 textColor = V4(1, 1, 1, 1);
-        
-		b32 nameHot = false;
-        char* nameToShow = name;
-        b32 showName = (nameToShow[0]);
-        
-        if(PointInRect(nameBounds, UI->relativeScreenMouse))
-        {
-            textColor = V4(1, 1, 0, 1);
-            u32 finalFlags = IsSet(root, EditorElem_Expanded) ? (root->flags & ~EditorElem_Expanded) : (root->flags | EditorElem_Expanded);
-            
-            UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &root->flags, finalFlags));
-            
-            if(!UI->active && parent && (parent->flags & EditorElem_LabelsEditable))
-            {
-                textColor = V4(1, 0, 0, 1);
-                UIAddInteraction(UI, input, mouseRight, UISetValueInteraction(UI_Trigger, &UI->activeLabel, root));
-			}
-            nameHot = true;
-        }
-        
-        if(root == UI->activeLabel)
-        {
-            nameToShow = UI->keyboardBuffer;
-        }
-        
-        Vec2 nameP = layout->P;
-        if(showName)
-        {
-            PushUIOrthoText(UI, nameToShow, layout->fontScale, nameP, textColor, layout->additionalZBias);
-            layout->P += V2(0, -layout->childStandardHeight);
-        }
-        
-        result = nameBounds;
-        
-        
-        Vec2 lineStartP = nameP + V2(0.2f * layout->nameValueDistance, -0.2f * layout->childStandardHeight);
-        Vec3 lineEndOffset = V3(0.2f * layout->nameValueDistance, 1.2f * layout->childStandardHeight, 0);
-        
-        switch(root->type)
-        {
-            case EditorElement_String:
-            case EditorElement_Real:
-            case EditorElement_Signed:
-            case EditorElement_Unsigned:
-            {
-                r32 xAdvance = Max(layout->nameValueDistance, GetDim(nameBounds).x + 10.0f);
-                Vec2 valueP = nameP + V2(xAdvance, 0);
-                char* text = (root == UI->active) ? UI->showBuffer : root->value;
-                
-                UIAddTabResult addTab = UIAddTabValueInteraction(UI, widget, input, grandParent, parent, root, valueP, layout, text);
-                
-                PushUIOrthoText(UI, text, layout->fontScale, valueP, addTab.color, layout->additionalZBias);
-                result = Union(result, addTab.bounds);
-                
-            } break;
-            
-            case EditorElement_List:
-            {
-                if(IsSet(root, EditorElem_Expanded))
+                Assert(root->type == EditorElement_Struct);
+                for(EditorElement* toFree = root->firstChild; toFree;)
                 {
-                    Vec3 verticalStartP = V3(lineStartP, 0);
-                    for(EditorElement** elementPtr = &root->firstInList; *elementPtr;)
+                    EditorElement* nextToFree = toFree->next;
+                    
+                    FreeElement(toFree);
+                    
+                    toFree = nextToFree;
+                }
+                root->firstChild = CopyEditorElement(UI->table, UI->copying->firstChild);
+                
+                ClearFlags(root, EditorElem_Pasted);
+            }
+            
+            Rect2 result = InvertedInfinityRect2();
+            char name[128];
+            if(root->type == EditorElement_List)
+            {
+                FormatString(name, sizeof(name), "%s |-|", root->name);
+            }
+            else
+            {
+                FormatString(name, sizeof(name), "%s", root->name);
+            }
+            
+            
+            
+            Rect2 nameBounds = GetUIOrthoTextBounds(UI, name, layout->fontScale, layout->P);
+            Vec4 textColor = V4(1, 1, 1, 1);
+            
+            b32 nameHot = false;
+            char* nameToShow = name;
+            b32 showName = (nameToShow[0]);
+            
+            if(PointInRect(nameBounds, UI->relativeScreenMouse))
+            {
+                textColor = V4(1, 1, 0, 1);
+                u32 finalFlags = IsSet(root, EditorElem_Expanded) ? (root->flags & ~EditorElem_Expanded) : (root->flags | EditorElem_Expanded);
+                
+                UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &root->flags, finalFlags));
+                
+                if(!UI->active && parent && (parent->flags & EditorElem_LabelsEditable))
+                {
+                    textColor = V4(1, 0, 0, 1);
+                    UIAddInteraction(UI, input, mouseRight, UISetValueInteraction(UI_Trigger, &UI->activeLabel, root));
+                }
+                nameHot = true;
+            }
+            
+            if(root == UI->activeLabel)
+            {
+                nameToShow = UI->keyboardBuffer;
+            }
+            
+            Vec2 nameP = layout->P;
+            if(showName)
+            {
+                PushUIOrthoText(UI, nameToShow, layout->fontScale, nameP, textColor, layout->additionalZBias);
+                layout->P += V2(0, -layout->childStandardHeight);
+            }
+            
+            result = nameBounds;
+            
+            
+            Vec2 lineStartP = nameP + V2(0.2f * layout->nameValueDistance, -0.2f * layout->childStandardHeight);
+            Vec3 lineEndOffset = V3(0.2f * layout->nameValueDistance, 1.2f * layout->childStandardHeight, 0);
+            
+            switch(root->type)
+            {
+                case EditorElement_String:
+                case EditorElement_Real:
+                case EditorElement_Signed:
+                case EditorElement_Unsigned:
+                {
+                    r32 xAdvance = Max(layout->nameValueDistance, GetDim(nameBounds).x + 10.0f);
+                    Vec2 valueP = nameP + V2(xAdvance, 0);
+                    char* text = (root == UI->active) ? UI->showBuffer : root->value;
+                    
+                    UIAddTabResult addTab = UIAddTabValueInteraction(UI, widget, input, grandParent, parent, root, valueP, layout, text);
+                    
+                    PushUIOrthoText(UI, text, layout->fontScale, valueP, addTab.color, layout->additionalZBias);
+                    result = Union(result, addTab.bounds);
+                    
+                } break;
+                
+                case EditorElement_List:
+                {
+                    if(IsSet(root, EditorElem_Expanded))
                     {
-                        EditorElement* element = *elementPtr;
-                        if(IsSet(element, EditorElem_Deleted))
+                        Vec3 verticalStartP = V3(lineStartP, 0);
+                        for(EditorElement** elementPtr = &root->firstInList; *elementPtr;)
                         {
-                            *elementPtr = element->next;
-                            FREELIST_DEALLOC(element, UI->table->firstFreeElement);
+                            EditorElement* element = *elementPtr;
+                            if(IsSet(element, EditorElem_Deleted))
+                            {
+                                *elementPtr = element->next;
+                                FREELIST_DEALLOC(element, UI->table->firstFreeElement);
+                            }
+                            else
+                            {
+                                elementPtr = &element->next;
+                            }
+                        }
+                        
+                        if(root == UI->copying)
+                        {
+                            Vec4 outlineColor = V4(0, 0, 1, 1);
+                            r32 thickness = 2;
+                            ObjectTransform nameTranform = FlatTransform();
+                            nameTranform.additionalZBias = layout->additionalZBias;
+                            PushRectOutline(UI->group, nameTranform, nameBounds, outlineColor, thickness);
                         }
                         else
                         {
-                            elementPtr = &element->next;
-                        }
-                    }
-                    
-					if(root == UI->copying)
-                    {
-						Vec4 outlineColor = V4(0, 0, 1, 1);
-						r32 thickness = 2;
-						ObjectTransform nameTranform = FlatTransform();
-						nameTranform.additionalZBias = layout->additionalZBias;
-						PushRectOutline(UI->group, nameTranform, nameBounds, outlineColor, thickness);
-                    }
-                    else
-                    {
-                        if(!UI->hotStructThisFrame && PointInRect(nameBounds, UI->relativeScreenMouse))
-                        {
-                            UI->hotStructThisFrame = true;
-                            UI->hotStructBounds = nameBounds;
-                            UI->hotStructZ = layout->additionalZBias;
-                            UI->hotStructColor = V4(0, 1, 0, 1);
-                            
-                            UIAddInteraction(UI, input, copyButton, UISetValueInteraction(UI_Trigger, &UI->copying, root));
-                            if(UI->copying)
+                            if(!UI->hotStructThisFrame && PointInRect(nameBounds, UI->relativeScreenMouse))
                             {
-                                b32 matches = StrEqual(root->name, UI->copying->name);
-                                if(matches)
+                                UI->hotStructThisFrame = true;
+                                UI->hotStructBounds = nameBounds;
+                                UI->hotStructZ = layout->additionalZBias;
+                                UI->hotStructColor = V4(0, 1, 0, 1);
+                                
+                                UIAddInteraction(UI, input, copyButton, UISetValueInteraction(UI_Trigger, &UI->copying, root));
+                                if(UI->copying)
                                 {
-                                    UIAddInteraction(UI, input, pasteButton, UISetValueInteraction(UI_Trigger, &root->flags, root->flags | EditorElem_Pasted));
-                                }
-                                else
-                                {
-                                    UI->hotStructColor.a = 0;
+                                    b32 matches = StrEqual(root->name, UI->copying->name);
+                                    if(matches)
+                                    {
+                                        UIAddInteraction(UI, input, pasteButton, UISetValueInteraction(UI_Trigger, &root->flags, root->flags | EditorElem_Pasted));
+                                    }
+                                    else
+                                    {
+                                        UI->hotStructColor.a = 0;
+                                    }
                                 }
                             }
                         }
-                    }
-                    
-                    b32 moveHorizontally = (root->firstInList && root->firstInList->name[0]);
-                    if(moveHorizontally)
-                    {
-                        layout->P += V2(layout->nameValueDistance, 0);
-                    }
-                    b32 canDeleteElements = !IsSet(root, EditorElem_CantBeDeleted);
-                    result = Union(result, UIRenderEditorTree(UI, widget, layout, parent, root, root->firstInList, input, canDeleteElements));
-                    
-                    if(moveHorizontally)
-                    {
-                        layout->P -= V2(layout->nameValueDistance, 0);
-                    }
-                    
-                    Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
-                    PushLine(UI->group, V4(1, 1, 1, 1), verticalStartP, verticalEndP, 1);
-                    
-                    
-                    if(root->emptyElement)
-                    {
-                        UIButton addButton = UIBtn(UI, nameP + V2(GetDim(nameBounds).x, 0) + V2(30, 0), layout, V4(1, 0, 0, 1), "add");
-                        UIButtonInteraction(&addButton, UIAddEmptyElementToListInteraction(UI_Trigger, root));
-                        result = Union(result, UIDrawButton(UI, input, &addButton));
-                    }
-                }
-            } break;
-            
-            case EditorElement_Struct:
-            {
-                if(IsSet(root, EditorElem_Expanded) || !root->name[0])
-                {
-                    Vec3 verticalStartP = V3(lineStartP, 0);
-                    layout->P += V2(layout->nameValueDistance, 0);
-                    
-                    Rect2 structBounds = UIRenderEditorTree(UI, widget, layout, parent, root, root->firstValue, input, false);
-                    
-                    if(canDelete)
-                    {
-                        UIButton deleteButton = UIBtn(UI, GetCenter(structBounds) + V2(30, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(1, 0, 0, 1), "delete");
-                        UIButtonInteraction(&deleteButton, UISetValueInteraction(UI_Trigger, &root->flags, (root->flags | EditorElem_Deleted)));
-                        structBounds = Union(structBounds, UIDrawButton(UI, input, &deleteButton));
-                    }
-                    
-                    
-                    if(root->firstValue && parent && (parent->flags & EditorElem_PlaySoundButton))
-                    {
-                        UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(70, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
                         
-                        u64 soundTypeHash = StringHash(parent->name);
-                        u64 soundNameHash = StringHash(root->firstValue->value);
-                        
-                        UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
-                        structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
-                    }
-                    else if(root->firstValue && parent && (parent->flags & EditorElem_PlayEventButton))
-                    {
-                        UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(20, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
-                        
-                        u64 eventNameHash = StringHash(root->firstValue->value);
-                        
-                        UIButtonInteraction(&playButton, UIPlaySoundEventInteraction(UI_Trigger, eventNameHash));
-                        structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
-                    }
-                    
-					r32 padding = 5;
-					layout->P += V2(0, -padding);
-                    Rect2 realBounds = AddRadius(structBounds, V2(padding, padding));
-                    
-                    
-                    r32 thickness = 1.0f;
-                    Vec4 outlineColor = V4(1, 1, 1, 1);
-                    if(root == UI->copying)
-                    {
-                        thickness = 2.0f;
-                        outlineColor = V4(0, 0, 1, 1);
-                    }
-                    else
-                    {
-                        if(!UI->hotStructThisFrame && PointInRect(realBounds, UI->relativeScreenMouse))
+                        b32 moveHorizontally = (root->firstInList && root->firstInList->name[0]);
+                        if(moveHorizontally)
                         {
-                            UI->hotStructThisFrame = true;
-                            UI->hotStructBounds = realBounds;
-                            UI->hotStructZ = layout->additionalZBias;
-                            UI->hotStructColor = V4(0, 1, 0, 1);
-                            
-                            UIAddInteraction(UI, input, copyButton, UISetValueInteraction(UI_Trigger, &UI->copying, root));
-                            if(UI->copying)
+                            layout->P += V2(layout->nameValueDistance, 0);
+                        }
+                        b32 canDeleteElements = !IsSet(root, EditorElem_CantBeDeleted);
+                        result = Union(result, UIRenderEditorTree(UI, widget, layout, parent, root, root->firstInList, input, canDeleteElements));
+                        
+                        if(moveHorizontally)
+                        {
+                            layout->P -= V2(layout->nameValueDistance, 0);
+                        }
+                        
+                        Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
+                        PushLine(UI->group, V4(1, 1, 1, 1), verticalStartP, verticalEndP, 1);
+                        
+                        
+                        if(root->emptyElement)
+                        {
+                            UIButton addButton = UIBtn(UI, nameP + V2(GetDim(nameBounds).x, 0) + V2(30, 0), layout, V4(1, 0, 0, 1), "add");
+                            UIButtonInteraction(&addButton, UIAddEmptyElementToListInteraction(UI_Trigger, root));
+                            result = Union(result, UIDrawButton(UI, input, &addButton));
+                        }
+                    }
+                } break;
+                
+                case EditorElement_Struct:
+                {
+                    if(IsSet(root, EditorElem_Expanded) || !root->name[0])
+                    {
+                        Vec3 verticalStartP = V3(lineStartP, 0);
+                        layout->P += V2(layout->nameValueDistance, 0);
+                        
+                        
+                        if(parent && grandParent)
+                        {
+                            if(StrEqual(parent->elementName, "soundCType") ||
+                               StrEqual(parent->elementName, "soundType"))
                             {
-                                b32 matches = true;
-                                EditorElement* test = root->firstChild;
-                                for(EditorElement* match = UI->copying->firstChild; match; match = match->next)
+                                char* type = GetValue(grandParent, "type");
+                                if(!StrEqual(type, "Labeled"))
                                 {
-                                    if(!test || !StrEqual(match->name, test->name))
+                                    EditorElement* list = GetElement(root, "labels");
+                                    if(list)
                                     {
-                                        matches = false;
-                                        break;
+                                        list->flags |= EditorElem_DontRender;
+                                    }
+                                }
+                            }
+                        }
+                        Rect2 structBounds = UIRenderEditorTree(UI, widget, layout, parent, root, root->firstValue, input, false);
+                        
+                        if(canDelete)
+                        {
+                            UIButton deleteButton = UIBtn(UI, GetCenter(structBounds) + V2(30, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(1, 0, 0, 1), "delete");
+                            UIButtonInteraction(&deleteButton, UISetValueInteraction(UI_Trigger, &root->flags, (root->flags | EditorElem_Deleted)));
+                            structBounds = Union(structBounds, UIDrawButton(UI, input, &deleteButton));
+                        }
+                        
+                        
+                        if(root->firstValue && parent && (parent->flags & EditorElem_PlaySoundButton))
+                        {
+                            UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(70, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
+                            
+                            u64 soundTypeHash = StringHash(parent->name);
+                            u64 soundNameHash = StringHash(root->firstValue->value);
+                            
+                            UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
+                            structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
+                        }
+                        else if(root->firstValue && parent && (parent->flags & EditorElem_PlayEventButton))
+                        {
+                            UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(20, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
+                            
+                            u64 eventNameHash = StringHash(root->name);
+                            
+                            UIButtonInteraction(&playButton, UIPlaySoundEventInteraction(UI_Trigger, eventNameHash));
+                            structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
+                        }
+                        
+                        r32 padding = 5;
+                        layout->P += V2(0, -padding);
+                        Rect2 realBounds = AddRadius(structBounds, V2(padding, padding));
+                        
+                        
+                        r32 thickness = 1.0f;
+                        Vec4 outlineColor = V4(1, 1, 1, 1);
+                        if(root == UI->copying)
+                        {
+                            thickness = 2.0f;
+                            outlineColor = V4(0, 0, 1, 1);
+                        }
+                        else
+                        {
+                            if(!UI->hotStructThisFrame && PointInRect(realBounds, UI->relativeScreenMouse))
+                            {
+                                UI->hotStructThisFrame = true;
+                                UI->hotStructBounds = realBounds;
+                                UI->hotStructZ = layout->additionalZBias;
+                                UI->hotStructColor = V4(0, 1, 0, 1);
+                                
+                                UIAddInteraction(UI, input, copyButton, UISetValueInteraction(UI_Trigger, &UI->copying, root));
+                                if(UI->copying)
+                                {
+                                    b32 matches = true;
+                                    EditorElement* test = root->firstChild;
+                                    for(EditorElement* match = UI->copying->firstChild; match; match = match->next)
+                                    {
+                                        if(!test || !StrEqual(match->name, test->name))
+                                        {
+                                            matches = false;
+                                            break;
+                                        }
+                                        
+                                        test = test->next;
                                     }
                                     
-                                    test = test->next;
-                                }
-                                
-                                if(matches)
-                                {
-                                    UIAddInteraction(UI, input, pasteButton, UISetValueInteraction(UI_Trigger, &root->flags, root->flags | EditorElem_Pasted));
-                                }
-                                else
-                                {
-                                    UI->hotStructColor.a = 0;
+                                    if(matches)
+                                    {
+                                        UIAddInteraction(UI, input, pasteButton, UISetValueInteraction(UI_Trigger, &root->flags, root->flags | EditorElem_Pasted));
+                                    }
+                                    else
+                                    {
+                                        UI->hotStructColor.a = 0;
+                                    }
                                 }
                             }
                         }
+                        
+                        result = Union(result, realBounds);
+                        layout->P += V2(-layout->nameValueDistance, 0);
+                        layout->P += V2(0, -padding);
+                        
+                        Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
+                        PushLine(UI->group, V4(1, 1, 1, 1), verticalStartP, verticalEndP, 1);
+                        
+                        ObjectTransform structTranform = FlatTransform();
+                        structTranform.additionalZBias = layout->additionalZBias;
+                        
+                        PushRectOutline(UI->group, structTranform, realBounds, outlineColor, thickness);
                     }
-                    
-                    result = Union(result, realBounds);
-                    layout->P += V2(-layout->nameValueDistance, 0);
-					layout->P += V2(0, -padding);
-                    
-                    Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
-                    PushLine(UI->group, V4(1, 1, 1, 1), verticalStartP, verticalEndP, 1);
-                    
-                    ObjectTransform structTranform = FlatTransform();
-                    structTranform.additionalZBias = layout->additionalZBias;
-                    
-                    PushRectOutline(UI->group, structTranform, realBounds, outlineColor, thickness);
-                }
-            } break;
-            
-            case EditorElement_Taxonomy:
-            {
-                if(IsSet(root, EditorElem_Expanded) && root->firstChild)
+                } break;
+                
+                case EditorElement_Taxonomy:
                 {
-                    if(IsSet(root, EditorElem_Editable))
+                    if(IsSet(root, EditorElem_Expanded) && root->firstChild)
                     {
-                        r32 buttonSeparator = 20;
-                        Vec2 startingPos = nameP + V2(GetDim(nameBounds).x + 0.5f * layout->nameValueDistance, 0);
+                        if(IsSet(root, EditorElem_Editable))
+                        {
+                            r32 buttonSeparator = 20;
+                            Vec2 startingPos = nameP + V2(GetDim(nameBounds).x + 0.5f * layout->nameValueDistance, 0);
+                            
+                            UIButton deleteButton = UIBtn(UI, startingPos, layout, V4(1, 0, 0, 1), "delete");
+                            UIButtonInteraction(&deleteButton, SendRequestInteraction(UI_Trigger, DeleteTaxonomyRequest(root->taxonomy)));
+                            result = Union(result, UIDrawButton(UI, input, &deleteButton));
+                            
+                            
+                            
+                            UIButton instantiateButton = UIBtn(UI, UIFollowingP(&deleteButton, buttonSeparator), layout, V4(0, 0, 1, 1), "instantiate");
+                            UIButtonInteraction(&instantiateButton, SendRequestInteraction(UI_Trigger, InstantiateTaxonomyRequest(root->taxonomy)));
+                            result = Union(result, UIDrawButton(UI, input, &instantiateButton));
+                            
+                            UIButton editButton = UIBtn(UI, UIFollowingP(&instantiateButton, buttonSeparator), layout, V4(0, 1, 0, 1), "edit");
+                            
+                            UIButtonInteraction(&editButton, SendRequestInteraction(UI_Trigger, EditRequest(root->taxonomy)));
+                            result = Union(result, UIDrawButton(UI, input, &editButton));
+                        }
                         
-                        UIButton deleteButton = UIBtn(UI, startingPos, layout, V4(1, 0, 0, 1), "delete");
-                        UIButtonInteraction(&deleteButton, SendRequestInteraction(UI_Trigger, DeleteTaxonomyRequest(root->taxonomy)));
-                        result = Union(result, UIDrawButton(UI, input, &deleteButton));
                         
+                        Vec3 verticalStartP = V3(lineStartP, 0);
                         
+                        layout->P += V2(layout->nameValueDistance, 0);
+                        result = Union(result, UIRenderEditorTree(UI, widget, layout, parent, root, root->firstChild, input, false));
+                        layout->P += V2(-layout->nameValueDistance, 0);
                         
-                        UIButton instantiateButton = UIBtn(UI, UIFollowingP(&deleteButton, buttonSeparator), layout, V4(0, 0, 1, 1), "instantiate");
-                        UIButtonInteraction(&instantiateButton, SendRequestInteraction(UI_Trigger, InstantiateTaxonomyRequest(root->taxonomy)));
-                        result = Union(result, UIDrawButton(UI, input, &instantiateButton));
-                        
-                        UIButton editButton = UIBtn(UI, UIFollowingP(&instantiateButton, buttonSeparator), layout, V4(0, 1, 0, 1), "edit");
-                        
-                        UIButtonInteraction(&editButton, SendRequestInteraction(UI_Trigger, EditRequest(root->taxonomy)));
-                        result = Union(result, UIDrawButton(UI, input, &editButton));
+                        Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
+                        PushLine(UI->group, V4(1, 1, 1, 1), verticalStartP, verticalEndP, 1);
                     }
-                    
-                    
-                    Vec3 verticalStartP = V3(lineStartP, 0);
-                    
-                    layout->P += V2(layout->nameValueDistance, 0);
-                    result = Union(result, UIRenderEditorTree(UI, widget, layout, parent, root, root->firstChild, input, false));
-                    layout->P += V2(-layout->nameValueDistance, 0);
-                    
-                    Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
-                    PushLine(UI->group, V4(1, 1, 1, 1), verticalStartP, verticalEndP, 1);
-                }
-            } break;
-            
-            case EditorElement_EmptyTaxonomy:
-            {
-                Vec4 addColor = V4(1, 1, 0.5f, 1);
-                if(root != UI->active)
+                } break;
+                
+                case EditorElement_EmptyTaxonomy:
                 {
-                    char* text = "Add new...";
-                    nameBounds = GetUIOrthoTextBounds(UI, text, layout->fontScale, nameP); 
-                    layout->P += V2(0, -layout->childStandardHeight);
-                    
-                    if(PointInRect(nameBounds, UI->relativeScreenMouse))
+                    Vec4 addColor = V4(1, 1, 0.5f, 1);
+                    if(root != UI->active)
                     {
-                        UIInteraction mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
-                        UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, parent); 
-                        UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeGrandParent, grandParent); 
-                        UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
-                        UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
+                        char* text = "Add new...";
+                        nameBounds = GetUIOrthoTextBounds(UI, text, layout->fontScale, nameP); 
+                        layout->P += V2(0, -layout->childStandardHeight);
+                        
+                        if(PointInRect(nameBounds, UI->relativeScreenMouse))
+                        {
+                            UIInteraction mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
+                            UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, parent); 
+                            UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeGrandParent, grandParent); 
+                            UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+                            UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
+                            addColor = V4(1, 0, 0, 1);
+                        }
+                        
+                        result = GetUIOrthoTextBounds(UI, text, layout->fontScale, nameP);
+                        PushUIOrthoText(UI, text, layout->fontScale, nameP, addColor, layout->additionalZBias);
+                    }
+                    else
+                    {
+                        layout->P += V2(0, -layout->childStandardHeight);
+                        char* text = UI->showBuffer;
                         addColor = V4(1, 0, 0, 1);
+                        
+                        if(UI->bufferValid)
+                        {
+                            addColor = V4(0, 1, 0, 1);
+                            UIInteraction buttonInteraction = SendRequestInteraction(UI_Trigger, AddTaxonomyRequest(root->parentTaxonomy, UI->keyboardBuffer));
+                            UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->active, 0);    
+                            UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->activeParent, 0);    
+                            UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->activeGrandParent, 0);    
+                            UIAddInteraction(UI, input, confirmButton, buttonInteraction);
+                        }
+                        
+                        result = GetUIOrthoTextBounds(UI, text, layout->fontScale, nameP);
+                        PushUIOrthoText(UI, text, layout->fontScale, nameP, addColor, layout->additionalZBias);
                     }
-                    
-                    result = GetUIOrthoTextBounds(UI, text, layout->fontScale, nameP);
-                    PushUIOrthoText(UI, text, layout->fontScale, nameP, addColor, layout->additionalZBias);
-                }
-                else
+                } break;
+                
+                case EditorElement_Animation:
                 {
-                    layout->P += V2(0, -layout->childStandardHeight);
-                    char* text = UI->showBuffer;
-                    addColor = V4(1, 0, 0, 1);
-                    
-                    if(UI->bufferValid)
+                    Vec3 P = V3(layout->P + 2.0f * V2(0, layout->childStandardHeight), 0);
+                    P.x += 0.5f * layout->nameValueDistance;
+                    if(UI->editingTaxonomy)
                     {
-                        addColor = V4(0, 1, 0, 1);
-                        UIInteraction buttonInteraction = SendRequestInteraction(UI_Trigger, AddTaxonomyRequest(root->parentTaxonomy, UI->keyboardBuffer));
-                        UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->active, 0);    
-                        UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->activeParent, 0);    
-                        UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->activeGrandParent, 0);    
-                        UIAddInteraction(UI, input, confirmButton, buttonInteraction);
+                        TaxonomySlot* animationSlot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
+                        ClientEntity test = {};
+                        test.taxonomy = UI->editingTaxonomy;
+                        test.lifePoints = 1;
+                        test.maxLifePoints = 1;
+                        test.status = R32_MAX;
+                        test.animation.cameInTime = R32_MAX;
+                        
+                        EditorElement* pause = root->next;
+                        b32 play = ToB32(GetValue(pause, "autoplay"));
+                        r32 speed = ToR32(GetValue(pause, "speed"));
+                        r32 timeToAdvance = play ? input->timeToAdvance : 0;
+                        
+                        
+                        EditorElement* animationElement = pause->next;
+                        
+                        char* animationName = GetValue(animationElement, "animationName");
+                        u64 nameHashID = StringHash(animationName);
+                        r32 timer = ToR32(GetValue(animationElement, "time"));
+                        r32 oldTimer = timer;
+                        
+                        if(play)
+                        {
+                            timer += UI->worldMode->originalTimeToAdvance * speed;
+                        }
+                        
+                        if(timer > 1.0f)
+                        {
+                            timer = 0;
+                        }
+                        timer = Clamp01(timer);
+                        
+                        EditorElement* timerElement = GetElement(animationElement, "time");
+                        FormatString(timerElement->value, sizeof(timerElement->value), "%f", timer);
+                        test.animation.totalTime = timer;
+                        
+                        PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, V2(50, 50), 0, P, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 10, true, timer, nameHashID);
+                        
+                        if(play)
+                        {
+                            PlaySoundForAnimation(UI->worldMode, UI->group->assets, animationSlot, nameHashID, oldTimer, timer);
+                        }
                     }
-                    
-                    result = GetUIOrthoTextBounds(UI, text, layout->fontScale, nameP);
-                    PushUIOrthoText(UI, text, layout->fontScale, nameP, addColor, layout->additionalZBias);
-                }
-            } break;
+                } break;
+            }
             
-            case EditorElement_Animation:
-            {
-                Vec3 P = V3(layout->P + 2.0f * V2(0, layout->childStandardHeight), 0);
-                P.x += 0.5f * layout->nameValueDistance;
-                if(UI->editingTaxonomy)
-                {
-                    TaxonomySlot* animationSlot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
-                    ClientEntity test = {};
-                    test.taxonomy = UI->editingTaxonomy;
-                    test.lifePoints = 1;
-                    test.maxLifePoints = 1;
-                    test.status = R32_MAX;
-                    test.animation.cameInTime = R32_MAX;
-                    
-                    EditorElement* pause = root->next;
-                    b32 play = ToB32(GetValue(pause, "autoplay"));
-                    r32 speed = ToR32(GetValue(pause, "speed"));
-                    r32 timeToAdvance = play ? input->timeToAdvance : 0;
-                    
-                    
-                    EditorElement* animationElement = pause->next;
-                    
-                    char* animationName = GetValue(animationElement, "animationName");
-					u64 nameHashID = StringHash(animationName);
-                    r32 timer = ToR32(GetValue(animationElement, "time"));
-                    r32 oldTimer = timer;
-                    
-                    if(play)
-                    {
-                        timer += UI->worldMode->originalTimeToAdvance * speed;
-                    }
-                    
-                    if(timer > 1.0f)
-                    {
-                        timer = 0;
-                    }
-                    timer = Clamp01(timer);
-                    
-                    EditorElement* timerElement = GetElement(animationElement, "time");
-                    FormatString(timerElement->value, sizeof(timerElement->value), "%f", timer);
-                    test.animation.totalTime = timer;
-                    
-                    PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, V2(50, 50), 0, P, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 10, true, timer, nameHashID);
-                    
-                    if(play)
-                    {
-                        PlaySoundForAnimation(UI->worldMode, UI->group->assets, animationSlot, nameHashID, oldTimer, timer);
-                    }
-                }
-            } break;
+            totalResult = Union(totalResult, result);
         }
-        
-        totalResult = Union(totalResult, result);
     }
     
     return totalResult;
