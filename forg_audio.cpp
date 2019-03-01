@@ -35,82 +35,83 @@ inline r32 LabelsDelta(u32 referenceLabelCount, SoundLabel* referenceLabels, u32
 inline LabeledSound* PickSoundChild(SoundContainer* container, u32 labelCount, SoundLabel* labels, RandomSequence* sequence)
 {
     LabeledSound* result = 0;
-
+    
 	switch(container->type)
 	{
 		case SoundContainer_Random:
 		{
-		        u32 totalChoiceCount = container->soundCount + container->containerCount;
-        Assert(totalChoiceCount > 0);
-        
-        u32 index = RandomChoice(sequence, totalChoiceCount);
-        if(index < container->soundCount)
-        {
-            u32 listIndex = 0;
-            for(LabeledSound* sound = container->firstSound; sound; sound = sound->next)
+            u32 totalChoiceCount = container->soundCount + container->containerCount;
+            if(totalChoiceCount > 0)
             {
-                if(listIndex++ == index)
+                u32 index = RandomChoice(sequence, totalChoiceCount);
+                if(index < container->soundCount)
                 {
-                    result = sound;
-                    break;
+                    u32 listIndex = 0;
+                    for(LabeledSound* sound = container->firstSound; sound; sound = sound->next)
+                    {
+                        if(listIndex++ == index)
+                        {
+                            result = sound;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    index -= container->soundCount;
+                    
+                    u32 childIndex = 0;
+                    for(SoundContainer* child = container->firstChildContainer; child; child = child->next)
+                    {
+                        if(childIndex++ == index)
+                        {
+                            result = PickSoundChild(child, labelCount, labels, sequence);
+                            break;
+                        }
+                    }
                 }
             }
-        }
-        else
-        {
-            index -= container->soundCount;
-            
-            u32 childIndex = 0;
-            for(SoundContainer* child = container->firstChildContainer; child; child = child->next)
-            {
-                if(childIndex++ == index)
-                {
-                    result = PickSoundChild(child, labelCount, labels, sequence);
-                    break;
-                }
-            }
-        }
 		} break;
-
+        
 		case SoundContainer_Labeled:
 		{
 			LabeledSound* bestSound = 0;
-        SoundContainer* bestContainer = 0;
-        r32 bestDelta = R32_MAX;
-        
-        for(LabeledSound* sound = container->firstSound; sound; sound = sound->next)
-        {
-            r32 delta = LabelsDelta(labelCount, labels, sound->labelCount, sound->labels);
-            if(delta < bestDelta)
+            SoundContainer* bestContainer = 0;
+            r32 bestDelta = R32_MAX;
+            
+            for(LabeledSound* sound = container->firstSound; sound; sound = sound->next)
             {
-                bestDelta = delta;
-                bestContainer = 0;
-                bestSound = sound;
+                r32 delta = LabelsDelta(labelCount, labels, sound->labelCount, sound->labels);
+                if(delta < bestDelta)
+                {
+                    bestDelta = delta;
+                    bestContainer = 0;
+                    bestSound = sound;
+                }
             }
-        }
-        
-        for(SoundContainer* child = container->firstChildContainer; child; child = child->next)
-        {
-            r32 delta = LabelsDelta(labelCount, labels, child->labelCount, child->labels);
-            if(delta < bestDelta)
+            
+            for(SoundContainer* child = container->firstChildContainer; child; child = child->next)
             {
-                bestDelta = delta;
-                bestContainer = child;
-                bestSound = 0;
+                r32 delta = LabelsDelta(labelCount, labels, child->labelCount, child->labels);
+                if(delta < bestDelta)
+                {
+                    bestDelta = delta;
+                    bestContainer = child;
+                    bestSound = 0;
+                }
             }
-        }
-        
-        
-        if(bestSound)
-        {
-            result = bestSound;
-        }
-        else if(bestContainer)
-        {
-            result = PickSoundChild(bestContainer, labelCount, labels, sequence);
-        }
+            
+            
+            if(bestSound)
+            {
+                result = bestSound;
+            }
+            else if(bestContainer)
+            {
+                result = PickSoundChild(bestContainer, labelCount, labels, sequence);
+            }
 		} break;
-
+        
 		InvalidDefaultCase;
 	}
     

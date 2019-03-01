@@ -351,9 +351,6 @@ inline u32 GetValuePreprocessor_(char** values, u32 count, char* test)
         }
     }
     
-    
-    Assert(found);
-    
     return result;
 }
 
@@ -2271,7 +2268,7 @@ inline b32 IsEditableByRole(EditorElement* root, u32 role)
     return result;
 }
 
-internal void LoadFileInTaxonomySlot(char* content)
+internal void LoadFileInTaxonomySlot(char* content, u32 editorRoles)
 {
     Tokenizer tokenizer = {};
     tokenizer.at = content;
@@ -2292,6 +2289,7 @@ internal void LoadFileInTaxonomySlot(char* content)
         
         EditorTab* newTab = currentSlot_->tabs + currentSlot_->tabCount++;
         newTab->root = LoadElementInMemory(LoadElements_Tab, &tokenizer, &end);
+        newTab->editable = IsEditableByRole(newTab->root, editorRoles);
         
         if(end)
         {
@@ -2883,6 +2881,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     }
     else if(StrEqual(name, "soundEvents"))
     {
+        taxTable_->eventCount = 0;
         EditorElement* events = root->firstInList;
         while(events)
         {
@@ -2918,7 +2917,7 @@ inline Token GetFileTaxonomyName(char* content)
     return result;
 }
 
-internal void ImportAllFiles(char* dataPath, MemoryPool* tempPool, b32 freeTab)
+internal void ImportAllFiles(char* dataPath, MemoryPool* tempPool, u32 editorRoles, b32 freeTab)
 {
     TempMemory fileMemory = BeginTemporaryMemory(tempPool);
     
@@ -2949,7 +2948,7 @@ internal void ImportAllFiles(char* dataPath, MemoryPool* tempPool, b32 freeTab)
             currentSlot_ = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName);
             if(currentSlot_)
             {
-                LoadFileInTaxonomySlot(source);
+                LoadFileInTaxonomySlot(source, editorRoles);
                 for(u32 tabIndex = 0; tabIndex < currentSlot_->tabCount; ++tabIndex)
                 {
                     EditorTab* tab = currentSlot_->tabs + tabIndex;

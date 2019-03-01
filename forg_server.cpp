@@ -177,7 +177,7 @@ internal void FillGenerationData(ServerState* server)
     
     
     b32 freeTabs = !server->editor;
-    ImportAllFiles("assets", tempPool, freeTabs);
+    ImportAllFiles("assets", tempPool, freeTabs, EditorRole_Everyone);
     ReadBehaviors();
     ReadSynthesisRules();
 }
@@ -476,34 +476,6 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                         
                         
                         
-                        
-                        
-                        
-                        case Type_EditRequest:
-                        {
-                            if(server->editor)
-                            {
-                                u32 taxonomy;
-                                u32 role;
-                                packetPtr = unpack(packetPtr, "LL", &taxonomy, &role);
-                                TaxonomySlot* slot = GetSlotForTaxonomy(server->activeTable, taxonomy);
-                                
-                                
-                                for(u32 tabIndex = 0; tabIndex < slot->tabCount; ++tabIndex)
-                                {
-                                    EditorElement* tab = slot->tabs[tabIndex].root;
-                                    
-                                    b32 canEdit = IsEditableByRole(tab, role);
-                                    SendNewTabMessage(player, canEdit);
-                                    
-                                    SendEditorElements(player, tab);
-                                }
-                            }
-                            else
-                            {
-                                InvalidCodePath;
-                            }
-                        } break;
                         
                         case Type_NewEditorTab:
                         {

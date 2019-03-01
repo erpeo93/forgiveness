@@ -312,7 +312,7 @@ struct UIAddTabResult
     Vec4 color;
 };
 
-inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget, PlatformInput* input, EditorElement* grandParent, EditorElement* parent, EditorElement* root, Vec2 P, EditorLayout* layout, char* text)
+inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget, PlatformInput* input, EditorElementParents parents, EditorElement* root, Vec2 P, EditorLayout* layout, char* text)
 {
     UIAddTabResult result = {};
     result.bounds = InvertedInfinityRect2();
@@ -353,7 +353,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                         }
                         else
                         {
-                            UIAutocomplete* autocomplete = UIFindAutocomplete(UI, grandParent, parent, root->name);
+                            UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parents.grandParents[0], parents.father, root->name);
                             if(autocomplete)
                             {
                                 canEdit = true;
@@ -365,8 +365,8 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                     {
                         result.color = V4(1, 0, 1, 1);
                         mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
-                        UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, parent);
-                        UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeGrandParent, grandParent);
+                        UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, parents.father);
+                        UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeGrandParent, parents.grandParents[0]);
                         UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->currentAutocompleteSelectedIndex, -1);   UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                     }
                 }
@@ -396,7 +396,6 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
             }
             else if(StrEqual(widget->name, "soundEvents"))
             {
-                UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->table->eventCount, 0);
                 UIAddReloadElementAction(&confirmInteraction, UI_Trigger, UI->soundEventsRoot);
             }
             
@@ -405,7 +404,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
         
         if(root->type == EditorElement_String)
         {
-            UIAutocomplete* autocomplete = UIFindAutocomplete(UI, grandParent, parent, root->name);
+            UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parents.grandParents[0], parents.father, root->name);
             if(autocomplete)
             {
                 UIRenderAutocomplete(UI, input, autocomplete, layout, P -V2(0, layout->childStandardHeight), UI->keyboardBuffer);
@@ -417,9 +416,21 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
 }
 
 
-
-inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElement* grandParent, EditorElement* parent, EditorElement* root_, PlatformInput* input, b32 canDelete)
+inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElementParents parents, EditorElement* parent_, EditorElement* root_, PlatformInput* input, b32 canDelete)
 {
+    for(u32 parentIndex = ArrayCount(parents.grandParents) - 1; parentIndex > 0; --parentIndex)
+    {
+        parents.grandParents[parentIndex] = parents.grandParents[parentIndex - 1];
+    }
+    
+    parents.grandParents[0] = parents.father;
+    parents.father = parent_;
+    
+    
+    
+    EditorElement* father = parents.father;
+    EditorElement* grandFather = parents.grandParents[0];
+    
     Rect2 totalResult = InvertedInfinityRect2();
     for(EditorElement* root = root_; root; root = root->next)
     {
@@ -472,7 +483,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 
                 UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &root->flags, finalFlags));
                 
-                if(!UI->active && parent && (parent->flags & EditorElem_LabelsEditable))
+                if(!UI->active && father && (father->flags & EditorElem_LabelsEditable))
                 {
                     textColor = V4(1, 0, 0, 1);
                     UIAddInteraction(UI, input, mouseRight, UISetValueInteraction(UI_Trigger, &UI->activeLabel, root));
@@ -509,7 +520,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     Vec2 valueP = nameP + V2(xAdvance, 0);
                     char* text = (root == UI->active) ? UI->showBuffer : root->value;
                     
-                    UIAddTabResult addTab = UIAddTabValueInteraction(UI, widget, input, grandParent, parent, root, valueP, layout, text);
+                    UIAddTabResult addTab = UIAddTabValueInteraction(UI, widget, input, parents, root, valueP, layout, text);
                     
                     PushUIOrthoText(UI, text, layout->fontScale, valueP, addTab.color, layout->additionalZBias);
                     result = Union(result, addTab.bounds);
@@ -574,7 +585,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             layout->P += V2(layout->nameValueDistance, 0);
                         }
                         b32 canDeleteElements = !IsSet(root, EditorElem_CantBeDeleted);
-                        result = Union(result, UIRenderEditorTree(UI, widget, layout, parent, root, root->firstInList, input, canDeleteElements));
+                        result = Union(result, UIRenderEditorTree(UI, widget, layout, parents, root, root->firstInList, input, canDeleteElements));
                         
                         if(moveHorizontally)
                         {
@@ -602,13 +613,27 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         layout->P += V2(layout->nameValueDistance, 0);
                         
                         
-                        if(parent && grandParent)
+                        if(father)
                         {
-                            if(StrEqual(parent->elementName, "soundCType") ||
-                               StrEqual(parent->elementName, "soundType"))
+                            if(StrEqual(father->elementName, "soundCType") ||
+                               StrEqual(father->elementName, "soundType"))
                             {
-                                char* type = GetValue(grandParent, "type");
-                                if(!StrEqual(type, "Labeled"))
+                                b32 showLabels = true;
+                                EditorElement* pppp = parents.grandParents[0];
+                                if(pppp)
+                                {
+                                    char* type = GetValue(pppp, "type");
+                                    if(!StrEqual(type, "Labeled"))
+                                    {
+                                        showLabels = false;
+                                    }
+                                }
+                                else
+                                {
+                                    showLabels = false;
+                                }
+                                
+                                if(!showLabels)
                                 {
                                     EditorElement* list = GetElement(root, "labels");
                                     if(list)
@@ -618,7 +643,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                                 }
                             }
                         }
-                        Rect2 structBounds = UIRenderEditorTree(UI, widget, layout, parent, root, root->firstValue, input, false);
+                        Rect2 structBounds = UIRenderEditorTree(UI, widget, layout, parents, root, root->firstValue, input, false);
                         
                         if(canDelete)
                         {
@@ -628,17 +653,17 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         }
                         
                         
-                        if(root->firstValue && parent && (parent->flags & EditorElem_PlaySoundButton))
+                        if(root->firstValue && father && (father->flags & EditorElem_PlaySoundButton))
                         {
                             UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(70, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
                             
-                            u64 soundTypeHash = StringHash(parent->name);
+                            u64 soundTypeHash = StringHash(father->name);
                             u64 soundNameHash = StringHash(root->firstValue->value);
                             
                             UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
                             structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
                         }
-                        else if(root->firstValue && parent && (parent->flags & EditorElem_PlayEventButton))
+                        else if(root->firstValue && father && (father->flags & EditorElem_PlayEventButton))
                         {
                             UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(20, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
                             
@@ -740,7 +765,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         Vec3 verticalStartP = V3(lineStartP, 0);
                         
                         layout->P += V2(layout->nameValueDistance, 0);
-                        result = Union(result, UIRenderEditorTree(UI, widget, layout, parent, root, root->firstChild, input, false));
+                        result = Union(result, UIRenderEditorTree(UI, widget, layout, parents, root, root->firstChild, input, false));
                         layout->P += V2(-layout->nameValueDistance, 0);
                         
                         Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
@@ -760,8 +785,8 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         if(PointInRect(nameBounds, UI->relativeScreenMouse))
                         {
                             UIInteraction mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
-                            UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, parent); 
-                            UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeGrandParent, grandParent); 
+                            UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, father); 
+                            UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeGrandParent, grandFather); 
                             UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                             UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
                             addColor = V4(1, 0, 0, 1);
@@ -949,6 +974,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         UIAddStandardAction(&confirmInteraction, UI_Trigger, UI->activeLabel->name, ColdPointer(UI->activeLabel->name), ColdPointer(UI->keyboardBuffer));
         UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeLabel, 0);    
         UIAddClearAction(&confirmInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+        UIAddReloadElementAction(&confirmInteraction, UI_Trigger, UI->soundEventsRoot);
         UIAddInteraction(UI, input, confirmButton, confirmInteraction);
     }
     else if(UI->keyboardBuffer[0] && UI->active)
@@ -1073,7 +1099,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     {
         EditorWidget* widget = UI->widgets + widgetIndex;
         
-        if(widget->necessaryRole & UI->editorRoles)
+        if(widget->necessaryRole & UI->worldMode->editorRoles)
         {
             Vec2 resizeP = widget->permanent.P;
             Vec2 widgetP = resizeP + V2(20, -8);
@@ -1195,7 +1221,8 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             Rect2 widgetBounds = InvertedInfinityRect2();
             if(widget->permanent.expanded && widget->root)
             {
-                widgetBounds = UIRenderEditorTree(UI, widget, layout, 0, 0, widget->root, input, false);
+                EditorElementParents parents = {};
+                widgetBounds = UIRenderEditorTree(UI, widget, layout, parents, 0, widget->root, input, false);
             }
             
             ObjectTransform widgetBoundsTransform = FlatTransform();
@@ -1719,8 +1746,6 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UI->initialized = true;
         if(worldMode->editingEnabled)
         {
-            UI->editorRoles = (u32) EditorRole_SoundDesigner;
-            
             UI->uneditableTabRoot.type = EditorElement_String;
             FormatString(UI->uneditableTabRoot.name, sizeof(UI->uneditableTabRoot.name), "YOU CAN'T EDIT THIS");
             

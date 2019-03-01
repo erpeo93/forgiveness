@@ -583,20 +583,10 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_Edit:
         {
+            UI->editingTaxonomy = request->taxonomy;
             if(request->taxonomy != UI->editingTaxonomy)
             {
-                TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, request->taxonomy);
-                for(u32 tabIndex = 0; tabIndex < slot->tabCount; ++tabIndex)
-                {
-                    EditorTab* tab = slot->tabs + tabIndex;
-                    FreeElement(tab->root);
-                    tab->root = 0;
-                }
-                slot->tabCount = 0;
-                
                 UI->editingTabIndex = 0;
-                UI->editingTaxonomy = request->taxonomy;
-                SendEditRequest(UI->editingTaxonomy, UI->editorRoles);
             }
         } break;
         

@@ -637,7 +637,6 @@ struct UIState
     EditorElement* activeLabel;
     
     r32 saveWidgetLayoutTimer;
-    u32 editorRoles;
     EditorWidget widgets[EditorWidget_Count];
     
     

@@ -243,13 +243,6 @@ internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
     CloseAndSendStandardPacket();
 }
 
-internal void SendEditRequest(u32 taxonomy, u32 role)
-{
-    StartStandardPacket(EditRequest);
-    Pack("LL", taxonomy, role);
-    CloseAndSendStandardPacket();
-}
-
 inline void SendPopMessage(b32 list, b32 pop = true)
 {
     StartStandardPacket(PopEditorElement);
@@ -526,6 +519,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                     
                     Unpack("HLl", &login.port, &login.challenge, &login.editingEnabled);
                     worldMode->editingEnabled = login.editingEnabled;
+                    worldMode->editorRoles = (u32) EditorRole_SoundDesigner;
                     
                     
                     u32 salt = 11111;
@@ -1027,135 +1021,6 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                 {
                     CompletePastWritesBeforeFutureWrites;
                     worldMode->allPakFilesArrived = true;
-                } break;
-                
-                case Type_NewEditorTab:
-                {
-                    b32 editable;
-                    Unpack("l", &editable);
-                    
-                    EditorTabStack* stack = &myPlayer->editorStack;
-                    stack->counter = 0;
-                    stack->currentTabEditable = editable;
-                    stack->previousElementType = EditorElement_Count;
-                } break;
-                
-                case Type_EditorElement:
-                {
-                    TaxonomyTable* taxTable = worldMode->table;
-                    TaxonomySlot* editingSlot = GetSlotForTaxonomy(taxTable, worldMode->UI->editingTaxonomy);
-                    
-                    EditorElement* element;
-                    FREELIST_ALLOC(element, taxTable->firstFreeElement, PushStruct(&taxTable->pool, EditorElement));
-                    *element = {};
-                    
-                    Unpack("sLL", element->name, &element->type, &element->flags);
-                    
-                    if(element->type < EditorElement_List)
-                    {
-                        Unpack("s", element->value);
-                    }
-                    else
-                    {
-                        if(element->type == EditorElement_List)
-                        {
-                            Unpack("s", element->elementName);
-                        }
-                        
-                        element->value[0] = 0;
-                    }
-                    
-                    EditorTabStack* stack = &myPlayer->editorStack;
-                    EditorElement* current;
-                    u32 currentStackIndex = 0;
-                    
-                    
-                    
-					if(!stack->counter)
-					{
-                        stack->stack[stack->counter++] = element;
-                        current = element;
-					}
-					else
-					{
-                        Assert(stack->counter > 0);
-                        currentStackIndex = stack->counter - 1;
-                        current = stack->stack[currentStackIndex];
-                    }
-                    
-                    
-                    if(StrEqual(element->name, "empty"))
-                    {
-                        Assert(current->type == EditorElement_List);
-                        current->emptyElement = element;
-                        Assert(stack->counter < ArrayCount(stack->stack));
-                        stack->stack[stack->counter++] = element;
-                    }
-                    else
-                    {
-                        switch(stack->previousElementType)
-                        {
-                            case EditorElement_String:
-                            case EditorElement_Real:
-                            case EditorElement_Signed:
-                            case EditorElement_Unsigned:
-                            {
-                                current->next = element;
-                                stack->stack[currentStackIndex] = element;
-                            } break;
-                            
-                            case EditorElement_Struct:
-                            {
-                                current->firstValue = element;
-                                
-                                Assert(stack->counter < ArrayCount(stack->stack));
-                                stack->stack[stack->counter++] = element;
-                            } break;
-                            
-                            case EditorElement_List:
-                            {
-                                current->firstInList = element;
-                                
-                                Assert(stack->counter < ArrayCount(stack->stack));
-                                stack->stack[stack->counter++] = element;
-                            } break;
-                            
-                            case EditorElement_Count:
-                            {
-                                EditorTab* tab = editingSlot->tabs +editingSlot->tabCount++;
-                                tab->root = current;
-                                tab->editable = stack->currentTabEditable;
-                            } break;
-                            
-                            InvalidDefaultCase;
-                        }
-                        
-                        stack->previousElementType = element->type;
-                    }
-                } break;
-                
-                case Type_PopEditorElement:
-                {
-                    b32 list;
-                    b32 pop;
-                    Unpack("ll", &list, &pop);
-                    
-                    EditorTabStack* stack = &myPlayer->editorStack;
-                    
-                    if(pop)
-                    {
-                        Assert(stack->counter > 0);
-                        --stack->counter;
-                    }
-                    
-                    if(list)
-                    {
-                        stack->previousElementType = EditorElement_List;
-                    }
-                    else
-                    {
-                        stack->previousElementType = EditorElement_String;
-                    }
                 } break;
                 
 #if FORGIVENESS_INTERNAL

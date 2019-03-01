@@ -95,7 +95,6 @@ enum Packet_Type
     Type_PassiveSkillRequest,
     Type_LearnRequest,
     Type_ConsumeRequest,
-    Type_EditRequest,
     Type_CraftFromInventoryRequest,
     
     Type_containerHeader,

@@ -261,6 +261,8 @@ struct ClientEntity
 struct GameModeWorld
 {
     b32 editingEnabled;
+    u32 editorRoles;
+    
     b32 gamePaused;
     r32 originalTimeToAdvance;
     

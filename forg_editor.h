@@ -65,6 +65,12 @@ struct EditorElement
 	
 };
 
+struct EditorElementParents
+{
+    EditorElement* grandParents[8]; // NOTE(Leonardo): grandParents[0] is the grandParent
+    EditorElement* father;
+};
+
 inline b32 IsSet(EditorElement* element, u32 flags)
 {
     b32 result = element->flags & flags;
@@ -97,7 +103,6 @@ struct DataFileArrived
 struct EditorTabStack
 {
     u32 counter;
-    b32 currentTabEditable;
     EditorElement* result;
     struct EditorElement* stack[16];
     u32 previousElementType;

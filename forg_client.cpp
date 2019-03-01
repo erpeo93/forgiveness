@@ -729,7 +729,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     
                     InitTaxonomyReadWrite(worldMode->table);
                     ReadTaxonomiesFromFile();
-                    ImportAllFiles(filePath, &worldMode->filePool, true);
+                    ImportAllFiles(filePath, &worldMode->filePool, worldMode->editorRoles, false);
                     ReadPlantChart();
                     
                     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(worldMode->table, "goblins");
