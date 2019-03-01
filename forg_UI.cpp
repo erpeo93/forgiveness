@@ -483,10 +483,13 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 
                 UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &root->flags, finalFlags));
                 
-                if(!UI->active && father && (father->flags & EditorElem_LabelsEditable))
+                if(!UI->activeLabel && !UI->active && father && (father->flags & EditorElem_LabelsEditable))
                 {
                     textColor = V4(1, 0, 0, 1);
-                    UIAddInteraction(UI, input, mouseRight, UISetValueInteraction(UI_Trigger, &UI->activeLabel, root));
+                    UIInteraction labelInteraction = UISetValueInteraction(UI_Trigger, &UI->activeLabel, root);
+                    UIAddClearAction(&labelInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+                    
+                    UIAddInteraction(UI, input, mouseRight, labelInteraction);
                 }
                 nameHot = true;
             }
@@ -1209,7 +1212,9 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                         
                         
                         UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), " SAVE ");
-                        UIButtonInteraction(&saveButton, SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("soundEvents", widget->root)));
+                        UIInteraction saveInteraction = SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("soundEvents", widget->root));
+                        UIAddReloadElementAction(&saveInteraction, UI_Trigger, UI->soundEventsRoot);
+                        UIButtonInteraction(&saveButton, saveInteraction);
                         UIDrawButton(UI, input, &saveButton);
                     } break;
                 }

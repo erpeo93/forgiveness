@@ -35,8 +35,8 @@
 #include "stb_truetype.h"
 #endif
 
-#define VERY_LARGE_NUMBER 512
-#define EVEN_BIGGER_NUMBER 2048
+#define VERY_LARGE_NUMBER 256
+#define EVEN_BIGGER_NUMBER 1024
 struct Assets
 {
     u32 countTags;
@@ -1859,6 +1859,7 @@ internal void WritePak(Assets* assets, char* fileName_)
             
             fclose(out );
             
+            
             PlatformFile uncompressed = DEBUGWin32ReadFile(outputpak);
             
             uLong uncompressedSize = (uLong) uncompressed.size;
@@ -2024,114 +2025,16 @@ inline void AddTagsBasedOnName(char* path, char* filename, u32 animationIndex)
     }
 }
 
-internal void AddTagsFromFile(char* path, char* imageName)
+
+
+
+
+struct BitmapFileHandle
 {
-    char completeName[128];
-    FormatString(completeName, sizeof(completeName), "%s/properties", path);
-    PlatformFile properties = DEBUGWin32ReadFile(completeName);
-    
-    if(properties.content)
-    {
-        Tokenizer tokenizer;
-        tokenizer.at = (char*) properties.content;
-        
-        b32 encountered = false;
-        b32 parsing = true;
-        while(parsing)
-        {
-            Token t = GetToken(&tokenizer);
-            switch(t.type)
-            {
-                case Token_String:
-                {
-                    Token s = Stringize(t);
-                    if(TokenEquals(s, imageName))
-                    {
-                        encountered = true;
-                    }
-                    else
-                    {
-                        if(encountered)
-                        {
-                            parsing = false;
-                        }
-                    }
-                } break;
-                
-                case Token_Identifier:
-                {
-                    if(encountered)
-                    {
-                        u32 tag = 0;
-                        for(u32 tagIndex = 0; tagIndex < Tag_count; ++tagIndex)
-                        {
-                            if(TokenEquals(t, MetaTable_TagId[tagIndex]))
-                            {
-                                tag = tagIndex;
-                                break;
-                            }
-                        }
-                        
-                        Assert(tag);
-                        if(tag)
-                        {
-                            Token colon = GetToken(&tokenizer);
-                            if(colon.type == Token_Colon)
-                            {
-                                Token value = GetToken(&tokenizer);
-                                if(value.type == Token_Identifier)
-                                {
-                                    r32 tagValue = 0;
-                                    switch(tag)
-                                    {
-                                        case Tag_Material:
-                                        {
-                                            for(u32 materialIndex = 0; materialIndex < Material_Count; ++materialIndex)
-                                            {
-                                                if(TokenEquals(value, MetaTable_Material[materialIndex]))
-                                                {
-                                                    tagValue = (r32) materialIndex;
-                                                    break;
-                                                }
-                                            }
-                                            
-                                            Assert(tagValue < (r32) Material_Count);
-                                        } break;
-                                        
-                                        InvalidDefaultCase;
-                                    }
-                                    
-                                    Assert(tagValue > 0);
-                                    AddTag((TagId)tag, tagValue);
-                                }
-                                else
-                                {
-                                    InvalidCodePath;
-                                }
-                            }
-                            else
-                            {
-                                InvalidCodePath;
-                            }
-                        }
-                    }
-                } break;
-                
-                case Token_EndOfFile:
-                {
-                    parsing = false;
-                } break;
-            }
-        }
-        
-        DEBUGWin32FreeFile(&properties);
-    }
-}
-
-
-
-
-
+    char name[64];
+    u32 assetIndex;
+    u64 ID;
+};
 
 internal void WriteBitmaps(char* folder, char* name_)
 {
@@ -2155,7 +2058,6 @@ internal void WriteBitmaps(char* folder, char* name_)
     u32 hashIndex =  hashID & (HASHED_ASSET_SLOTS - 1);
     u32 assetIndex = Asset_count + hashIndex;
     PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, completePath);
-    
     if(bitmapGroup.fileCount)
     {
         BeginAssetType(assets, assetIndex);
@@ -2163,7 +2065,6 @@ internal void WriteBitmaps(char* folder, char* name_)
         {
             PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, completePath);
             AddBitmapAsset(completePath, bitmapHandle.name, hashID);
-            AddTagsFromFile(completePath, bitmapHandle.name);
             Win32CloseHandle(&bitmapHandle);
         }
         EndAssetType();
@@ -2172,42 +2073,50 @@ internal void WriteBitmaps(char* folder, char* name_)
     Win32GetAllFilesEnd(&bitmapGroup);
     
     
+    char subfolderPath[128];
+    FormatString(subfolderPath, sizeof(subfolderPath), "%s/side", completePath);
+    PlatformFileGroup sideGroup = Win32GetAllFilesBegin(PlatformFile_image, subfolderPath);
     
-    
-    for(u32 additionalAssetIndex = Asset_count; additionalAssetIndex < (Asset_count + HASHED_ASSET_SLOTS); ++additionalAssetIndex)
+    if(sideGroup.fileCount)
     {
-        char subfolderPath[128];
-        FormatString(subfolderPath, sizeof(subfolderPath), "%s/side", completePath);
-        PlatformFileGroup sideGroup = Win32GetAllFilesBegin(PlatformFile_image, subfolderPath);
+        BitmapFileHandle* handles = (BitmapFileHandle*) malloc(sizeof(BitmapFileHandle) * sideGroup.fileCount);
         
-        if(sideGroup.fileCount)
+        for(u32 fileIndex = 0; fileIndex < sideGroup.fileCount; ++fileIndex)
+        {
+            PlatformFileHandle handle = Win32OpenNextFile(&sideGroup, subfolderPath);
+            BitmapFileHandle* bitmap = handles + fileIndex;
+            
+            char* limbName = handle.name;
+            char nameWithoutPoint[64];
+            GetNameWithoutPoint(nameWithoutPoint, ArrayCount(nameWithoutPoint), limbName);
+            
+            FormatString(bitmap->name, sizeof(bitmap->name), "%s", limbName);
+            
+            bitmap->ID = StringHash(nameWithoutPoint);
+            u32 limbIndex =  bitmap->ID & (HASHED_ASSET_SLOTS - 1);
+            bitmap->assetIndex = Asset_count + limbIndex;
+            
+        }
+        
+        Win32GetAllFilesEnd(&sideGroup);
+        
+        for(u32 additionalAssetIndex = Asset_count; additionalAssetIndex < (Asset_count + HASHED_ASSET_SLOTS); ++additionalAssetIndex)
         {
             BeginAssetType(assets, additionalAssetIndex);
-            
             for(u32 fileIndex = 0; fileIndex < sideGroup.fileCount; ++fileIndex)
             {
-                PlatformFileHandle handle = Win32OpenNextFile(&sideGroup, subfolderPath);
-                char* limbName = handle.name;
-                char nameWithoutPoint[64];
-                GetNameWithoutPoint(nameWithoutPoint, ArrayCount(nameWithoutPoint), limbName);
-                
-                u64 limbID = StringHash(nameWithoutPoint);
-                u32 limbIndex =  limbID & (HASHED_ASSET_SLOTS - 1);
-                u32 limbAssetIndex = Asset_count + limbIndex;
-                if(limbAssetIndex == additionalAssetIndex)
+                BitmapFileHandle* bitmap = handles + fileIndex;
+                if(bitmap->assetIndex == additionalAssetIndex)
                 {
-                    AddBitmapAsset(subfolderPath, limbName, limbID);
+                    AddBitmapAsset(subfolderPath, bitmap->name, bitmap->ID);
                     r32 firstHashHalfValue = (r32) (hashID >> 32);
                     r32 secondHashHalfValue = (r32) (hashID & 0xFFFFFFFF);
                     AddTag(Tag_firstHashHalf, firstHashHalfValue);
                     AddTag(Tag_secondHashHalf, secondHashHalfValue);
                 }
             }
-            
             EndAssetType();
         }
-        
-        Win32GetAllFilesEnd(&sideGroup);
     }
     
     
@@ -2415,7 +2324,7 @@ internal void WriteUI()
 
 internal void RecursiveWriteBitmaps(char* path)
 {
-    PlatformSubdirNames* subdir = (PlatformSubdirNames* ) malloc(sizeof(PlatformSubdirNames ) );
+    PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
     Win32GetAllSubdirectoriesName(subdir, path);
     
     for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)

@@ -1899,8 +1899,18 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
 	{
 		if(element->name[0])
 		{
-            buffer = OutputToBuffer(buffer, bufferSize, element->name);
-			buffer = OutputToBuffer(buffer, bufferSize, " = ");
+            if(!StrEqual(element->name, "empty"))
+            {
+                buffer = OutputToBuffer(buffer, bufferSize, "\"");
+                buffer = OutputToBuffer(buffer, bufferSize, element->name);
+                buffer = OutputToBuffer(buffer, bufferSize, "\"");
+                buffer = OutputToBuffer(buffer, bufferSize, " = ");
+            }
+            else
+            {
+                buffer = OutputToBuffer(buffer, bufferSize, element->name);
+                buffer = OutputToBuffer(buffer, bufferSize, " = ");
+            }
 		}
         
 		switch(element->type)
