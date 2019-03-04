@@ -414,12 +414,12 @@ inline UIRequest InstantiateTaxonomyRequest(u32 taxonomy)
     return result;
 }
 
-inline UIRequest SaveAssetFadFileRequest(char* fileName, EditorElement* root)
+inline UIRequest SaveAssetFadFileRequest(char* fileName, EditorWidget* widget)
 {
     UIRequest result = {};
     result.requestCode = UIRequest_SaveAssetFile;
     FormatString(result.fileName, sizeof(result.fileName), "%s", fileName);
-    result.root = root;
+    result.widget = widget;
     
     return result;
 }
@@ -449,6 +449,7 @@ inline UIRequest SaveTaxonomyTabRequest()
 }
 
 
+inline void UIAddUndoRedoCommand(UIState* UI, UndoRedoCommand command);
 inline void UIHandleRequest(UIState* UI, UIRequest* request)
 {
     switch(request->requestCode)
@@ -583,9 +584,11 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_Edit:
         {
-            UI->editingTaxonomy = request->taxonomy;
             if(request->taxonomy != UI->editingTaxonomy)
             {
+                UIAddUndoRedoCommand(UI, UndoRedoEditTaxonomy(UI->editingTaxonomy, UI->editingTabIndex, request->taxonomy));
+                
+                UI->editingTaxonomy = request->taxonomy;
                 UI->editingTabIndex = 0;
             }
         } break;
@@ -610,13 +613,6 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
                 SendNewTabMessage();
                 SendEditorElements(toSend->root);
                 SendReloadEditingMessage(UI->editingTaxonomy, sendingIndex);
-                FreeTaxonomySlot(UI->table, editingSlot);
-                
-                for(u32 tabIndex = 0; tabIndex < editingSlot->tabCount; ++tabIndex)
-                {
-                    EditorTab* tab = editingSlot->tabs + tabIndex;
-                    Import(editingSlot, tab->root);
-                }
             }
         } break;
         
@@ -637,7 +633,8 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_SaveAssetFile:
         {
-            SendSaveAssetDefinitionFile(request->fileName, request->root);
+            request->widget->changeCount = 0;
+            SendSaveAssetDefinitionFile(request->fileName, request->widget->root);
         } break;
         
         case UIRequest_ReloadAssets:
@@ -653,6 +650,9 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_SaveTaxonomyTab:
         {
+            TaxonomySlot* editing = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
+            editing->editorChangeCount = 0;
+            
             SendSaveTabRequest(UI->editingTaxonomy);
         } break;
         InvalidDefaultCase;
@@ -829,13 +829,14 @@ inline void UIAddOffsetV2Action(UIInteraction* interaction, u32 flags, UIMemoryR
     dest->speed = speed;
 }
 
-inline UIInteraction UIAddEmptyElementToListInteraction(u32 flags, EditorElement* list)
+inline UIInteraction UIAddEmptyElementToListInteraction(u32 flags, EditorWidget* widget, EditorElement* list)
 {
     UIInteraction result = {};
     UIInteractionAction* dest = UIGetFreeAction(&result);
     dest->type = UIInteractionAction_AddEmptyEditorElement;
     dest->flags = flags;
-    dest->value = ColdPointer(list);
+    dest->list = ColdPointer(list);
+    dest->widget = ColdPointer(widget);
     
     return result;
 }
@@ -872,6 +873,21 @@ inline void UIAddReloadElementAction(UIInteraction* interaction, u32 flags, Edit
     dest->toReload = ColdPointer(toReload);
 }
 
+inline void UIAddReleaseDragAction(UIInteraction* interaction, u32 flags)
+{
+    UIInteractionAction* dest = UIGetFreeAction(interaction);
+    dest->type = UIInteractionAction_ReleaseDragging;
+    dest->flags = flags;
+}
+
+inline void UIAddUndoRedoAction(UIInteraction* interaction, u32 flags, UndoRedoCommand command)
+{
+    UIInteractionAction* dest = UIGetFreeAction(interaction);
+    dest->type = UIInteractionAction_UndoRedoCommand;
+    dest->flags = flags;
+    dest->undoRedo = command;
+}
+
 inline UIInteraction NullInteraction()
 {
     UIInteraction result;
@@ -880,6 +896,26 @@ inline UIInteraction NullInteraction()
     result.actionCount = 0;
     result.checkCount = 0;
     result.excludeFromReset = 0;
+    
+    return result;
+}
+
+inline UIInteraction UIUndoInteraction(u32 flags)
+{
+    UIInteraction result = NullInteraction();
+    result.actionCount = 1;
+    result.actions[0].type = UIInteractionAction_Undo;
+    result.actions[0].flags = flags;
+    
+    return result;
+}
+
+inline UIInteraction UIRedoInteraction(u32 flags)
+{
+    UIInteraction result = NullInteraction();
+    result.actionCount = 1;
+    result.actions[0].type = UIInteractionAction_Redo;
+    result.actions[0].flags = flags;
     
     return result;
 }
@@ -1067,6 +1103,47 @@ inline EditorElement* CopyEditorElement(TaxonomyTable* table, EditorElement* sou
     return result;
 }
 
+inline void UpdateWidgetChangeCount(UIState* UI, EditorWidget* widget, i32 delta)
+{
+    if(widget)
+    {
+        if(StrEqual(widget->name, "Editing Tabs"))
+        {
+            TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
+            slot->editorChangeCount += delta;
+        }
+        else
+        {
+            widget->changeCount += delta;
+        }
+    }
+}
+
+inline void UIAddUndoRedoCommand(UIState* UI, UndoRedoCommand command)
+{
+    UpdateWidgetChangeCount(UI, command.widget, 1);
+    
+    UndoRedoCommand* current = UI->current;
+    while(current != &UI->undoRedoSentinel)
+    {
+        UndoRedoCommand* nextToFree = current->next;
+        DLLIST_REMOVE(current);
+        FREELIST_DEALLOC(current, UI->firstFreeUndoRedoCommand);
+        current = nextToFree;
+    }
+    
+    
+    
+    UndoRedoCommand* newCommand;
+    FREELIST_ALLOC(newCommand, UI->firstFreeUndoRedoCommand, PushStruct(&UI->undoRedoPool, UndoRedoCommand));
+    *newCommand = command;
+    
+    DLLIST_INSERT_AS_LAST(&UI->undoRedoSentinel, newCommand);
+    UI->current = &UI->undoRedoSentinel;
+    UI->canRedo = false;
+}
+
+
 inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 flag, r32 timeToAdvance, b32 onlyNotActivated = false)
 {
     for(u32 actionIndex = 0; actionIndex < interaction->actionCount; ++actionIndex)
@@ -1133,7 +1210,6 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                     
                     case UIInteractionAction_OffsetV2:
                     {
-                        
                         r32 speed = action->speed;
                         Vec2* value = (Vec2*) GetValue(action->value, &interaction->data);
                         Vec2* offset = (Vec2*) GetValue(action->offset, &interaction->data);
@@ -1143,8 +1219,9 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                     
                     case UIInteractionAction_AddEmptyEditorElement:
                     {
-                        EditorElement* list = (EditorElement*) GetValue(action->value, &interaction->data);
+                        EditorWidget* widget = (EditorWidget*) GetValue(action->widget, &interaction->data);
                         
+                        EditorElement* list = (EditorElement*) GetValue(action->list, &interaction->data);
                         EditorElement* newElement = CopyEditorElement(UI->table, list->emptyElement);
                         
                         if(list->flags & EditorElem_RecursiveEmpty)
@@ -1171,6 +1248,8 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         {
                             newElement->name[0] = 0;
                         }
+                        
+                        UIAddUndoRedoCommand(UI, UndoRedoAdd(widget, list, newElement));
                         
                         newElement->next = list->firstChild;
                         list->firstChild = newElement;
@@ -1208,25 +1287,182 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                             Assert(labelCount < ArrayCount(labels));
                             SoundLabel* label = labels + labelCount++;
                             
-                            label->labelHashID = StringHash(labelName);
+                            label->hashID = StringHash(labelName);
                             label->value = ToR32(labelValue);
                             
                             activeLabels = activeLabels->next;
                         }
                         
                         
-                        SoundId ID = PickSoundFromEvent(UI->group->assets, event, labelCount, labels, &UI->table->eventSequence);
-                        if(IsValid(ID))
+                        PickSoundResult pick = PickSoundFromEvent(UI->group->assets, event, labelCount, labels, &UI->table->eventSequence);
+                        
+                        for(u32 pickIndex = 0; pickIndex < pick.soundCount; ++pickIndex)
                         {
-                            PlaySound(UI->worldMode->soundState, ID);
+                            SoundId toPlay = pick.sounds[pickIndex];
+                            r32 delay = pick.delays[pickIndex];
+                            
+                            if(IsValid(toPlay))
+                            {
+                                PlaySound(UI->worldMode->soundState, toPlay, delay);
+                            }
                         }
                     } break;
                     
                     case UIInteractionAction_ReloadElement:
                     {
                         EditorElement* root = (EditorElement*) GetValue(action->toReload, &interaction->data);
-                        Import(0, root);
-                    }
+                        TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
+                        Import(slot, root);
+                    } break;
+                    
+                    case UIInteractionAction_ReleaseDragging:
+                    {
+                        if(UI->hotStructThisFrame)
+                        {
+                            EditorElement* hot = UI->hotStruct;
+                            EditorWidget* hotWidget = UI->hotWidget;
+                            
+                            if(hot->type == EditorElement_List)
+                            {
+                                if(StrEqual(hot->elementName, "soundType"))
+                                {
+                                    if(UI->draggingParent)
+                                    {
+                                        char* soundName = GetValue(UI->dragging, "soundName");
+                                        char* soundType = UI->draggingParent->name;
+                                        if(soundName)
+                                        {
+                                            EditorElement* newSound = CopyEditorElement(UI->table, hot->emptyElement);
+                                            newSound->name[0] = 0;
+                                            
+                                            for(EditorElement* value = newSound->firstValue; value; value = value->next)
+                                            {
+                                                if(StrEqual(value->name, "soundType"))
+                                                {
+                                                    FormatString(value->value, sizeof(value->value), "%s", soundType);
+                                                }
+                                                else if(StrEqual(value->name, "sound"))
+                                                {
+                                                    FormatString(value->value, sizeof(value->value), "%s", soundName);
+                                                }
+                                            }
+                                            
+                                            newSound->next = hot->firstInList;
+                                            hot->firstInList = newSound;
+                                            
+                                            hotWidget->needsToBeReloaded = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        UI->dragging = 0;
+                        UI->draggingParent = 0;
+                    } break;
+                    
+                    case UIInteractionAction_UndoRedoCommand:
+                    {
+                        UIAddUndoRedoCommand(UI, action->undoRedo);
+                    } break;
+                    
+                    case UIInteractionAction_Undo:
+                    {
+                        UndoRedoCommand* current = UI->current;
+                        if(current->prev != &UI->undoRedoSentinel)
+                        {
+                            UndoRedoCommand* toExec = current->prev;
+                            
+                            UpdateWidgetChangeCount(UI, toExec->widget, -1);
+                            
+                            switch(toExec->type)
+                            {
+                                case UndoRedo_StringCopy:
+                                {
+                                    FormatString(toExec->ptr, toExec->maxPtrSize, "%s", toExec->oldString);
+                                } break;
+                                
+                                case UndoRedo_AddElement:
+                                {
+                                    Assert(toExec->added == toExec->list->firstInList);
+                                    toExec->list->firstInList = toExec->added->next;
+                                    toExec->added->next = 0;
+                                } break;
+                                
+                                case UndoRedo_DeleteElement:
+                                {
+                                    ClearFlags(toExec->deleted, EditorElem_Deleted);
+                                    toExec->deleted->next = *toExec->prevNextPtr;
+                                    *toExec->prevNextPtr = toExec->deleted;
+                                } break;
+                                
+                                case UndoRedo_Paste:
+                                {
+                                    *toExec->dest = toExec->oldElem;
+                                } break;
+                                
+                                case UndoRedo_EditTaxonomy:
+                                {
+                                    UI->editingTaxonomy = toExec->oldTaxonomy;
+                                    UI->editingTabIndex = toExec->oldTabIndex;
+                                } break;
+                            }
+                            
+                            UI->current = toExec;
+                            UI->canRedo = true;
+                        }
+                    } break;
+                    
+                    case UIInteractionAction_Redo:
+                    {
+                        if(UI->canRedo)
+                        {
+                            UndoRedoCommand* current = UI->current;
+                            if(current != &UI->undoRedoSentinel)
+                            {
+                                UndoRedoCommand* toExec = current;
+                                UpdateWidgetChangeCount(UI, toExec->widget, 1);
+                                
+                                switch(toExec->type)
+                                {
+                                    case UndoRedo_StringCopy:
+                                    {
+                                        FormatString(toExec->ptr, toExec->maxPtrSize, "%s", toExec->newString);
+                                    } break;
+                                    
+                                    case UndoRedo_AddElement:
+                                    {
+                                        FREELIST_INSERT(toExec->added, toExec->list->firstInList);
+                                    } break;
+                                    
+                                    case UndoRedo_DeleteElement:
+                                    {
+                                        AddFlags(toExec->deleted, EditorElem_Deleted);
+                                        *toExec->prevNextPtr = toExec->deleted->next;
+                                        toExec->deleted->next = 0;
+                                    } break;
+                                    
+                                    case UndoRedo_Paste:
+                                    {
+                                        *toExec->dest = toExec->newElem;
+                                    } break;
+                                    
+                                    case UndoRedo_EditTaxonomy:
+                                    {
+                                        UI->editingTaxonomy = toExec->newTaxonomy;
+                                        UI->editingTabIndex = 0;
+                                    } break;
+                                }
+                                
+                                UndoRedoCommand* next = toExec->next;
+                                if(next == &UI->undoRedoSentinel)
+                                {
+                                    UI->canRedo = false;
+                                }
+                                UI->current = next;
+                            }
+                        }
+                    } break;
                 }
                 
                 action->flags |= UI_Activated;

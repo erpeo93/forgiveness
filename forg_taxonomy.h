@@ -236,19 +236,13 @@ struct EditorTab
 struct TaxonomySlot
 {
     u32 taxonomy;
-    
     u64 stringHashID;
     u32 subTaxonomiesCount;
     u32 usedBitsTotal;
     u32 parentNecessaryBits;
     u32 necessaryBits;
-    
-    
-    b32 editorCollapsed;
-    
     char name[32];
     TaxonomySlot* nextInHash;
-    
     
     
     
@@ -315,15 +309,15 @@ struct TaxonomySlot
     
     
     
+    b32 editorCollapsed;
+    i32 editorChangeCount;
     u32 tabCount;
     EditorTab tabs[16];
-    
-    
 };
 
 struct SoundLabel
 {
-    u64 labelHashID;
+    u64 hashID;
     r32 value;
 };
 
@@ -332,6 +326,7 @@ struct LabeledSound
     u64 typeHash;
     u64 nameHash;
     
+    r32 delay;
     union
     {
         LabeledSound* next;
@@ -346,6 +341,7 @@ printTable(noPrefix) enum SoundContainerType
 {
     SoundContainer_Random,
     SoundContainer_Labeled,
+    SoundContainer_Sequence,
 };
 
 struct SoundContainer

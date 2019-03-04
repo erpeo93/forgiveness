@@ -143,6 +143,7 @@ char* MetaTable_SoundContainerType[] =
  {
 "Random",
 "Labeled",
+"Sequence",
 };
 char* MetaTable_Material[] = 
  {

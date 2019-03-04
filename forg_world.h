@@ -81,6 +81,15 @@ inline AddEntityAdditionalParams DefaultAddEntityParams()
     return result;
 }
 
+
+inline AddEntityAdditionalParams Crafting(u64 recipeIndex)
+{
+    AddEntityAdditionalParams result = {};
+	result.status = I16_MAX;
+    result.recipeIndex = recipeIndex;
+    return result;
+}
+
 inline AddEntityAdditionalParams FluidDirection( m4x4 rotation, u64 id1, u32 segmentIndex1, u64 id2, u32 segmentIndex2 )
 {
     AddEntityAdditionalParams result = DefaultAddEntityParams();

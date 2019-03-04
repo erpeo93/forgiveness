@@ -365,15 +365,16 @@ struct PlatformInput
             PlatformButton inventoryButton;
             PlatformButton equipmentButton;
             
-            PlatformButton editorButton;
-            PlatformButton copyButton;
-            PlatformButton pasteButton;
-            PlatformButton pauseButton;
-            
             PlatformButton mouseLeft;
             PlatformButton mouseRight;
             PlatformButton mouseCenter;
             
+            PlatformButton editorButton;
+            PlatformButton copyButton;
+            PlatformButton pasteButton;
+            PlatformButton pauseButton;
+            PlatformButton undo;
+            PlatformButton redo;
             
             
             PlatformButton slotButtons[10];
@@ -388,6 +389,7 @@ struct PlatformInput
     
     // NOTE(Leonardo): signals back to the platform layer
     b32 quitRequested;
+    b32 allowedToQuit;
 };
 
 inline b32 IsDown( PlatformButton* button )

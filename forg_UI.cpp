@@ -34,13 +34,15 @@ inline void UIButtonInteraction(UIButton* button, UIInteraction interaction)
     button->interaction = interaction;
 }
 
-inline Rect2 UIDrawButton(UIState* UI, PlatformInput* input, UIButton* button)
+inline Rect2 UIDrawButton(UIState* UI, PlatformInput* input, UIButton* button, r32 alpha = 1.0f)
 {
     ObjectTransform buttonTranform = FlatTransform();
     buttonTranform.additionalZBias = button->Z + 0.001f;
     
     Vec4 buttonColor = button->color;
-    if(PointInRect(button->bounds, UI->relativeScreenMouse))
+    buttonColor.a *= alpha;
+    
+    if(PointInRect(button->bounds, UI->relativeScreenMouse) && button->interaction.actionCount)
     {
         UIAddInteraction(UI, input, mouseLeft, button->interaction);
     }
@@ -50,7 +52,7 @@ inline Rect2 UIDrawButton(UIState* UI, PlatformInput* input, UIButton* button)
     }
     
     PushRect(UI->group, buttonTranform, button->bounds, buttonColor);
-    PushUIOrthoText(UI, button->text, button->fontScale, button->textP, V4(1, 1, 1, 1), button->Z + 0.002f);
+    PushUIOrthoText(UI, button->text, button->fontScale, button->textP, V4(1, 1, 1, alpha), button->Z + 0.002f);
     
     
     return button->bounds;
@@ -384,19 +386,18 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
             result.color = V4(0, 1, 0, 1);
             
             UIInteraction confirmInteraction = {};
+            UIAddUndoRedoAction(&confirmInteraction, UI_Trigger, UndoRedoString(widget, root->value, sizeof(root->value), root->value, UI->keyboardBuffer));
+            
             UIAddStandardAction(&confirmInteraction, UI_Trigger, root->value, ColdPointer(root->value), ColdPointer(UI->keyboardBuffer));
             UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->active, 0);    
             UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeParent, 0);    
             UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeGrandParent, 0);    
             
             
-            if(StrEqual(widget->name, "taxonomy tabs"))
+            UIAddReloadElementAction(&confirmInteraction, UI_Trigger, widget->root);
+            if(StrEqual(widget->name, "Editing Tabs"))
             {
                 UIAddRequestAction(&confirmInteraction, UI_Trigger, SendDataFileRequest());
-            }
-            else if(StrEqual(widget->name, "soundEvents"))
-            {
-                UIAddReloadElementAction(&confirmInteraction, UI_Trigger, UI->soundEventsRoot);
             }
             
             UIAddInteraction(UI, input, confirmButton, confirmInteraction);
@@ -415,6 +416,21 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
     return result;
 }
 
+inline b32 UIChildModified(TaxonomyTable* table, TaxonomySlot* slot)
+{
+    b32 result = false;
+    for(u32 childIndex = 0; childIndex < slot->subTaxonomiesCount; ++childIndex)
+    {
+        TaxonomySlot* child = GetNthChildSlot(table, slot, childIndex);
+        if(child->editorChangeCount || UIChildModified(table, child))
+        {
+            result = true;
+            break;
+        }
+    }
+    
+    return result;
+}
 
 inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElementParents parents, EditorElement* parent_, EditorElement* root_, PlatformInput* input, b32 canDelete)
 {
@@ -442,18 +458,32 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
 		{
 			if(IsSet(root, EditorElem_Pasted))
             {
-                Assert(root->type == EditorElement_Struct);
-                for(EditorElement* toFree = root->firstChild; toFree;)
-                {
-                    EditorElement* nextToFree = toFree->next;
-                    
-                    FreeElement(toFree);
-                    
-                    toFree = nextToFree;
-                }
-                root->firstChild = CopyEditorElement(UI->table, UI->copying->firstChild);
-                
                 ClearFlags(root, EditorElem_Pasted);
+                EditorElement oldElem = *root;
+                
+                root->flags = UI->copying->flags;
+                switch(root->type)
+                {
+                    case EditorElement_Struct:
+                    {
+                        root->firstValue = CopyEditorElement(UI->table, UI->copying->firstValue);
+                    } break;
+                    
+                    case EditorElement_List:
+                    {
+                        root->firstInList = CopyEditorElement(UI->table, UI->copying->firstInList);
+                        
+                        FormatString(root->elementName, sizeof(root->elementName), "%s", UI->copying->elementName);
+                        if(UI->copying->emptyElement)
+                        {
+                            root->emptyElement = CopyEditorElement(UI->table, UI->copying->emptyElement);
+                        }
+                    }
+                }
+                
+                EditorElement newElem = *root;
+                UIAddUndoRedoCommand(UI, UndoRedoPaste(widget, root, oldElem, newElem));
+                
             }
             
             Rect2 result = InvertedInfinityRect2();
@@ -470,7 +500,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             
             
             Rect2 nameBounds = GetUIOrthoTextBounds(UI, name, layout->fontScale, layout->P);
-            Vec4 textColor = V4(1, 1, 1, 1);
+            Vec4 nameColor = V4(1, 1, 1, 1);
             
             b32 nameHot = false;
             char* nameToShow = name;
@@ -478,14 +508,14 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             
             if(PointInRect(nameBounds, UI->relativeScreenMouse))
             {
-                textColor = V4(1, 1, 0, 1);
+                nameColor = V4(1, 1, 0, 1);
                 u32 finalFlags = IsSet(root, EditorElem_Expanded) ? (root->flags & ~EditorElem_Expanded) : (root->flags | EditorElem_Expanded);
                 
                 UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &root->flags, finalFlags));
                 
                 if(!UI->activeLabel && !UI->active && father && (father->flags & EditorElem_LabelsEditable))
                 {
-                    textColor = V4(1, 0, 0, 1);
+                    nameColor = V4(1, 0, 0, 1);
                     UIInteraction labelInteraction = UISetValueInteraction(UI_Trigger, &UI->activeLabel, root);
                     UIAddClearAction(&labelInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                     
@@ -496,18 +526,30 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             
             if(root == UI->activeLabel)
             {
-                nameToShow = UI->keyboardBuffer;
+                nameToShow = UI->showBuffer;
+                
+                UIInteraction confirmInteraction = {};
+                UIAddUndoRedoAction(&confirmInteraction, UI_Trigger, UndoRedoString(widget, root->name, sizeof(root->name), root->name, UI->keyboardBuffer));
+                UIAddStandardAction(&confirmInteraction, UI_Trigger, root->name, ColdPointer(root->name), ColdPointer(UI->keyboardBuffer));
+                UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeLabel, 0);    
+                UIAddClearAction(&confirmInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+                
+                UIAddReloadElementAction(&confirmInteraction, UI_Trigger, widget->root);
+                if(StrEqual(widget->name, "Editing Tabs"))
+                {
+                    UIAddRequestAction(&confirmInteraction, UI_Trigger, SendDataFileRequest());
+                }
+                
+                UIAddInteraction(UI, input, confirmButton, confirmInteraction);
             }
             
             Vec2 nameP = layout->P;
-            if(showName)
-            {
-                PushUIOrthoText(UI, nameToShow, layout->fontScale, nameP, textColor, layout->additionalZBias);
-                layout->P += V2(0, -layout->childStandardHeight);
-            }
-            
             result = nameBounds;
             
+            if(showName)
+            {
+                layout->P += V2(0, -layout->childStandardHeight);
+            }
             
             Vec2 lineStartP = nameP + V2(0.2f * layout->nameValueDistance, -0.2f * layout->childStandardHeight);
             Vec3 lineEndOffset = V3(0.2f * layout->nameValueDistance, 1.2f * layout->childStandardHeight, 0);
@@ -540,8 +582,9 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             EditorElement* element = *elementPtr;
                             if(IsSet(element, EditorElem_Deleted))
                             {
+                                UIAddUndoRedoCommand(UI, UndoRedoDelete(widget, elementPtr, element));
                                 *elementPtr = element->next;
-                                FREELIST_DEALLOC(element, UI->table->firstFreeElement);
+                                widget->needsToBeReloaded = true;
                             }
                             else
                             {
@@ -565,6 +608,8 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                                 UI->hotStructBounds = nameBounds;
                                 UI->hotStructZ = layout->additionalZBias;
                                 UI->hotStructColor = V4(0, 1, 0, 1);
+                                UI->hotStruct = root;
+                                UI->hotWidget = widget;
                                 
                                 UIAddInteraction(UI, input, copyButton, UISetValueInteraction(UI_Trigger, &UI->copying, root));
                                 if(UI->copying)
@@ -602,7 +647,15 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         if(root->emptyElement)
                         {
                             UIButton addButton = UIBtn(UI, nameP + V2(GetDim(nameBounds).x, 0) + V2(30, 0), layout, V4(1, 0, 0, 1), "add");
-                            UIButtonInteraction(&addButton, UIAddEmptyElementToListInteraction(UI_Trigger, root));
+                            UIInteraction addInteraction = UIAddEmptyElementToListInteraction(UI_Trigger, widget, root);
+                            
+                            if(StrEqual(widget->name, "Editing Tabs"))
+                            {
+                                UIAddRequestAction(&addInteraction, UI_Trigger, SendDataFileRequest());
+                            }
+                            
+                            UIAddReloadElementAction(&addInteraction, UI_Trigger, widget->root);
+                            UIButtonInteraction(&addButton, addInteraction);
                             result = Union(result, UIDrawButton(UI, input, &addButton));
                         }
                     }
@@ -650,11 +703,13 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         
                         if(canDelete)
                         {
-                            UIButton deleteButton = UIBtn(UI, GetCenter(structBounds) + V2(30, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(1, 0, 0, 1), "delete");
-                            UIButtonInteraction(&deleteButton, UISetValueInteraction(UI_Trigger, &root->flags, (root->flags | EditorElem_Deleted)));
-                            structBounds = Union(structBounds, UIDrawButton(UI, input, &deleteButton));
+                            if(root != UI->copying)
+                            {
+                                UIButton deleteButton = UIBtn(UI, GetCenter(structBounds) + V2(30, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(1, 0, 0, 1), "delete");
+                                UIButtonInteraction(&deleteButton, UISetValueInteraction(UI_Trigger, &root->flags, (root->flags | EditorElem_Deleted)));
+                                structBounds = Union(structBounds, UIDrawButton(UI, input, &deleteButton));
+                            }
                         }
-                        
                         
                         if(root->firstValue && father && (father->flags & EditorElem_PlaySoundButton))
                         {
@@ -662,6 +717,18 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             
                             u64 soundTypeHash = StringHash(father->name);
                             u64 soundNameHash = StringHash(root->firstValue->value);
+                            
+                            UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
+                            structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
+                        }
+                        if(root->firstValue && father && (father->flags & EditorElem_PlayEventSoundButton))
+                        {
+                            UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(70, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
+                            
+                            char* soundType = GetValue(root, "soundType");
+                            char* soundName = GetValue(root, "sound");
+                            u64 soundTypeHash = StringHash(soundType);
+                            u64 soundNameHash = StringHash(soundName);
                             
                             UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
                             structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
@@ -696,6 +763,8 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                                 UI->hotStructBounds = realBounds;
                                 UI->hotStructZ = layout->additionalZBias;
                                 UI->hotStructColor = V4(0, 1, 0, 1);
+                                UI->hotStruct = root;
+                                UI->hotWidget = widget;
                                 
                                 UIAddInteraction(UI, input, copyButton, UISetValueInteraction(UI_Trigger, &UI->copying, root));
                                 if(UI->copying)
@@ -725,6 +794,17 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             }
                         }
                         
+                        if(!canDelete)
+                        {
+                            if(UI->hotStructThisFrame && root == UI->hotStruct)
+                            {
+                                UIInteraction dragInteraction = UISetValueInteraction(UI_Trigger, &UI->dragging, root);
+                                UIAddSetValueAction(&dragInteraction, UI_Trigger, &UI->draggingParent, father);
+                                UIAddReleaseDragAction(&dragInteraction, UI_Release);
+                                UIAddInteraction(UI, input, mouseRight, dragInteraction);
+                            }
+                        }
+                        
                         result = Union(result, realBounds);
                         layout->P += V2(-layout->nameValueDistance, 0);
                         layout->P += V2(0, -padding);
@@ -741,20 +821,30 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 
                 case EditorElement_Taxonomy:
                 {
-                    if(IsSet(root, EditorElem_Expanded) && root->firstChild)
+                    TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, root->taxonomy);
+                    if(slot->editorChangeCount || UIChildModified(UI->table, slot))
+                    {
+                        nameColor = V4(1, 0, 0, 1);
+                    }
+                    
+                    if(IsSet(root, EditorElem_Expanded))
                     {
                         if(IsSet(root, EditorElem_Editable))
                         {
                             r32 buttonSeparator = 20;
                             Vec2 startingPos = nameP + V2(GetDim(nameBounds).x + 0.5f * layout->nameValueDistance, 0);
+                            Vec2 instantiateP = startingPos;
                             
-                            UIButton deleteButton = UIBtn(UI, startingPos, layout, V4(1, 0, 0, 1), "delete");
-                            UIButtonInteraction(&deleteButton, SendRequestInteraction(UI_Trigger, DeleteTaxonomyRequest(root->taxonomy)));
-                            result = Union(result, UIDrawButton(UI, input, &deleteButton));
+                            if(UI->worldMode->editorRoles & EditorRole_GameDesigner)
+                            {
+                                UIButton deleteButton = UIBtn(UI, startingPos, layout, V4(1, 0, 0, 1), "canc");
+                                UIButtonInteraction(&deleteButton, SendRequestInteraction(UI_Trigger, DeleteTaxonomyRequest(root->taxonomy)));
+                                result = Union(result, UIDrawButton(UI, input, &deleteButton));
+                                
+                                instantiateP = UIFollowingP(&deleteButton, buttonSeparator);
+                            }
                             
-                            
-                            
-                            UIButton instantiateButton = UIBtn(UI, UIFollowingP(&deleteButton, buttonSeparator), layout, V4(0, 0, 1, 1), "instantiate");
+                            UIButton instantiateButton = UIBtn(UI, instantiateP, layout, V4(0, 0, 1, 1), "place");
                             UIButtonInteraction(&instantiateButton, SendRequestInteraction(UI_Trigger, InstantiateTaxonomyRequest(root->taxonomy)));
                             result = Union(result, UIDrawButton(UI, input, &instantiateButton));
                             
@@ -768,7 +858,9 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         Vec3 verticalStartP = V3(lineStartP, 0);
                         
                         layout->P += V2(layout->nameValueDistance, 0);
+                        
                         result = Union(result, UIRenderEditorTree(UI, widget, layout, parents, root, root->firstChild, input, false));
+                        
                         layout->P += V2(-layout->nameValueDistance, 0);
                         
                         Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
@@ -871,6 +963,11 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 } break;
             }
             
+            if(showName)
+            {
+                PushUIOrthoText(UI, nameToShow, layout->fontScale, nameP, nameColor, layout->additionalZBias);
+            }
+            
             totalResult = Union(totalResult, result);
         }
     }
@@ -880,6 +977,9 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
 
 inline void UIRenderEditor(UIState* UI, PlatformInput* input)
 {
+    input->allowedToQuit = true;
+    
+    
     RenderGroup* group = UI->group;
     GameRenderCommands* commands = group->commands;
     
@@ -887,6 +987,9 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     r32 height = (r32) commands->settings.height;
     
     SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / width, 0.0f, 0.0f), V3(0.0f, 2.0f / width, 0.0f), V3( 0, 0, 1));
+    
+    UIAddInteraction(UI, input, undo, UIUndoInteraction(UI_Trigger));
+    UIAddInteraction(UI, input, redo, UIRedoInteraction(UI_Trigger));
     
     
     UI->saveWidgetLayoutTimer += UI->worldMode->originalTimeToAdvance;
@@ -906,7 +1009,6 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     
     if(UI->reloadingAssets)
     {
-        
         PushUIOrthoText(UI, "Reloading Assets...", 0.42f, V2(-900, +500), V4(1, 0, 0, 1));
     }
     
@@ -940,9 +1042,15 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     u32 maxToCopy = sizeof(UI->keyboardBuffer) - (current + 1);
     char* appendHere = UI->keyboardBuffer + current;
     
-    if(Pressed(&input->backButton) && current > 0)
+    if(IsDown(&input->backButton) && current > 0)
     {
-        *(--appendHere) = 0;
+        UI->backspacePressedTime += UI->worldMode->originalTimeToAdvance;
+        
+        if(Pressed(&input->backButton) || UI->backspacePressedTime >= 0.12f)
+        {
+            UI->backspacePressedTime = 0;
+            *(--appendHere) = 0;
+        }
     }
     else
     {
@@ -972,13 +1080,6 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     if(UI->keyboardBuffer[0] && UI->activeLabel)
     {
         UI->bufferValid = true;
-        
-        UIInteraction confirmInteraction = {};
-        UIAddStandardAction(&confirmInteraction, UI_Trigger, UI->activeLabel->name, ColdPointer(UI->activeLabel->name), ColdPointer(UI->keyboardBuffer));
-        UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeLabel, 0);    
-        UIAddClearAction(&confirmInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
-        UIAddReloadElementAction(&confirmInteraction, UI_Trigger, UI->soundEventsRoot);
-        UIAddInteraction(UI, input, confirmButton, confirmInteraction);
     }
     else if(UI->keyboardBuffer[0] && UI->active)
     {
@@ -1101,9 +1202,24 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     for(u32 widgetIndex = 0; widgetIndex < EditorWidget_Count; ++widgetIndex)
     {
         EditorWidget* widget = UI->widgets + widgetIndex;
-        
         if(widget->necessaryRole & UI->worldMode->editorRoles)
         {
+            if(widget->needsToBeReloaded)
+            {
+                TaxonomySlot* editing = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
+                Import(editing, widget->root);
+                
+                if(StrEqual(widget->name, "Editing Tabs"))
+                {
+                    SendNewTabMessage();
+                    SendEditorElements(widget->root);
+                    SendReloadEditingMessage(UI->editingTaxonomy, UI->editingTabIndex);
+                }
+                
+                
+                widget->needsToBeReloaded = false;
+            }
+            
             Vec2 resizeP = widget->permanent.P;
             Vec2 widgetP = resizeP + V2(20, -8);
             Vec2 resizeDim = V2(8, 8);
@@ -1162,11 +1278,20 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                             
                             Vec2 saveP = UIFollowingP(&rightButton, 30.0f);
                             
+                            r32 buttonAlpha = 0.2f;
+                            
+                            UIInteraction saveInteraction = NullInteraction();
+                            if(editingSlot->editorChangeCount)
+                            {
+                                buttonAlpha = 1.0f;
+                                saveInteraction = SendRequestInteraction(UI_Trigger, SaveTaxonomyTabRequest());
+                            }
+                            
                             char saveText[128];
                             FormatString(saveText, sizeof(saveText), "Save %s", editingSlot->name);
                             UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), saveText);
-                            UIButtonInteraction(&saveButton, SendRequestInteraction(UI_Trigger, SaveTaxonomyTabRequest()));
-                            UIDrawButton(UI, input, &saveButton);
+                            UIButtonInteraction(&saveButton, saveInteraction);
+                            UIDrawButton(UI, input, &saveButton, buttonAlpha);
                             
                             u32 parentTaxonomy = GetParentTaxonomy(UI->table, editingSlot->taxonomy);
                             if(parentTaxonomy)
@@ -1183,12 +1308,6 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     
                     case EditorWidget_SoundDatabase:
                     {
-                        Vec2 saveP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
-                        
-                        
-                        UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), " SAVE ");
-                        UIButtonInteraction(&saveButton, SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("sound", widget->root)));
-                        UIDrawButton(UI, input, &saveButton);
                     } break;
                     
                     case EditorWidget_GeneralButtons:
@@ -1210,12 +1329,21 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     {
                         Vec2 saveP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
                         
+                        UIInteraction saveInteraction = NullInteraction();
                         
-                        UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), " SAVE ");
-                        UIInteraction saveInteraction = SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("soundEvents", widget->root));
-                        UIAddReloadElementAction(&saveInteraction, UI_Trigger, UI->soundEventsRoot);
+                        UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1.0f), " SAVE ");
+                        
+                        r32 buttonAlpha = 0.2f;
+                        if(widget->changeCount)
+                        {
+                            buttonAlpha = 1.0f;
+                            saveInteraction =SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("soundEvents", widget));
+                            UIAddReloadElementAction(&saveInteraction, UI_Trigger, UI->soundEventsRoot);
+                        }
+                        
+                        
                         UIButtonInteraction(&saveButton, saveInteraction);
-                        UIDrawButton(UI, input, &saveButton);
+                        UIDrawButton(UI, input, &saveButton, buttonAlpha);
                     } break;
                 }
             }
@@ -1241,6 +1369,16 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             
             widgetZ += 1.0f;
         }
+        
+        if(widget->changeCount)
+        {
+            input->allowedToQuit = false;
+        }
+    }
+    
+    if(input->allowedToQuit && UIChildModified(UI->table, &UI->table->root))
+    {
+        input->allowedToQuit = false;
     }
     
     if(UI->hotStructThisFrame)
@@ -1249,6 +1387,19 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         structBoundsTranform.additionalZBias = UI->hotStructZ;
         
         PushRectOutline(UI->group, structBoundsTranform, UI->hotStructBounds, UI->hotStructColor, 2);
+    }
+    
+    if(UI->dragging)
+    {
+        EditorLayout layout = UI->widgets[0].layout;
+        layout.P = UI->relativeScreenMouse;
+        layout.additionalZBias = 10.0f;
+        
+        EditorElementParents parents = {};
+        
+        EditorElement* oldNext = UI->dragging->next;
+        UIRenderEditorTree(UI, 0, &layout, parents, 0, UI->dragging, input, false);
+        UI->dragging->next = oldNext;
     }
 }
 
@@ -1676,7 +1827,7 @@ internal void UIHandleContainer(UIState* UI, ClientEntity* container, PlatformIn
     }
 }
 
-internal EditorElement* BuildEditorTaxonomyTree(TaxonomyTable* table, TaxonomySlot* slot)
+internal EditorElement* BuildEditorTaxonomyTree(u32 editorRoles, TaxonomyTable* table, TaxonomySlot* slot)
 {
     EditorElement* result;
     FREELIST_ALLOC(result, table->firstFreeElement, PushStruct(&table->pool, EditorElement));
@@ -1684,7 +1835,6 @@ internal EditorElement* BuildEditorTaxonomyTree(TaxonomyTable* table, TaxonomySl
     result->type = EditorElement_Taxonomy;
     result->taxonomy = slot->taxonomy;
     FormatString(result->name, sizeof(result->name), "%s", slot->name);
-    
     
     if(slot->taxonomy)
     {
@@ -1694,19 +1844,21 @@ internal EditorElement* BuildEditorTaxonomyTree(TaxonomyTable* table, TaxonomySl
             AddFlags(result, EditorElem_Editable);
         }
         
-        EditorElement* empty;
-        FREELIST_ALLOC(empty, table->firstFreeElement, PushStruct(&table->pool, EditorElement));
-        *empty = {};
-        empty->type = EditorElement_EmptyTaxonomy;
-        empty->parentTaxonomy = slot->taxonomy;
-        result->firstChild = empty;
+        if(editorRoles & EditorRole_GameDesigner)
+        {
+            EditorElement* empty;
+            FREELIST_ALLOC(empty, table->firstFreeElement, PushStruct(&table->pool, EditorElement));
+            *empty = {};
+            empty->type = EditorElement_EmptyTaxonomy;
+            empty->parentTaxonomy = slot->taxonomy;
+            result->firstChild = empty;
+        }
     }
-    
     
     for(u32 childIndex = 0; childIndex < slot->subTaxonomiesCount; ++childIndex)
     {
         TaxonomySlot* childSlot = GetNthChildSlot(table, slot, childIndex);
-        EditorElement* child = BuildEditorTaxonomyTree(table, childSlot);
+        EditorElement* child = BuildEditorTaxonomyTree(editorRoles, table, childSlot);
         child->next = result->firstChild;
         result->firstChild = child;
     }
@@ -1755,7 +1907,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             FormatString(UI->uneditableTabRoot.name, sizeof(UI->uneditableTabRoot.name), "YOU CAN'T EDIT THIS");
             
             
-            EditorWidget* taxonomyTree = StartWidget(UI, EditorWidget_TaxonomyTree, EditorRole_GameDesigner, "Taxonomy Tree");
+            EditorWidget* taxonomyTree = StartWidget(UI, EditorWidget_TaxonomyTree, EditorRole_Everyone, "Taxonomy Tree");
             taxonomyTree->permanent.P = V2(-800, -100);
             
             
@@ -1826,6 +1978,10 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             }
             
             platformAPI.DEBUGFreeFile(&layoutFile);
+            
+            
+            DLLIST_INIT(&UI->undoRedoSentinel);
+            UI->current = &UI->undoRedoSentinel;
         }
         
         
@@ -1896,7 +2052,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
     UI->player = player;
     
     
-    UI->runningCursorTimer += input->timeToAdvance;
+    UI->runningCursorTimer += UI->worldMode->originalTimeToAdvance;
     r32 cursorInterval = 0.6f;
     
     u32 triggered = TruncateReal32ToU32(UI->runningCursorTimer / cursorInterval);
@@ -2021,7 +2177,7 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
         GetUIName(entityName, sizeof(entityName), UI->table, overlapping);
         
         UIMarkListToUpdateAndRender(UI, possibleOverlappingActions);
-        if(UI->worldMode->editingEnabled && input->ctrlDown)
+        if(UI->worldMode->editingEnabled && input->altDown)
         {
             if(!IsPlant(UI->table, overlapping->taxonomy))
             {
@@ -2146,7 +2302,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                 {
                     if(overlapping->identifier == player->identifier)
                     {
-                        if(UI->worldMode->editingEnabled && input->ctrlDown)
+                        if(UI->worldMode->editingEnabled && input->altDown)
                         {
                             TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, overlapping->taxonomy);
                             char tooltip[64];

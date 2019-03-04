@@ -177,7 +177,7 @@ internal void FillGenerationData(ServerState* server)
     
     
     b32 freeTabs = !server->editor;
-    ImportAllFiles("assets", tempPool, freeTabs, EditorRole_Everyone);
+    ImportAllFiles("assets", tempPool, (u32) EditorRole_Everyone, freeTabs);
     ReadBehaviors();
     ReadSynthesisRules();
 }
@@ -624,8 +624,6 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                                 FreeElement(editingSlot->tabs[tab].root);
                                 editingSlot->tabs[tab].root = stack->result;
                                 stack->counter = 0;
-                                
-                                FreeTaxonomySlot(taxTable, editingSlot);
                                 
                                 for(u32 tabIndex = 0; tabIndex < editingSlot->tabCount; ++tabIndex)
                                 {

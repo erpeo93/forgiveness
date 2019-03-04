@@ -1967,7 +1967,7 @@ inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, Taxo
     while(soundTaxonomy && !found)
     {
         TaxonomySlot* soundSlot = GetSlotForTaxonomy(worldMode->table, soundTaxonomy);
-        for(TaxonomySound* sound = slot->firstSound; sound; sound = sound->next)
+        for(TaxonomySound* sound = slot->firstSound; sound && !found; sound = sound->next)
         {
             if(nameHash == sound->animationNameHash)
             {
@@ -1991,13 +1991,18 @@ inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, Taxo
                         u32 labelCount = 0;
                         SoundLabel* labels = 0;
                         
-                        SoundId soundToPlay = PickSoundFromEvent(assets, event, labelCount, labels, &worldMode->table->eventSequence);
+                        PickSoundResult pick = PickSoundFromEvent(assets, event, labelCount, labels, &worldMode->table->eventSequence);
                         
-                        if(IsValid(soundToPlay))
+                        for(u32 pickIndex = 0; pickIndex < pick.soundCount; ++pickIndex)
                         {
-                            PlaySound(worldMode->soundState, soundToPlay);
-                            found = true;
-                            break;
+                            SoundId toPlay = pick.sounds[pickIndex];
+                            r32 delay = pick.delays[pickIndex];
+                            
+                            if(IsValid(toPlay))
+                            {
+                                PlaySound(worldMode->soundState, toPlay, delay);
+                                found = true;
+                            }
                         }
                     }
                 }

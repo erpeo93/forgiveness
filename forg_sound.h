@@ -6,6 +6,7 @@ struct PlayingSound
     Vec2 currentVolume;
     Vec2 targetVolume;
     Vec2 dVolume;
+    r32 delay;
     r32 dSample;
     PlayingSound* next;
 };

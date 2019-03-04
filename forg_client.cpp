@@ -753,7 +753,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     UI->editorTaxonomyTree = 0;
                     
                     TaxonomySlot* rootSlot = &worldMode->table->root;
-                    UI->editorTaxonomyTree = BuildEditorTaxonomyTree(worldMode->table, rootSlot);
+                    UI->editorTaxonomyTree = BuildEditorTaxonomyTree(worldMode->editorRoles, worldMode->table, rootSlot);
                 }
                 worldMode->allDataFilesArrived = false;
             }
@@ -1675,6 +1675,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     RenderGroup group = BeginRenderGroup(gameState->assets, commands);
     
     b32 rerun = false;
+    
+    input->allowedToQuit = true;
     do
     {
         switch(gameState->mode)
@@ -1738,7 +1740,7 @@ extern "C" GAME_GET_SOUND_OUTPUT(GameGetSoundOutput)
     TranState* tranState = (TranState*) memory->tranState;
     //OutputSineWave(soundBuffer, gameState);
     
-    PlayMixedAudio(&gameState->soundState, soundBuffer, gameState->assets, &gameState->framePool);
+    PlayMixedAudio(&gameState->soundState, input->timeToAdvance, soundBuffer, gameState->assets, &gameState->framePool);
 }
 
 #if FORGIVENESS_INTERNAL

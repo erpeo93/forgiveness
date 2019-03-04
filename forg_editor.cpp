@@ -1106,11 +1106,16 @@ inline SoundContainer* AddSoundEvent(char* eventName)
     SoundContainer* result = &event->rootContainer;
     
     event->rootContainer.soundCount = 0;
+    event->rootContainer.firstSound = 0;
+    
     event->rootContainer.containerCount = 0;
+    event->rootContainer.firstChildContainer = 0;
+    
+    event->rootContainer.labelCount = 0;
     return result;
 }
 
-inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundType, char* soundName)
+inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundType, char* soundName, char* delay)
 {
     ++container->soundCount;
     
@@ -1119,6 +1124,8 @@ inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundT
     
     sound->typeHash = StringHash(soundType);
     sound->nameHash = StringHash(soundName);
+    
+    sound->delay = delay ? ToR32(delay) : 0;
     
     FREELIST_INSERT(sound, container->firstSound);
     
@@ -1133,7 +1140,12 @@ inline SoundContainer* AddChildContainer(SoundContainer* container)
     TAXTABLE_ALLOC(newContainer, SoundContainer);
     
     newContainer->soundCount = 0;
+    newContainer->firstSound = 0;
+    
     newContainer->containerCount = 0;
+    newContainer->firstChildContainer = 0;
+    
+    newContainer->labelCount = 0;
     
     FREELIST_INSERT(newContainer, container->firstChildContainer);
     
@@ -1145,7 +1157,7 @@ inline void SetLabel(SoundLabel* label, char* labelName, char* labelValue)
     r32 value = labelValue ? ToR32(labelValue) : 0;
     u64 hash = StringHash(labelName);
     
-    label->labelHashID = hash;
+    label->hashID = hash;
     label->value = value;
 }
 
@@ -1221,6 +1233,7 @@ NewSegment* currentNewSegment_;
 inline void BeginParams(char* name)
 {
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName( taxTable_, name );
+    FREELIST_FREE(slot->plantParams, PlantParams, taxTable_->firstFreePlantParams);
     currentSlot_ = slot;
     TAXTABLE_ALLOC(slot->plantParams, PlantParams);
     currentPlantParams_ = slot->plantParams;
@@ -1517,6 +1530,7 @@ Consideration* currentConsideration_;
 inline void BeginBehavior(char* name)
 {
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
+    FREELIST_FREE(slot->behaviorContent, AIBehavior, taxTable_->firstFreeAIBehavior);
     Assert(IsBehavior(taxTable_, slot->taxonomy));
     TAXTABLE_ALLOC(slot->behaviorContent, AIBehavior);
     currentBehavior_ = slot->behaviorContent;
@@ -1703,6 +1717,15 @@ MemSynthOption* currentSynthOption_;
 inline void BeginMemoryBehavior(char* behaviorName)
 {
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, behaviorName);
+    FREELIST_FREE(slot->criteria, MemCriteria, taxTable_->firstFreeMemCriteria);
+	
+    for(MemSynthesisRule* rule = slot->synthRules; rule; rule = rule->next)
+    {
+        FreeMemSynthRuleTree(taxTable_, rule->tree.root);
+    }
+	FREELIST_FREE(slot->synthRules, MemSynthesisRule, taxTable_->firstFreeMemSynthesisRule);
+    
+    
     Assert(IsBehavior(taxTable_, slot->taxonomy));
     currentSlot_ = slot;
 }
@@ -1984,6 +2007,11 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
                     buffer = OutputToBuffer(buffer, bufferSize, "#playSound ");
                 }
                 
+                if(element->flags & EditorElem_PlayEventSoundButton)
+                {
+                    buffer = OutputToBuffer(buffer, bufferSize, "#playEventSound ");
+                }
+                
                 if(element->flags & EditorElem_PlayEventButton)
                 {
                     buffer = OutputToBuffer(buffer, bufferSize, "#playEvent ");
@@ -2125,6 +2153,10 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
 							else if(TokenEquals(paramName, "playSound"))
 							{
 								newElement->flags |= EditorElem_PlaySoundButton;
+							}
+                            else if(TokenEquals(paramName, "playEventSound"))
+							{
+								newElement->flags |= EditorElem_PlayEventSoundButton;
 							}
                             else if(TokenEquals(paramName, "playEvent"))
 							{
@@ -2432,7 +2464,6 @@ inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer,
     }
     
 	EditorElement* containerLabels = GetList(root, "labels");
-    
 	while(containerLabels)
 	{
         char* labelName = GetValue(containerLabels, "name");
@@ -2447,15 +2478,22 @@ inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer,
     {
         char* soundType = GetValue(sounds, "soundType");
         char* soundName = GetValue(sounds, "sound");
+        
+        char* delay = 0;
+        EditorElement* params = GetStruct(sounds, "params");
+        if(params)
+        {
+            delay = GetValue(params, "delay");
+        }
+        
         if(soundType && soundName)
         {
-            LabeledSound* sound = AddSoundToContainer(rootContainer, soundType, soundName);
-            
-			EditorElement* soundLabels = GetList(root, "labels");
+            LabeledSound* sound = AddSoundToContainer(rootContainer, soundType, soundName, delay);
+			EditorElement* soundLabels = GetList(sounds, "labels");
 			while(soundLabels)
 			{
-                char* labelName = GetValue(containerLabels, "name");
-                char* labelValue = GetValue(containerLabels, "value");
+                char* labelName = GetValue(soundLabels, "name");
+                char* labelValue = GetValue(soundLabels, "value");
                 
                 AddSoundLabel(sound, labelName, labelValue);
 				soundLabels = soundLabels->next;
@@ -2509,6 +2547,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     
     else if(StrEqual(name, "equipmentMappings"))
     {
+        FREELIST_FREE(currentSlot_->firstEquipmentMapping, EquipmentMapping, taxTable_->firstFreeEquipmentMapping);
         EditorElement* singleSlot = GetList(root, "singleSlot");
         EditorElement* doubleSlot = GetList(root, "doubleSlot");
         EditorElement* multiPart = GetList(root, "multiPart");
@@ -2553,6 +2592,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     
     else if(StrEqual(name, "consumeMappings"))
     {
+        FREELIST_FREE(currentSlot_->firstConsumeMapping, ConsumeMapping, taxTable_->firstFreeConsumeMapping);
         EditorElement* consume = root->firstInList;
         while(consume)
         {
@@ -2566,6 +2606,8 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     
     else if(StrEqual(name, "components"))
     {
+        FREELIST_FREE(currentSlot_->firstComponent, TaxonomyComponent, taxTable_->firstFreeTaxonomyComponent);
+        
         EditorElement* templates = root->firstInList;
         while(templates)
         {
@@ -2605,6 +2647,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     }
     else if(StrEqual(name, "requireEssences"))
     {
+        FREELIST_FREE(currentSlot_->essences, TaxonomyEssence, taxTable_->firstFreeTaxonomyEssence);
         EditorElement* essences = root->firstInList;
         
         while(essences)
@@ -2620,6 +2663,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
 #if FORG_SERVER
     else if(StrEqual(name, "craftingEssences"))
     {
+        FREELIST_FREE(currentSlot_->essences, TaxonomyEssence, taxTable_->firstFreeTaxonomyEssence);
         EditorElement* essences = root->firstInList;
         
         while(essences)
@@ -2634,6 +2678,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     }
     else if(StrEqual(name, "effects"))
     {
+        FREELIST_FREE(currentSlot_->firstEffect, TaxonomyEffect, taxTable_->firstFreeTaxonomyEffect);
+        FREELIST_FREE(currentSlot_->nakedHandReq, NakedHandReq, taxTable_->firstFreeNakedHandReq);
+        
         EditorElement* effectList = root->firstInList;
         while(effectList)
         {
@@ -2697,6 +2744,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     }
     else if(StrEqual(name, "craftingEffects"))
     {
+        FREELIST_FREE(currentSlot_->links, CraftingEffectLink, taxTable_->firstFreeCraftingEffectLink);
         EditorElement* craftingEffectsList = root->firstInList;
         while(craftingEffectsList)
         {
@@ -2723,6 +2771,10 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     }
     else if(StrEqual(name, "attributes"))
     {
+        for(u32 attributeIndex = 0; attributeIndex < ArrayCount(currentSlot_->attributeHashmap); ++attributeIndex)
+        {
+            currentSlot_->attributeHashmap[attributeIndex] = {};
+        }
         EditorElement* attributes = root->firstInList;
         
         while(attributes)
@@ -2760,6 +2812,13 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     
     else if(StrEqual(name, "playerActions"))
     {
+        for(PlayerPossibleAction* action = currentSlot_->firstPossibleAction; action; action = action->next)
+        {
+            FreePlayerActionTree(taxTable_, action->tree.root);
+        }
+        
+        FREELIST_FREE(currentSlot_->firstPossibleAction, PlayerPossibleAction, taxTable_->firstFreePlayerPossibleAction);
+        
         EditorElement* actions = root->firstInList;
         while(actions)
         {
@@ -2791,6 +2850,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     
     else if(StrEqual(name, "behaviors"))
     {
+        FREELIST_FREE(currentSlot_->firstPossibleBehavior, TaxonomyBehavior, taxTable_->firstFreeTaxonomyBehavior);
         EditorElement* behaviors = root->firstInList;
         while(behaviors)
         {
@@ -2805,6 +2865,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     }
     else if(StrEqual(name, "memBehaviors"))
     {
+        FREELIST_FREE(currentSlot_->firstMemBehavior, TaxonomyMemBehavior, taxTable_->firstFreeTaxonomyMemBehavior);
         EditorElement* behaviors = root->firstInList;
         while(behaviors)
         {
@@ -2819,6 +2880,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
 #ifndef FORG_SERVER
     else if(StrEqual(name, "visualTags"))
     {
+        FREELIST_FREE(currentSlot_->firstVisualTag, VisualTag, taxTable_->firstFreeVisualTag);
         EditorElement* tags = root->firstInList;
         
         while(tags)
@@ -2844,6 +2906,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     }
     else if(StrEqual(name, "animationEffects"))
     {
+        FREELIST_FREE(currentSlot_->firstAnimationEffect, AnimationEffect, taxTable_->firstFreeAnimationEffect);
         EditorElement* effects = root->firstInList;
         while(effects)
         {
@@ -2862,6 +2925,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     }
     else if(StrEqual(name, "soundEffects"))
     {
+        FREELIST_FREE(currentSlot_->firstSound, TaxonomySound, taxTable_->firstFreeTaxonomySound);
         EditorElement* effects = root->firstInList;
         while(effects)
         {

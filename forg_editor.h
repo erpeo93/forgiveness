@@ -26,9 +26,10 @@ enum EditorElementFlags
     EditorElem_AlwaysEditable = (1 << 6),
     EditorElem_LabelsEditable = (1 << 7),
     EditorElem_PlaySoundButton = (1 << 8),
-    EditorElem_PlayEventButton = (1 << 9),
-    EditorElem_RecursiveEmpty = (1 << 10),
-    EditorElem_DontRender = (1 << 11),
+    EditorElem_PlayEventSoundButton = (1 << 9),
+    EditorElem_PlayEventButton = (1 << 10),
+    EditorElem_RecursiveEmpty = (1 << 11),
+    EditorElem_DontRender = (1 << 12),
 };
 
 struct EditorElement
@@ -147,7 +148,9 @@ struct WidgetPermanent
 
 struct EditorWidget
 {
-    u32 buttonCount;
+    i32 changeCount;
+    
+    b32 needsToBeReloaded;
     u32 necessaryRole;
     
     WidgetPermanent permanent;
@@ -158,3 +161,4 @@ struct EditorWidget
     char name[32];
     EditorElement* root;
 };
+

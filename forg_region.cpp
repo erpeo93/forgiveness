@@ -1409,7 +1409,16 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             InstantiateRequest request;
             unpack(data, "LV", &request.taxonomy, &request.offset);
             RandomSequence* seq = &server->instantiateSequence;
-            AddRandomEntity(region, seq, entity->P + request.offset, request.taxonomy);
+            
+            AddEntityAdditionalParams params = DefaultAddEntityParams();
+            
+            TaxonomySlot* slot = GetSlotForTaxonomy(server->activeTable, request.taxonomy);
+            
+            if(slot->firstComponent)
+            {
+                params = Crafting(GetNextUInt32(&server->instantiateSequence));
+            }
+            AddRandomEntity(region, seq, entity->P + request.offset, request.taxonomy, params);
         } break;
         
         case Type_DeleteEntity:

@@ -110,7 +110,7 @@ struct UIRequest
         struct
         {
             char fileName[32];
-            EditorElement* root;
+            EditorWidget* widget;
         };
     };
 };
@@ -392,6 +392,128 @@ inline b32 Check(UIMemoryPair* pair, UIInteractionData* data)
     return result;
 }
 
+
+enum UndoRedoCommandType
+{
+    UndoRedo_StringCopy,
+    UndoRedo_AddElement,
+    UndoRedo_DeleteElement,
+    UndoRedo_Paste,
+    UndoRedo_EditTaxonomy,
+};
+
+
+struct UndoRedoCommand
+{
+    UndoRedoCommandType type;
+    EditorWidget* widget;
+    
+    union
+    {
+        struct
+        {
+            char oldString[32];
+            char newString[32];
+            char* ptr;
+            u32 maxPtrSize;
+        };
+        
+        struct
+        {
+            EditorElement* list;
+            EditorElement* added;
+        };
+        
+        struct
+        {
+            EditorElement** prevNextPtr;
+            EditorElement* deleted;
+        };
+        
+        struct
+        {
+            EditorElement* dest;
+            EditorElement oldElem;
+            EditorElement newElem;
+        };
+        
+        struct
+        {
+            u32 oldTaxonomy;
+            u32 newTaxonomy;
+            u32 oldTabIndex;
+        };
+    };
+    
+    
+    union
+    {
+        UndoRedoCommand* next;
+        UndoRedoCommand* nextFree;
+    };
+    UndoRedoCommand* prev;
+};
+
+
+inline UndoRedoCommand UndoRedoString(EditorWidget* widget, char* ptr, u32 ptrSize, char* oldString, char* newString)
+{
+    UndoRedoCommand result = {};
+    result.widget = widget;
+    result.type = UndoRedo_StringCopy;
+    result.ptr = ptr;
+    result.maxPtrSize = ptrSize;
+    FormatString(result.oldString, sizeof(result.oldString), "%s", oldString);
+    FormatString(result.newString, sizeof(result.newString), "%s", newString);
+    
+    return result;
+}
+
+inline UndoRedoCommand UndoRedoDelete(EditorWidget* widget, EditorElement** prevNextPtr, EditorElement* deleted)
+{
+    UndoRedoCommand result = {};
+    result.widget = widget;
+    result.type = UndoRedo_DeleteElement;
+    result.prevNextPtr = prevNextPtr;
+    result.deleted = deleted;
+    
+    return result;
+}
+
+inline UndoRedoCommand UndoRedoAdd(EditorWidget* widget, EditorElement* list, EditorElement* added)
+{
+    UndoRedoCommand result = {};
+    result.widget = widget;
+    result.type = UndoRedo_AddElement;
+    result.list = list;
+    result.added = added;
+    
+    return result;
+}
+
+inline UndoRedoCommand UndoRedoPaste(EditorWidget* widget, EditorElement* dest, EditorElement oldElem, EditorElement newElem)
+{
+    UndoRedoCommand result = {};
+    result.widget = widget;
+    result.type = UndoRedo_Paste;
+    result.dest = dest;
+    result.oldElem = oldElem;
+    result.newElem = newElem;
+    
+    return result;
+}
+
+inline UndoRedoCommand UndoRedoEditTaxonomy(u32 oldTaxonomy, u32 oldTabIndex, u32 newTaxonomy)
+{
+    UndoRedoCommand result = {};
+    result.widget = 0;
+    result.type = UndoRedo_EditTaxonomy;
+    result.oldTaxonomy = oldTaxonomy;
+    result.newTaxonomy = newTaxonomy;
+    result.oldTabIndex = oldTabIndex;
+    
+    return result;
+}
+
 enum UIInteractionActionType
 {
     UIInteractionAction_Copy,
@@ -404,6 +526,10 @@ enum UIInteractionActionType
     UIInteractionAction_PlaySound,
     UIInteractionAction_ReloadElement,
     UIInteractionAction_PlaySoundEvent,
+    UIInteractionAction_ReleaseDragging,
+    UIInteractionAction_UndoRedoCommand,
+    UIInteractionAction_Undo,
+    UIInteractionAction_Redo,
 };
 
 struct UIInteractionAction
@@ -436,7 +562,15 @@ struct UIInteractionAction
             u64 eventNameHash;
         };
         
+        struct
+        {
+            UIMemoryReference list;
+            UIMemoryReference widget;
+        };
+        
         UIMemoryReference toReload;
+        
+        UndoRedoCommand undoRedo;
     };
     
     r32 timer;
@@ -520,6 +654,8 @@ struct UIAutocomplete
     u64 hash;
     UIAutocompleteBlock* firstBlock;
 };
+
+
 
 struct UIState
 {
@@ -636,16 +772,21 @@ struct UIState
     
     EditorElement* activeLabel;
     
+    EditorElement* dragging;
+    EditorElement* draggingParent;
+    
     r32 saveWidgetLayoutTimer;
     EditorWidget widgets[EditorWidget_Count];
     
     
-    b32 hotStructThisFrame;
     EditorElement* copying;
     
+    b32 hotStructThisFrame;
     Rect2 hotStructBounds;
     r32 hotStructZ;
     Vec4 hotStructColor;
+    EditorElement* hotStruct;
+    EditorWidget* hotWidget;
     
     char trueString[32];
     char falseString[32];
@@ -660,4 +801,12 @@ struct UIState
     MemoryPool autocompletePool;
     UIAutocompleteBlock* firstFreeAutocompleteBlock;
     
+    MemoryPool undoRedoPool;
+    UndoRedoCommand* firstFreeUndoRedoCommand;
+    UndoRedoCommand undoRedoSentinel;
+    UndoRedoCommand* current;
+    b32 canRedo;
+    
+    
+    r32 backspacePressedTime;
 };

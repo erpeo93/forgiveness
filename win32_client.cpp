@@ -779,6 +779,22 @@ internal void Win32ProcessKeyboardMessage( HWND window, PlatformInput* input, MS
                 }
             } break;
             
+            case 'Z':
+            {
+                if(altKeyDown)
+                {
+                    Win32ProcessButton(&input->undo, isDown);
+                }
+            } break;
+            
+            case 'Y':
+            {
+                if(altKeyDown)
+                {
+                    Win32ProcessButton(&input->redo, isDown);
+                }
+            } break;
+            
 #if FORGIVENESS_INTERNAL
             case VK_F1:
             {
@@ -791,9 +807,19 @@ internal void Win32ProcessKeyboardMessage( HWND window, PlatformInput* input, MS
             
             case VK_F4:
             {
-                if( altKeyDown )
+                if(altKeyDown)
                 {
-                    running = false;
+                    if(gameInput.allowedToQuit)
+                    {
+                        running = false;
+                    }
+                    else
+                    {
+                        if(MessageBox(window, "You have unsaved changes, do you want to quit anyway?", 0, MB_YESNO) == IDYES)
+                        {
+                            running = false;
+                        }
+                    }
                 }
             } break;		
             
