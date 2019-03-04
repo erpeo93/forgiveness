@@ -1023,6 +1023,11 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                     worldMode->allPakFilesArrived = true;
                 } break;
                 
+                case Type_PatchLocalServer:
+                {
+                    worldMode->UI->patchingLocalServer = false;
+                } break;
+                
 #if FORGIVENESS_INTERNAL
                 case Type_InputRecording:
                 {

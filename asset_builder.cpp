@@ -2408,7 +2408,7 @@ internal void WriteBitmapsAndAnimations()
 }
 
 
-inline char* StringPresentInFile(char* file, char* token)
+inline char* StringPresentInFile(char* file, char* token, b32 limitToSingleList)
 {
     char* result = 0;
     Tokenizer tokenizer = {};
@@ -2453,6 +2453,11 @@ inline char* StringPresentInFile(char* file, char* token)
                 }
             } break;
             
+            case Token_CloseParen:
+            {
+                parsing = false;
+            } break;
+            
             case Token_EndOfFile:
             {
                 parsing = false;
@@ -2465,7 +2470,7 @@ inline char* StringPresentInFile(char* file, char* token)
 
 internal void AddLabelsFromFile(PlatformFile labelsFile, char* assetName)
 {
-    char* ptr = StringPresentInFile((char*) labelsFile.content, assetName);
+    char* ptr = StringPresentInFile((char*) labelsFile.content, assetName, true);
     
     Tokenizer tokenizer = {};
     tokenizer.at = ptr;
@@ -2741,7 +2746,7 @@ internal void WriteAssetDefinitionFile(char* path, char* filename, char* definit
             }
             *dest = 0;
             
-            char* folderPtr = StringPresentInFile(newFile, folderNameNoWhiteSpaces);
+            char* folderPtr = StringPresentInFile(newFile, folderNameNoWhiteSpaces, false);
             if(!folderPtr)
             {
                 folderPtr = AddFolderToFile(newFile, endFile, folderNameNoWhiteSpaces, definitionParams);
@@ -2755,7 +2760,7 @@ internal void WriteAssetDefinitionFile(char* path, char* filename, char* definit
             {
                 PlatformFileHandle soundHandle = Win32OpenNextFile(&soundGroup, folderPath);
                 
-                if(!StringPresentInFile(folderPtr, soundHandle.name))
+                if(!StringPresentInFile(folderPtr, soundHandle.name, true))
                 {
                     AddAssetToFile(folderPtr, endFile, "soundName", soundHandle.name);
                 }

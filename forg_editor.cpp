@@ -3158,12 +3158,27 @@ internal void WriteToFile(TaxonomyTable* table, TaxonomySlot* slot)
     platformAPI.DEBUGWriteFile(path, buffer, writtenTotal);
 }
 
-inline void PatchLocalServer()
+inline void PatchLocalServer(ServerState* server)
 {
+    
+    
     char* destinationFolder = "../server/definition";
+    char* destinationPath = "../server";
     platformAPI.DeleteFolderRecursive(destinationFolder);
-    platformAPI.CreateFolder(destinationFolder);
-    platformAPI.CopyAllFiles("definition", destinationFolder);
+    platformAPI.CopyAllFiles("definition", destinationPath);
+    
+    u32 playerCount = 0;
+    for(u32 playerIndex = 0; playerIndex < MAXIMUM_SERVER_PLAYERS; ++playerIndex)
+    {
+        ServerPlayer* player = server->players + playerIndex;
+        if(player->connectionSlot)
+        {
+            ++playerCount;
+            SendPatchDoneMessage(player);
+        }
+    }
+    (playerCount == 1);
+    
 }
 
 

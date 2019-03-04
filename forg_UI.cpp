@@ -845,7 +845,14 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             }
                             
                             UIButton instantiateButton = UIBtn(UI, instantiateP, layout, V4(0, 0, 1, 1), "place");
-                            UIButtonInteraction(&instantiateButton, SendRequestInteraction(UI_Trigger, InstantiateTaxonomyRequest(root->taxonomy)));
+                            
+                            UIInteraction instantiateInteraction = SendRequestInteraction(UI_Click, InstantiateTaxonomyRequest(root->taxonomy, V3(1, 0, 0)));
+                            UIAddSetValueAction(&instantiateInteraction, UI_Idle, &UI->instantiatingTaxonomy, root->taxonomy);
+                            UIAddSetValueAction(&instantiateInteraction, UI_Release, &UI->instantiatingTaxonomy, 0); 
+                            
+                            
+                            
+                            UIButtonInteraction(&instantiateButton, instantiateInteraction);
                             result = Union(result, UIDrawButton(UI, input, &instantiateButton));
                             
                             UIButton editButton = UIBtn(UI, UIFollowingP(&instantiateButton, buttonSeparator), layout, V4(0, 1, 0, 1), "edit");
@@ -977,9 +984,6 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
 
 inline void UIRenderEditor(UIState* UI, PlatformInput* input)
 {
-    input->allowedToQuit = true;
-    
-    
     RenderGroup* group = UI->group;
     GameRenderCommands* commands = group->commands;
     
@@ -991,7 +995,11 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     UIAddInteraction(UI, input, undo, UIUndoInteraction(UI_Trigger));
     UIAddInteraction(UI, input, redo, UIRedoInteraction(UI_Trigger));
     
-    
+    if(UI->instantiatingTaxonomy)
+    {
+        Vec3 mouseOffset = UI->worldMouseP;
+        UIAddInteraction(UI, input, mouseRight,SendRequestInteraction(UI_Trigger, InstantiateTaxonomyRequest(UI->instantiatingTaxonomy, mouseOffset)));
+    }
     UI->saveWidgetLayoutTimer += UI->worldMode->originalTimeToAdvance;
     if(UI->saveWidgetLayoutTimer >= 10.0f)
     {
@@ -1010,6 +1018,10 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     if(UI->reloadingAssets)
     {
         PushUIOrthoText(UI, "Reloading Assets...", 0.42f, V2(-900, +500), V4(1, 0, 0, 1));
+    }
+    else if(UI->patchingLocalServer)
+    {
+        PushUIOrthoText(UI, "Patching Local Server...", 0.42f, V2(-900, +500), V4(1, 0, 0, 1));
     }
     
     UI->hotStructThisFrame = false;
@@ -1314,14 +1326,31 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     {
                         Vec2 reloadP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
                         UIButton reloadButton = UIBtn(UI, reloadP, &widget->layout, V4(1, 0, 0, 1), " RELOAD ASSETS ");
-                        UIButtonInteraction(&reloadButton, SendRequestInteraction(UI_Trigger, ReloadAssetsRequest()));
-                        UIDrawButton(UI, input, &reloadButton);
+                        
+                        UIInteraction reloadInteraction = NullInteraction();
+                        r32 reloadAlpha = 0.2f;
+                        
+                        if(!UI->reloadingAssets && !UI->patchingLocalServer)
+                        {
+                            reloadInteraction = SendRequestInteraction(UI_Trigger, ReloadAssetsRequest());
+                            reloadAlpha = 1.0f;
+                        }
+                        UIButtonInteraction(&reloadButton, reloadInteraction);
+                        UIDrawButton(UI, input, &reloadButton, reloadAlpha);
                         
                         
                         Vec2 patchP = UIFollowingP(&reloadButton, 20);
                         UIButton patchButton = UIBtn(UI, patchP, &widget->layout, V4(1, 0, 0, 1), " PATCH SERVER ");
-                        UIButtonInteraction(&patchButton, SendRequestInteraction(UI_Trigger, PatchServerRequest()));
-                        UIDrawButton(UI, input, &patchButton);
+                        
+                        r32 patchAlpha = 0.2f;
+                        UIInteraction patchInteraction = NullInteraction();
+                        if(!UI->reloadingAssets && !UI->patchingLocalServer)
+                        {
+                            patchInteraction = SendRequestInteraction(UI_Trigger, PatchServerRequest());
+                            patchAlpha = 1.0f;
+                        }
+                        UIButtonInteraction(&patchButton, patchInteraction);
+                        UIDrawButton(UI, input, &patchButton, patchAlpha);
                         
                     } break;
                     
@@ -2233,6 +2262,8 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
 
 internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, ClientEntity** overlappingEntities, u32 maxOverlappingEntities)
 {
+    input->allowedToQuit = true;
+    
     i32 scrollOffset = input->mouseWheelOffset;
     
     UIOutput output = {};

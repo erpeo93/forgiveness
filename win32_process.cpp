@@ -48,7 +48,31 @@ DEBUG_PLATFORM_GET_PROCESS_STATE( DEBUGWin32GetProcessState )
 }
 
 
-void Win32KillProcessByName(const char *filename)
+DEBUG_PLATFORM_EXISTS_PROCESS_WITH_NAME(Win32ExistsProcessWithName)
+{
+    b32 result = false;
+    
+    
+    HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, NULL);
+    PROCESSENTRY32 pEntry;
+    pEntry.dwSize = sizeof (pEntry);
+    BOOL hRes = Process32First(hSnapShot, &pEntry);
+    while (hRes)
+    {
+        if(strcmp(pEntry.szExeFile, processName) == 0)
+        {
+            result = true;
+            break;
+        }
+        
+        hRes = Process32Next(hSnapShot, &pEntry);
+    }
+    CloseHandle(hSnapShot);
+    
+    return result;
+}
+
+DEBUG_PLATFORM_KILL_PROCESS_BY_NAME(Win32KillProcessByName)
 {
     HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, NULL);
     PROCESSENTRY32 pEntry;
@@ -56,7 +80,7 @@ void Win32KillProcessByName(const char *filename)
     BOOL hRes = Process32First(hSnapShot, &pEntry);
     while (hRes)
     {
-        if (strcmp(pEntry.szExeFile, filename) == 0)
+        if (strcmp(pEntry.szExeFile, processName) == 0)
         {
             HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, 0,
                                           (DWORD) pEntry.th32ProcessID);

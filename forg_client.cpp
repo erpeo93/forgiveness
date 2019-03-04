@@ -1520,8 +1520,11 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
     r32 height = (r32) commands->settings.height;
     
     SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / width, 0.0f, 0.0f), V3(0.0f, 2.0f / width, 0.0f), V3( 0, 0, 1));
-    char* serverText = "start server";
-    char* editorText = "start editor";
+    
+    b32 serverRunning = platformAPI.DEBUGExistsProcessWithName("win32_server.exe");
+    
+    char* serverText = serverRunning ? "end server" : "start server";
+    char* editorText = serverRunning ? "end editor" : "start editor";
     char* joinText = "join local server";
     r32 fontScale = 0.52f;
     Vec2 serverP = V2(300, 100);
@@ -1577,8 +1580,14 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
         serverColor.a = 1.0f;
         if(Pressed(&input->mouseLeft))
         {
-            platformAPI.DEBUGExecuteSystemCommand("../server", "../build/win32_server.exe", "");
-            PlayGame(gameState, input);
+            if(serverRunning)
+            {
+                platformAPI.DEBUGKillProcessByName("win32_server.exe");
+            }
+            else
+            {
+                platformAPI.DEBUGExecuteSystemCommand("../server", "../build/win32_server.exe", "");
+            }
         }
     }
     else if(PointInRect(editorRect, relativeScreenMouse))
@@ -1586,16 +1595,25 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
         editorColor.a = 1.0f;
         if(Pressed(&input->mouseLeft))
         {
-            platformAPI.DEBUGExecuteSystemCommand("../editor", "../build/win32_server.exe"," editor");
-            PlayGame(gameState, input);
+            if(serverRunning)
+            {
+                platformAPI.DEBUGKillProcessByName("win32_server.exe");
+            }
+            else
+            {
+                platformAPI.DEBUGExecuteSystemCommand("../editor", "../build/win32_server.exe"," editor");
+            }
         }
     }
     else if(PointInRect(joinRect, relativeScreenMouse))
     {
-        joinColor.a = 1.0f;
-        if(Pressed(&input->mouseLeft))
+        if(serverRunning)
         {
-            PlayGame(gameState, input);
+            joinColor.a = 1.0f;
+            if(Pressed(&input->mouseLeft))
+            {
+                PlayGame(gameState, input);
+            }
         }
     }
     
@@ -1699,6 +1717,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             case GameMode_Playing:
             {
                 rerun = UpdateAndRenderGame(gameState, gameState->world, &group, input);
+                if(input->allowedToQuit && input->ctrlDown && Pressed(&input->escButton))
+                {
+                    InvalidCodePath;
+                    //gameState->mode = GameMode_Launcher;
+                }
+                
             } break;
             
             InvalidDefaultCase;

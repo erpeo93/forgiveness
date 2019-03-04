@@ -112,6 +112,12 @@ struct UIRequest
             char fileName[32];
             EditorWidget* widget;
         };
+        
+        struct
+        {
+            u32 taxonomy;
+            Vec3 offset;
+        };
     };
 };
 
@@ -753,10 +759,13 @@ struct UIState
     
     
     b32 reloadingAssets;
+    b32 patchingLocalServer;
     
     EditorElement uneditableTabRoot;
     i32 editingTabIndex;
     u32 editingTaxonomy;
+    
+    u32 instantiatingTaxonomy;
     
     b32 showCursor;
     r32 runningCursorTimer;

@@ -405,11 +405,12 @@ inline UIRequest DeleteTaxonomyRequest(u32 taxonomy)
     
     return result;
 }
-inline UIRequest InstantiateTaxonomyRequest(u32 taxonomy)
+inline UIRequest InstantiateTaxonomyRequest(u32 taxonomy, Vec3 offset)
 {
     UIRequest result = {};
     result.requestCode = UIRequest_InstantiateTaxonomy;
     result.taxonomy = taxonomy;
+    result.offset = offset;
     
     return result;
 }
@@ -628,7 +629,7 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_InstantiateTaxonomy:
         {
-            SendInstantiateTaxonomyRequest(request->taxonomy, V3(1, 0, 0));
+            SendInstantiateTaxonomyRequest(request->taxonomy, request->offset);
         } break;
         
         case UIRequest_SaveAssetFile:
@@ -645,6 +646,7 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_PatchServer:
         {
+            UI->patchingLocalServer = true;
             SendPatchServerRequest();
         } break;
         

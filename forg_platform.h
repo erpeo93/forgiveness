@@ -509,6 +509,13 @@ typedef DEBUG_PLATFORM_EXECUTE_COMMAND( platform_execute_command );
 #define DEBUG_PLATFORM_GET_PROCESS_STATE( name ) PlatformProcessState name( PlatformProcessHandle handle )
 typedef DEBUG_PLATFORM_GET_PROCESS_STATE( platform_get_process_state );
 
+#define DEBUG_PLATFORM_EXISTS_PROCESS_WITH_NAME(name) b32 name(char* processName)
+typedef DEBUG_PLATFORM_EXISTS_PROCESS_WITH_NAME(platform_exists_process_with_name);
+
+#define DEBUG_PLATFORM_KILL_PROCESS_BY_NAME(name) void name(char* processName)
+typedef DEBUG_PLATFORM_KILL_PROCESS_BY_NAME(platform_kill_process_by_name);
+
+
 
 
 typedef enum PlatformFileType
@@ -665,6 +672,8 @@ struct PlatformAPI
     
     platform_execute_command* DEBUGExecuteSystemCommand;
     platform_get_process_state* DEBUGGetProcessState;
+    platform_exists_process_with_name* DEBUGExistsProcessWithName;
+    platform_kill_process_by_name* DEBUGKillProcessByName;
     
 #if FORGIVENESS_INTERNAL
     

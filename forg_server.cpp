@@ -706,7 +706,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                         {
                             if(server->editor)
                             {
-                                PatchLocalServer();
+                                PatchLocalServer(server);
                             }
                         } break;
                         

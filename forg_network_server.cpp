@@ -852,6 +852,12 @@ internal void SendAllPakFileSentMessage(ServerPlayer* player)
     CloseAndStoreStandardPacket(player, ReliableOrdered);
 }
 
+internal void SendPatchDoneMessage(ServerPlayer* player)
+{
+    StartStandardPacket(PatchLocalServer);
+    CloseAndStoreStandardPacket(player, ReliableOrdered);
+}
+
 #if FORGIVENESS_INTERNAL
 internal void SendDebugEvent(ServerPlayer* player, DebugEvent* event)
 {

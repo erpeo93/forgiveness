@@ -1346,6 +1346,8 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             
             gameMemory.api.DEBUGExecuteSystemCommand = DEBUGWin32ExecuteCommand;
             gameMemory.api.DEBUGGetProcessState = DEBUGWin32GetProcessState;
+            gameMemory.api.DEBUGExistsProcessWithName = Win32ExistsProcessWithName;
+            gameMemory.api.DEBUGKillProcessByName = Win32KillProcessByName;
             
             u32 textureOpCount = 1024;
             PlatformTextureOpQueue* textureQueue = &gameMemory.textureQueue;
