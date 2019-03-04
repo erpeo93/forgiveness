@@ -3306,64 +3306,53 @@ internal void WriteAllFiles(MemoryPool* tempPool, char* dataPath, DataFileArrive
 
 
 #if 0
-internal void Merge()
+internal void RecursivelyMerge()
 {
-    GetAllFiles(f1);
-    GetAllFiles(f2);
-    
-    for(everyf2File)
+    if(reference fed file)
     {
-        if(!existsInf1)
+        Assert(toMergeFedFile);
+        for(everyTabToMErge)
         {
-            Add();
+            if(HasPreemption())
+            {
+                SubstTab();
+            }
+        }
+    }
+    
+    
+    for(everysubfolder)
+    {
+        if(StrEqual(folderName, "side"))
+        {
+            if(roles == Artist)
+            {
+                Copy();
+            }
         }
         else
         {
-            if(file.type == type_Fed)
-            {
-                MergeDefinitionFiles();
-            }
-            else
-            {
-                Assert(fileAreEquals);
-            }
-        }
-    }
-    
-    for(everyFolder1)
-    {
-        MergeSubFolder();
-    }
-}
-
-internal void Merge()
-{
-    MyDefinition = ?;
-    GetAllSubDirectories()
-    {
-        if(subDirectoryStartsWith(root))
-        {
-            MergeDefinitions();
+            RecursiveMerge(subfolder);
         }
     }
 }
 
-internal void ProduceOutput(folder)
+internal void Merge(Definition* reference, Definition* toMerge, u32 toMergeRoles)
 {
-    if(everythingIsValid)
+    for(everySubfolder)
     {
-        for(everyFile)
+        if(StrEqual(folderName, "root"))
         {
-            CopyFile(completeBuild);
-            if(file->dirty)
+            RecursivelyMerge(folderName, reference, toMerge, toMergeRoles);
+        }
+        else
+        {
+            if(hasPreemption(folderName, toMergeRoles))
             {
-                CopyFile(patch);
+                Delelete(reference);
+                CopyEntireFolder(toMerge, subfolder);
             }
         }
-        for(everyFoder)
-        {
-            ProduceOutput(subfoolder);
-        }
-    }	
+    }
 }
 #endif
