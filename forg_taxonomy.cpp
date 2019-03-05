@@ -211,7 +211,8 @@ inline u32 GetRandomChild(TaxonomyTable* table, RandomSequence* sequence, u32 ta
     TaxonomySlot* slot = GetSlotForTaxonomy(table, result);
     while(slot->subTaxonomiesCount)
     {
-        result = result | ((RandomChoice(sequence, slot->subTaxonomiesCount) + 1) << (32 - slot->usedBitsTotal));
+        u32 validSubTaxonomyCount = slot->subTaxonomiesCount - slot->invalidTaxonomiesCount;
+        result = result | ((RandomChoice(sequence, validSubTaxonomyCount) + 1) << (32 - slot->usedBitsTotal));
         slot = GetChildSlot(table, slot, result);
     }
     

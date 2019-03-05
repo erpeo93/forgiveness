@@ -173,7 +173,7 @@ internal void FillGenerationData(ServerState* server)
     
     LoadAssets();
     
-    WriteDataFiles();
+    WriteDataFiles(server->editor);
     
     
     b32 freeTabs = !server->editor;

@@ -84,6 +84,12 @@ inline void Push_(char* name, u32 nameLength = 0)
     Assert(stackShortcutCount < ArrayCount(shortcutStack));
     ShortcutSlot * currentSlot = shortcutStack[stackShortcutCount - 1];
     
+    
+    if(name[0] == '#')
+    {
+        ++currentSlot->invalidTaxonomiesCount;
+    }
+    
     AddSubTaxonomy(currentSlot, name, nameLength);
     result = SaveShortcut(taxTable_, name, nameLength, taxPool_);
     
@@ -96,9 +102,9 @@ inline void Pop()
     --stackShortcutCount;
 }
 
-inline void WriteDataFilesRecursive(char* path, char* name)
+inline void WriteDataFilesRecursive(b32 editor, char* path, char* name)
 {
-    if(!StrEqual(name, ".") && !StrEqual(name, "..") && !StrEqual(name, "side") && name[0] != '#')
+    if(!StrEqual(name, ".") && !StrEqual(name, "..") && !StrEqual(name, "side"))
     {
         Push_(name);
         
@@ -117,10 +123,24 @@ inline void WriteDataFilesRecursive(char* path, char* name)
         for(u32 subdirIndex = 0; subdirIndex < subdir.subDirectoryCount; ++subdirIndex)
         {
             char* subName = subdir.subdirs[subdirIndex];
-            char nameWithoutPoint[64];
-            GetNameWithoutPoint(nameWithoutPoint, ArrayCount(nameWithoutPoint), subName + 1);
-            WriteDataFilesRecursive(newPath, subName);
+            if(subName[0] != '#')
+            {
+                WriteDataFilesRecursive(editor, newPath, subName);
+            }
         }
+        
+        if(editor)
+        {
+            for(u32 subdirIndex = 0; subdirIndex < subdir.subDirectoryCount; ++subdirIndex)
+            {
+                char* subName = subdir.subdirs[subdirIndex];
+                if(subName[0] == '#')
+                {
+                    WriteDataFilesRecursive(editor, newPath, subName);
+                }
+            }
+        }
+        
         
         Pop();
     }
@@ -172,7 +192,7 @@ inline void FinalizeShortcut(ShortcutSlot* shortcut, u32 taxonomy)
 }
 
 
-internal u32 WriteTaxonomies(char* giantBuffer, u32 giantBufferLength, b32 writeToFile, TaxonomySlot* parent, TaxonomySlot* slot, ShortcutSlot* shortcut)
+internal u32 FinalizeTaxonomies(char* giantBuffer, u32 giantBufferLength, b32 writeToFile, TaxonomySlot* parent, TaxonomySlot* slot, ShortcutSlot* shortcut)
 {
     u32 written = 0;
     if(giantBuffer && writeToFile)
@@ -185,6 +205,7 @@ internal u32 WriteTaxonomies(char* giantBuffer, u32 giantBufferLength, b32 write
     
     FinalizeShortcut(shortcut, slot->taxonomy);
     slot->subTaxonomiesCount = shortcut->subTaxonomiesCount;
+    slot->invalidTaxonomiesCount = shortcut->invalidTaxonomiesCount;
     slot->necessaryBits = TruncateReal32ToU32(log2f((r32) slot->subTaxonomiesCount) + 1);
     slot->usedBitsTotal = slot->necessaryBits;
     if(parent)
@@ -210,7 +231,7 @@ internal u32 WriteTaxonomies(char* giantBuffer, u32 giantBufferLength, b32 write
         
         ShortcutSlot* newShortcut = GetShortcut(taxTable_, shortcut->subTaxonomies[subIndex]);
         newShortcut->taxonomy = taxonomy;
-        u32 writtenChild = WriteTaxonomies(giantBuffer, giantBufferLength, true, slot, newSlot, newShortcut);
+        u32 writtenChild = FinalizeTaxonomies(giantBuffer, giantBufferLength, true, slot, newSlot, newShortcut);
         if(giantBuffer)
         {
             written += writtenChild;
@@ -229,7 +250,7 @@ internal u32 WriteTaxonomies(char* giantBuffer, u32 giantBufferLength, b32 write
 }
 
 
-internal void WriteDataFiles()
+internal void WriteDataFiles(b32 editor)
 {
     shortcutStack[stackShortcutCount++] = SaveShortcut(taxTable_, "root", 0, taxPool_);
     char* rootPath = "definition/root";
@@ -240,7 +261,7 @@ internal void WriteDataFiles()
     platformAPI.GetAllSubdirectoriesName(&subdir, rootPath);
     for(u32 subdirIndex = 0; subdirIndex < subdir.subDirectoryCount; ++subdirIndex)
     {
-        WriteDataFilesRecursive(rootPath, subdir.subdirs[subdirIndex]);
+        WriteDataFilesRecursive(editor, rootPath, subdir.subdirs[subdirIndex]);
     }
     
     
@@ -253,7 +274,7 @@ internal void WriteDataFiles()
     
     u32 giantBufferSize = MegaBytes(2);
     char* giantBuffer = PushArray(&tempPool, char, giantBufferSize);
-    u32 written = WriteTaxonomies(giantBuffer, giantBufferSize, false, 0, rootSlot, rootShortcut);
+    u32 written = FinalizeTaxonomies(giantBuffer, giantBufferSize, false, 0, rootSlot, rootShortcut);
     platformAPI.DEBUGWriteFile("assets/taxonomies.fed", giantBuffer, written);
     
     EndTemporaryMemory(bufferMemory);
@@ -265,10 +286,6 @@ internal void WriteDataFiles()
 
 
 
-//
-//
-//
-//NOTE: this only deals with the taxonomy.
 internal void ReadTaxonomiesFromFile()
 {
     shortcutStack[stackShortcutCount++] = SaveShortcut(taxTable_, "root", 0, taxPool_);
@@ -304,7 +321,7 @@ internal void ReadTaxonomiesFromFile()
     ShortcutSlot* rootShortcut = GetShortcut(taxTable_, "root");
     TaxonomySlot* rootSlot = &taxTable_->root;
     rootSlot->taxonomy = 0;
-    WriteTaxonomies(0, 0, 0, 0, rootSlot, rootShortcut);
+    FinalizeTaxonomies(0, 0, 0, 0, rootSlot, rootShortcut);
 }
 
 
@@ -3020,6 +3037,14 @@ internal void ImportAllFiles(char* dataPath, MemoryPool* tempPool, u32 editorRol
             GetNameWithoutPoint(taxonomyName, sizeof(taxonomyName), handle.name);
             
             currentSlot_ = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName);
+            
+            if(!currentSlot_)
+            {
+                char nameWithPound[64];
+                FormatString(nameWithPound, sizeof(nameWithPound), "#%s", taxonomyName);
+                currentSlot_ = NORUNTIMEGetTaxonomySlotByName(taxTable_, nameWithPound);
+            }
+            
             if(currentSlot_)
             {
                 LoadFileInTaxonomySlot(source, editorRoles);
@@ -3154,7 +3179,9 @@ internal void WriteToFile(TaxonomyTable* table, TaxonomySlot* slot)
     }
     
     
-    FormatString(writeHere, remainingSize, "%s.fed", slot->name);
+    char* slotName = slot->name[0] == '#' ? slot->name + 1 : slot->name;
+    
+    FormatString(writeHere, remainingSize, "%s.fed", slotName);
     platformAPI.DEBUGWriteFile(path, buffer, writtenTotal);
 }
 

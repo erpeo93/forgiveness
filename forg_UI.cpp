@@ -822,6 +822,12 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 case EditorElement_Taxonomy:
                 {
                     TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, root->taxonomy);
+                    
+                    if(slot->name[0] == '#')
+                    {
+                        nameToShow++;
+                    }
+                    
                     if(slot->editorChangeCount || UIChildModified(UI->table, slot))
                     {
                         nameColor = V4(1, 0, 0, 1);
@@ -846,19 +852,35 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             
                             UIButton instantiateButton = UIBtn(UI, instantiateP, layout, V4(0, 0, 1, 1), "place");
                             
-                            UIInteraction instantiateInteraction = SendRequestInteraction(UI_Click, InstantiateTaxonomyRequest(root->taxonomy, V3(1, 0, 0)));
-                            UIAddSetValueAction(&instantiateInteraction, UI_Idle, &UI->instantiatingTaxonomy, root->taxonomy);
-                            UIAddSetValueAction(&instantiateInteraction, UI_Release, &UI->instantiatingTaxonomy, 0); 
+                            UIInteraction instantiateInteraction = NullInteraction();
                             
-                            
+                            r32 instantiateAlpha = 0.2f;
+                            if(root->name[0] != '#')
+                            {
+                                instantiateAlpha = 1.0f;
+                                instantiateInteraction = SendRequestInteraction(UI_Click, InstantiateTaxonomyRequest(root->taxonomy, V3(1, 0, 0)));
+                                UIAddSetValueAction(&instantiateInteraction, UI_Idle, &UI->instantiatingTaxonomy, root->taxonomy);
+                                UIAddSetValueAction(&instantiateInteraction, UI_Release, &UI->instantiatingTaxonomy, 0); 
+                            }
                             
                             UIButtonInteraction(&instantiateButton, instantiateInteraction);
-                            result = Union(result, UIDrawButton(UI, input, &instantiateButton));
+                            result = Union(result, UIDrawButton(UI, input, &instantiateButton, instantiateAlpha));
+                            
+                            
                             
                             UIButton editButton = UIBtn(UI, UIFollowingP(&instantiateButton, buttonSeparator), layout, V4(0, 1, 0, 1), "edit");
                             
-                            UIButtonInteraction(&editButton, SendRequestInteraction(UI_Trigger, EditRequest(root->taxonomy)));
-                            result = Union(result, UIDrawButton(UI, input, &editButton));
+                            UIInteraction editInteraction = NullInteraction();
+                            r32 editAlpha = 0.2f;
+                            
+                            if(true)//root->name[0] != '#')
+                            {
+                                editAlpha = 1.0f;
+                                editInteraction = SendRequestInteraction(UI_Trigger, EditRequest(root->taxonomy));
+                            }
+                            
+                            UIButtonInteraction(&editButton, editInteraction);
+                            result = Union(result, UIDrawButton(UI, input, &editButton, editAlpha));
                         }
                         
                         
@@ -1300,7 +1322,9 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                             }
                             
                             char saveText[128];
-                            FormatString(saveText, sizeof(saveText), "Save %s", editingSlot->name);
+                            
+                            char* name = editingSlot->name[0] == '#' ? editingSlot->name + 1 : editingSlot->name;
+                            FormatString(saveText, sizeof(saveText), "Save %s", name);
                             UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), saveText);
                             UIButtonInteraction(&saveButton, saveInteraction);
                             UIDrawButton(UI, input, &saveButton, buttonAlpha);

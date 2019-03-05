@@ -50,6 +50,7 @@ struct PlayerPossibleAction
 struct ShortcutSlot
 {
     u32 subTaxonomiesCount;
+    u32 invalidTaxonomiesCount;
     char subTaxonomies[64][32];
     
     u32 taxonomy;
@@ -237,7 +238,10 @@ struct TaxonomySlot
 {
     u32 taxonomy;
     u64 stringHashID;
+    
     u32 subTaxonomiesCount;
+    u32 invalidTaxonomiesCount;
+    
     u32 usedBitsTotal;
     u32 parentNecessaryBits;
     u32 necessaryBits;
