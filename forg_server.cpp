@@ -171,9 +171,11 @@ internal void FillGenerationData(ServerState* server)
     
     InitTaxonomyReadWrite(table);
     
-    LoadAssets();
-    
-    WriteDataFiles(server->editor);
+	if(server->editor)
+	{
+		LoadAssets();
+		WriteDataFiles();
+	}
     
     
     b32 freeTabs = !server->editor;
@@ -323,24 +325,40 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                     PlatformFileHandle handle = platformAPI.OpenNextFile(&pakGroup, clientDataPath);
                     if(fileIndex == player->pakFileIndex)
                     {
-                        u32 sizeToRead = Min(toSendSize, handle.fileSize - player->pakFileOffset);
                         
-                        platformAPI.ReadFromFile(&handle, player->pakFileOffset, sizeToRead, server->sendPakBuffer);
-                        
-                        if(player->pakFileOffset == 0)
-                        {
-                            char nameWithoutPoint[64];
-                            GetNameWithoutPoint(nameWithoutPoint, sizeof(nameWithoutPoint), handle.name);
+						if(server->editor || handle.name[0] != '#')
+						{
+							u32 sizeToRead = Min(toSendSize, handle.fileSize - player->pakFileOffset);
+							platformAPI.ReadFromFile(&handle, player->pakFileOffset, sizeToRead, server->sendPakBuffer);
                             
-                            char uncompressedName[64];
-                            FormatString(uncompressedName, sizeof(uncompressedName), "%s.upak", nameWithoutPoint);
+							if(player->pakFileOffset == 0)
+							{
+								char nameWithoutPoint[64];
+								GetNameWithoutPoint(nameWithoutPoint, sizeof(nameWithoutPoint), handle.name);
+                                
+								char uncompressedName[64];
+								FormatString(uncompressedName, sizeof(uncompressedName), "%s.upak", nameWithoutPoint);
+                                
+                                
+								SendPakFileHeader(player, uncompressedName, handle.fileSize, chunkSize);
+							}
                             
+							SendFileChunks(player, server->sendPakBuffer, sizeToRead, chunkSize);
+							player->pakFileOffset += sizeToRead;
                             
-                            SendPakFileHeader(player, uncompressedName, handle.fileSize, chunkSize);
-                        }
-                        
-                        SendFileChunks(player, server->sendPakBuffer, sizeToRead, chunkSize);
-                        player->pakFileOffset += sizeToRead;
+                            u32 modSizeToRead = sizeToRead;
+                            
+                            if(modSizeToRead % chunkSize != 0)
+                            {
+                                modSizeToRead += chunkSize - (sizeToRead % chunkSize);
+                            }
+                            Assert(modSizeToRead % chunkSize == 0);
+                            toSendSize -= modSizeToRead;
+						}
+						else
+						{
+							player->pakFileOffset = handle.fileSize;
+						}
                         
                         if(player->pakFileOffset >= handle.fileSize)
                         {
@@ -351,17 +369,6 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                                 player->allPakFileSent = true;
                             }
                         }
-                        
-                        u32 modSizeToRead = sizeToRead;
-                        
-                        if(modSizeToRead % chunkSize != 0)
-                        {
-                            modSizeToRead += chunkSize - (sizeToRead % chunkSize);
-                        }
-                        Assert(modSizeToRead % chunkSize == 0);
-                        
-                        
-                        toSendSize -= modSizeToRead;
                     }
                     platformAPI.CloseHandle(&handle);
                 }
@@ -748,20 +755,26 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                                 
                                 BuildTaxonomyDataPath(server->activeTable, toDelete, "", path, sizeof(path), copyFrom, sizeof(copyFrom));
                                 
-                                platformAPI.DeleteFolderRecursive(path);
+								//AddPoundToNameAndFedFileRecursively();
                                 
-                                //if(AllFilesValid())
-                                {
-                                    SwapTables(server);
-                                    FillGenerationData(server);
-                                    TranslateServer(server);
-                                }
-                                //else
-                                {
-                                    //SendWrongTaxonomies();
-                                }
+								SwapTables(server);
+                                FillGenerationData(server);
+                                TranslateServer(server);
                             }
 						} break;
+                        
+#if 0
+						case Type_ReviveTaxonomy:
+						{
+							BuildPath();
+                            
+							RemovePoundFromNameAndFadFileRecursively();
+                            
+                            SwapTables(server);
+                            FillGenerationData(server);
+                            TranslateServer(server);
+						} break;
+#endif
                         
 						case Type_InstantiateTaxonomy:
                         case Type_DeleteEntity:

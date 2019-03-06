@@ -2036,20 +2036,14 @@ struct BitmapFileHandle
     u64 ID;
 };
 
-internal void WriteBitmaps(char* folder, char* name_)
+internal void WriteBitmaps(char* folder, char* name)
 {
     Assets assets_;
     Assets* assets = &assets_;
     InitializeAssets(assets);
     
-    char* name = name_;
-    if(name_[0] == '#' || name_[0] == '@')
-    {
-        name = name_ + 1;
-    }
-    
     char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s", folder, name_);
+    FormatString(completePath, sizeof(completePath), "%s/%s", folder, name);
     
     
     u64 hashID = StringHash(name);
@@ -2533,25 +2527,19 @@ internal void AddLabelsFromFile(PlatformFile labelsFile, char* assetName)
     }
 }
 
-internal void WriteSounds(PlatformFile labelsFile, char* folder, char* name_)
+internal void WriteSounds(PlatformFile labelsFile, char* folder, char* name)
 {
     Assets assets_;
     Assets* assets = &assets_;
     InitializeAssets(assets);
     
-    char* name = name_;
-    if(name_[0] == '#' || name_[0] == '@')
-    {
-        name = name_ + 1;
-    }
-    
     char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s", folder, name_);
+    FormatString(completePath, sizeof(completePath), "%s/%s", folder, name);
     
     
     char* outputPath = "assets";
     char autocompletePath[128];
-    FormatString(autocompletePath, sizeof(autocompletePath), "%s/%s.autocomplete", outputPath, name_);
+    FormatString(autocompletePath, sizeof(autocompletePath), "%s/%s.autocomplete", outputPath, name);
     
     
     char* buffer = (char*) malloc(MegaBytes(2));
@@ -2857,6 +2845,13 @@ internal void WriteFonts()
 
 int main(int argc, char** argv )
 {
+    
+#if 0    
+	DeleteAll("assets", "*.fad");
+	DeleteAll("assets", "*.pak");
+	DeleteAll("assets", "*.autocomplete");
+#endif
+    
     WriteMusic();
     WriteSounds();
     WriteFonts();

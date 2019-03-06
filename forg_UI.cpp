@@ -1037,13 +1037,23 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         platformAPI.DEBUGWriteFile("widget", toSave, sizeof(toSave));
     }
     
+    Vec2 importantMessageP = V2(-900, +500);
+    r32 importantMessageScale = 0.42f;
+    Vec4 importantColor = V4(1, 0, 0, 1);
+    
+    if(UI->table->errorCount)
+    {
+        PushUIOrthoText(UI, "There were errors when loading the assets! check the editorError file", importantMessageScale, importantMessageP, importantColor);
+        importantMessageP.y -= 40.0f;
+    }
+    
     if(UI->reloadingAssets)
     {
-        PushUIOrthoText(UI, "Reloading Assets...", 0.42f, V2(-900, +500), V4(1, 0, 0, 1));
+        PushUIOrthoText(UI, "Reloading Assets...", importantMessageScale, importantMessageP, importantColor);
     }
     else if(UI->patchingLocalServer)
     {
-        PushUIOrthoText(UI, "Patching Local Server...", 0.42f, V2(-900, +500), V4(1, 0, 0, 1));
+        PushUIOrthoText(UI, "Patching Local Server...", importantMessageScale, importantMessageP, importantColor);
     }
     
     UI->hotStructThisFrame = false;

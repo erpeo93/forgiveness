@@ -431,6 +431,10 @@ struct TaxonomyTable
     RandomSequence eventSequence;
     u32 eventCount;
     SoundEvent events[64];
+    
+    
+    u32 errorCount;
+    char errors[512][128];
 };
 
 inline u32 GetObjectTaxonomy(TaxonomyTable* table, Object* object)

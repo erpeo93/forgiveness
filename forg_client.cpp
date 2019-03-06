@@ -729,12 +729,15 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     
                     InitTaxonomyReadWrite(worldMode->table);
                     ReadTaxonomiesFromFile();
+                    
                     ImportAllFiles(filePath, &worldMode->filePool, worldMode->editorRoles, false);
                     ReadPlantChart();
                     
                     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(worldMode->table, "goblins");
                     TaxonomySlot* test = GetSlotForTaxonomy(worldMode->table, slot->taxonomy);
                     Assert(slot->taxonomy == test->taxonomy);
+                    
+                    platformAPI.DEBUGWriteFile("editorErrors", worldMode->table->errors, sizeof(worldMode->table->errors[0]) * worldMode->table->errorCount);
                     
                     
                     for(u32 entityIndex = 0; entityIndex < ArrayCount(worldMode->entities); ++entityIndex)

@@ -51,11 +51,12 @@ inline void GetNameWithoutPoint(char* dest, u32 destLength, char* source)
 global_variable TaxonomyTable* taxTable_;
 global_variable MemoryPool* taxPool_;
 global_variable TaxonomySlot* currentSlot_;
-TaxonomyComponent* currentActiveComponent_;
+global_variable TaxonomyComponent* currentActiveComponent_;
 
 inline void InitTaxonomyReadWrite(TaxonomyTable* table)
 {
     taxTable_ = table;
+    taxTable_->errorCount = 0;
     taxPool_ = &table->pool;
     currentActiveComponent_ = 0;
 }
@@ -102,7 +103,7 @@ inline void Pop()
     --stackShortcutCount;
 }
 
-inline void WriteDataFilesRecursive(b32 editor, char* path, char* name)
+inline void WriteDataFilesRecursive(char* path, char* name)
 {
     if(!StrEqual(name, ".") && !StrEqual(name, "..") && !StrEqual(name, "side"))
     {
@@ -125,21 +126,18 @@ inline void WriteDataFilesRecursive(b32 editor, char* path, char* name)
             char* subName = subdir.subdirs[subdirIndex];
             if(subName[0] != '#')
             {
-                WriteDataFilesRecursive(editor, newPath, subName);
+                WriteDataFilesRecursive(newPath, subName);
             }
         }
         
-        if(editor)
-        {
-            for(u32 subdirIndex = 0; subdirIndex < subdir.subDirectoryCount; ++subdirIndex)
-            {
-                char* subName = subdir.subdirs[subdirIndex];
-                if(subName[0] == '#')
-                {
-                    WriteDataFilesRecursive(editor, newPath, subName);
-                }
+		for(u32 subdirIndex = 0; subdirIndex < subdir.subDirectoryCount; ++subdirIndex)
+		{
+			char* subName = subdir.subdirs[subdirIndex];
+			if(subName[0] == '#')
+			{
+				WriteDataFilesRecursive(newPath, subName);
             }
-        }
+		}
         
         
         Pop();
@@ -250,8 +248,10 @@ internal u32 FinalizeTaxonomies(char* giantBuffer, u32 giantBufferLength, b32 wr
 }
 
 
-internal void WriteDataFiles(b32 editor)
+internal void WriteDataFiles()
 {
+	//DeleteAllfiles("assets", "*.fed");
+    
     shortcutStack[stackShortcutCount++] = SaveShortcut(taxTable_, "root", 0, taxPool_);
     char* rootPath = "definition/root";
     
@@ -261,7 +261,7 @@ internal void WriteDataFiles(b32 editor)
     platformAPI.GetAllSubdirectoriesName(&subdir, rootPath);
     for(u32 subdirIndex = 0; subdirIndex < subdir.subDirectoryCount; ++subdirIndex)
     {
-        WriteDataFilesRecursive(editor, rootPath, subdir.subdirs[subdirIndex]);
+        WriteDataFilesRecursive(rootPath, subdir.subdirs[subdirIndex]);
     }
     
     
@@ -395,12 +395,6 @@ inline u32 GetFlagPreprocessor_(MetaFlag* values, u32 count, char* test)
 }
 
 
-inline void Begin(char* name)
-{
-    currentSlot_ = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-}
-
-
 inline u8 ToU8(char* string)
 {
     u8 result = SafeTruncateToU8(atoi(string));
@@ -431,9 +425,27 @@ inline r32 ToR32(char* string)
 
 
 
+#if FORG_SERVER
+#define EditorErrorLog(name) EditorErrorLogServer(__FUNCTION__, name)
+#else
+#define EditorErrorLog(name) EditorErrorLogClient(__FUNCTION__, name)
+#endif
+
+inline void EditorErrorLogServer(char* functionName, char* wasSearching)
+{
+    Assert(currentSlot_);
+    printf("Unable to find %s in function %s when loading %s\n", wasSearching, functionName, currentSlot_->name);
+}
 
 
-
+inline void EditorErrorLogClient(char* functionName, char* wasSearching)
+{
+    if(taxTable_->errorCount < ArrayCount(taxTable_->errors))
+    {
+        char* error = taxTable_->errors[taxTable_->errorCount++];
+        FormatString(error, sizeof(taxTable_->errors[0]), "Unable to find %s in function %s when loading %s\n", wasSearching, functionName, currentSlot_->name);
+    }
+}
 
 
 
@@ -443,45 +455,64 @@ inline r32 ToR32(char* string)
 
 
 #define TAXTABLE_ALLOC(ptr, type) FREELIST_ALLOC(ptr, taxTable_->firstFree##type, PushStruct(taxPool_, type, NoClear())) ZeroStruct(*(ptr));
-EquipmentMapping* currentEquipmentMap_;
+global_variable EquipmentMapping* currentEquipmentMap_;
 
 inline void CanEquip(char* name, char* leftSlot, char* rightSlot)
 {
     TaxonomySlot* slot = currentSlot_;
     TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    EquipmentMapping* mapping;
-    TAXTABLE_ALLOC(mapping, EquipmentMapping);
     
-    mapping->taxonomy = target->taxonomy;
-    mapping->mapping.multiPart = false;
-    mapping->mapping.left = (SlotName) GetValuePreprocessor(SlotName, leftSlot);
-    mapping->mapping.right = (SlotName) GetValuePreprocessor(SlotName, rightSlot);
-    
-    mapping->next = slot->firstEquipmentMapping;
-    slot->firstEquipmentMapping = mapping;
+    if(target)
+    {
+        EquipmentMapping* mapping;
+        TAXTABLE_ALLOC(mapping, EquipmentMapping);
+        
+        mapping->taxonomy = target->taxonomy;
+        mapping->mapping.multiPart = false;
+        mapping->mapping.left = (SlotName) GetValuePreprocessor(SlotName, leftSlot);
+        mapping->mapping.right = (SlotName) GetValuePreprocessor(SlotName, rightSlot);
+        
+        mapping->next = slot->firstEquipmentMapping;
+        slot->firstEquipmentMapping = mapping;
+    }
+    else
+    {
+        EditorErrorLog(name);
+    }
 }
 
 inline void CanEquipMultipart(char* name)
 {
     TaxonomySlot* slot = currentSlot_;
     TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    EquipmentMapping* mapping;
-    TAXTABLE_ALLOC(mapping, EquipmentMapping);
     
-    mapping->taxonomy = target->taxonomy;
-    mapping->mapping.multiPart = true;
-    currentEquipmentMap_ = mapping;
-    
-    mapping->next = slot->firstEquipmentMapping;
-    slot->firstEquipmentMapping = mapping;
+    if(target)
+    {
+        EquipmentMapping* mapping;
+        TAXTABLE_ALLOC(mapping, EquipmentMapping);
+        
+        mapping->taxonomy = target->taxonomy;
+        mapping->mapping.multiPart = true;
+        currentEquipmentMap_ = mapping;
+        
+        mapping->next = slot->firstEquipmentMapping;
+        slot->firstEquipmentMapping = mapping;
+    }
+    else
+    {
+        currentEquipmentMap_ = 0;
+        EditorErrorLog(name);
+    }
 }
 
 inline void AddPart(char* slot)
 {
-    
-    EquipmentMapping* currentMapping = currentEquipmentMap_;
-    Assert(currentMapping->mapping.slotCount < ArrayCount(currentMapping->mapping.slots));
-    currentMapping->mapping.slots[currentMapping->mapping.slotCount++] = (SlotName) GetValuePreprocessor(SlotName, slot);
+    if(currentEquipmentMap_)
+    {
+        EquipmentMapping* currentMapping = currentEquipmentMap_;
+        Assert(currentMapping->mapping.slotCount < ArrayCount(currentMapping->mapping.slots));
+        currentMapping->mapping.slots[currentMapping->mapping.slotCount++] = (SlotName) GetValuePreprocessor(SlotName, slot);
+    }
 }
 
 inline void CanConsume(char* action, char* name)
@@ -489,15 +520,23 @@ inline void CanConsume(char* action, char* name)
     TaxonomySlot* slot = currentSlot_;
     TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
     
-    ConsumeMapping* mapping;
-    TAXTABLE_ALLOC(mapping, ConsumeMapping);
+    if(target)
+    {
+        ConsumeMapping* mapping;
+        TAXTABLE_ALLOC(mapping, ConsumeMapping);
+        
+        
+        mapping->action = (EntityAction) GetValuePreprocessor(EntityAction, action);
+        mapping->taxonomy = target->taxonomy;
+        
+        mapping->next = slot->firstConsumeMapping;
+        slot->firstConsumeMapping = mapping;
+    }
+    else
+    {
+        EditorErrorLog(name);
+    }
     
-    
-    mapping->action = (EntityAction) GetValuePreprocessor(EntityAction, action);
-    mapping->taxonomy = target->taxonomy;
-    
-    mapping->next = slot->firstConsumeMapping;
-    slot->firstConsumeMapping = mapping;
 }
 
 
@@ -620,7 +659,14 @@ inline void AddIngredient(char* name)
     Assert(component->ingredientCount < ArrayCount(component->ingredientTaxonomies));
     
     TaxonomySlot* ingredientSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    component->ingredientTaxonomies[component->ingredientCount++] = ingredientSlot->taxonomy;
+    if(ingredientSlot)
+    {
+        component->ingredientTaxonomies[component->ingredientCount++] = ingredientSlot->taxonomy;
+    }
+    else
+    {
+        EditorErrorLog(name);
+    }
 }
 
 inline void MadeOf(char* name)
@@ -647,7 +693,7 @@ inline void MadeOf(char* name)
 
 
 #if FORG_SERVER
-TaxonomyEffect* currentEffect_;
+global_variable TaxonomyEffect* currentEffect_;
 
 inline void AddEffect(char* action, char* ID)
 {
@@ -676,8 +722,15 @@ inline void Power(char* power)
 inline void Spawn(char* name)
 {
     TaxonomySlot* spawnSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-	currentEffect_->effect.data = {};
-    currentEffect_->effect.data.taxonomy = spawnSlot->taxonomy;
+    if(spawnSlot)
+    {
+        currentEffect_->effect.data = {};
+        currentEffect_->effect.data.taxonomy = spawnSlot->taxonomy;
+    }
+    else
+    {
+        EditorErrorLog(name);
+    }
 }
 
 inline void AddFlag(char* flagName)
@@ -696,11 +749,19 @@ inline void AddFreeHandReq(char* slot, char* taxonomy)
     NakedHandReq* req;
     TAXTABLE_ALLOC(req, NakedHandReq);
     TaxonomySlot* taxonomyslot = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomy);
-    req->slotIndex = SafeTruncateToU8(GetValuePreprocessor(SlotName, slot));
-    req->taxonomy = taxonomyslot->taxonomy;
     
-    req->next = currentSlot_->nakedHandReq;
-    currentSlot_->nakedHandReq = req;
+    if(taxonomyslot)
+    {
+        req->slotIndex = SafeTruncateToU8(GetValuePreprocessor(SlotName, slot));
+        req->taxonomy = taxonomyslot->taxonomy;
+        
+        req->next = currentSlot_->nakedHandReq;
+        currentSlot_->nakedHandReq = req;
+    }
+    else
+    {
+        EditorErrorLog(taxonomy);
+    }
 }
 
 
@@ -729,30 +790,50 @@ internal void CustomEffects()
 
 
 
-CraftingEffectLink* activeCraftingLink_;
+global_variable CraftingEffectLink* activeCraftingLink_;
 inline void LinkStandard(char* action, char* effectName, char* target)
 {
     TaxonomySlot* effectSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, effectName);
-    CraftingEffectLink* link;
-    TAXTABLE_ALLOC(link, CraftingEffectLink);
-    link->triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
-    link->target = target ? ToB32(target) : false;
-    link->ID = effectSlot->effectID;
-    activeCraftingLink_ = link;
     
-    FREELIST_INSERT(link, currentSlot_->links);
+    if(effectSlot)
+    {
+        CraftingEffectLink* link;
+        TAXTABLE_ALLOC(link, CraftingEffectLink);
+        link->triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
+        link->target = target ? ToB32(target) : false;
+        link->ID = effectSlot->effectID;
+        activeCraftingLink_ = link;
+        
+        FREELIST_INSERT(link, currentSlot_->links);
+    }
+    else
+    {
+        activeCraftingLink_ = 0;
+        EditorErrorLog(effectName);
+    }
 }
 
 inline void Requires_(char* essenceName)
 {
     TaxonomySlot* essenceSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, essenceName);
-    for(u32 essenceIndex = 0; essenceIndex < MAX_ESSENCES_PER_EFFECT; ++essenceIndex)
+    
+    if(essenceSlot)
     {
-        if(!activeCraftingLink_->essences[essenceIndex].taxonomy)
+        if(activeCraftingLink_)
         {
-            activeCraftingLink_->essences[essenceIndex].taxonomy = essenceSlot->taxonomy;
-            return;
+            for(u32 essenceIndex = 0; essenceIndex < MAX_ESSENCES_PER_EFFECT; ++essenceIndex)
+            {
+                if(!activeCraftingLink_->essences[essenceIndex].taxonomy)
+                {
+                    activeCraftingLink_->essences[essenceIndex].taxonomy = essenceSlot->taxonomy;
+                    return;
+                }
+            }
         }
+    }
+    else
+    {
+        EditorErrorLog(essenceName);
     }
 }
 
@@ -838,27 +919,33 @@ inline void InventorySpace(u8 width, u8 height)
 inline void AddEssence(char* name, u32 quantity)
 {
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    Assert(IsEssence(taxTable_, slot->taxonomy));
     
-    
-    b32 found = false;
-    for(TaxonomyEssence* essence = currentSlot_->essences; essence; essence = essence->next)
+    if(slot)
     {
-        if(essence->essence.taxonomy == slot->taxonomy)
+        Assert(IsEssence(taxTable_, slot->taxonomy));
+        b32 found = false;
+        for(TaxonomyEssence* essence = currentSlot_->essences; essence; essence = essence->next)
         {
-            essence->essence.quantity += quantity;
-            essence->essence.quantity = SafeTruncateToU8(essence->essence.quantity);
-            found = true;
+            if(essence->essence.taxonomy == slot->taxonomy)
+            {
+                essence->essence.quantity += quantity;
+                essence->essence.quantity = SafeTruncateToU8(essence->essence.quantity);
+                found = true;
+            }
+        }
+        
+        if(!found)
+        {
+            TaxonomyEssence* essence;
+            TAXTABLE_ALLOC(essence, TaxonomyEssence);
+            essence->essence.taxonomy = slot->taxonomy;
+            essence->essence.quantity = quantity;
+            FREELIST_INSERT(essence, currentSlot_->essences);
         }
     }
-    
-    if(!found)
+    else
     {
-        TaxonomyEssence* essence;
-        TAXTABLE_ALLOC(essence, TaxonomyEssence);
-        essence->essence.taxonomy = slot->taxonomy;
-        essence->essence.quantity = quantity;
-        FREELIST_INSERT(essence, currentSlot_->essences);
+        EditorErrorLog(name);
     }
 }
 
@@ -970,9 +1057,17 @@ inline TaxonomyNode* AddToTaxonomyTree(TaxonomyTree* tree, TaxonomySlot* slot)
 inline void AddTarget(char* name)
 {
     TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    PlayerPossibleAction* possibleAction = currentSlot_->firstPossibleAction;
-    TaxonomyNode* node = AddToTaxonomyTree(&possibleAction->tree, target);
-    node->data.possible = true;
+    
+    if(target)
+    {
+        PlayerPossibleAction* possibleAction = currentSlot_->firstPossibleAction;
+        TaxonomyNode* node = AddToTaxonomyTree(&possibleAction->tree, target);
+        node->data.possible = true;
+    }
+    else
+    {
+        EditorErrorLog(name);
+    }
 }
 
 
@@ -1014,16 +1109,23 @@ inline void AddActionEffect(AnimationEffect effect, u32 action, char* pieceName 
 
 inline void AddTriggerEffect(AnimationEffect effect, char* effectName)
 {
-    AnimationEffect* dest;
-    TAXTABLE_ALLOC(dest, AnimationEffect);
-    
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, effectName);
-    effect.triggerEffectTaxonomy = slot->taxonomy;
     
-    *dest = effect;
-    dest->timer = 0;
-    
-    FREELIST_INSERT(dest, currentSlot_->firstAnimationEffect);
+    if(slot)
+    {
+        AnimationEffect* dest;
+        TAXTABLE_ALLOC(dest, AnimationEffect);
+        effect.triggerEffectTaxonomy = slot->taxonomy;
+        
+        *dest = effect;
+        dest->timer = 0;
+        
+        FREELIST_INSERT(dest, currentSlot_->firstAnimationEffect);
+    }
+    else
+    {
+        EditorErrorLog(effectName);
+    }
 }
 
 inline void AddPerpetualEffect(AnimationEffect effect, char* pieceName = 0)
@@ -1243,96 +1345,117 @@ inline SoundEvent* GetSoundEvent(TaxonomyTable* table, u64 eventHash)
 
 
 
-PlantParams* currentPlantParams_;
-PlantRule* currentPlantRule_;
-NewSegment* currentNewSegment_;
+global_variable PlantParams* currentPlantParams_;
+global_variable PlantRule* currentPlantRule_;
+global_variable NewSegment* currentNewSegment_;
 
 inline void BeginParams(char* name)
 {
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName( taxTable_, name );
-    FREELIST_FREE(slot->plantParams, PlantParams, taxTable_->firstFreePlantParams);
-    currentSlot_ = slot;
-    TAXTABLE_ALLOC(slot->plantParams, PlantParams);
-    currentPlantParams_ = slot->plantParams;
-    currentPlantParams_->plantCount = 1;
-    currentPlantParams_->leafSize[0] = 1.0f;
+    
+    if(slot)
+    {
+        FREELIST_FREE(slot->plantParams, PlantParams, taxTable_->firstFreePlantParams);
+        currentSlot_ = slot;
+        TAXTABLE_ALLOC(slot->plantParams, PlantParams);
+        currentPlantParams_ = slot->plantParams;
+        currentPlantParams_->plantCount = 1;
+        currentPlantParams_->leafSize[0] = 1.0f;
+    }
+    else
+    {
+        currentPlantParams_ = 0;
+        EditorErrorLog(name);
+    }
 }
 
 inline void RenderingGeneralParams(u8 plantCount, r32 minOffset, r32 maxOffset)
 {
-    currentPlantParams_->plantCount = plantCount;
-    currentPlantParams_->minOffset = minOffset;
-    currentPlantParams_->maxOffset = maxOffset;
+    if(currentPlantParams_)
+    {
+        currentPlantParams_->plantCount = plantCount;
+        currentPlantParams_->minOffset = minOffset;
+        currentPlantParams_->maxOffset = maxOffset;
+    }
 }
 
 inline void GeneralParams(u8 maxLevels, r32 rootStrength, Vec4 branchColorAlive, Vec4 branchColorDead)
 {
-    Assert(Normalized( rootStrength));
-    Assert(maxLevels <= MAX_LEVELS);
-    
-    u8 maxZeroLevelSegmentNumber = currentSlot_->plantBaseParams.maxZeroLevelSegmentNumber;
-    r32 maxRootSegmentLength = currentSlot_->plantBaseParams.maxRootSegmentLength;
-    r32 maxRootSegmentRadious = currentSlot_->plantBaseParams.maxRootSegmentRadious;
-    
-    currentPlantParams_->maxSegmentNumber[0] = maxZeroLevelSegmentNumber;
-    currentPlantParams_->maxRadious[0] = maxRootSegmentRadious;
-    currentPlantParams_->segmentLengths[0] = maxRootSegmentLength;
-    
-    currentPlantParams_->maxLevels = maxLevels;
-    currentPlantParams_->plantStrength[0] = rootStrength;
-    
-    currentPlantParams_->oneOverMaxRadious = 1.0f / maxRootSegmentLength;
-    
-    currentPlantParams_->branchColorAlive = branchColorAlive;
-    currentPlantParams_->branchColorDead = branchColorDead;
+    if(currentPlantParams_)
+    {
+        Assert(Normalized( rootStrength));
+        Assert(maxLevels <= MAX_LEVELS);
+        
+        u8 maxZeroLevelSegmentNumber = currentSlot_->plantBaseParams.maxZeroLevelSegmentNumber;
+        r32 maxRootSegmentLength = currentSlot_->plantBaseParams.maxRootSegmentLength;
+        r32 maxRootSegmentRadious = currentSlot_->plantBaseParams.maxRootSegmentRadious;
+        
+        currentPlantParams_->maxSegmentNumber[0] = maxZeroLevelSegmentNumber;
+        currentPlantParams_->maxRadious[0] = maxRootSegmentRadious;
+        currentPlantParams_->segmentLengths[0] = maxRootSegmentLength;
+        
+        currentPlantParams_->maxLevels = maxLevels;
+        currentPlantParams_->plantStrength[0] = rootStrength;
+        
+        currentPlantParams_->oneOverMaxRadious = 1.0f / maxRootSegmentLength;
+        
+        currentPlantParams_->branchColorAlive = branchColorAlive;
+        currentPlantParams_->branchColorDead = branchColorDead;
+    }
 }
 
 inline void DeltaCoeffBetweenLevels( r32 maxRadiousCoeff, r32 maxLengthCoeff, r32 maxSegmentCoeff, r32 leafSizeCoeff, r32 strengthCoeff )
 {
-    Assert( currentPlantParams_->maxLevels && currentPlantParams_->maxLevels <= MAX_LEVELS );
-    
-    u8* maxSegm = currentPlantParams_->maxSegmentNumber;
-    r32* maxR = currentPlantParams_->maxRadious;
-    r32* maxL = currentPlantParams_->segmentLengths;
-    r32* maxLS = currentPlantParams_->leafSize;
-    r32* maxS = currentPlantParams_->plantStrength;
-    
-    Assert( maxSegm[0] );
-    Assert( maxR[0] != 0.0f );
-    Assert( maxL[0] != 0.0f );
-    Assert( maxLS[0] != 0.0f );
-    Assert( maxS[0] != 0.0f );
-    
-    for( u8 levelIndex = 1; levelIndex < currentPlantParams_->maxLevels; ++levelIndex )
+    if(currentPlantParams_)
     {
-        maxSegm[levelIndex] = ( u8 ) ( ( r32 ) maxSegm[levelIndex - 1] * maxSegmentCoeff );
-        maxR[levelIndex] = maxR[levelIndex - 1] * maxRadiousCoeff;
-        maxL[levelIndex] = maxL[levelIndex - 1] * maxLengthCoeff;
-        maxLS[levelIndex] = maxLS[levelIndex - 1] * leafSizeCoeff;
-        maxS[levelIndex] = maxS[levelIndex - 1] * strengthCoeff;
+        Assert( currentPlantParams_->maxLevels && currentPlantParams_->maxLevels <= MAX_LEVELS );
+        
+        u8* maxSegm = currentPlantParams_->maxSegmentNumber;
+        r32* maxR = currentPlantParams_->maxRadious;
+        r32* maxL = currentPlantParams_->segmentLengths;
+        r32* maxLS = currentPlantParams_->leafSize;
+        r32* maxS = currentPlantParams_->plantStrength;
+        
+        Assert( maxSegm[0] );
+        Assert( maxR[0] != 0.0f );
+        Assert( maxL[0] != 0.0f );
+        Assert( maxLS[0] != 0.0f );
+        Assert( maxS[0] != 0.0f );
+        
+        for( u8 levelIndex = 1; levelIndex < currentPlantParams_->maxLevels; ++levelIndex )
+        {
+            maxSegm[levelIndex] = ( u8 ) ( ( r32 ) maxSegm[levelIndex - 1] * maxSegmentCoeff );
+            maxR[levelIndex] = maxR[levelIndex - 1] * maxRadiousCoeff;
+            maxL[levelIndex] = maxL[levelIndex - 1] * maxLengthCoeff;
+            maxLS[levelIndex] = maxLS[levelIndex - 1] * leafSizeCoeff;
+            maxS[levelIndex] = maxS[levelIndex - 1] * strengthCoeff;
+        }
     }
 }
 
 inline void DeltaCoeffBetweenLevelSegment( r32 radiousCoeff, r32 lengthCoeff, r32 branchLengthCoeff, r32 strengthCoeff )
 {
-    for( u32 levelIndex = 0; levelIndex < ArrayCount( currentPlantParams_->segmentBySegmentRadiousCoeff ); ++levelIndex )
+    if(currentPlantParams_)
     {
-        currentPlantParams_->segmentBySegmentRadiousCoeff[levelIndex] = radiousCoeff;
-    }
-    
-    for( u32 levelIndex = 0; levelIndex < ArrayCount( currentPlantParams_->segmentBySegmentLengthCoeff ); ++levelIndex )
-    {
-        currentPlantParams_->segmentBySegmentLengthCoeff[levelIndex] = lengthCoeff;
-    }
-    
-    for( u32 levelIndex = 0; levelIndex < ArrayCount( currentPlantParams_->segmentBySegmentBranchLengthCoeff ); ++levelIndex )
-    {
-        currentPlantParams_->segmentBySegmentBranchLengthCoeff[levelIndex] = branchLengthCoeff;
-    }
-    
-    for( u32 levelIndex = 0; levelIndex < ArrayCount( currentPlantParams_->segmentBySegmentStrengthCoeff ); ++levelIndex )
-    {
-        currentPlantParams_->segmentBySegmentStrengthCoeff[levelIndex] = strengthCoeff;
+        for( u32 levelIndex = 0; levelIndex < ArrayCount( currentPlantParams_->segmentBySegmentRadiousCoeff ); ++levelIndex )
+        {
+            currentPlantParams_->segmentBySegmentRadiousCoeff[levelIndex] = radiousCoeff;
+        }
+        
+        for( u32 levelIndex = 0; levelIndex < ArrayCount( currentPlantParams_->segmentBySegmentLengthCoeff ); ++levelIndex )
+        {
+            currentPlantParams_->segmentBySegmentLengthCoeff[levelIndex] = lengthCoeff;
+        }
+        
+        for( u32 levelIndex = 0; levelIndex < ArrayCount( currentPlantParams_->segmentBySegmentBranchLengthCoeff ); ++levelIndex )
+        {
+            currentPlantParams_->segmentBySegmentBranchLengthCoeff[levelIndex] = branchLengthCoeff;
+        }
+        
+        for( u32 levelIndex = 0; levelIndex < ArrayCount( currentPlantParams_->segmentBySegmentStrengthCoeff ); ++levelIndex )
+        {
+            currentPlantParams_->segmentBySegmentStrengthCoeff[levelIndex] = strengthCoeff;
+        }
     }
 }
 
@@ -1539,46 +1662,78 @@ inline void AddTag(TagId ID, r32 value)
 
 #ifdef FORG_SERVER
 
-AIBehavior* currentBehavior_;
-AIAction* currentAction_;
-Consideration* currentConsideration_;
+global_variable AIBehavior* currentBehavior_;
+global_variable AIAction* currentAction_;
+global_variable Consideration* currentConsideration_;
 
 
 inline void BeginBehavior(char* name)
 {
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    FREELIST_FREE(slot->behaviorContent, AIBehavior, taxTable_->firstFreeAIBehavior);
-    Assert(IsBehavior(taxTable_, slot->taxonomy));
-    TAXTABLE_ALLOC(slot->behaviorContent, AIBehavior);
-    currentBehavior_ = slot->behaviorContent;
+    
+    if(slot)
+    {
+        FREELIST_FREE(slot->behaviorContent, AIBehavior, taxTable_->firstFreeAIBehavior);
+        Assert(IsBehavior(taxTable_, slot->taxonomy));
+        TAXTABLE_ALLOC(slot->behaviorContent, AIBehavior);
+        currentBehavior_ = slot->behaviorContent;
+    }
+    else
+    {
+        currentBehavior_ = 0;
+        EditorErrorLog(name);
+    }
 }
 
 inline void AddAction(EntityAction todo, char* targetCriteria = 0, r32 importance = 1.0f)
 {
-    
-    Assert(currentBehavior_->actionCount < ArrayCount(currentBehavior_->actions));
-    AIAction* action = currentBehavior_->actions + currentBehavior_->actionCount++;
-    action->type = AIAction_Command;
-    action->command.action = todo;
-    
-    if(targetCriteria)
+    if(currentBehavior_)
     {
-        TaxonomySlot* targetSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, targetCriteria);
-        action->associatedConcept = targetSlot->taxonomy;
+        Assert(currentBehavior_->actionCount < ArrayCount(currentBehavior_->actions));
+        AIAction* action = currentBehavior_->actions + currentBehavior_->actionCount++;
+        action->type = AIAction_Command;
+        action->command.action = todo;
+        
+        if(targetCriteria)
+        {
+            TaxonomySlot* targetSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, targetCriteria);
+            
+            if(targetSlot)
+            {
+                action->associatedConcept = targetSlot->taxonomy;
+            }
+            else
+            {
+                EditorErrorLog(targetCriteria);
+            }
+        }
+        action->importance = importance;
+        currentAction_ = action;
     }
-    action->importance = importance;
-    currentAction_ = action;
 }
 
 inline void AddAction(char* behaviorName, r32 importance = 1.0f)
 {
-    Assert(currentBehavior_->actionCount < ArrayCount(currentBehavior_->actions));
-    AIAction* action = currentBehavior_->actions + currentBehavior_->actionCount++;
-    action->type = AIAction_Behavior;
-    action->behaviorTaxonomy = NORUNTIMEGetTaxonomySlotByName(taxTable_, behaviorName)->taxonomy;
+    TaxonomySlot* behaviorSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, behaviorName);
     
-    action->importance = importance;
-    currentAction_ = action;
+    if(behaviorSlot)
+    {
+        if(currentBehavior_)
+        {
+            Assert(currentBehavior_->actionCount < ArrayCount(currentBehavior_->actions));
+            AIAction* action = currentBehavior_->actions + currentBehavior_->actionCount++;
+            action->type = AIAction_Behavior;
+            action->behaviorTaxonomy = behaviorSlot->taxonomy;
+            
+            action->importance = importance;
+            currentAction_ = action;
+        }
+    }
+    else
+    {
+        currentAction_ = 0;
+        EditorErrorLog(behaviorName);
+    }
 }
 
 inline void AssociateBehavior(char* referenceName, char* specificName, b32 isStartingBlock = false)
@@ -1587,24 +1742,46 @@ inline void AssociateBehavior(char* referenceName, char* specificName, b32 isSta
     TAXTABLE_ALLOC(behavior, TaxonomyBehavior);
     TaxonomySlot* referenceSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, referenceName);
     TaxonomySlot* blockSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, specificName);
-    behavior->referenceTaxonomy = referenceSlot->taxonomy;
-    behavior->specificTaxonomy = blockSlot->taxonomy;
     
-    FREELIST_INSERT(behavior, currentSlot_->firstPossibleBehavior);
-    
-    if(isStartingBlock)
+    if(referenceSlot)
     {
-        currentSlot_->startingBehavior = behavior;
+        if(blockSlot)
+        {
+            behavior->referenceTaxonomy = referenceSlot->taxonomy;
+            behavior->specificTaxonomy = blockSlot->taxonomy;
+            
+            FREELIST_INSERT(behavior, currentSlot_->firstPossibleBehavior);
+            
+            if(isStartingBlock)
+            {
+                currentSlot_->startingBehavior = behavior;
+            }
+        }
+        else
+        {
+            EditorErrorLog(specificName);
+        }
+    }
+    else
+    {
+        EditorErrorLog(referenceName);
     }
 }
 
 inline void DefineConsideration(char* considerationName, char* expression)
 {
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, considerationName);
-    Assert(!slot->consideration);
-    TAXTABLE_ALLOC(slot->consideration, TaxonomyConsideration);
-    
-    StrCpy(expression, StrLen(expression), slot->consideration->expression, ArrayCount(slot->consideration->expression));
+    if(slot)
+    {
+        Assert(!slot->consideration);
+        TAXTABLE_ALLOC(slot->consideration, TaxonomyConsideration);
+        
+        StrCpy(expression, StrLen(expression), slot->consideration->expression, ArrayCount(slot->consideration->expression));
+    }
+    else
+    {
+        EditorErrorLog(considerationName);
+    }
 }
 
 inline ResponseCurve Gaussian()
@@ -1615,17 +1792,28 @@ inline ResponseCurve Gaussian()
 
 inline void AddConsideration(char* name, r32 bookEndMin, r32 bookEndMax, ResponseCurve curve)
 {
-    Assert(currentAction_->considerationCount < ArrayCount(currentAction_->considerations));
-    Consideration* dest = currentAction_->considerations + currentAction_->considerationCount++;
-    dest->expression = NORUNTIMEGetTaxonomySlotByName(taxTable_, name)->consideration->expression;
-    
-    dest->bookEndMin = bookEndMin;
-    dest->bookEndMax = bookEndMax;
-    
-    dest->curve = curve;
-    dest->params.paramCount = 0;
-    
-    currentConsideration_ = dest;
+    TaxonomySlot* considerationSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
+    if(considerationSlot)
+    {
+        if(currentAction_)
+        {
+            Assert(currentAction_->considerationCount < ArrayCount(currentAction_->considerations));
+            Consideration* dest = currentAction_->considerations + currentAction_->considerationCount++;
+            dest->expression = NORUNTIMEGetTaxonomySlotByName(taxTable_, name)->consideration->expression;
+            
+            dest->bookEndMin = bookEndMin;
+            dest->bookEndMax = bookEndMax;
+            
+            dest->curve = curve;
+            dest->params.paramCount = 0;
+            currentConsideration_ = dest;
+        }
+    }
+    else
+    {
+        currentConsideration_ = 0;
+        EditorErrorLog(name);
+    }
 }
 
 
@@ -1637,8 +1825,11 @@ inline void AddBooleanConsideration(char* name)
 #define AddParam(value) AddParam_(ExpressionVal(value))
 inline void AddParam_(ExpressionValue value)
 {
-    ConsiderationParams* params = &currentConsideration_->params;
-    AddParam_(params, value);
+    if(currentConsideration_)
+    {
+        ConsiderationParams* params = &currentConsideration_->params;
+        AddParam_(params, value);
+    }
 }
 
 
@@ -1726,43 +1917,68 @@ internal void ReadBehaviors()
 }
 
 
-MemCriteria* currentMemCriteria_;
-TaxonomyTree* currentSynthTree_;
-TaxonomyNode* currentSynthNode_;
-MemSynthOption* currentSynthOption_;
+global_variable MemCriteria* currentMemCriteria_;
+global_variable TaxonomyTree* currentSynthTree_;
+global_variable TaxonomyNode* currentSynthNode_;
+global_variable MemSynthOption* currentSynthOption_;
 
 inline void BeginMemoryBehavior(char* behaviorName)
 {
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, behaviorName);
-    FREELIST_FREE(slot->criteria, MemCriteria, taxTable_->firstFreeMemCriteria);
-	
-    for(MemSynthesisRule* rule = slot->synthRules; rule; rule = rule->next)
+    
+    if(slot)
     {
-        FreeMemSynthRuleTree(taxTable_, rule->tree.root);
+        FREELIST_FREE(slot->criteria, MemCriteria, taxTable_->firstFreeMemCriteria);
+        
+        for(MemSynthesisRule* rule = slot->synthRules; rule; rule = rule->next)
+        {
+            FreeMemSynthRuleTree(taxTable_, rule->tree.root);
+        }
+        FREELIST_FREE(slot->synthRules, MemSynthesisRule, taxTable_->firstFreeMemSynthesisRule);
+        
+        Assert(IsBehavior(taxTable_, slot->taxonomy));
+        currentSlot_ = slot;
     }
-	FREELIST_FREE(slot->synthRules, MemSynthesisRule, taxTable_->firstFreeMemSynthesisRule);
-    
-    
-    Assert(IsBehavior(taxTable_, slot->taxonomy));
-    currentSlot_ = slot;
+    else
+    {
+        EditorErrorLog(behaviorName);
+    }
 }
 
 inline void AddCriteria(char* criteriaName)
 {
     TaxonomySlot* criteriaTax = NORUNTIMEGetTaxonomySlotByName(taxTable_, criteriaName);
-    MemCriteria* newCriteria;
-    TAXTABLE_ALLOC(newCriteria, MemCriteria);
-    newCriteria->taxonomy = criteriaTax->taxonomy;
-    
-    FREELIST_INSERT(newCriteria, currentSlot_->criteria);
-    currentMemCriteria_ = newCriteria;
+    if(criteriaTax)
+    {
+        MemCriteria* newCriteria;
+        TAXTABLE_ALLOC(newCriteria, MemCriteria);
+        newCriteria->taxonomy = criteriaTax->taxonomy;
+        
+        FREELIST_INSERT(newCriteria, currentSlot_->criteria);
+        currentMemCriteria_ = newCriteria;
+    }
+    else
+    {
+        currentMemCriteria_ = 0;
+        EditorErrorLog(criteriaName);
+    }
 }
 
 inline void AddMemConsideration(char* requiredConceptName)
 {
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, requiredConceptName);
-    Assert(currentMemCriteria_->possibleTaxonomiesCount < ArrayCount(currentMemCriteria_->requiredConceptTaxonomy));
-    currentMemCriteria_->requiredConceptTaxonomy[currentMemCriteria_->possibleTaxonomiesCount++] = slot->taxonomy;
+    if(slot)
+    {
+        if(currentMemCriteria_)
+        {
+            Assert(currentMemCriteria_->possibleTaxonomiesCount < ArrayCount(currentMemCriteria_->requiredConceptTaxonomy));
+            currentMemCriteria_->requiredConceptTaxonomy[currentMemCriteria_->possibleTaxonomiesCount++] = slot->taxonomy;
+        }
+    }
+    else
+    {
+        EditorErrorLog(requiredConceptName);
+    }
 }
 
 inline void AddSynthesisRule(EntityAction action)
@@ -1779,20 +1995,39 @@ inline void AddSynthesisRule(EntityAction action)
 inline void AddNode(char* name)
 {
     TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    currentSynthNode_ = AddToTaxonomyTree(currentSynthTree_, target);
+    if(target)
+    {
+        if(currentSynthTree_)
+        {
+            currentSynthNode_ = AddToTaxonomyTree(currentSynthTree_, target);
+        }
+    }
+    else
+    {
+        EditorErrorLog(name);
+    }
 }
 
 inline void AddOption(char* conceptName, u32 lastingtimeUnits, u32 refreshTimeUnits)
 {
-    MemSynthOption* option;
-    TAXTABLE_ALLOC(option, MemSynthOption);
-    option->lastingtimeUnits = SafeTruncateToU16(lastingtimeUnits);
-    option->refreshTimeUnits = SafeTruncateToU16(refreshTimeUnits);
-    option->outputConcept = NORUNTIMEGetTaxonomySlotByName(taxTable_, conceptName)->taxonomy;
+    TaxonomySlot* conceptSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, conceptName);
     
-    FREELIST_INSERT(option, currentSynthNode_->data.firstOption);
-    
-    currentSynthOption_ = option;
+    if(conceptSlot)
+    {
+        MemSynthOption* option;
+        TAXTABLE_ALLOC(option, MemSynthOption);
+        option->lastingtimeUnits = SafeTruncateToU16(lastingtimeUnits);
+        option->refreshTimeUnits = SafeTruncateToU16(refreshTimeUnits);
+        option->outputConcept = conceptSlot->taxonomy;
+        
+        FREELIST_INSERT(option, currentSynthNode_->data.firstOption);
+        currentSynthOption_ = option;
+    }
+    else
+    {
+        currentSynthOption_ = 0;
+        EditorErrorLog(conceptName);
+    }
 }
 
 #if 0
@@ -1809,11 +2044,20 @@ inline void OnCondition(char* requiredAssociationConcept)
 
 inline void AddMemBehavior(char* behaviorName)
 {
-    TaxonomyMemBehavior* newBehavior;
-    TAXTABLE_ALLOC(newBehavior, TaxonomyMemBehavior);
-    newBehavior->taxonomy = NORUNTIMEGetTaxonomySlotByName(taxTable_, behaviorName)->taxonomy;
+    TaxonomySlot* behaviorSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, behaviorName);
     
-    FREELIST_INSERT(newBehavior, currentSlot_->firstMemBehavior);
+    if(behaviorSlot)
+    {
+        TaxonomyMemBehavior* newBehavior;
+        TAXTABLE_ALLOC(newBehavior, TaxonomyMemBehavior);
+        newBehavior->taxonomy = behaviorSlot->taxonomy;
+        
+        FREELIST_INSERT(newBehavior, currentSlot_->firstMemBehavior);
+    }
+    else
+    {
+        EditorErrorLog(behaviorName);
+    }
 }
 
 #define Seconds(value) value
@@ -1876,18 +2120,26 @@ internal void ReadSynthesisRules()
 inline void Requires(char* toolName)
 {
     TaxonomySlot* toolSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, toolName);
-    b32 inserted = false;
-    for(u32 toolIndex = 0; toolIndex < ArrayCount(currentSlot_->neededToolTaxonomies); ++toolIndex)
+    if(toolSlot)
     {
-        if(!currentSlot_->neededToolTaxonomies[toolIndex])
+        b32 inserted = false;
+        for(u32 toolIndex = 0; toolIndex < ArrayCount(currentSlot_->neededToolTaxonomies); ++toolIndex)
         {
-            inserted = true;
-            currentSlot_->neededToolTaxonomies[toolIndex] = toolSlot->taxonomy;
-            break;
+            if(!currentSlot_->neededToolTaxonomies[toolIndex])
+            {
+                inserted = true;
+                currentSlot_->neededToolTaxonomies[toolIndex] = toolSlot->taxonomy;
+                break;
+            }
         }
+        
+        Assert(inserted);
     }
-    
-    Assert(inserted);
+    else
+    {
+        
+        EditorErrorLog(toolName);
+    }
 }
 
 
@@ -3037,14 +3289,6 @@ internal void ImportAllFiles(char* dataPath, MemoryPool* tempPool, u32 editorRol
             GetNameWithoutPoint(taxonomyName, sizeof(taxonomyName), handle.name);
             
             currentSlot_ = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName);
-            
-            if(!currentSlot_)
-            {
-                char nameWithPound[64];
-                FormatString(nameWithPound, sizeof(nameWithPound), "#%s", taxonomyName);
-                currentSlot_ = NORUNTIMEGetTaxonomySlotByName(taxTable_, nameWithPound);
-            }
-            
             if(currentSlot_)
             {
                 LoadFileInTaxonomySlot(source, editorRoles);
@@ -3179,9 +3423,7 @@ internal void WriteToFile(TaxonomyTable* table, TaxonomySlot* slot)
     }
     
     
-    char* slotName = slot->name[0] == '#' ? slot->name + 1 : slot->name;
-    
-    FormatString(writeHere, remainingSize, "%s.fed", slotName);
+    FormatString(writeHere, remainingSize, "%s.fed", slot->name);
     platformAPI.DEBUGWriteFile(path, buffer, writtenTotal);
 }
 
@@ -3226,13 +3468,14 @@ internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player,
             
             if(!singleFileNameToSend || StrEqual(singleFileNameToSend, handle.name))
             {
-                Assert(handle.fileSize <= bufferSize);
-                platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
-                buffer[handle.fileSize] = 0;
-                char* source = (char*) buffer;
-                
-                
-                SendDataFile(player, handle.name, source, handle.fileSize);
+				if(editorMode || handle.name[0] != '#')
+				{
+					Assert(handle.fileSize <= bufferSize);
+					platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
+					buffer[handle.fileSize] = 0;
+					char* source = (char*) buffer;
+					SendDataFile(player, handle.name, source, handle.fileSize);
+				}
             }
             
             platformAPI.CloseHandle(&handle);
@@ -3249,13 +3492,16 @@ internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player,
             
             if(!singleFileNameToSend || StrEqual(singleFileNameToSend, handle.name))
             {
-                Assert(handle.fileSize <= bufferSize);
-                platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
-                buffer[handle.fileSize] = 0;
-                char* source = (char*) buffer;
-                
-                
-                SendDataFile(player, handle.name, source, handle.fileSize);
+				if(editorMode || handle.name[0] != '#')
+				{
+                    Assert(handle.fileSize <= bufferSize);
+                    platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
+                    buffer[handle.fileSize] = 0;
+                    char* source = (char*) buffer;
+                    
+                    
+                    SendDataFile(player, handle.name, source, handle.fileSize);
+				}
             }
             
             platformAPI.CloseHandle(&handle);
@@ -3270,13 +3516,16 @@ internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player,
             
             if(!singleFileNameToSend || StrEqual(singleFileNameToSend, handle.name))
             {
-                Assert(handle.fileSize <= bufferSize);
-                platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
-                buffer[handle.fileSize] = 0;
-                char* source = (char*) buffer;
-                
-                
-                SendDataFile(player, handle.name, source, handle.fileSize);
+				if(editorMode || handle.name[0] != '#')
+				{
+                    Assert(handle.fileSize <= bufferSize);
+                    platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
+                    buffer[handle.fileSize] = 0;
+                    char* source = (char*) buffer;
+                    
+                    
+                    SendDataFile(player, handle.name, source, handle.fileSize);
+				}
             }
             
             platformAPI.CloseHandle(&handle);
