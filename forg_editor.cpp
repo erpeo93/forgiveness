@@ -250,7 +250,7 @@ internal u32 FinalizeTaxonomies(char* giantBuffer, u32 giantBufferLength, b32 wr
 
 internal void WriteDataFiles()
 {
-	//DeleteAllfiles("assets", "*.fed");
+	platformAPI.DeleteFileWildcards("assets", "*.fed");
     
     shortcutStack[stackShortcutCount++] = SaveShortcut(taxTable_, "root", 0, taxPool_);
     char* rootPath = "definition/root";
@@ -3260,12 +3260,13 @@ inline Token GetFileTaxonomyName(char* content)
     return result;
 }
 
-internal void ImportAllFiles(char* dataPath, MemoryPool* tempPool, u32 editorRoles, b32 freeTab)
+internal void ImportAllFiles(char* dataPath, u32 editorRoles, b32 freeTab)
 {
-    TempMemory fileMemory = BeginTemporaryMemory(tempPool);
+    MemoryPool tempPool = {};
+    TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
     
     u32 bufferSize = MegaBytes(64);
-    char* buffer = (char*) PushSize(tempPool, bufferSize, NoClear());
+    char* buffer = (char*) PushSize(&tempPool, bufferSize, NoClear());
     
     for(u32 effectIndex = 0; effectIndex < ArrayCount(MetaTable_EffectIdentifier); ++effectIndex)
     {
@@ -3289,6 +3290,11 @@ internal void ImportAllFiles(char* dataPath, MemoryPool* tempPool, u32 editorRol
             GetNameWithoutPoint(taxonomyName, sizeof(taxonomyName), handle.name);
             
             currentSlot_ = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName);
+            
+			if(!currentSlot_ && taxonomyName[0] == '#')
+			{
+				currentSlot_ = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName + 1);
+			}
             if(currentSlot_)
             {
                 LoadFileInTaxonomySlot(source, editorRoles);
@@ -3451,12 +3457,13 @@ inline void PatchLocalServer(ServerState* server)
 }
 
 
-internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player, MemoryPool* tempPool, b32 sendTaxonomyFiles, char* singleFileNameToSend = 0)
+internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player,b32 sendTaxonomyFiles, b32 sendMetaAssetFiles)
 {
-    TempMemory fileMemory = BeginTemporaryMemory(tempPool);
+    MemoryPool tempPool = {};
+    TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
     
     u32 bufferSize = MegaBytes(64);
-    char* buffer = (char*) PushSize(tempPool, bufferSize, NoClear());
+    char* buffer = (char*) PushSize(&tempPool, bufferSize, NoClear());
     
     
     if(sendTaxonomyFiles)
@@ -3466,16 +3473,13 @@ internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player,
         {
             PlatformFileHandle handle = platformAPI.OpenNextFile(&definitionGroup, path);
             
-            if(!singleFileNameToSend || StrEqual(singleFileNameToSend, handle.name))
+            if(editorMode || handle.name[0] != '#')
             {
-				if(editorMode || handle.name[0] != '#')
-				{
-					Assert(handle.fileSize <= bufferSize);
-					platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
-					buffer[handle.fileSize] = 0;
-					char* source = (char*) buffer;
-					SendDataFile(player, handle.name, source, handle.fileSize);
-				}
+                Assert(handle.fileSize <= bufferSize);
+                platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
+                buffer[handle.fileSize] = 0;
+                char* source = (char*) buffer;
+                SendDataFile(player, handle.name, source, handle.fileSize);
             }
             
             platformAPI.CloseHandle(&handle);
@@ -3483,17 +3487,17 @@ internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player,
         platformAPI.GetAllFilesEnd(&definitionGroup);
     }
     
-    if(editorMode)
+    if(sendMetaAssetFiles)
     {
-        PlatformFileGroup autocompleteGroup = platformAPI.GetAllFilesBegin(PlatformFile_autocomplete, path);
-        for(u32 fileIndex = 0; fileIndex < autocompleteGroup.fileCount; ++fileIndex)
+        if(editorMode)
         {
-            PlatformFileHandle handle = platformAPI.OpenNextFile(&autocompleteGroup, path);
-            
-            if(!singleFileNameToSend || StrEqual(singleFileNameToSend, handle.name))
+            PlatformFileGroup autocompleteGroup = platformAPI.GetAllFilesBegin(PlatformFile_autocomplete, path);
+            for(u32 fileIndex = 0; fileIndex < autocompleteGroup.fileCount; ++fileIndex)
             {
-				if(editorMode || handle.name[0] != '#')
-				{
+                PlatformFileHandle handle = platformAPI.OpenNextFile(&autocompleteGroup, path);
+                
+                if(editorMode || handle.name[0] != '#')
+                {
                     Assert(handle.fileSize <= bufferSize);
                     platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
                     buffer[handle.fileSize] = 0;
@@ -3501,23 +3505,20 @@ internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player,
                     
                     
                     SendDataFile(player, handle.name, source, handle.fileSize);
-				}
+                }
+                
+                platformAPI.CloseHandle(&handle);
             }
+            platformAPI.GetAllFilesEnd(&autocompleteGroup);
             
-            platformAPI.CloseHandle(&handle);
-        }
-        platformAPI.GetAllFilesEnd(&autocompleteGroup);
-        
-        
-        PlatformFileGroup assetGroup = platformAPI.GetAllFilesBegin(PlatformFile_assetDefinition, path);
-        for(u32 fileIndex = 0; fileIndex < assetGroup.fileCount; ++fileIndex)
-        {
-            PlatformFileHandle handle = platformAPI.OpenNextFile(&assetGroup, path);
             
-            if(!singleFileNameToSend || StrEqual(singleFileNameToSend, handle.name))
+            PlatformFileGroup assetGroup = platformAPI.GetAllFilesBegin(PlatformFile_assetDefinition, path);
+            for(u32 fileIndex = 0; fileIndex < assetGroup.fileCount; ++fileIndex)
             {
-				if(editorMode || handle.name[0] != '#')
-				{
+                PlatformFileHandle handle = platformAPI.OpenNextFile(&assetGroup, path);
+                
+                if(editorMode || handle.name[0] != '#')
+                {
                     Assert(handle.fileSize <= bufferSize);
                     platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
                     buffer[handle.fileSize] = 0;
@@ -3525,12 +3526,12 @@ internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player,
                     
                     
                     SendDataFile(player, handle.name, source, handle.fileSize);
-				}
+                }
+                
+                platformAPI.CloseHandle(&handle);
             }
-            
-            platformAPI.CloseHandle(&handle);
+            platformAPI.GetAllFilesEnd(&assetGroup);
         }
-        platformAPI.GetAllFilesEnd(&assetGroup);
     }
     
     SendAllDataFileSentMessage(player, sendTaxonomyFiles);

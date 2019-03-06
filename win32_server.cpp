@@ -313,6 +313,8 @@ int main( int argc, char* argv[] )
     memory.api.CreateFolder = Win32CreateFolder;
     memory.api.CopyAllFiles = Win32CopyAllFiles;
     memory.api.DeleteFolderRecursive = Win32DeleteFolderRecursive;
+    memory.api.DeleteFileWildcards = Win32DeleteFileWildcards;
+    memory.api.MoveFileOrFolder = Win32MoveFileOrFolder;
     
     memory.api.net = Win32NetworkAPI;
     

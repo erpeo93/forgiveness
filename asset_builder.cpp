@@ -2046,7 +2046,12 @@ internal void WriteBitmaps(char* folder, char* name)
     FormatString(completePath, sizeof(completePath), "%s/%s", folder, name);
     
     
-    u64 hashID = StringHash(name);
+	char* hashName = name;
+	if(hashName[0] == '#')
+	{
+		++hashName;
+	}
+    u64 hashID = StringHash(hashName);
     
     
     u32 hashIndex =  hashID & (HASHED_ASSET_SLOTS - 1);

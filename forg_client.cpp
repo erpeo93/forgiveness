@@ -710,11 +710,15 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             char* filePath = "assets";
             if(worldMode->allDataFilesArrived)
             {
+                if(worldMode->loadTaxonomies)
+                {
+                    platformAPI.DeleteFileWildcards(filePath, "*.fed");
+                }
+                
                 WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstDataFileArrived, false);
                 worldMode->firstDataFileArrived = 0;
                 
                 if(worldMode->loadTaxonomies)
-                
                 {
                     TaxonomyTable* old = worldMode->oldTable;
                     
@@ -730,7 +734,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     InitTaxonomyReadWrite(worldMode->table);
                     ReadTaxonomiesFromFile();
                     
-                    ImportAllFiles(filePath, &worldMode->filePool, worldMode->editorRoles, false);
+                    ImportAllFiles(filePath, worldMode->editorRoles, false);
                     ReadPlantChart();
                     
                     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(worldMode->table, "goblins");

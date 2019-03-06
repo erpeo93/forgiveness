@@ -130,6 +130,7 @@ enum Packet_Type
     Type_ReloadEditingSlot,
     Type_AddTaxonomy,
     Type_DeleteTaxonomy,
+    Type_ReviveTaxonomy,
     Type_InstantiateTaxonomy,
     Type_DeleteEntity,
     Type_ImpersonateEntity,

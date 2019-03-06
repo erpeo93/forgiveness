@@ -393,3 +393,27 @@ PLATFORM_COPY_ALL_FILES(Win32CopyAllFiles)
     }
 }
 
+
+PLATFORM_DELETE_FILE_WILDCARDS(Win32DeleteFileWildcards)
+{
+	WIN32_FIND_DATA fd;
+    char completeFileName[MAX_PATH];
+    FormatString(completeFileName, sizeof(completeFileName), "%s\\%s", path, fileName);
+    
+	HANDLE hFind = FindFirstFile(completeFileName, &fd);
+	if (hFind != INVALID_HANDLE_VALUE)
+	{
+		do
+		{
+			FormatString(completeFileName, sizeof(completeFileName), "%s\\%s", path, fd.cFileName);
+			DeleteFile(completeFileName);
+		} while (FindNextFile(hFind, &fd));
+		FindClose(hFind);
+	}
+}
+
+PLATFORM_MOVE_FILE_OR_FOLDER(Win32MoveFileOrFolder)
+{
+	BOOL result = MoveFile(oldPath, newPath);
+}
+

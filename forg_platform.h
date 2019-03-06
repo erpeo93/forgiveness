@@ -589,6 +589,11 @@ typedef PLATFORM_COPY_ALL_FILES(platform_copy_all_files);
 #define PLATFORM_DELETE_FOLDER_RECURSIVE(name) void name(char* path)
 typedef PLATFORM_DELETE_FOLDER_RECURSIVE(platform_delete_folder_recursive);
 
+#define PLATFORM_DELETE_FILE_WILDCARDS(name) void name(char* path, char* fileName)
+typedef PLATFORM_DELETE_FILE_WILDCARDS(platform_delete_file_wildcards);
+
+#define PLATFORM_MOVE_FILE_OR_FOLDER(name) void name(char* oldPath, char* newPath)
+typedef PLATFORM_MOVE_FILE_OR_FOLDER(platform_move_file_or_folder);
 
 
 inline b32 PlatformNoFileErrors( PlatformFileHandle* handle )
@@ -667,6 +672,8 @@ struct PlatformAPI
     platform_create_folder* CreateFolder;
     platform_copy_all_files* CopyAllFiles;
     platform_delete_folder_recursive* DeleteFolderRecursive;
+    platform_delete_file_wildcards* DeleteFileWildcards;
+    platform_move_file_or_folder* MoveFileOrFolder;
     
     NetworkAPI net;
     

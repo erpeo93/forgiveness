@@ -519,7 +519,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                     
                     Unpack("HLl", &login.port, &login.challenge, &login.editingEnabled);
                     worldMode->editingEnabled = login.editingEnabled;
-                    worldMode->editorRoles = (u32) EditorRole_SoundDesigner;
+                    worldMode->editorRoles = (u32) EditorRole_Everyone;
                     
                     
                     u32 salt = 11111;

@@ -1349,6 +1349,10 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             gameMemory.api.DEBUGExistsProcessWithName = Win32ExistsProcessWithName;
             gameMemory.api.DEBUGKillProcessByName = Win32KillProcessByName;
             
+            
+            gameMemory.api.DeleteFileWildcards = Win32DeleteFileWildcards;
+            gameMemory.api.MoveFileOrFolder = Win32MoveFileOrFolder;
+            
             u32 textureOpCount = 1024;
             PlatformTextureOpQueue* textureQueue = &gameMemory.textureQueue;
             textureQueue->firstFree = ( TextureOp* ) VirtualAlloc( 0, textureOpCount * sizeof( TextureOp ), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );

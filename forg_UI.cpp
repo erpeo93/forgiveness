@@ -223,7 +223,8 @@ inline void UIAddTaxonomyToAutocomplete(UIState* UI, UIAutocomplete* autocomplet
 {
     UIAddOption(UI, autocomplete, slot->name);
     
-    for(u32 childIndex = 0; childIndex < slot->subTaxonomiesCount; ++childIndex)
+	u32 validTaxonomies = slot->subTaxonomiesCount - slot->invalidTaxonomiesCount;
+    for(u32 childIndex = 0; childIndex < validTaxonomies; ++childIndex)
     {
         TaxonomySlot* child = GetNthChildSlot(UI->table, slot, childIndex);
         UIAddTaxonomyToAutocomplete(UI, autocomplete, child);
@@ -844,8 +845,18 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             if(UI->worldMode->editorRoles & EditorRole_GameDesigner)
                             {
                                 UIButton deleteButton = UIBtn(UI, startingPos, layout, V4(1, 0, 0, 1), "canc");
-                                UIButtonInteraction(&deleteButton, SendRequestInteraction(UI_Trigger, DeleteTaxonomyRequest(root->taxonomy)));
-                                result = Union(result, UIDrawButton(UI, input, &deleteButton));
+                                
+                                UIInteraction cancInteraction = NullInteraction();
+                                r32 cancAlpha = 0.2f;
+                                
+                                
+                                if(root->name[0] != '#')
+                                {
+                                    cancAlpha = 1.0f;
+                                    cancInteraction = SendRequestInteraction(UI_Trigger, DeleteTaxonomyRequest(root->taxonomy));
+                                }
+                                UIButtonInteraction(&deleteButton, cancInteraction);
+                                result = Union(result, UIDrawButton(UI, input, &deleteButton, cancAlpha));
                                 
                                 instantiateP = UIFollowingP(&deleteButton, buttonSeparator);
                             }
@@ -1132,7 +1143,11 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             case EditorElement_EmptyTaxonomy:
             {
                 ShortcutSlot* shortcut = GetShortcut(UI->table, UI->keyboardBuffer);
-                UI->bufferValid = (shortcut == 0);
+				char withPound[64];
+				FormatString(withPound, sizeof(withPound), "#%s", UI->keyboardBuffer);
+				ShortcutSlot* shortcutPound = GetShortcut(UI->table, withPound);
+                
+                UI->bufferValid = (shortcut == 0 && shortcutPound == 0);
             } break;
             
             case EditorElement_String:

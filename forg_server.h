@@ -218,7 +218,6 @@ struct ServerState
     EntityComponentArray components[Component_Count];
     
     MemoryPool worldPool;
-    MemoryPool tempPool;
     MemoryPool networkPool;
     NetworkInterface clientInterface;
     
