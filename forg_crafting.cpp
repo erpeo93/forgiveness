@@ -8,16 +8,18 @@ struct RecipeIngredients
 internal void GetRecipeIngredients(RecipeIngredients* output, TaxonomyTable* table, u32 taxonomy, u64 recipeIndex)
 {
     TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
-    Assert(slot->firstComponent);
+    Assert(slot->firstLayout);
+    ObjectLayout* layout = slot->firstLayout;
+    
     output->count = 0;
     
     RandomSequence seq = Seed((u32)recipeIndex);
-    for(TaxonomyComponent* component = slot->firstComponent; component; component = component->next)
+    for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
     {
-        for(u32 ingredientIndex = 0; ingredientIndex < component->ingredientCount; ++ingredientIndex)
+        for(u32 ingredientIndex = 0; ingredientIndex < piece->ingredientCount; ++ingredientIndex)
         {
-            u8 sourceQuantity = component->ingredientQuantities[ingredientIndex]; 
-            u32 ingredientTaxonomy = GetRandomChild(table, &seq, component->ingredientTaxonomies[ingredientIndex]);
+            u8 sourceQuantity = piece->ingredientQuantities[ingredientIndex]; 
+            u32 ingredientTaxonomy = GetRandomChild(table, &seq, piece->ingredientTaxonomies[ingredientIndex]);
             u8 quantity = ( sourceQuantity == 0) ? 1 : sourceQuantity;
             
             b32 alreadyPresent = false;

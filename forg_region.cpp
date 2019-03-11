@@ -1414,7 +1414,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             
             TaxonomySlot* slot = GetSlotForTaxonomy(server->activeTable, request.taxonomy);
             
-            if(slot->firstComponent)
+            if(slot->firstLayout)
             {
                 params = Crafting(GetNextUInt32(&server->instantiateSequence));
             }

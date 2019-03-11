@@ -404,6 +404,7 @@ inline b32 Check(UIMemoryPair* pair, UIInteractionData* data)
 enum UndoRedoCommandType
 {
     UndoRedo_StringCopy,
+    UndoRedo_DelayedStringCopy,
     UndoRedo_AddElement,
     UndoRedo_DeleteElement,
     UndoRedo_Paste,
@@ -424,6 +425,12 @@ struct UndoRedoCommand
             char newString[32];
             char* ptr;
             u32 maxPtrSize;
+        };
+        
+        struct
+        {
+            char oldString[32];
+            UIMemoryReference newDelayedString;
         };
         
         struct
@@ -472,6 +479,20 @@ inline UndoRedoCommand UndoRedoString(EditorWidget* widget, char* ptr, u32 ptrSi
     result.maxPtrSize = ptrSize;
     FormatString(result.oldString, sizeof(result.oldString), "%s", oldString);
     FormatString(result.newString, sizeof(result.newString), "%s", newString);
+    
+    return result;
+}
+
+
+inline UndoRedoCommand UndoRedoDelayedString(EditorWidget* widget, char* ptr, u32 ptrSize, char* oldString, UIMemoryReference newString)
+{
+    UndoRedoCommand result = {};
+    result.widget = widget;
+    result.type = UndoRedo_DelayedStringCopy;
+    result.ptr = ptr;
+    result.maxPtrSize = ptrSize;
+    FormatString(result.oldString, sizeof(result.oldString), "%s", oldString);
+    result.newDelayedString = newString;
     
     return result;
 }
@@ -529,7 +550,7 @@ enum UIInteractionActionType
     UIInteractionAction_ObjectToEntity,
     UIInteractionAction_Clear,
     UIInteractionAction_SendRequestDirectly,
-    UIInteractionAction_OffsetV2,
+    UIInteractionAction_OffsetRealEditor,
     UIInteractionAction_AddEmptyEditorElement,
     UIInteractionAction_PlaySound,
     UIInteractionAction_ReloadElement,
@@ -598,7 +619,7 @@ struct UIInteraction
     UIInteractionButtonGroup* excludeFromReset;
     
     u32 actionCount;
-    UIInteractionAction actions[8];
+    UIInteractionAction actions[12];
     
     u32 checkCount;
     UIInteractionCheck checks[4];
@@ -775,6 +796,7 @@ struct UIState
     EditorElement* editorTaxonomyTree;
     
     b32 bufferValid;
+    char realDragging[32];
     char keyboardBuffer[32];
     char showBuffer[64];
     EditorElement* active;

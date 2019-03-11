@@ -6,30 +6,6 @@
 #define ashDead V4(0.0f, 0.0f, 0.0f, 1.0f)
 #define ashAlive V4(1, 0, 0, 1)
 
-
-struct LayoutPiece
-{
-    Vec2 offset;
-    r32 angle;
-    Vec2 scale;
-    r32 alpha;
-    Vec2 pivot;
-    u64 componentHashID;
-    u32 flags;
-};
-
-struct ObjectLayout
-{
-    u32 pieceCount;
-    LayoutPiece pieces[32];
-    
-    union
-    {
-        ObjectLayout* next;
-        ObjectLayout* nextFree;
-    };
-};
-
 struct BlendResult
 {
     u32 boneCount;

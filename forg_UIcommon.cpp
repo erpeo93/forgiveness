@@ -823,7 +823,6 @@ inline void UIAddStandardAction_(UIInteraction* interaction, u32 flags, u32 size
 inline void UIAddRequestAction(UIInteraction* interaction, u32 flags, UIRequest request)
 {
     UIInteractionAction* dest = UIGetFreeAction(interaction);
-    Assert(interaction->data.request.requestCode == UIRequest_None);
     interaction->data.request = request;
     dest->type = UIInteractionAction_SendRequest;
     dest->flags = flags;
@@ -850,10 +849,11 @@ inline void UIAddClearAction(UIInteraction* interaction, u32 flags, UIMemoryRefe
     pair->size = size;
 }
 
-inline void UIAddOffsetV2Action(UIInteraction* interaction, u32 flags, UIMemoryReference value, UIMemoryReference offset, r32 speed)
+
+inline void UIAddOffsetStringEditorElement(UIInteraction* interaction, u32 flags, UIMemoryReference value, UIMemoryReference offset, r32 speed)
 {
     UIInteractionAction* dest = UIGetFreeAction(interaction);
-    dest->type = UIInteractionAction_OffsetV2;
+    dest->type = UIInteractionAction_OffsetRealEditor;
     dest->flags = flags;
     dest->value = value;
     dest->offset = offset;
@@ -1239,13 +1239,16 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         UIHandleRequest(UI, request);
                     }break;
                     
-                    case UIInteractionAction_OffsetV2:
+                    case UIInteractionAction_OffsetRealEditor:
                     {
                         r32 speed = action->speed;
-                        Vec2* value = (Vec2*) GetValue(action->value, &interaction->data);
-                        Vec2* offset = (Vec2*) GetValue(action->offset, &interaction->data);
+                        char* value = (char*) GetValue(action->value, &interaction->data);
+                        r32* offset = (r32*) GetValue(action->offset, &interaction->data);
                         
-                        *value = *value + speed * *offset;
+                        r32 current = ToR32(value);
+                        r32 newValue = current + speed * *offset;
+                        
+                        FormatString(value, 32, "%f", newValue);
                     }break;
                     
                     case UIInteractionAction_AddEmptyEditorElement:
@@ -1394,6 +1397,15 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                     
                     case UIInteractionAction_UndoRedoCommand:
                     {
+                        if(action->undoRedo.type == UndoRedo_DelayedStringCopy)
+                        {
+                            action->undoRedo.type = UndoRedo_StringCopy;
+                            char* newString = (char*) GetValue(action->undoRedo.newDelayedString, &interaction->data);
+                            
+                            FormatString(action->undoRedo.newString, sizeof(action->undoRedo.newString), "%s", newString);
+                        }
+                        
+                        
                         UIAddUndoRedoCommand(UI, action->undoRedo);
                     } break;
                     

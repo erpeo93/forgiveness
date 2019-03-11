@@ -367,10 +367,24 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                     if(canEdit)
                     {
                         result.color = V4(1, 0, 1, 1);
-                        mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
-                        UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, parents.father);
-                        UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeGrandParent, parents.grandParents[0]);
-                        UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->currentAutocompleteSelectedIndex, -1);   UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+                        mouseInteraction = UISetValueInteraction(UI_Click, &UI->active, root);
+                        UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->activeParent, parents.father);
+                        UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->activeGrandParent, parents.grandParents[0]);
+                        UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->currentAutocompleteSelectedIndex, -1);   UIAddClearAction(&mouseInteraction, UI_Click, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+                        
+                        
+                        if(root->type == EditorElement_Real)
+                        {
+                            UIAddStandardAction_(&mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(UI->realDragging), ColdPointer(root->value));
+                            UIAddOffsetStringEditorElement(&mouseInteraction, UI_Idle, ColdPointer(root->value), ColdPointer(&UI->deltaScreenMouseP.y), 0.01f);
+                            UIAddUndoRedoAction(&mouseInteraction, UI_Release, UndoRedoDelayedString(widget, root->value, sizeof(root->value), root->value, ColdPointer(root->value)));
+                            UIAddReloadElementAction(&mouseInteraction, UI_Release, widget->root);
+                            if(StrEqual(widget->name, "Editing Tabs"))
+                            {
+                                UIAddRequestAction(&mouseInteraction, UI_Release, SendDataFileRequest());
+                            }
+                            
+                        }
                     }
                 }
                 

@@ -124,9 +124,18 @@ struct ConsumeMapping
     };
 };
 
+
 #define MAX_COMPONENT_PER_MODULE 8
-struct TaxonomyComponent
+struct LayoutPiece
 {
+    Vec2 offset;
+    r32 angle;
+    Vec2 scale;
+    r32 alpha;
+    Vec2 pivot;
+    u64 componentHashID;
+    u32 flags;
+    
     u64 stringHashID;
     u32 ingredientCount;
     u32 ingredientTaxonomies[MAX_COMPONENT_PER_MODULE];
@@ -134,8 +143,19 @@ struct TaxonomyComponent
     
     union
     {
-        TaxonomyComponent* next;
-        TaxonomyComponent* nextFree;
+        LayoutPiece* next;
+        LayoutPiece* nextFree;
+    };
+};
+
+struct ObjectLayout
+{
+    LayoutPiece* firstPiece;
+    
+    union
+    {
+        ObjectLayout* next;
+        ObjectLayout* nextFree;
     };
 };
 
@@ -254,7 +274,7 @@ struct TaxonomySlot
     EquipmentMapping* firstEquipmentMapping;
     ConsumeMapping* firstConsumeMapping;
     PlayerPossibleAction* firstPossibleAction;
-    TaxonomyComponent* firstComponent;
+    ObjectLayout* firstLayout;
     TaxonomyEssence* essences;
     CraftingEffectLink* links;
     TaxonomyEffect* firstEffect;
@@ -276,7 +296,6 @@ struct TaxonomySlot
     VisualTag* firstVisualTag;
     AnimationEffect* firstAnimationEffect;
     TaxonomySound* firstSound;
-    ObjectLayout* firstLayout;
     
     r32 lightIntensity;
     Vec3 lightColor;
@@ -404,7 +423,8 @@ struct TaxonomyTable
     TaxonomyNode* firstFreeTaxonomyNode;
     MemSynthOption* firstFreeMemSynthOption;
     PlayerPossibleAction* firstFreePlayerPossibleAction;
-    TaxonomyComponent* firstFreeTaxonomyComponent;
+    LayoutPiece* firstFreeLayoutPiece;
+    ObjectLayout* firstFreeObjectLayout;
     TaxonomyEssence* firstFreeTaxonomyEssence;
     CraftingEffectLink* firstFreeCraftingEffectLink;
     TaxonomyEffect* firstFreeTaxonomyEffect;
@@ -417,7 +437,6 @@ struct TaxonomyTable
     TaxonomySound* firstFreeTaxonomySound;
     LabeledSound* firstFreeLabeledSound;
     SoundContainer* firstFreeSoundContainer;
-    ObjectLayout* firstFreeObjectLayout;
 #endif
     
     

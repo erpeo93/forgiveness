@@ -402,21 +402,24 @@ internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* tab
     dest->componentCount = 0;
     TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
     
+    Assert(slot->firstLayout);
+    ObjectLayout* layout = slot->firstLayout;
+    
     RandomSequence seq = Seed((u32)recipeIndex);
-    for(TaxonomyComponent* component = slot->firstComponent; component; component = component->next)
+    for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
     {
         Assert(dest->componentCount < ArrayCount(dest->components));
         VisualComponent* visualComponent = dest->components + dest->componentCount++;
         
-        visualComponent->stringHashID = component->stringHashID;
+        visualComponent->stringHashID = piece->stringHashID;
         visualComponent->tagCount = 0;
         
         
-        Assert(component->ingredientCount > 0);
+        Assert(piece->ingredientCount > 0);
         
-        for(u32 ingredientIndex = 0; ingredientIndex < component->ingredientCount; ++ingredientIndex)
+        for(u32 ingredientIndex = 0; ingredientIndex < piece->ingredientCount; ++ingredientIndex)
         {
-            u32 ingredientTaxonomy = component->ingredientTaxonomies[ingredientIndex];
+            u32 ingredientTaxonomy = piece->ingredientTaxonomies[ingredientIndex];
             u32 choosenTaxonomy = GetRandomChild(table, &seq, ingredientTaxonomy);
             TaxonomySlot* ingredientSlot = GetSlotForTaxonomy(table, choosenTaxonomy);
             
@@ -581,13 +584,10 @@ inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, Ob
     bone->parentID = -1;
     
     
-    Assert(layout->pieceCount <= ArrayCount(output->ass));
-    output->assCount = layout->pieceCount;
-    
-    for(u32 pieceIndex = 0; pieceIndex < layout->pieceCount; ++pieceIndex)
+    for(LayoutPiece* source = layout->firstPiece; source; source = source->next)
     {
-        LayoutPiece* source = layout->pieces + pieceIndex;
-        
+        Assert(output->assCount <= ArrayCount(output->ass));
+        u32 pieceIndex = output->assCount++;
         PieceAss* destAss = output->ass + pieceIndex;
         SpriteInfo* destSprite = output->sprites + pieceIndex;
         

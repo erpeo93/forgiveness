@@ -51,14 +51,12 @@ inline void GetNameWithoutPoint(char* dest, u32 destLength, char* source)
 global_variable TaxonomyTable* taxTable_;
 global_variable MemoryPool* taxPool_;
 global_variable TaxonomySlot* currentSlot_;
-global_variable TaxonomyComponent* currentActiveComponent_;
 
 inline void InitTaxonomyReadWrite(TaxonomyTable* table)
 {
     taxTable_ = table;
     taxTable_->errorCount = 0;
     taxPool_ = &table->pool;
-    currentActiveComponent_ = 0;
 }
 
 
@@ -631,56 +629,6 @@ inline void DefineNullBounds(char* boundsHeight, char* boundsRadious)
 
 
 
-
-
-
-
-
-inline TaxonomyComponent* AddComponent_(u64 stringHashID)
-{
-    TaxonomySlot* slot = currentSlot_;
-    TaxonomyComponent* result;
-    TAXTABLE_ALLOC(result, TaxonomyComponent);
-    result->stringHashID = stringHashID;
-    result->ingredientCount = 0;
-    
-    result->next = slot->firstComponent;
-    slot->firstComponent = result;
-    return result;
-}
-
-inline void AddComponent(char* name)
-{
-    u64 stringHashID = StringHash(name);
-    currentActiveComponent_ = AddComponent_(stringHashID);
-}
-
-
-
-inline void AddIngredient(char* name)
-{
-    TaxonomyComponent* component = currentActiveComponent_;
-    Assert(component->ingredientCount < ArrayCount(component->ingredientTaxonomies));
-    
-    TaxonomySlot* ingredientSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    if(ingredientSlot)
-    {
-        component->ingredientTaxonomies[component->ingredientCount++] = ingredientSlot->taxonomy;
-    }
-    else
-    {
-        EditorErrorLog(name);
-    }
-}
-
-inline void MadeOf(char* name)
-{
-    if(!currentActiveComponent_)
-    {
-        currentActiveComponent_ = AddComponent_(currentSlot_->stringHashID);
-    }
-    AddIngredient(name);
-}
 
 
 
@@ -1660,25 +1608,11 @@ inline void AddTag(TagId ID, r32 value)
     
     FREELIST_INSERT(dest, slot->firstVisualTag);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-inline void AddLayoutPiece(ObjectLayout* layout, Vec2 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u32 flags = 0)
+#endif
+inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec2 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u32 flags = 0)
 {
-    Assert(layout->pieceCount < ArrayCount(layout->pieces));
-    LayoutPiece* dest = layout->pieces + layout->pieceCount++;
+    LayoutPiece* dest;
+    TAXTABLE_ALLOC(dest, LayoutPiece);
     dest->offset = offset;
     dest->angle = angle;
     dest->scale = scale;
@@ -1686,9 +1620,26 @@ inline void AddLayoutPiece(ObjectLayout* layout, Vec2 offset, r32 angle, Vec2 sc
     dest->pivot = pivot;
     dest->componentHashID = StringHash(componentName);
     dest->flags = flags;
+    
+    FREELIST_INSERT(dest, layout->firstPiece);
+    
+    return dest;
 }
 
-#endif
+inline void AddIngredient(LayoutPiece* piece, char* name)
+{
+    Assert(piece->ingredientCount < ArrayCount(piece->ingredientTaxonomies));
+    
+    TaxonomySlot* ingredientSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
+    if(ingredientSlot)
+    {
+        piece->ingredientTaxonomies[piece->ingredientCount++] = ingredientSlot->taxonomy;
+    }
+    else
+    {
+        EditorErrorLog(name);
+    }
+}
 
 
 
@@ -2905,37 +2856,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         }
     }
     
-    else if(StrEqual(name, "components"))
-    {
-        FREELIST_FREE(currentSlot_->firstComponent, TaxonomyComponent, taxTable_->firstFreeTaxonomyComponent);
-        
-        EditorElement* templates = root->firstInList;
-        while(templates)
-        {
-            EditorElement* component = GetList(templates, "componentList");
-            while(component)
-            {
-                char* componentName = GetValue(component, "name");
-                if(componentName)
-                {
-                    AddComponent(componentName);
-                }
-                
-                EditorElement* ingredient = GetList(component, "ingredients");
-                while(ingredient)
-                {
-                    char* ingredientName = GetValue(ingredient, "name");
-                    MadeOf(ingredientName);
-                    
-                    ingredient = ingredient->next;
-                }
-                
-                component = component->next;
-            }
-            
-            templates = templates->next;
-        }
-    }
+    
     else if(StrEqual(name, "neededTools"))
     {
         for(u32 toolIndex = 0; toolIndex < ArrayCount(currentSlot_->neededToolTaxonomies); ++toolIndex)
@@ -3272,16 +3193,19 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             events = events->next;
         }
     }
+#endif
     else if(StrEqual(name, "layouts"))
     {
+        for(ObjectLayout* toDelete = currentSlot_->firstLayout; toDelete; toDelete = toDelete->next)
+        {
+            FREELIST_FREE(toDelete->firstPiece, LayoutPiece, taxTable_->firstFreeLayoutPiece);
+        }
         FREELIST_FREE(currentSlot_->firstLayout, ObjectLayout, taxTable_->firstFreeObjectLayout);
         EditorElement* layouts = root->firstInList;
         while(layouts)
         {
             ObjectLayout* newLayout;
             TAXTABLE_ALLOC(newLayout, ObjectLayout);
-            
-            newLayout->pieceCount = 0;
             
             EditorElement* pieces = GetList(layouts, "pieces");
             while(pieces)
@@ -3294,7 +3218,18 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 r32 pieceAlpha = ToR32(GetValue(pieces, "alpha"));
                 char* pieceName = GetValue(pieces, "component");
                 
-                AddLayoutPiece(newLayout, V2(x, y), angle, V2(scaleX, scaleY), pieceAlpha, V2(0.5f, 0.5f), pieceName);
+                LayoutPiece* piece = AddLayoutPiece(newLayout, V2(x, y), angle, V2(scaleX, scaleY), pieceAlpha, V2(0.5f, 0.5f), pieceName);
+                
+                EditorElement* ingredient = GetList(pieces, "ingredients");
+                while(ingredient)
+                {
+                    char* ingredientName = GetValue(ingredient, "name");
+                    AddIngredient(piece, ingredientName);
+                    
+                    ingredient = ingredient->next;
+                }
+                
+                
                 pieces = pieces->next;
             }
             
@@ -3302,8 +3237,6 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             layouts = layouts->next;
         }
     }
-#endif
-    
     
     
     if(root->next)
