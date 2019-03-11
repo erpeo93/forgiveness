@@ -385,7 +385,7 @@ internal void BuildSimpleTestWorld(ServerState* server)
 {
 #define GENERATE_ENEMIES 1
 #define GENERATE_ENVIRONMENT 0
-#define GENERATE_OBJECTS 0
+#define GENERATE_OBJECTS 1
     
     
     RegionWorkContext* context = server->threadContext + 0;
@@ -500,6 +500,7 @@ internal void BuildSimpleTestWorld(ServerState* server)
             testSlot = NORUNTIMEGetTaxonomySlotByName( taxTable, "pant" );
             AddRandomEntity( region, &region->server->randomSequence, P + V3( 2, 4, 0 ), testSlot->taxonomy);
             
+#if 0            
             testSlot = NORUNTIMEGetTaxonomySlotByName( taxTable, "chest" );
             AddRandomEntity( region, &region->server->randomSequence, P + V3( 1, 1, 0 ), testSlot->taxonomy );
             
@@ -533,6 +534,8 @@ internal void BuildSimpleTestWorld(ServerState* server)
             TaxonomySlot* recipeSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "sword");
             testSlot = NORUNTIMEGetTaxonomySlotByName( taxTable, "recipe" );
             AddEntity( region, P + V3( 4.0f, 0.0f, 0.0f ), testSlot->taxonomy, 0, RecipeObject(recipeSlot->taxonomy, 12, I16_MAX));
+#endif
+            
 #endif
         }
         

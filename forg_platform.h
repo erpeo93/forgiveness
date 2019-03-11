@@ -61,13 +61,13 @@ struct TicketMutex
 
 inline void BeginTicketMutex(TicketMutex* mutex)
 {
-    u64 ticket = AtomicIncrementU64( &mutex->ticket, 1 );
-    while( ticket != mutex->serving );{ _mm_pause(); }
+    u64 ticket = AtomicIncrementU64(&mutex->ticket, 1);
+    while(ticket != mutex->serving);{_mm_pause();}
 }
 
 inline void EndTicketMutex(TicketMutex* mutex)
 {
-    AtomicIncrementU64( &mutex->serving, 1 );
+    AtomicIncrementU64(&mutex->serving, 1);
 }
 
 #define CompletePastWritesBeforeFutureWrites _WriteBarrier(); _mm_sfence(); 
@@ -595,6 +595,9 @@ typedef PLATFORM_DELETE_FILE_WILDCARDS(platform_delete_file_wildcards);
 #define PLATFORM_MOVE_FILE_OR_FOLDER(name) void name(char* oldPath, char* newPath)
 typedef PLATFORM_MOVE_FILE_OR_FOLDER(platform_move_file_or_folder);
 
+#define PLATFORM_COPY_FILE_OR_FOLDER(name) void name(char* oldPath, char* newPath)
+typedef PLATFORM_COPY_FILE_OR_FOLDER(platform_copy_file_or_folder);
+
 
 inline b32 PlatformNoFileErrors( PlatformFileHandle* handle )
 {
@@ -674,6 +677,7 @@ struct PlatformAPI
     platform_delete_folder_recursive* DeleteFolderRecursive;
     platform_delete_file_wildcards* DeleteFileWildcards;
     platform_move_file_or_folder* MoveFileOrFolder;
+    platform_copy_file_or_folder* CopyFileOrFolder;
     
     NetworkAPI net;
     

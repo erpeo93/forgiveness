@@ -444,7 +444,6 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
     parents.father = parent_;
     
     
-    
     EditorElement* father = parents.father;
     EditorElement* grandFather = parents.grandParents[0];
     
@@ -844,19 +843,19 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             
                             if(UI->worldMode->editorRoles & EditorRole_GameDesigner)
                             {
-                                UIButton deleteButton = UIBtn(UI, startingPos, layout, V4(1, 0, 0, 1), "canc");
+                                char* cancText = "canc";
+                                UIInteraction cancReviveInteraction = SendRequestInteraction(UI_Trigger, DeleteTaxonomyRequest(root->taxonomy));
                                 
-                                UIInteraction cancInteraction = NullInteraction();
-                                r32 cancAlpha = 0.2f;
-                                
-                                
-                                if(root->name[0] != '#')
+                                if(root->name[0] == '#')
                                 {
-                                    cancAlpha = 1.0f;
-                                    cancInteraction = SendRequestInteraction(UI_Trigger, DeleteTaxonomyRequest(root->taxonomy));
+                                    cancText = "revive";
+                                    cancReviveInteraction = SendRequestInteraction(UI_Trigger, ReviveTaxonomyRequest(root->taxonomy));
                                 }
-                                UIButtonInteraction(&deleteButton, cancInteraction);
-                                result = Union(result, UIDrawButton(UI, input, &deleteButton, cancAlpha));
+                                
+                                UIButton deleteButton = UIBtn(UI, startingPos, layout, V4(1, 0, 0, 1), cancText);
+                                UIButtonInteraction(&deleteButton, cancReviveInteraction);
+                                
+                                result = Union(result, UIDrawButton(UI, input, &deleteButton));
                                 
                                 instantiateP = UIFollowingP(&deleteButton, buttonSeparator);
                             }
@@ -1064,7 +1063,13 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     }
     else if(UI->patchingLocalServer)
     {
-        PushUIOrthoText(UI, "Patching Local Server...", importantMessageScale, importantMessageP, importantColor);
+        char* patchText = "Patching Local Server...";
+        if(UI->patchingLocalServer == 2)
+        {
+            patchText = "Checking if is possible to patch...";
+        }
+        
+        PushUIOrthoText(UI, patchText, importantMessageScale, importantMessageP, importantColor);
     }
     
     UI->hotStructThisFrame = false;
@@ -1079,8 +1084,8 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     tabWidget->root = editingRoot;
     
     UI->widgets[0].root = UI->editorTaxonomyTree;
-    UI->widgets[3].root = UI->soundNamesRoot;
-    UI->widgets[5].root = UI->soundEventsRoot;
+    UI->widgets[3].root = UI->table->soundNamesRoot;
+    UI->widgets[5].root = UI->table->soundEventsRoot;
     
     
     UIInteraction esc = UISetValueInteraction(UI_Trigger, &UI->active, 0);
@@ -1388,12 +1393,28 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                         UIDrawButton(UI, input, &reloadButton, reloadAlpha);
                         
                         
-                        Vec2 patchP = UIFollowingP(&reloadButton, 20);
+                        
+                        Vec2 patchCheckP = UIFollowingP(&reloadButton, 20);
+                        UIButton patchCheckButton = UIBtn(UI, patchCheckP, &widget->layout, V4(1, 0, 0, 1), " PATCH CHECK ");
+                        
+                        r32 checkAlpha = 0.2f;
+                        UIInteraction checkInteraction = NullInteraction();
+                        if(!UI->reloadingAssets && !UI->patchingLocalServer && !UIChildModified(UI->table, &UI->table->root))
+                        {
+                            checkInteraction = SendRequestInteraction(UI_Trigger, PatchCheckRequest());
+                            checkAlpha = 1.0f;
+                        }
+                        UIButtonInteraction(&patchCheckButton, checkInteraction);
+                        UIDrawButton(UI, input, &patchCheckButton, checkAlpha);
+                        
+                        
+                        
+                        Vec2 patchP = UIFollowingP(&patchCheckButton, 20);
                         UIButton patchButton = UIBtn(UI, patchP, &widget->layout, V4(1, 0, 0, 1), " PATCH SERVER ");
                         
                         r32 patchAlpha = 0.2f;
                         UIInteraction patchInteraction = NullInteraction();
-                        if(!UI->reloadingAssets && !UI->patchingLocalServer)
+                        if(!UI->reloadingAssets && !UI->patchingLocalServer && !UI->table->errorCount)
                         {
                             patchInteraction = SendRequestInteraction(UI_Trigger, PatchServerRequest());
                             patchAlpha = 1.0f;
@@ -1416,7 +1437,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                         {
                             buttonAlpha = 1.0f;
                             saveInteraction =SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("soundEvents", widget));
-                            UIAddReloadElementAction(&saveInteraction, UI_Trigger, UI->soundEventsRoot);
+                            UIAddReloadElementAction(&saveInteraction, UI_Trigger, UI->table->soundEventsRoot);
                         }
                         
                         
@@ -1922,7 +1943,7 @@ internal EditorElement* BuildEditorTaxonomyTree(u32 editorRoles, TaxonomyTable* 
             AddFlags(result, EditorElem_Editable);
         }
         
-        if(editorRoles & EditorRole_GameDesigner)
+        if((editorRoles & EditorRole_GameDesigner) && slot->name[0] != '#')
         {
             EditorElement* empty;
             FREELIST_ALLOC(empty, table->firstFreeElement, PushStruct(&table->pool, EditorElement));
@@ -1959,7 +1980,7 @@ inline void UIAddChild(TaxonomyTable* table, EditorElement* element, EditorEleme
     element->firstChild = newElement;
 }
 
-inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, EditorRole necessaryRole, char* name)
+inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, u32 necessaryRole, char* name)
 {
     EditorWidget* result = UI->widgets + widget;
     *result = {};
@@ -1985,11 +2006,11 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             FormatString(UI->uneditableTabRoot.name, sizeof(UI->uneditableTabRoot.name), "YOU CAN'T EDIT THIS");
             
             
-            EditorWidget* taxonomyTree = StartWidget(UI, EditorWidget_TaxonomyTree, EditorRole_Everyone, "Taxonomy Tree");
+            EditorWidget* taxonomyTree = StartWidget(UI, EditorWidget_TaxonomyTree, 0xffffffff, "Taxonomy Tree");
             taxonomyTree->permanent.P = V2(-800, -100);
             
             
-            EditorWidget* taxonomyEditing = StartWidget(UI, EditorWidget_EditingTaxonomyTabs, EditorRole_Everyone, "Editing Tabs");
+            EditorWidget* taxonomyEditing = StartWidget(UI, EditorWidget_EditingTaxonomyTabs, 0xffffffff, "Editing Tabs");
             taxonomyEditing->permanent.P = V2(100, -100);
             
             
@@ -2021,23 +2042,23 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             animationStruct->firstValue = animationRoot;
             
             
-            EditorWidget* animation = StartWidget(UI, EditorWidget_Animation, EditorRole_Everyone, "Animation");
+            EditorWidget* animation = StartWidget(UI, EditorWidget_Animation, 0xffffffff, "Animation");
             animation->permanent.P = V2(-300, -300);
             animation->root = animationRoot;
             
             
             EditorWidget* soundDatabase = StartWidget(UI, EditorWidget_SoundDatabase, EditorRole_SoundDesigner, "Sound Database");
             soundDatabase->permanent.P = V2(300, 200);
-            soundDatabase->root = UI->soundNamesRoot;
+            soundDatabase->root = UI->table->soundNamesRoot;
             
             
-            EditorWidget* actions = StartWidget(UI, EditorWidget_GeneralButtons, EditorRole_Everyone, "Actions:");
+            EditorWidget* actions = StartWidget(UI, EditorWidget_GeneralButtons, 0xffffffff, "Actions:");
             actions->permanent.P = V2(200, 100);
             
             
             EditorWidget* soundEvents = StartWidget(UI, EditorWidget_SoundEvents, EditorRole_SoundDesigner, "Sound Events");
             soundEvents->permanent.P = V2(-200, 100);
-            soundEvents->root = UI->soundEventsRoot;
+            soundEvents->root = UI->table->soundEventsRoot;
             
             
             PlatformFile layoutFile = platformAPI.DEBUGReadFile("widget");

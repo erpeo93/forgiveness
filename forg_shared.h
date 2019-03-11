@@ -589,4 +589,5 @@ inline void AppendString(char* original, u32 size, char* toAppend, u32 toAppendC
     {
         *copyHere++ = *toAppend++;
     }
+    *copyHere = 0;
 }

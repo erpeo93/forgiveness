@@ -405,6 +405,16 @@ inline UIRequest DeleteTaxonomyRequest(u32 taxonomy)
     
     return result;
 }
+
+inline UIRequest ReviveTaxonomyRequest(u32 taxonomy)
+{
+    UIRequest result = {};
+    result.requestCode = UIRequest_ReviveTaxonomy;
+    result.taxonomy = taxonomy;
+    
+    return result;
+}
+
 inline UIRequest InstantiateTaxonomyRequest(u32 taxonomy, Vec3 offset)
 {
     UIRequest result = {};
@@ -437,6 +447,14 @@ inline UIRequest PatchServerRequest()
 {
     UIRequest result = {};
     result.requestCode = UIRequest_PatchServer;
+    
+    return result;
+}
+
+inline UIRequest PatchCheckRequest()
+{
+    UIRequest result = {};
+    result.requestCode = UIRequest_PatchCheck;
     
     return result;
 }
@@ -627,6 +645,11 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
             SendDeleteTaxonomyRequest(request->taxonomy);
         } break;
         
+        case UIRequest_ReviveTaxonomy:
+        {
+            SendReviveTaxonomyRequest(request->taxonomy);
+        } break;
+        
         case UIRequest_InstantiateTaxonomy:
         {
             SendInstantiateTaxonomyRequest(request->taxonomy, request->offset);
@@ -646,8 +669,14 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_PatchServer:
         {
-            UI->patchingLocalServer = true;
+            UI->patchingLocalServer = 1;
             SendPatchServerRequest();
+        } break;
+        
+        case UIRequest_PatchCheck:
+        {
+            UI->patchingLocalServer = 2;
+            SendPatchCheckRequest();
         } break;
         
         case UIRequest_SaveTaxonomyTab:

@@ -74,7 +74,7 @@ struct DayPhase
 struct ReceiveNetworkPacketWork
 {
     NetworkInterface** network;
-    network_platform_receive_data_accept* ReceiveData;
+    network_platform_receive_data* ReceiveData;
 };
 
 
@@ -386,8 +386,9 @@ struct GameState
     
     
     r32 timeCoeff;
-    
     u32 lock;
+    
+    u32 editorRoles;
     
     Assets* assets;
     MemoryPool assetPool;

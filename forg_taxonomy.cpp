@@ -433,7 +433,7 @@ inline void BuildTaxonomyDataPath(TaxonomyTable* table, u32 parentTaxonomy, char
     
     TaxonomySlot* copyFromSlot = GetChildSlot(table, root, parentTaxonomy);
     
-    FormatString(copyFrom, copyFromSize, "%s/%s/*.fed", root->name, copyFromSlot->name);
+    FormatString(copyFrom, copyFromSize, "definition/%s/%s", root->name, copyFromSlot->name);
     
     
 }
@@ -453,8 +453,8 @@ inline u32 TranslateTaxonomy(TaxonomyTable* oldTable, TaxonomyTable* newTable, u
                 ShortcutSlot* shortcut = GetShortcut(newTable, hashID);
                 if(shortcut)
                 {
-                    RandomSequence seq = Seed((u32)hashID);
-                    result = GetRandomChild(newTable, &seq, shortcut->taxonomy);
+                    RandomSequence* seq = &newTable->translateSequence;
+                    result = GetRandomChild(newTable, seq, shortcut->taxonomy);
                     
                     TaxonomySlot* newSlot = GetSlotForTaxonomy(newTable, result);
                     Assert(newSlot->taxonomy == result);

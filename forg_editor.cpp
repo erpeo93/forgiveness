@@ -120,7 +120,6 @@ inline void WriteDataFilesRecursive(char* path, char* name)
         FormatString(copyPath, sizeof(copyPath), "%s/*.fed", newPath);
         
 		platformAPI.CopyAllFiles(copyPath, "assets");
-        
         for(u32 subdirIndex = 0; subdirIndex < subdir.subDirectoryCount; ++subdirIndex)
         {
             char* subName = subdir.subdirs[subdirIndex];
@@ -430,6 +429,11 @@ inline r32 ToR32(char* string)
 #else
 #define EditorErrorLog(name) EditorErrorLogClient(__FUNCTION__, name)
 #endif
+
+inline void StartingLoadingMessageServer()
+{
+    printf("\n\n\nStarting Loading Datafiles...\n\n\n");
+}
 
 inline void EditorErrorLogServer(char* functionName, char* wasSearching)
 {
@@ -2573,7 +2577,7 @@ inline b32 IsEditableByRole(EditorElement* root, u32 role)
     }
     else
     {
-        result = (role == EditorRole_Everyone);
+        result = (role & EditorRole_GameDesigner);
     }
     
     return result;
@@ -3262,6 +3266,7 @@ inline Token GetFileTaxonomyName(char* content)
 
 internal void ImportAllFiles(char* dataPath, u32 editorRoles, b32 freeTab)
 {
+    StartingLoadingMessageServer();
     MemoryPool tempPool = {};
     TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
     
@@ -3346,14 +3351,12 @@ internal void ImportAllAssetFiles(GameModeWorld* worldMode, char* dataPath, Memo
         b32 ign = false;
         if(StrEqual(handle.name, "sound.fad"))
         {
-            FreeElement(worldMode->UI->soundNamesRoot);
-            worldMode->UI->soundNamesRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
+            worldMode->table->soundNamesRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
         }
         else if(StrEqual(handle.name, "soundEvents.fad"))
         {
-            FreeElement(worldMode->UI->soundEventsRoot);
-            worldMode->UI->soundEventsRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
-            Import(0, worldMode->UI->soundEventsRoot);
+            worldMode->table->soundEventsRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
+            Import(0, worldMode->table->soundEventsRoot);
         }
         
         platformAPI.CloseHandle(&handle);
@@ -3376,6 +3379,27 @@ inline void LoadAssets()
             break;
         }
     }
+}
+
+inline char* WriteElementsToBuffer(char* buffer, EditorElement* root, u32* remaining, u32* writtenTotal)
+{
+    char* result = buffer;
+    
+    u32 newRemaining = *remaining;
+    WriteElements(buffer, &newRemaining, root);
+    u32 written = *remaining - newRemaining;
+    *writtenTotal += written;
+    
+    result += written;
+    *remaining = newRemaining;
+    
+    
+    *result++ = ' ';
+    *result++ = '\n';
+    *remaining -= 2;
+    *writtenTotal += 2;
+    
+    return result;
 }
 
 internal void WriteToFile(TaxonomyTable* table, TaxonomySlot* slot)
@@ -3413,19 +3437,8 @@ internal void WriteToFile(TaxonomyTable* table, TaxonomySlot* slot)
     char* currentBuffer = buffer;
     for(u32 tabIndex = 0; tabIndex < slot->tabCount; ++tabIndex)
     {
-        u32 newRemaining = remaining;
-        WriteElements(currentBuffer, &newRemaining, slot->tabs[tabIndex].root);
-        u32 written = remaining - newRemaining;
-        writtenTotal += written;
-        
-        currentBuffer += written;
-        remaining = newRemaining;
-        
-        
-        *currentBuffer++ = ' ';
-        *currentBuffer++ = '\n';
-        remaining -= 2;
-        writtenTotal += 2;
+        EditorElement* root = slot->tabs[tabIndex].root;
+        currentBuffer = WriteElementsToBuffer(currentBuffer, root, &remaining, &writtenTotal);
     }
     
     
@@ -3435,30 +3448,19 @@ internal void WriteToFile(TaxonomyTable* table, TaxonomySlot* slot)
 
 inline void PatchLocalServer(ServerState* server)
 {
-    
-    
-    char* destinationFolder = "../server/definition";
+    char* destinationFolder = "../server/assets";
     char* destinationPath = "../server";
     platformAPI.DeleteFolderRecursive(destinationFolder);
-    platformAPI.CopyAllFiles("definition", destinationPath);
+    platformAPI.CopyAllFiles("assets", destinationPath);
     
-    u32 playerCount = 0;
-    for(u32 playerIndex = 0; playerIndex < MAXIMUM_SERVER_PLAYERS; ++playerIndex)
-    {
-        ServerPlayer* player = server->players + playerIndex;
-        if(player->connectionSlot)
-        {
-            ++playerCount;
-            SendPatchDoneMessage(player);
-        }
-    }
-    (playerCount == 1);
-    
+    SendPatchDoneMessageToAllPlayers(server);
 }
 
 
-internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player,b32 sendTaxonomyFiles, b32 sendMetaAssetFiles)
+internal void SendDataFiles(b32 editorMode, ServerPlayer* player,b32 sendTaxonomyFiles, b32 sendMetaAssetFiles)
 {
+    char* path = "assets";
+    
     MemoryPool tempPool = {};
     TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
     
@@ -3537,6 +3539,206 @@ internal void SendAllDataFiles(b32 editorMode, char* path, ServerPlayer* player,
     SendAllDataFileSentMessage(player, sendTaxonomyFiles);
     EndTemporaryMemory(fileMemory);
 }
+
+inline b32 TabHasPreemption(char* tabName, u32 roles)
+{
+    b32 result = false;
+    
+    if(StrEqual(tabName, "soundEffects"))
+    {
+        result = (roles & EditorRole_SoundDesigner);
+    }
+    
+    return result;
+}
+
+inline b32 HasPreemption(char* folderName, u32 roles)
+{
+    b32 result = false;
+    
+    if(StrEqual(folderName, "sound") && (roles & EditorRole_SoundDesigner))
+    {
+        result = true;
+    }
+    else if(StrEqual(folderName, "soundEvents") && (roles & EditorRole_SoundDesigner))
+    {
+        result = true;
+    }
+    
+    return result;
+}
+
+internal void RecursivelyMerge(char* toMergeDefinitionName, char* toMergePath, char* name, u32 toMergeRoles)
+{
+    char fedSourceFilePath[512];
+    FormatString(fedSourceFilePath, sizeof(fedSourceFilePath), "%s/%s/%s.fed", toMergeDefinitionName, toMergePath, name);
+    
+    char fedDestFilePath[512];
+    FormatString(fedDestFilePath, sizeof(fedDestFilePath), "definition/%s/%s.fed", toMergePath, name);
+    
+    
+    PlatformFile fedSourceFile = platformAPI.DEBUGReadFile(fedSourceFilePath);
+    
+    if(fedSourceFile.content)
+    {
+        Tokenizer sourceT = {};
+        sourceT.at = (char*) fedSourceFile.content;
+        
+        u32 sourceTabCount = 0;
+        EditorElement* sourceTabs[128] = {};
+        
+        b32 endSource = false;
+        while(true)
+        {
+            EditorElement* root = LoadElementInMemory(LoadElements_Tab, &sourceT, &endSource);
+            Assert(sourceTabCount < ArrayCount(sourceTabs));
+            sourceTabs[sourceTabCount++] = root;
+            if(endSource)
+            {
+                break;
+            }
+        }
+        platformAPI.DEBUGFreeFile(&fedSourceFile);
+        
+        PlatformFile fedDestFile = platformAPI.DEBUGReadFile(fedDestFilePath);
+        if(fedDestFile.content)
+        {
+            Tokenizer destT = {};
+            destT.at = (char*) fedDestFile.content;
+            
+            u32 destTabCount = 0;
+            EditorElement* destTabs[128] = {};
+            
+            b32 endDest = false;
+            while(true)
+            {
+                EditorElement* root = LoadElementInMemory(LoadElements_Tab, &destT, &endDest);
+                Assert(destTabCount < ArrayCount(destTabs));
+                destTabs[destTabCount++] = root;
+                if(endDest)
+                {
+                    break;
+                }
+            }
+            platformAPI.DEBUGFreeFile(&fedDestFile);
+            
+            
+            char buffer[KiloBytes(16)] = {};
+            char* currentBuffer = buffer;
+            
+            u32 remaining = sizeof(buffer);
+            u32 writtenTotal = 0;
+            
+            for(u32 destTabIndex = 0; destTabIndex < destTabCount; ++destTabIndex)
+            {
+                EditorElement* toWrite = destTabs[destTabIndex];
+                
+                for(u32 sourceTabIndex = 0; sourceTabIndex < sourceTabCount; ++sourceTabIndex)
+                {
+                    EditorElement* test = sourceTabs[sourceTabIndex];
+                    if(StrEqual(test->name, toWrite->name))
+                    {
+                        if(TabHasPreemption(test->name, toMergeRoles))
+                        {
+                            toWrite = test;
+                        }
+                        break;
+                    }
+                }
+                
+                currentBuffer = WriteElementsToBuffer(currentBuffer, toWrite, &remaining, &writtenTotal);
+            }
+            platformAPI.DEBUGWriteFile(fedDestFilePath, buffer, writtenTotal);
+        }
+    }
+    
+    PlatformSubdirNames subdir;
+    subdir.subDirectoryCount = 0;
+    
+    char childToSearchPath[512];
+    FormatString(childToSearchPath, sizeof(childToSearchPath), "%s/%s", toMergeDefinitionName, toMergePath);
+    platformAPI.GetAllSubdirectoriesName(&subdir, childToSearchPath);
+    for(u32 subdirIndex = 0; subdirIndex < subdir.subDirectoryCount; ++subdirIndex)
+    {
+        char* folderName = subdir.subdirs[subdirIndex];
+        if(StrEqual(folderName, "side"))
+        {
+        }
+        else
+        {
+            if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
+            {
+                char childPath[512];
+                FormatString(childPath, sizeof(childPath), "%s/%s", toMergePath, folderName);
+                RecursivelyMerge(toMergeDefinitionName, childPath, folderName, toMergeRoles);
+            }
+        }
+    }
+}
+
+internal void Merge(TaxonomyTable* table, char* toMergePath, u32 toMergeRoles)
+{
+    char* referencePath = "definition";
+    
+    PlatformSubdirNames subdir;
+    subdir.subDirectoryCount = 0;
+    
+    platformAPI.GetAllSubdirectoriesName(&subdir, toMergePath);
+    for(u32 subdirIndex = 0; subdirIndex < subdir.subDirectoryCount; ++subdirIndex)
+    {
+        char* folderName = subdir.subdirs[subdirIndex];
+        if(StrEqual(folderName, "root"))
+        {
+            InitTaxonomyReadWrite(table);
+            RecursivelyMerge(toMergePath, folderName, folderName, toMergeRoles);
+            Clear(&table->pool);
+        }
+        else
+        {
+            if(HasPreemption(folderName, toMergeRoles))
+            {
+                char pathToDelete[512];
+                FormatString(pathToDelete, sizeof(pathToDelete), "%s/%s", referencePath, folderName);
+                platformAPI.DeleteFolderRecursive(pathToDelete);
+                
+                char sourcePath[512];
+                FormatString(sourcePath, sizeof(sourcePath), "%s/%s", toMergePath, folderName);
+                platformAPI.CopyAllFiles(sourcePath, pathToDelete);
+            }
+        }
+    }
+    
+    platformAPI.DeleteFolderRecursive(toMergePath);
+}
+
+inline void CheckForDefinitionsToMerge(ServerState* server)
+{
+    printf("checking for definitions to merge\n");
+    PlatformSubdirNames subdir;
+    subdir.subDirectoryCount = 0;
+    
+    platformAPI.GetAllSubdirectoriesName(&subdir, ".");
+    for(u32 subdirIndex = 0; subdirIndex < subdir.subDirectoryCount; ++subdirIndex)
+    {
+        char* definitionName = subdir.subdirs[subdirIndex];
+        if(!StrEqual(definitionName, ".") && !StrEqual(definitionName, "..") && 
+           !StrEqual(definitionName, "definition") && !StrEqual(definitionName, "assets"))
+        {
+            if(StrEqual(definitionName, "SoundDesigner"))
+            {
+                printf("Merging sound designer patch...\n");
+                Merge(server->activeTable, definitionName, EditorRole_SoundDesigner);
+            }
+            else
+            {
+                printf("unknown patch name %s\n", definitionName);
+            }
+        }
+    }
+    
+    printf("merging done\n");
+}
+
 #endif
 
 internal void WriteAllFiles(MemoryPool* tempPool, char* dataPath, DataFileArrived* firstArrived, b32 compressed)
@@ -3581,55 +3783,3 @@ internal void WriteAllFiles(MemoryPool* tempPool, char* dataPath, DataFileArrive
     
 }
 
-
-#if 0
-internal void RecursivelyMerge()
-{
-    if(reference fed file)
-    {
-        Assert(toMergeFedFile);
-        for(everyTabToMErge)
-        {
-            if(HasPreemption())
-            {
-                SubstTab();
-            }
-        }
-    }
-    
-    
-    for(everysubfolder)
-    {
-        if(StrEqual(folderName, "side"))
-        {
-            if(roles == Artist)
-            {
-                Copy();
-            }
-        }
-        else
-        {
-            RecursiveMerge(subfolder);
-        }
-    }
-}
-
-internal void Merge(Definition* reference, Definition* toMerge, u32 toMergeRoles)
-{
-    for(everySubfolder)
-    {
-        if(StrEqual(folderName, "root"))
-        {
-            RecursivelyMerge(folderName, reference, toMerge, toMergeRoles);
-        }
-        else
-        {
-            if(hasPreemption(folderName, toMergeRoles))
-            {
-                Delelete(reference);
-                CopyEntireFolder(toMerge, subfolder);
-            }
-        }
-    }
-}
-#endif

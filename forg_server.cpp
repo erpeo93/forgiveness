@@ -161,12 +161,13 @@ inline void SwapTables(ServerState* server)
     TaxonomyTable* temp = toClear;
     server->oldTable = server->activeTable;
     server->activeTable = temp;
+    InitTaxonomyReadWrite(server->activeTable);
 }
 
 internal void FillGenerationData(ServerState* server)
 {
     b32 freeTabs = !server->editor;
-    ImportAllFiles("assets", (u32) EditorRole_Everyone, freeTabs);
+    ImportAllFiles("assets", (u32) 0xffffffff, freeTabs);
     ReadBehaviors();
     ReadSynthesisRules();
 }
@@ -201,14 +202,13 @@ inline void TranslateServerChunks(ServerState* server)
 
 inline void TranslateServerPlayers(ServerState* server)
 {
-    char* clientDataPath = "output/client";
     for(u32 playerIndex = 0; playerIndex < MAXIMUM_SERVER_PLAYERS; ++playerIndex)
     {
         ServerPlayer* player = server->players + playerIndex;
         if(player->connectionSlot)
         {
             TranslatePlayer(server->oldTable, server->activeTable, player);
-            SendAllDataFiles(server->editor, clientDataPath, player, true, false);
+            SendDataFiles(server->editor, player, true, false);
         }
     }
 }
@@ -230,13 +230,39 @@ inline void InvalidateAllHashUpdates(ServerState* server)
     }
 }
 
-inline void AddPoundToNameAndFedFileRecursively(char* path, char* taxonomyName)
+
+inline void TranslateServer(ServerState* server)
+{
+    
+    TranslateServerChunks(server);
+    TranslateServerPlayers(server);
+    InvalidateAllHashUpdates(server);
+}
+
+inline void ReloadServer(ServerState* server)
+{
+    SwapTables(server);
+    WriteDataFiles();
+    FillGenerationData(server);
+    TranslateServer(server);
+}
+
+inline void PoundToNameAndFedFileRecursively(char* path, char* taxonomyName, b32 add)
 {
     char originalFed[512];
     char newFed[512];
     
     FormatString(originalFed, sizeof(originalFed), "%s/%s.fed", path, taxonomyName);
-    FormatString(newFed, sizeof(originalFed), "%s/#%s.fed", path, taxonomyName);
+    
+    if(add)
+    {
+        FormatString(newFed, sizeof(originalFed), "%s/#%s.fed", path, taxonomyName);
+    }
+    else
+    {
+        FormatString(newFed, sizeof(originalFed), "%s/%s.fed", path, taxonomyName + 1);
+    }
+    
     
     platformAPI.MoveFileOrFolder(originalFed, newFed);
     
@@ -251,7 +277,7 @@ inline void AddPoundToNameAndFedFileRecursively(char* path, char* taxonomyName)
         {
             char childPath[512];
             FormatString(childPath, sizeof(childPath), "%s/%s", path, folderName);
-            AddPoundToNameAndFedFileRecursively(childPath, folderName);
+            PoundToNameAndFedFileRecursively(childPath, folderName, add);
         }
     }
     
@@ -271,26 +297,32 @@ inline void AddPoundToNameAndFedFileRecursively(char* path, char* taxonomyName)
     }
     
     char toAppend[64];
-    FormatString(toAppend, sizeof(toAppend), "/#%s", taxonomyName);
+    if(add)
+    {
+        FormatString(toAppend, sizeof(toAppend), "/#%s", taxonomyName);
+    }
+    else
+    {
+        FormatString(toAppend, sizeof(toAppend), "/%s", taxonomyName + 1);
+    }
     AppendString(newPath, sizeof(newPath), toAppend, StrLen(toAppend));
-    
     
     platformAPI.MoveFileOrFolder(path, newPath);
 }
 
-inline void TranslateServer(ServerState* server)
+PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 {
+    ReceiveNetworkPacketWork* work = (ReceiveNetworkPacketWork*) param;
     
-    TranslateServerChunks(server);
-    TranslateServerPlayers(server);
-    InvalidateAllHashUpdates(server);
+    while(true)
+    {
+        work->ReceiveData(work->network);
+    }
 }
 
 
 extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
 {
-    char* clientDataPath = "assets";
-    
     platformAPI = memory->api;
     
     ServerState* server = memory->server;
@@ -305,14 +337,18 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
     
     
     
-    platformAPI.net.ReceiveDataAndAccept(&server->clientInterface);
+    //platformAPI.net.ReceiveDataAndAccept(&server->clientInterface);
     
-    for(u32 newConnectionIndex = 0; newConnectionIndex < server->clientInterface.newConnectionCount; ++newConnectionIndex)
+    u16 newConnections[16] = {};
+    u16 accepted = platformAPI.net.Accept(&server->clientInterface, newConnections, ArrayCount(newConnections));
+    
+    for(u32 newConnectionIndex = 0; newConnectionIndex < accepted; ++newConnectionIndex)
     {
-        u16 connectionSlot = server->clientInterface.newConnections[newConnectionIndex];
+        u16 connectionSlot = newConnections[newConnectionIndex];
         ServerPlayer* player = FirstFreePlayer(server);
         player->connectionSlot = connectionSlot;
     }
+    
     
 #if 0        
     //Assert( server->countOtherServers < MAX_OTHER_SERVERS );
@@ -343,21 +379,17 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
         {
             if(player->allDataFileSent && !player->allPakFileSent)
             {
-                if(player->assetsReloaded)
-                {
-                    SendAllDataFiles(server->editor, clientDataPath, player, false, true);
-                    player->assetsReloaded = false;
-                }
 #if 1
                 u32 chunkSize = KiloBytes(1);
                 
-                PlatformFileGroup pakGroup = platformAPI.GetAllFilesBegin(PlatformFile_compressedAsset, clientDataPath);
+                char* pakPath = "assets";
+                PlatformFileGroup pakGroup = platformAPI.GetAllFilesBegin(PlatformFile_compressedAsset, pakPath);
                 
                 u32 toSendSize = server->sendPakBufferSize;
                 
                 for(u32 fileIndex = 0; fileIndex < pakGroup.fileCount && toSendSize > 0; ++fileIndex)
                 {
-                    PlatformFileHandle handle = platformAPI.OpenNextFile(&pakGroup, clientDataPath);
+                    PlatformFileHandle handle = platformAPI.OpenNextFile(&pakGroup, pakPath);
                     if(fileIndex == player->pakFileIndex)
                     {
                         
@@ -480,9 +512,8 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                             unpack(packetPtr, "L", &clientReq.challenge ); 
 							if(challenge == clientReq.challenge)
                             {
-                                SendAllDataFiles(server->editor, clientDataPath, player, true, true);
+                                SendDataFiles(server->editor, player, true, true);
                                 player->allDataFileSent = true;
-                                player->assetsReloaded = false;
                                 //EntitySQL ep = SQLRetriveHero( server->conn, newPlayer->username, newPlayer->heroSlot );
                                 SimRegion* region = GetServerRegion( server, 0, 0 );
                                 Vec3 P = V3( 0.5f, 10.0f, 0 );
@@ -736,12 +767,30 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                                     if(toReset->connectionSlot)
                                     {
                                         toReset->allPakFileSent = false;
-                                        toReset->assetsReloaded = true;
+                                        SendDataFiles(server->editor, player, false, true);
                                         toReset->pakFileIndex = 0;
                                         toReset->pakFileOffset = 0;
                                     }
                                 }
                             }
+                        } break;
+                        
+                        case Type_PatchCheck:
+                        {
+                            if(server->editor)
+                            {
+                                ReloadServer(server);
+                                if(!server->activeTable->errorCount)
+                                {
+                                    printf("Yay! you can patch the local server!\n");
+                                }
+                                else
+                                {
+                                    InvalidCodePath;
+                                }
+                                
+                                SendPatchDoneMessageToAllPlayers(server);
+                            } break;
                         } break;
                         
                         case Type_PatchLocalServer:
@@ -761,18 +810,21 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                                 
                                 packetPtr = unpack(packetPtr, "Ls", &parentTaxonomy, name);
                                 
-                                char path[512];
-                                char copyFrom[512];
+                                char destPath[512];
+                                char referenceTaxonomyPath[512];
                                 
-                                BuildTaxonomyDataPath(server->activeTable, parentTaxonomy, name, path, sizeof(path), copyFrom, sizeof(copyFrom));
+                                BuildTaxonomyDataPath(server->activeTable, parentTaxonomy, name, destPath, sizeof(destPath), referenceTaxonomyPath, sizeof(referenceTaxonomyPath));
                                 
-                                if(platformAPI.CreateFolder(path))
+                                char finalSource[512];
+                                FormatString(finalSource, sizeof(finalSource), "%s/reference", referenceTaxonomyPath);
+                                
+                                char finalDest[512];
+                                FormatString(finalDest, sizeof(finalDest), "%s/%s.fed", destPath, name);
+                                
+                                if(platformAPI.CreateFolder(destPath))
                                 {
-                                    //platformAPI.MoveFileOrFolder(copyfrom, path);
-                                    SwapTables(server);
-                                    WriteDataFiles();
-                                    FillGenerationData(server);
-                                    TranslateServer(server);
+                                    platformAPI.CopyFileOrFolder(finalSource, finalDest);
+                                    ReloadServer(server);
                                 }
                             }
                             
@@ -783,39 +835,36 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
 						{
                             if(server->editor)
                             {
-                                char path[128];
-                                char copyFrom[128];
+                                char path[512];
+                                char ignored[512];
                                 
                                 u32 toDelete;
                                 packetPtr = unpack(packetPtr, "L", &toDelete);
                                 
                                 TaxonomySlot* toDeleteSlot = GetSlotForTaxonomy(server->activeTable, toDelete);
-                                BuildTaxonomyDataPath(server->activeTable, toDelete, "", path, sizeof(path), copyFrom, sizeof(copyFrom));
+                                BuildTaxonomyDataPath(server->activeTable, toDelete, "", path, sizeof(path), ignored, sizeof(ignored));
                                 
-								AddPoundToNameAndFedFileRecursively(path, toDeleteSlot->name);
-                                
-								SwapTables(server);
-                                WriteDataFiles();
-                                FillGenerationData(server);
-                                TranslateServer(server);
+								PoundToNameAndFedFileRecursively(path, toDeleteSlot->name, true);
+                                ReloadServer(server);
                             }
 						} break;
                         
 						case Type_ReviveTaxonomy:
 						{
-                            InvalidCodePath;
-                            
-#if 0                            
-							BuildPath();
-                            
-							RemovePoundFromNameAndFadFileRecursively();
-                            
-                            SwapTables(server);
-                            WriteDataFiles();
-                            FillGenerationData(server);
-                            TranslateServer(server);
-#endif
-                            
+                            if(server->editor)
+                            {
+                                char path[512];
+                                char ignored[512];
+                                
+                                u32 toDelete;
+                                packetPtr = unpack(packetPtr, "L", &toDelete);
+                                
+                                TaxonomySlot* toDeleteSlot = GetSlotForTaxonomy(server->activeTable, toDelete);
+                                BuildTaxonomyDataPath(server->activeTable, toDelete, "", path, sizeof(path), ignored, sizeof(ignored));
+                                
+                                PoundToNameAndFedFileRecursively(path, toDeleteSlot->name, false);
+                                ReloadServer(server);
+                            }
 						} break;
                         
 						case Type_InstantiateTaxonomy:
@@ -1003,6 +1052,11 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     u16 clientPort = globalUserPorts[universeIndex];
     platformAPI.net.InitServer(&server->clientInterface, clientPort, ForgNetwork_Count, forgNetworkChannelParams, connections, maxConnectionCount);
     
+    server->receivePacketWork.network = &server->clientInterface;
+    server->receivePacketWork.ReceiveData = platformAPI.net.ReceiveData;
+    Win32PushWork(&server->slowQueue, ReceiveNetworkPackets, &server->receivePacketWork);
+    
+    
     // TODO(Leonardo): get this from main server or from file
     server->currentIdentifier = 1;
     
@@ -1075,6 +1129,7 @@ extern "C" SERVER_INITIALIZE(InitializeServer)
     ServerCommonInit(memory, universeIndex);
     
     ServerState* server = (ServerState*) memory->server;
+    
     server->editor = editor;
     
     TaxonomyTable* table = server->activeTable;
@@ -1082,11 +1137,15 @@ extern "C" SERVER_INITIALIZE(InitializeServer)
     InitTaxonomyReadWrite(table);
     if(server->editor)
     {
-        
         platformAPI.DeleteFileWildcards("assets", "*");
         
+        CheckForDefinitionsToMerge(server);
         LoadAssets();
         WriteDataFiles();
+    }
+    else
+    {
+        ReadTaxonomiesFromFile();
     }
     
     FillGenerationData(server);

@@ -341,6 +341,12 @@ inline void SendPatchServerRequest()
     CloseAndSendStandardPacket();
 }
 
+inline void SendPatchCheckRequest()
+{
+    StartStandardPacket(PatchCheck);
+    CloseAndSendStandardPacket();
+}
+
 inline void SendSaveTabRequest(u32 taxonomy)
 {
     StartStandardPacket(SaveSlotTabToFile);
@@ -365,6 +371,13 @@ inline void SendAddTaxonomyRequest(u32 parentTaxonomy, char* name)
 inline void SendDeleteTaxonomyRequest(u32 taxonomy)
 {
     StartStandardPacket(DeleteTaxonomy);
+    Pack("L", taxonomy);
+    CloseAndSendStandardPacket();
+}
+
+inline void SendReviveTaxonomyRequest(u32 taxonomy)
+{
+    StartStandardPacket(ReviveTaxonomy);
     Pack("L", taxonomy);
     CloseAndSendStandardPacket();
 }
@@ -519,8 +532,6 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                     
                     Unpack("HLl", &login.port, &login.challenge, &login.editingEnabled);
                     worldMode->editingEnabled = login.editingEnabled;
-                    worldMode->editorRoles = (u32) EditorRole_Everyone;
-                    
                     
                     u32 salt = 11111;
                     platformAPI.net.CloseConnection(myPlayer->network, 0);
@@ -573,6 +584,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                     Assert(e);
                     
                     EntityAction oldAction = e->action;
+                    u32 oldTaxonomy = e->taxonomy;
                     
                     Unpack("llVLLQCddCLddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->recipeIndex, &e->action, &e->plantTotalAge, &e->plantStatusPercentage, &e->plantStatus, &e->recipeTaxonomy, &e->lifePoints, &e->maxLifePoints, &e->status);
                     

@@ -642,7 +642,8 @@ int main( int argc, char** argv )
         "forg_AI.h",
         "forg_memory.h",
         "forg_asset_enum.h",
-        "forg_taxonomy.cpp"
+        "forg_taxonomy.cpp",
+        "forg_editor.h",
     };
     for( int fileIndex = 0; fileIndex < sizeof( fileNames ) / sizeof( fileNames[0] ); ++fileIndex )
     {

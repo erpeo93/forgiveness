@@ -1352,6 +1352,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             
             gameMemory.api.DeleteFileWildcards = Win32DeleteFileWildcards;
             gameMemory.api.MoveFileOrFolder = Win32MoveFileOrFolder;
+            gameMemory.api.CopyFileOrFolder = Win32CopyFileOrFolder;
             
             u32 textureOpCount = 1024;
             PlatformTextureOpQueue* textureQueue = &gameMemory.textureQueue;

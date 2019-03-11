@@ -354,6 +354,8 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
 {
     SetGameMode(gameState, GameMode_Playing);
     GameModeWorld* result = PushStruct(&gameState->modePool, GameModeWorld);
+    
+    result->editorRoles = gameState->editorRoles;
     myPlayer = &result->player;
     
     u32 sendBufferSize = KiloBytes(4);
@@ -374,7 +376,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     
     
     gameState->receivePacketWork.network = &myPlayer->network;
-    gameState->receivePacketWork.ReceiveData = platformAPI.net.ReceiveDataAndAccept;
+    gameState->receivePacketWork.ReceiveData = platformAPI.net.ReceiveData;
     
     platformAPI.PushWork(gameState->slowQueue, ReceiveNetworkPackets, &gameState->receivePacketWork);
     
@@ -517,6 +519,19 @@ internal void HandleClientPrediction(ClientEntity* entity, r32 timeToUpdate)
             }
         } break;
     }
+}
+
+inline void AddLayoutPiece(ObjectLayout* layout, Vec2 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u32 flags = 0)
+{
+    Assert(layout->pieceCount < ArrayCount(layout->pieces));
+    LayoutPiece* dest = layout->pieces + layout->pieceCount++;
+    dest->offset = offset;
+    dest->angle = angle;
+    dest->scale = scale;
+    dest->alpha = alpha;
+    dest->pivot = pivot;
+    dest->componentHashID = StringHash(componentName);
+    dest->flags = flags;
 }
 
 internal Vec3 MoveEntityClient(GameModeWorld* worldMode, ClientEntity* entity, r32 timeToAdvance, Vec3 acceleration, Vec3 velocity, Vec3* velocityToUpdate)
@@ -735,11 +750,13 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     ReadTaxonomiesFromFile();
                     
                     ImportAllFiles(filePath, worldMode->editorRoles, false);
+                    ImportAllAssetFiles(worldMode, filePath, &worldMode->filePool);
                     ReadPlantChart();
                     
-                    TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(worldMode->table, "goblins");
-                    TaxonomySlot* test = GetSlotForTaxonomy(worldMode->table, slot->taxonomy);
-                    Assert(slot->taxonomy == test->taxonomy);
+                    
+                    ObjectLayout* layout = &worldMode->table->testLayout;
+                    layout->pieceCount = 0;
+                    AddLayoutPiece(layout, V2(0, 0), 0, V2(1, 1), 1, V2(0.5f, 0.5f), "blade");
                     
                     platformAPI.DEBUGWriteFile("editorErrors", worldMode->table->errors, sizeof(worldMode->table->errors[0]) * worldMode->table->errorCount);
                     
@@ -774,8 +791,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 CloseAllHandles(gameState->assets);
                 
                 WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstPakFileArrived, true);
-                
-                ImportAllAssetFiles(worldMode, filePath, &worldMode->filePool);
                 
                 worldMode->firstPakFileArrived = 0;
                 
@@ -869,6 +884,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         {   
                             entity->actionTime += input->timeToAdvance;
                             TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, entity->taxonomy);
+                            if(!slot)
+                            {
+                                entity->timeFromLastUpdate = R32_MAX;
+                            }
                             entity->slot = slot;
                             
                             Vec3 offset = {};
@@ -1538,7 +1557,6 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
     Vec2 editorP = V2(-300, 100);
     Vec2 joinP = V2(0, 100);
     
-    
     TagVector matchVector = {};
     TagVector weightVector = {};
     weightVector.E[Tag_fontType] = 1.0f;
@@ -1548,10 +1566,11 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
     Rect2 serverRect = InvertedInfinityRect2();
     Rect2 editorRect = InvertedInfinityRect2();
     Rect2 joinRect = InvertedInfinityRect2();
+    
+    ObjectTransform rectTransform = FlatTransform();
     if(IsValid(fontId))
     {
         Font* font = PushFont(group, fontId);
-        
         if(font)
         {
             PakFont* fontInfo = GetFontInfo(group->assets, fontId);
@@ -1566,6 +1585,42 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
                 UIOrthoTextOp(group, font, fontInfo, serverText, fontScale, V3(serverP, 1.0f), TextOp_draw, V4(1, 1, 1, 1));
                 UIOrthoTextOp(group, font, fontInfo, editorText, fontScale, V3(editorP, 1.0f), TextOp_draw, V4(1, 1, 1, 1));
                 UIOrthoTextOp(group, font, fontInfo, joinText, fontScale, V3(joinP, 1.0f), TextOp_draw, V4(1, 1, 1, 1));
+                
+                
+                Vec2 startingP = V2(-300, 0);
+                for(u32 roleIndex = 0; roleIndex < ArrayCount(MetaFlags_EditorRole); ++roleIndex)
+                {
+                    MetaFlag* flag = MetaFlags_EditorRole + roleIndex;
+                    Rect2 roleRect = UIOrthoTextOp(group, font, fontInfo, flag->name, fontScale, V3(startingP, 0), TextOp_getSize, V4(1, 1, 1, 1));
+                    
+                    Vec4 color = V4(1, 0, 0, 0.4f);
+                    
+                    if(gameState->editorRoles & flag->value)
+                    {
+                        color.a = 1.0f;
+                    }
+                    
+                    if(PointInRect(roleRect, relativeScreenMouse))
+                    {
+                        color.b = 1.0f;
+                        if(Pressed(&input->mouseLeft))
+                        {
+                            if(gameState->editorRoles & flag->value)
+                            {
+                                gameState->editorRoles &= ~flag->value;
+                            }
+                            else
+                            {
+                                gameState->editorRoles |= flag->value;
+                            }
+                        }
+                    }
+                    
+                    PushRect(group, rectTransform, roleRect, color);
+                    UIOrthoTextOp(group, font, fontInfo, flag->name, fontScale, V3(startingP, 1.0f), TextOp_draw, V4(1, 1, 1, 1));
+                    
+                    startingP.y -= 40;
+                }
             }
         }
     }
@@ -1575,8 +1630,6 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
         serverRect = RectMinDim(V2(0, 100), V2(200, 50));
         joinRect = RectMinDim(V2(300, 100), V2(200, 50));
     }
-    
-    ObjectTransform rectTransform = FlatTransform();
     
     Vec4 serverColor = V4(1, 0, 0, 0.5f);
     Vec4 editorColor = V4(0, 1, 0, 0.5f);
@@ -1597,7 +1650,7 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
             }
         }
     }
-    else if(PointInRect(editorRect, relativeScreenMouse))
+    else if(PointInRect(editorRect, relativeScreenMouse) && gameState->editorRoles)
     {
         editorColor.a = 1.0f;
         if(Pressed(&input->mouseLeft))

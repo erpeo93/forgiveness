@@ -67,7 +67,6 @@ internal PieceAss BlendAss_(PieceAss* p1, r32 lerp, PieceAss* p2)
 inline Bone* FindBone(Animation* animation, u32 timelineIndex, u32 startingFrameIndex, b32 negativeDelta, u32* timelineMS)
 {
     Bone* result = 0;
-    
     u32 test = startingFrameIndex;
     while(test != 0 )
     {
@@ -213,7 +212,7 @@ internal void BlendFrames_(Animation* animation, BlendResult* in, u32 lowerFrame
         Assert(in->ass[assIndex].spriteIndex < animation->spriteInfoCount);
         
         SpriteInfo* sprite = animation->spriteInfos + in->ass[assIndex].spriteIndex;
-        in->sprites[assIndex] = sprite;
+        in->sprites[assIndex] = *sprite;
     }
 }
 
@@ -474,7 +473,7 @@ inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 entityHa
         weight.E[Tag_secondHashHalf] = 10.0f;
         u32 assetIndex = Asset_count + (sprite->stringHashID & (HASHED_ASSET_SLOTS - 1));
         
-        if(properties->componentCount)
+        if(properties && properties->componentCount)
         {
             for(u32 componentIndex = 0; componentIndex < properties->componentCount; ++componentIndex)
             {
@@ -554,6 +553,47 @@ inline EquipmentAnimationSlot* Exists(AnimationFixedParams* input, u64 stringHas
     return result;
 }
 
+inline ObjectLayout* GetLayout(TaxonomyTable* table, b32 onGround, b32 drawOpened)
+{
+    ObjectLayout* result = &table->testLayout;
+    return result;
+}
+
+
+inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, ObjectLayout* layout, AnimationVolatileParams* params)
+{
+    output->boneCount = 1;
+    Bone* bone = output->bones + 0;
+    *bone = {};
+    bone->mainAxis = V2(0, 1);
+    bone->parentID = -1;
+    
+    
+    Assert(layout->pieceCount <= ArrayCount(output->ass));
+    output->assCount = layout->pieceCount;
+    
+    for(u32 pieceIndex = 0; pieceIndex < layout->pieceCount; ++pieceIndex)
+    {
+        LayoutPiece* source = layout->pieces + pieceIndex;
+        
+        PieceAss* destAss = output->ass + pieceIndex;
+        SpriteInfo* destSprite = output->sprites + pieceIndex;
+        
+        *destAss = {};
+        *destSprite = {};
+        
+        destAss->spriteIndex = pieceIndex;
+        destAss->boneOffset = source->offset;
+        destAss->angle = source->angle;
+        destAss->scale = source->scale;
+        destAss->alpha = source->alpha;
+        
+        destSprite->pivot = source->pivot;
+        destSprite->stringHashID = source->componentHashID;
+        destSprite->flags = source->flags;
+    }
+}
+
 inline Rect2 GetBitmapRect(Bitmap* bitmap, Vec2 pivot, Vec3 originOffset, r32 angle, b32 flipOnYAxis, Vec2 scale)
 {
     r32 angleRad = DegToRad(angle);
@@ -562,8 +602,6 @@ inline Rect2 GetBitmapRect(Bitmap* bitmap, Vec2 pivot, Vec3 originOffset, r32 an
     
     if(flipOnYAxis)
     {
-        //XAxis.x = -XAxis.x;
-        //YAxis.xy = -Perp(XAxis.xy);
         originOffset.x = -originOffset.x;
     }
     
@@ -571,19 +609,15 @@ inline Rect2 GetBitmapRect(Bitmap* bitmap, Vec2 pivot, Vec3 originOffset, r32 an
     Rect2 bitmapRect = RectMinMax(dim.P.xy, dim.P.xy + (dim.size.x * dim.XAxis.xy) + (dim.size.y * dim.YAxis.xy));
     return bitmapRect;
 }
-inline Rect2 GetAnimationBounds(AnimationFixedParams* input, RenderGroup* group, Animation* animation, AnimationVolatileParams* params)
+
+inline Rect2 GetPiecesBound(RenderGroup* group, BlendResult* blended, AnimationVolatileParams* params)
 {
     Rect2 result = InvertedInfinityRect2();
-    
-    BlendResult blended;
-    AnimationState dummyState = {};
-    GetAnimationPiecesAndAdvanceState(input, &blended, animation, &dummyState, 0, params);
-    
-    for(u32 assIndex = 0; assIndex < blended.assCount; ++assIndex)
+    for(u32 assIndex = 0; assIndex < blended->assCount; ++assIndex)
     {
-        PieceAss* ass = blended.ass + assIndex;
-        Bone* parentBone = blended.bones + ass->boneID;
-        SpriteInfo* sprite = blended.sprites[assIndex];
+        PieceAss* ass = blended->ass + assIndex;
+        Bone* parentBone = blended->bones + ass->boneID;
+        SpriteInfo* sprite = blended->sprites + assIndex;
         
         Vec3 originOffset = AssOriginOffset(parentBone, ass, params->zOffset, params->scale);
         r32 finalAngle = AssFinalAngle(parentBone, ass);
@@ -617,6 +651,15 @@ inline Rect2 GetAnimationBounds(AnimationFixedParams* input, RenderGroup* group,
     return result;
 }
 
+inline Rect2 GetLayoutBounds(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, AnimationVolatileParams* params)
+{
+    BlendResult blended;
+    GetLayoutPieces(input, &blended, layout, params);
+    Rect2 result = GetPiecesBound(group, &blended, params);
+    
+    return result;
+}
+
 inline Rect2 GetAnimationBounds(AnimationFixedParams* input, RenderGroup* group, AnimationVolatileParams* params, b32 onGround)
 {
     Rect2 result = InvertedInfinityRect2();
@@ -638,21 +681,15 @@ inline Rect2 GetAnimationBounds(AnimationFixedParams* input, RenderGroup* group,
         Animation* pieceAnimation = GetAnimation(group->assets, ID);
         if(pieceAnimation)
         {
-            result = GetAnimationBounds(input, group, pieceAnimation, params);
+            BlendResult blended;
+            AnimationState dummyState = {};
+            GetAnimationPiecesAndAdvanceState(input, &blended, pieceAnimation, &dummyState, 0, params);
+            
+            result = GetPiecesBound(group, &blended, params);
         }
         else
         {
             LoadAnimation(group->assets, ID);
-        }
-        
-    }
-    else
-    {
-        BitmapId BID = GetBitmapNoAnimation(input->taxTable, group, params->entityHashID);
-        Bitmap* bitmap = GetBitmap(group->assets, BID);
-        if(bitmap)
-        {
-            result = GetBitmapRect(bitmap, bitmap->pivot, V3(0, 0, 0), 0, params->flipOnYAxis, params->scale);
         }
         
     }
@@ -663,74 +700,38 @@ inline Rect2 GetAnimationBounds(AnimationFixedParams* input, RenderGroup* group,
     return result;
 }
 
-internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup* group, Animation* animation, u64 skeletonHashID, Vec3 P, AnimationState* animationState, AnimationVolatileParams* params, r32 timeToAdvance);
+
+
+internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, Vec3 P, AnimationVolatileParams* params);
+
 inline b32 DrawModularPiece(AnimationFixedParams* input, RenderGroup* group, Vec3 P, u64 entityHashID, AnimationVolatileParams* params, b32 onGround, b32 drawOpened, b32 dontRender)
 {
     b32 result = false;
-    
-    AssetTypeId assetID = Asset_equipmentMap;
-    TagVector match = {};
-    TagVector weight = {};
-    weight.E[Tag_direction] = 1.0f;
-    weight.E[Tag_ObjectState] = 1000.0f;
-    
-    if(onGround)
+    ObjectLayout* layout = GetLayout(input->taxTable, onGround, drawOpened);
+    if(layout)
     {
-        match.E[Tag_ObjectState] = ObjectState_Ground;
-    }
-    
-    if(drawOpened)
-    {
-        match.E[Tag_ObjectState] = ObjectState_Open;
-    }
-    
-    AnimationId ID = GetMatchingAnimation(group->assets, assetID, entityHashID, &match, &weight);
-    Rect2 pieceBounds = GetAnimationBounds(input, group, params, onGround);
-    
-    Vec3 offset = params->cameraOffset;
-    if(params->flipOnYAxis)
-    {
-        offset.x = -offset.x;
-    }
-    Vec3 offsetRealP = offset.x * group->gameCamera.X + offset.y * group->gameCamera.Y + offset.z * group->gameCamera.Z;
-    Vec3 groundP = P + ProjectOnGround(offsetRealP, group->gameCamera.P);
-    r32 distanceSq = LengthSq(groundP - input->mousePOnGround);
-    if(distanceSq < input->minFocusSlotDistanceSq)
-    {
-        result = true;
-        input->minFocusSlotDistanceSq = distanceSq;
-    }
-    
-    if(!dontRender)
-    {
-        if(IsValid(ID))
+        Vec3 offset = params->cameraOffset;
+        if(params->flipOnYAxis)
         {
-            Animation* pieceAnimation = GetAnimation(group->assets, ID);
-            if(pieceAnimation )
-            {
-                AnimationState pieceState = {};
-                UpdateAndRenderAnimation(input, group, pieceAnimation, 0, P, &pieceState, params, 0);
-            }
-            else
-            {
-                LoadAnimation(group->assets, ID );
-            }
-            
+            offset.x = -offset.x;
         }
-        else
+        Vec3 offsetRealP = offset.x * group->gameCamera.X + offset.y * group->gameCamera.Y + offset.z * group->gameCamera.Z;
+        
+        Vec3 groundP = P + ProjectOnGround(offsetRealP, group->gameCamera.P);
+        r32 distanceSq = LengthSq(groundP - input->mousePOnGround);
+        if(distanceSq < input->minFocusSlotDistanceSq)
         {
-            BitmapId BID = GetBitmapNoAnimation(input->taxTable, group, entityHashID);
-            if(IsValid(BID))
-            {
-                ObjectTransform objectTransform = UprightTransform();
-                objectTransform.additionalZBias = params->additionalZbias;
-                objectTransform.cameraOffset = params->cameraOffset;
-                objectTransform.angle = 0;
-                Bitmap* bitmap = GetBitmap(group->assets, BID);
-                PushBitmap(group, objectTransform, BID, P, 0, params->scale, params->color, params->lightIndexes);
-            }
+            result = true;
+            input->minFocusSlotDistanceSq = distanceSq;
+        }
+        
+        if(!dontRender)
+        {
+            AnimationState pieceState = {};
+            RenderObjectLayout(input, group, layout, P, params);
         }
     }
+    
     return result;
 }
 
@@ -859,7 +860,6 @@ inline b32 RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3
             
             ComponentsProperties pieceProperties;
             pieceProperties.componentCount = 0;
-            
             pieceParams.properties = &pieceProperties;
             
             if(!input->ortho)
@@ -1304,7 +1304,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
 #endif
         
         
-        SpriteInfo* sprite = blended->sprites[assIndex];
+        SpriteInfo* sprite = blended->sprites + assIndex;
         if(equipmentMap)
         {
             if(!(sprite->flags & Sprite_Composed) &&
@@ -1428,6 +1428,19 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
     AnimationPiecesOperation(input, group, equipmentMap, &blended, P, params, CycleAss_DetermineFocus);
     AnimationPiecesOperation(input, group, equipmentMap, &blended, P, params, CycleAss_Render);
 }
+
+
+internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, Vec3 P, AnimationVolatileParams* params)
+{
+    BlendResult blended;
+    GetLayoutPieces(input, &blended, layout, params);
+    
+    AnimationPiecesOperation(input, group, 0, &blended, P, params, CycleAss_DetermineFocus);
+    AnimationPiecesOperation(input, group, 0, &blended, P, params, CycleAss_Render);
+}
+
+
+
 
 inline void InitializeAnimationInputOutput(AnimationFixedParams* input, AnimationOutput* output, GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToAdvance)
 {
@@ -1561,6 +1574,11 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
         
     }
     
+    input->equipment = 0;
+    input->maxEquipmentCount = 0;
+    input->combatAnimation = false;
+    
+    
     input->output = output;
     output->nearestCompatibleSlot = {};
     output->focusSlots = {};
@@ -1637,123 +1655,118 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
     AnimationState* animationState = &entityC->animation;
     animationState->cameInTime += timeToAdvance;
     
-    if(PushNewAction(animationState, entityC->action))
-    {
-        GetAIDResult prefetchAID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->nextAction, drawOpened);
-        PrefetchAnimation(group->assets, prefetchAID.AID);
-    }
-    
-    GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, drawOpened, forcedNameHashID);
-    
     AnimationFixedParams input;
-    
-    EquipmentAnimationSlot slots[32];
-    input.equipment = slots;
-    input.maxEquipmentCount = ArrayCount(slots);
-    input.combatAnimation = (AID.assetID == Asset_attacking);
+    InitializeAnimationInputOutput(&input, &result, worldMode, entityC, timeToAdvance);
     input.ortho = ortho;
     input.timeMod = modTime;
     
-    InitializeAnimationInputOutput(&input, &result, worldMode, entityC, timeToAdvance);
+    AnimationVolatileParams params;
+    params.flipOnYAxis = animationState->flipOnYAxis;
+    params.drawEmptySpaces = true;
+    params.recipeIndex = 0;
+    params.entityHashID = 0;
+    params.additionalZbias = additionalZbias;
+    params.modulationWithFocusColor = entityC->modulationWithFocusColor;
+    params.cameraOffset = offset;
+    params.lightIndexes = lightIndexes;
+    params.color = color;
+    params.angle = angle;
+    params.scale = scale;
+    params.zOffset = 0;
+    params.properties = 0;
     
-    if(IsValid(AID.AID))
+    if(IsObject(worldMode->table, entityC->taxonomy))
     {
-        Animation* animation = GetAnimation(group->assets, AID.AID);
-        if(animation)
+        ComponentsProperties properties;
+        params.properties = &properties;
+        GetVisualProperties(&properties, taxTable, entityC->taxonomy, entityC->recipeIndex);
+        
+        b32 onGround = true;
+        ObjectLayout* layout = GetLayout(taxTable, onGround, drawOpened);
+        Rect2 animationBounds = GetLayoutBounds(&input, group, layout, &params);
+        if(HasArea(bounds))
         {
-            result.playedAnimationNameHash = animation->header->nameHash;
+            Vec2 boundsDim = GetDim(bounds);
+            r32 boundsFillPercentage = 0.9f;
+            Vec2 animationDim = GetDim(animationBounds);
+            r32 boundScaleX = boundsDim.x / animationDim.x * boundsFillPercentage;
+            r32 boundScaleY = boundsDim.y / animationDim.y * boundsFillPercentage;
             
-            r32 quicknessCoeff = 1.0f;
-            timeToAdvance *= quicknessCoeff;
+            r32 boundScale = Min(boundScaleX, boundScaleY);
+            Vec2 animationCenter = GetCenter(animationBounds);
+            params.cameraOffset = -boundScale * V3(animationCenter, 0);
+            params.scale *= Min(boundScaleX, boundScaleY);
             
-            AnimationVolatileParams params;
-            params.flipOnYAxis = animationState->flipOnYAxis;
-            params.drawEmptySpaces = true;
-            params.entityHashID = AID.entityHashID;
-            params.recipeIndex = 0;
-            params.additionalZbias = additionalZbias;
-            params.modulationWithFocusColor = entityC->modulationWithFocusColor;
-            params.cameraOffset = offset;
-            params.lightIndexes = lightIndexes;
-            params.color = color;
-            params.angle = angle;
-            params.scale = scale;
-            params.zOffset = 0;
-            
-            ComponentsProperties properties;
-            params.properties = &properties;
-            GetVisualProperties(&properties, taxTable, entityC->taxonomy, entityC->recipeIndex);
-            
-            Rect2 animationBounds = GetAnimationBounds(&input, group, animation, &params);
-            if(HasArea(bounds))
-            {
-                Vec2 boundsDim = GetDim(bounds);
-                r32 boundsFillPercentage = 0.9f;
-                Vec2 animationDim = GetDim(animationBounds);
-                r32 boundScaleX = boundsDim.x / animationDim.x * boundsFillPercentage;
-                r32 boundScaleY = boundsDim.y / animationDim.y * boundsFillPercentage;
-                
-                r32 boundScale = Min(boundScaleX, boundScaleY);
-                Vec2 animationCenter = GetCenter(animationBounds);
-                params.cameraOffset = -boundScale * V3(animationCenter, 0);
-                params.scale *= Min(boundScaleX, boundScaleY);
-                
-                animationBounds = RectCenterDim(animationCenter, Hadamart(animationDim, V2(boundScaleX, boundScaleY)));
-            }
-            
-            if(!ortho)
-            {
-                animationState->bounds = animationBounds;
-            }
-            UpdateAndRenderAnimation(&input, group, animation, AID.skeletonHashID, entityC->P, animationState, &params, timeToAdvance);
+            animationBounds = RectCenterDim(animationCenter, Hadamart(animationDim, V2(boundScaleX, boundScaleY)));
         }
-        else
+        
+        if(!ortho)
         {
-            LoadAnimation(group->assets, AID.AID );
+            animationState->bounds = animationBounds;
         }
+        
+        RenderObjectLayout(&input, group, layout, entityC->P, &params);
     }
     else
     {
-        animationState->totalTime = 0;
-        animationState->action = animationState->nextAction;
-        
-        BitmapId BID = GetBitmapNoAnimation(taxTable, group, AID.entityHashID);
-        if(IsValid(BID))
+        if(PushNewAction(animationState, entityC->action))
         {
-            ObjectTransform objectTransform = UprightTransform();
-            objectTransform.modulationPercentage = entityC->modulationWithFocusColor;
-            objectTransform.additionalZBias = additionalZbias;
-            objectTransform.cameraOffset.xy = offset.xy;
-            objectTransform.angle = angle;
-            
-            Bitmap* bitmap = GetBitmap(group->assets, BID);
-            if(bitmap)
+            GetAIDResult prefetchAID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->nextAction, drawOpened);
+            PrefetchAnimation(group->assets, prefetchAID.AID);
+        }
+        
+        GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, drawOpened, forcedNameHashID);
+        
+        EquipmentAnimationSlot slots[32];
+        input.equipment = slots;
+        input.maxEquipmentCount = ArrayCount(slots);
+        input.combatAnimation = (AID.assetID == Asset_attacking);
+        
+        if(IsValid(AID.AID))
+        {
+            Animation* animation = GetAnimation(group->assets, AID.AID);
+            if(animation)
             {
-                animationState->bounds = GetBitmapRect(bitmap, bitmap->pivot, offset, angle, animationState->flipOnYAxis, scale);
-            }
-            
-            if(HasArea(bounds))
-            {
-                Vec2 boundsDim = GetDim(bounds);
-                r32 boundsFillPercentage = 0.9f;
-                Vec2 animationDim = GetDim(animationState->bounds);
-                r32 boundScaleX = boundsDim.x / animationDim.x * boundsFillPercentage;
-                r32 boundScaleY = boundsDim.y / animationDim.y * boundsFillPercentage;
+                result.playedAnimationNameHash = animation->header->nameHash;
                 
-                r32 boundScale = Min(boundScaleX, boundScaleY);
-                Vec2 animationCenter = GetCenter(animationState->bounds);
-                objectTransform.cameraOffset = -boundScale * V3(animationCenter, 0);
-                scale *= Min(boundScaleX, boundScaleY);
+                r32 quicknessCoeff = 1.0f;
+                timeToAdvance *= quicknessCoeff;
+                params.entityHashID = AID.entityHashID;
+                
+                BlendResult blended;
+                AnimationState dummyState = {};
+                GetAnimationPiecesAndAdvanceState(&input, &blended, animation, &dummyState, 0, &params);
+                Rect2 animationBounds = GetPiecesBound(group, &blended, &params);
+                if(HasArea(bounds))
+                {
+                    Vec2 boundsDim = GetDim(bounds);
+                    r32 boundsFillPercentage = 0.9f;
+                    Vec2 animationDim = GetDim(animationBounds);
+                    r32 boundScaleX = boundsDim.x / animationDim.x * boundsFillPercentage;
+                    r32 boundScaleY = boundsDim.y / animationDim.y * boundsFillPercentage;
+                    
+                    r32 boundScale = Min(boundScaleX, boundScaleY);
+                    Vec2 animationCenter = GetCenter(animationBounds);
+                    params.cameraOffset = -boundScale * V3(animationCenter, 0);
+                    params.scale *= Min(boundScaleX, boundScaleY);
+                    
+                    animationBounds = RectCenterDim(animationCenter, Hadamart(animationDim, V2(boundScaleX, boundScaleY)));
+                }
+                
+                if(!ortho)
+                {
+                    animationState->bounds = animationBounds;
+                }
+                
+                UpdateAndRenderAnimation(&input, group, animation, AID.skeletonHashID, entityC->P, animationState, &params, timeToAdvance);
             }
-            
-            
-            r32 alpha = GetAssAlphaFade(entityC->identifier, 0, 
-                                        input.lifePointsSeedResetCounter, input.lifePointFadeDuration, input.lifePointThreesold, input.lifePointRatio, animationState->cameInTime, entityC->status);
-            
-            color.a *= alpha;
-            PushBitmap(group, objectTransform, BID, entityC->P, 0, scale, color, lightIndexes);
+            else
+            {
+                LoadAnimation(group->assets, AID.AID );
+            }
         }
     }
+    
     
     return result;
 }
@@ -2164,7 +2177,6 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     GetPhysicalProperties(worldMode->table, entityC->taxonomy, entityC->identifier, &entityC->boundType, &ignored);
     entityC->bounds = bounds;
     //PushCubeOutline(group, bounds, V4(1, 1, 1, 1), 0.05f);
-    
     
     PlaySoundForAnimation(worldMode, group->assets, slot, result.playedAnimationNameHash, oldSoundTime, soundTime);
     

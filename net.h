@@ -26,6 +26,31 @@ typedef intptr_t snm;
 #define unpack754_32(i) (unpack754((i), 32, 8))
 #define unpack754_64(i) (unpack754((i), 64, 11))
 
+struct NetMutex
+{
+    u64 volatile ticket;
+    u64 volatile serving;
+};
+
+inline u64 NetAtomicIncrementU64(u64 volatile* value, u64 addend)
+{
+    // NOTE( Leonardo ): return the value that was there _Before_ the add!
+    u64 result = (InterlockedExchangeAdd64(( __int64* ) value, addend));
+    return result;
+}
+
+inline void BeginNetMutex(NetMutex* mutex)
+{
+    u64 ticket = NetAtomicIncrementU64(&mutex->ticket, 1);
+    while(ticket != mutex->serving);{_mm_pause();}
+}
+
+inline void EndNetMutex(NetMutex* mutex)
+{
+    NetAtomicIncrementU64(&mutex->serving, 1);
+}
+
+
 inline u64 pack754(long double f, unsigned bits, unsigned expbits)
 {
     long double fnorm;
@@ -604,7 +629,8 @@ struct NetworkChannelInfo
     u16 nextProgressiveIndexSend;
     u16 nextProgressiveIndexRecv;
     
-	u32 runningUnackedIndex;
+    NetMutex unackedMutex;
+	u32 unackedPacketCount;
     UnackedPacket unackedPackets[SLIDING_WINDOW_SIZE * 64];
     
     u16 packetSize[SLIDING_WINDOW_SIZE];
@@ -630,6 +656,11 @@ struct NetworkConnection
     NetworkConnection* nextFree;
 };
 
+struct NetworkNewConnection
+{
+    b32 accepted;
+    u16 slot;
+};
 
 struct NetworkInterface
 {
@@ -640,8 +671,9 @@ struct NetworkInterface
     u32 channelCount;
     NetworkChannel channels[4];
     
+    b32 newConnectionsAccepted;
     u32 newConnectionCount;
-    u16 newConnections[128];
+    NetworkNewConnection newConnections[128];
     
     u16 nextConnectionIndex;
     NetworkConnection* firstFreeConnection;
@@ -662,8 +694,11 @@ struct NetworkChannelParams
 #define NETWORK_SEND_DATA(name) b32 name(NetworkInterface* network, u16 connectionSlot, u8 channelIndex,void* data, u16 size, b32 sendUnackedPackets)
 typedef NETWORK_SEND_DATA(network_platform_send_data);
 
-#define NETWORK_RECEIVE_DATA_ACCEPT(name) void name(NetworkInterface* network)
-typedef NETWORK_RECEIVE_DATA_ACCEPT(network_platform_receive_data_accept);
+#define NETWORK_RECEIVE_DATA(name) void name(NetworkInterface* network)
+typedef NETWORK_RECEIVE_DATA(network_platform_receive_data);
+
+#define NETWORK_ACCEPT(name) u16 name(NetworkInterface* network, u16* acceptedSlots, u16 maxAccepted)
+typedef NETWORK_ACCEPT(network_platform_accept);
 
 #define NETWORK_GET_PACKET(name) NetworkPacketReceived name(NetworkInterface* network, u16 connectionSlot)
 typedef NETWORK_GET_PACKET(network_platform_get_packet);
@@ -685,7 +720,8 @@ typedef NETWORK_RECYCLE_CONNECTION(network_platform_recycle_connection);
 struct NetworkAPI
 {
     network_platform_send_data* SendData;
-    network_platform_receive_data_accept* ReceiveDataAndAccept;
+    network_platform_receive_data* ReceiveData;
+    network_platform_accept* Accept;
     network_platform_get_packet* GetPacketOnSlot;
     
     network_platform_open_connection* OpenConnection;

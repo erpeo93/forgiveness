@@ -33,12 +33,14 @@ enum UIRequestType
     UIRequest_EditTab,
     UIRequest_AddTaxonomy,
     UIRequest_DeleteTaxonomy,
+    UIRequest_ReviveTaxonomy,
     UIRequest_InstantiateTaxonomy,
     UIRequest_DeleteEntity,
     UIRequest_ImpersonateEntity,
     UIRequest_SaveAssetFile,
     UIRequest_ReloadAssets,
     UIRequest_PatchServer,
+    UIRequest_PatchCheck,
     UIRequest_SaveTaxonomyTab,
 };
 
@@ -803,9 +805,6 @@ struct UIState
     i32 currentAutocompleteSelectedIndex;
     u32 autocompleteCount;
     UIAutocomplete autocompletes[64];
-    
-    EditorElement* soundNamesRoot;
-    EditorElement* soundEventsRoot;
     
     MemoryPool autocompletePool;
     UIAutocompleteBlock* firstFreeAutocompleteBlock;

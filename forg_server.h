@@ -53,7 +53,6 @@ struct ServerPlayer
     b32 connectionClosed;
     u16 connectionSlot;
     
-    b32 assetsReloaded;
     b32 allPakFileSent;
     b32 allDataFileSent;
     u32 pakFileIndex;
@@ -184,6 +183,12 @@ struct DeletedEntity
     u32 IDs[Component_Count];
 };
 
+struct ReceiveNetworkPacketWork
+{
+    NetworkInterface* network;
+    network_platform_receive_data* ReceiveData;
+};
+
 struct AIOperationNode;
 struct ServerState
 {
@@ -207,6 +212,7 @@ struct ServerState
     b32 canAdvance;
 #endif
     
+    
     TaskWithMemory tasks[6];
     PlatformWorkQueue fastQueue;
     PlatformWorkQueue slowQueue;
@@ -219,6 +225,8 @@ struct ServerState
     
     MemoryPool worldPool;
     MemoryPool networkPool;
+    
+    ReceiveNetworkPacketWork receivePacketWork;
     NetworkInterface clientInterface;
     
     u32 sendPakBufferSize;

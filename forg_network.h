@@ -138,6 +138,7 @@ enum Packet_Type
     Type_ReloadAssets,
     Type_SaveSlotTabToFile,
     Type_PatchLocalServer,
+    Type_PatchCheck,
     Type_SaveAssetFadFile,
     
     Type_EditorP,

@@ -7,6 +7,23 @@
 #define ashAlive V4(1, 0, 0, 1)
 
 
+struct LayoutPiece
+{
+    Vec2 offset;
+    r32 angle;
+    Vec2 scale;
+    r32 alpha;
+    Vec2 pivot;
+    u64 componentHashID;
+    u32 flags;
+};
+
+struct ObjectLayout
+{
+    u32 pieceCount;
+    LayoutPiece pieces[32];
+};
+
 struct BlendResult
 {
     u32 boneCount;
@@ -15,7 +32,7 @@ struct BlendResult
     u32 assCount;
     PieceAss ass[32];
     
-    SpriteInfo* sprites[32];
+    SpriteInfo sprites[32];
 };
 
 struct PieceResult

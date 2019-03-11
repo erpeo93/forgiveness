@@ -417,6 +417,8 @@ struct TaxonomyTable
     TaxonomySound* firstFreeTaxonomySound;
     LabeledSound* firstFreeLabeledSound;
     SoundContainer* firstFreeSoundContainer;
+    
+    ObjectLayout testLayout;
 #endif
     
     
@@ -429,9 +431,12 @@ struct TaxonomyTable
     NakedHandReq* firstFreeNakedHandReq;
     
     RandomSequence eventSequence;
+    RandomSequence translateSequence;
     u32 eventCount;
     SoundEvent events[64];
     
+    EditorElement* soundNamesRoot;
+    EditorElement* soundEventsRoot;
     
     u32 errorCount;
     char errors[512][128];

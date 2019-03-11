@@ -417,3 +417,7 @@ PLATFORM_MOVE_FILE_OR_FOLDER(Win32MoveFileOrFolder)
 	BOOL result = MoveFile(oldPath, newPath);
 }
 
+PLATFORM_COPY_FILE_OR_FOLDER(Win32CopyFileOrFolder)
+{
+    BOOL result = CopyFile(oldPath, newPath, true);
+}

@@ -120,12 +120,10 @@ struct EditorLayout
     r32 childStandardHeight;
 };
 
-enum EditorRole
+printFlags(noPrefix) enum EditorRole
 {
     EditorRole_SoundDesigner = (1 << 1),
     EditorRole_GameDesigner = (1 << 2),
-    
-    EditorRole_Everyone = 0xffffffff,
 };
 
 enum EditorWidgetType

@@ -858,6 +858,21 @@ internal void SendPatchDoneMessage(ServerPlayer* player)
     CloseAndStoreStandardPacket(player, ReliableOrdered);
 }
 
+inline void SendPatchDoneMessageToAllPlayers(ServerState* server)
+{
+    u32 playerCount = 0;
+    for(u32 playerIndex = 0; playerIndex < MAXIMUM_SERVER_PLAYERS; ++playerIndex)
+    {
+        ServerPlayer* player = server->players + playerIndex;
+        if(player->connectionSlot)
+        {
+            ++playerCount;
+            SendPatchDoneMessage(player);
+        }
+    }
+    Assert(playerCount == 1);
+}
+
 #if FORGIVENESS_INTERNAL
 internal void SendDebugEvent(ServerPlayer* player, DebugEvent* event)
 {

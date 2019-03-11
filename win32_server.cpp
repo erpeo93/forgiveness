@@ -293,6 +293,7 @@ int main( int argc, char* argv[] )
     
     memory.api.DEBUGReadFile = DEBUGWin32ReadFile;
     memory.api.DEBUGWriteFile = DEBUGWin32WriteFile;
+    memory.api.DEBUGFreeFile = DEBUGWin32FreeFile;
 #if FORGIVENESS_INTERNAL
     memory.api.PlatformInputRecordingCommand = Win32DispatchInputRecordingCommand;
     memory.api.PlatformInputRecordingHandlePlayer = Win32InputRecordingHandlePlayer;
@@ -315,6 +316,7 @@ int main( int argc, char* argv[] )
     memory.api.DeleteFolderRecursive = Win32DeleteFolderRecursive;
     memory.api.DeleteFileWildcards = Win32DeleteFileWildcards;
     memory.api.MoveFileOrFolder = Win32MoveFileOrFolder;
+    memory.api.CopyFileOrFolder = Win32CopyFileOrFolder;
     
     memory.api.net = Win32NetworkAPI;
     
