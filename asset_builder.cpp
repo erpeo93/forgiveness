@@ -2207,9 +2207,39 @@ internal void WriteEquipmentMaps()
     WritePak(assets, "equipmentmaps.pak" );
 }
 
+internal void OutputFoldersAutocompleteFile(char* filename, char* path)
+{
+    char* outputPath = "assets";
+    char completePath[128];
+    FormatString(completePath, sizeof(completePath), "%s/%s.autocomplete", outputPath, filename);
+    
+    
+    char* buffer = (char*) malloc(MegaBytes(2));
+    char* writeHere = buffer;
+    
+    PlatformSubdirNames* subdir = (PlatformSubdirNames* ) malloc(sizeof(PlatformSubdirNames));
+    Win32GetAllSubdirectoriesName(subdir, path);
+    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
+    {
+        char* folderName = subdir->subdirs[subdirIndex];
+        if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
+        {
+            writeHere += sprintf(writeHere, "\"%s\",", folderName);
+        }
+    }
+    free(subdir);
+    
+    DEBUGWin32WriteFile(completePath, buffer, StrLen(buffer));
+    
+    free(buffer);
+}
+
 internal void WriteComponents()
 {
     char* componentsPath = "definition/components";
+    
+    OutputFoldersAutocompleteFile("component", componentsPath);
+    
     PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
     Win32GetAllSubdirectoriesName(subdir, componentsPath);
     
@@ -2646,32 +2676,6 @@ internal void WriteMusic()
 }
 
 
-internal void OutputFoldersAutocompleteFile(char* filename, char* path)
-{
-    char* outputPath = "assets";
-    char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s.autocomplete", outputPath, filename);
-    
-    
-    char* buffer = (char*) malloc(MegaBytes(2));
-    char* writeHere = buffer;
-    
-    PlatformSubdirNames* subdir = (PlatformSubdirNames* ) malloc(sizeof(PlatformSubdirNames));
-    Win32GetAllSubdirectoriesName(subdir, path);
-    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
-    {
-        char* folderName = subdir->subdirs[subdirIndex];
-        if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
-        {
-            writeHere += sprintf(writeHere, "\"%s\",", folderName);
-        }
-    }
-    free(subdir);
-    
-    DEBUGWin32WriteFile(completePath, buffer, StrLen(buffer));
-    
-    free(buffer);
-}
 
 inline char* AddFolderToFile(char* addHere, char* fileEnd, char* folder, char* params)
 {

@@ -1660,6 +1660,34 @@ inline void AddTag(TagId ID, r32 value)
     
     FREELIST_INSERT(dest, slot->firstVisualTag);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+inline void AddLayoutPiece(ObjectLayout* layout, Vec2 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u32 flags = 0)
+{
+    Assert(layout->pieceCount < ArrayCount(layout->pieces));
+    LayoutPiece* dest = layout->pieces + layout->pieceCount++;
+    dest->offset = offset;
+    dest->angle = angle;
+    dest->scale = scale;
+    dest->alpha = alpha;
+    dest->pivot = pivot;
+    dest->componentHashID = StringHash(componentName);
+    dest->flags = flags;
+}
+
 #endif
 
 
@@ -2910,6 +2938,10 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     }
     else if(StrEqual(name, "neededTools"))
     {
+        for(u32 toolIndex = 0; toolIndex < ArrayCount(currentSlot_->neededToolTaxonomies); ++toolIndex)
+        {
+            currentSlot_->neededToolTaxonomies[toolIndex] = 0;
+        }
         EditorElement* tools = root->firstInList;
         while(tools)
         {
@@ -3238,6 +3270,36 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             AddSoundAndChildContainersRecursively(rootContainer, events);
             
             events = events->next;
+        }
+    }
+    else if(StrEqual(name, "layouts"))
+    {
+        FREELIST_FREE(currentSlot_->firstLayout, ObjectLayout, taxTable_->firstFreeObjectLayout);
+        EditorElement* layouts = root->firstInList;
+        while(layouts)
+        {
+            ObjectLayout* newLayout;
+            TAXTABLE_ALLOC(newLayout, ObjectLayout);
+            
+            newLayout->pieceCount = 0;
+            
+            EditorElement* pieces = GetList(layouts, "pieces");
+            while(pieces)
+            {
+                r32 x = ToR32(GetValue(pieces, "xOffset"));
+                r32 y = ToR32(GetValue(pieces, "yOffset"));
+                r32 angle = ToR32(GetValue(pieces, "angle"));
+                r32 scaleX = ToR32(GetValue(pieces, "xScale"));
+                r32 scaleY = ToR32(GetValue(pieces, "yScale"));
+                r32 pieceAlpha = ToR32(GetValue(pieces, "alpha"));
+                char* pieceName = GetValue(pieces, "component");
+                
+                AddLayoutPiece(newLayout, V2(x, y), angle, V2(scaleX, scaleY), pieceAlpha, V2(0.5f, 0.5f), pieceName);
+                pieces = pieces->next;
+            }
+            
+            FREELIST_INSERT(newLayout, currentSlot_->firstLayout);
+            layouts = layouts->next;
         }
     }
 #endif

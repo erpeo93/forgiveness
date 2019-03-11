@@ -553,9 +553,21 @@ inline EquipmentAnimationSlot* Exists(AnimationFixedParams* input, u64 stringHas
     return result;
 }
 
-inline ObjectLayout* GetLayout(TaxonomyTable* table, b32 onGround, b32 drawOpened)
+inline ObjectLayout* GetLayout(TaxonomyTable* table, u32 taxonomy, b32 onGround, b32 drawOpened)
 {
-    ObjectLayout* result = &table->testLayout;
+    ObjectLayout* result = 0;
+    u32 testTaxonomy = taxonomy;
+    while(testTaxonomy)
+    {
+        TaxonomySlot* slot = GetSlotForTaxonomy(table, testTaxonomy);
+        if(slot->firstLayout)
+        {
+            result = slot->firstLayout;
+            break;
+        }
+        
+        testTaxonomy = GetParentTaxonomy(table, testTaxonomy);
+    }
     return result;
 }
 
@@ -565,7 +577,7 @@ inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, Ob
     output->boneCount = 1;
     Bone* bone = output->bones + 0;
     *bone = {};
-    bone->mainAxis = V2(0, 1);
+    bone->mainAxis = V2(1, 0);
     bone->parentID = -1;
     
     
@@ -704,10 +716,10 @@ inline Rect2 GetAnimationBounds(AnimationFixedParams* input, RenderGroup* group,
 
 internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, Vec3 P, AnimationVolatileParams* params);
 
-inline b32 DrawModularPiece(AnimationFixedParams* input, RenderGroup* group, Vec3 P, u64 entityHashID, AnimationVolatileParams* params, b32 onGround, b32 drawOpened, b32 dontRender)
+inline b32 DrawModularPiece(AnimationFixedParams* input, RenderGroup* group, Vec3 P, u32 pieceTaxonomy, AnimationVolatileParams* params, b32 onGround, b32 drawOpened, b32 dontRender)
 {
     b32 result = false;
-    ObjectLayout* layout = GetLayout(input->taxTable, onGround, drawOpened);
+    ObjectLayout* layout = GetLayout(input->taxTable, pieceTaxonomy, onGround, drawOpened);
     if(layout)
     {
         Vec3 offset = params->cameraOffset;
@@ -873,13 +885,19 @@ inline b32 RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3
                         pieceParams.drawEmptySpaces = false;
                     }
                     GetVisualProperties(&pieceProperties, input->taxTable, slot->taxonomy, slot->recipeIndex);
-                    onFocus = DrawModularPiece(input, group, P, slot->stringHashID, &pieceParams, false, slot->drawOpened, dontRender);
+                    onFocus = DrawModularPiece(input, group, P, slot->taxonomy, &pieceParams, false, slot->drawOpened, dontRender);
                 }
             }
             else
             {
                 pieceParams.entityHashID = sprite->stringHashID;
-                DrawModularPiece(input, group, P, sprite->stringHashID, &pieceParams, false, false, false);
+                
+                
+                ShortcutSlot* shortcut = GetShortcut(input->taxTable, sprite->stringHashID);
+                if(shortcut)
+                {
+                    DrawModularPiece(input, group, P, shortcut->taxonomy, &pieceParams, false, false, false);
+                }
             }
         }
         else if(sprite->flags & Sprite_EmptySpace)
@@ -991,7 +1009,7 @@ inline b32 RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3
                             objectParams.properties = &objectProperties;
                             GetVisualProperties(&objectProperties, input->taxTable, taxonomy, recipeIndex);
                             
-                            DrawModularPiece(input, group, P, slot->stringHashID, &objectParams, true, false, false);
+                            DrawModularPiece(input, group, P, slot->taxonomy, &objectParams, true, false, false);
                         }
                     }
                 }
@@ -1574,11 +1592,6 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
         
     }
     
-    input->equipment = 0;
-    input->maxEquipmentCount = 0;
-    input->combatAnimation = false;
-    
-    
     input->output = output;
     output->nearestCompatibleSlot = {};
     output->focusSlots = {};
@@ -1656,6 +1669,11 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
     animationState->cameInTime += timeToAdvance;
     
     AnimationFixedParams input;
+    
+    EquipmentAnimationSlot slots[32];
+    input.equipment = slots;
+    input.maxEquipmentCount = ArrayCount(slots);
+    
     InitializeAnimationInputOutput(&input, &result, worldMode, entityC, timeToAdvance);
     input.ortho = ortho;
     input.timeMod = modTime;
@@ -1682,30 +1700,33 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
         GetVisualProperties(&properties, taxTable, entityC->taxonomy, entityC->recipeIndex);
         
         b32 onGround = true;
-        ObjectLayout* layout = GetLayout(taxTable, onGround, drawOpened);
-        Rect2 animationBounds = GetLayoutBounds(&input, group, layout, &params);
-        if(HasArea(bounds))
+        ObjectLayout* layout = GetLayout(taxTable, entityC->taxonomy, onGround, drawOpened);
+        if(layout)
         {
-            Vec2 boundsDim = GetDim(bounds);
-            r32 boundsFillPercentage = 0.9f;
-            Vec2 animationDim = GetDim(animationBounds);
-            r32 boundScaleX = boundsDim.x / animationDim.x * boundsFillPercentage;
-            r32 boundScaleY = boundsDim.y / animationDim.y * boundsFillPercentage;
+            Rect2 animationBounds = GetLayoutBounds(&input, group, layout, &params);
+            if(HasArea(bounds))
+            {
+                Vec2 boundsDim = GetDim(bounds);
+                r32 boundsFillPercentage = 0.9f;
+                Vec2 animationDim = GetDim(animationBounds);
+                r32 boundScaleX = boundsDim.x / animationDim.x * boundsFillPercentage;
+                r32 boundScaleY = boundsDim.y / animationDim.y * boundsFillPercentage;
+                
+                r32 boundScale = Min(boundScaleX, boundScaleY);
+                Vec2 animationCenter = GetCenter(animationBounds);
+                params.cameraOffset = -boundScale * V3(animationCenter, 0);
+                params.scale *= Min(boundScaleX, boundScaleY);
+                
+                animationBounds = RectCenterDim(animationCenter, Hadamart(animationDim, V2(boundScaleX, boundScaleY)));
+            }
             
-            r32 boundScale = Min(boundScaleX, boundScaleY);
-            Vec2 animationCenter = GetCenter(animationBounds);
-            params.cameraOffset = -boundScale * V3(animationCenter, 0);
-            params.scale *= Min(boundScaleX, boundScaleY);
+            if(!ortho)
+            {
+                animationState->bounds = animationBounds;
+            }
             
-            animationBounds = RectCenterDim(animationCenter, Hadamart(animationDim, V2(boundScaleX, boundScaleY)));
+            RenderObjectLayout(&input, group, layout, entityC->P, &params);
         }
-        
-        if(!ortho)
-        {
-            animationState->bounds = animationBounds;
-        }
-        
-        RenderObjectLayout(&input, group, layout, entityC->P, &params);
     }
     else
     {
@@ -1717,9 +1738,6 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
         
         GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, drawOpened, forcedNameHashID);
         
-        EquipmentAnimationSlot slots[32];
-        input.equipment = slots;
-        input.maxEquipmentCount = ArrayCount(slots);
         input.combatAnimation = (AID.assetID == Asset_attacking);
         
         if(IsValid(AID.AID))

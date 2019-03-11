@@ -521,19 +521,6 @@ internal void HandleClientPrediction(ClientEntity* entity, r32 timeToUpdate)
     }
 }
 
-inline void AddLayoutPiece(ObjectLayout* layout, Vec2 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u32 flags = 0)
-{
-    Assert(layout->pieceCount < ArrayCount(layout->pieces));
-    LayoutPiece* dest = layout->pieces + layout->pieceCount++;
-    dest->offset = offset;
-    dest->angle = angle;
-    dest->scale = scale;
-    dest->alpha = alpha;
-    dest->pivot = pivot;
-    dest->componentHashID = StringHash(componentName);
-    dest->flags = flags;
-}
-
 internal Vec3 MoveEntityClient(GameModeWorld* worldMode, ClientEntity* entity, r32 timeToAdvance, Vec3 acceleration, Vec3 velocity, Vec3* velocityToUpdate)
 {
     Vec3 result = {};
@@ -753,10 +740,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     ImportAllAssetFiles(worldMode, filePath, &worldMode->filePool);
                     ReadPlantChart();
                     
-                    
-                    ObjectLayout* layout = &worldMode->table->testLayout;
-                    layout->pieceCount = 0;
-                    AddLayoutPiece(layout, V2(0, 0), 0, V2(1, 1), 1, V2(0.5f, 0.5f), "blade");
                     
                     platformAPI.DEBUGWriteFile("editorErrors", worldMode->table->errors, sizeof(worldMode->table->errors[0]) * worldMode->table->errorCount);
                     

@@ -260,7 +260,6 @@ struct TaxonomySlot
     TaxonomyEffect* firstEffect;
     
     
-    
     u32 neededToolTaxonomies[4];
     
     
@@ -277,6 +276,7 @@ struct TaxonomySlot
     VisualTag* firstVisualTag;
     AnimationEffect* firstAnimationEffect;
     TaxonomySound* firstSound;
+    ObjectLayout* firstLayout;
     
     r32 lightIntensity;
     Vec3 lightColor;
@@ -417,8 +417,7 @@ struct TaxonomyTable
     TaxonomySound* firstFreeTaxonomySound;
     LabeledSound* firstFreeLabeledSound;
     SoundContainer* firstFreeSoundContainer;
-    
-    ObjectLayout testLayout;
+    ObjectLayout* firstFreeObjectLayout;
 #endif
     
     

@@ -530,11 +530,10 @@ internal void BuildSimpleTestWorld(ServerState* server)
             
             testSlot = NORUNTIMEGetTaxonomySlotByName( taxTable, "strength" );
             AddRandomEntity( region, &region->server->randomSequence, P + V3( 5.0f, 0.0f, 0.0f ), testSlot->taxonomy );
-            
+#endif
             TaxonomySlot* recipeSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "sword");
             testSlot = NORUNTIMEGetTaxonomySlotByName( taxTable, "recipe" );
             AddEntity( region, P + V3( 4.0f, 0.0f, 0.0f ), testSlot->taxonomy, 0, RecipeObject(recipeSlot->taxonomy, 12, I16_MAX));
-#endif
             
 #endif
         }

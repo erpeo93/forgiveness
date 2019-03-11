@@ -22,6 +22,12 @@ struct ObjectLayout
 {
     u32 pieceCount;
     LayoutPiece pieces[32];
+    
+    union
+    {
+        ObjectLayout* next;
+        ObjectLayout* nextFree;
+    };
 };
 
 struct BlendResult
