@@ -482,9 +482,6 @@ internal void BuildSimpleTestWorld(ServerState* server)
 #endif
             
 #if GENERATE_OBJECTS
-            testSlot = NORUNTIMEGetTaxonomySlotByName( taxTable, "arm armour" );
-            //AddRandomEntity( region, &region->server->randomSequence, P + V3( 1, 4, 0 ), testSlot->taxonomy );
-            
             testSlot = NORUNTIMEGetTaxonomySlotByName( taxTable, "standard leather" );
             AddRandomEntity( region, &region->server->randomSequence, P + V3( 2, 5, 0 ), testSlot->taxonomy );
             

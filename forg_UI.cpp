@@ -231,9 +231,13 @@ inline void UIAddTaxonomyToAutocomplete(UIState* UI, UIAutocomplete* autocomplet
     }
 }
 
-inline void UIAddAutocompleteFromTaxonomy(UIState* UI, char* name)
+inline void UIAddAutocompleteFromTaxonomy(UIState* UI, char* name, char* autocompleteName = 0)
 {
-    UIAutocomplete* autocomplete = UIAddAutocomplete(UI, name);
+    if(!autocompleteName)
+    {
+        autocompleteName = name;
+    }
+    UIAutocomplete* autocomplete = UIAddAutocomplete(UI, autocompleteName);
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(UI->table, name);
     
     for(u32 childIndex = 0; childIndex < slot->subTaxonomiesCount; ++childIndex)
@@ -1007,6 +1011,10 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         test.animation.totalTime = timer;
                         
                         PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, V2(50, 50), 0, P, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 10, true, timer, nameHashID);
+                        
+                        ObjectTransform originTransform = FlatTransform();
+                        originTransform.additionalZBias = 30.0f;
+                        PushRect(UI->group, originTransform, P, V2(6, 6), V4(1, 0, 0, 1));
                         
                         if(play)
                         {
@@ -2154,6 +2162,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         
         
         UIAddAutocompleteFromTaxonomy(UI, "equipment");
+        UIAddAutocompleteFromTaxonomy(UI, "root", "ingredient");
         UIAddAutocompleteFromTable(UI, SlotName, "slot");
         UIAddAutocompleteFromTable(UI, EntityAction, "action");
         UIAddAutocompleteFromTable(UI, SoundContainerType, "soundCType");

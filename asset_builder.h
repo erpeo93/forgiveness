@@ -101,6 +101,7 @@ struct PieceAss
     u32 timeLineIndex;
     i32 boneID;
     Vec2 boneOffset;
+    r32 additionalZOffset;
     r32 angle;
     Vec2 scale;
     r32 alpha;

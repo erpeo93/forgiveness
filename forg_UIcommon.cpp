@@ -387,6 +387,18 @@ inline UIRequest SendDataFileRequest()
     return result;
 }
 
+inline void UISendTab(TaxonomySlot* slot, u32 tabIndex)
+{
+    EditorTab* toSend = slot->tabs + tabIndex;
+    if(toSend->root)
+    {
+        SendNewTabMessage();
+        SendEditorElements(toSend->root);
+        SendReloadEditingMessage(slot->taxonomy, tabIndex);
+    }
+}
+
+
 inline UIRequest AddTaxonomyRequest(u32 parentTaxonomy, char* name)
 {
     UIRequest result = {};
@@ -466,6 +478,7 @@ inline UIRequest SaveTaxonomyTabRequest()
     
     return result;
 }
+
 
 
 inline void UIAddUndoRedoCommand(UIState* UI, UndoRedoCommand command);
@@ -625,14 +638,7 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         case UIRequest_EditTab:
         {
             TaxonomySlot* editingSlot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
-            u32 sendingIndex = UI->editingTabIndex;
-            EditorTab* toSend = editingSlot->tabs + sendingIndex;
-            if(toSend->root)
-            {
-                SendNewTabMessage();
-                SendEditorElements(toSend->root);
-                SendReloadEditingMessage(UI->editingTaxonomy, sendingIndex);
-            }
+            UISendTab(editingSlot, UI->editingTabIndex);
         } break;
         
         case UIRequest_AddTaxonomy:
@@ -1134,19 +1140,24 @@ inline EditorElement* CopyEditorElement(TaxonomyTable* table, EditorElement* sou
     return result;
 }
 
+
 inline void UpdateWidgetChangeCount(UIState* UI, EditorWidget* widget, i32 delta)
 {
     if(widget)
     {
+        TaxonomySlot* slot = 0;
         if(StrEqual(widget->name, "Editing Tabs"))
         {
-            TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
+            slot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
             slot->editorChangeCount += delta;
+            UISendTab(slot, UI->editingTabIndex);
         }
         else
         {
             widget->changeCount += delta;
         }
+        
+        Import(slot, widget->root);
     }
 }
 
@@ -1416,8 +1427,6 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         {
                             UndoRedoCommand* toExec = current->prev;
                             
-                            UpdateWidgetChangeCount(UI, toExec->widget, -1);
-                            
                             switch(toExec->type)
                             {
                                 case UndoRedo_StringCopy:
@@ -1451,6 +1460,8 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                                 } break;
                             }
                             
+                            UpdateWidgetChangeCount(UI, toExec->widget, -1);
+                            
                             UI->current = toExec;
                             UI->canRedo = true;
                         }
@@ -1464,7 +1475,6 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                             if(current != &UI->undoRedoSentinel)
                             {
                                 UndoRedoCommand* toExec = current;
-                                UpdateWidgetChangeCount(UI, toExec->widget, 1);
                                 
                                 switch(toExec->type)
                                 {
@@ -1496,6 +1506,8 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                                         UI->editingTabIndex = 0;
                                     } break;
                                 }
+                                
+                                UpdateWidgetChangeCount(UI, toExec->widget, 1);
                                 
                                 UndoRedoCommand* next = toExec->next;
                                 if(next == &UI->undoRedoSentinel)

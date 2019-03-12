@@ -1348,6 +1348,7 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                     
                     
                     ass->boneOffset = V2(x, y )  * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f );
+                    ass->additionalZOffset = 0;
                     ass->angle = angle;
                     ass->scale = V2(scaleX, scaleY );
                     ass->alpha = alpha;

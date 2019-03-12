@@ -180,6 +180,8 @@ internal void BlendFrames_(Animation* animation, BlendResult* in, u32 lowerFrame
         u32 exceedingLower = timelineMS - lowerTimeLine;
         r32 lerp = SafeRatio1((r32 ) exceedingLower, (r32 ) (upperTimeLine - lowerTimeLine ) );
         in->bones[boneIndex] = BlendBones_(b1, lerp, b2);
+        
+        in->boneAlterations[boneIndex] = {};
     }
     
     
@@ -208,6 +210,8 @@ internal void BlendFrames_(Animation* animation, BlendResult* in, u32 lowerFrame
         u32 exceedingLower = timelineMS - lowerTimeLine;
         r32 lerp = SafeRatio1((r32 ) exceedingLower, (r32 ) (upperTimeLine - lowerTimeLine ) );
         in->ass[assIndex] = BlendAss_(a1, lerp, a2);
+        
+        in->assAlterations[assIndex] = {};
         
         Assert(in->ass[assIndex].spriteIndex < animation->spriteInfoCount);
         
@@ -320,6 +324,21 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
     }
     BlendFrames_(animation, blended, lowerFrameIndex, animTimeMod, upperFrameIndex);
     
+    
+    TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, input->entity->taxonomy);
+    for(TaxonomyBoneAlterations* boneAlt = slot->firstBoneAlteration; boneAlt; boneAlt = boneAlt->next)
+    {
+        Assert(boneAlt->boneIndex < ArrayCount(blended->boneAlterations));
+        blended->boneAlterations[boneAlt->boneIndex] = boneAlt->alt;
+    }
+    
+    for(TaxonomyAssAlterations* assAlt = slot->firstAssAlteration; assAlt; assAlt = assAlt->next)
+    {
+        Assert(assAlt->assIndex < ArrayCount(blended->assAlterations));
+        blended->assAlterations[assAlt->assIndex] = assAlt->alt;
+    }
+    
+    
     if(ended)
     {
         if(state->nextAction == state->action && header->singleCycle)
@@ -337,6 +356,8 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
     for(u32 boneIndex = 0; boneIndex < blended->boneCount; boneIndex++ )
     {
         Bone* bone = blended->bones + boneIndex;
+        BoneAlterations* boneAlt = blended->boneAlterations + boneIndex;
+        
         if(bone->parentID != -1 )
         {
             Bone* parent = blended->bones + bone->parentID;
@@ -352,13 +373,10 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
         Vec2 scale = V2(1.0f, 1.0f);
         
         
-        // TODO(Leonardo): modify this with in-game editor
-#if 0        
-        if(boneIndex == 3)
+        if(boneAlt->valid)
         {
-            scale = V2(2.0f, 2.0f);
+            scale = boneAlt->scale;
         }
-#endif
         
         bone->mainAxis = Hadamart(scale, V2(Cos(totalAngleRad), Sin(totalAngleRad))); 
     }
@@ -371,7 +389,7 @@ inline Vec3 AssOriginOffset(Bone* parentBone, PieceAss* ass, r32 zOffset, Vec2 s
     
     Vec2 boneOffset = Hadamart(ass->boneOffset, scale);
     Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
-    Vec3 originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset);
+    Vec3 originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset);
     
     return originOffset;
 }
@@ -402,31 +420,36 @@ internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* tab
     dest->componentCount = 0;
     TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
     
-    Assert(slot->firstLayout);
-    ObjectLayout* layout = slot->firstLayout;
-    
-    RandomSequence seq = Seed((u32)recipeIndex);
-    for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
+    if(slot->firstLayout)
     {
-        Assert(dest->componentCount < ArrayCount(dest->components));
-        VisualComponent* visualComponent = dest->components + dest->componentCount++;
+        ObjectLayout* layout = slot->firstLayout;
         
-        visualComponent->stringHashID = piece->stringHashID;
-        visualComponent->tagCount = 0;
-        
-        
-        Assert(piece->ingredientCount > 0);
-        
-        for(u32 ingredientIndex = 0; ingredientIndex < piece->ingredientCount; ++ingredientIndex)
+        RandomSequence seq = Seed((u32)recipeIndex);
+        for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
         {
-            u32 ingredientTaxonomy = piece->ingredientTaxonomies[ingredientIndex];
-            u32 choosenTaxonomy = GetRandomChild(table, &seq, ingredientTaxonomy);
-            TaxonomySlot* ingredientSlot = GetSlotForTaxonomy(table, choosenTaxonomy);
+            Assert(dest->componentCount < ArrayCount(dest->components));
+            VisualComponent* visualComponent = dest->components + dest->componentCount++;
             
-            for(VisualTag* tag = ingredientSlot->firstVisualTag; tag; tag = tag->next)
+            visualComponent->stringHashID = piece->componentHashID;
+            visualComponent->tagCount = 0;
+            
+            LayoutPiece* visualPiece = piece;
+            if(piece->parent)
             {
-                Assert(visualComponent->tagCount < ArrayCount(visualComponent->tags));
-                visualComponent->tags[visualComponent->tagCount++] = *tag;
+                visualPiece = piece->parent;
+            }
+            
+            for(u32 ingredientIndex = 0; ingredientIndex < visualPiece->ingredientCount; ++ingredientIndex)
+            {
+                u32 ingredientTaxonomy = piece->ingredientTaxonomies[ingredientIndex];
+                u32 choosenTaxonomy = GetRandomChild(table, &seq, ingredientTaxonomy);
+                TaxonomySlot* ingredientSlot = GetSlotForTaxonomy(table, choosenTaxonomy);
+                
+                for(VisualTag* tag = ingredientSlot->firstVisualTag; tag; tag = tag->next)
+                {
+                    Assert(visualComponent->tagCount < ArrayCount(visualComponent->tags));
+                    visualComponent->tags[visualComponent->tagCount++] = *tag;
+                }
             }
         }
     }
@@ -578,10 +601,14 @@ inline ObjectLayout* GetLayout(TaxonomyTable* table, u32 taxonomy, b32 onGround,
 inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, ObjectLayout* layout, AnimationVolatileParams* params)
 {
     output->boneCount = 1;
+    output->assCount = 0;
     Bone* bone = output->bones + 0;
     *bone = {};
     bone->mainAxis = V2(1, 0);
     bone->parentID = -1;
+    
+    BoneAlterations* boneAlt = output->boneAlterations + 0;
+    boneAlt->valid = false;
     
     
     for(LayoutPiece* source = layout->firstPiece; source; source = source->next)
@@ -589,13 +616,18 @@ inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, Ob
         Assert(output->assCount <= ArrayCount(output->ass));
         u32 pieceIndex = output->assCount++;
         PieceAss* destAss = output->ass + pieceIndex;
+        
+        AssAlterations* destAlt = output->assAlterations + pieceIndex;
+        destAlt->valid = false;
+        
         SpriteInfo* destSprite = output->sprites + pieceIndex;
         
         *destAss = {};
         *destSprite = {};
         
         destAss->spriteIndex = pieceIndex;
-        destAss->boneOffset = source->offset;
+        destAss->boneOffset = source->offset.xy;
+        destAss->additionalZOffset = source->offset.z;
         destAss->angle = source->angle;
         destAss->scale = source->scale;
         destAss->alpha = source->alpha;
@@ -1309,18 +1341,16 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
     {
         b32 validAss = true;
         PieceAss currentAss = blended->ass[assIndex];
+        AssAlterations* assAlt = blended->assAlterations + assIndex;
+        
         Bone* parentBone = blended->bones + currentAss.boneID;
         
         
-        // TODO(Leonardo): modify this with in-game editor
-#if 0        
-        if(assIndex == 14)
+        if(assAlt->valid)
         {
-            currentAss.scale.y *= 1.8f;
-            currentAss.boneOffset += V2(0.05f, -0.02f);
+            currentAss.scale = Hadamart(currentAss.scale, assAlt->scale);
+            currentAss.boneOffset += assAlt->boneOffset;
         }
-#endif
-        
         
         SpriteInfo* sprite = blended->sprites + assIndex;
         if(equipmentMap)

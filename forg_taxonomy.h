@@ -128,7 +128,7 @@ struct ConsumeMapping
 #define MAX_COMPONENT_PER_MODULE 8
 struct LayoutPiece
 {
-    Vec2 offset;
+    Vec3 offset;
     r32 angle;
     Vec2 scale;
     r32 alpha;
@@ -136,8 +136,8 @@ struct LayoutPiece
     u64 componentHashID;
     u32 flags;
     
-    u64 stringHashID;
     u32 ingredientCount;
+    LayoutPiece* parent;
     u32 ingredientTaxonomies[MAX_COMPONENT_PER_MODULE];
     u8 ingredientQuantities[MAX_COMPONENT_PER_MODULE];
     
@@ -254,6 +254,30 @@ struct EditorTab
     struct EditorElement* root;
 };
 
+#ifndef FORG_SERVER
+struct TaxonomyBoneAlterations
+{
+    u32 boneIndex;
+    BoneAlterations alt;
+    union
+    {
+        TaxonomyBoneAlterations* next;
+        TaxonomyBoneAlterations* nextFree;
+    };
+};
+
+struct TaxonomyAssAlterations
+{
+    u32 assIndex;
+    AssAlterations alt;
+    union
+    {
+        TaxonomyAssAlterations* next;
+        TaxonomyAssAlterations* nextFree;
+    };
+};
+#endif
+
 struct TaxonomySlot
 {
     u32 taxonomy;
@@ -296,6 +320,9 @@ struct TaxonomySlot
     VisualTag* firstVisualTag;
     AnimationEffect* firstAnimationEffect;
     TaxonomySound* firstSound;
+    
+    TaxonomyBoneAlterations* firstBoneAlteration;
+    TaxonomyAssAlterations* firstAssAlteration;
     
     r32 lightIntensity;
     Vec3 lightColor;
@@ -437,6 +464,8 @@ struct TaxonomyTable
     TaxonomySound* firstFreeTaxonomySound;
     LabeledSound* firstFreeLabeledSound;
     SoundContainer* firstFreeSoundContainer;
+    TaxonomyBoneAlterations* firstFreeTaxonomyBoneAlterations;
+    TaxonomyAssAlterations* firstFreeTaxonomyAssAlterations;
 #endif
     
     

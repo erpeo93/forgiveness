@@ -1127,6 +1127,39 @@ inline void UsesSkeleton(char* skeletonName)
     currentSlot_->skeletonHashID = StringHash(skeletonName);
 }
 
+inline void AddBoneAlteration(char* boneIndex, char* scaleX, char* scaleY)
+{
+    TaxonomyBoneAlterations* alt;
+    TAXTABLE_ALLOC(alt, TaxonomyBoneAlterations);
+    
+    alt->boneIndex = ToU32(boneIndex);
+    
+    alt->alt.valid = true;
+    
+    alt->alt.scale.x = ToR32(scaleX);
+    alt->alt.scale.y = ToR32(scaleY);
+    
+    FREELIST_INSERT(alt, currentSlot_->firstBoneAlteration);
+}
+
+inline void AddAssAlteration(char* assIndex, char* scaleX, char* scaleY, char* offsetX, char* offsetY)
+{
+    TaxonomyAssAlterations* alt;
+    TAXTABLE_ALLOC(alt, TaxonomyAssAlterations);
+    
+    alt->assIndex = ToU32(assIndex);
+    
+    alt->alt.valid = true;
+    
+    alt->alt.scale.x = ToR32(scaleX);
+    alt->alt.scale.y = ToR32(scaleY);
+    
+    alt->alt.boneOffset.x = ToR32(offsetX);
+    alt->alt.boneOffset.y = ToR32(offsetY);
+    
+    FREELIST_INSERT(alt, currentSlot_->firstAssAlteration);
+}
+
 internal void ReadAnimationData()
 {
     
@@ -1609,7 +1642,7 @@ inline void AddTag(TagId ID, r32 value)
     FREELIST_INSERT(dest, slot->firstVisualTag);
 }
 #endif
-inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec2 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u32 flags = 0)
+inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u32 flags = 0)
 {
     LayoutPiece* dest;
     TAXTABLE_ALLOC(dest, LayoutPiece);
@@ -1620,6 +1653,8 @@ inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec2 offset, r32 angle,
     dest->pivot = pivot;
     dest->componentHashID = StringHash(componentName);
     dest->flags = flags;
+    dest->ingredientCount = 0;
+    dest->parent = 0;
     
     FREELIST_INSERT(dest, layout->firstPiece);
     
@@ -3193,6 +3228,43 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             events = events->next;
         }
     }
+    else if(StrEqual(name, "boneAlterations"))
+    {
+        FREELIST_FREE(currentSlot_->firstBoneAlteration, TaxonomyBoneAlterations, taxTable_->firstFreeTaxonomyBoneAlterations);
+        EditorElement* alterations = root->firstInList;
+        while(alterations)
+        {
+            char* boneIndex = GetValue(alterations, "boneIndex");
+            EditorElement* scale = GetStruct(alterations, "scale");
+            char* scaleX = GetValue(scale, "x");
+            char* scaleY = GetValue(scale, "y");
+            
+            AddBoneAlteration(boneIndex, scaleX, scaleY);
+            
+            alterations = alterations->next;
+        }
+    }
+    else if(StrEqual(name, "assAlterations"))
+    {
+        FREELIST_FREE(currentSlot_->firstAssAlteration, TaxonomyAssAlterations, taxTable_->firstFreeTaxonomyAssAlterations);
+        
+        EditorElement* alterations = root->firstInList;
+        while(alterations)
+        {
+            char* assIndex = GetValue(alterations, "assIndex");
+            EditorElement* scale = GetStruct(alterations, "scale");
+            char* scaleX = GetValue(scale, "x");
+            char* scaleY = GetValue(scale, "y");
+            
+            EditorElement* offset = GetStruct(alterations, "boneOffset");
+            char* offsetX = GetValue(offset, "x");
+            char* offsetY = GetValue(offset, "y");
+            
+            AddAssAlteration(assIndex, scaleX, scaleY, offsetX, offsetY);
+            
+            alterations = alterations->next;
+        }
+    }
 #endif
     else if(StrEqual(name, "layouts"))
     {
@@ -3210,25 +3282,52 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             EditorElement* pieces = GetList(layouts, "pieces");
             while(pieces)
             {
-                r32 x = ToR32(GetValue(pieces, "xOffset"));
-                r32 y = ToR32(GetValue(pieces, "yOffset"));
+                EditorElement* offset = GetStruct(pieces, "offset");
+                r32 x = ToR32(GetValue(offset, "x"));
+                r32 y = ToR32(GetValue(offset, "y"));
+                r32 z = ToR32(GetValue(offset, "z"));
+                
                 r32 angle = ToR32(GetValue(pieces, "angle"));
-                r32 scaleX = ToR32(GetValue(pieces, "xScale"));
-                r32 scaleY = ToR32(GetValue(pieces, "yScale"));
+                
+                EditorElement* scale = GetStruct(pieces, "scale");
+                r32 scaleX = ToR32(GetValue(scale, "x"));
+                r32 scaleY = ToR32(GetValue(scale, "y"));
                 r32 pieceAlpha = ToR32(GetValue(pieces, "alpha"));
                 char* pieceName = GetValue(pieces, "component");
                 
-                LayoutPiece* piece = AddLayoutPiece(newLayout, V2(x, y), angle, V2(scaleX, scaleY), pieceAlpha, V2(0.5f, 0.5f), pieceName);
+                LayoutPiece* piece = AddLayoutPiece(newLayout, V3(x, y, z), angle, V2(scaleX, scaleY), pieceAlpha, V2(0.5f, 0.5f), pieceName);
                 
                 EditorElement* ingredient = GetList(pieces, "ingredients");
                 while(ingredient)
                 {
-                    char* ingredientName = GetValue(ingredient, "name");
+                    char* ingredientName = GetValue(ingredient, "ingredient");
                     AddIngredient(piece, ingredientName);
                     
                     ingredient = ingredient->next;
                 }
                 
+                EditorElement* decorationPieces = GetList(pieces, "childPieces");
+                while(decorationPieces)
+                {
+                    offset = GetStruct(decorationPieces, "offset");
+                    r32 childX = ToR32(GetValue(offset, "x"));
+                    r32 childY = ToR32(GetValue(offset, "y"));
+                    r32 childZ = ToR32(GetValue(offset, "z"));
+                    
+                    r32 childAngle = ToR32(GetValue(decorationPieces, "angle"));
+                    
+                    scale = GetStruct(decorationPieces, "scale");
+                    r32 childScaleX = ToR32(GetValue(scale, "x"));
+                    r32 childScaleY = ToR32(GetValue(scale, "y"));
+                    r32 childAlpha = ToR32(GetValue(pieces, "alpha"));
+                    char* childName = GetValue(decorationPieces, "component");
+                    
+                    LayoutPiece* childPiece = AddLayoutPiece(newLayout, piece->offset + V3(childX, childY, childZ), piece->angle + childAngle, V2(scaleX, scaleY), childAlpha, V2(0.5f, 0.5f), childName);
+                    childPiece->parent = piece;
+                    
+                    decorationPieces = decorationPieces->next;
+                    
+                }
                 
                 pieces = pieces->next;
             }

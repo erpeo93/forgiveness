@@ -8,37 +8,39 @@ struct RecipeIngredients
 internal void GetRecipeIngredients(RecipeIngredients* output, TaxonomyTable* table, u32 taxonomy, u64 recipeIndex)
 {
     TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
-    Assert(slot->firstLayout);
-    ObjectLayout* layout = slot->firstLayout;
-    
     output->count = 0;
     
     RandomSequence seq = Seed((u32)recipeIndex);
-    for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
+    if(slot->firstLayout)
     {
-        for(u32 ingredientIndex = 0; ingredientIndex < piece->ingredientCount; ++ingredientIndex)
+        ObjectLayout* layout = slot->firstLayout;
+        
+        for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
         {
-            u8 sourceQuantity = piece->ingredientQuantities[ingredientIndex]; 
-            u32 ingredientTaxonomy = GetRandomChild(table, &seq, piece->ingredientTaxonomies[ingredientIndex]);
-            u8 quantity = ( sourceQuantity == 0) ? 1 : sourceQuantity;
-            
-            b32 alreadyPresent = false;
-            for(u32 presentIndex = 0; presentIndex < output->count; ++presentIndex)
+            for(u32 ingredientIndex = 0; ingredientIndex < piece->ingredientCount; ++ingredientIndex)
             {
-                if(output->taxonomies[presentIndex] == ingredientTaxonomy)
+                u8 sourceQuantity = piece->ingredientQuantities[ingredientIndex]; 
+                u32 ingredientTaxonomy = GetRandomChild(table, &seq, piece->ingredientTaxonomies[ingredientIndex]);
+                u8 quantity = ( sourceQuantity == 0) ? 1 : sourceQuantity;
+                
+                b32 alreadyPresent = false;
+                for(u32 presentIndex = 0; presentIndex < output->count; ++presentIndex)
                 {
-                    output->quantities[presentIndex] += quantity;
-                    alreadyPresent = true;
-                    break;
+                    if(output->taxonomies[presentIndex] == ingredientTaxonomy)
+                    {
+                        output->quantities[presentIndex] += quantity;
+                        alreadyPresent = true;
+                        break;
+                    }
                 }
-            }
-            
-            if(!alreadyPresent)
-            {
-                Assert(output->count < ArrayCount(output->taxonomies));
-                u32 outputIndex = output->count++;
-                output->taxonomies[outputIndex] = ingredientTaxonomy;
-                output->quantities[outputIndex] = quantity;
+                
+                if(!alreadyPresent)
+                {
+                    Assert(output->count < ArrayCount(output->taxonomies));
+                    u32 outputIndex = output->count++;
+                    output->taxonomies[outputIndex] = ingredientTaxonomy;
+                    output->quantities[outputIndex] = quantity;
+                }
             }
         }
     }
@@ -54,6 +56,7 @@ internal void GetRecipeIngredients(RecipeIngredients* output, TaxonomyTable* tab
         output->taxonomies[outputIndex] = essenceTaxonomy;
         output->quantities[outputIndex] = quantity;
     }
+    
 }
 
 
@@ -144,7 +147,6 @@ internal void Craft(SimRegion* region, SimEntity* dest, u32 taxonomy, u64 recipe
         }
     }
     
-    Assert(availableEssenceCount > 0);
     RandomSequence seq_ = Seed((u32) recipeIndex);
     RandomSequence* seq = &seq_;
     

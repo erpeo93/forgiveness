@@ -6,13 +6,28 @@
 #define ashDead V4(0.0f, 0.0f, 0.0f, 1.0f)
 #define ashAlive V4(1, 0, 0, 1)
 
+struct BoneAlterations
+{
+    b32 valid;
+    Vec2 scale;
+};
+
+struct AssAlterations
+{
+    b32 valid;
+    Vec2 scale;
+    Vec2 boneOffset;
+};
+
 struct BlendResult
 {
     u32 boneCount;
     Bone bones[32];
+    BoneAlterations boneAlterations[32];
     
     u32 assCount;
     PieceAss ass[32];
+    AssAlterations assAlterations[32];
     
     SpriteInfo sprites[32];
 };
