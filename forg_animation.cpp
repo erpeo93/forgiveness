@@ -873,11 +873,12 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
     }
 }
 
-inline b32 RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender)
+inline b32 RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender, Vec4 proceduralColor = V4(1, 1, 1, 1))
 {
     b32 onFocus = false;
     
     AnimationVolatileParams pieceParams = *params;
+    pieceParams.color = Hadamart(pieceParams.color, proceduralColor);
     
     Vec3 originOffset = AssOriginOffset(parentBone, ass, pieceParams.zOffset, pieceParams.scale);
     r32 finalAngle = AssFinalAngle(parentBone, ass);
@@ -1346,6 +1347,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         Bone* parentBone = blended->bones + currentAss.boneID;
         
         
+        Vec4 proceduralColor = input->defaultColoration;
         if(assAlt->valid)
         {
             Vec2 normMain = Normalize(parentBone->mainAxis);
@@ -1353,6 +1355,11 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
             
             currentAss.scale = Hadamart(currentAss.scale, assAlt->scale);
             currentAss.boneOffset.x += Dot(normMain, assAlt->boneOffset); currentAss.boneOffset.y += Dot(perpNormMain, assAlt->boneOffset);
+			
+			if(assAlt->specialColoration)
+			{
+				proceduralColor = assAlt->color;
+			}
         }
         
         SpriteInfo* sprite = blended->sprites + assIndex;
@@ -1395,8 +1402,8 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         {
             r32 alpha = GetAssAlphaFade(input->entity->identifier, assIndex, 
                                         input->lifePointsSeedResetCounter, input->lifePointFadeDuration, input->lifePointThreesold, input->lifePointRatio, input->cameInTime, input->entity->status);
-            currentAss.alpha *= alpha;
-            RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false);
+            proceduralColor.a *= alpha;
+            RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, proceduralColor);
         }
         if(validAss)
         {
@@ -1476,8 +1483,37 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
     Assert(referenceFrame->countBones == blended.boneCount);
     Assert(referenceFrame->countAss == blended.assCount);
     
-    AnimationPiecesOperation(input, group, equipmentMap, &blended, P, params, CycleAss_DetermineFocus);
-    AnimationPiecesOperation(input, group, equipmentMap, &blended, P, params, CycleAss_Render);
+    if(input->showBitmaps)
+    {
+        AnimationPiecesOperation(input, group, equipmentMap, &blended, P, params, CycleAss_DetermineFocus);
+        AnimationPiecesOperation(input, group, equipmentMap, &blended, P, params, CycleAss_Render);
+    }
+    
+    if(input->ortho && input->showBones)
+    {
+        for(u32 boneIndex = 0; boneIndex < blended.boneCount; ++boneIndex)
+        {
+            Bone* bone = blended.bones + boneIndex;
+            Vec2 startP = P.xy + params->cameraOffset.xy + bone->finalOriginOffset;
+            
+            r32 thickness = 2.5f;
+            
+            Vec2 XAxis = 0.6f * Hadamart(params->scale, bone->mainAxis);
+            Vec2 YAxis = Perp(XAxis);
+            YAxis = 2.0f * thickness * Normalize(YAxis);
+            
+            Vec2 toP = startP + XAxis;
+            
+            Vec4 boneColor = V4(1, 0, 0, 1);
+            if(PointInUnalignedRect(startP - 0.5f * YAxis, XAxis, YAxis, input->relativeScreenMouseP))
+            {
+                input->output->hotBoneIndex = (i16) boneIndex;
+                boneColor = V4(1, 1, 1, 1);
+            }
+            
+            PushLine(group, boneColor, V3(startP, params->additionalZbias + 1.0f), V3(toP, params->additionalZbias + 1.0f), thickness);
+        }
+    }
 }
 
 
@@ -1486,8 +1522,11 @@ internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group
     BlendResult blended;
     GetLayoutPieces(input, &blended, layout, params);
     
-    AnimationPiecesOperation(input, group, 0, &blended, P, params, CycleAss_DetermineFocus);
-    AnimationPiecesOperation(input, group, 0, &blended, P, params, CycleAss_Render);
+    if(input->showBitmaps)
+    {
+        AnimationPiecesOperation(input, group, 0, &blended, P, params, CycleAss_DetermineFocus);
+        AnimationPiecesOperation(input, group, 0, &blended, P, params, CycleAss_Render);
+    }
 }
 
 
@@ -1504,6 +1543,7 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
     r32 slotMaxDistance = 0.6f;
     input->minFocusSlotDistanceSq = Square(slotMaxDistance);
     input->mousePOnGround = worldMode->worldMouseP;
+    input->relativeScreenMouseP = worldMode->UI->relativeScreenMouse;
     input->oldFocusSlots = entityC->animation.output.focusSlots;
     input->currentObjectIndex = 0;
     
@@ -1630,17 +1670,21 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
     output->focusSlots = {};
     output->focusObjectIndex = -1;
     output->additionalZoomCoeff = 1.0f;
+    output->hotBoneIndex = -1;
+    output->hotAssIndex = -1;
     
 }
 
-inline u64 GetSkeletonForTaxonomy(TaxonomyTable* table, TaxonomySlot* slot)
+inline SkeletonInfo GetSkeletonForTaxonomy(TaxonomyTable* table, TaxonomySlot* slot)
 {
-    u64 result = 0;
+    SkeletonInfo result = {};
     while(slot->taxonomy)
     {
         if(slot->skeletonHashID)
         {
-            result = slot->skeletonHashID;
+            result.hashID = slot->skeletonHashID;
+            result.coloration = slot->defaultColoration;
+            result.originOffset = slot->originOffset;
             break;
         }
         
@@ -1656,17 +1700,24 @@ struct GetAIDResult
     AnimationId AID;
     u64 entityHashID;
     u64 skeletonHashID;
+    Vec4 coloration;
+    Vec2 originOffset;
 };
 
 inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy, u32 action, b32 drawOpened, u64 forcedNameHashID = 0)
 {
     GetAIDResult result = {};
+    result.coloration = V4(1, 1, 1, 1);
     
     ObjectState state = drawOpened ? ObjectState_Open : ObjectState_Ground;
     TaxonomySlot* slot = GetSlotForTaxonomy(taxTable, taxonomy);
     
     result.entityHashID = slot->stringHashID;
-	result.skeletonHashID = GetSkeletonForTaxonomy(taxTable, slot);
+    
+    SkeletonInfo skeletonInfo = GetSkeletonForTaxonomy(taxTable, slot);
+    result.skeletonHashID = skeletonInfo.hashID;
+    result.coloration = skeletonInfo.coloration;
+    result.originOffset = skeletonInfo.originOffset;
     
     if(forcedNameHashID)
 	{
@@ -1694,7 +1745,7 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
     return result;
 }
 
-internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, ClientEntity* entityC, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, b32 ortho = false, r32 modTime = 0.0f, u64 forcedNameHashID = 0)
+internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, ClientEntity* entityC, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, b32 ortho = false, b32 showBones = false, b32 showBitmaps = true, r32 modTime = 0.0f, u64 forcedNameHashID = 0)
 {
     AnimationOutput result = {};
     TaxonomyTable* taxTable = worldMode->table;
@@ -1709,6 +1760,8 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
     
     InitializeAnimationInputOutput(&input, &result, worldMode, entityC, timeToAdvance);
     input.ortho = ortho;
+    input.showBitmaps = showBitmaps;
+    input.showBones = showBones;
     input.timeMod = modTime;
     
     AnimationVolatileParams params;
@@ -1771,7 +1824,10 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
         
         GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, drawOpened, forcedNameHashID);
         
+        input.defaultColoration = AID.coloration;
         input.combatAnimation = (AID.assetID == Asset_attacking);
+        
+        params.cameraOffset.xy += AID.originOffset;
         
         if(IsValid(AID.AID))
         {

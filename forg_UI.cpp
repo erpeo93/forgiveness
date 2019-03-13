@@ -169,7 +169,7 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElement* grandParen
 	if(StrEqual(name, "animationName"))
 	{
 		TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
-		hash = GetSkeletonForTaxonomy(UI->table, slot);
+		hash = GetSkeletonForTaxonomy(UI->table, slot).hashID;
 	}
     else if(StrEqual(name, "sound"))
     {
@@ -337,12 +337,14 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                 {
                     result.color = V4(1, 0, 1, 1);
                     UIAddStandardAction_(&mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(root->value), ColdPointer(UI->falseString));
+                    UIAddReloadElementAction(&mouseInteraction, UI_Trigger, widget->root);
                     
                 }
                 else if(StrEqual(text, "false"))
                 {
                     result.color = V4(1, 0, 1, 1);
                     UIAddStandardAction_(&mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(root->value), ColdPointer(UI->trueString));
+                    UIAddReloadElementAction(&mouseInteraction, UI_Trigger, widget->root);
                 }
                 else
                 {
@@ -382,6 +384,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                             UIAddStandardAction_(&mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(UI->realDragging), ColdPointer(root->value));
                             UIAddOffsetStringEditorElement(&mouseInteraction, UI_Idle, ColdPointer(root->value), ColdPointer(&UI->deltaScreenMouseP.y), 0.01f);
                             UIAddUndoRedoAction(&mouseInteraction, UI_Release, UndoRedoDelayedString(widget, root->value, sizeof(root->value), root->value, ColdPointer(root->value)));
+                            UIAddReloadElementAction(&mouseInteraction, UI_Idle, widget->root);
                             UIAddReloadElementAction(&mouseInteraction, UI_Release, widget->root);
                             if(StrEqual(widget->name, "Editing Tabs"))
                             {
@@ -984,6 +987,9 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         
                         EditorElement* pause = root->next;
                         b32 play = ToB32(GetValue(pause, "autoplay"));
+                        b32 showBones = ToB32(GetValue(pause, "showBones"));
+                        b32 showBitmaps = ToB32(GetValue(pause, "showBitmaps"));
+                        
                         r32 speed = ToR32(GetValue(pause, "speed"));
                         r32 timeToAdvance = play ? input->timeToAdvance : 0;
                         
@@ -1010,7 +1016,28 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         FormatString(timerElement->value, sizeof(timerElement->value), "%f", timer);
                         test.animation.totalTime = timer;
                         
-                        PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, V2(50, 50), 0, P, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 10, true, timer, nameHashID);
+                        Vec2 animationScale = V2(50, 50);
+                        
+                        SkeletonInfo info = GetSkeletonForTaxonomy(UI->table, animationSlot);
+                        
+                        Vec3 animationBase = P;
+                        animationBase.xy += Hadamart(info.originOffset, animationScale);
+                        
+                        AnimationOutput output =  PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 1, true, showBones, showBitmaps, timer, nameHashID);
+                        
+                        if(output.hotBoneIndex >= 0)
+                        {
+                            char tooltip[64];
+                            FormatString(tooltip, sizeof(tooltip), "bone index: %d", output.hotBoneIndex);
+                            PushUITooltip(UI, tooltip, V4(1, 1, 1, 1));
+                        }
+                        else if(output.hotAssIndex >= 0)
+                        {
+                            char tooltip[64];
+                            FormatString(tooltip, sizeof(tooltip), "bitmap index: %d", output.hotAssIndex);
+                            PushUITooltip(UI, tooltip, V4(1, 1, 1, 1));
+                        }
+                        
                         
                         ObjectTransform originTransform = FlatTransform();
                         originTransform.additionalZBias = 30.0f;
@@ -1268,6 +1295,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             
             case EditorElement_Unsigned:
             {
+                UI->bufferValid = true;
                 for(char* test = UI->keyboardBuffer; *test; ++test)
                 {
                     if(*test < '0' || *test > '9')
@@ -1558,6 +1586,7 @@ inline void UIRenderTooltip(UIState* UI)
     RenderGroup* group = UI->group;
     GameRenderCommands* commands = group->commands;
     
+    r32 tooltipZ = 100;
     if(commands)
     {
         r32 width = (r32) commands->settings.width;
@@ -1580,7 +1609,7 @@ inline void UIRenderTooltip(UIState* UI)
             
             centerTooltipP.y += 0.5f * textDim.y;
             
-            UIOrthoTextOp(group, UI->font, UI->fontInfo, text, tooltipScale, V3(textP, 0), TextOp_draw,V4(1, 1, 1, 1));
+            UIOrthoTextOp(group, UI->font, UI->fontInfo, text, tooltipScale, V3(textP, tooltipZ), TextOp_draw,V4(1, 1, 1, 1));
         }
         
         if(UI->prefix || UI->suffix)
@@ -1590,16 +1619,16 @@ inline void UIRenderTooltip(UIState* UI)
             
             Vec2 prefixP = centerTooltipP + V2(0, 28.0f);
             
-            PushBitmap(group, FlatTransform(), ID, V3(prefixP, 0), prefixHeight, V2( 1.0f, 1.0f ), V4(0.0f, 0.0f, 0.0f, 1.0f));
-            PushBitmap(group, FlatTransform(), ID, V3(prefixP, 0), prefixHeight, V2( 1.0f, 1.0f ), V4(1, 1, 1, 1));
+            PushBitmap(group, FlatTransform(), ID, V3(prefixP, tooltipZ), prefixHeight, V2( 1.0f, 1.0f ), V4(0.0f, 0.0f, 0.0f, 1.0f));
+            PushBitmap(group, FlatTransform(), ID, V3(prefixP, tooltipZ), prefixHeight, V2( 1.0f, 1.0f ), V4(1, 1, 1, 1));
             
             Vec2 suffixP = centerTooltipP - V2(0, 28.0f);
             
             ObjectTransform suffixTransform = FlatTransform();
             suffixTransform.angle = 180;
             
-            PushBitmap(group, suffixTransform, ID, V3(suffixP, 0), prefixHeight, V2( 1.0f, 1.0f ), V4(0.0f, 0.0f, 0.0f, 1.0f));
-            PushBitmap(group, suffixTransform, ID, V3(suffixP, 0), prefixHeight, V2( 1.0f, 1.0f ), V4(1, 1, 1, 1));
+            PushBitmap(group, suffixTransform, ID, V3(suffixP, tooltipZ), prefixHeight, V2( 1.0f, 1.0f ), V4(0.0f, 0.0f, 0.0f, 1.0f));
+            PushBitmap(group, suffixTransform, ID, V3(suffixP, tooltipZ), prefixHeight, V2( 1.0f, 1.0f ), V4(1, 1, 1, 1));
         }
     }
 }
@@ -2057,6 +2086,8 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             playButton->type = EditorElement_Struct;
             UIAddChild(UI->table, playButton, EditorElement_String, "autoplay", "false");
             UIAddChild(UI->table, playButton, EditorElement_Real, "speed", "1.0");
+            UIAddChild(UI->table, playButton, EditorElement_String, "showBones", "false");
+            UIAddChild(UI->table, playButton, EditorElement_String, "showBitmaps", "true");
             
             
             playButton->next = animationActionTimer;
@@ -2893,12 +2924,12 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
     UpdateScrollableList(UI, UI->toUpdateList, scrollOffset);
     UIRenderList(UI, UI->toRenderList);
     
-    UIRenderTooltip(UI);
-    
     if(worldMode->editingEnabled)
     {
         UIRenderEditor(UI, input);
     }
+    
+    UIRenderTooltip(UI);
     
     for(u32 buttonIndex = 0; buttonIndex < MAX_BUTTON_COUNT; ++buttonIndex)
     {

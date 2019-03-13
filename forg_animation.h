@@ -17,6 +17,9 @@ struct AssAlterations
     b32 valid;
     Vec2 scale;
     Vec2 boneOffset;
+    
+    b32 specialColoration;
+    Vec4 color;
 };
 
 struct BlendResult
@@ -74,6 +77,9 @@ struct AnimationOutput
     b32 entityPresent;
     Vec3 entityOffset;
     r32 entityAngle;
+    
+    i16 hotBoneIndex;
+    i16 hotAssIndex;
 };
 
 struct AnimationState
@@ -155,14 +161,24 @@ struct AnimationEffect
     };
 };
 
+struct SkeletonInfo
+{
+    u64 hashID;
+    Vec4 coloration;
+    Vec2 originOffset;
+};
+
 struct AnimationFixedParams
 {
     b32 ortho;
+    b32 showBones;
+    b32 showBitmaps;
     r32 timeMod;
     
     r32 timeToAdvance;
     struct GameModeWorld* worldMode;
     struct TaxonomyTable* taxTable;
+    Vec2 relativeScreenMouseP;
     Vec3 mousePOnGround;
     b32 combatAnimation;
     r32 defaultModulatonWithFocusColor;
@@ -193,6 +209,8 @@ struct AnimationFixedParams
     struct ClientEntity* entity;
     struct ClientEntity* draggingEntity;
     u64 draggingEntityHashIDs[4];
+    
+    Vec4 defaultColoration;
     
     AnimationOutput* output;
 };

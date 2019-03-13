@@ -420,6 +420,31 @@ inline r32 ToR32(char* string)
     return result;
 }
 
+inline char* GetValue(EditorElement* element, char* name);
+inline Vec4 ToV4Color(EditorElement* element)
+{
+    Vec4 result = V4(1, 1, 1, 1);
+    if(element)
+    {
+        result.r = ToR32(GetValue(element, "r"));
+        result.g = ToR32(GetValue(element, "g"));
+        result.b = ToR32(GetValue(element, "b"));
+        result.a = ToR32(GetValue(element, "a"));
+    }
+    return result;
+}
+
+inline Vec2 ToV2(EditorElement* element)
+{
+    Vec2 result = {};
+    if(element)
+    {
+        result.x = ToR32(GetValue(element, "x"));
+        result.y = ToR32(GetValue(element, "y"));
+    }
+    return result;
+}
+
 
 
 #if FORG_SERVER
@@ -1122,9 +1147,11 @@ inline void AddLight(r32 intensity, Vec3 color)
     currentSlot_->lightColor = color;
 }
 
-inline void UsesSkeleton(char* skeletonName)
+inline void UsesSkeleton(char* skeletonName, Vec4 defaultColoration, Vec2 originOffset)
 {
     currentSlot_->skeletonHashID = StringHash(skeletonName);
+    currentSlot_->defaultColoration = defaultColoration;
+    currentSlot_->originOffset = originOffset;
 }
 
 inline void AddBoneAlteration(char* boneIndex, char* scaleX, char* scaleY)
@@ -1142,7 +1169,7 @@ inline void AddBoneAlteration(char* boneIndex, char* scaleX, char* scaleY)
     FREELIST_INSERT(alt, currentSlot_->firstBoneAlteration);
 }
 
-inline void AddAssAlteration(char* assIndex, char* scaleX, char* scaleY, char* offsetX, char* offsetY)
+inline void AddAssAlteration(char* assIndex, char* scaleX, char* scaleY, char* offsetX, char* offsetY, b32 specialColoration, Vec4 color)
 {
     TaxonomyAssAlterations* alt;
     TAXTABLE_ALLOC(alt, TaxonomyAssAlterations);
@@ -1156,6 +1183,9 @@ inline void AddAssAlteration(char* assIndex, char* scaleX, char* scaleY, char* o
     
     alt->alt.boneOffset.x = ToR32(offsetX);
     alt->alt.boneOffset.y = ToR32(offsetY);
+    
+    alt->alt.specialColoration = specialColoration;
+    alt->alt.color = color;
     
     FREELIST_INSERT(alt, currentSlot_->firstAssAlteration);
 }
@@ -3158,7 +3188,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     else if(StrEqual(name, "skeleton"))
     {
         char* skeleton = GetValue(root, "name");
-        UsesSkeleton(skeleton);
+        Vec4 color = ToV4Color(GetStruct(root, "defaultColoration"));
+        Vec2 originOffset = ToV2(GetStruct(root, "originOffset"));
+        UsesSkeleton(skeleton, color, originOffset);
     }
     else if(StrEqual(name, "light"))
     {
@@ -3260,7 +3292,10 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             char* offsetX = GetValue(offset, "x");
             char* offsetY = GetValue(offset, "y");
             
-            AddAssAlteration(assIndex, scaleX, scaleY, offsetX, offsetY);
+			b32 specialColoration = ToB32(GetValue(alterations, "specialColoration"));
+            Vec4 color = ToV4Color(GetStruct(alterations, "color"));
+            
+            AddAssAlteration(assIndex, scaleX, scaleY, offsetX, offsetY, specialColoration, color);
             
             alterations = alterations->next;
         }

@@ -327,6 +327,8 @@ struct TaxonomySlot
     r32 lightIntensity;
     Vec3 lightColor;
     u64 skeletonHashID;
+    Vec4 defaultColoration;
+    Vec2 originOffset;
 #endif
     
     
