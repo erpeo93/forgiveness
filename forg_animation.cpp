@@ -1348,8 +1348,11 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         
         if(assAlt->valid)
         {
+            Vec2 normMain = Normalize(parentBone->mainAxis);
+            Vec2 perpNormMain = Perp(normMain);
+            
             currentAss.scale = Hadamart(currentAss.scale, assAlt->scale);
-            currentAss.boneOffset += assAlt->boneOffset;
+            currentAss.boneOffset.x += Dot(normMain, assAlt->boneOffset); currentAss.boneOffset.y += Dot(perpNormMain, assAlt->boneOffset);
         }
         
         SpriteInfo* sprite = blended->sprites + assIndex;

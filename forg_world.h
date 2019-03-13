@@ -4,7 +4,7 @@ struct EntityBlock
     u32 countEntity;
     
     u32 usedData;
-    u8 data[KiloBytes( 64 )];
+    u8 data[KiloBytes(64)];
     
     union
     {
@@ -30,6 +30,7 @@ struct WorldChunk
     r32 influences[CHUNK_DIM][CHUNK_DIM];
     u8 biomes[CHUNK_DIM][CHUNK_DIM];
     Vec2 tileNormals[CHUNK_DIM][CHUNK_DIM];
+    
 #ifndef FORG_SERVER
     Vec4 colors[CHUNK_DIM][CHUNK_DIM];
     Vec4 subchunkColor[4];
