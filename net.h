@@ -672,7 +672,7 @@ struct NetworkInterface
     NetworkChannel channels[4];
     
     b32 newConnectionsAccepted;
-    u32 newConnectionCount;
+    u16 newConnectionCount;
     NetworkNewConnection newConnections[128];
     
     u16 nextConnectionIndex;

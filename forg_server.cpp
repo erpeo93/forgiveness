@@ -282,7 +282,7 @@ inline void PoundToNameAndFedFileRecursively(char* path, char* taxonomyName, b32
     }
     
     char newPath[512];
-    u32 written = FormatString(newPath, sizeof(newPath), "%s", path);
+    u32 written = (u32) FormatString(newPath, sizeof(newPath), "%s", path);
     
     char* end = newPath + written - 2;
     while(end >= newPath)

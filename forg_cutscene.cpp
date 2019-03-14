@@ -19,7 +19,7 @@ internal void RenderLayeredScene( Assets* assets, RenderGroup* group, LayeredSce
         SceneLayer* layer = scene->layers + layerIndex;
         match.E[Tag_layerIndex] = ( r32 ) ( layerIndex + 1 );
         match.E[Tag_shotIndex] = ( r32 ) scene->shotIndex;
-        BitmapId BID = GetMatchingBitmap( assets, Asset_openingCutscene, 0, &match, &weight );
+        BitmapId BID = GetMatchingBitmap( assets, Asset_openingCutscene, &match, &weight );
         
         if( group )
         {

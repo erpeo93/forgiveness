@@ -27,9 +27,10 @@ enum EditorElementFlags
     EditorElem_LabelsEditable = (1 << 7),
     EditorElem_PlaySoundButton = (1 << 8),
     EditorElem_PlayEventSoundButton = (1 << 9),
-    EditorElem_PlayEventButton = (1 << 10),
-    EditorElem_RecursiveEmpty = (1 << 11),
-    EditorElem_DontRender = (1 << 12),
+    EditorElem_ShowLabelBitmapButton = (1 << 10),
+    EditorElem_PlayEventButton = (1 << 11),
+    EditorElem_RecursiveEmpty = (1 << 12),
+    EditorElem_DontRender = (1 << 13),
 };
 
 struct EditorElement

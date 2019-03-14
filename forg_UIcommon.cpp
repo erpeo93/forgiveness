@@ -199,7 +199,7 @@ inline BitmapId GetRecursiveIconId(TaxonomyTable* table, Assets* assets, u32 tax
     while(currentTaxonomy)
     {
         TaxonomySlot* slot = GetSlotForTaxonomy(table, currentTaxonomy);
-        BitmapId iconID = GetMatchingBitmap(assets, Asset_Icon, slot->stringHashID, &match, &weight);
+        BitmapId iconID = GetMatchingBitmap_(assets, Asset_Icon, slot->stringHashID, &match, &weight);
         if(IsValid(iconID))
         {
             result = iconID;
@@ -902,6 +902,18 @@ inline UIInteraction UIPlaySoundEventInteraction(u32 flags, u64 eventNameHash)
     return result;
 }
 
+inline UIInteraction UIShowBitmapInteraction(u32 flags, u64 componentNameHash, u64 bitmapNameHash)
+{
+    UIInteraction result = {};
+    UIInteractionAction* dest = UIGetFreeAction(&result);
+    dest->type = UIInteractionAction_ShowLabeledBitmap;
+    dest->flags = flags;
+    dest->componentNameHash = componentNameHash;
+    dest->bitmapNameHash = bitmapNameHash;
+    
+    return result;
+}
+
 inline void UIAddReloadElementAction(UIInteraction* interaction, u32 flags, EditorElement* toReload)
 {
     UIInteractionAction* dest = UIGetFreeAction(interaction);
@@ -1350,6 +1362,34 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                             {
                                 PlaySound(UI->worldMode->soundState, toPlay, delay);
                             }
+                        }
+                    } break;
+                    
+                    case UIInteractionAction_ShowLabeledBitmap:
+                    {
+                        u64 componentNameHash = action->componentNameHash;
+                        u64 bitmapNameHash = action->bitmapNameHash;
+                        
+                        BitmapId BID = FindBitmapByName(UI->group->assets, componentNameHash, bitmapNameHash);
+                        
+                        Vec3 P = V3(0, 0, 0);
+                        ObjectTransform transform = FlatTransform();
+                        transform.additionalZBias = 30.0f;
+                        
+                        r32 height = 200;
+                        Bitmap* bitmap = GetBitmap(UI->group->assets, BID);
+                        if(bitmap)
+                        {
+                            r32 width = height * bitmap->widthOverHeight;
+                            
+                            Rect2 backdropRect = RectCenterDim(P.xy, V2(width, height));
+                            PushRect(UI->group, transform, backdropRect, V4(0, 0, 0, 1));
+                            
+                            PushBitmapWithPivot(UI->group, transform, BID, P, V2(0.5f, 0.5f), height);
+                        }
+                        else
+                        {
+                            LoadBitmap(UI->group->assets, BID, false);
                         }
                     } break;
                     

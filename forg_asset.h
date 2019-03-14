@@ -39,8 +39,8 @@ struct TagVector
 struct LabelVector
 {
     u32 labelCount;
-    u32 IDs[8];
-    r32 values[8];
+    u32 IDs[16];
+    r32 values[16];
 };
 
 struct AssetType
@@ -181,10 +181,23 @@ inline SoundId GetFirstSound( Assets* assets, u32 assetID )
 u32 GetMatchingAsset_( Assets* assets, u32 assetID, u64 stringHashID,
                       TagVector* values, TagVector* weights, LabelVector* labels);
 
-inline BitmapId GetMatchingBitmap( Assets* assets, u32 assetID, u64 stringHashID,
-                                  TagVector* values, TagVector* weights, LabelVector* labels = 0)
+inline BitmapId GetMatchingBitmap_( Assets* assets, u32 assetID, u64 stringHashID,
+                                   TagVector* values, TagVector* weights, LabelVector* labels = 0)
 {
     BitmapId result = {GetMatchingAsset_( assets, assetID, stringHashID, values, weights, labels )};
+    return result;
+}
+
+inline BitmapId GetMatchingBitmap(Assets* assets, u32 assetIndex, TagVector* values, TagVector* weights, LabelVector* labels = 0)
+{
+    BitmapId result = GetMatchingBitmap_(assets, assetIndex, 0, values, weights, labels);
+    return result;
+}
+
+inline BitmapId GetMatchingBitmapHashed(Assets* assets, u64 stringHashID, TagVector* values, TagVector* weights, LabelVector* labels = 0)
+{
+    u32 assetIndex = Asset_count + (stringHashID & (HASHED_ASSET_SLOTS - 1));
+    BitmapId result = GetMatchingBitmap_(assets, assetIndex, stringHashID, values, weights, labels);
     return result;
 }
 

@@ -317,7 +317,7 @@ struct TaxonomySlot
 #ifndef FORG_SERVER
     PlantParams* plantParams;
     TaxonomyPart* firstPart;  
-    VisualTag* firstVisualTag;
+    VisualLabel* firstVisualLabel;
     AnimationEffect* firstAnimationEffect;
     TaxonomySound* firstSound;
     
@@ -461,7 +461,7 @@ struct TaxonomyTable
 #ifndef FORG_SERVER
     PlantParams* firstFreePlantParams;
     TaxonomyPart* firstFreePart;
-    VisualTag* firstFreeVisualTag;
+    VisualLabel* firstFreeVisualLabel;
     AnimationEffect* firstFreeAnimationEffect;
     TaxonomySound* firstFreeTaxonomySound;
     LabeledSound* firstFreeLabeledSound;

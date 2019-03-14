@@ -219,8 +219,8 @@ struct VisualComponent
 {
     u64 stringHashID;
     
-    u32 tagCount;
-    VisualTag tags[8];
+    u32 labelCount;
+    VisualLabel labels[8];
 };
 
 struct ComponentsProperties

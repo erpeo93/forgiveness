@@ -407,6 +407,15 @@ inline u32 ToU32(char* string)
     return result;
 }
 
+inline u64 ToU64(char* string)
+{
+    i64 intValue = atoi(string);
+    
+    Assert(intValue >= 0);
+    u64 result = (u64) intValue;
+    return result;
+}
+
 inline b32 ToB32(char* string)
 {
     b32 result = (StrEqual(string, "true"));
@@ -1661,15 +1670,17 @@ internal void ReadPlantChart()
 
 
 
-inline void AddTag(TagId ID, r32 value)
+inline void AddLabel(u64 ID, r32 value)
 {
     TaxonomySlot* slot = currentSlot_;
-    VisualTag* dest;
-    TAXTABLE_ALLOC(dest, VisualTag);
-    dest->ID = ID;
+    VisualLabel* dest;
+    TAXTABLE_ALLOC(dest, VisualLabel);
+    
+    u32 hash = (u32) (ID >> 32);
+    dest->ID = (hash & (LABEL_HASH_COUNT - 1)) + Tag_count;
     dest->value = value;
     
-    FREELIST_INSERT(dest, slot->firstVisualTag);
+    FREELIST_INSERT(dest, slot->firstVisualLabel);
 }
 #endif
 inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u32 flags = 0)
@@ -1694,7 +1705,6 @@ inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle,
 inline void AddIngredient(LayoutPiece* piece, char* name)
 {
     Assert(piece->ingredientCount < ArrayCount(piece->ingredientTaxonomies));
-    
     TaxonomySlot* ingredientSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
     if(ingredientSlot)
     {
@@ -2334,6 +2344,11 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
                     buffer = OutputToBuffer(buffer, bufferSize, "#playEvent ");
                 }
                 
+                if(element->flags & EditorElem_ShowLabelBitmapButton)
+                {
+                    buffer = OutputToBuffer(buffer, bufferSize, "#showBitmap ");
+                }
+                
                 if(element->elementName[0])
                 {
                     char outputElementName[64];
@@ -2478,6 +2493,10 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                             else if(TokenEquals(paramName, "playEvent"))
 							{
 								newElement->flags |= EditorElem_PlayEventButton;
+							}
+                            else if(TokenEquals(paramName, "showBitmap"))
+							{
+								newElement->flags |= EditorElem_ShowLabelBitmapButton;
 							}
 							else if(TokenEquals(paramName, "elementName"))
 							{
@@ -2959,7 +2978,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         
         while(essences)
         {
-            char* essenceName = GetValue(essences, "name");
+            char* essenceName = GetValue(essences, "essence");
             char* quantity = GetValue(essences, "quantity");
             
             AddEssence(essenceName, ToU8(quantity));
@@ -3169,20 +3188,20 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
 #endif
     
 #ifndef FORG_SERVER
-    else if(StrEqual(name, "visualTags"))
+    else if(StrEqual(name, "visualLabels"))
     {
-        FREELIST_FREE(currentSlot_->firstVisualTag, VisualTag, taxTable_->firstFreeVisualTag);
-        EditorElement* tags = root->firstInList;
+        FREELIST_FREE(currentSlot_->firstVisualLabel, VisualLabel, taxTable_->firstFreeVisualLabel);
+        EditorElement* labels = root->firstInList;
         
-        while(tags)
+        while(labels)
         {
-            char* tagName = GetValue(tags, "name");
-            char* value = GetValue(tags, "value");
+            char* labelName = GetValue(labels, "name");
+            char* value = GetValue(labels, "value");
             
-            TagId ID = (TagId) GetValuePreprocessor(TagId, tagName);
+            u64 ID = StringHash(labelName);
             r32 val = ToR32(value);
-            AddTag(ID, val);
-            tags = tags->next;
+            AddLabel(ID, val);
+            labels = labels->next;
         }
     }
     else if(StrEqual(name, "skeleton"))

@@ -553,6 +553,7 @@ enum UIInteractionActionType
     UIInteractionAction_OffsetRealEditor,
     UIInteractionAction_AddEmptyEditorElement,
     UIInteractionAction_PlaySound,
+    UIInteractionAction_ShowLabeledBitmap,
     UIInteractionAction_ReloadElement,
     UIInteractionAction_PlaySoundEvent,
     UIInteractionAction_ReleaseDragging,
@@ -589,6 +590,12 @@ struct UIInteractionAction
         struct
         {
             u64 eventNameHash;
+        };
+        
+        struct
+        {
+            u64 componentNameHash;
+            u64 bitmapNameHash;
         };
         
         struct

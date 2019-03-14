@@ -1541,7 +1541,7 @@ internal BitmapId AddBitmapAsset(char* path, char* filename, u64 stringHash = 0,
     asset.dest->bitmap.align[0] = alignX;
     asset.dest->bitmap.align[1] = alignY;
     asset.dest->typeHashID = stringHash;
-    asset.dest->nameHashID = 0;
+    asset.dest->nameHashID = StringHash(filename);
     
     LoadedBitmap bitmap = LoadBitmap(path, filename, false);
     asset.dest->bitmap.nativeHeight = bitmap.downsampleFactor * bitmap.height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
@@ -2097,27 +2097,9 @@ inline char* StringPresentInFile(char* file, char* token, b32 limitToSingleList)
     return result;
 }
 
-inline void RemoveSpaces(char* dest, char* source)
-{
-    for(char* s = source; *s; ++s)
-    {
-        char copy = *s;
-        if(copy == ' ')
-        {
-            copy = '_';
-        }
-        
-        *dest++ = copy;
-    }
-    *dest = 0;
-}
-
 internal void AddLabelsFromFile(PlatformFile* labelsFile, char* folderName, char* assetName)
 {
-    char folderNameNoWhiteSpaces[64];
-    Assert(StrLen(folderName) < ArrayCount(folderNameNoWhiteSpaces));
-    RemoveSpaces(folderNameNoWhiteSpaces, folderName);
-    char* folder = StringPresentInFile((char*) labelsFile->content, folderNameNoWhiteSpaces, false);
+    char* folder = StringPresentInFile((char*) labelsFile->content, folderName, false);
     Assert(folder);
     char* ptr = StringPresentInFile(folder, assetName, true);
     Assert(ptr);
@@ -2144,7 +2126,7 @@ internal void AddLabelsFromFile(PlatformFile* labelsFile, char* folderName, char
                 {
                     if(RequireToken(&tokenizer, Token_EqualSign))
                     {
-                        if(RequireToken(&tokenizer, Token_OpenParen))
+                        if(RequireToken(&tokenizer, Token_OpenParen) && RequireToken(&tokenizer, Token_Pound))
                         {
                             Token empty = GetToken(&tokenizer);
                             if(empty.type == Token_Identifier && TokenEquals(empty, "empty"))
@@ -2160,13 +2142,13 @@ internal void AddLabelsFromFile(PlatformFile* labelsFile, char* folderName, char
                                     }
                                     else
                                     {
-                                        if(RequireToken(&tokenizer, Token_Identifier) &&
+                                        if(RequireToken(&tokenizer, Token_String) &&
                                            RequireToken(&tokenizer, Token_EqualSign))
                                         {
                                             Token labelName = Stringize(GetToken(&tokenizer));
                                             
                                             if(RequireToken(&tokenizer, Token_Comma) &&
-                                               RequireToken(&tokenizer, Token_Identifier) &&
+                                               RequireToken(&tokenizer, Token_String) &&
                                                RequireToken(&tokenizer, Token_EqualSign))
                                             {
                                                 Token labelValue = GetToken(&tokenizer);
@@ -2473,14 +2455,11 @@ internal void WriteAssetDefinitionFile(char* path, char* filename, char* definit
         char* folderName = subdir->subdirs[subdirIndex];
         if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
         {
-            char folderNameNoWhiteSpaces[64];
-            Assert(StrLen(folderName) < ArrayCount(folderNameNoWhiteSpaces));
-            RemoveSpaces(folderNameNoWhiteSpaces, folderName);
-            char* folderPtr = StringPresentInFile(newFile, folderNameNoWhiteSpaces, false);
+            char* folderPtr = StringPresentInFile(newFile, folderName, false);
             
             if(!folderPtr)
             {
-                folderPtr = AddFolderToFile(newFile, endFile, folderNameNoWhiteSpaces, definitionParams);
+                folderPtr = AddFolderToFile(newFile, endFile, folderName, definitionParams);
             }
             else
             {
@@ -2546,7 +2525,7 @@ internal void WriteComponents()
 {
     char* componentsPath = "definition/components";
     char* assetFile = "components.fad";
-    char* definitionParams = "#cantBeDeleted";
+    char* definitionParams = "#cantBeDeleted #showBitmap";
     
     WriteAssetDefinitionFile(componentsPath, assetFile, definitionParams);
     

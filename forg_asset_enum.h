@@ -48,15 +48,15 @@ printTable(noPrefix) enum TagId
 #define LABEL_HASH_COUNT (MegaBytes(1)) // NOTE(Leonardo): has to be a power of 2!
 
 
-struct VisualTag
+struct VisualLabel
 {
-    TagId ID;
+    u32 ID;
     r32 value;
     
     union
     {
-        VisualTag* next;
-        VisualTag* nextFree;
+        VisualLabel* next;
+        VisualLabel* nextFree;
     };
 };
 

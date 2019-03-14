@@ -431,7 +431,7 @@ internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* tab
             VisualComponent* visualComponent = dest->components + dest->componentCount++;
             
             visualComponent->stringHashID = piece->componentHashID;
-            visualComponent->tagCount = 0;
+            visualComponent->labelCount = 0;
             
             LayoutPiece* visualPiece = piece;
             if(piece->parent)
@@ -445,10 +445,10 @@ internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* tab
                 u32 choosenTaxonomy = GetRandomChild(table, &seq, ingredientTaxonomy);
                 TaxonomySlot* ingredientSlot = GetSlotForTaxonomy(table, choosenTaxonomy);
                 
-                for(VisualTag* tag = ingredientSlot->firstVisualTag; tag; tag = tag->next)
+                for(VisualLabel* label = ingredientSlot->firstVisualLabel; label; label = label->next)
                 {
-                    Assert(visualComponent->tagCount < ArrayCount(visualComponent->tags));
-                    visualComponent->tags[visualComponent->tagCount++] = *tag;
+                    Assert(visualComponent->labelCount < ArrayCount(visualComponent->labels));
+                    visualComponent->labels[visualComponent->labelCount++] = *label;
                 }
             }
         }
@@ -470,8 +470,7 @@ inline BitmapId GetBitmapNoAnimation(TaxonomyTable* taxTable, RenderGroup* group
     }
 #endif
     
-    u32 assetIndex = Asset_count + (stringHashID & (HASHED_ASSET_SLOTS - 1));
-    BitmapId BID = GetMatchingBitmap(group->assets, assetIndex, stringHashID, &match, &weight);
+    BitmapId BID = GetMatchingBitmapHashed(group->assets, stringHashID, &match, &weight);
     
     return BID;
 }
@@ -489,7 +488,7 @@ inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 entityHa
         match.E[Tag_dimY] = 1.0f;
         weight.E[Tag_dimX] = 1.0f;
         weight.E[Tag_dimY] = 1.0f;
-        result = GetMatchingBitmap(group->assets, Asset_emptySpace, 0, &match, &weight);
+        result = GetMatchingBitmap(group->assets, Asset_emptySpace, &match, &weight);
     }
     else
     {
@@ -501,26 +500,32 @@ inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 entityHa
         
         if(properties && properties->componentCount)
         {
+            LabelVector labels;
+            labels.labelCount = 0;
+            
             for(u32 componentIndex = 0; componentIndex < properties->componentCount; ++componentIndex)
             {
                 VisualComponent* component = properties->components + componentIndex;
                 if(component->stringHashID == sprite->stringHashID)
                 {
-                    for(u32 tagIndex = 0; tagIndex < component->tagCount; ++tagIndex)
+                    for(u32 labelIndex = 0; labelIndex < component->labelCount; ++labelIndex)
                     {
-                        VisualTag* tag = component->tags + tagIndex;
-                        match.E[tag->ID] = tag->value;
-                        weight.E[tag->ID] = 1.0f;
+                        if(labels.labelCount < ArrayCount(labels.IDs))
+                        {
+                            VisualLabel* label = component->labels + labelIndex;
+                            u32 labelI = labels.labelCount++;
+                            labels.IDs[labelI] = label->ID;
+                            labels.values[labelI] = label->value;
+                        }
                     }
                 }
             }
-            //result = GetRandomBitmapBetweenMatchingBitmaps();
-            result = GetMatchingBitmap(group->assets, assetIndex, sprite->stringHashID, &match, &weight);
+            result = GetMatchingBitmapHashed(group->assets, sprite->stringHashID, &match, &weight, &labels);
             
         }
         else
         {
-            result = GetMatchingBitmap(group->assets, assetIndex, sprite->stringHashID, &match, &weight);
+            result = GetMatchingBitmapHashed(group->assets, sprite->stringHashID, &match, &weight, 0);
         }
     }
     
@@ -1428,7 +1433,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
             proceduralColor.a *= alpha;
             if(RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, proceduralColor).screenInRect)
 			{
-				input->output->hotAssIndex = assIndex;
+				input->output->hotAssIndex = (i16) assIndex;
 			}
         }
         if(validAss)
@@ -1822,6 +1827,7 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
     
     if(IsObject(worldMode->table, entityC->taxonomy))
     {
+        input.defaultColoration = V4(1, 1, 1, 1);
         ComponentsProperties properties;
         params.properties = &properties;
         GetVisualProperties(&properties, taxTable, entityC->taxonomy, entityC->recipeIndex);

@@ -636,7 +636,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                                 if(UI->copying)
                                 {
                                     b32 matches = StrEqual(root->name, UI->copying->name);
-                                    if(matches)
+                                    if(matches && canDelete)
                                     {
                                         UIAddInteraction(UI, input, pasteButton, UISetValueInteraction(UI_Trigger, &root->flags, root->flags | EditorElem_Pasted));
                                     }
@@ -732,36 +732,50 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             }
                         }
                         
-                        if(root->firstValue && father && (father->flags & EditorElem_PlaySoundButton))
+                        if(root->firstValue && father)
                         {
-                            UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(70, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
+                            if(father->flags & EditorElem_PlaySoundButton)
+                            {
+                                UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(70, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
+                                
+                                u64 soundTypeHash = StringHash(father->name);
+                                u64 soundNameHash = StringHash(root->firstValue->value);
+                                
+                                UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
+                                structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
+                            }
+                            else if(father->flags & EditorElem_PlayEventSoundButton)
+                            {
+                                UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(70, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
+                                
+                                char* soundType = GetValue(root, "soundType");
+                                char* soundName = GetValue(root, "sound");
+                                u64 soundTypeHash = StringHash(soundType);
+                                u64 soundNameHash = StringHash(soundName);
+                                
+                                UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
+                                structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
+                            }
+                            else if(father->flags & EditorElem_PlayEventButton)
+                            {
+                                UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(20, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
+                                
+                                u64 eventNameHash = StringHash(root->name);
+                                
+                                UIButtonInteraction(&playButton, UIPlaySoundEventInteraction(UI_Trigger, eventNameHash));
+                                structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
+                            }
                             
-                            u64 soundTypeHash = StringHash(father->name);
-                            u64 soundNameHash = StringHash(root->firstValue->value);
+                            else if(father->flags & EditorElem_ShowLabelBitmapButton)
+                            {
+                                UIButton showButton = UIBtn(UI, GetCenter(structBounds) + V2(20, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "view");
+                                
+                                u64 componentNameHash = StringHash(father->name);
+                                u64 bitmapNameHash = StringHash(GetValue(root, "componentName"));
+                                UIButtonInteraction(&showButton, UIShowBitmapInteraction(UI_Idle, componentNameHash, bitmapNameHash));
+                                structBounds = Union(structBounds, UIDrawButton(UI, input, &showButton));
+                            }
                             
-                            UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
-                            structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
-                        }
-                        if(root->firstValue && father && (father->flags & EditorElem_PlayEventSoundButton))
-                        {
-                            UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(70, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
-                            
-                            char* soundType = GetValue(root, "soundType");
-                            char* soundName = GetValue(root, "sound");
-                            u64 soundTypeHash = StringHash(soundType);
-                            u64 soundNameHash = StringHash(soundName);
-                            
-                            UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
-                            structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
-                        }
-                        else if(root->firstValue && father && (father->flags & EditorElem_PlayEventButton))
-                        {
-                            UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(20, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
-                            
-                            u64 eventNameHash = StringHash(root->name);
-                            
-                            UIButtonInteraction(&playButton, UIPlaySoundEventInteraction(UI_Trigger, eventNameHash));
-                            structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
                         }
                         
                         r32 padding = 5;
@@ -803,7 +817,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                                         test = test->next;
                                     }
                                     
-                                    if(matches)
+                                    if(matches && canDelete)
                                     {
                                         UIAddInteraction(UI, input, pasteButton, UISetValueInteraction(UI_Trigger, &root->flags, root->flags | EditorElem_Pasted));
                                     }
@@ -994,7 +1008,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         r32 speed = ToR32(GetValue(pause, "speed"));
                         r32 timeToAdvance = play ? input->timeToAdvance : 0;
                         
-                        
+                        test.recipeIndex = ToU64(GetValue(pause, "seed"));
                         EditorElement* animationElement = pause->next;
                         
                         char* animationName = GetValue(animationElement, "animationName");
@@ -2110,6 +2124,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             UIAddChild(UI->table, playButton, EditorElement_Real, "scale", "50.0");
             UIAddChild(UI->table, playButton, EditorElement_String, "showBones", "false");
             UIAddChild(UI->table, playButton, EditorElement_String, "showBitmaps", "true");
+            UIAddChild(UI->table, playButton, EditorElement_Unsigned, "seed", "0");
             
             
             playButton->next = animationActionTimer;
@@ -2192,7 +2207,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         matchVector.E[Tag_fontType] = ( r32 ) Font_default;
         UI->fontId = GetMatchingFont(group->assets, Asset_font, &matchVector, &weightVector);
         
-        UI->scrollIconID = GetMatchingBitmap(group->assets, Asset_scrollUI, 0, &matchVector, &weightVector);
+        UI->scrollIconID = GetMatchingBitmap(group->assets, Asset_scrollUI, &matchVector, &weightVector);
         
         
         PlatformFile skillsFile = platformAPI.DEBUGReadFile("skills");

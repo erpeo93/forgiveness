@@ -879,6 +879,28 @@ inline SoundId FindSoundByName(Assets* assets, u64 typeHashID, u64 nameHashID)
     return result;
 }
 
+inline BitmapId FindBitmapByName(Assets* assets, u64 typeHashID, u64 nameHashID)
+{
+    BitmapId result = {};
+    
+    u32 assetID = Asset_count + (typeHashID & (HASHED_ASSET_SLOTS - 1));
+    AssetType* type = assets->types + assetID;
+    
+    for(u32 assetIndex = type->firstAssetIndex; 
+        assetIndex < type->onePastLastAssetIndex;
+        assetIndex++)
+    {
+        Asset* asset = assets->assets + assetIndex;
+        if(asset->paka.typeHashID == typeHashID && asset->paka.nameHashID == nameHashID)
+        {
+            result = {assetIndex};
+            break;
+        }
+	}
+    
+    return result;
+}
+
 
 
 inline u32 GetMatchingAsset_(Assets* assets, u32 assetID, u64 stringHashID,
