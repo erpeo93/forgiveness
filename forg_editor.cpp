@@ -3487,6 +3487,10 @@ internal void ImportAllAssetFiles(GameModeWorld* worldMode, char* dataPath, Memo
             worldMode->table->soundEventsRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
             Import(0, worldMode->table->soundEventsRoot);
         }
+        else if(StrEqual(handle.name, "components.fad"))
+        {
+            worldMode->table->componentsRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
+        }
         
         platformAPI.CloseHandle(&handle);
     }

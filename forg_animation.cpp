@@ -873,9 +873,15 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
     }
 }
 
-inline b32 RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender, Vec4 proceduralColor = V4(1, 1, 1, 1))
+struct RenderAssResult
 {
-    b32 onFocus = false;
+    b32 onFocus;
+    b32 screenInRect;
+};
+
+inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender, Vec4 proceduralColor = V4(1, 1, 1, 1))
+{
+    RenderAssResult result = {};
     
     AnimationVolatileParams pieceParams = *params;
     pieceParams.color = Hadamart(pieceParams.color, proceduralColor);
@@ -918,7 +924,7 @@ inline b32 RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3
                         pieceParams.drawEmptySpaces = false;
                     }
                     GetVisualProperties(&pieceProperties, input->taxTable, slot->taxonomy, slot->recipeIndex);
-                    onFocus = DrawModularPiece(input, group, P, slot->taxonomy, &pieceParams, false, slot->drawOpened, dontRender);
+                    result.onFocus = DrawModularPiece(input, group, P, slot->taxonomy, &pieceParams, false, slot->drawOpened, dontRender);
                 }
             }
             else
@@ -1089,7 +1095,18 @@ inline b32 RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3
                     }
                     
                     Vec2 pivot = sprite->pivot;
-                    PushBitmapWithPivot(group, objectTransform, BID, P, pivot, 0, finalScale, color, pieceParams.lightIndexes);
+                    BitmapDim dim = PushBitmapWithPivot(group, objectTransform, BID, P, pivot, 0, finalScale, color, pieceParams.lightIndexes);
+                    
+					if(input->ortho)
+					{
+                        Vec2 XAxis = dim.XAxis.xy * dim.size.x;
+                        Vec2 YAxis = dim.YAxis.xy * dim.size.y;
+                        Vec2 startP = dim.P.xy;
+						if(PointInUnalignedRect(startP - 0.5f * YAxis, XAxis, YAxis, input->relativeScreenMouseP))
+						{
+							result.screenInRect = true;
+						}
+					}
                     
                     Vec3 particleP = P + pieceParams.cameraOffset.x * group->gameCamera.X + pieceParams.cameraOffset.y * group->gameCamera.Y + pieceParams.cameraOffset.z * group->gameCamera.Z;
                     Vec3 velocity = V3(0, 0, 0.14f);
@@ -1110,7 +1127,7 @@ inline b32 RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3
                     r32 distanceSq = LengthSq(groundP - input->mousePOnGround);
                     if(distanceSq < input->minFocusSlotDistanceSq)
                     {
-                        onFocus = true;
+                        result.onFocus = true;
                         input->minFocusSlotDistanceSq = distanceSq;
                     }
                 }
@@ -1120,7 +1137,7 @@ inline b32 RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3
     }
     
     params->zOffset += 0.01f;
-    return onFocus;
+    return result;
 }
 
 inline void MarkGhostAss(AnimationFixedParams* input, RenderGroup* group, BlendResult* blended, PieceAss* ass, Vec3 P, SpriteInfo* spriteInfo, AnimationVolatileParams* params)
@@ -1254,7 +1271,7 @@ inline void RenderEquipmentPiece(AnimationFixedParams* input, RenderGroup* group
             pieceParams.modulationWithFocusColor = input->defaultModulatonWithFocusColor;
         }
         
-        if(RenderPieceAss_(input, group, P, spriteInfo, equipmentBone, &toDraw, &pieceParams, slot->dontRender))
+        if(RenderPieceAss_(input, group, P, spriteInfo, equipmentBone, &toDraw, &pieceParams, slot->dontRender).onFocus)
         {
             input->output->focusSlots.slotCount = 0;
             if(slot->stringHashID == slot->parentStringHashID)
@@ -1325,6 +1342,24 @@ enum CycleAssOperation
     CycleAss_Render,
 };
 
+inline void ApplyAssAlterations(PieceAss* ass, AssAlterations* assAlt, Bone* parentBone, Vec4* proceduralColor)
+{
+    if(assAlt->valid)
+    {
+        Vec2 normMain = Normalize(parentBone->mainAxis);
+        Vec2 perpNormMain = Perp(normMain);
+        
+        ass->scale = Hadamart(ass->scale, assAlt->scale);
+        ass->boneOffset.x += Dot(normMain, assAlt->boneOffset); ass->boneOffset.y += Dot(perpNormMain, assAlt->boneOffset);
+        
+        if(assAlt->specialColoration)
+        {
+            *proceduralColor = assAlt->color;
+        }
+    }
+    
+}
+
 inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* group, Animation* equipmentMap, BlendResult* blended, Vec3 P, AnimationVolatileParams* params, CycleAssOperation operation)
 {
     PieceAss* currentEquipmentRig = 0;
@@ -1343,26 +1378,14 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         b32 validAss = true;
         PieceAss currentAss = blended->ass[assIndex];
         AssAlterations* assAlt = blended->assAlterations + assIndex;
-        
         Bone* parentBone = blended->bones + currentAss.boneID;
+        SpriteInfo* sprite = blended->sprites + assIndex;
         
         
         Vec4 proceduralColor = input->defaultColoration;
-        if(assAlt->valid)
-        {
-            Vec2 normMain = Normalize(parentBone->mainAxis);
-            Vec2 perpNormMain = Perp(normMain);
-            
-            currentAss.scale = Hadamart(currentAss.scale, assAlt->scale);
-            currentAss.boneOffset.x += Dot(normMain, assAlt->boneOffset); currentAss.boneOffset.y += Dot(perpNormMain, assAlt->boneOffset);
-			
-			if(assAlt->specialColoration)
-			{
-				proceduralColor = assAlt->color;
-			}
-        }
         
-        SpriteInfo* sprite = blended->sprites + assIndex;
+        ApplyAssAlterations(&currentAss, assAlt, parentBone, &proceduralColor);
+        
         if(equipmentMap)
         {
             if(!(sprite->flags & Sprite_Composed) &&
@@ -1403,7 +1426,10 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
             r32 alpha = GetAssAlphaFade(input->entity->identifier, assIndex, 
                                         input->lifePointsSeedResetCounter, input->lifePointFadeDuration, input->lifePointThreesold, input->lifePointRatio, input->cameInTime, input->entity->status);
             proceduralColor.a *= alpha;
-            RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, proceduralColor);
+            if(RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, proceduralColor).screenInRect)
+			{
+				input->output->hotAssIndex = assIndex;
+			}
         }
         if(validAss)
         {
@@ -1424,7 +1450,22 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         }
         ++currentEquipmentRig;
     }
+    
+    i16 hotAssIndex = input->output->hotAssIndex;
+    if(hotAssIndex >= 0)
+    {
+        PieceAss currentAss = blended->ass[hotAssIndex];
+        AssAlterations* assAlt = blended->assAlterations + hotAssIndex;
+        Bone* parentBone = blended->bones + currentAss.boneID;
+        SpriteInfo* sprite = blended->sprites + hotAssIndex;
+        
+        Vec4 proceduralColor = input->defaultColoration;
+        ApplyAssAlterations(&currentAss, assAlt, parentBone, &proceduralColor);
+        
+        RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, Hadamart(proceduralColor, V4(0.1f, 0.1f, 0.1f, 1)));
+    }
 }
+
 
 inline AnimationId GetAnimationRecursive(Assets* assets, TaxonomyTable* table, u32 taxonomy, AssetTypeId assetID, u64* stringHashID, ObjectState state)
 {
@@ -1508,7 +1549,7 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
             if(PointInUnalignedRect(startP - 0.5f * YAxis, XAxis, YAxis, input->relativeScreenMouseP))
             {
                 input->output->hotBoneIndex = (i16) boneIndex;
-                boneColor = V4(1, 1, 1, 1);
+                boneColor = V4(0, 0, 0, 1);
             }
             
             PushLine(group, boneColor, V3(startP, params->additionalZbias + 1.0f), V3(toP, params->additionalZbias + 1.0f), thickness);

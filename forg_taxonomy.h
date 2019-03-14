@@ -486,6 +486,7 @@ struct TaxonomyTable
     
     EditorElement* soundNamesRoot;
     EditorElement* soundEventsRoot;
+    EditorElement* componentsRoot;
     
     u32 errorCount;
     char errors[512][128];

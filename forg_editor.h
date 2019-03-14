@@ -134,6 +134,7 @@ enum EditorWidgetType
     EditorWidget_SoundDatabase,
     EditorWidget_GeneralButtons,
     EditorWidget_SoundEvents,
+    EditorWidget_Components,
     
     EditorWidget_Count,
 };

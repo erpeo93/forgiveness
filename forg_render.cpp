@@ -425,8 +425,9 @@ inline void PushBitmap__(RenderGroup* group, Bitmap* bitmap, Vec3 P, Vec3 XAxis,
     
 }
 
-inline void PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTransform, Bitmap* bitmap,  Vec3 P, r32 height, Vec2 scale, Vec4 color, Vec4 lightIndexes, Vec2 pivot)
+inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTransform, Bitmap* bitmap,  Vec3 P, r32 height, Vec2 scale, Vec4 color, Vec4 lightIndexes, Vec2 pivot)
 {
+    BitmapDim result = {};
     GameRenderCommands* commands = renderGroup->commands;
     if(bitmap->width && bitmap->height)
     {
@@ -471,6 +472,8 @@ inline void PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTransfor
             }
             
             BitmapDim dim = GetBitmapDim(bitmap, pivot, P, XAxis, YAxis, height, scale);
+            result = dim;
+            
             P = dim.P;
             XAxis= XAxis * dim.size.x;
             YAxis = YAxis * dim.size.y;
@@ -478,6 +481,8 @@ inline void PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTransfor
             PushBitmap__(renderGroup, bitmap, P, XAxis, YAxis, color, lightIndexes, objectTransform.modulationPercentage, objectTransform.additionalZBias);
         }
     }
+    
+    return result;
 }
 
 
@@ -506,18 +511,21 @@ inline void PushUIBitmap(RenderGroup* group, BitmapId ID, Vec2 screenCenterOffse
     PushBitmap(group, transform, ID, V3(0, 0, 0), height, scale, color);
 }
 
-inline void PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, Vec2 pivot, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Vec4 lightIndexes = V4(-1, -1, -1, -1))
+inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, Vec2 pivot, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Vec4 lightIndexes = V4(-1, -1, -1, -1))
 {
+    BitmapDim result = {};
     Bitmap* bitmap = GetBitmap(renderGroup->assets, ID);
     if(bitmap)
     {
-        PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lightIndexes, pivot);
+        result = PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lightIndexes, pivot);
     }
     else
     {
         ++renderGroup->countMissing;
         LoadBitmap(renderGroup->assets, ID, false);
     }
+    
+    return result;
 }
 
 inline void PushCube_(RenderGroup* group, Vec3 P, r32 height, r32 width, RenderTexture texture, Vec4 color, Vec4 lightIndexes)

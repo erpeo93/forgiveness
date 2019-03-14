@@ -989,6 +989,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         b32 play = ToB32(GetValue(pause, "autoplay"));
                         b32 showBones = ToB32(GetValue(pause, "showBones"));
                         b32 showBitmaps = ToB32(GetValue(pause, "showBitmaps"));
+                        r32 scale = ToR32(GetValue(pause, "scale"));
                         
                         r32 speed = ToR32(GetValue(pause, "speed"));
                         r32 timeToAdvance = play ? input->timeToAdvance : 0;
@@ -1016,7 +1017,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         FormatString(timerElement->value, sizeof(timerElement->value), "%f", timer);
                         test.animation.totalTime = timer;
                         
-                        Vec2 animationScale = V2(50, 50);
+                        Vec2 animationScale = V2(scale, scale);
                         
                         SkeletonInfo info = GetSkeletonForTaxonomy(UI->table, animationSlot);
                         
@@ -1488,6 +1489,26 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                             buttonAlpha = 1.0f;
                             saveInteraction =SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("soundEvents", widget));
                             UIAddReloadElementAction(&saveInteraction, UI_Trigger, UI->table->soundEventsRoot);
+                        }
+                        
+                        
+                        UIButtonInteraction(&saveButton, saveInteraction);
+                        UIDrawButton(UI, input, &saveButton, buttonAlpha);
+                    } break;
+                    
+                    case EditorWidget_Components:
+                    {
+                        Vec2 saveP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
+                        
+                        UIInteraction saveInteraction = NullInteraction();
+                        
+                        UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1.0f), " SAVE ");
+                        
+                        r32 buttonAlpha = 0.2f;
+                        if(widget->changeCount)
+                        {
+                            buttonAlpha = 1.0f;
+                            saveInteraction =SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("components", widget));
                         }
                         
                         
@@ -2086,6 +2107,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             playButton->type = EditorElement_Struct;
             UIAddChild(UI->table, playButton, EditorElement_String, "autoplay", "false");
             UIAddChild(UI->table, playButton, EditorElement_Real, "speed", "1.0");
+            UIAddChild(UI->table, playButton, EditorElement_Real, "scale", "50.0");
             UIAddChild(UI->table, playButton, EditorElement_String, "showBones", "false");
             UIAddChild(UI->table, playButton, EditorElement_String, "showBitmaps", "true");
             
@@ -2103,6 +2125,10 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             EditorWidget* soundDatabase = StartWidget(UI, EditorWidget_SoundDatabase, EditorRole_SoundDesigner, "Sound Database");
             soundDatabase->permanent.P = V2(300, 200);
             soundDatabase->root = UI->table->soundNamesRoot;
+            
+            EditorWidget* componentDatabase = StartWidget(UI, EditorWidget_Components, EditorRole_GameDesigner, "Visual Components");
+            componentDatabase->permanent.P = V2(300, 200);
+            componentDatabase->root = UI->table->componentsRoot;
             
             
             EditorWidget* actions = StartWidget(UI, EditorWidget_GeneralButtons, 0xffffffff, "Actions:");

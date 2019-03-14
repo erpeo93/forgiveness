@@ -2027,6 +2027,169 @@ inline void AddTagsBasedOnName(char* path, char* filename, u32 animationIndex)
 }
 
 
+inline char* StringPresentInFile(char* file, char* token, b32 limitToSingleList)
+{
+    char* result = 0;
+    Tokenizer tokenizer = {};
+    tokenizer.at = (char*) file;
+    
+    b32 parsing = true;
+    i32 level = 0;
+    
+    while(parsing)
+    {
+        Token t = GetToken(&tokenizer);
+        switch(t.type)
+        {
+            case Token_Identifier:
+            {
+                if(TokenEquals(t, token))
+                {
+                    if(RequireToken(&tokenizer, Token_EqualSign))
+                    {
+                        if(RequireToken(&tokenizer, Token_OpenParen))
+                        {
+                            result = tokenizer.at;
+                        }
+                    }
+                    parsing = false;
+                }
+            } break;
+            
+            case Token_String:
+            {
+                Token string = Stringize(t);
+                if(TokenEquals(string, token))
+                {
+                    result = tokenizer.at;
+                    if(RequireToken(&tokenizer, Token_EqualSign))
+                    {
+                        if(RequireToken(&tokenizer, Token_OpenParen))
+                        {
+                            result = tokenizer.at;
+                        }
+                    }
+                    parsing = false;
+                }
+            } break;
+            
+            case Token_OpenParen:
+            {
+                ++level;
+            } break;
+            
+            case Token_CloseParen:
+            {
+                --level;
+                if(limitToSingleList && level < 0)
+                {
+                    parsing = false;
+                }
+            } break;
+            
+            case Token_EndOfFile:
+            {
+                parsing = false;
+            } break;
+        }
+    }
+    
+    return result;
+}
+
+inline void RemoveSpaces(char* dest, char* source)
+{
+    for(char* s = source; *s; ++s)
+    {
+        char copy = *s;
+        if(copy == ' ')
+        {
+            copy = '_';
+        }
+        
+        *dest++ = copy;
+    }
+    *dest = 0;
+}
+
+internal void AddLabelsFromFile(PlatformFile* labelsFile, char* folderName, char* assetName)
+{
+    char folderNameNoWhiteSpaces[64];
+    Assert(StrLen(folderName) < ArrayCount(folderNameNoWhiteSpaces));
+    RemoveSpaces(folderNameNoWhiteSpaces, folderName);
+    char* folder = StringPresentInFile((char*) labelsFile->content, folderNameNoWhiteSpaces, false);
+    Assert(folder);
+    char* ptr = StringPresentInFile(folder, assetName, true);
+    Assert(ptr);
+    
+    Tokenizer tokenizer = {};
+    tokenizer.at = ptr;
+    
+    b32 parsing = true;
+    while(parsing)
+    {
+        Token t = GetToken(&tokenizer);
+        
+        switch(t.type)
+        {
+            case Token_String:
+            case Token_Identifier:
+            {
+                if(t.type == Token_String)
+                {
+                    t = Stringize(t);
+                }
+                
+                if(TokenEquals(t, "labels"))
+                {
+                    if(RequireToken(&tokenizer, Token_EqualSign))
+                    {
+                        if(RequireToken(&tokenizer, Token_OpenParen))
+                        {
+                            Token empty = GetToken(&tokenizer);
+                            if(empty.type == Token_Identifier && TokenEquals(empty, "empty"))
+                            {
+                                AdvanceToNextToken(&tokenizer, Token_CloseBraces);
+                                
+                                while(true)
+                                {
+                                    Token labelToken = GetToken(&tokenizer);
+                                    if(labelToken.type == Token_CloseParen)
+                                    {
+                                        break;
+                                    }
+                                    else
+                                    {
+                                        if(RequireToken(&tokenizer, Token_Identifier) &&
+                                           RequireToken(&tokenizer, Token_EqualSign))
+                                        {
+                                            Token labelName = Stringize(GetToken(&tokenizer));
+                                            
+                                            if(RequireToken(&tokenizer, Token_Comma) &&
+                                               RequireToken(&tokenizer, Token_Identifier) &&
+                                               RequireToken(&tokenizer, Token_EqualSign))
+                                            {
+                                                Token labelValue = GetToken(&tokenizer);
+                                                
+                                                AddLabel(labelName.text, labelName.textLength, (r32) atof(labelValue.text));
+                                            }
+                                        }
+                                        
+                                        AdvanceToNextToken(&tokenizer, Token_CloseBraces);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                parsing = false;
+            } break;
+        }
+    }
+}
+
+
 
 
 
@@ -2037,7 +2200,7 @@ struct BitmapFileHandle
     u64 ID;
 };
 
-internal void WriteBitmaps(char* folder, char* name)
+internal void WriteBitmaps(char* folder, char* name, PlatformFile* labelsFile)
 {
     Assets assets_;
     Assets* assets = &assets_;
@@ -2065,6 +2228,12 @@ internal void WriteBitmaps(char* folder, char* name)
         {
             PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, completePath);
             AddBitmapAsset(completePath, bitmapHandle.name, hashID);
+            
+            if(labelsFile)
+            {
+                AddLabelsFromFile(labelsFile, name, bitmapHandle.name);
+            }
+            
             Win32CloseHandle(&bitmapHandle);
         }
         EndAssetType();
@@ -2235,14 +2404,162 @@ internal void OutputFoldersAutocompleteFile(char* filename, char* path)
     free(buffer);
 }
 
+inline char* AddFolderToFile(char* addHere, char* fileEnd, char* folder, char* params)
+{
+    u32 sizeToEnd = (u32) (fileEnd - addHere);
+    char toAdd[128];
+    FormatString(toAdd, sizeof(toAdd), "\"%s\" = (%s),", folder, params);
+    
+    u32 roomToMake = StrLen(toAdd);
+    Assert(roomToMake <= sizeToEnd);
+    
+    memcpy(addHere + roomToMake, addHere, sizeToEnd);
+    memcpy(addHere, toAdd, roomToMake);
+    
+    char* result = addHere + roomToMake - 2;
+    return result;
+}
+
+inline void AddAssetToFile(char* addHere, char* fileEnd, char* tag, char* assetName, b32 labeled)
+{
+    u32 sizeToEnd = (u32) (fileEnd - addHere);
+    
+    char toAdd[256];
+    
+    if(labeled)
+    {
+        FormatString(toAdd, sizeof(toAdd), "{%s = \"%s\", labels = (#empty = {name = \"invalid\", value = 0.0})},", tag, assetName);
+    }
+    else
+    {
+        FormatString(toAdd, sizeof(toAdd), "{%s = \"%s\"},", tag, assetName);
+    }
+    u32 roomToMake = StrLen(toAdd);
+    Assert(roomToMake <= sizeToEnd);
+    
+    memcpy(addHere + roomToMake, addHere, sizeToEnd);
+    memcpy(addHere, toAdd, roomToMake);
+}
+
+internal void WriteAssetDefinitionFile(char* path, char* filename, char* definitionParams)
+{
+    char* assetPath = "assets";
+    
+    char assetDest[512];
+    FormatString(assetDest, sizeof(assetDest), "%s/%s", assetPath, filename);
+    
+    char oldPath[512];
+    FormatString(oldPath, sizeof(oldPath), "%s/%s", path, filename);
+    
+    
+    u32 newFileSize = MegaBytes(4);
+    char* newFile = (char*) malloc(newFileSize);
+    memset(newFile, 0, newFileSize);
+    char* endFile = newFile + newFileSize;
+    
+    
+    PlatformFile oldFile = DEBUGWin32ReadFile(oldPath);
+    if(oldFile.content && oldFile.size <= newFileSize)
+    {
+        memcpy(newFile, oldFile.content, oldFile.size);
+        DEBUGWin32FreeFile(&oldFile);
+    }
+    
+    
+    PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
+    Win32GetAllSubdirectoriesName(subdir, path);
+    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
+    {
+        char* folderName = subdir->subdirs[subdirIndex];
+        if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
+        {
+            char folderNameNoWhiteSpaces[64];
+            Assert(StrLen(folderName) < ArrayCount(folderNameNoWhiteSpaces));
+            RemoveSpaces(folderNameNoWhiteSpaces, folderName);
+            char* folderPtr = StringPresentInFile(newFile, folderNameNoWhiteSpaces, false);
+            
+            if(!folderPtr)
+            {
+                folderPtr = AddFolderToFile(newFile, endFile, folderNameNoWhiteSpaces, definitionParams);
+            }
+            else
+            {
+                Tokenizer paramT = {};
+                paramT.at = folderPtr;
+                
+                while(true)
+                {
+                    Token p = GetToken(&paramT);
+                    if(p.type == Token_Pound)
+                    {
+                        Token value = GetToken(&paramT);
+                        folderPtr = paramT.at + 1;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+            
+            
+            char folderPath[512];
+            FormatString(folderPath, sizeof(folderPath), "%s/%s", path, folderName);
+            
+            PlatformFileGroup soundGroup = Win32GetAllFilesBegin(PlatformFile_sound, folderPath);
+            for(u32 soundIndex = 0; soundIndex < soundGroup.fileCount; ++soundIndex)
+            {
+                PlatformFileHandle soundHandle = Win32OpenNextFile(&soundGroup, folderPath);
+                
+                if(!StringPresentInFile(folderPtr, soundHandle.name, true))
+                {
+                    AddAssetToFile(folderPtr, endFile, "soundName", soundHandle.name, false);
+                }
+                
+                Win32CloseHandle(&soundHandle);
+            }
+            Win32GetAllFilesEnd(&soundGroup);
+            
+            
+            
+            PlatformFileGroup imageGroup = Win32GetAllFilesBegin(PlatformFile_image, folderPath);
+            for(u32 imageIndex = 0; imageIndex < imageGroup.fileCount; ++imageIndex)
+            {
+                PlatformFileHandle imageHandle = Win32OpenNextFile(&imageGroup, folderPath);
+                
+                if(!StringPresentInFile(folderPtr, imageHandle.name, true))
+                {
+                    AddAssetToFile(folderPtr, endFile, "componentName", imageHandle.name, true);
+                }
+                
+                Win32CloseHandle(&imageHandle);
+            }
+            Win32GetAllFilesEnd(&imageGroup);
+        }
+        
+    }
+    free(subdir);
+    DEBUGWin32WriteFile(assetDest, newFile, StrLen(newFile));
+}
+
 internal void WriteComponents()
 {
     char* componentsPath = "definition/components";
+    char* assetFile = "components.fad";
+    char* definitionParams = "#cantBeDeleted";
+    
+    WriteAssetDefinitionFile(componentsPath, assetFile, definitionParams);
     
     OutputFoldersAutocompleteFile("component", componentsPath);
     
     PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
     Win32GetAllSubdirectoriesName(subdir, componentsPath);
+    
+    
+    char labelsPath[64];
+    FormatString(labelsPath, sizeof(labelsPath), "assets/%s", assetFile);
+    PlatformFile labelsFile = DEBUGWin32ReadFile(labelsPath);
+    Assert(labelsFile.content);
     
     for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
     {
@@ -2250,9 +2567,11 @@ internal void WriteComponents()
         
         if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
         {
-            WriteBitmaps(componentsPath, folderName);
+            WriteBitmaps(componentsPath, folderName, &labelsFile);
         }
     }
+    
+    DEBUGWin32FreeFile(&labelsFile);
     free(subdir);
 }
 
@@ -2366,7 +2685,7 @@ internal void RecursiveWriteBitmaps(char* path)
         
         if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
         {
-            WriteBitmaps(path, folderName);
+            WriteBitmaps(path, folderName, 0);
             RecursiveWriteBitmaps(nextPath);
         }
     }
@@ -2438,130 +2757,7 @@ internal void WriteBitmapsAndAnimations()
 }
 
 
-inline char* StringPresentInFile(char* file, char* token, b32 limitToSingleList)
-{
-    char* result = 0;
-    Tokenizer tokenizer = {};
-    tokenizer.at = (char*) file;
-    
-    b32 parsing = true;
-    while(parsing)
-    {
-        Token t = GetToken(&tokenizer);
-        switch(t.type)
-        {
-            case Token_Identifier:
-            {
-                if(TokenEquals(t, token))
-                {
-                    if(RequireToken(&tokenizer, Token_EqualSign))
-                    {
-                        if(RequireToken(&tokenizer, Token_OpenParen))
-                        {
-                            result = tokenizer.at;
-                        }
-                    }
-                    parsing = false;
-                }
-            } break;
-            
-            case Token_String:
-            {
-                Token string = Stringize(t);
-                if(TokenEquals(string, token))
-                {
-                    result = tokenizer.at;
-                    
-                    if(RequireToken(&tokenizer, Token_EqualSign))
-                    {
-                        if(RequireToken(&tokenizer, Token_OpenParen))
-                        {
-                            result = tokenizer.at;
-                        }
-                    }
-                    parsing = false;
-                }
-            } break;
-            
-            case Token_CloseParen:
-            {
-                parsing = false;
-            } break;
-            
-            case Token_EndOfFile:
-            {
-                parsing = false;
-            } break;
-        }
-    }
-    
-    return result;
-}
 
-internal void AddLabelsFromFile(PlatformFile labelsFile, char* assetName)
-{
-    char* ptr = StringPresentInFile((char*) labelsFile.content, assetName, true);
-    
-    Tokenizer tokenizer = {};
-    tokenizer.at = ptr;
-    
-    b32 parsing = true;
-    while(parsing)
-    {
-        Token t = GetToken(&tokenizer);
-        
-        switch(t.type)
-        {
-            case Token_Identifier:
-            {
-                if(TokenEquals(t, "labels"))
-                {
-                    if(RequireToken(&tokenizer, Token_EqualSign))
-                    {
-                        if(RequireToken(&tokenizer, Token_OpenParen))
-                        {
-                            Token empty = GetToken(&tokenizer);
-                            if(empty.type == Token_Identifier && TokenEquals(empty, "empty"))
-                            {
-                                AdvanceToNextToken(&tokenizer, Token_CloseBraces);
-                                
-                                while(true)
-                                {
-                                    Token labelToken = GetToken(&tokenizer);
-                                    if(labelToken.type == Token_CloseParen)
-                                    {
-                                        break;
-                                    }
-                                    else
-                                    {
-                                        if(RequireToken(&tokenizer, Token_Identifier) &&
-                                           RequireToken(&tokenizer, Token_EqualSign))
-                                        {
-                                            Token labelName = Stringize(GetToken(&tokenizer));
-                                            
-                                            if(RequireToken(&tokenizer, Token_Comma) &&
-                                               RequireToken(&tokenizer, Token_Identifier) &&
-                                               RequireToken(&tokenizer, Token_EqualSign))
-                                            {
-                                                Token labelValue = GetToken(&tokenizer);
-                                                
-                                                AddLabel(labelName.text, labelName.textLength, (r32) atof(labelValue.text));
-                                            }
-                                        }
-                                        
-                                        AdvanceToNextToken(&tokenizer, Token_CloseBraces);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                parsing = false;
-            } break;
-        }
-    }
-}
 
 internal void WriteSounds(PlatformFile labelsFile, char* folder, char* name)
 {
@@ -2677,111 +2873,6 @@ internal void WriteMusic()
 }
 
 
-
-inline char* AddFolderToFile(char* addHere, char* fileEnd, char* folder, char* params)
-{
-    u32 sizeToEnd = (u32) (fileEnd - addHere);
-    char toAdd[128];
-    FormatString(toAdd, sizeof(toAdd), "\"%s\" = (%s),", folder, params);
-    
-    u32 roomToMake = StrLen(toAdd);
-    Assert(roomToMake <= sizeToEnd);
-    
-    memcpy(addHere + roomToMake, addHere, sizeToEnd);
-    memcpy(addHere, toAdd, roomToMake);
-    
-    char* result = addHere + roomToMake - 2;
-    return result;
-}
-
-inline void AddAssetToFile(char* addHere, char* fileEnd, char* tag, char* assetName)
-{
-    u32 sizeToEnd = (u32) (fileEnd - addHere);
-    
-    char toAdd[256];
-    FormatString(toAdd, sizeof(toAdd), "{%s = \"%s\"},", tag, assetName);
-    u32 roomToMake = StrLen(toAdd);
-    Assert(roomToMake <= sizeToEnd);
-    
-    memcpy(addHere + roomToMake, addHere, sizeToEnd);
-    memcpy(addHere, toAdd, roomToMake);
-}
-
-internal void WriteAssetDefinitionFile(char* path, char* filename, char* definitionParams)
-{
-    char* assetPath = "assets";
-    
-    char assetDest[512];
-    FormatString(assetDest, sizeof(assetDest), "%s/%s", assetPath, filename);
-    
-    u32 newFileSize = MegaBytes(4);
-    char* newFile = (char*) malloc(newFileSize);
-    memset(newFile, 0, newFileSize);
-    char* endFile = newFile + newFileSize;
-    
-    
-    PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
-    Win32GetAllSubdirectoriesName(subdir, path);
-    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
-    {
-        char* folderName = subdir->subdirs[subdirIndex];
-        if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
-        {
-            char folderNameNoWhiteSpaces[64];
-            
-            Assert(StrLen(folderName) < ArrayCount(folderNameNoWhiteSpaces));
-            
-            char* dest = folderNameNoWhiteSpaces;
-            for(char* source = folderName; *source; ++source)
-            {
-                char copy = *source;
-                if(copy == ' ')
-                {
-                    copy = '_';
-                }
-                
-                *dest++ = copy;
-            }
-            *dest = 0;
-            
-            char* folderPtr = StringPresentInFile(newFile, folderNameNoWhiteSpaces, false);
-            if(!folderPtr)
-            {
-                folderPtr = AddFolderToFile(newFile, endFile, folderNameNoWhiteSpaces, definitionParams);
-            }
-            
-            char folderPath[512];
-            FormatString(folderPath, sizeof(folderPath), "%s/%s", path, folderName);
-            
-            PlatformFileGroup soundGroup = Win32GetAllFilesBegin(PlatformFile_sound, folderPath);
-            for(u32 soundIndex = 0; soundIndex < soundGroup.fileCount; ++soundIndex)
-            {
-                PlatformFileHandle soundHandle = Win32OpenNextFile(&soundGroup, folderPath);
-                
-                if(!StringPresentInFile(folderPtr, soundHandle.name, true))
-                {
-                    AddAssetToFile(folderPtr, endFile, "soundName", soundHandle.name);
-                }
-                
-                Win32CloseHandle(&soundHandle);
-            }
-            Win32GetAllFilesEnd(&soundGroup);
-            
-            
-            
-            PlatformFileGroup imageGroup = Win32GetAllFilesBegin(PlatformFile_image, folderPath);
-            for(u32 imageIndex = 0; imageIndex < imageGroup.fileCount; ++imageIndex)
-            {
-                PlatformFileHandle imageHandle = Win32OpenNextFile(&imageGroup, folderPath);
-                Win32CloseHandle(&imageHandle);
-            }
-            Win32GetAllFilesEnd(&imageGroup);
-        }
-        
-    }
-    free(subdir);
-    DEBUGWin32WriteFile(assetDest, newFile, StrLen(newFile));
-}
 
 internal void WriteSounds()
 {
