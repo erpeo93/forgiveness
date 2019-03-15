@@ -902,8 +902,23 @@ inline BitmapId FindBitmapByName(Assets* assets, u64 typeHashID, u64 nameHashID)
 }
 
 
+struct ClonedInfo
+{
+	union
+	{
+		Vec4 coloration;
+	}
+}
 
-inline u32 GetMatchingAsset_(Assets* assets, u32 assetID, u64 stringHashID,
+struct MatchingAssetResult
+{
+	u32 assetIndex;
+
+	b32 cloned;
+	ClonedAssetInfo clonedInfo;
+};
+
+inline MatchingAssetResult GetMatchingAsset_(Assets* assets, u32 assetID, u64 stringHashID,
                              TagVector* values, TagVector* weights, LabelVector* labels)
 {
     r32 bestDiff = R32_MAX;
@@ -959,7 +974,7 @@ inline u32 GetMatchingAsset_(Assets* assets, u32 assetID, u64 stringHashID,
             if(currentDiff < bestDiff)
             {
                 bestDiff = currentDiff;
-                bestAsset = assetIndex;
+                bestAsset = assetIndex - asset->offsetFromBaseAsset;
             }
         }
     }

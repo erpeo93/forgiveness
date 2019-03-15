@@ -2,7 +2,7 @@ struct RecipeIngredients
 {
     u32 count;
     u32 taxonomies[16];
-    u8 quantities[16];
+    u32 quantities[16];
 };
 
 internal void GetRecipeIngredients(RecipeIngredients* output, TaxonomyTable* table, u32 taxonomy, u64 recipeIndex)
@@ -19,9 +19,9 @@ internal void GetRecipeIngredients(RecipeIngredients* output, TaxonomyTable* tab
         {
             for(u32 ingredientIndex = 0; ingredientIndex < piece->ingredientCount; ++ingredientIndex)
             {
-                u8 sourceQuantity = piece->ingredientQuantities[ingredientIndex]; 
+                u32 sourceQuantity = piece->ingredientQuantities[ingredientIndex]; 
                 u32 ingredientTaxonomy = GetRandomChild(table, &seq, piece->ingredientTaxonomies[ingredientIndex]);
-                u8 quantity = ( sourceQuantity == 0) ? 1 : sourceQuantity;
+                u32 quantity = ( sourceQuantity == 0) ? 1 : sourceQuantity;
                 
                 b32 alreadyPresent = false;
                 for(u32 presentIndex = 0; presentIndex < output->count; ++presentIndex)

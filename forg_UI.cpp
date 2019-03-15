@@ -319,6 +319,26 @@ struct UIAddTabResult
     Vec4 color;
 };
 
+inline void AddConfirmInteraction(char* dest)
+{
+	UIAddUndoRedoAction(&confirmInteraction, UI_Trigger, UndoRedoString(widget, root->value, sizeof(root->value), root->value, UI->keyboardBuffer));
+            
+	UIAddStandardAction(&confirmInteraction, UI_Trigger, dest, ColdPointer(dest), ColdPointer(UI->keyboardBuffer));
+	UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeLabel, 0); 
+	UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->active, 0);    
+	UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeParent, 0);    
+	UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeGrandParent, 0);    
+            
+            
+	UIAddReloadElementAction(&confirmInteraction, UI_Trigger, widget->root);
+	if(StrEqual(widget->name, "Editing Tabs"))
+	{
+		UIAddRequestAction(&confirmInteraction, UI_Trigger, SendDataFileRequest());
+	}        
+	UIAddClearAction(&confirmInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+                
+}
+
 inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget, PlatformInput* input, EditorElementParents parents, EditorElement* root, Vec2 P, EditorLayout* layout, char* text)
 {
     UIAddTabResult result = {};
@@ -333,6 +353,12 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
             if(PointInRect(result.bounds, UI->relativeScreenMouse))
             {
                 UIInteraction mouseInteraction = {};
+
+				if(UI->active && UI->bufferValid)
+				{
+					AddConfirmActions(&mouseInteraction, UI->active->value);
+				}
+
                 if(StrEqual(text, "true"))
                 {
                     result.color = V4(1, 0, 1, 1);
@@ -408,20 +434,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
             result.color = V4(0, 1, 0, 1);
             
             UIInteraction confirmInteraction = {};
-            UIAddUndoRedoAction(&confirmInteraction, UI_Trigger, UndoRedoString(widget, root->value, sizeof(root->value), root->value, UI->keyboardBuffer));
-            
-            UIAddStandardAction(&confirmInteraction, UI_Trigger, root->value, ColdPointer(root->value), ColdPointer(UI->keyboardBuffer));
-            UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->active, 0);    
-            UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeParent, 0);    
-            UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeGrandParent, 0);    
-            
-            
-            UIAddReloadElementAction(&confirmInteraction, UI_Trigger, widget->root);
-            if(StrEqual(widget->name, "Editing Tabs"))
-            {
-                UIAddRequestAction(&confirmInteraction, UI_Trigger, SendDataFileRequest());
-            }
-            
+			AddConfirmActions(root->value);
             UIAddInteraction(UI, input, confirmButton, confirmInteraction);
         }
         
@@ -524,6 +537,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             Vec4 nameColor = V4(1, 1, 1, 1);
             
             b32 nameHot = false;
+			char* shadowName = 0;
             char* nameToShow = name;
             b32 showName = (nameToShow[0]);
             
@@ -548,19 +562,14 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             if(root == UI->activeLabel)
             {
                 nameToShow = UI->showBuffer;
+
+				if(UI->keyboardBuffer[0] == 0)
+				{
+					shadowName = root->name;
+				}
                 
-                UIInteraction confirmInteraction = {};
-                UIAddUndoRedoAction(&confirmInteraction, UI_Trigger, UndoRedoString(widget, root->name, sizeof(root->name), root->name, UI->keyboardBuffer));
-                UIAddStandardAction(&confirmInteraction, UI_Trigger, root->name, ColdPointer(root->name), ColdPointer(UI->keyboardBuffer));
-                UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeLabel, 0);    
-                UIAddClearAction(&confirmInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
-                
-                UIAddReloadElementAction(&confirmInteraction, UI_Trigger, widget->root);
-                if(StrEqual(widget->name, "Editing Tabs"))
-                {
-                    UIAddRequestAction(&confirmInteraction, UI_Trigger, SendDataFileRequest());
-                }
-                
+				UIInteraction confirmInteraction = {};
+				AddConfirmActions(root->name);
                 UIAddInteraction(UI, input, confirmButton, confirmInteraction);
             }
             
@@ -585,6 +594,11 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     r32 xAdvance = Max(layout->nameValueDistance, GetDim(nameBounds).x + 10.0f);
                     Vec2 valueP = nameP + V2(xAdvance, 0);
                     char* text = (root == UI->active) ? UI->showBuffer : root->value;
+
+					if(root == UI->active && UI->keyboardBuffer[0] == 0)
+					{
+						shadowName = root->value;
+					}
                     
                     UIAddTabResult addTab = UIAddTabValueInteraction(UI, widget, input, parents, root, valueP, layout, text);
                     
@@ -1003,6 +1017,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         b32 play = ToB32(GetValue(pause, "autoplay"));
                         b32 showBones = ToB32(GetValue(pause, "showBones"));
                         b32 showBitmaps = ToB32(GetValue(pause, "showBitmaps"));
+                        b32 showPivots = ToB32(GetValue(pause, "showPivots"));
                         r32 scale = ToR32(GetValue(pause, "scale"));
                         
                         r32 speed = ToR32(GetValue(pause, "speed"));
@@ -1038,7 +1053,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         Vec3 animationBase = P;
                         animationBase.xy += Hadamart(info.originOffset, animationScale);
                         
-                        AnimationOutput output =  PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 1, true, showBones, showBitmaps, timer, nameHashID);
+                        AnimationOutput output =  PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 1, true, showBones, showBitmaps, showPivots, timer, nameHashID);
                         
                         if(output.hotBoneIndex >= 0)
                         {
@@ -1066,6 +1081,11 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 } break;
             }
             
+			if(shadowName)
+			{
+				Vec4 shadowColor = V4(0.6f, 0.6f, 0.6f, 1.0f);
+				PushUIOrthoText(UI, shadowName, layout->fontScale, nameP, shadowColor, layout->additionalZBias);
+			}
             if(showName)
             {
                 PushUIOrthoText(UI, nameToShow, layout->fontScale, nameP, nameColor, layout->additionalZBias);
@@ -1076,6 +1096,20 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
     }
     
     return totalResult;
+}
+
+inline b32 ChangesMustBeSaved(u32 widgetIndex)
+{
+    b32 result = true;
+    
+    if(widgetIndex == EditorWidget_Animation ||
+       widgetIndex == EditorWidget_SoundDatabase ||
+       widgetIndex == EditorWidget_GeneralButtons)
+    {
+        result = false;
+    }
+    
+    return result;
 }
 
 inline void UIRenderEditor(UIState* UI, PlatformInput* input)
@@ -1160,8 +1194,55 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     UIAddSetValueAction(&esc, UI_Trigger, &UI->copying, 0);
     UIAddSetValueAction(&esc, UI_Trigger, &UI->currentAutocompleteSelectedIndex, -1);
     UIAddInteraction(UI, input, escButton, esc);
+
+	if(UI->bufferValid)
+	{
+		if(UI->active)
+		{
+			AddConfirmActions(UI->active->value);
+			UIAddInteraction(UI, input, mouseleft, confirmOnClick);
+		}
+		else if(UI->activeLabel)
+		{
+			UIInteraction confirmOnClick;
+			AddConfirmActions(UI->activeLabel->name);
+			UIAddInteraction(UI, input, mouseleft, confirmOnClick);
+		}
+	}
     
-    
+    if(UI->active)
+	{
+		if(ctrlDown)
+		{
+			How do we update the grandparent?
+			UpOneLevel();
+		}
+		else if(shiftDown)
+		{
+			if(firstInList || firstValue)
+			{
+				DrillDown();
+			}
+		}
+		else
+		{
+			if(editable(UI->active->next))
+			{
+				UIInteraction moveInteraction;
+				if(bufferValid)
+				{
+					AddConfirmInteraction();
+				}
+
+				AddClearAction(keyboardBuffer);
+				AddAction(moveDown, UI->active, UI->active->next);
+
+				AddAction(moveUp, UI->active, UI->active->prev);
+			}
+		}
+	}
+
+
     u32 current = StrLen(UI->keyboardBuffer);
     u32 maxToCopy = sizeof(UI->keyboardBuffer) - (current + 1);
     char* appendHere = UI->keyboardBuffer + current;
@@ -1554,7 +1635,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             widgetZ += 1.0f;
         }
         
-        if(widget->changeCount)
+        if(ChangesMustBeSaved(widgetIndex) && widget->changeCount)
         {
             input->allowedToQuit = false;
         }
@@ -2094,6 +2175,10 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             EditorWidget* taxonomyTree = StartWidget(UI, EditorWidget_TaxonomyTree, 0xffffffff, "Taxonomy Tree");
             taxonomyTree->permanent.P = V2(-800, -100);
+
+			AddChild(recipeParameters);
+			AddChild("taxonomy");
+			AddChild("recipeIndex");
             
             
             EditorWidget* taxonomyEditing = StartWidget(UI, EditorWidget_EditingTaxonomyTabs, 0xffffffff, "Editing Tabs");
@@ -2124,6 +2209,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             UIAddChild(UI->table, playButton, EditorElement_Real, "scale", "50.0");
             UIAddChild(UI->table, playButton, EditorElement_String, "showBones", "false");
             UIAddChild(UI->table, playButton, EditorElement_String, "showBitmaps", "true");
+            UIAddChild(UI->table, playButton, EditorElement_String, "showPivots", "false");
             UIAddChild(UI->table, playButton, EditorElement_Unsigned, "seed", "0");
             
             

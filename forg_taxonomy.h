@@ -136,10 +136,10 @@ struct LayoutPiece
     u64 componentHashID;
     u32 flags;
     
+	LayoutPiece* parent;
     u32 ingredientCount;
-    LayoutPiece* parent;
     u32 ingredientTaxonomies[MAX_COMPONENT_PER_MODULE];
-    u8 ingredientQuantities[MAX_COMPONENT_PER_MODULE];
+    u32 ingredientQuantities[MAX_COMPONENT_PER_MODULE];
     
     union
     {

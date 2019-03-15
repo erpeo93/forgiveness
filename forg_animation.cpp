@@ -431,6 +431,7 @@ internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* tab
             VisualComponent* visualComponent = dest->components + dest->componentCount++;
             
             visualComponent->stringHashID = piece->componentHashID;
+			visualComponent->index = piece->index;
             visualComponent->labelCount = 0;
             
             LayoutPiece* visualPiece = piece;
@@ -506,7 +507,7 @@ inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 entityHa
             for(u32 componentIndex = 0; componentIndex < properties->componentCount; ++componentIndex)
             {
                 VisualComponent* component = properties->components + componentIndex;
-                if(component->stringHashID == sprite->stringHashID)
+                if(component->stringHashID == sprite->stringHashID && component->index == sprite->index)
                 {
                     for(u32 labelIndex = 0; labelIndex < component->labelCount; ++labelIndex)
                     {
@@ -882,6 +883,7 @@ struct RenderAssResult
 {
     b32 onFocus;
     b32 screenInRect;
+	r32 distanceFromCenter;
 };
 
 inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender, Vec4 proceduralColor = V4(1, 1, 1, 1))
@@ -963,15 +965,27 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                 if(bitmap)
                 {
                     Vec4 cellColor = V4(pieceParams.color.rgb, 0.5f);
-                    i32 objectIndex = input->currentObjectIndex++;
+
+                    
+                    r32 zOffset = 0.0f;
+                    
+                    Vec3 gridDim = V3(Hadamart(finalScale, V2(bitmap->widthOverHeight * bitmap->nativeHeight, bitmap->nativeHeight)), 0);
+					Vec2 cellDim = ?;
+					Vec2 halfCellDim = 0.5f * celldim;
+                    
+                    r32 cellWidth = cellDim.x;
+                    r32 cellHeight = cellDim.y;
+                    
+                    Vec3 cellDim = V3(cellWidth, cellHeight, 0);
+                    
+
+					for(everyObject)
+					{
+						i32 objectIndex = input->currentObjectIndex++;
                     Object* object = input->objects + objectIndex;
                     
                     r32 objectScale = 1.0f;
-                    
-                    
                     Vec4 objectColor = V4(1, 1, 1, 1);
-                    
-                    
                     if(object->status < 0)
                     {
                         objectColor = V4(0.5f, 0.5f, 0.5f, 0.5f);
@@ -982,18 +996,8 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                         Vec4 statusColor = Lerp(bodyDead, ratio, V4(1, 1, 1, 1));
                         objectColor = statusColor;
                     }
-                    
-                    r32 zOffset = 0.0f;
-                    
-                    Vec3 gridDim = V3(Hadamart(finalScale, V2(bitmap->widthOverHeight * bitmap->nativeHeight, bitmap->nativeHeight)), 0);
-                    Vec3 halfGridDim = 0.5f * gridDim;
-                    
-                    r32 cellWidth = gridDim.x;
-                    r32 cellHeight = gridDim.y;
-                    
-                    Vec3 cellDim = V3(cellWidth, cellHeight, 0);
-                    
-                    Assert(P.z == 0.0f);
+					}
+ Assert(P.z == 0.0f);
                     Rect2 cellRect = ProjectOnGround(group, P, pieceParams.cameraOffset, cellDim);
                     
                     if(PointInRect(cellRect, input->mousePOnGround.xy))
@@ -1055,6 +1059,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                             
                             DrawModularPiece(input, group, P, slot->taxonomy, &objectParams, true, false, false);
                         }
+                   
                     }
                 }
                 else
@@ -1107,8 +1112,10 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                         Vec2 XAxis = dim.XAxis.xy * dim.size.x;
                         Vec2 YAxis = dim.YAxis.xy * dim.size.y;
                         Vec2 startP = dim.P.xy;
-						if(PointInUnalignedRect(startP - 0.5f * YAxis, XAxis, YAxis, input->relativeScreenMouseP))
+						if(PointInUnalignedRect(startP, XAxis, YAxis, input->relativeScreenMouseP))
 						{
+							Vec2 centerP = startP + 0.5f * XAxis + 0.5f * YAxis;
+							result.distanceFromAssCenter = centerP - input->relativeScreenMouse;
 							result.screenInRect = true;
 						}
 					}
@@ -1345,6 +1352,7 @@ enum CycleAssOperation
 {
     CycleAss_DetermineFocus,
     CycleAss_Render,
+    CycleAss_RenderPivots,
 };
 
 inline void ApplyAssAlterations(PieceAss* ass, AssAlterations* assAlt, Bone* parentBone, Vec4* proceduralColor)
@@ -1400,18 +1408,22 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                 {
                     SpriteInfo* spriteInfo = equipmentMap->spriteInfos + currentEquipmentRig->spriteIndex;
                     
-                    if(operation == CycleAss_Render)
+                    switch(operation)
                     {
-                        r32 alpha = GetAssAlphaFade(input->entity->identifier, blended->assCount + equipmentAssCount,
-                                                    input->lifePointsSeedResetCounter, input->lifePointFadeDuration, input->lifePointThreesold, input->lifePointRatio, input->cameInTime, input->entity->status);
+                        case CycleAss_Render:
+                        {
+                            r32 alpha = GetAssAlphaFade(input->entity->identifier, blended->assCount + equipmentAssCount,
+                                                        input->lifePointsSeedResetCounter, input->lifePointFadeDuration, input->lifePointThreesold, input->lifePointRatio, input->cameInTime, input->entity->status);
+                            
+                            PieceAss equipmentAss = *currentEquipmentRig;
+                            equipmentAss.alpha *= alpha;
+                            RenderEquipmentPiece(input, group, blended, &equipmentAss, P, spriteInfo, params);
+                        } break;
                         
-                        PieceAss equipmentAss = *currentEquipmentRig;
-                        equipmentAss.alpha *= alpha;
-                        RenderEquipmentPiece(input, group, blended, &equipmentAss, P, spriteInfo, params);
-                    }
-                    else
-                    {
-                        MarkGhostAss(input, group, blended, currentEquipmentRig, P, spriteInfo, params);
+                        case CycleAss_DetermineFocus:
+                        {
+                            MarkGhostAss(input, group, blended, currentEquipmentRig, P, spriteInfo, params);
+                        } break;
                     }
                     
                     ++currentEquipmentRig;
@@ -1426,16 +1438,31 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
             }
         }
         
-        if(operation == CycleAss_Render)
+        switch(operation)
         {
-            r32 alpha = GetAssAlphaFade(input->entity->identifier, assIndex, 
-                                        input->lifePointsSeedResetCounter, input->lifePointFadeDuration, input->lifePointThreesold, input->lifePointRatio, input->cameInTime, input->entity->status);
-            proceduralColor.a *= alpha;
-            if(RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, proceduralColor).screenInRect)
-			{
-				input->output->hotAssIndex = (i16) assIndex;
-			}
+            case CycleAss_Render:
+            {
+                r32 alpha = GetAssAlphaFade(input->entity->identifier, assIndex, 
+                                            input->lifePointsSeedResetCounter, input->lifePointFadeDuration, input->lifePointThreesold, input->lifePointRatio, input->cameInTime, input->entity->status);
+                proceduralColor.a *= alpha;
+
+				RenderPieceAssResult = RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, proceduralColor);
+                if(render.screenInRect && render.distance < input->currentDistance)
+                {
+                    input->output->hotAssIndex = (i16) assIndex;
+                }
+            } break;
+            
+            case CycleAss_RenderPivots:
+            {
+                Vec3 pivotP = AssOriginOffset(parentBone, &currentAss, params->zOffset, params->scale);
+                
+                ObjectTransform pivotTranform = FlatTransform();
+                pivotTranform.additionalZBias = 30.0f;
+                PushRect(group, pivotTranform, RectCenterDim(pivotP.xy + params->cameraOffset.xy, V2(4, 4)), V4(1, 1, 1, 1));
+            } break;
         }
+        
         if(validAss)
         {
             ++validBlendedAss;
@@ -1445,13 +1472,18 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
     for(u32 totalDrawn = validBlendedAss + equipmentAssCount; totalDrawn < equipmentMapAssCount; ++totalDrawn)
     {
         SpriteInfo* spriteInfo = equipmentMap->spriteInfos + currentEquipmentRig->spriteIndex;
-        if(operation == CycleAss_Render)
+        
+        switch(operation)
         {
-            RenderEquipmentPiece(input, group, blended, currentEquipmentRig, P, spriteInfo, params);
-        }
-        else
-        {
-            MarkGhostAss(input, group, blended, currentEquipmentRig, P, spriteInfo, params);
+            case CycleAss_Render:
+            {
+                RenderEquipmentPiece(input, group, blended, currentEquipmentRig, P, spriteInfo, params);
+            } break;
+            
+            case CycleAss_DetermineFocus:
+            {
+                MarkGhostAss(input, group, blended, currentEquipmentRig, P, spriteInfo, params);
+            } break;
         }
         ++currentEquipmentRig;
     }
@@ -1468,6 +1500,15 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         ApplyAssAlterations(&currentAss, assAlt, parentBone, &proceduralColor);
         
         RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, Hadamart(proceduralColor, V4(0.1f, 0.1f, 0.1f, 1)));
+        
+        if(input->showPivots)
+        {
+            Vec3 pivotP = AssOriginOffset(parentBone, &currentAss, params->zOffset, params->scale);
+            
+            ObjectTransform pivotTranform = FlatTransform();
+            pivotTranform.additionalZBias = 30.1f;
+            PushRect(group, pivotTranform, RectCenterDim(pivotP.xy + params->cameraOffset.xy, V2(4, 4)), V4(0, 1, 0, 1));
+        }
     }
 }
 
@@ -1560,6 +1601,11 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
             PushLine(group, boneColor, V3(startP, params->additionalZbias + 1.0f), V3(toP, params->additionalZbias + 1.0f), thickness);
         }
     }
+    
+    if(input->ortho && input->showPivots)
+    {
+        AnimationPiecesOperation(input, group, equipmentMap, &blended, P, params, CycleAss_RenderPivots);
+    }
 }
 
 
@@ -1572,6 +1618,11 @@ internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group
     {
         AnimationPiecesOperation(input, group, 0, &blended, P, params, CycleAss_DetermineFocus);
         AnimationPiecesOperation(input, group, 0, &blended, P, params, CycleAss_Render);
+    }
+    
+    if(input->ortho && input->showPivots)
+    {
+        AnimationPiecesOperation(input, group, 0, &blended, P, params, CycleAss_RenderPivots);
     }
 }
 
@@ -1604,6 +1655,10 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
     }
     
     input->cameInTime = entityC->animation.cameInTime;
+	if(timeToAdvance == 0 && input->cameInTime == 0)
+	{
+		input->cameInTime = R32_MAX;
+	}
     input->lifePointsSeedResetCounter = entityC->animation.lifePointsSeedResetCounter;
     input->lifePointRatio = lifePointRatio;
     input->lifePointFadeDuration = lifePointFadeDuration;
@@ -1791,7 +1846,7 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
     return result;
 }
 
-internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, ClientEntity* entityC, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, b32 ortho = false, b32 showBones = false, b32 showBitmaps = true, r32 modTime = 0.0f, u64 forcedNameHashID = 0)
+internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, ClientEntity* entityC, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, b32 ortho = false, b32 showBones = false, b32 showBitmaps = true, b32 showPivots = false, r32 modTime = 0.0f, u64 forcedNameHashID = 0)
 {
     AnimationOutput result = {};
     TaxonomyTable* taxTable = worldMode->table;
@@ -1806,8 +1861,9 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
     
     InitializeAnimationInputOutput(&input, &result, worldMode, entityC, timeToAdvance);
     input.ortho = ortho;
-    input.showBitmaps = showBitmaps;
     input.showBones = showBones;
+    input.showBitmaps = showBitmaps;
+    input.showPivots = showPivots;
     input.timeMod = modTime;
     
     AnimationVolatileParams params;

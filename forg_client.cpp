@@ -876,7 +876,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             Vec3 offset = {};
                             if(entity->identifier == player->identifier)
                             {
-                                if(myPlayer->distanceCoeffFromServerP < 0.3f)
+                                if(myPlayer->distanceCoeffFromServerP < 0.3f && input->timeToAdvance > 0)
                                 {
                                     Vec3 acc = ComputeAcceleration(myPlayer->acceleration, myPlayer->velocity, DefaultMoveSpec());
                                     myPlayer->velocity += acc * input->timeToAdvance;

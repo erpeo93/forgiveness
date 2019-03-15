@@ -173,6 +173,7 @@ struct AnimationFixedParams
     b32 ortho;
     b32 showBones;
     b32 showBitmaps;
+    b32 showPivots;
     r32 timeMod;
     
     r32 timeToAdvance;

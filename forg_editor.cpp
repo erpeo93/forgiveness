@@ -443,9 +443,9 @@ inline Vec4 ToV4Color(EditorElement* element)
     return result;
 }
 
-inline Vec2 ToV2(EditorElement* element)
+inline Vec2 ToV2(EditorElement* element, Vec2 default = {})
 {
-    Vec2 result = {};
+    Vec2 result = default;
     if(element)
     {
         result.x = ToR32(GetValue(element, "x"));
@@ -1683,7 +1683,7 @@ inline void AddLabel(u64 ID, r32 value)
     FREELIST_INSERT(dest, slot->firstVisualLabel);
 }
 #endif
-inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u32 flags = 0)
+inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u8 index, u32 flags = 0)
 {
     LayoutPiece* dest;
     TAXTABLE_ALLOC(dest, LayoutPiece);
@@ -1693,6 +1693,7 @@ inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle,
     dest->alpha = alpha;
     dest->pivot = pivot;
     dest->componentHashID = StringHash(componentName);
+	dest->index = index;
     dest->flags = flags;
     dest->ingredientCount = 0;
     dest->parent = 0;
@@ -1702,13 +1703,15 @@ inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle,
     return dest;
 }
 
-inline void AddIngredient(LayoutPiece* piece, char* name)
+inline void AddIngredient(LayoutPiece* piece, char* name, u32 quantity)
 {
     Assert(piece->ingredientCount < ArrayCount(piece->ingredientTaxonomies));
     TaxonomySlot* ingredientSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
     if(ingredientSlot)
     {
-        piece->ingredientTaxonomies[piece->ingredientCount++] = ingredientSlot->taxonomy;
+		u32 ingredientIndex = piece->ingredientCount++;
+        piece->ingredientTaxonomies[ingredientIndex] = ingredientSlot->taxonomy;
+		piece->ingredientQuantities[ingredientIndex] = quantity;
     }
     else
     {
@@ -3332,6 +3335,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         {
             ObjectLayout* newLayout;
             TAXTABLE_ALLOC(newLayout, ObjectLayout);
+
+			LayoutType = GetValue(layouts, "layoutType");
+			layout->type = type;
             
             EditorElement* pieces = GetList(layouts, "pieces");
             while(pieces)
@@ -3349,7 +3355,18 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 r32 pieceAlpha = ToR32(GetValue(pieces, "alpha"));
                 char* pieceName = GetValue(pieces, "component");
                 
-                LayoutPiece* piece = AddLayoutPiece(newLayout, V3(x, y, z), angle, V2(scaleX, scaleY), pieceAlpha, V2(0.5f, 0.5f), pieceName);
+                Vec2 pivot = ToV2(GetStruct(pieces, "pivot"), V2(0.5f, 0.5f));
+
+				u8 index = 0;
+
+				for(everyPiece)
+				{
+					if(piece->hashID == pieceName)
+					{
+						++index;
+					}
+				}
+                LayoutPiece* piece = AddLayoutPiece(newLayout, V3(x, y, z), angle, V2(scaleX, scaleY), pieceAlpha, pivot, pieceName, index);
                 
                 EditorElement* ingredient = GetList(pieces, "ingredients");
                 while(ingredient)

@@ -658,7 +658,14 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_InstantiateTaxonomy:
         {
-            SendInstantiateTaxonomyRequest(request->taxonomy, request->offset);
+			if(IsSubTaxonomy())
+			{
+				SendInstantiateRecipeRequest(widget->recipeTaxonomy, widget->recipeIndex);
+			}
+			else
+			{
+				SendInstantiateTaxonomyRequest(request->taxonomy, request->offset);
+			}
         } break;
         
         case UIRequest_SaveAssetFile:
