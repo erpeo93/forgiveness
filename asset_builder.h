@@ -121,6 +121,7 @@ struct SpriteInfo
 {
     Vec2 pivot;
     u64 stringHashID;
+    u8 index;
     char name[32];
     u32 flags;
 };

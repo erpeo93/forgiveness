@@ -658,11 +658,14 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_InstantiateTaxonomy:
         {
+#if 0
 			if(IsSubTaxonomy())
 			{
 				SendInstantiateRecipeRequest(widget->recipeTaxonomy, widget->recipeIndex);
 			}
 			else
+#endif
+            
 			{
 				SendInstantiateTaxonomyRequest(request->taxonomy, request->offset);
 			}
@@ -991,6 +994,7 @@ UIAddSetValueActionDefinition(b32);
 UIAddSetValueActionDefinition(UIMode);
 UIAddSetValueActionDefinition(char);
 UIAddSetValueActionDefinition(EditorElement*);
+UIAddSetValueActionDefinition(EditorWidget*);
 
 #define UISetValueInteractionDefinition(type)\
 inline UIInteraction UISetValueInteraction(u32 flags, type* destination, type value)\

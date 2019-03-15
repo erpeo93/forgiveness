@@ -134,6 +134,7 @@ struct LayoutPiece
     r32 alpha;
     Vec2 pivot;
     u64 componentHashID;
+    u8 index;
     u32 flags;
     
 	LayoutPiece* parent;
@@ -148,6 +149,13 @@ struct LayoutPiece
     };
 };
 
+printTable(noPrefix) enum LayoutType
+{
+    Layout_Default,
+    Layout_Ground,
+    Layout_Open,
+};
+
 struct ObjectLayout
 {
     LayoutPiece* firstPiece;
@@ -158,6 +166,7 @@ struct ObjectLayout
         ObjectLayout* nextFree;
     };
 };
+
 
 struct CraftingEffectLink
 {
@@ -298,7 +307,17 @@ struct TaxonomySlot
     EquipmentMapping* firstEquipmentMapping;
     ConsumeMapping* firstConsumeMapping;
     PlayerPossibleAction* firstPossibleAction;
-    ObjectLayout* firstLayout;
+    
+    u32 defaultLayoutCount;
+    ObjectLayout* firstDefaultLayout;
+    
+    u32 groundLayoutCount;
+    ObjectLayout* firstGroundLayout;
+    
+    u32 openLayoutCount;
+    ObjectLayout* firstOpenLayout;
+    
+    
     TaxonomyEssence* essences;
     CraftingEffectLink* links;
     TaxonomyEffect* firstEffect;

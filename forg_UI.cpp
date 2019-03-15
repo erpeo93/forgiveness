@@ -319,23 +319,23 @@ struct UIAddTabResult
     Vec4 color;
 };
 
-inline void AddConfirmInteraction(char* dest)
+inline void AddConfirmActions(UIState* UI, EditorWidget* widget, UIInteraction* interaction, char* dest, u32 destSize)
 {
-	UIAddUndoRedoAction(&confirmInteraction, UI_Trigger, UndoRedoString(widget, root->value, sizeof(root->value), root->value, UI->keyboardBuffer));
+	UIAddUndoRedoAction(interaction, UI_Trigger, UndoRedoString(widget, dest, destSize, dest, UI->keyboardBuffer));            
+	UIAddStandardAction(interaction, UI_Trigger, dest, ColdPointer(dest), ColdPointer(UI->keyboardBuffer));
+	UIAddSetValueAction(interaction, UI_Trigger, &UI->activeLabel, 0); 
+	UIAddSetValueAction(interaction, UI_Trigger, &UI->active, 0);    
+	UIAddSetValueAction(interaction, UI_Trigger, &UI->activeParent, 0);    
+	UIAddSetValueAction(interaction, UI_Trigger, &UI->activeGrandParent, 0);    
+	UIAddSetValueAction(interaction, UI_Trigger, &UI->activeWidget, 0);    
             
-	UIAddStandardAction(&confirmInteraction, UI_Trigger, dest, ColdPointer(dest), ColdPointer(UI->keyboardBuffer));
-	UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeLabel, 0); 
-	UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->active, 0);    
-	UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeParent, 0);    
-	UIAddSetValueAction(&confirmInteraction, UI_Trigger, &UI->activeGrandParent, 0);    
             
-            
-	UIAddReloadElementAction(&confirmInteraction, UI_Trigger, widget->root);
+	UIAddReloadElementAction(interaction, UI_Trigger, widget->root);
 	if(StrEqual(widget->name, "Editing Tabs"))
 	{
-		UIAddRequestAction(&confirmInteraction, UI_Trigger, SendDataFileRequest());
+		UIAddRequestAction(interaction, UI_Trigger, SendDataFileRequest());
 	}        
-	UIAddClearAction(&confirmInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+	UIAddClearAction(interaction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                 
 }
 
@@ -356,7 +356,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
 
 				if(UI->active && UI->bufferValid)
 				{
-					AddConfirmActions(&mouseInteraction, UI->active->value);
+					AddConfirmActions(UI, widget, &mouseInteraction, UI->active->value, sizeof(UI->active->value));
 				}
 
                 if(StrEqual(text, "true"))
@@ -396,12 +396,13 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                         }
                     }
                     
-                    if(canEdit)
+                    if(!UI->active && canEdit)
                     {
                         result.color = V4(1, 0, 1, 1);
                         mouseInteraction = UISetValueInteraction(UI_Click, &UI->active, root);
                         UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->activeParent, parents.father);
                         UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->activeGrandParent, parents.grandParents[0]);
+                        UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->activeWidget, widget); 
                         UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->currentAutocompleteSelectedIndex, -1);   UIAddClearAction(&mouseInteraction, UI_Click, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                         
                         
@@ -434,7 +435,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
             result.color = V4(0, 1, 0, 1);
             
             UIInteraction confirmInteraction = {};
-			AddConfirmActions(root->value);
+			AddConfirmActions(UI, widget, &confirmInteraction, root->value, sizeof(root->value));
             UIAddInteraction(UI, input, confirmButton, confirmInteraction);
         }
         
@@ -445,7 +446,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
             {
                 UIRenderAutocomplete(UI, input, autocomplete, layout, P -V2(0, layout->childStandardHeight), UI->keyboardBuffer);
             }
-        }
+        }   
     }
     
     return result;
@@ -537,7 +538,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             Vec4 nameColor = V4(1, 1, 1, 1);
             
             b32 nameHot = false;
-			char* shadowName = 0;
+			char* shadowLabel = 0;
             char* nameToShow = name;
             b32 showName = (nameToShow[0]);
             
@@ -565,11 +566,11 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
 
 				if(UI->keyboardBuffer[0] == 0)
 				{
-					shadowName = root->name;
+					shadowLabel = root->name;
 				}
                 
 				UIInteraction confirmInteraction = {};
-				AddConfirmActions(root->name);
+				AddConfirmActions(UI, widget, &confirmInteraction, root->name, sizeof(root->name));
                 UIAddInteraction(UI, input, confirmButton, confirmInteraction);
             }
             
@@ -597,7 +598,8 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
 
 					if(root == UI->active && UI->keyboardBuffer[0] == 0)
 					{
-						shadowName = root->value;
+                        Vec4 shadowColor = V4(0.6f, 0.6f, 0.6f, 1.0f);
+                        PushUIOrthoText(UI, root->value, layout->fontScale, valueP, shadowColor, layout->additionalZBias);
 					}
                     
                     UIAddTabResult addTab = UIAddTabValueInteraction(UI, widget, input, parents, root, valueP, layout, text);
@@ -970,6 +972,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             UIInteraction mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
                             UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, father); 
                             UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeGrandParent, grandFather); 
+                            UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeWidget, widget); 
                             UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                             UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
                             addColor = V4(1, 0, 0, 1);
@@ -991,6 +994,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->active, 0);    
                             UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->activeParent, 0);    
                             UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->activeGrandParent, 0);    
+                            UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->activeWidget, 0);    
                             UIAddInteraction(UI, input, confirmButton, buttonInteraction);
                         }
                         
@@ -1081,10 +1085,10 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 } break;
             }
             
-			if(shadowName)
+			if(shadowLabel)
 			{
 				Vec4 shadowColor = V4(0.6f, 0.6f, 0.6f, 1.0f);
-				PushUIOrthoText(UI, shadowName, layout->fontScale, nameP, shadowColor, layout->additionalZBias);
+				PushUIOrthoText(UI, shadowLabel, layout->fontScale, nameP, shadowColor, layout->additionalZBias);
 			}
             if(showName)
             {
@@ -1190,6 +1194,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     UIAddSetValueAction(&esc, UI_Trigger, &UI->activeParent, 0);
     UIAddSetValueAction(&esc, UI_Trigger, &UI->activeGrandParent, 0);
     UIAddSetValueAction(&esc, UI_Trigger, &UI->activeLabel, 0);
+    UIAddSetValueAction(&esc, UI_Trigger, &UI->activeWidget, 0);
     UIAddClearAction(&esc, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
     UIAddSetValueAction(&esc, UI_Trigger, &UI->copying, 0);
     UIAddSetValueAction(&esc, UI_Trigger, &UI->currentAutocompleteSelectedIndex, -1);
@@ -1199,17 +1204,19 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
 	{
 		if(UI->active)
 		{
-			AddConfirmActions(UI->active->value);
-			UIAddInteraction(UI, input, mouseleft, confirmOnClick);
+            UIInteraction clickInteraction = {};
+			AddConfirmActions(UI, UI->activeWidget, &clickInteraction, UI->active->value, sizeof(UI->active->value));
+			UIAddInteraction(UI, input, mouseLeft, clickInteraction);
 		}
 		else if(UI->activeLabel)
 		{
-			UIInteraction confirmOnClick;
-			AddConfirmActions(UI->activeLabel->name);
-			UIAddInteraction(UI, input, mouseleft, confirmOnClick);
+            UIInteraction clickInteraction = {};
+			AddConfirmActions(UI, UI->activeWidget, &clickInteraction, UI->activeLabel->name, sizeof(UI->activeLabel->name));
+			UIAddInteraction(UI, input, mouseLeft, clickInteraction);
+            
 		}
 	}
-    
+    #if 0
     if(UI->active)
 	{
 		if(ctrlDown)
@@ -1241,6 +1248,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
 			}
 		}
 	}
+#endif
 
 
     u32 current = StrLen(UI->keyboardBuffer);
@@ -2176,10 +2184,13 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             EditorWidget* taxonomyTree = StartWidget(UI, EditorWidget_TaxonomyTree, 0xffffffff, "Taxonomy Tree");
             taxonomyTree->permanent.P = V2(-800, -100);
 
+
+#if 0            
 			AddChild(recipeParameters);
 			AddChild("taxonomy");
 			AddChild("recipeIndex");
-            
+            #endif
+
             
             EditorWidget* taxonomyEditing = StartWidget(UI, EditorWidget_EditingTaxonomyTabs, 0xffffffff, "Editing Tabs");
             taxonomyEditing->permanent.P = V2(100, -100);
@@ -2324,6 +2335,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTable(UI, SlotName, "slot");
         UIAddAutocompleteFromTable(UI, EntityAction, "action");
         UIAddAutocompleteFromTable(UI, SoundContainerType, "soundCType");
+        UIAddAutocompleteFromTable(UI, LayoutType, "layoutType");
         UIAddAutocompleteFromFiles(UI);
         
         FormatString(UI->trueString, sizeof(UI->trueString), "true");

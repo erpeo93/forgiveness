@@ -415,15 +415,14 @@ inline b32 PushNewAction(AnimationState* animation, u32 action)
 }
 
 
-internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* table, u32 taxonomy, u64 recipeIndex)
+internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* table, u32 taxonomy, u64 recipeIndex, b32 onGround, b32 drawOpened)
 {
     dest->componentCount = 0;
     TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
     
-    if(slot->firstLayout)
+    ObjectLayout* layout = GetLayout(table, taxonomy, onGround, drawOpened);
+    if(layout)
     {
-        ObjectLayout* layout = slot->firstLayout;
-        
         RandomSequence seq = Seed((u32)recipeIndex);
         for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
         {
@@ -585,25 +584,6 @@ inline EquipmentAnimationSlot* Exists(AnimationFixedParams* input, u64 stringHas
     return result;
 }
 
-inline ObjectLayout* GetLayout(TaxonomyTable* table, u32 taxonomy, b32 onGround, b32 drawOpened)
-{
-    ObjectLayout* result = 0;
-    u32 testTaxonomy = taxonomy;
-    while(testTaxonomy)
-    {
-        TaxonomySlot* slot = GetSlotForTaxonomy(table, testTaxonomy);
-        if(slot->firstLayout)
-        {
-            result = slot->firstLayout;
-            break;
-        }
-        
-        testTaxonomy = GetParentTaxonomy(table, testTaxonomy);
-    }
-    return result;
-}
-
-
 inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, ObjectLayout* layout, AnimationVolatileParams* params)
 {
     output->boneCount = 1;
@@ -640,6 +620,7 @@ inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, Ob
         
         destSprite->pivot = source->pivot;
         destSprite->stringHashID = source->componentHashID;
+        destSprite->index = source->index;
         destSprite->flags = source->flags;
     }
 }
@@ -883,7 +864,7 @@ struct RenderAssResult
 {
     b32 onFocus;
     b32 screenInRect;
-	r32 distanceFromCenter;
+	r32 distanceFromAssCenter;
 };
 
 inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender, Vec4 proceduralColor = V4(1, 1, 1, 1))
@@ -930,7 +911,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     {
                         pieceParams.drawEmptySpaces = false;
                     }
-                    GetVisualProperties(&pieceProperties, input->taxTable, slot->taxonomy, slot->recipeIndex);
+                    GetVisualProperties(&pieceProperties, input->taxTable, slot->taxonomy, slot->recipeIndex, false, slot->drawOpened);
                     result.onFocus = DrawModularPiece(input, group, P, slot->taxonomy, &pieceParams, false, slot->drawOpened, dontRender);
                 }
             }
@@ -965,23 +946,22 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                 if(bitmap)
                 {
                     Vec4 cellColor = V4(pieceParams.color.rgb, 0.5f);
-
+                    
                     
                     r32 zOffset = 0.0f;
                     
                     Vec3 gridDim = V3(Hadamart(finalScale, V2(bitmap->widthOverHeight * bitmap->nativeHeight, bitmap->nativeHeight)), 0);
-					Vec2 cellDim = ?;
-					Vec2 halfCellDim = 0.5f * celldim;
                     
-                    r32 cellWidth = cellDim.x;
-                    r32 cellHeight = cellDim.y;
+                    
+					//Vec2 cellDim = ?;
+					Vec3 halfGridDim = 0.5f * gridDim;
+                    
+                    r32 cellWidth = gridDim.x;
+                    r32 cellHeight = gridDim.y;
                     
                     Vec3 cellDim = V3(cellWidth, cellHeight, 0);
                     
-
-					for(everyObject)
-					{
-						i32 objectIndex = input->currentObjectIndex++;
+                    i32 objectIndex = input->currentObjectIndex++;
                     Object* object = input->objects + objectIndex;
                     
                     r32 objectScale = 1.0f;
@@ -996,8 +976,8 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                         Vec4 statusColor = Lerp(bodyDead, ratio, V4(1, 1, 1, 1));
                         objectColor = statusColor;
                     }
-					}
- Assert(P.z == 0.0f);
+                    
+                    Assert(P.z == 0.0f);
                     Rect2 cellRect = ProjectOnGround(group, P, pieceParams.cameraOffset, cellDim);
                     
                     if(PointInRect(cellRect, input->mousePOnGround.xy))
@@ -1055,11 +1035,11 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                             
                             ComponentsProperties objectProperties;
                             objectParams.properties = &objectProperties;
-                            GetVisualProperties(&objectProperties, input->taxTable, taxonomy, recipeIndex);
+                            GetVisualProperties(&objectProperties, input->taxTable, taxonomy, recipeIndex, false, false);
                             
                             DrawModularPiece(input, group, P, slot->taxonomy, &objectParams, true, false, false);
                         }
-                   
+                        
                     }
                 }
                 else
@@ -1115,7 +1095,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
 						if(PointInUnalignedRect(startP, XAxis, YAxis, input->relativeScreenMouseP))
 						{
 							Vec2 centerP = startP + 0.5f * XAxis + 0.5f * YAxis;
-							result.distanceFromAssCenter = centerP - input->relativeScreenMouse;
+							result.distanceFromAssCenter = Length(centerP - input->relativeScreenMouseP);
 							result.screenInRect = true;
 						}
 					}
@@ -1276,7 +1256,7 @@ inline void RenderEquipmentPiece(AnimationFixedParams* input, RenderGroup* group
         
         ComponentsProperties properties;
         pieceParams.properties = &properties;
-        GetVisualProperties(&properties, input->taxTable, slot->taxonomy, slot->recipeIndex);
+        GetVisualProperties(&properties, input->taxTable, slot->taxonomy, slot->recipeIndex, false, slot->drawOpened);
         
         if(slot->ghost || SlotIsOnFocus(input, slot))
         {
@@ -1384,6 +1364,8 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         equipmentMapAssCount = equipmentMap->frames[0].countAss;
     }
     
+    r32 bestAssDistance = R32_MAX;
+    
     u32 equipmentAssCount = 0;
     u32 validBlendedAss = 0;
     for(u32 assIndex = 0;assIndex < blended->assCount; ++assIndex )
@@ -1445,10 +1427,11 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                 r32 alpha = GetAssAlphaFade(input->entity->identifier, assIndex, 
                                             input->lifePointsSeedResetCounter, input->lifePointFadeDuration, input->lifePointThreesold, input->lifePointRatio, input->cameInTime, input->entity->status);
                 proceduralColor.a *= alpha;
-
-				RenderPieceAssResult = RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, proceduralColor);
-                if(render.screenInRect && render.distance < input->currentDistance)
+                
+				RenderAssResult render = RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, proceduralColor);
+                if(render.screenInRect && render.distanceFromAssCenter < bestAssDistance)
                 {
+                    bestAssDistance = render.distanceFromAssCenter;
                     input->output->hotAssIndex = (i16) assIndex;
                 }
             } break;
@@ -1886,9 +1869,9 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
         input.defaultColoration = V4(1, 1, 1, 1);
         ComponentsProperties properties;
         params.properties = &properties;
-        GetVisualProperties(&properties, taxTable, entityC->taxonomy, entityC->recipeIndex);
-        
         b32 onGround = true;
+        GetVisualProperties(&properties, taxTable, entityC->taxonomy, entityC->recipeIndex, onGround, drawOpened);
+        
         ObjectLayout* layout = GetLayout(taxTable, entityC->taxonomy, onGround, drawOpened);
         if(layout)
         {

@@ -5,16 +5,69 @@ struct RecipeIngredients
     u32 quantities[16];
 };
 
+inline ObjectLayout* GetLayout(TaxonomyTable* table, u32 taxonomy, b32 onGround, b32 drawOpened)
+{
+    ObjectLayout* result = 0;
+    
+    
+    b32 found = false;
+    if(onGround)
+    {
+        u32 testTaxonomy = taxonomy;
+        while(testTaxonomy)
+        {
+            TaxonomySlot* slot = GetSlotForTaxonomy(table, testTaxonomy);
+            if(slot->firstGroundLayout)
+            {
+                result = slot->firstGroundLayout;
+                break;
+            }
+            testTaxonomy = GetParentTaxonomy(table, testTaxonomy);
+        }
+    }
+    else if(drawOpened)
+    {
+        u32 testTaxonomy = taxonomy;
+        while(testTaxonomy)
+        {
+            TaxonomySlot* slot = GetSlotForTaxonomy(table, testTaxonomy);
+            if(slot->firstOpenLayout)
+            {
+                result = slot->firstOpenLayout;
+                break;
+            }
+            testTaxonomy = GetParentTaxonomy(table, testTaxonomy);
+        }
+    }
+    
+    if(!result)
+    {
+        u32 testTaxonomy = taxonomy;
+        while(testTaxonomy)
+        {
+            TaxonomySlot* slot = GetSlotForTaxonomy(table, testTaxonomy);
+            if(slot->firstDefaultLayout)
+            {
+                result = slot->firstDefaultLayout;
+                break;
+            }
+            testTaxonomy = GetParentTaxonomy(table, testTaxonomy);
+        }
+    }
+    
+    return result;
+}
+
 internal void GetRecipeIngredients(RecipeIngredients* output, TaxonomyTable* table, u32 taxonomy, u64 recipeIndex)
 {
     TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
     output->count = 0;
     
     RandomSequence seq = Seed((u32)recipeIndex);
-    if(slot->firstLayout)
+    
+    ObjectLayout* layout = GetLayout(table, taxonomy, false, false);
+    if(layout)
     {
-        ObjectLayout* layout = slot->firstLayout;
-        
         for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
         {
             for(u32 ingredientIndex = 0; ingredientIndex < piece->ingredientCount; ++ingredientIndex)

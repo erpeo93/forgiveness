@@ -219,6 +219,7 @@ struct AnimationFixedParams
 struct VisualComponent
 {
     u64 stringHashID;
+    u8 index;
     
     u32 labelCount;
     VisualLabel labels[8];

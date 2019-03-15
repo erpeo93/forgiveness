@@ -178,13 +178,25 @@ inline SoundId GetFirstSound( Assets* assets, u32 assetID )
     return result;
 }
 
-u32 GetMatchingAsset_( Assets* assets, u32 assetID, u64 stringHashID,
-                      TagVector* values, TagVector* weights, LabelVector* labels);
+
+struct MatchingAssetResult
+{
+	u32 assetIndex;
+    
+	b32 cloned;
+    union
+    {
+        Vec4 clonedColoration;
+    };
+};
+
+MatchingAssetResult GetMatchingAsset_( Assets* assets, u32 assetID, u64 stringHashID,
+                                      TagVector* values, TagVector* weights, LabelVector* labels);
 
 inline BitmapId GetMatchingBitmap_( Assets* assets, u32 assetID, u64 stringHashID,
                                    TagVector* values, TagVector* weights, LabelVector* labels = 0)
 {
-    BitmapId result = {GetMatchingAsset_( assets, assetID, stringHashID, values, weights, labels )};
+    BitmapId result = {GetMatchingAsset_( assets, assetID, stringHashID, values, weights, labels ).assetIndex};
     return result;
 }
 
@@ -204,21 +216,21 @@ inline BitmapId GetMatchingBitmapHashed(Assets* assets, u64 stringHashID, TagVec
 inline FontId GetMatchingFont( Assets* assets, u32 assetID, 
                               TagVector* values, TagVector* weights, LabelVector* labels = 0)
 {
-    FontId result = {GetMatchingAsset_( assets, assetID, 0, values, weights, labels)};
+    FontId result = {GetMatchingAsset_( assets, assetID, 0, values, weights, labels).assetIndex};
     return result;
 }
 
 inline SoundId GetMatchingSound( Assets* assets, u32 assetID, u64 stringHashID,
                                 TagVector* values, TagVector* weights, LabelVector* labels = 0)
 {
-    SoundId result = {GetMatchingAsset_( assets, assetID, stringHashID, values, weights, labels)};
+    SoundId result = {GetMatchingAsset_( assets, assetID, stringHashID, values, weights, labels).assetIndex};
     return result;
 }
 
 inline AnimationId GetMatchingAnimation( Assets* assets, u32 assetID, u64 stringHashID,
                                         TagVector* values, TagVector* weights, LabelVector* labels = 0)
 {
-    AnimationId result = {GetMatchingAsset_( assets, assetID, stringHashID, values, weights, labels)};
+    AnimationId result = {GetMatchingAsset_( assets, assetID, stringHashID, values, weights, labels).assetIndex};
     return result;
 }
 

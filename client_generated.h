@@ -139,6 +139,12 @@ MetaFlag MetaFlags_CanDoActionFlags[] =
 {"Empty",
 (1 << 3)},
 };
+char* MetaTable_LayoutType[] = 
+ {
+"Default",
+"Ground",
+"Open",
+};
 char* MetaTable_SoundContainerType[] = 
  {
 "Random",

@@ -892,7 +892,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                         
                         default:
                         {
-                            if(player->requestCount < ArrayCount(player->requests))
+                            if(!server->gamePaused && player->requestCount < ArrayCount(player->requests))
                             {
                                 PlayerRequest* request = player->requests + player->requestCount++;
                                 Assert(received.info.dataSize < ArrayCount(request->data));

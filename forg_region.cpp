@@ -1063,7 +1063,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                                                 u8 toUse = SafeTruncateToU8(quantity);
                                                 if(toUse > ingredients.quantities[ingredientIndex])
                                                 {
-                                                    toUse = ingredients.quantities[ingredientIndex];
+                                                    toUse = SafeTruncateToU8(ingredients.quantities[ingredientIndex]);
                                                 }
                                                 
                                                 Assert(markCount < ArrayCount(marks));
@@ -1094,7 +1094,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                                 u8 toUse = SafeTruncateToU8(slot->quantity);
                                 if(toUse > ingredients.quantities[ingredientIndex])
                                 {
-                                    toUse = ingredients.quantities[ingredientIndex];
+                                    toUse = SafeTruncateToU8(ingredients.quantities[ingredientIndex]);
                                 }
                                 
                                 Assert(markCount < ArrayCount(marks));
@@ -1414,7 +1414,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             
             TaxonomySlot* slot = GetSlotForTaxonomy(server->activeTable, request.taxonomy);
             
-            if(slot->firstLayout)
+            if(slot->firstDefaultLayout)
             {
                 params = Crafting(GetNextUInt32(&server->instantiateSequence));
             }

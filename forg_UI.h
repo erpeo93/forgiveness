@@ -811,6 +811,7 @@ struct UIState
     EditorElement* activeGrandParent;
     
     EditorElement* activeLabel;
+    EditorWidget* activeWidget;
     
     EditorElement* dragging;
     EditorElement* draggingParent;

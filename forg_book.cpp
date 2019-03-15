@@ -198,9 +198,9 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
     for(u32 ingredientIndex = 0; ingredientIndex < ingredients.count; ++ingredientIndex)
     {
         u32 ingredientTaxonomy = ingredients.taxonomies[ingredientIndex];
-        u8 necessary = ingredients.quantities[ingredientIndex];
+        u32 necessary = ingredients.quantities[ingredientIndex];
         
-        u16 owned;
+        u32 owned;
         
         Vec3 ingredientWorldP = GetWorldP(group, ingredientP);
         if(IsEssence(UI->table, ingredientTaxonomy))

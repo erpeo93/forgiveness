@@ -400,10 +400,14 @@ inline u8 ToU8(char* string)
 
 inline u32 ToU32(char* string)
 {
-    i32 intValue = atoi(string);
-    
-    Assert(intValue >= 0);
-    u32 result = (u32) intValue;
+    u32 result = 0;
+    if(string)
+    {
+        i32 intValue = atoi(string);
+        
+        Assert(intValue >= 0);
+        result = (u32) intValue;
+    }
     return result;
 }
 
@@ -1683,7 +1687,7 @@ inline void AddLabel(u64 ID, r32 value)
     FREELIST_INSERT(dest, slot->firstVisualLabel);
 }
 #endif
-inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u8 index, u32 flags = 0)
+inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, u64 componentHashID, u8 index, u32 flags = 0)
 {
     LayoutPiece* dest;
     TAXTABLE_ALLOC(dest, LayoutPiece);
@@ -1692,7 +1696,7 @@ inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle,
     dest->scale = scale;
     dest->alpha = alpha;
     dest->pivot = pivot;
-    dest->componentHashID = StringHash(componentName);
+    dest->componentHashID = componentHashID;
 	dest->index = index;
     dest->flags = flags;
     dest->ingredientCount = 0;
@@ -3325,19 +3329,36 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
 #endif
     else if(StrEqual(name, "layouts"))
     {
-        for(ObjectLayout* toDelete = currentSlot_->firstLayout; toDelete; toDelete = toDelete->next)
+        for(ObjectLayout* toDelete = currentSlot_->firstDefaultLayout; toDelete; toDelete = toDelete->next)
         {
             FREELIST_FREE(toDelete->firstPiece, LayoutPiece, taxTable_->firstFreeLayoutPiece);
         }
-        FREELIST_FREE(currentSlot_->firstLayout, ObjectLayout, taxTable_->firstFreeObjectLayout);
+        FREELIST_FREE(currentSlot_->firstDefaultLayout, ObjectLayout, taxTable_->firstFreeObjectLayout);
+        currentSlot_->defaultLayoutCount = 0;
+        
+        for(ObjectLayout* toDelete = currentSlot_->firstGroundLayout; toDelete; toDelete = toDelete->next)
+        {
+            FREELIST_FREE(toDelete->firstPiece, LayoutPiece, taxTable_->firstFreeLayoutPiece);
+        }
+        FREELIST_FREE(currentSlot_->firstGroundLayout, ObjectLayout, taxTable_->firstFreeObjectLayout);
+        currentSlot_->groundLayoutCount = 0;
+        
+        for(ObjectLayout* toDelete = currentSlot_->firstOpenLayout; toDelete; toDelete = toDelete->next)
+        {
+            FREELIST_FREE(toDelete->firstPiece, LayoutPiece, taxTable_->firstFreeLayoutPiece);
+        }
+        FREELIST_FREE(currentSlot_->firstOpenLayout, ObjectLayout, taxTable_->firstFreeObjectLayout);
+        currentSlot_->openLayoutCount = 0;
+        
+        
+        
+        
         EditorElement* layouts = root->firstInList;
         while(layouts)
         {
             ObjectLayout* newLayout;
             TAXTABLE_ALLOC(newLayout, ObjectLayout);
-
-			LayoutType = GetValue(layouts, "layoutType");
-			layout->type = type;
+            
             
             EditorElement* pieces = GetList(layouts, "pieces");
             while(pieces)
@@ -3354,25 +3375,26 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 r32 scaleY = ToR32(GetValue(scale, "y"));
                 r32 pieceAlpha = ToR32(GetValue(pieces, "alpha"));
                 char* pieceName = GetValue(pieces, "component");
+                u64 pieceHash = StringHash(pieceName);
                 
                 Vec2 pivot = ToV2(GetStruct(pieces, "pivot"), V2(0.5f, 0.5f));
-
+                
 				u8 index = 0;
-
-				for(everyPiece)
+				for(LayoutPiece* test = newLayout->firstPiece; test; test = test->next)
 				{
-					if(piece->hashID == pieceName)
+					if(test->componentHashID == pieceHash)
 					{
 						++index;
 					}
 				}
-                LayoutPiece* piece = AddLayoutPiece(newLayout, V3(x, y, z), angle, V2(scaleX, scaleY), pieceAlpha, pivot, pieceName, index);
+                LayoutPiece* piece = AddLayoutPiece(newLayout, V3(x, y, z), angle, V2(scaleX, scaleY), pieceAlpha, pivot, pieceHash, index);
                 
                 EditorElement* ingredient = GetList(pieces, "ingredients");
                 while(ingredient)
                 {
                     char* ingredientName = GetValue(ingredient, "ingredient");
-                    AddIngredient(piece, ingredientName);
+                    u32 quantity = ToU32(GetValue(ingredient, "quantity"));
+                    AddIngredient(piece, ingredientName, quantity);
                     
                     ingredient = ingredient->next;
                 }
@@ -3392,8 +3414,18 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                     r32 childScaleY = ToR32(GetValue(scale, "y"));
                     r32 childAlpha = ToR32(GetValue(pieces, "alpha"));
                     char* childName = GetValue(decorationPieces, "component");
+                    u64 childHash = StringHash(childName);
                     
-                    LayoutPiece* childPiece = AddLayoutPiece(newLayout, piece->offset + V3(childX, childY, childZ), piece->angle + childAngle, V2(scaleX, scaleY), childAlpha, V2(0.5f, 0.5f), childName);
+                    u8 childIndex = 0;
+                    for(LayoutPiece* test = newLayout->firstPiece; test; test = test->next)
+                    {
+                        if(test->componentHashID == pieceHash)
+                        {
+                            ++childIndex;
+                        }
+                    }
+                    
+                    LayoutPiece* childPiece = AddLayoutPiece(newLayout, piece->offset + V3(childX, childY, childZ), piece->angle + childAngle, V2(scaleX, scaleY), childAlpha, V2(0.5f, 0.5f), childHash, childIndex);
                     childPiece->parent = piece;
                     
                     decorationPieces = decorationPieces->next;
@@ -3403,7 +3435,28 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 pieces = pieces->next;
             }
             
-            FREELIST_INSERT(newLayout, currentSlot_->firstLayout);
+            LayoutType type = (LayoutType) GetValuePreprocessor(LayoutType, GetValue(layouts, "layoutType"));
+            switch(type)
+            {
+                case Layout_Default:
+                {
+                    ++currentSlot_->defaultLayoutCount;
+                    FREELIST_INSERT(newLayout, currentSlot_->firstDefaultLayout);
+                } break;
+                
+                case Layout_Ground:
+                {
+                    ++currentSlot_->groundLayoutCount;
+                    FREELIST_INSERT(newLayout, currentSlot_->firstGroundLayout);
+                } break;
+                
+                case Layout_Open:
+                {
+                    ++currentSlot_->openLayoutCount;
+                    FREELIST_INSERT(newLayout, currentSlot_->firstOpenLayout);
+                } break;
+            }
+            
             layouts = layouts->next;
         }
     }

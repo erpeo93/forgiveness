@@ -104,12 +104,6 @@ struct PakAnimation
     */
 };
 
-struct PakBitmapColoration
-{
-	u32 offsetFromBaseAsset;
-	Vec4 coloration;
-};
-
 struct PakAsset
 {
     u64 dataOffset;
@@ -124,7 +118,6 @@ struct PakAsset
         PakSound sound;
         PakAnimation animation;
         PakFont font;
-		PakBitmapColoration bitmapColoration;
     };
 };
 
