@@ -4,6 +4,7 @@
 enum Asset_Type
 {
     Pak_bitmap,
+    Pak_coloration,
     Pak_sound,
     Pak_animation,
     Pak_font,
@@ -23,6 +24,7 @@ struct LoadedBitmap
     r32 widthOverHeight;
     r32 downsampleFactor;
     
+    Vec4 coloration;
     void* free;
 };
 

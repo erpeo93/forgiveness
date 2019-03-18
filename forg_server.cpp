@@ -868,6 +868,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
 						} break;
                         
 						case Type_InstantiateTaxonomy:
+						case Type_InstantiateRecipe:
                         case Type_DeleteEntity:
 						{
                             if(server->editor)

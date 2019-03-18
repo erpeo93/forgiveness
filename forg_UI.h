@@ -596,6 +596,7 @@ struct UIInteractionAction
         {
             u64 componentNameHash;
             u64 bitmapNameHash;
+            Vec4 coloration;
         };
         
         struct

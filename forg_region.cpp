@@ -1421,6 +1421,23 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             AddRandomEntity(region, seq, entity->P + request.offset, request.taxonomy, params);
         } break;
         
+        case Type_InstantiateRecipe:
+        {
+            InstantiateRecipeRequest request;
+            unpack(data, "LQV", &request.taxonomy, &request.recipeIndex, &request.offset);
+            
+            if(request.taxonomy)
+            {
+                RandomSequence* seq = &server->instantiateSequence;
+                u32 recipeTaxonomy = GetRandomChild(server->activeTable, seq, request.taxonomy);
+                
+                AddEntityAdditionalParams params = RecipeObject(recipeTaxonomy, request.recipeIndex);
+                
+                u32 taxonomy = server->activeTable->recipeTaxonomy;
+                AddRandomEntity(region, seq, entity->P + request.offset, taxonomy, params);
+            }
+        } break;
+        
         case Type_DeleteEntity:
         {
             u64 identifier;

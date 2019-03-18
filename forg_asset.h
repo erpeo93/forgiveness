@@ -182,8 +182,7 @@ inline SoundId GetFirstSound( Assets* assets, u32 assetID )
 struct MatchingAssetResult
 {
 	u32 assetIndex;
-    
-	b32 cloned;
+    b32 cloned;
     union
     {
         Vec4 clonedColoration;
@@ -196,7 +195,15 @@ MatchingAssetResult GetMatchingAsset_( Assets* assets, u32 assetID, u64 stringHa
 inline BitmapId GetMatchingBitmap_( Assets* assets, u32 assetID, u64 stringHashID,
                                    TagVector* values, TagVector* weights, LabelVector* labels = 0)
 {
-    BitmapId result = {GetMatchingAsset_( assets, assetID, stringHashID, values, weights, labels ).assetIndex};
+    MatchingAssetResult matching = GetMatchingAsset_( assets, assetID, stringHashID, values, weights, labels );
+    
+    if(!matching.cloned)
+    {
+        matching.clonedColoration = V4(1, 1, 1, 1);
+    }
+    
+    BitmapId result {matching.assetIndex, matching.clonedColoration};
+    
     return result;
 }
 

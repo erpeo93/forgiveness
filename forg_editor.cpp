@@ -2336,6 +2336,11 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
                     buffer = OutputToBuffer(buffer, bufferSize, "#cantBeDeleted ");
                 }
                 
+                if(element->flags & EditorElem_CantBeDeleted)
+                {
+                    buffer = OutputToBuffer(buffer, bufferSize, "#atLeastOneInList ");
+                }
+                
                 if(element->flags & EditorElem_PlaySoundButton)
                 {
                     buffer = OutputToBuffer(buffer, bufferSize, "#playSound ");
@@ -2489,6 +2494,10 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
 							{
 								newElement->flags |= EditorElem_CantBeDeleted;
 							}
+                            else if(TokenEquals(paramName, "atLeastOneInList"))
+							{
+								newElement->flags |= EditorElem_AtLeastOneInList;
+							}
 							else if(TokenEquals(paramName, "playSound"))
 							{
 								newElement->flags |= EditorElem_PlaySoundButton;
@@ -2592,7 +2601,7 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
     return newElement;
 }
 
-inline void FreeElement(EditorElement* element)
+inline void FreeElement(EditorElement* element, b32 freeNext = true)
 {
     if(element)
     {
@@ -2607,17 +2616,17 @@ inline void FreeElement(EditorElement* element)
             
             case EditorElement_List:
             {
-                FreeElement(element->firstInList);
+                FreeElement(element->firstInList, freeNext);
             } break;
             
             case EditorElement_Struct:
             {
-                FreeElement(element->firstValue);
+                FreeElement(element->firstValue, freeNext);
             } break;
             
             case EditorElement_Taxonomy:
             {
-                FreeElement(element->firstChild);
+                FreeElement(element->firstChild, freeNext);
             } break;
             
             case EditorElement_EmptyTaxonomy:
@@ -2627,9 +2636,13 @@ inline void FreeElement(EditorElement* element)
             InvalidDefaultCase;
         }
         
-        if(element->next)
+        if(freeNext)
         {
-            FreeElement(element->next);
+            if(element->next)
+            {
+                FreeElement(element->next, freeNext);
+            }
+            
         }
         
         FREELIST_DEALLOC(element, taxTable_->firstFreeElement);
@@ -3579,6 +3592,63 @@ internal void ImportAllAssetFiles(GameModeWorld* worldMode, char* dataPath, Memo
         else if(StrEqual(handle.name, "components.fad"))
         {
             worldMode->table->componentsRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
+        }
+        else if(StrEqual(handle.name, "componentvanilla.fad"))
+        {
+            worldMode->table->oldComponentsRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
+            
+            for(EditorElement** componentTypePtr = &worldMode->table->componentsRoot; *componentTypePtr; )
+            {
+                b32 present = false;
+                EditorElement* componentType = *componentTypePtr;
+                EditorElement* vanilla = 0;
+                
+                for(EditorElement* vanillaTest = worldMode->table->oldComponentsRoot; vanillaTest; vanillaTest = vanillaTest->next)
+                {
+                    if(StrEqual(vanillaTest->name, componentType->name))
+                    {
+                        vanilla = vanillaTest;
+                        break;
+                    }
+                }
+                
+                if(vanilla)
+                {
+                    for(EditorElement** componentPtr = &componentType->firstInList; *componentPtr; )
+                    {
+                        b32 componentPresent = false;
+                        EditorElement* component = *componentPtr;
+                        char* componentName = GetValue(component, "componentName");
+                        
+                        for(EditorElement* vanillaComponent = vanilla->firstInList; vanillaComponent; vanillaComponent = vanillaComponent->next)
+                        {
+                            char* vanillaName = GetValue(vanillaComponent, "componentName");
+                            if(StrEqual(vanillaName, componentName))
+                            {
+                                componentPresent = true;
+                                break;
+                            }
+                        }
+                        
+                        if(componentPresent)
+                        {
+                            componentPtr = &component->next;
+                        }
+                        else
+                        {
+                            *componentPtr = component->next;
+                            FreeElement(component, false);
+                        }
+                    }
+                    
+                    componentTypePtr = &componentType->next;
+                }
+                else
+                {
+                    *componentTypePtr = componentType->next;
+                    FreeElement(componentType, false);
+                }
+            }
         }
         
         platformAPI.CloseHandle(&handle);

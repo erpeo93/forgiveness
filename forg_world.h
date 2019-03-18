@@ -132,7 +132,7 @@ inline AddEntityAdditionalParams EntityFromObject(u64 ownerID, u16 quantity, i16
 }
 
 
-inline AddEntityAdditionalParams RecipeObject(u32 recipeTaxonomy, u64 recipeIndex, i16 status)
+inline AddEntityAdditionalParams RecipeObject(u32 recipeTaxonomy, u64 recipeIndex, i16 status = I16_MAX)
 {
     AddEntityAdditionalParams result = EntityFromObject(0, 1, status);
     result.recipeTaxonomy = recipeTaxonomy;

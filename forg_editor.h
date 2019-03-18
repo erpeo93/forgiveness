@@ -23,14 +23,15 @@ enum EditorElementFlags
     EditorElem_Editable = (1 << 3),
     EditorElem_Expanded = (1 << 4),
     EditorElem_CantBeDeleted = (1 << 5),
-    EditorElem_AlwaysEditable = (1 << 6),
-    EditorElem_LabelsEditable = (1 << 7),
-    EditorElem_PlaySoundButton = (1 << 8),
-    EditorElem_PlayEventSoundButton = (1 << 9),
-    EditorElem_ShowLabelBitmapButton = (1 << 10),
-    EditorElem_PlayEventButton = (1 << 11),
-    EditorElem_RecursiveEmpty = (1 << 12),
-    EditorElem_DontRender = (1 << 13),
+    EditorElem_AtLeastOneInList = (1 << 6),
+    EditorElem_AlwaysEditable = (1 << 7),
+    EditorElem_LabelsEditable = (1 << 8),
+    EditorElem_PlaySoundButton = (1 << 9),
+    EditorElem_PlayEventSoundButton = (1 << 10),
+    EditorElem_ShowLabelBitmapButton = (1 << 11),
+    EditorElem_PlayEventButton = (1 << 12),
+    EditorElem_RecursiveEmpty = (1 << 13),
+    EditorElem_DontRender = (1 << 14),
 };
 
 struct EditorElement
@@ -136,6 +137,7 @@ enum EditorWidgetType
     EditorWidget_GeneralButtons,
     EditorWidget_SoundEvents,
     EditorWidget_Components,
+    EditorWidget_Misc,
     
     EditorWidget_Count,
 };

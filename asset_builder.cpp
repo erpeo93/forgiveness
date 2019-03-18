@@ -1543,12 +1543,32 @@ internal BitmapId AddBitmapAsset(char* path, char* filename, u64 stringHash = 0,
     asset.dest->typeHashID = stringHash;
     asset.dest->nameHashID = StringHash(filename);
     
+    asset.dest->offsetFromOriginalOffset = 0;
+    
     LoadedBitmap bitmap = LoadBitmap(path, filename, false);
     asset.dest->bitmap.nativeHeight = bitmap.downsampleFactor * bitmap.height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
     free(bitmap.free );
     
     
     BitmapId result = { asset.ID };
+    return result;
+}
+
+internal BitmapId AddColorationAsset(char* path, char* filename, u64 stringHash, u16 colorationIndex, Vec4 coloration)
+{
+    Assets* assets = currentAssets_;
+    AddedAsset asset = AddAsset(assets);
+    asset.source->type = Pak_coloration;
+    
+    asset.dest->bitmap.align[0] = 0;
+    asset.dest->bitmap.align[1] = 0;
+    asset.dest->typeHashID = stringHash;
+    asset.dest->nameHashID = StringHash(filename);
+    
+    asset.dest->offsetFromOriginalOffset = colorationIndex;
+    asset.dest->coloration.coloration = coloration;
+    
+    BitmapId result = {asset.ID};
     return result;
 }
 
@@ -1564,11 +1584,12 @@ internal BitmapId AddCharacterAsset(LoadedFont* font, u32 codePoint )
     // NOTE(Leonardo ): alignment is set later!
     asset.dest->typeHashID = 0;
     asset.dest->nameHashID = 0;
+    asset.dest->offsetFromOriginalOffset = 0;
     asset.dest->bitmap.align[0] = 0.0f;
     asset.dest->bitmap.align[1] = 0.0f;
     asset.dest->bitmap.nativeHeight = 0.0f;
     
-    BitmapId result = {asset.ID};
+    BitmapId result = {asset.ID, V4(1, 1, 1, 1)};
     
     u32 glyphIndex = font->glyphsCount++;
     Assert(font->glyphsCount < font->maximumGlyphsCount );
@@ -1595,6 +1616,7 @@ internal FontId AddFontAsset(LoadedFont* font )
     
     asset.dest->typeHashID = 0;
     asset.dest->nameHashID = 0;
+    asset.dest->offsetFromOriginalOffset = 0;
     asset.dest->font.glyphsCount = font->glyphsCount;
     asset.dest->font.ascenderHeight = font->ascenderHeight;
     asset.dest->font.descenderHeight = font->descenderHeight;
@@ -1619,6 +1641,7 @@ internal AnimationId AddAnimationAsset(char* path, char* filename, u32 animation
     asset.source->type = Pak_animation;
     asset.dest->typeHashID = stringHashID;
     asset.dest->nameHashID = stringHashID;
+    asset.dest->offsetFromOriginalOffset = 0;
     StrCpy(path, StrLen(path ), asset.source->animation.path, ArrayCount(asset.source->animation.path ) );
     StrCpy(filename, StrLen(filename ), asset.source->animation.filename, ArrayCount(asset.source->animation.filename ) );
     asset.source->animation.animationIndex = animationIndex;
@@ -1672,6 +1695,7 @@ internal SoundId AddSoundAsset(char* filename, u64 stringHash, i32 firstSampleIn
     StrCpy(filename, StrLen(filename), asset.source->sound.filename, ArrayCount(asset.source->bitmap.filename));
     asset.dest->typeHashID = stringHash;
     asset.dest->nameHashID = StringHash(soundName);
+    asset.dest->offsetFromOriginalOffset = 0;
     
     asset.dest->sound.sampleCount = sampleCount;
     asset.dest->sound.chain = Chain_none;
@@ -1761,6 +1785,11 @@ internal void WritePak(Assets* assets, char* fileName_)
                         
                         fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out );
                         free(bitmap.free );
+                    } break;
+                    
+                    case Pak_coloration:
+                    {
+                        
                     } break;
                     
                     case Pak_font:
@@ -2097,20 +2126,22 @@ inline char* StringPresentInFile(char* file, char* token, b32 limitToSingleList)
     return result;
 }
 
-internal void AddLabelsFromFile(PlatformFile* labelsFile, char* folderName, char* assetName)
+
+internal char* GetAssetFilePtr(PlatformFile* file, char* folderName, char* assetName)
 {
-    char* folder = StringPresentInFile((char*) labelsFile->content, folderName, false);
+	char* folder = StringPresentInFile((char*) file->content, folderName, false);
     Assert(folder);
     char* ptr = StringPresentInFile(folder, assetName, true);
     Assert(ptr);
-    
-    Tokenizer tokenizer = {};
-    tokenizer.at = ptr;
-    
+	return ptr;
+}
+
+internal void AddLabelsFromFile(Tokenizer* tokenizer)
+{
     b32 parsing = true;
     while(parsing)
     {
-        Token t = GetToken(&tokenizer);
+        Token t = GetToken(tokenizer);
         
         switch(t.type)
         {
@@ -2124,40 +2155,40 @@ internal void AddLabelsFromFile(PlatformFile* labelsFile, char* folderName, char
                 
                 if(TokenEquals(t, "labels"))
                 {
-                    if(RequireToken(&tokenizer, Token_EqualSign))
+                    if(RequireToken(tokenizer, Token_EqualSign))
                     {
-                        if(RequireToken(&tokenizer, Token_OpenParen) && RequireToken(&tokenizer, Token_Pound))
+                        if(RequireToken(tokenizer, Token_OpenParen) && RequireToken(tokenizer, Token_Pound))
                         {
-                            Token empty = GetToken(&tokenizer);
+                            Token empty = GetToken(tokenizer);
                             if(empty.type == Token_Identifier && TokenEquals(empty, "empty"))
                             {
-                                AdvanceToNextToken(&tokenizer, Token_CloseBraces);
+                                AdvanceToNextToken(tokenizer, Token_CloseBraces);
                                 
                                 while(true)
                                 {
-                                    Token labelToken = GetToken(&tokenizer);
+                                    Token labelToken = GetToken(tokenizer);
                                     if(labelToken.type == Token_CloseParen)
                                     {
                                         break;
                                     }
                                     else
                                     {
-                                        if(RequireToken(&tokenizer, Token_String) &&
-                                           RequireToken(&tokenizer, Token_EqualSign))
+                                        if(RequireToken(tokenizer, Token_String) &&
+                                           RequireToken(tokenizer, Token_EqualSign))
                                         {
-                                            Token labelName = Stringize(GetToken(&tokenizer));
+                                            Token labelName = Stringize(GetToken(tokenizer));
                                             
-                                            if(RequireToken(&tokenizer, Token_Comma) &&
-                                               RequireToken(&tokenizer, Token_String) &&
-                                               RequireToken(&tokenizer, Token_EqualSign))
+                                            if(RequireToken(tokenizer, Token_Comma) &&
+                                               RequireToken(tokenizer, Token_String) &&
+                                               RequireToken(tokenizer, Token_EqualSign))
                                             {
-                                                Token labelValue = GetToken(&tokenizer);
+                                                Token labelValue = GetToken(tokenizer);
                                                 
                                                 AddLabel(labelName.text, labelName.textLength, (r32) atof(labelValue.text));
                                             }
                                         }
                                         
-                                        AdvanceToNextToken(&tokenizer, Token_CloseBraces);
+                                        AdvanceToNextToken(tokenizer, Token_CloseBraces);
                                     }
                                 }
                             }
@@ -2172,6 +2203,67 @@ internal void AddLabelsFromFile(PlatformFile* labelsFile, char* folderName, char
 }
 
 
+
+inline r32 ParseR32WithName(Tokenizer* tokenizer)
+{
+    r32 result = 0;
+    
+    Token name = GetToken(tokenizer);
+    if(RequireToken(tokenizer, Token_EqualSign))
+    {
+        Token value = GetToken(tokenizer);
+        result = (r32) atof(value.text);
+    }
+    else
+    {
+        InvalidCodePath;
+    }
+    
+    return result;
+}
+
+inline Vec4 ParseV4(Tokenizer* tokenizer)
+{
+    Vec4 result = {};
+    if(RequireToken(tokenizer, Token_OpenBraces))
+    {
+        result.r = ParseR32WithName(tokenizer);
+        
+        if(RequireToken(tokenizer, Token_Comma))
+        {
+            result.g = ParseR32WithName(tokenizer);
+            
+            if(RequireToken(tokenizer, Token_Comma))
+            {
+                result.b = ParseR32WithName(tokenizer);
+                
+                if(RequireToken(tokenizer, Token_Comma))
+                {
+                    result.a = ParseR32WithName(tokenizer);
+                }
+                else
+                {
+                    InvalidCodePath;
+                }
+            }
+            else
+            {
+                InvalidCodePath;
+            }
+        }
+        else
+        {
+            InvalidCodePath;
+        }
+        
+    }
+    else
+    {
+        InvalidCodePath;
+    }
+    
+    return result;
+}
 
 
 
@@ -2213,7 +2305,53 @@ internal void WriteBitmaps(char* folder, char* name, PlatformFile* labelsFile)
             
             if(labelsFile)
             {
-                AddLabelsFromFile(labelsFile, name, bitmapHandle.name);
+				char* assetPtr = GetAssetFilePtr(labelsFile, name, bitmapHandle.name);
+                Tokenizer tokenizer = {};
+                tokenizer.at = assetPtr;
+                
+                // NOTE(Leonardo): jump the empty coloration!
+                AdvanceToNextToken(&tokenizer, "coloration");
+                u16 colorationIndex = 1;
+                while(true)
+				{
+                    AdvanceToNextToken(&tokenizer, "coloration");
+                    
+                    Token t = GetToken(&tokenizer);
+                    
+                    if(t.type == Token_EqualSign)
+                    {
+                        Vec4 color = ParseV4(&tokenizer);
+                        AddColorationAsset(completePath, bitmapHandle.name, hashID, colorationIndex++, color);
+                        AddLabelsFromFile(&tokenizer);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                    
+                    if(RequireToken(&tokenizer, Token_CloseBraces))
+                    {
+                        if(NextTokenIs(&tokenizer, Token_Comma))
+                        {
+                            Token comma = GetToken(&tokenizer);
+                            if(NextTokenIs(&tokenizer, Token_OpenBraces))
+                            {
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        InvalidCodePath;
+                    }
+				}
             }
             
             Win32CloseHandle(&bitmapHandle);
@@ -2406,11 +2544,11 @@ inline void AddAssetToFile(char* addHere, char* fileEnd, char* tag, char* assetN
 {
     u32 sizeToEnd = (u32) (fileEnd - addHere);
     
-    char toAdd[256];
+    char toAdd[1024];
     
     if(labeled)
     {
-        FormatString(toAdd, sizeof(toAdd), "{%s = \"%s\", labels = (#empty = {name = \"invalid\", value = 0.0})},", tag, assetName);
+		FormatString(toAdd, sizeof(toAdd), "{%s = \"%s\", colorations = (#atLeastOneInList #showBitmap #empty = {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#empty = {name = \"invalid\", value = 0.0})} {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#empty = {name = \"invalid\", value = 0.0})}) },", tag, assetName);
     }
     else
     {
@@ -2423,7 +2561,7 @@ inline void AddAssetToFile(char* addHere, char* fileEnd, char* tag, char* assetN
     memcpy(addHere, toAdd, roomToMake);
 }
 
-internal void WriteAssetDefinitionFile(char* path, char* filename, char* definitionParams)
+internal void WriteAssetDefinitionFile(char* path, char* filename, char* definitionParams, b32 useOldFile)
 {
     char* assetPath = "assets";
     
@@ -2439,14 +2577,15 @@ internal void WriteAssetDefinitionFile(char* path, char* filename, char* definit
     memset(newFile, 0, newFileSize);
     char* endFile = newFile + newFileSize;
     
-    
-    PlatformFile oldFile = DEBUGWin32ReadFile(oldPath);
-    if(oldFile.content && oldFile.size <= newFileSize)
+    if(useOldFile)
     {
-        memcpy(newFile, oldFile.content, oldFile.size);
-        DEBUGWin32FreeFile(&oldFile);
+        PlatformFile oldFile = DEBUGWin32ReadFile(oldPath);
+        if(oldFile.content && oldFile.size <= newFileSize)
+        {
+            memcpy(newFile, oldFile.content, oldFile.size);
+            DEBUGWin32FreeFile(&oldFile);
+        }
     }
-    
     
     PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
     Win32GetAllSubdirectoriesName(subdir, path);
@@ -2525,15 +2664,15 @@ internal void WriteComponents()
 {
     char* componentsPath = "definition/components";
     char* assetFile = "components.fad";
-    char* definitionParams = "#cantBeDeleted #showBitmap";
+    char* assetOldFile = "componentvanilla.fad";
+    char* definitionParams = "#cantBeDeleted";
     
-    WriteAssetDefinitionFile(componentsPath, assetFile, definitionParams);
-    
+    WriteAssetDefinitionFile(componentsPath, assetFile, definitionParams, true);
+    WriteAssetDefinitionFile(componentsPath, assetOldFile, 0, false);
     OutputFoldersAutocompleteFile("component", componentsPath);
     
     PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
     Win32GetAllSubdirectoriesName(subdir, componentsPath);
-    
     
     char labelsPath[64];
     FormatString(labelsPath, sizeof(labelsPath), "assets/%s", assetFile);
@@ -2709,6 +2848,12 @@ internal void WriteAnimationAutocompleteFile(char* path, char* skeletonName)
 
 internal void WriteBitmapsAndAnimations()
 {
+    WriteComponents();
+    WriteEquipmentMaps();
+    WriteSpaces();
+    WriteLeafs();
+    WriteUI();
+    
     char* bitmapPath = "definition/root";
     RecursiveWriteBitmaps(bitmapPath);
     
@@ -2727,12 +2872,6 @@ internal void WriteBitmapsAndAnimations()
         }
     }
     free(subdir);
-    
-    WriteComponents();
-    WriteEquipmentMaps();
-    WriteSpaces();
-    WriteLeafs();
-    WriteUI();
 }
 
 
@@ -2863,7 +3002,7 @@ internal void WriteSounds()
     OutputFoldersAutocompleteFile("soundType", soundPath);
     
     char* definitionParams = "#cantBeDeleted #playSound";
-    WriteAssetDefinitionFile(soundPath, assetFile, definitionParams);
+    WriteAssetDefinitionFile(soundPath, assetFile, definitionParams, true);
     
     PlatformFile database = DEBUGWin32ReadFile(databaseFile);
     RecursiveWriteSounds(database, soundPath);

@@ -87,6 +87,7 @@ inline void EndTicketMutex(TicketMutex* mutex)
 struct BitmapId
 {
     u32 value;
+    Vec4 coloration;
 };
 
 struct FontId

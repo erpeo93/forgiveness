@@ -879,7 +879,7 @@ inline SoundId FindSoundByName(Assets* assets, u64 typeHashID, u64 nameHashID)
     return result;
 }
 
-inline BitmapId FindBitmapByName(Assets* assets, u64 typeHashID, u64 nameHashID)
+inline BitmapId FindBitmapByName(Assets* assets, u64 typeHashID, u64 nameHashID, u16 colorationIndex)
 {
     BitmapId result = {};
     
@@ -891,9 +891,17 @@ inline BitmapId FindBitmapByName(Assets* assets, u64 typeHashID, u64 nameHashID)
         assetIndex++)
     {
         Asset* asset = assets->assets + assetIndex;
-        if(asset->paka.typeHashID == typeHashID && asset->paka.nameHashID == nameHashID)
+        if(asset->paka.typeHashID == typeHashID && asset->paka.nameHashID == nameHashID && asset->paka.offsetFromOriginalOffset == colorationIndex)
         {
-            result = {assetIndex};
+            result.coloration = V4(1, 1, 1, 1);
+            result.value = assetIndex;
+            
+            u16 clonedOffset = asset->paka.offsetFromOriginalOffset;
+            if(clonedOffset)
+            {
+                result.value = assetIndex - (u32) clonedOffset;
+                result.coloration = asset->paka.coloration.coloration;
+            }
             break;
         }
 	}
@@ -959,7 +967,15 @@ inline MatchingAssetResult GetMatchingAsset_(Assets* assets, u32 assetID, u64 st
             if(currentDiff < bestDiff)
             {
                 bestDiff = currentDiff;
-                result.assetIndex = assetIndex;
+                
+                u16 clonedOffset = asset->paka.offsetFromOriginalOffset;
+                if(clonedOffset)
+                {
+                    result.cloned = true;
+                    result.clonedColoration = asset->paka.coloration.coloration;
+                }
+                result.assetIndex = assetIndex - (u32) clonedOffset;
+                Assert(result.assetIndex > 0);
             }
         }
     }

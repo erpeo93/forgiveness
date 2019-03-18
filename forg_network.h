@@ -132,6 +132,7 @@ enum Packet_Type
     Type_DeleteTaxonomy,
     Type_ReviveTaxonomy,
     Type_InstantiateTaxonomy,
+    Type_InstantiateRecipe,
     Type_DeleteEntity,
     Type_ImpersonateEntity,
     Type_PauseToggle,
@@ -261,6 +262,13 @@ struct LevelUpRequest
 struct InstantiateRequest
 {
     u32 taxonomy;
+    Vec3 offset;
+};
+
+struct InstantiateRecipeRequest
+{
+    u32 taxonomy;
+    u64 recipeIndex;
     Vec3 offset;
 };
 

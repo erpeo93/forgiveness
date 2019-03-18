@@ -491,6 +491,7 @@ inline void PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTransform
     Bitmap* bitmap = GetBitmap(renderGroup->assets, ID);
     if(bitmap)
     {
+        color = Hadamart(color, ID.coloration);
         PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lightIndexes, bitmap->pivot);
     }
     else
@@ -517,6 +518,7 @@ inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform o
     Bitmap* bitmap = GetBitmap(renderGroup->assets, ID);
     if(bitmap)
     {
+        color = Hadamart(color, ID.coloration);
         result = PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lightIndexes, pivot);
     }
     else

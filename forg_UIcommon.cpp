@@ -658,14 +658,16 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_InstantiateTaxonomy:
         {
-#if 0
-			if(IsSubTaxonomy())
+            TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->table->recipeTaxonomy);
+			if(IsSubTaxonomy(request->taxonomy, slot))
 			{
-				SendInstantiateRecipeRequest(widget->recipeTaxonomy, widget->recipeIndex);
+                EditorWidget* widget = UI->widgets + EditorWidget_Misc;
+                char* taxonomy = GetValue(widget->root, "recipeTaxonomy");
+                u32 recipeTaxonomy = NORUNTIMEGetTaxonomySlotByName(UI->table, taxonomy)->taxonomy;
+                u64 recipeIndex = ToU64(GetValue(widget->root, "recipeIndex"));
+				SendInstantiateRecipeRequest(recipeTaxonomy, recipeIndex, request->offset);
 			}
 			else
-#endif
-            
 			{
 				SendInstantiateTaxonomyRequest(request->taxonomy, request->offset);
 			}
@@ -912,7 +914,7 @@ inline UIInteraction UIPlaySoundEventInteraction(u32 flags, u64 eventNameHash)
     return result;
 }
 
-inline UIInteraction UIShowBitmapInteraction(u32 flags, u64 componentNameHash, u64 bitmapNameHash)
+inline UIInteraction UIShowBitmapInteraction(u32 flags, u64 componentNameHash, u64 bitmapNameHash, Vec4 coloration)
 {
     UIInteraction result = {};
     UIInteractionAction* dest = UIGetFreeAction(&result);
@@ -920,6 +922,7 @@ inline UIInteraction UIShowBitmapInteraction(u32 flags, u64 componentNameHash, u
     dest->flags = flags;
     dest->componentNameHash = componentNameHash;
     dest->bitmapNameHash = bitmapNameHash;
+    dest->coloration = coloration;
     
     return result;
 }
@@ -1381,7 +1384,8 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         u64 componentNameHash = action->componentNameHash;
                         u64 bitmapNameHash = action->bitmapNameHash;
                         
-                        BitmapId BID = FindBitmapByName(UI->group->assets, componentNameHash, bitmapNameHash);
+                        BitmapId BID = FindBitmapByName(UI->group->assets, componentNameHash, bitmapNameHash, 0);
+                        BID.coloration = action->coloration;
                         
                         Vec3 P = V3(0, 0, 0);
                         ObjectTransform transform = FlatTransform();

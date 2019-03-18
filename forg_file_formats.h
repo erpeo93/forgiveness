@@ -104,11 +104,21 @@ struct PakAnimation
     */
 };
 
+
+struct PakColoration
+{
+    Vec4 coloration;
+    
+    // NOTE(Leonardo): data is: 
+    //nothing!
+};
+
 struct PakAsset
 {
     u64 dataOffset;
     u32 firstTagIndex;
     u32 onePastLastTagIndex;
+    u16 offsetFromOriginalOffset;
     u64 typeHashID;
     u64 nameHashID;
     
@@ -118,6 +128,7 @@ struct PakAsset
         PakSound sound;
         PakAnimation animation;
         PakFont font;
+        PakColoration coloration;
     };
 };
 

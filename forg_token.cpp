@@ -172,39 +172,6 @@ Token GetToken( Tokenizer* tokenizer )
     return result;
 }
 
-
-inline void AdvanceToNextToken(Tokenizer* tokenizer, ForgTokenType type)
-{
-    bool parsing = true;
-    while(parsing)
-    {
-        Token t = GetToken(tokenizer);
-        
-        if(t.type == type || t.type == Token_EndOfFile)
-        {
-            parsing = false;
-        }
-    }
-}
-
-inline bool NextTokenIs(Tokenizer* tokenizer, ForgTokenType type)
-{
-    Tokenizer testTokenizer = *tokenizer;
-    Token test = GetToken(&testTokenizer);
-    
-    bool result = (test.type == type);
-    
-    return result;
-}
-
-#define RequiresToken(tokenizer, tokenType) if(!RequireToken(tokenizer, Token_##tokenType)){InvalidCodePath;}
-inline bool RequireToken(Tokenizer* tokenizer, int tokenType)
-{
-    Token token = GetToken( tokenizer );
-    bool result = token.type == tokenType;
-    return result;
-}
-
 inline bool TokenEquals( Token token, char* name )
 {
     char* at = name;
@@ -239,7 +206,6 @@ inline bool SameToken(Token t1, Token t2)
     return result;
 }
 
-
 inline Token Stringize(Token token)
 {
     if(token.type == Token_String)
@@ -260,3 +226,54 @@ inline Token Stringize(Token token)
     
     return token;
 }
+inline void AdvanceToNextToken(Tokenizer* tokenizer, ForgTokenType type)
+{
+    bool parsing = true;
+    while(parsing)
+    {
+        Token t = GetToken(tokenizer);
+        
+        if(t.type == type || t.type == Token_EndOfFile)
+        {
+            parsing = false;
+        }
+    }
+}
+
+inline void AdvanceToNextToken(Tokenizer* tokenizer, char* tokenName)
+{
+    bool parsing = true;
+    while(parsing)
+    {
+        Token t = GetToken(tokenizer);
+        
+        if(t.type == Token_String)
+        {
+            t = Stringize(t);
+        }
+        
+        if(t.type == Token_EndOfFile || (t.type == Token_Identifier && TokenEquals(t, tokenName)))
+        {
+            parsing = false;
+        }
+    }
+}
+
+inline bool NextTokenIs(Tokenizer* tokenizer, ForgTokenType type)
+{
+    Tokenizer testTokenizer = *tokenizer;
+    Token test = GetToken(&testTokenizer);
+    
+    bool result = (test.type == type);
+    
+    return result;
+}
+
+#define RequiresToken(tokenizer, tokenType) if(!RequireToken(tokenizer, Token_##tokenType)){InvalidCodePath;}
+inline bool RequireToken(Tokenizer* tokenizer, int tokenType)
+{
+    Token token = GetToken( tokenizer );
+    bool result = token.type == tokenType;
+    return result;
+}
+

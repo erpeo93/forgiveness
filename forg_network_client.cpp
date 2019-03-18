@@ -382,6 +382,14 @@ inline void SendReviveTaxonomyRequest(u32 taxonomy)
     CloseAndSendStandardPacket();
 }
 
+inline void SendInstantiateRecipeRequest(u32 taxonomy, u64 recipeIndex, Vec3 offset)
+{
+    StartStandardPacket(InstantiateRecipe);
+    Pack("LQV", taxonomy, recipeIndex, offset);
+    CloseAndSendStandardPacket();
+}
+
+
 inline void SendInstantiateTaxonomyRequest(u32 taxonomy, Vec3 offset)
 {
     StartStandardPacket(InstantiateTaxonomy);

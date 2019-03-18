@@ -455,26 +455,6 @@ internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* tab
     }
 }
 
-inline BitmapId GetBitmapNoAnimation(TaxonomyTable* taxTable, RenderGroup* group, u64 stringHashID)
-{
-    
-    TagVector match = {};
-    TagVector weight = {};
-    
-#if 0    
-    for(u32 tagIndex = 0; tagIndex < slot->visualTagCount; ++tagIndex)
-    {
-        VisualTag* tag = slot->visualTags + tagIndex;
-        match.E[tag->ID] = tag->value;
-        weight.E[tag->ID] = 1.0f;
-    }
-#endif
-    
-    BitmapId BID = GetMatchingBitmapHashed(group->assets, stringHashID, &match, &weight);
-    
-    return BID;
-}
-
 inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 entityHashID, ComponentsProperties* properties)
 {
     BitmapId result = {};

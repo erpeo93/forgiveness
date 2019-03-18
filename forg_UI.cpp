@@ -34,8 +34,16 @@ inline void UIButtonInteraction(UIButton* button, UIInteraction interaction)
     button->interaction = interaction;
 }
 
-inline Rect2 UIDrawButton(UIState* UI, PlatformInput* input, UIButton* button, r32 alpha = 1.0f)
+struct DrawButtonResult
 {
+    Rect2 bounds;
+    b32 hot;
+};
+
+inline DrawButtonResult UIDrawButton(UIState* UI, PlatformInput* input, UIButton* button, r32 alpha = 1.0f)
+{
+    DrawButtonResult result = {};
+    
     ObjectTransform buttonTranform = FlatTransform();
     buttonTranform.additionalZBias = button->Z + 0.001f;
     
@@ -45,6 +53,7 @@ inline Rect2 UIDrawButton(UIState* UI, PlatformInput* input, UIButton* button, r
     if(PointInRect(button->bounds, UI->relativeScreenMouse) && button->interaction.actionCount)
     {
         UIAddInteraction(UI, input, mouseLeft, button->interaction);
+        result.hot = true;
     }
     else
     {
@@ -54,8 +63,8 @@ inline Rect2 UIDrawButton(UIState* UI, PlatformInput* input, UIButton* button, r
     PushRect(UI->group, buttonTranform, button->bounds, buttonColor);
     PushUIOrthoText(UI, button->text, button->fontScale, button->textP, V4(1, 1, 1, alpha), button->Z + 0.002f);
     
-    
-    return button->bounds;
+    result.bounds = button->bounds;
+    return result;
 }
 
 
@@ -669,7 +678,19 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         {
                             layout->P += V2(layout->nameValueDistance, 0);
                         }
-                        b32 canDeleteElements = !IsSet(root, EditorElem_CantBeDeleted);
+                        
+
+                        
+                        b32 canDeleteElements;
+                        if(IsSet(root, EditorElem_AtLeastOneInList))
+                        {
+                            canDeleteElements = (root->firstInList && root->firstInList->next);
+                            
+                        }
+                        else
+                        {
+                            canDeleteElements = !IsSet(root, EditorElem_CantBeDeleted);
+                        }
                         result = Union(result, UIRenderEditorTree(UI, widget, layout, parents, root, root->firstInList, input, canDeleteElements));
                         
                         if(moveHorizontally)
@@ -693,7 +714,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             
                             UIAddReloadElementAction(&addInteraction, UI_Trigger, widget->root);
                             UIButtonInteraction(&addButton, addInteraction);
-                            result = Union(result, UIDrawButton(UI, input, &addButton));
+                            result = Union(result, UIDrawButton(UI, input, &addButton).bounds);
                         }
                     }
                 } break;
@@ -744,7 +765,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             {
                                 UIButton deleteButton = UIBtn(UI, GetCenter(structBounds) + V2(30, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(1, 0, 0, 1), "delete");
                                 UIButtonInteraction(&deleteButton, UISetValueInteraction(UI_Trigger, &root->flags, (root->flags | EditorElem_Deleted)));
-                                structBounds = Union(structBounds, UIDrawButton(UI, input, &deleteButton));
+                                structBounds = Union(structBounds, UIDrawButton(UI, input, &deleteButton).bounds);
                             }
                         }
                         
@@ -758,7 +779,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                                 u64 soundNameHash = StringHash(root->firstValue->value);
                                 
                                 UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
-                                structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
+                                structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton).bounds);
                             }
                             else if(father->flags & EditorElem_PlayEventSoundButton)
                             {
@@ -770,7 +791,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                                 u64 soundNameHash = StringHash(soundName);
                                 
                                 UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
-                                structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
+                                structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton).bounds);
                             }
                             else if(father->flags & EditorElem_PlayEventButton)
                             {
@@ -779,19 +800,23 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                                 u64 eventNameHash = StringHash(root->name);
                                 
                                 UIButtonInteraction(&playButton, UIPlaySoundEventInteraction(UI_Trigger, eventNameHash));
-                                structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton));
+                                structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton).bounds);
                             }
                             
                             else if(father->flags & EditorElem_ShowLabelBitmapButton)
                             {
                                 UIButton showButton = UIBtn(UI, GetCenter(structBounds) + V2(20, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "view");
                                 
-                                u64 componentNameHash = StringHash(father->name);
-                                u64 bitmapNameHash = StringHash(GetValue(root, "componentName"));
-                                UIButtonInteraction(&showButton, UIShowBitmapInteraction(UI_Idle, componentNameHash, bitmapNameHash));
-                                structBounds = Union(structBounds, UIDrawButton(UI, input, &showButton));
+                                EditorElement* grandGrandFather = parents.grandParents[1];
+                                u64 componentNameHash = StringHash(grandGrandFather->name);
+                                u64 bitmapNameHash = StringHash(GetValue(grandFather,
+ "componentName"));
+
+                                Vec4 coloration = ToV4Color(GetElement(root, "coloration"));
+                                UIButtonInteraction(&showButton, UIShowBitmapInteraction(UI_Idle, componentNameHash, bitmapNameHash, coloration));
+                                structBounds = Union(structBounds, UIDrawButton(UI, input, &showButton).bounds);
                             }
-                            
+                      
                         }
                         
                         r32 padding = 5;
@@ -906,7 +931,12 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                                 UIButton deleteButton = UIBtn(UI, startingPos, layout, V4(1, 0, 0, 1), cancText);
                                 UIButtonInteraction(&deleteButton, cancReviveInteraction);
                                 
-                                result = Union(result, UIDrawButton(UI, input, &deleteButton));
+                                DrawButtonResult cancDraw = UIDrawButton(UI, input, &deleteButton);
+                                if(cancDraw.hot)
+                                {
+                                    nameColor = V4(0, 1, 0, 1);
+                                }
+                                result = Union(result, cancDraw.bounds);
                                 
                                 instantiateP = UIFollowingP(&deleteButton, buttonSeparator);
                             }
@@ -925,7 +955,13 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             }
                             
                             UIButtonInteraction(&instantiateButton, instantiateInteraction);
-                            result = Union(result, UIDrawButton(UI, input, &instantiateButton, instantiateAlpha));
+                            
+                            DrawButtonResult placeDraw = UIDrawButton(UI, input, &instantiateButton, instantiateAlpha);
+                            if(placeDraw.hot)
+                            {
+                                nameColor = V4(0, 1, 0, 1);
+                            }
+                            result = Union(result, placeDraw.bounds);
                             
                             
                             
@@ -937,11 +973,19 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             if(true)//root->name[0] != '#')
                             {
                                 editAlpha = 1.0f;
-                                editInteraction = SendRequestInteraction(UI_Trigger, EditRequest(root->taxonomy));
+                                editInteraction = SendRequestInteraction(UI_Trigger,
+                                                                       EditRequest(root->taxonomy));
+                              
                             }
                             
                             UIButtonInteraction(&editButton, editInteraction);
-                            result = Union(result, UIDrawButton(UI, input, &editButton, editAlpha));
+                            
+                            DrawButtonResult editDraw = UIDrawButton(UI, input, &editButton, editAlpha);
+                            result = Union(result, editDraw.bounds);
+                            if(editDraw.hot)
+                            {
+                                nameColor = V4(0, 1, 0, 1);  
+                            }
                         }
                         
                         
@@ -969,6 +1013,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         
                         if(PointInRect(nameBounds, UI->relativeScreenMouse))
                         {
+                          
                             UIInteraction mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
                             UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, father); 
                             UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeGrandParent, grandFather); 
@@ -2247,6 +2292,16 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             actions->permanent.P = V2(200, 100);
             
             
+            EditorWidget* misc = StartWidget(UI, EditorWidget_Misc, 0xffffffff, "Miscellaneous");
+                        FREELIST_ALLOC(misc->root, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            misc->root->type = EditorElement_Struct;
+            
+            misc->permanent.P = V2(200, 100);
+            UIAddChild(UI->table, misc->root, EditorElement_String, "recipeTaxonomy", "objects");
+            UIAddChild(UI->table, misc->root, EditorElement_Unsigned, "recipeIndex", "0");
+           
+            
+            
             EditorWidget* soundEvents = StartWidget(UI, EditorWidget_SoundEvents, EditorRole_SoundDesigner, "Sound Events");
             soundEvents->permanent.P = V2(-200, 100);
             soundEvents->root = UI->table->soundEventsRoot;
@@ -2332,6 +2387,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         
         UIAddAutocompleteFromTaxonomy(UI, "equipment");
         UIAddAutocompleteFromTaxonomy(UI, "root", "ingredient");
+        UIAddAutocompleteFromTaxonomy(UI, "objects", "recipeTaxonomy");
         UIAddAutocompleteFromTable(UI, SlotName, "slot");
         UIAddAutocompleteFromTable(UI, EntityAction, "action");
         UIAddAutocompleteFromTable(UI, SoundContainerType, "soundCType");
