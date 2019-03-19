@@ -657,7 +657,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             ContainedObjects* objects = &object->objects;
             if(dragging->status >= 0 && dragging->taxonomy)
             {
-                SlotPresentMap slotPresent = InventorySlotPresent(region->taxTable, entity->taxonomy, dragging->taxonomy);
+                EquipmentMapping slotPresent = InventorySlotPresent(region->taxTable, entity->taxonomy, dragging->taxonomy);
                 SlotName desired = (SlotName) equipDragging->slotIndex;
                 Assert(desired > Slot_None);
                 

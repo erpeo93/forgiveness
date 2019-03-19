@@ -82,21 +82,15 @@ inline void EntityToObject(SimEntity* entity, Object* object)
 }
 #endif
 
-inline SlotPresentMap InventorySlotPresent(TaxonomyTable* table, u32 entityTaxonomy, u32 objectTaxonomy)
+inline EquipmentMapping InventorySlotPresent(TaxonomyTable* table, u32 entityTaxonomy, u32 objectTaxonomy)
 {
-    SlotPresentMap result = {};
+    EquipmentMapping result = {};
     
     TaxonomySlot* slot = GetSlotForTaxonomy(table, entityTaxonomy);
-    
-    EquipmentMapping* mapping = slot->firstEquipmentMapping;
-    while(mapping)
+    TaxonomyNode* node = FindInTaxonomyTree(table, slot->equipmentMappings.root, objectTaxonomy);
+    if(node && node->data.equipmentMapping)
     {
-        if(mapping->taxonomy == objectTaxonomy)
-        {
-            result = mapping->mapping;
-        }
-        
-        mapping = mapping->next;
+        result = *(node->data.equipmentMapping);
     }
     return result;
 }
@@ -109,7 +103,7 @@ inline EquipInfo PossibleToEquip_(TaxonomyTable* table, u32 entityTaxonomy, Equi
     // NOTE(Leonardo): otherwise it means it's not completed
     if(status >= 0)
     {
-        SlotPresentMap slotPresent = InventorySlotPresent(table, entityTaxonomy, objectTaxonomy);
+        EquipmentMapping slotPresent = InventorySlotPresent(table, entityTaxonomy, objectTaxonomy);
         if(!slotPresent.multiPart)
         {
             if(slotPresent.left || slotPresent.right)

@@ -11,6 +11,7 @@ union TaxonomyNodeData
 {
     b32 possible;
     struct MemSynthOption* firstOption;
+    struct EquipmentMapping* equipmentMapping;
 };
 
 struct TaxonomyNode
@@ -80,10 +81,30 @@ struct TaxonomyPart
     };
 };
 
+struct EquipmentPiece
+{
+    u32 boneIndex;
+    u64 stringHashID;
+    u8 index;
+    Vec2 boneOffset;
+    r32 zOffset;
+    r32 angle;
+    
+    Vec2 pivot;
+    u32 flags;
+    
+    union
+    {
+        EquipmentPiece* next;
+        EquipmentPiece* nextFree;
+    };
+};
 
-struct SlotPresentMap
+struct EquipmentMapping
 {
     b32 multiPart;
+    EquipmentPiece* firstEquipmentPiece;
+    
     union
     {
         struct
@@ -98,12 +119,7 @@ struct SlotPresentMap
             SlotName slots[4];
         };
     };
-};
-
-struct EquipmentMapping
-{
-    u32 taxonomy;
-    SlotPresentMap mapping;
+    
     
     union
     {
@@ -303,8 +319,7 @@ struct TaxonomySlot
     
     
     
-    
-    EquipmentMapping* firstEquipmentMapping;
+    TaxonomyTree equipmentMappings;
     ConsumeMapping* firstConsumeMapping;
     PlayerPossibleAction* firstPossibleAction;
     
@@ -463,7 +478,6 @@ struct TaxonomyTable
     ShortcutSlot* shortcutSlots[4096];
     
     struct EditorElement* firstFreeElement;
-    
     
     
     EquipmentMapping* firstFreeEquipmentMapping;

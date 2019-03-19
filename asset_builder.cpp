@@ -2464,6 +2464,8 @@ internal void WriteAnimations(char* folder, char* name)
     WritePak(assets, pakName);
 }
 
+
+#if 0
 internal void WriteEquipmentMaps()
 {
     Assets assets_;
@@ -2496,6 +2498,7 @@ internal void WriteEquipmentMaps()
     
     WritePak(assets, "equipmentmaps.pak" );
 }
+#endif
 
 internal void OutputFoldersAutocompleteFile(char* filename, char* path)
 {
@@ -2849,7 +2852,6 @@ internal void WriteAnimationAutocompleteFile(char* path, char* skeletonName)
 internal void WriteBitmapsAndAnimations()
 {
     WriteComponents();
-    WriteEquipmentMaps();
     WriteSpaces();
     WriteLeafs();
     WriteUI();

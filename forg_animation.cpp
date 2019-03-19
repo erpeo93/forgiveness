@@ -180,6 +180,8 @@ internal void BlendFrames_(Animation* animation, BlendResult* in, u32 lowerFrame
         u32 exceedingLower = timelineMS - lowerTimeLine;
         r32 lerp = SafeRatio1((r32 ) exceedingLower, (r32 ) (upperTimeLine - lowerTimeLine ) );
         in->bones[boneIndex] = BlendBones_(b1, lerp, b2);
+        in->lastAssIndexForBone[boneIndex] = U32_MAX;
+        in->equipmentBoneCount[boneIndex] = 0;
         
         in->boneAlterations[boneIndex] = {};
     }
@@ -210,6 +212,9 @@ internal void BlendFrames_(Animation* animation, BlendResult* in, u32 lowerFrame
         u32 exceedingLower = timelineMS - lowerTimeLine;
         r32 lerp = SafeRatio1((r32 ) exceedingLower, (r32 ) (upperTimeLine - lowerTimeLine ) );
         in->ass[assIndex] = BlendAss_(a1, lerp, a2);
+        
+        u32 boneIndex = in->ass[assIndex].boneID;
+        in->lastAssIndexForBone[boneIndex] = assIndex;
         
         in->assAlterations[assIndex] = {};
         
@@ -324,7 +329,6 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
     }
     BlendFrames_(animation, blended, lowerFrameIndex, animTimeMod, upperFrameIndex);
     
-    
     TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, input->entity->taxonomy);
     for(TaxonomyBoneAlterations* boneAlt = slot->firstBoneAlteration; boneAlt; boneAlt = boneAlt->next)
     {
@@ -371,14 +375,49 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
         bone->finalOriginOffset = CalculateFinalBoneOffset_(input, blended->bones, blended->boneCount, bone, params);
         
         Vec2 scale = V2(1.0f, 1.0f);
-        
-        
         if(boneAlt->valid)
         {
             scale = boneAlt->scale;
         }
-        
         bone->mainAxis = Hadamart(scale, V2(Cos(totalAngleRad), Sin(totalAngleRad))); 
+    }
+}
+
+internal void GetEquipmentPieces(TaxonomyTree* equipmentMappings, EquipmentAnimationSlot* slot)
+{
+    u64 inserted[Slot_Count];
+    for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
+    {
+        if(!AlreadyInserted())
+        {
+            TaxonomyNode* node = SearchInTaxonomyTree();
+            if(node && node->data.equipmentMappings)
+            {
+                ObjectLayout* layout = slot->layout;
+                for(EquipmentPiece* piece = node->data.equipmentMappings.firstEquipmentPiece; piece; piece = piece->next)
+                {
+                    u32 boneIndex = piece->boneIndex;
+                    
+                    
+                    PieceAss* destAss = ?;
+                    SpriteInfo* destSprite = ?;
+                    
+                    *destAss = {};
+                    *destSprite = {};
+                    
+                    destAss->boneOffset = equipmentMapping->boneOffset;
+                    destAss->additionalZOffset = equipmentMapping->zOffset;
+                    destAss->angle = equipmentMapping->angle;
+                    destAss->scale = equipmentMapping->scale;
+                    destAss->alpha = 1.0f;
+                    
+                    destSprite->pivot = equipmentMapping->pivot;
+                    destSprite->stringHashID = equipmentMapping->id;
+                    destSprite->index = equipmentMapping->index;
+                    destSprite->flags = equipmentMapping->flags;
+                }
+            }
+        }
     }
 }
 
@@ -573,6 +612,9 @@ inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, Ob
     bone->mainAxis = V2(1, 0);
     bone->parentID = -1;
     
+    output->equipmentBoneCount[0] = 0;
+    output->lastAssIndexForBone[0] = U32_MAX;
+    
     BoneAlterations* boneAlt = output->boneAlterations + 0;
     boneAlt->valid = false;
     
@@ -670,47 +712,6 @@ inline Rect2 GetLayoutBounds(AnimationFixedParams* input, RenderGroup* group, Ob
     
     return result;
 }
-
-inline Rect2 GetAnimationBounds(AnimationFixedParams* input, RenderGroup* group, AnimationVolatileParams* params, b32 onGround)
-{
-    Rect2 result = InvertedInfinityRect2();
-    
-    AssetTypeId assetID = Asset_equipmentMap;
-    TagVector match = {};
-    TagVector weight = {};
-    weight.E[Tag_direction] = 1.0f;
-    weight.E[Tag_ObjectState] = 1000.0f;
-    
-    if(onGround)
-    {
-        match.E[Tag_ObjectState] = ObjectState_Ground;
-    }
-    
-    AnimationId ID = GetMatchingAnimation(group->assets, assetID, params->entityHashID, &match, &weight);
-    if(IsValid(ID))
-    {
-        Animation* pieceAnimation = GetAnimation(group->assets, ID);
-        if(pieceAnimation)
-        {
-            BlendResult blended;
-            AnimationState dummyState = {};
-            GetAnimationPiecesAndAdvanceState(input, &blended, pieceAnimation, &dummyState, 0, params);
-            
-            result = GetPiecesBound(group, &blended, params);
-        }
-        else
-        {
-            LoadAnimation(group->assets, ID);
-        }
-        
-    }
-    
-    result.min = result.min;
-    result.max = result.max;
-    
-    return result;
-}
-
 
 
 internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, Vec3 P, AnimationVolatileParams* params);
@@ -997,7 +998,8 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                         AnimationVolatileParams objectParams = pieceParams;
                         objectParams.entityHashID = slot->stringHashID;
                         
-                        Rect2 animationBounds = GetAnimationBounds(input, group, &objectParams, true);
+                        ObjectLayout* layout = GetLayout(input->taxTable, taxonomy, true, false);
+                        Rect2 animationBounds = GetLayoutBounds(input, group, layout, &objectParams);
                         if(HasArea(animationBounds))
                         {
                             r32 cellFillPercentage = 0.9f;
@@ -1215,57 +1217,6 @@ inline b32 SlotIsOnFocus(AnimationFixedParams* input, EquipmentAnimationSlot* sl
     return result;
 }
 
-inline void RenderEquipmentPiece(AnimationFixedParams* input, RenderGroup* group, BlendResult* blended, PieceAss* ass, Vec3 P, SpriteInfo* spriteInfo, AnimationVolatileParams* params)
-{
-    Bone* parentBone = blended->bones + ass->boneID;
-    Vec3 cameraOffset = AssOriginOffset(parentBone, ass, params->zOffset, params->scale);
-    
-    
-    EquipmentAnimationSlot* slot = Exists(input, spriteInfo->stringHashID, cameraOffset, true);
-    if(slot)
-    {
-        Bone* equipmentBone = blended->bones + ass->boneID;
-        PieceAss toDraw = *ass;
-        
-        AnimationVolatileParams pieceParams = *params;
-        
-        r32 ratio = Clamp01MapToRange(0, (r32) slot->status, (r32) I16_MAX);
-        Vec4 statusColor = Lerp(bodyDead, ratio, V4(1, 1, 1, 1));
-        pieceParams.color = statusColor;
-        
-        
-        ComponentsProperties properties;
-        pieceParams.properties = &properties;
-        GetVisualProperties(&properties, input->taxTable, slot->taxonomy, slot->recipeIndex, false, slot->drawOpened);
-        
-        if(slot->ghost || SlotIsOnFocus(input, slot))
-        {
-            pieceParams.modulationWithFocusColor = input->defaultModulatonWithFocusColor;
-        }
-        
-        if(RenderPieceAss_(input, group, P, spriteInfo, equipmentBone, &toDraw, &pieceParams, slot->dontRender).onFocus)
-        {
-            input->output->focusSlots.slotCount = 0;
-            if(slot->stringHashID == slot->parentStringHashID)
-            {
-                input->output->focusSlots.slots[input->output->focusSlots.slotCount++] = (SlotName) slot->equipmentSlotIndex;
-            }
-            else
-            {
-                for(u32 equipmentIndex = 0; equipmentIndex < input->equipmentCount; ++equipmentIndex)
-                {
-                    EquipmentAnimationSlot* equipmentSlot = input->equipment + equipmentIndex;
-                    if(equipmentSlot->parentStringHashID == slot->parentStringHashID)
-                    {
-                        input->output->focusSlots.slots[input->output->focusSlots.slotCount++] = (SlotName) equipmentSlot->equipmentSlotIndex;
-                    }
-                }
-            }
-        }
-        params->zOffset = pieceParams.zOffset;
-    }
-}
-
 #define ALPHA_CAME_IN_SECONDS 2.0f
 #define MIN_STATUS_ALPHA -20.0f
 #define MAX_STATUS_ALPHA 20.0f
@@ -1333,24 +1284,15 @@ inline void ApplyAssAlterations(PieceAss* ass, AssAlterations* assAlt, Bone* par
     
 }
 
-inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* group, Animation* equipmentMap, BlendResult* blended, Vec3 P, AnimationVolatileParams* params, CycleAssOperation operation)
+inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* group, BlendResult* blended, Vec3 P, AnimationVolatileParams* params, CycleAssOperation operation)
 {
     PieceAss* currentEquipmentRig = 0;
-    u32 equipmentMapAssCount = 0;
-    if(equipmentMap)
-    {
-        Assert(equipmentMap->frameCount == 1);
-        currentEquipmentRig = equipmentMap->ass + 0;
-        equipmentMapAssCount = equipmentMap->frames[0].countAss;
-    }
-    
     r32 bestAssDistance = R32_MAX;
     
-    u32 equipmentAssCount = 0;
-    u32 validBlendedAss = 0;
+    u32 progressiveEquipmentIndex = 0;
+    
     for(u32 assIndex = 0;assIndex < blended->assCount; ++assIndex )
     {
-        b32 validAss = true;
         PieceAss currentAss = blended->ass[assIndex];
         AssAlterations* assAlt = blended->assAlterations + assIndex;
         Bone* parentBone = blended->bones + currentAss.boneID;
@@ -1358,48 +1300,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         
         
         Vec4 proceduralColor = input->defaultColoration;
-        
         ApplyAssAlterations(&currentAss, assAlt, parentBone, &proceduralColor);
-        
-        if(equipmentMap)
-        {
-            if(!(sprite->flags & Sprite_Composed) &&
-               !(sprite->flags & Sprite_Entity))
-            {
-                while(currentEquipmentRig->boneID != currentAss.boneID || currentEquipmentRig->spriteIndex != currentAss.spriteIndex)
-                {
-                    SpriteInfo* spriteInfo = equipmentMap->spriteInfos + currentEquipmentRig->spriteIndex;
-                    
-                    switch(operation)
-                    {
-                        case CycleAss_Render:
-                        {
-                            r32 alpha = GetAssAlphaFade(input->entity->identifier, blended->assCount + equipmentAssCount,
-                                                        input->lifePointsSeedResetCounter, input->lifePointFadeDuration, input->lifePointThreesold, input->lifePointRatio, input->cameInTime, input->entity->status);
-                            
-                            PieceAss equipmentAss = *currentEquipmentRig;
-                            equipmentAss.alpha *= alpha;
-                            RenderEquipmentPiece(input, group, blended, &equipmentAss, P, spriteInfo, params);
-                        } break;
-                        
-                        case CycleAss_DetermineFocus:
-                        {
-                            MarkGhostAss(input, group, blended, currentEquipmentRig, P, spriteInfo, params);
-                        } break;
-                    }
-                    
-                    ++currentEquipmentRig;
-                    ++equipmentAssCount;
-                }
-                
-                ++currentEquipmentRig;
-            }
-            else
-            {
-                validAss = false;
-            }
-        }
-        
         switch(operation)
         {
             case CycleAss_Render:
@@ -1426,30 +1327,72 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
             } break;
         }
         
-        if(validAss)
+        
+        if(assIndex == blended->lastAssIndexForBone[currentAss.boneID])
         {
-            ++validBlendedAss;
+            u32 equipmentCount = blended->equipmentBoneCount[currentAss.boneID];
+            for(u32 equipmentIndex = 0; equipmentIndex < equipmentCount; ++equipmentIndex)
+            {
+                u32 equipmentAssIndex = progressiveEquipmentIndex + equipmentIndex;
+                PieceAss* equipmentAss = blended->equipment + equipmentAssIndex;
+                SpriteInfo* spriteInfo = blended->equipmentSprites + equipmentAssIndex;
+                
+                switch(operation)
+                {
+                    case CycleAss_Render:
+                    {
+                        r32 alpha = GetAssAlphaFade(input->entity->identifier, (u32) spriteInfo->stringHashID,
+                                                    input->lifePointsSeedResetCounter, input->lifePointFadeDuration, input->lifePointThreesold, input->lifePointRatio, input->cameInTime, input->entity->status);
+                        
+                        equipmentAss->alpha *= alpha;
+                        
+                        AnimationVolatileParams pieceParams = *params;
+                        
+                        r32 ratio = Clamp01MapToRange(0, (r32) slot->status, (r32) I16_MAX);
+                        Vec4 statusColor = Lerp(bodyDead, ratio, V4(1, 1, 1, 1));
+                        pieceParams.color = statusColor;
+                        
+                        pieceParams.properties = slot->properties;
+                        
+                        
+                        if(slot->ghost || SlotIsOnFocus(input, slot))
+                        {
+                            pieceParams.modulationWithFocusColor = input->defaultModulatonWithFocusColor;
+                        }
+                        
+                        if(RenderPieceAss_(input, group, P, spriteInfo, equipmentBone, &toDraw, &pieceParams, slot->dontRender).onFocus)
+                        {
+                            input->output->focusSlots.slotCount = 0;
+                            if(slot->stringHashID == slot->parentStringHashID)
+                            {
+                                input->output->focusSlots.slots[input->output->focusSlots.slotCount++] = (SlotName) slot->equipmentSlotIndex;
+                            }
+                            else
+                            {
+                                for(u32 equipmentIndex = 0; equipmentIndex < input->equipmentCount; ++equipmentIndex)
+                                {
+                                    EquipmentAnimationSlot* equipmentSlot = input->equipment + equipmentIndex;
+                                    if(equipmentSlot->parentStringHashID == slot->parentStringHashID)
+                                    {
+                                        input->output->focusSlots.slots[input->output->focusSlots.slotCount++] = (SlotName) equipmentSlot->equipmentSlotIndex;
+                                    }
+                                }
+                            }
+                        }
+                        params->zOffset = pieceParams.zOffset;
+                    } break;
+                    
+                    case CycleAss_DetermineFocus:
+                    {
+                        MarkGhostAss(input, group, blended, equipmentAss, P, spriteInfo, params);
+                    } break;
+                }
+            }
         }
     }
     
-    for(u32 totalDrawn = validBlendedAss + equipmentAssCount; totalDrawn < equipmentMapAssCount; ++totalDrawn)
-    {
-        SpriteInfo* spriteInfo = equipmentMap->spriteInfos + currentEquipmentRig->spriteIndex;
-        
-        switch(operation)
-        {
-            case CycleAss_Render:
-            {
-                RenderEquipmentPiece(input, group, blended, currentEquipmentRig, P, spriteInfo, params);
-            } break;
-            
-            case CycleAss_DetermineFocus:
-            {
-                MarkGhostAss(input, group, blended, currentEquipmentRig, P, spriteInfo, params);
-            } break;
-        }
-        ++currentEquipmentRig;
-    }
+    
+    
     
     i16 hotAssIndex = input->output->hotAssIndex;
     if(hotAssIndex >= 0)
@@ -1510,24 +1453,10 @@ inline AnimationId GetAnimationRecursive(Assets* assets, TaxonomyTable* table, u
 
 internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup* group, Animation* animation, u64 skeletonHashID, Vec3 P, AnimationState* animationState, AnimationVolatileParams* params, r32 timeToAdvance)
 {
-    AssetTypeId assetID = Asset_equipmentRig;
-    TagVector match = {};
-    TagVector weight = {};
-    weight.E[Tag_direction] = 1.0f;
-    
-    AnimationId ID = GetMatchingAnimation(group->assets, assetID, skeletonHashID, &match, &weight );
-    Animation* equipmentMap = 0;
-    if(IsValid(ID))
-    {
-        equipmentMap = GetAnimation(group->assets, ID);
-        if(!equipmentMap)
-        {
-            LoadAnimation(group->assets, ID);
-        }
-    }
-    
     BlendResult blended;
     GetAnimationPiecesAndAdvanceState(input, &blended, animation, animationState, timeToAdvance, params);
+    GetEquipmentPieces(input, &blended, entityC, animationState, params);
+    
     
     FrameData* referenceFrame = animation->frames + 0;
     Assert(referenceFrame->countBones == blended.boneCount);
@@ -1535,8 +1464,8 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
     
     if(input->showBitmaps)
     {
-        AnimationPiecesOperation(input, group, equipmentMap, &blended, P, params, CycleAss_DetermineFocus);
-        AnimationPiecesOperation(input, group, equipmentMap, &blended, P, params, CycleAss_Render);
+        AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_DetermineFocus);
+        AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_Render);
     }
     
     if(input->ortho && input->showBones)
@@ -1567,7 +1496,7 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
     
     if(input->ortho && input->showPivots)
     {
-        AnimationPiecesOperation(input, group, equipmentMap, &blended, P, params, CycleAss_RenderPivots);
+        AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_RenderPivots);
     }
 }
 
@@ -1579,13 +1508,13 @@ internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group
     
     if(input->showBitmaps)
     {
-        AnimationPiecesOperation(input, group, 0, &blended, P, params, CycleAss_DetermineFocus);
-        AnimationPiecesOperation(input, group, 0, &blended, P, params, CycleAss_Render);
+        AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_DetermineFocus);
+        AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_Render);
     }
     
     if(input->ortho && input->showPivots)
     {
-        AnimationPiecesOperation(input, group, 0, &blended, P, params, CycleAss_RenderPivots);
+        AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_RenderPivots);
     }
 }
 

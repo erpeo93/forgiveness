@@ -177,7 +177,6 @@ char* MetaTable_TagId[] =
 char* MetaTable_AssetTypeId[] = 
  {
 "none",
-"equipmentMap",
 "music",
 "font",
 "glyph",

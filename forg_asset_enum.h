@@ -65,7 +65,6 @@ struct VisualLabel
 printTable(noPrefix) enum AssetTypeId
 {
     Asset_none,
-    Asset_equipmentMap,
     Asset_music,
     
     Asset_font,

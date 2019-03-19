@@ -1179,7 +1179,8 @@ inline BitmapId GetBitmapForGlyph(Assets* assets, Font* font, PakFont* info, u32
 inline AssetTypeId GetAssetIDForEntity(Assets* assets, TaxonomyTable* table, u32 taxonomy, u32 action)
 {
     u32 currentTaxonomy = taxonomy;
-    AssetTypeId result = Asset_equipmentMap;
+    
+    AssetTypeId result = Asset_standing;
     if(!IsObject(table, taxonomy))
     {
         switch(action)
@@ -1214,6 +1215,10 @@ inline AssetTypeId GetAssetIDForEntity(Assets* assets, TaxonomyTable* table, u32
                 result = Asset_standing;
             } break;
         }
+    }
+    else
+    {
+        InvalidCodePath;
     }
     
     return result;

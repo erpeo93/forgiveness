@@ -493,8 +493,85 @@ inline void EditorErrorLogClient(char* functionName, char* wasSearching)
 
 
 
-
 #define TAXTABLE_ALLOC(ptr, type) FREELIST_ALLOC(ptr, taxTable_->firstFree##type, PushStruct(taxPool_, type, NoClear())) ZeroStruct(*(ptr));
+inline TaxonomyNode* AddToTaxonomyTree(TaxonomyTree* tree, TaxonomySlot* slot)
+{
+    if(!tree->root)
+    {
+        TaxonomyNode* newNode;
+        TAXTABLE_ALLOC(newNode, TaxonomyNode);
+        newNode->key = 0;
+        tree->root = newNode;
+    }
+    TaxonomyNode* root = tree->root;
+    TaxonomyNode* result = root;
+    
+    u32 currentTaxonomy = 0;
+    TaxonomyNode* current = root;
+    
+    u32 taxonomy = slot->taxonomy;
+    while(currentTaxonomy != taxonomy)
+    {
+        TaxonomySlot* currentSlot = GetSlotForTaxonomy(taxTable_, currentTaxonomy);
+        u32 childTaxonomy = GetChildTaxonomy(currentSlot, taxonomy);
+        
+        
+        if(!current->firstChild)
+        {
+            TaxonomyNode* newNode;
+            TAXTABLE_ALLOC(newNode, TaxonomyNode);
+            newNode->key = childTaxonomy;
+            current->firstChild = newNode;
+        }
+        TaxonomyNode* firstChild = current->firstChild;
+        
+        while(true)
+        {
+            if(firstChild->key == childTaxonomy)
+            {
+                if(childTaxonomy == taxonomy)
+                {
+                    result = firstChild;
+                    break;
+                }
+                else
+                {
+                    current = firstChild;
+                    break;
+                }
+            }
+            else if(!firstChild->next)
+            {
+                TaxonomyNode* newNode;
+                TAXTABLE_ALLOC(newNode, TaxonomyNode);
+                firstChild->next = newNode;
+                
+                newNode->key = childTaxonomy;
+                if(newNode->key == taxonomy)
+                {
+                    result = newNode;
+                }
+                else
+                {
+                    current = newNode;
+                }
+                break;
+            }
+            
+            firstChild = firstChild->next;
+        }
+        
+        currentTaxonomy = childTaxonomy;
+    }
+    
+    return result;
+}
+
+
+
+
+
+
 global_variable EquipmentMapping* currentEquipmentMap_;
 
 inline void CanEquip(char* name, char* leftSlot, char* rightSlot)
@@ -507,13 +584,12 @@ inline void CanEquip(char* name, char* leftSlot, char* rightSlot)
         EquipmentMapping* mapping;
         TAXTABLE_ALLOC(mapping, EquipmentMapping);
         
-        mapping->taxonomy = target->taxonomy;
-        mapping->mapping.multiPart = false;
-        mapping->mapping.left = (SlotName) GetValuePreprocessor(SlotName, leftSlot);
-        mapping->mapping.right = (SlotName) GetValuePreprocessor(SlotName, rightSlot);
+        mapping->multiPart = false;
+        mapping->left = (SlotName) GetValuePreprocessor(SlotName, leftSlot);
+        mapping->right = (SlotName) GetValuePreprocessor(SlotName, rightSlot);
         
-        mapping->next = slot->firstEquipmentMapping;
-        slot->firstEquipmentMapping = mapping;
+        TaxonomyNode* node = AddToTaxonomyTree(&currentSlot_->equipmentMappings, target);
+        node->data.equipmentMapping = mapping;
     }
     else
     {
@@ -531,12 +607,11 @@ inline void CanEquipMultipart(char* name)
         EquipmentMapping* mapping;
         TAXTABLE_ALLOC(mapping, EquipmentMapping);
         
-        mapping->taxonomy = target->taxonomy;
-        mapping->mapping.multiPart = true;
+        mapping->multiPart = true;
         currentEquipmentMap_ = mapping;
         
-        mapping->next = slot->firstEquipmentMapping;
-        slot->firstEquipmentMapping = mapping;
+        TaxonomyNode* node = AddToTaxonomyTree(&currentSlot_->equipmentMappings, target);
+        node->data.equipmentMapping = mapping;
     }
     else
     {
@@ -550,8 +625,8 @@ inline void AddPart(char* slot)
     if(currentEquipmentMap_)
     {
         EquipmentMapping* currentMapping = currentEquipmentMap_;
-        Assert(currentMapping->mapping.slotCount < ArrayCount(currentMapping->mapping.slots));
-        currentMapping->mapping.slots[currentMapping->mapping.slotCount++] = (SlotName) GetValuePreprocessor(SlotName, slot);
+        Assert(currentMapping->slotCount < ArrayCount(currentMapping->slots));
+        currentMapping->slots[currentMapping->slotCount++] = (SlotName) GetValuePreprocessor(SlotName, slot);
     }
 }
 
@@ -971,83 +1046,10 @@ inline void AddActionFlag(char* flagName)
     possibleAction->flags |= flag;
 }
 
-inline TaxonomyNode* AddToTaxonomyTree(TaxonomyTree* tree, TaxonomySlot* slot)
-{
-    if(!tree->root)
-    {
-        TaxonomyNode* newNode;
-        TAXTABLE_ALLOC(newNode, TaxonomyNode);
-        newNode->key = 0;
-        tree->root = newNode;
-    }
-    TaxonomyNode* root = tree->root;
-    TaxonomyNode* result = root;
-    
-    u32 currentTaxonomy = 0;
-    TaxonomyNode* current = root;
-    
-    u32 taxonomy = slot->taxonomy;
-    while(currentTaxonomy != taxonomy)
-    {
-        TaxonomySlot* currentSlot = GetSlotForTaxonomy(taxTable_, currentTaxonomy);
-        u32 childTaxonomy = GetChildTaxonomy(currentSlot, taxonomy);
-        
-        
-        if(!current->firstChild)
-        {
-            TaxonomyNode* newNode;
-            TAXTABLE_ALLOC(newNode, TaxonomyNode);
-            newNode->key = childTaxonomy;
-            current->firstChild = newNode;
-        }
-        TaxonomyNode* firstChild = current->firstChild;
-        
-        while(true)
-        {
-            if(firstChild->key == childTaxonomy)
-            {
-                if(childTaxonomy == taxonomy)
-                {
-                    result = firstChild;
-                    break;
-                }
-                else
-                {
-                    current = firstChild;
-                    break;
-                }
-            }
-            else if(!firstChild->next)
-            {
-                TaxonomyNode* newNode;
-                TAXTABLE_ALLOC(newNode, TaxonomyNode);
-                firstChild->next = newNode;
-                
-                newNode->key = childTaxonomy;
-                if(newNode->key == taxonomy)
-                {
-                    result = newNode;
-                }
-                else
-                {
-                    current = newNode;
-                }
-                break;
-            }
-            
-            firstChild = firstChild->next;
-        }
-        
-        currentTaxonomy = childTaxonomy;
-    }
-    
-    return result;
-}
 
 inline void AddTarget(char* name)
 {
     TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    
     if(target)
     {
         PlayerPossibleAction* possibleAction = currentSlot_->firstPossibleAction;
@@ -2869,6 +2871,24 @@ inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer,
 }
 #endif
 
+internal void FreeEquipmentTreeNodeRecursive(TaxonomyNode* root)
+{
+    if(root)
+    {
+        for(TaxonomyNode* child = root->firstChild; child; child = child->next)
+        {
+            FreeEquipmentTreeNodeRecursive(child);
+        }
+        
+        if(root->data.equipmentMapping)
+        {
+            FREELIST_DEALLOC(root->data.equipmentMapping, taxTable_->firstFreeEquipmentMapping);
+        }
+        
+        FREELIST_DEALLOC(root, taxTable_->firstFreeTaxonomyNode);
+    }
+}
+
 internal void Import(TaxonomySlot* slot, EditorElement* root)
 {
     currentSlot_ = slot;
@@ -2903,7 +2923,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     
     else if(StrEqual(name, "equipmentMappings"))
     {
-        FREELIST_FREE(currentSlot_->firstEquipmentMapping, EquipmentMapping, taxTable_->firstFreeEquipmentMapping);
+        FreeEquipmentTreeNodeRecursive(currentSlot_->equipmentMappings.root);
+        currentSlot_->equipmentMappings.root = 0;
+        
         EditorElement* singleSlot = GetList(root, "singleSlot");
         EditorElement* doubleSlot = GetList(root, "doubleSlot");
         EditorElement* multiPart = GetList(root, "multiPart");

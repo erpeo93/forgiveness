@@ -33,6 +33,16 @@ struct BlendResult
     AssAlterations assAlterations[32];
     
     SpriteInfo sprites[32];
+    
+    
+    
+    
+    u32 lastAssIndexForBone[32];
+    u32 equipmentBoneCount[32];
+    
+    
+    PieceAss equipment[32][8];
+    SpriteInfo equipmentSprites[32][8];
 };
 
 struct PieceResult
@@ -56,6 +66,8 @@ struct EquipmentAnimationSlot
     b32 drawOpened;
     b32 container;
     
+    ObjectLayout* layout;
+    VisualProperties* properties;
     u32 equipmentSlotIndex;
     u32 taxonomy;
     u64 recipeIndex;
