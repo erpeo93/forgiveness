@@ -37,9 +37,7 @@ struct BlendResult
     
     
     
-    u32 lastAssIndexForBone[32];
-    u32 equipmentBoneCount[32];
-    
+    u32 equipmentAssCount[32];
     
     PieceAss equipment[32][8];
     SpriteInfo equipmentSprites[32][8];
@@ -66,8 +64,8 @@ struct EquipmentAnimationSlot
     b32 drawOpened;
     b32 container;
     
-    ObjectLayout* layout;
-    VisualProperties* properties;
+    //ObjectLayout* layout;
+    //VisualProperties* properties;
     u32 equipmentSlotIndex;
     u32 taxonomy;
     u64 recipeIndex;
@@ -199,9 +197,6 @@ struct AnimationFixedParams
     EquipInfo oldFocusSlots; 
     i32 currentObjectIndex;
     
-    u32 equipmentCount;
-    u32 maxEquipmentCount;
-    EquipmentAnimationSlot* equipment;
     u8 objectCount;
     Object* objects;
     
