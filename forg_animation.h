@@ -64,21 +64,17 @@ struct EquipmentAnimationSlot
     b32 drawOpened;
     b32 container;
     
-    //ObjectLayout* layout;
-    //VisualProperties* properties;
-    u32 equipmentSlotIndex;
+    u64 ID;
+    struct ObjectLayout* layout;
     u32 taxonomy;
     u64 recipeIndex;
     r32 status;
-    u64 parentStringHashID;
-    u64 stringHashID;
     SlotPlacement placement;
 };
 
 struct AnimationOutput
 {
     u64 playedAnimationNameHash;
-    
     EquipInfo nearestCompatibleSlot;
     EquipInfo focusSlots;
     i32 focusObjectIndex;
@@ -87,6 +83,7 @@ struct AnimationOutput
     b32 entityPresent;
     Vec3 entityOffset;
     r32 entityAngle;
+    
     
     i16 hotBoneIndex;
     i16 hotAssIndex;
@@ -218,6 +215,7 @@ struct AnimationFixedParams
     struct ClientEntity* draggingEntity;
     u64 draggingEntityHashIDs[4];
     
+    EquipmentAnimationSlot equipment[Slot_Count];
     Vec4 defaultColoration;
     
     AnimationOutput* output;

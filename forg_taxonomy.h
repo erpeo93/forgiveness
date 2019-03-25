@@ -68,30 +68,18 @@ struct AttributeSlot
     r32 valueR32;
 };
 
-// NOTE(Leonardo): this is used only for "multipart" things that need to "follow" the animations like pants, body armours, ecc
-struct TaxonomyPart
-{
-    SlotName slot;
-    u64 stringHashID;
-    
-    union
-    {
-        TaxonomyPart* next;
-        TaxonomyPart* nextFree;
-    };
-};
 
 struct EquipmentPiece
 {
-    u32 boneIndex;
+    u32 assIndex;
     u64 stringHashID;
     u8 index;
-    Vec2 boneOffset;
+    Vec2 assOffset;
     r32 zOffset;
     r32 angle;
     
+    Vec2 scale;
     Vec2 pivot;
-    u32 flags;
     
     union
     {
@@ -350,7 +338,6 @@ struct TaxonomySlot
     
 #ifndef FORG_SERVER
     PlantParams* plantParams;
-    TaxonomyPart* firstPart;  
     VisualLabel* firstVisualLabel;
     AnimationEffect* firstAnimationEffect;
     TaxonomySound* firstSound;
@@ -481,6 +468,7 @@ struct TaxonomyTable
     
     
     EquipmentMapping* firstFreeEquipmentMapping;
+    EquipmentPiece* firstFreeEquipmentPiece;
     ConsumeMapping* firstFreeConsumeMapping;
     TaxonomyNode* firstFreeTaxonomyNode;
     MemSynthOption* firstFreeMemSynthOption;
@@ -493,7 +481,6 @@ struct TaxonomyTable
     
 #ifndef FORG_SERVER
     PlantParams* firstFreePlantParams;
-    TaxonomyPart* firstFreePart;
     VisualLabel* firstFreeVisualLabel;
     AnimationEffect* firstFreeAnimationEffect;
     TaxonomySound* firstFreeTaxonomySound;

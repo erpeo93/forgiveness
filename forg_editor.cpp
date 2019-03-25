@@ -574,7 +574,7 @@ inline TaxonomyNode* AddToTaxonomyTree(TaxonomyTree* tree, TaxonomySlot* slot)
 
 global_variable EquipmentMapping* currentEquipmentMap_;
 
-inline void CanEquip(char* name, char* leftSlot, char* rightSlot)
+inline void CanEquip(char* name, char* leftSlot, char* rightSlot, u32 assIndex, u8 index, Vec2 assOffset, r32 zOffset, r32 angle, Vec2 scale, Vec2 pivot)
 {
     TaxonomySlot* slot = currentSlot_;
     TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
@@ -587,6 +587,22 @@ inline void CanEquip(char* name, char* leftSlot, char* rightSlot)
         mapping->multiPart = false;
         mapping->left = (SlotName) GetValuePreprocessor(SlotName, leftSlot);
         mapping->right = (SlotName) GetValuePreprocessor(SlotName, rightSlot);
+        
+        
+        EquipmentPiece* piece;
+        TAXTABLE_ALLOC(piece, EquipmentPiece);
+        
+        piece->assIndex = assIndex;
+        piece->stringHashID = StringHash(name);
+        piece->index = index;
+        piece->assOffset = assOffset;
+        piece->zOffset = zOffset;
+        piece->angle = angle;
+        piece->scale = scale;
+        piece->pivot = pivot;
+        piece->next = 0;
+        
+        mapping->firstEquipmentPiece = piece;
         
         TaxonomyNode* node = AddToTaxonomyTree(&currentSlot_->equipmentMappings, target);
         node->data.equipmentMapping = mapping;
@@ -2875,15 +2891,22 @@ internal void FreeEquipmentTreeNodeRecursive(TaxonomyNode* root)
 {
     if(root)
     {
-        for(TaxonomyNode* child = root->firstChild; child; child = child->next)
+        for(TaxonomyNode* child = root->firstChild; child;)
         {
+            TaxonomyNode* next = child->next;
             FreeEquipmentTreeNodeRecursive(child);
+            child = next;
         }
+        root->firstChild = 0;
         
         if(root->data.equipmentMapping)
         {
+            FREELIST_FREE(root->data.equipmentMapping->firstEquipmentPiece, EquipmentPiece,  taxTable_->firstFreeEquipmentPiece);
+            root->data.equipmentMapping->firstEquipmentPiece = 0;
+            
             FREELIST_DEALLOC(root->data.equipmentMapping, taxTable_->firstFreeEquipmentMapping);
         }
+        root->data.equipmentMapping = 0;
         
         FREELIST_DEALLOC(root, taxTable_->firstFreeTaxonomyNode);
     }
@@ -2935,23 +2958,36 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         {
             char* equipName = GetValue(singleSlot, "equipment");
             char* slotName = GetValue(singleSlot, "slot");
-            CanEquip(equipName, slotName, slotName);
+            
+            u32 assIndex = ToU32(GetValue(singleSlot, "assIndex"));
+            u8 index = ToU8(GetValue(singleSlot, "index"));
+            Vec2 assOffset = ToV2(GetStruct(singleSlot, "assOffset"));
+            r32 zOffset = ToR32(GetValue(singleSlot, "zOffset"));
+            r32 angle = ToR32(GetValue(singleSlot, "angle"));
+            Vec2 scale = ToV2(GetStruct(singleSlot, "scale"));
+            Vec2 pivot = ToV2(GetStruct(singleSlot, "pivot"));
+            CanEquip(equipName, slotName, slotName, assIndex, index, assOffset, zOffset, angle, scale, pivot);
             
             singleSlot = singleSlot->next;
         }
         
         while(doubleSlot)
         {
+            
+#if 0            
             char* equipName = GetValue(doubleSlot, "equipment");
             char* slotName = GetValue(doubleSlot, "slot");
             char* slotName2 = GetValue(doubleSlot, "slot2");
             CanEquip(equipName, slotName, slotName2);
+#endif
             
             doubleSlot = doubleSlot->next;
         }
         
         while(multiPart)
         {
+            
+#if 0            
             char* equipName = GetValue(multiPart, "equipment");
             CanEquipMultipart(equipName);
             
@@ -2962,9 +2998,11 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 AddPart(partName);
                 part = part->next;
             }
+#endif
             
             multiPart = multiPart->next;
         }
+        
     }
     
     
