@@ -1041,11 +1041,12 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     
     
     u16 maxConnectionCount = 64;
-    NetworkConnection* connections = PushArray(&server->networkPool, NetworkConnection, maxConnectionCount);
+    NetworkConnection* connections = PushArray(&server->networkPool, NetworkConnection, maxConnectionCount, NoClear());
     Assert(connections);
     for(u16 connectionIndex = 0; connectionIndex < maxConnectionCount; ++connectionIndex)
     {
         NetworkConnection* connection = connections + connectionIndex;
+        connection->connected = false;
         u32 recvBufferSize = MegaBytes(3);
         connection->appRecv = ForgAllocateNetworkBuffer(&server->networkPool, recvBufferSize);
     }

@@ -1416,7 +1416,8 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             
             if(slot->firstDefaultLayout)
             {
-                params = Crafting(GetNextUInt32(&server->instantiateSequence));
+                u64 recipeIndex = GetNextUInt32(&server->instantiateSequence);
+                params = Crafting(recipeIndex);
             }
             AddRandomEntity(region, seq, entity->P + request.offset, request.taxonomy, params);
         } break;

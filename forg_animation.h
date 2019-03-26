@@ -22,6 +22,30 @@ struct AssAlterations
     Vec4 color;
 };
 
+
+struct VisualComponent
+{
+    u64 stringHashID;
+    u8 index;
+    
+    u32 labelCount;
+    VisualLabel labels[8];
+};
+
+struct ComponentsProperties
+{
+    u32 componentCount;
+    VisualComponent components[8];
+};
+
+struct EquipmentAnimationPiece
+{
+    PieceAss ass;
+    SpriteInfo sprite;
+    i16 status;
+    struct ComponentsProperties* properties;
+};
+
 struct BlendResult
 {
     u32 boneCount;
@@ -38,9 +62,7 @@ struct BlendResult
     
     
     u32 equipmentAssCount[32];
-    
-    PieceAss equipment[32][8];
-    SpriteInfo equipmentSprites[32][8];
+    EquipmentAnimationPiece equipment[32][8];
 };
 
 struct PieceResult
@@ -59,17 +81,11 @@ struct PieceResult
 
 struct EquipmentAnimationSlot
 {
-    b32 ghost;
-    b32 dontRender;
-    b32 drawOpened;
-    b32 container;
-    
     u64 ID;
     struct ObjectLayout* layout;
     u32 taxonomy;
-    u64 recipeIndex;
-    r32 status;
-    SlotPlacement placement;
+    i16 status;
+    ComponentsProperties properties;
 };
 
 struct AnimationOutput
@@ -219,21 +235,6 @@ struct AnimationFixedParams
     Vec4 defaultColoration;
     
     AnimationOutput* output;
-};
-
-struct VisualComponent
-{
-    u64 stringHashID;
-    u8 index;
-    
-    u32 labelCount;
-    VisualLabel labels[8];
-};
-
-struct ComponentsProperties
-{
-    u32 componentCount;
-    VisualComponent components[8];
 };
 
 struct AnimationVolatileParams

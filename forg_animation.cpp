@@ -453,8 +453,9 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
                         Assert(blended->equipmentAssCount[assIndex] < ArrayCount(blended->equipment[0]));
                         u32 equipmentAssIndex = blended->equipmentAssCount[assIndex]++;
                         
-                        PieceAss* destAss = blended->equipment[assIndex] + equipmentAssIndex;
-                        SpriteInfo* destSprite = blended->equipmentSprites[assIndex] + equipmentAssIndex;
+                        EquipmentAnimationPiece* dest = blended->equipment[assIndex] + equipmentAssIndex;
+                        PieceAss* destAss = &dest->ass;
+                        SpriteInfo* destSprite = &dest->sprite;
                         
                         *destAss = {};
                         *destSprite = {};
@@ -479,6 +480,9 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
                         destSprite->stringHashID = piece->componentHashID;
                         destSprite->index = piece->index;
                         destSprite->flags = 0;
+                        
+                        dest->status = slot->status;
+                        dest->properties = &slot->properties;
                     }
                 }
             }
@@ -675,7 +679,6 @@ inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, Ob
     
     BoneAlterations* boneAlt = output->boneAlterations + 0;
     boneAlt->valid = false;
-    
     
     for(LayoutPiece* source = layout->firstPiece; source; source = source->next)
     {
@@ -963,7 +966,6 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                 }
             }
 #endif
-            
         }
         else if(sprite->flags & Sprite_EmptySpace)
         {
@@ -1304,11 +1306,11 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         {
             u32 equipmentAssIndex = progressiveEquipmentIndex + equipmentIndex;
             
-            PieceAss* equipmentAss = blended->equipment[assIndex] + equipmentAssIndex;
-            SpriteInfo* spriteInfo = blended->equipmentSprites[assIndex] + equipmentAssIndex;
-            
-            i16 status = I16_MAX;
-            ComponentsProperties* properties = 0;
+            EquipmentAnimationPiece* equipment = blended->equipment[assIndex] + equipmentAssIndex;
+            PieceAss* equipmentAss = &equipment->ass;
+            SpriteInfo* spriteInfo = &equipment->sprite;
+            i16 status = equipment->status;
+            ComponentsProperties* properties = equipment->properties;
             
             switch(operation)
             {
@@ -1326,7 +1328,6 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                     pieceParams.color = statusColor;
                     
                     pieceParams.properties = properties;
-                    
                     
 #if 0                    
                     if(slot->ghost || SlotIsOnFocus(input, slot))
@@ -1657,23 +1658,18 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
                 TaxonomySlot* taxonomySlot = GetSlotForTaxonomy(worldMode->table, taxonomy);
                 
                 EquipmentAnimationSlot* dest = input->equipment + slotCount++;
-                dest->ghost = false;
-                dest->dontRender = false;
-                dest->drawOpened = false;
-                dest->container = (objectEntity->objects.maxObjectCount > 0);
                 
-                
+                b32 drawOpened = false;
                 if(worldMode->UI->mode == UIMode_Equipment)
                 {
-                    dest->drawOpened = (objectEntityID == worldMode->UI->lockedInventoryID1 ||
-                                        objectEntityID == worldMode->UI->lockedInventoryID2);
+                    drawOpened = (objectEntityID == worldMode->UI->lockedInventoryID1 ||
+                                  objectEntityID == worldMode->UI->lockedInventoryID2);
                 }
                 dest->ID = objectEntityID;
                 dest->layout = GetLayout(worldMode->table, taxonomy, false, false);
                 dest->taxonomy = taxonomy;
-                dest->recipeIndex = recipeIndex;
-                dest->status = objectEntity->status;
-                dest->placement = GetSlotPlacement((SlotName)slotIndex);
+                dest->status = (i16) objectEntity->status;
+                GetVisualProperties(&dest->properties, worldMode->table, taxonomy, recipeIndex, false, drawOpened);
             }
         }
     }
