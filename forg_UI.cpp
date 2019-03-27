@@ -862,7 +862,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             {
                                 UIButton equipButton = UIBtn(UI, GetCenter(structBounds) + V2(20, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "try");
                                                                 
-                                UIButtonInteraction(&equipButton, UIEquipInAnimationWidgetInteraction(UI_Trigger, father, root));
+                                UIButtonInteraction(&equipButton, UIEquipInAnimationWidgetInteraction(UI_Trigger, grandFather, root));
                                 structBounds = Union(structBounds, UIDrawButton(UI, input, &equipButton).bounds);
                             }
                             
@@ -1163,7 +1163,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         Vec3 animationBase = P;
                         animationBase.xy += Hadamart(info.originOffset, animationScale);
                         
-                        AnimationOutput output =  PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 1, {true, showBones, !showBitmaps, showPivots, timer, nameHashID, UI->fakeEquipmentInWidget});
+                        AnimationOutput output =  PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 1, {true, showBones, !showBitmaps, showPivots, timer, nameHashID, UI->fakeEquipment});
                         
                         if(output.hotBoneIndex >= 0)
                         {
@@ -2091,10 +2091,10 @@ inline void UIOverdrawEssences(UIState* UI)
     }
 }
 
-inline EquipInfo PossibleToEquip(TaxonomyTable* table, ClientEntity* entity, Object* object, SlotPlacement placement)
+inline EquipInfo PossibleToEquip(TaxonomyTable* table, ClientEntity* entity, Object* object)
 {
     u32 objectTaxonomy = GetObjectTaxonomy(table, object);
-    EquipInfo result = PossibleToEquip_(table, entity->taxonomy, entity->equipment, objectTaxonomy, object->status, SlotPlacement_Both);
+    EquipInfo result = PossibleToEquip_(table, entity->taxonomy, entity->equipment, objectTaxonomy, object->status);
     
     return result;
 }
@@ -2119,7 +2119,7 @@ internal void UIHandleContainer(UIState* UI, ClientEntity* container, PlatformIn
                     GetUIName(objectName, sizeof(objectName), table, focusObject);
                     u32 taxonomy = GetObjectTaxonomy(table, focusObject);
                     
-                    EquipInfo equipInfo = PossibleToEquip(table, UI->player, focusObject, SlotPlacement_Both);
+                    EquipInfo equipInfo = PossibleToEquip(table, UI->player, focusObject);
                     PickInfo pickInfo = PossibleToPick(UI->worldMode, table, UI->player, taxonomy, false);
                     EntityAction consumeAction = CanConsume(table, UI->player->taxonomy, taxonomy);
                     

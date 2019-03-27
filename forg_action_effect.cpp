@@ -468,7 +468,7 @@ inline b32 PlayerCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* tar
             if(possibleAction->flags & CanDoAction_EquipmentSlot)
             {
                 CreatureComponent* creature = Creature(region, actor);
-                EquipInfo info = PossibleToEquip_(taxTable, actor->taxonomy, creature->equipment, targetSlot->taxonomy, (i16) target->status, SlotPlacement_Both);
+                EquipInfo info = PossibleToEquip_(taxTable, actor->taxonomy, creature->equipment, targetSlot->taxonomy, (i16) target->status);
                 if(!info.slotCount)
                 {
                     canDoAction = false;

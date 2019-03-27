@@ -34,34 +34,6 @@ printTable(noPrefix) enum SlotName
     Slot_Count,
 };
 
-enum SlotPlacement
-{
-    SlotPlacement_None,
-    SlotPlacement_Left,
-    SlotPlacement_Right,
-    SlotPlacement_Both,
-};
-
-inline SlotPlacement GetSlotPlacement(SlotName slot)
-{
-    SlotPlacement result = SlotPlacement_None;
-    
-    switch(slot)
-    {
-        case Slot_BellySideRight:
-        {
-            result = SlotPlacement_Right;
-        } break;
-        
-        case Slot_BellySideLeft:
-        {
-            result = SlotPlacement_Left;
-        } break;
-    }
-    
-    return result;
-}
-
 struct EquipmentSlot
 {
     u64 ID;

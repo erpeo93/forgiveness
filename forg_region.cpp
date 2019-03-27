@@ -620,7 +620,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                     Object* object = objects->objects + equip->sourceObjectIndex;
                     
                     u32 objectTaxonomy = GetObjectTaxonomy(region->taxTable, object);
-                    EquipInfo info = PossibleToEquip(region, entity, object, SlotPlacement_Both);
+                    EquipInfo info = PossibleToEquip(region, entity, object);
                     if(info.slotCount)
                     {
                         u64 ID = AddEntity(region, entity->P, objectTaxonomy, object->recipeIndex, EquippedBy(entity->identifier, object->quantity, object->status, 0));
@@ -661,30 +661,10 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 SlotName desired = (SlotName) equipDragging->slotIndex;
                 Assert(desired > Slot_None);
                 
-                if(false)
+                
+                for(EquipmentLayout* layout = slotPresent.firstEquipmentLayout; layout; layout = layout->next)
                 {
-                    u64 ID = AddEntity(region, entity->P, dragging->taxonomy, dragging->recipeIndex, EquippedBy(entity->identifier, (u16) dragging->quantity, (u16) dragging->status, objects));
-                    for(u32 slotIndex = 0; slotIndex < slotPresent.slotCount; ++slotIndex)
-                    {
-                        EquipmentSlot* equipmentSlot = creature->equipment + slotPresent.slots[slotIndex];
-                        if(!equipmentSlot->ID)
-                        {
-                            equipmentSlot->ID = ID;
-                        }
-                        else
-                        {
-                            InvalidCodePath;
-                        }
-                        
-                        creature->draggingEntity = 0;
-                        player->draggingEntity.taxonomy = 0;
-                    }
-                    
-                    SendCompleteContainerInfoIdentifier(region, player, ID, dragging);
-                }
-                else
-                {
-                    if(desired == slotPresent.left || desired == slotPresent.right)
+                    if(desired == layout->slot)
                     {
                         EquipmentSlot* equipmentSlot = creature->equipment + desired;
                         if(!equipmentSlot->ID)
@@ -700,10 +680,6 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                         {
                             InvalidCodePath;
                         }
-                    }
-                    else
-                    {
-                        InvalidCodePath;
                     }
                 }
             }

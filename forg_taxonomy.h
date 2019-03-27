@@ -90,6 +90,8 @@ struct EquipmentAss
 struct EquipmentLayout
 {
     u64 layoutHashID;
+    SlotName slot;
+    
     EquipmentAss* firstEquipmentAss;
     
     union
@@ -102,22 +104,6 @@ struct EquipmentLayout
 struct EquipmentMapping
 {
     EquipmentLayout* firstEquipmentLayout;
-    
-    union
-    {
-        struct
-        {
-            SlotName left;
-            SlotName right;
-        };
-        
-        struct
-        {
-            u32 slotCount;
-            SlotName slots[4];
-        };
-    };
-    
     
     union
     {

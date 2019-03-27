@@ -608,7 +608,7 @@ struct UIInteractionAction
         
         struct
         {
-            UIMemoryReference parent;
+            UIMemoryReference grandParent;
             UIMemoryReference root;
         };
         
@@ -852,7 +852,7 @@ struct UIState
     UndoRedoCommand* current;
     b32 canRedo;
     
-    ClientEntity fakeEquipmentInWidget[Slot_Count];
+    ClientEntity fakeEquipment[Slot_Count];
     
     r32 backspacePressedTime;
 };

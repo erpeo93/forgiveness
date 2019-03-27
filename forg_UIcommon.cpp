@@ -914,13 +914,13 @@ inline UIInteraction UIPlaySoundEventInteraction(u32 flags, u64 eventNameHash)
     return result;
 }
 
-inline UIInteraction UIEquipInAnimationWidgetInteraction(u32 flags, EditorElement* parent, EditorElement* root)
+inline UIInteraction UIEquipInAnimationWidgetInteraction(u32 flags, EditorElement* grandParent, EditorElement* root)
 {
     UIInteraction result = {};
     UIInteractionAction* dest = UIGetFreeAction(&result);
     dest->type = UIInteractionAction_EquipInAnimationWidget;
     dest->flags = flags;
-    dest->parent = ColdPointer(parent);
+    dest->grandParent = ColdPointer(grandParent);
     dest->root = ColdPointer(root);
     
     return result;
@@ -1403,50 +1403,69 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                     } break;
                     
                     case UIInteractionAction_EquipInAnimationWidget:
-                    {
-                        InvalidCodePath;
-#if 0                        
-                        EditorElement* parent = (EditorElement*) GetValue(action->parent, &interaction->data);
+                    {               
+                        EditorElement* grandParent = (EditorElement*) GetValue(action->grandParent, &interaction->data);
                         EditorElement* root = (EditorElement*) GetValue(action->root, &interaction->data);
                         
-                        EquipmentSlot slots[Slot_Count];
+                        b32 slotUsed[Slot_Count] = {};;
                         
-                        char* slot = GetValue(parent, "slot");
-                        char* taxonomyName = GetValue(parent, "equipment");
-                        u32 taxonomy = NORUNTIMEGetTaxonomySlotByName(UI->table, taxonomyName);
+                        char* slot = GetValue(grandParent, "slot");
+                        u8 slotInUse = SafeTruncateToU8(GetValuePreprocessor(SlotName, slot));
+                        slotUsed[slotInUse] = true;
+                        char* taxonomyName = GetValue(grandParent, "equipment");
                         
-                        char* layoutName = GetValue(root, "layoutName");
-                        u64 layoutHashID = StringHash(layoutName);
+                        TaxonomySlot* taxonomySlot =NORUNTIMEGetTaxonomySlotByName(UI->table, taxonomyName);
                         
-                        u64 recipeIndex = 0;
-                        while(true)
+                        if(taxonomySlot)
                         {
-                            GetProperties();
-                            if(layoutMatches())
+                            u32 taxonomy = taxonomySlot->taxonomy;
+                            char* layoutName = GetValue(root, "layoutName");
+                            u64 layoutHashID = StringHash(layoutName);
+                            
+                            u64 recipeIndex = 0;
+                            while(true)
                             {
-                                break;
+                                ObjectLayout* layout = GetLayout(UI->table, taxonomy, false, false);
+                                if(layout->nameHashID == layoutHashID)
+                                {
+                                    break;
+                                }
+                                
+                                ++recipeIndex;
                             }
-                        }
-                        
-                        for(everySlot)
-                        {
-                            u32 toDeleteTaxonomy = fakeEquipment[slotIndex].taxonomy;
-                            u64 toDeleteRecipeIndex = fakeEquipment[slotIndex].recipeIndex;
+                            
+                            
+                            u64 ID = 1;
                             
                             for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
                             {
-                                if()
+                                if(UI->fakeEquipment[slotIndex].identifier >= ID)
                                 {
-                                    fakeEquipment[toDeleteIndex].taxonomy = 0;
-                                    fakeEquipment[toDeleteIndex].recipeIndex = 0;
+                                    ID = UI->fakeEquipment[slotIndex].identifier + 1;
                                 }
                             }
                             
-                            fakeEquipment[slotIndex].taxonomy = taxonomy;
-                            fakeEquipment[slotIndex].recipeIndex = recipeIndex;
+                            for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
+                            {
+                                if(slotUsed[slotIndex])
+                                {
+                                    u64 toDeleteID = UI->fakeEquipment[slotIndex].identifier;
+                                    
+                                    for(u32 toDeleteIndex = 0; toDeleteIndex < Slot_Count; ++toDeleteIndex)
+                                    {
+                                        if(UI->fakeEquipment[toDeleteIndex].identifier == toDeleteID)
+                                        {
+                                            UI->fakeEquipment[toDeleteIndex].taxonomy = 0;
+                                            UI->fakeEquipment[toDeleteIndex].identifier = 0;
+                                        }
+                                    }
+                                    
+                                    UI->fakeEquipment[slotIndex].taxonomy = taxonomy;
+                                    UI->fakeEquipment[slotIndex].recipeIndex = recipeIndex;
+                                    UI->fakeEquipment[slotIndex].identifier = ID;
+                                }
+                            }
                         }
-#endif
-                        
                     } break;
                     
                     case UIInteractionAction_ShowLabeledBitmap:

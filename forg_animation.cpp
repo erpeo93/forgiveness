@@ -1680,48 +1680,58 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
     for(u32 slotIndex = Slot_None; slotIndex < Slot_Count; ++slotIndex)
     {
         input->equipment[slotIndex] = {};
-        u64 objectEntityID = entityC->equipment[slotIndex].ID;
-        if(objectEntityID)
+        if(fakeEquipment)
         {
-            ClientEntity* objectEntity = 0;
-            if(fakeEquipment)
+            ClientEntity* objectEntity = fakeEquipment + slotIndex;
+            if(objectEntity->taxonomy)
             {
-                objectEntity = fakeEquipment + slotIndex;
-            }
-            else
-            {
-                objectEntity = GetEntityClient(worldMode, objectEntityID);
-            }
-            if(objectEntity)
-            {
-                u32 taxonomy;
-                u64 recipeIndex;
-                if(objectEntityID == 0xffffffffffffffff)
-                {
-                    taxonomy = entityC->prediction.taxonomy;
-                    recipeIndex = entityC->prediction.recipeIndex;
-                }
-                else
-                {
-                    taxonomy = objectEntity->taxonomy;
-                    recipeIndex = objectEntity->recipeIndex;
-                    
-                }
-                
-                TaxonomySlot* taxonomySlot = GetSlotForTaxonomy(worldMode->table, taxonomy);
                 EquipmentAnimationSlot* dest = input->equipment + slotCount++;
-                
                 b32 drawOpened = false;
-                if(worldMode->UI->mode == UIMode_Equipment)
+                
+                dest->ID = objectEntity->identifier;
+                dest->layout = GetLayout(worldMode->table, objectEntity->taxonomy, false, false);
+                dest->taxonomy = objectEntity->taxonomy;
+                dest->status = I16_MAX;
+                GetVisualProperties(&dest->properties, worldMode->table, objectEntity->taxonomy, objectEntity->recipeIndex, false, drawOpened);
+            }
+        }
+        else
+        {
+            u64 objectEntityID = entityC->equipment[slotIndex].ID;
+            if(objectEntityID)
+            {
+                ClientEntity* objectEntity = 0;
+                objectEntity = GetEntityClient(worldMode, objectEntityID);
+                
+                if(objectEntity)
                 {
-                    drawOpened = (objectEntityID == worldMode->UI->lockedInventoryID1 ||
-                                  objectEntityID == worldMode->UI->lockedInventoryID2);
+                    u32 taxonomy;
+                    u64 recipeIndex;
+                    if(objectEntityID == 0xffffffffffffffff)
+                    {
+                        taxonomy = entityC->prediction.taxonomy;
+                        recipeIndex = entityC->prediction.recipeIndex;
+                    }
+                    else
+                    {
+                        taxonomy = objectEntity->taxonomy;
+                        recipeIndex = objectEntity->recipeIndex;
+                        
+                    }
+                    
+                    EquipmentAnimationSlot* dest = input->equipment + slotCount++;
+                    b32 drawOpened = false;
+                    if(worldMode->UI->mode == UIMode_Equipment)
+                    {
+                        drawOpened = (objectEntityID == worldMode->UI->lockedInventoryID1 ||
+                                      objectEntityID == worldMode->UI->lockedInventoryID2);
+                    }
+                    dest->ID = objectEntityID;
+                    dest->layout = GetLayout(worldMode->table, taxonomy, false, false);
+                    dest->taxonomy = taxonomy;
+                    dest->status = (i16) objectEntity->status;
+                    GetVisualProperties(&dest->properties, worldMode->table, taxonomy, recipeIndex, false, drawOpened);
                 }
-                dest->ID = objectEntityID;
-                dest->layout = GetLayout(worldMode->table, taxonomy, false, false);
-                dest->taxonomy = taxonomy;
-                dest->status = (i16) objectEntity->status;
-                GetVisualProperties(&dest->properties, worldMode->table, taxonomy, recipeIndex, false, drawOpened);
             }
         }
     }
@@ -1848,7 +1858,7 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
     
     AnimationFixedParams input;
     
-    InitializeAnimationInputOutput(&input, &result, worldMode, entityC, timeToAdvance);
+    InitializeAnimationInputOutput(&input, &result, worldMode, entityC, timeToAdvance, debugParams.fakeEquipment);
     input.debug = debugParams;
     
     AnimationVolatileParams params;

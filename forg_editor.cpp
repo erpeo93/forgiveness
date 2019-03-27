@@ -572,7 +572,7 @@ inline TaxonomyNode* AddToTaxonomyTree(TaxonomyTree* tree, TaxonomySlot* slot)
 
 
 
-inline EquipmentMapping* AddEquipmentMapping(char* slotName, char* equipmentName)
+inline EquipmentMapping* AddEquipmentMapping(char* equipmentName)
 {
     TaxonomySlot* slot = currentSlot_;
     TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, equipmentName);
@@ -582,8 +582,6 @@ inline EquipmentMapping* AddEquipmentMapping(char* slotName, char* equipmentName
     {
         EquipmentMapping* mapping;
         TAXTABLE_ALLOC(mapping, EquipmentMapping);
-        mapping->left = (SlotName) GetValuePreprocessor(SlotName, slotName);
-        mapping->right = (SlotName) GetValuePreprocessor(SlotName, slotName);
         
         TaxonomyNode* node = AddToTaxonomyTree(&currentSlot_->equipmentMappings, target);
         node->data.equipmentMapping = mapping;
@@ -2944,17 +2942,19 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         EditorElement* singleSlot = root->firstInList;
         while(singleSlot)
         {
-            char* slotName = GetValue(singleSlot, "slot");
             char* equipmentName = GetValue(singleSlot, "equipment");
-            EquipmentMapping* mapping = AddEquipmentMapping(slotName, equipmentName);
+            EquipmentMapping* mapping = AddEquipmentMapping(equipmentName);
             
             EditorElement* layouts = GetList(singleSlot, "layouts");
             while(layouts)
             {
                 char* layoutName = GetValue(layouts, "layoutName");
+                char* slotName = GetValue(layouts, "slot");
+                
                 EquipmentLayout* equipmentLayout;
                 TAXTABLE_ALLOC(equipmentLayout, EquipmentLayout);
                 equipmentLayout->layoutHashID = StringHash(layoutName);
+                equipmentLayout->slot = (SlotName) GetValuePreprocessor(SlotName, slotName);
                 
                 FREELIST_INSERT(equipmentLayout, mapping->firstEquipmentLayout);
                 

@@ -95,7 +95,7 @@ inline EquipmentMapping InventorySlotPresent(TaxonomyTable* table, u32 entityTax
     return result;
 }
 
-inline EquipInfo PossibleToEquip_(TaxonomyTable* table, u32 entityTaxonomy, EquipmentSlot* equipment, u32 objectTaxonomy, i16 status, SlotPlacement placement)
+inline EquipInfo PossibleToEquip_(TaxonomyTable* table, u32 entityTaxonomy, EquipmentSlot* equipment, u32 objectTaxonomy, i16 status)
 {
     EquipInfo result;
     result.slotCount = 0;
@@ -104,74 +104,37 @@ inline EquipInfo PossibleToEquip_(TaxonomyTable* table, u32 entityTaxonomy, Equi
     if(status >= 0)
     {
         EquipmentMapping slotPresent = InventorySlotPresent(table, entityTaxonomy, objectTaxonomy);
-        if(true)
+        for(EquipmentLayout* layout = slotPresent.firstEquipmentLayout; layout; layout = layout->next)
         {
-            if(slotPresent.left || slotPresent.right)
+            if(!equipment[layout->slot].ID)
             {
-                switch(placement)
+                result.slotCount = 1;
+                result.slots[0] = layout->slot;
+            }
+            
+#if 0            
+            if(true)
+            {
+            }
+            else
+            {
+                result.slotCount = slotPresent.slotCount;
+                for(u32 slotIndex = 0; slotIndex < slotPresent.slotCount; ++slotIndex)
                 {
-                    case SlotPlacement_None:
+                    SlotName test = slotPresent.slots[slotIndex];
+                    if(!equipment[test].ID)
                     {
-                        Assert(slotPresent.left == slotPresent.right);
-                        if(!equipment[slotPresent.left].ID)
-                        {
-                            result.slotCount = 1;
-                            result.slots[0] = slotPresent.left;
-                        }
-                    } break;
-                    
-                    case SlotPlacement_Left:
+                        result.slots[slotIndex] = test;
+                    }
+                    else
                     {
-                        if(!equipment[slotPresent.left].ID)
-                        {
-                            result.slotCount = 1;
-                            result.slots[0] = slotPresent.left;
-                        }
-                    } break;
-                    
-                    case SlotPlacement_Right:
-                    {
-                        if(!equipment[slotPresent.right].ID)
-                        {
-                            result.slotCount = 1;
-                            result.slots[0] = slotPresent.right;
-                        }
-                    } break;
-                    
-                    case SlotPlacement_Both:
-                    {
-                        if(!equipment[slotPresent.left].ID)
-                        {
-                            result.slotCount = 1;
-                            result.slots[0] = slotPresent.left;
-                        }
-                        else if(!equipment[slotPresent.right].ID)
-                        {
-                            result.slotCount = 1;
-                            result.slots[0] = slotPresent.right;
-                        }
-                    } break;
-                    
-                    InvalidDefaultCase;
+                        result.slotCount = 0;
+                        break;
+                    }
                 }
             }
-        }
-        else
-        {
-            result.slotCount = slotPresent.slotCount;
-            for(u32 slotIndex = 0; slotIndex < slotPresent.slotCount; ++slotIndex)
-            {
-                SlotName test = slotPresent.slots[slotIndex];
-                if(!equipment[test].ID)
-                {
-                    result.slots[slotIndex] = test;
-                }
-                else
-                {
-                    result.slotCount = 0;
-                    break;
-                }
-            }
+#endif
+            
         }
     }
     
@@ -195,13 +158,13 @@ inline EntityAction CanConsume(TaxonomyTable* table, u32 taxonomy, u32 objectTax
 }
 
 #if FORG_SERVER
-inline EquipInfo PossibleToEquip(SimRegion* region, SimEntity* entity, Object* object, SlotPlacement placement)
+inline EquipInfo PossibleToEquip(SimRegion* region, SimEntity* entity, Object* object)
 {
     Assert(entity->IDs[Component_Creature]);
     
     CreatureComponent* creature = Creature(region, entity);
     u32 objectTaxonomy = GetObjectTaxonomy(region->taxTable, object);
-    EquipInfo result = PossibleToEquip_(region->taxTable, entity->taxonomy, creature->equipment, objectTaxonomy, object->status, placement);
+    EquipInfo result = PossibleToEquip_(region->taxTable, entity->taxonomy, creature->equipment, objectTaxonomy, object->status);
     return result;
 }
 
@@ -338,7 +301,7 @@ internal b32 EquipObject(SimRegion* region, SimEntity* actor, SimEntity* object)
 {
     b32 result = false;
     CreatureComponent* creature = Creature(region, actor);
-    EquipInfo info = PossibleToEquip_(region->taxTable, actor->taxonomy, creature->equipment, object->taxonomy, (i16) object->status, SlotPlacement_Both);
+    EquipInfo info = PossibleToEquip_(region->taxTable, actor->taxonomy, creature->equipment, object->taxonomy, (i16) object->status);
     if(info.slotCount)
     {
         AddFlags(object, Flag_Equipped);
