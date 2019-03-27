@@ -262,10 +262,10 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
     AnimationHeader* header = animation->header;
     
 	u32 animTimeMod;
-	if(input->ortho)
+	if(input->debug.ortho)
 	{
-        Assert(Normalized(input->timeMod));
-		animTimeMod = (u32) (input->timeMod * header->durationMS);
+        Assert(Normalized(input->debug.modTime));
+		animTimeMod = (u32) (input->debug.modTime * header->durationMS);
 	}
 	else
 	{
@@ -405,7 +405,6 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
     for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
     {
         EquipmentAnimationSlot* slot = slots + slotIndex;
-        
         b32 alreadyInserted = false;
         for(u32 slotIndexTest = 0; slotIndexTest < Slot_Count; ++slotIndexTest)
         {
@@ -429,20 +428,16 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
                     {
                         for(LayoutPiece* piece = reference->firstPiece; piece; piece = piece->next)
                         {
+                            u64 componentHashID = piece->componentHashID;
+                            u8 index = piece->index;
+                            b32 decorativePiece = false;
+                            
 							if(piece->parent)
 							{
-                                InvalidCodePath;
-#if 0
-								DoStuff;
-								sstringHash = parent->stringhash;
-								index = parent->index;
-								AddOffset(piece->parentOffset);
-								AddScale();
-								AddAngle();
-#endif
-                                
-                                
-							}
+                                componentHashID = piece->parent->componentHashID;
+								index = piece->parent->index;
+                                decorativePiece = true;
+                            }
                             
                             for(EquipmentAss* eq = layout->firstEquipmentAss; eq; eq = eq->next)
                             {
@@ -450,7 +445,7 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
                                 PieceAss* ass = blended->ass + assIndex;
                                 Bone* parentBone = blended->bones + ass->boneID;
                                 
-                                if(eq->index == 0xff || (eq->stringHashID == piece->componentHashID && eq->index == piece->index))
+                                if(eq->index == 0xff || (eq->stringHashID == componentHashID && eq->index == index))
                                 {
                                     Assert(blended->equipmentAssCount[assIndex] < ArrayCount(blended->equipment[0]));
                                     u32 equipmentAssIndex = blended->equipmentAssCount[assIndex]++;
@@ -467,23 +462,49 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
                                     destAss->angle = ass->angle + eq->angle;
                                     destAss->scale = Hadamart(ass->scale, eq->scale);
                                     
-                                    Vec2 layoutOffset = {};
+                                    r32 zOffset = 0;
+                                    r32 angle = 0;
+                                    Vec2 scale = V2(1, 1);
+                                    Vec2 offset = {};
+                                    
                                     if(eq->index == 0xff)
                                     {
-                                        destAss->additionalZOffset += piece->offset.z;
-                                        destAss->angle += piece->angle;
-                                        destAss->scale = Hadamart(destAss->scale, piece->scale);
+                                        zOffset = piece->parentOffset.z;
+                                        angle = piece->parentAngle;
+                                        scale = piece->scale;
+                                        offset = piece->parentOffset.xy;
                                         
-                                        
-                                        r32 finalAngle = DegToRad(AssFinalAngle(parentBone, ass) + eq->angle + piece->angle);
-                                        Vec2 layoutX = V2(Cos(finalAngle), Sin(finalAngle));
-                                        Vec2 layoutY = Perp(layoutX);
-                                        layoutX *= eq->scale.x;
-                                        layoutY *= eq->scale.y;
-                                        layoutOffset =  piece->offset.x * layoutX + piece->offset.y * layoutY;
+                                        if(decorativePiece)
+                                        {
+                                            zOffset += piece->parent->parentOffset.z;
+                                            angle += piece->parent->parentAngle;
+                                            offset += piece->parent->parentOffset.xy;
+                                        }
+                                    }
+                                    else if(decorativePiece)
+                                    {
+                                        zOffset = piece->parentOffset.z;
+                                        angle = piece->parentAngle;
+                                        scale = piece->scale;
+                                        offset = piece->parentOffset.xy;
                                     }
                                     
+                                    
+                                    destAss->additionalZOffset += zOffset;
+                                    destAss->angle += angle;
+                                    destAss->scale = Hadamart(destAss->scale, scale);
+                                    
+                                    
+                                    r32 finalAngle = DegToRad(AssFinalAngle(parentBone, ass) + eq->angle + angle);
+                                    Vec2 layoutX = V2(Cos(finalAngle), Sin(finalAngle));
+                                    Vec2 layoutY = Perp(layoutX);
+                                    layoutX *= eq->scale.x;
+                                    layoutY *= eq->scale.y;
+                                    Vec2 layoutOffset =  offset.x * layoutX + offset.y * layoutY;
+                                    
                                     destAss->boneOffset = ass->boneOffset + GetBoneAxisOffset(parentBone, eq->assOffset + layoutOffset);
+                                    
+                                    
                                     
                                     
                                     destAss->alpha = 1.0f;
@@ -713,9 +734,17 @@ inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, Ob
         *destSprite = {};
         
         destAss->spriteIndex = pieceIndex;
-        destAss->boneOffset = source->offset.xy;
-        destAss->additionalZOffset = source->offset.z;
-        destAss->angle = source->angle;
+        destAss->boneOffset = source->parentOffset.xy;
+        destAss->additionalZOffset = source->parentOffset.z;
+        destAss->angle = source->parentAngle;
+        
+        if(source->parent)
+        {
+            destAss->boneOffset += source->parent->parentOffset.xy;
+            destAss->additionalZOffset += source->parent->parentOffset.z;
+            destAss->angle += source->parent->parentAngle;
+        }
+        
         destAss->scale = source->scale;
         destAss->alpha = source->alpha;
         
@@ -1112,7 +1141,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                 if(!dontRender)
                 {
                     ObjectTransform objectTransform;
-                    if(input->ortho)
+                    if(input->debug.ortho)
                     {
                         objectTransform = FlatTransform();
                     }
@@ -1144,7 +1173,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     Vec2 pivot = sprite->pivot;
                     BitmapDim dim = PushBitmapWithPivot(group, objectTransform, BID, P, pivot, 0, finalScale, color, pieceParams.lightIndexes);
                     
-					if(input->ortho)
+					if(input->debug.ortho)
 					{
                         Vec2 XAxis = dim.XAxis.xy * dim.size.x;
                         Vec2 YAxis = dim.YAxis.xy * dim.size.y;
@@ -1489,7 +1518,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         
         RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, Hadamart(proceduralColor, V4(0.1f, 0.1f, 0.1f, 1)));
         
-        if(input->showPivots)
+        if(input->debug.showPivots)
         {
             Vec3 pivotP = AssOriginOffset(parentBone, &currentAss, params->zOffset, params->scale);
             
@@ -1547,7 +1576,7 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
     Assert(referenceFrame->countBones == blended.boneCount);
     Assert(referenceFrame->countAss == blended.assCount);
     
-    if(input->showBitmaps)
+    if(!input->debug.hideBitmaps)
     {
         AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_DetermineFocus);
         AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_Render);
@@ -1555,7 +1584,7 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
     
     
     
-    if(input->ortho && input->showBones)
+    if(input->debug.ortho && input->debug.showBones)
     {
         for(u32 boneIndex = 0; boneIndex < blended.boneCount; ++boneIndex)
         {
@@ -1581,7 +1610,7 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
         }
     }
     
-    if(input->ortho && input->showPivots)
+    if(input->debug.ortho && input->debug.showPivots)
     {
         AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_RenderPivots);
     }
@@ -1593,13 +1622,13 @@ internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group
     BlendResult blended;
     GetLayoutPieces(input, &blended, layout, params);
     
-    if(input->showBitmaps)
+    if(!input->debug.hideBitmaps)
     {
         AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_DetermineFocus);
         AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_Render);
     }
     
-    if(input->ortho && input->showPivots)
+    if(input->debug.ortho && input->debug.showPivots)
     {
         AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_RenderPivots);
     }
@@ -1608,7 +1637,7 @@ internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group
 
 
 
-inline void InitializeAnimationInputOutput(AnimationFixedParams* input, AnimationOutput* output, GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToAdvance)
+inline void InitializeAnimationInputOutput(AnimationFixedParams* input, AnimationOutput* output, GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToAdvance, ClientEntity* fakeEquipment = 0)
 {
     AnimationState* animationState = &entityC->animation;
     
@@ -1654,7 +1683,15 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
         u64 objectEntityID = entityC->equipment[slotIndex].ID;
         if(objectEntityID)
         {
-            ClientEntity* objectEntity = GetEntityClient(worldMode, objectEntityID);
+            ClientEntity* objectEntity = 0;
+            if(fakeEquipment)
+            {
+                objectEntity = fakeEquipment + slotIndex;
+            }
+            else
+            {
+                objectEntity = GetEntityClient(worldMode, objectEntityID);
+            }
             if(objectEntity)
             {
                 u32 taxonomy;
@@ -1672,7 +1709,6 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
                 }
                 
                 TaxonomySlot* taxonomySlot = GetSlotForTaxonomy(worldMode->table, taxonomy);
-                
                 EquipmentAnimationSlot* dest = input->equipment + slotCount++;
                 
                 b32 drawOpened = false;
@@ -1803,7 +1839,7 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
     return result;
 }
 
-internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, ClientEntity* entityC, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, b32 ortho = false, b32 showBones = false, b32 showBitmaps = true, b32 showPivots = false, r32 modTime = 0.0f, u64 forcedNameHashID = 0)
+internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, ClientEntity* entityC, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, AnimationDebugParams debugParams = {})
 {
     AnimationOutput result = {};
     TaxonomyTable* taxTable = worldMode->table;
@@ -1813,11 +1849,7 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
     AnimationFixedParams input;
     
     InitializeAnimationInputOutput(&input, &result, worldMode, entityC, timeToAdvance);
-    input.ortho = ortho;
-    input.showBones = showBones;
-    input.showBitmaps = showBitmaps;
-    input.showPivots = showPivots;
-    input.timeMod = modTime;
+    input.debug = debugParams;
     
     AnimationVolatileParams params;
     params.flipOnYAxis = animationState->flipOnYAxis;
@@ -1862,7 +1894,7 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
                 animationBounds = RectCenterDim(animationCenter, Hadamart(animationDim, V2(boundScaleX, boundScaleY)));
             }
             
-            if(!ortho)
+            if(!debugParams.ortho)
             {
                 animationState->bounds = animationBounds;
             }
@@ -1878,7 +1910,7 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
             PrefetchAnimation(group->assets, prefetchAID.AID);
         }
         
-        GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, drawOpened, forcedNameHashID);
+        GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, drawOpened, debugParams.forcedNameHashID);
         
         input.defaultColoration = AID.coloration;
         input.combatAnimation = (AID.assetID == Asset_attacking);
@@ -1916,7 +1948,7 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
                     animationBounds = RectCenterDim(animationCenter, Hadamart(animationDim, V2(boundScaleX, boundScaleY)));
                 }
                 
-                if(!ortho)
+                if(!debugParams.ortho)
                 {
                     animationState->bounds = animationBounds;
                 }

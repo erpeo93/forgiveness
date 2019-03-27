@@ -556,6 +556,7 @@ enum UIInteractionActionType
     UIInteractionAction_ShowLabeledBitmap,
     UIInteractionAction_ReloadElement,
     UIInteractionAction_PlaySoundEvent,
+    UIInteractionAction_EquipInAnimationWidget,
     UIInteractionAction_ReleaseDragging,
     UIInteractionAction_UndoRedoCommand,
     UIInteractionAction_Undo,
@@ -603,6 +604,12 @@ struct UIInteractionAction
         {
             UIMemoryReference list;
             UIMemoryReference widget;
+        };
+        
+        struct
+        {
+            UIMemoryReference parent;
+            UIMemoryReference root;
         };
         
         UIMemoryReference toReload;
@@ -845,6 +852,7 @@ struct UIState
     UndoRedoCommand* current;
     b32 canRedo;
     
+    ClientEntity fakeEquipmentInWidget[Slot_Count];
     
     r32 backspacePressedTime;
 };

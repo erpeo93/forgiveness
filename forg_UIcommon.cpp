@@ -914,6 +914,18 @@ inline UIInteraction UIPlaySoundEventInteraction(u32 flags, u64 eventNameHash)
     return result;
 }
 
+inline UIInteraction UIEquipInAnimationWidgetInteraction(u32 flags, EditorElement* parent, EditorElement* root)
+{
+    UIInteraction result = {};
+    UIInteractionAction* dest = UIGetFreeAction(&result);
+    dest->type = UIInteractionAction_EquipInAnimationWidget;
+    dest->flags = flags;
+    dest->parent = ColdPointer(parent);
+    dest->root = ColdPointer(root);
+    
+    return result;
+}
+
 inline UIInteraction UIShowBitmapInteraction(u32 flags, u64 componentNameHash, u64 bitmapNameHash, Vec4 coloration)
 {
     UIInteraction result = {};
@@ -1388,6 +1400,53 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                                 PlaySound(UI->worldMode->soundState, toPlay, delay);
                             }
                         }
+                    } break;
+                    
+                    case UIInteractionAction_EquipInAnimationWidget:
+                    {
+                        InvalidCodePath;
+#if 0                        
+                        EditorElement* parent = (EditorElement*) GetValue(action->parent, &interaction->data);
+                        EditorElement* root = (EditorElement*) GetValue(action->root, &interaction->data);
+                        
+                        EquipmentSlot slots[Slot_Count];
+                        
+                        char* slot = GetValue(parent, "slot");
+                        char* taxonomyName = GetValue(parent, "equipment");
+                        u32 taxonomy = NORUNTIMEGetTaxonomySlotByName(UI->table, taxonomyName);
+                        
+                        char* layoutName = GetValue(root, "layoutName");
+                        u64 layoutHashID = StringHash(layoutName);
+                        
+                        u64 recipeIndex = 0;
+                        while(true)
+                        {
+                            GetProperties();
+                            if(layoutMatches())
+                            {
+                                break;
+                            }
+                        }
+                        
+                        for(everySlot)
+                        {
+                            u32 toDeleteTaxonomy = fakeEquipment[slotIndex].taxonomy;
+                            u64 toDeleteRecipeIndex = fakeEquipment[slotIndex].recipeIndex;
+                            
+                            for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
+                            {
+                                if()
+                                {
+                                    fakeEquipment[toDeleteIndex].taxonomy = 0;
+                                    fakeEquipment[toDeleteIndex].recipeIndex = 0;
+                                }
+                            }
+                            
+                            fakeEquipment[slotIndex].taxonomy = taxonomy;
+                            fakeEquipment[slotIndex].recipeIndex = recipeIndex;
+                        }
+#endif
+                        
                     } break;
                     
                     case UIInteractionAction_ShowLabeledBitmap:

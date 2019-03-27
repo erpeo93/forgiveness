@@ -303,6 +303,8 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, u64 hash)
 
 inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents parents, char* name)
 {
+    EditorElement* grandGrandGrandGrandParent = parents.grandParents[3];
+    EditorElement* grandGrandGrandParent = parents.grandParents[2];
     EditorElement* grandGrandParent = parents.grandParents[1];
     EditorElement* grandParent = parents.grandParents[0];
     EditorElement* parent = parents.father;
@@ -344,8 +346,8 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
 		UIAutocomplete* autocomplete = UIFindAutocomplete(UI, hash);
         UIFreeAutocompleteOptions(UI, autocomplete);
         
-		char* equipmentName = GetValue(grandParent, "equipment");
-        char* layoutName = GetValue(parent, "layoutName");
+		char* equipmentName = GetValue(grandGrandGrandGrandParent, "equipment");
+        char* layoutName = GetValue(grandGrandParent, "layoutName");
         
         if(equipmentName && layoutName)
         {
@@ -366,6 +368,8 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
                 }
             }   
         }
+        
+        UIAddOption(UI, autocomplete, "all");
 	}
     
 	UIAutocomplete* result = UIFindAutocomplete(UI, hash);
@@ -854,6 +858,13 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                                 UIButtonInteraction(&playButton, UIPlaySoundEventInteraction(UI_Trigger, eventNameHash));
                                 structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton).bounds);
                             }
+                            else if(father->flags & EditorElem_EquipInAnimationButton)
+                            {
+                                UIButton equipButton = UIBtn(UI, GetCenter(structBounds) + V2(20, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "try");
+                                                                
+                                UIButtonInteraction(&equipButton, UIEquipInAnimationWidgetInteraction(UI_Trigger, father, root));
+                                structBounds = Union(structBounds, UIDrawButton(UI, input, &equipButton).bounds);
+                            }
                             
                             else if(father->flags & EditorElem_ShowLabelBitmapButton)
                             {
@@ -1152,7 +1163,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         Vec3 animationBase = P;
                         animationBase.xy += Hadamart(info.originOffset, animationScale);
                         
-                        AnimationOutput output =  PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 1, true, showBones, showBitmaps, showPivots, timer, nameHashID);
+                        AnimationOutput output =  PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 1, {true, showBones, !showBitmaps, showPivots, timer, nameHashID, UI->fakeEquipmentInWidget});
                         
                         if(output.hotBoneIndex >= 0)
                         {

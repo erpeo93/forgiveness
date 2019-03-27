@@ -142,8 +142,8 @@ struct ConsumeMapping
 #define MAX_COMPONENT_PER_MODULE 8
 struct LayoutPiece
 {
-    Vec3 offset;
-    r32 angle;
+    Vec3 parentOffset;
+    r32 parentAngle;
     Vec2 scale;
     r32 alpha;
     Vec2 pivot;

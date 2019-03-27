@@ -1675,7 +1675,7 @@ inline void AddLabel(u64 ID, r32 value)
     FREELIST_INSERT(dest, slot->firstVisualLabel);
 }
 #endif
-inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u8 index, u32 flags = 0)
+inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 parentOffset, r32 parentAngle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u8 index, u32 flags = 0)
 {
     u64 componentHashID = StringHash(componentName);
     
@@ -1683,8 +1683,8 @@ inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle,
     TAXTABLE_ALLOC(dest, LayoutPiece);
     
     
-    dest->offset = offset;
-    dest->angle = angle;
+    dest->parentOffset = parentOffset;
+    dest->parentAngle = parentAngle;
     dest->scale = scale;
     dest->alpha = alpha;
     dest->pivot = pivot;
@@ -2350,6 +2350,11 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
                     buffer = OutputToBuffer(buffer, bufferSize, "#playEvent ");
                 }
                 
+                if(element->flags & EditorElem_EquipInAnimationButton)
+                {
+                    buffer = OutputToBuffer(buffer, bufferSize, "#equipInAnimation ");
+                }
+                
                 if(element->flags & EditorElem_ShowLabelBitmapButton)
                 {
                     buffer = OutputToBuffer(buffer, bufferSize, "#showBitmap ");
@@ -2504,6 +2509,10 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
 							{
 								newElement->flags |= EditorElem_PlayEventButton;
 							}
+                            else if(TokenEquals(paramName, "equipInAnimation"))
+                            {
+                                newElement->flags |= EditorElem_EquipInAnimationButton;
+                            }
                             else if(TokenEquals(paramName, "showBitmap"))
 							{
 								newElement->flags |= EditorElem_ShowLabelBitmapButton;
@@ -3474,7 +3483,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                         }
                     }
                     
-                    LayoutPiece* childPiece = AddLayoutPiece(newLayout, piece->offset + V3(childX, childY, childZ), piece->angle + childAngle, V2(scaleX, scaleY), childAlpha, V2(0.5f, 0.5f), childName, childIndex);
+                    LayoutPiece* childPiece = AddLayoutPiece(newLayout, V3(childX, childY, childZ), childAngle, V2(scaleX, scaleY), childAlpha, V2(0.5f, 0.5f), childName, childIndex);
                     childPiece->parent = piece;
                     
                     decorationPieces = decorationPieces->next;
