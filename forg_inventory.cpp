@@ -97,8 +97,7 @@ inline EquipmentMapping InventorySlotPresent(TaxonomyTable* table, u32 entityTax
 
 inline EquipInfo PossibleToEquip_(TaxonomyTable* table, u32 entityTaxonomy, EquipmentSlot* equipment, u32 objectTaxonomy, i16 status)
 {
-    EquipInfo result;
-    result.slotCount = 0;
+    EquipInfo result = {};
     
     // NOTE(Leonardo): otherwise it means it's not completed
     if(status >= 0)
@@ -106,10 +105,9 @@ inline EquipInfo PossibleToEquip_(TaxonomyTable* table, u32 entityTaxonomy, Equi
         EquipmentMapping slotPresent = InventorySlotPresent(table, entityTaxonomy, objectTaxonomy);
         for(EquipmentLayout* layout = slotPresent.firstEquipmentLayout; layout; layout = layout->next)
         {
-            if(!equipment[layout->slot].ID)
+            if(!equipment[layout->slot.slot].ID)
             {
-                result.slotCount = 1;
-                result.slots[0] = layout->slot;
+                result = layout->slot;
             }
             
 #if 0            
@@ -139,6 +137,28 @@ inline EquipInfo PossibleToEquip_(TaxonomyTable* table, u32 entityTaxonomy, Equi
     }
     
     return result;
+}
+
+inline void MarkAllSlotsAsOccupied(EquipmentSlot* slots, EquipInfo info, u64 ID)
+{
+    slots[info.slot].ID = ID;
+}
+
+inline void MarkAllSlotsAsNull(EquipmentSlot* slots, EquipInfo info)
+{
+    slots[info.slot].ID = 0;
+}
+
+inline void MarkAsNullAllSlots(EquipmentSlot* slots, u64 ID)
+{
+    for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
+    {
+        EquipmentSlot* toDelete = slots + slotIndex;
+        if(toDelete->ID == ID)
+        {
+            toDelete->ID = 0;
+        }
+    }
 }
 
 inline EntityAction CanConsume(TaxonomyTable* table, u32 taxonomy, u32 objectTaxonomy)
@@ -302,16 +322,13 @@ internal b32 EquipObject(SimRegion* region, SimEntity* actor, SimEntity* object)
     b32 result = false;
     CreatureComponent* creature = Creature(region, actor);
     EquipInfo info = PossibleToEquip_(region->taxTable, actor->taxonomy, creature->equipment, object->taxonomy, (i16) object->status);
-    if(info.slotCount)
+    if(IsValid(info))
     {
         AddFlags(object, Flag_Equipped);
         object->velocity = {};
         
-        for(u32 slotIndex = 0; slotIndex < info.slotCount; ++slotIndex)
-        {
-            EquipmentSlot* equipmentSlot = creature->equipment + info.slots[slotIndex];
-            equipmentSlot->ID = object->identifier;
-        }
+        EquipmentSlot* equipmentSlot = creature->equipment + info.slot;
+        equipmentSlot->ID = object->identifier;
         
         if(actor->playerID)
         {

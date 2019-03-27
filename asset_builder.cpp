@@ -1013,13 +1013,6 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                         pieceName = slash;
                     }
                     
-                    if(pieceName[0] == '#')
-                    {
-                        pieceName++;
-                        isComposed = false;
-                        isSubPart = true;
-                    }
-                    
                     Vec2 pivot;
                     GetXMLValuef(&currentTag, "pivot_x", &pivot.x );
                     GetXMLValuef(&currentTag, "pivot_y", &pivot.y );
@@ -1057,11 +1050,6 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                     if(isEmptySpace)
                     {
                         tempSprite->flags |= Sprite_EmptySpace;
-                    }
-                    
-                    if(isSubPart)
-                    {
-                        tempSprite->flags |= Sprite_SubPart;
                     }
                     
                     if(isEntity)

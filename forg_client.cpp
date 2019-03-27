@@ -491,19 +491,13 @@ internal void HandleClientPrediction(ClientEntity* entity, r32 timeToUpdate)
         
         case Prediction_EquipmentRemoved:
         {
-            for(u32 slotIndex = 0; slotIndex < prediction->slot.slotCount; ++slotIndex)
-            {
-                entity->equipment[prediction->slot.slots[slotIndex]].ID = 0;
-            }
+            entity->equipment[prediction->slot.slot].ID = 0;
         } break;
         
         case Prediction_EquipmentAdded:
         {
             u64 ID = prediction->identifier;
-            for(u32 slotIndex = 0; slotIndex < prediction->slot.slotCount; ++slotIndex)
-            {
-                entity->equipment[prediction->slot.slots[slotIndex]].ID = ID;
-            }
+            entity->equipment[prediction->slot.slot].ID = ID;
         } break;
         
         case Prediction_ActionBegan:

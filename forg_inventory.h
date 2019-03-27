@@ -41,9 +41,26 @@ struct EquipmentSlot
 
 struct EquipInfo
 {
-    u32 slotCount;
-    SlotName slots[4];
+    SlotName slot;
 };
+
+inline b32 IsValid(EquipInfo info)
+{
+    b32 result = (info.slot != Slot_None);
+    return result;
+}
+
+inline b32 AreEqual(EquipInfo i1, EquipInfo i2)
+{
+    b32 result = (i1.slot == i2.slot);
+    return result;
+}
+
+inline SlotName GetMainSlot(EquipInfo info)
+{
+    SlotName result = info.slot;
+    return result;
+}
 
 struct ContainedObjects
 {

@@ -253,6 +253,19 @@ internal Vec2 CalculateFinalBoneOffset_(AnimationFixedParams* input, Bone* frame
     return result;
 }
 
+
+inline Vec3 AssOriginOffset(Bone* parentBone, PieceAss* ass, r32 zOffset, Vec2 scale)
+{
+    Vec2 boneXAxis = parentBone->mainAxis;
+    Vec2 boneYAxis = Perp(boneXAxis);
+    
+    Vec2 boneOffset = Hadamart(ass->boneOffset, scale);
+    Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
+    Vec3 originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset);
+    
+    return originOffset;
+}
+
 internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, BlendResult* blended, Animation* animation, AnimationState* state, r32 elapsedTime, AnimationVolatileParams* params)
 {
     r32 oldAnimationTime = state->totalTime;
@@ -381,7 +394,7 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
     }
 }
 
-inline Vec2 GetBoneAxisOffset(Bone* bone, Vec2 alignedOffset)
+inline Vec2 GetBoneAxisOffsetfromXY(Bone* bone, Vec2 alignedOffset)
 {
     Vec2 result = {};
     
@@ -414,6 +427,7 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
                 break;
             }
         }
+        
         if(!alreadyInserted)
         {
             inserted[slotIndex] = slot->ID;
@@ -502,7 +516,7 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
                                     layoutY *= eq->scale.y;
                                     Vec2 layoutOffset =  offset.x * layoutX + offset.y * layoutY;
                                     
-                                    destAss->boneOffset = ass->boneOffset + GetBoneAxisOffset(parentBone, eq->assOffset + layoutOffset);
+                                    destAss->boneOffset = ass->boneOffset + GetBoneAxisOffsetfromXY(parentBone, eq->assOffset + layoutOffset);
                                     
                                     
                                     
@@ -516,6 +530,8 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
                                     
                                     dest->status = slot->status;
                                     dest->properties = &slot->properties;
+                                    dest->slot = slot->slot;
+                                    dest->drawModulated = slot->drawModulated;
                                 }
                             }
                         }
@@ -525,18 +541,6 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
             }
         }
     }
-}
-
-inline Vec3 AssOriginOffset(Bone* parentBone, PieceAss* ass, r32 zOffset, Vec2 scale)
-{
-    Vec2 boneXAxis = parentBone->mainAxis;
-    Vec2 boneYAxis = Perp(boneXAxis);
-    
-    Vec2 boneOffset = Hadamart(ass->boneOffset, scale);
-    Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
-    Vec3 originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset);
-    
-    return originOffset;
 }
 
 
@@ -650,60 +654,6 @@ inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 entityHa
     
     return result;
 }
-
-#if 0
-inline EquipmentAnimationSlot* Exists(AnimationFixedParams* input, u64 stringHashID, Vec3 originOffset, b32 excludeCombatSprites)
-{
-    EquipmentAnimationSlot* slots = 0;
-    u32 slotCount = 0;
-    
-    EquipmentAnimationSlot* result = 0;
-    
-    SlotPlacement placement = SlotPlacement_Right;
-    if(originOffset.x < 0)
-    {
-        placement = SlotPlacement_Left;
-    }
-    
-    for(u32 slotIndex = 0; slotIndex < slotCount; ++slotIndex)
-    {
-        EquipmentAnimationSlot* slot = slots + slotIndex;
-        if(!excludeCombatSprites || (!input->combatAnimation || (slot->equipmentSlotIndex != Slot_RightHand)))
-        {
-            b32 valid = false;
-            if(slot->stringHashID == stringHashID)
-            {
-                valid = true;
-            }
-            else
-            {
-                TaxonomySlot* weapons = NORUNTIMEGetTaxonomySlotByName(input->taxTable, "weapons");
-                TaxonomySlot* taxSlot = GetSlotForTaxonomy(input->taxTable, slot->taxonomy);
-                while(IsSubTaxonomy(taxSlot->taxonomy, weapons))
-                {
-                    if(taxSlot->stringHashID == stringHashID)
-                    {
-                        valid = true;
-                        break;
-                    }
-                    taxSlot = GetParentSlot(input->taxTable, taxSlot);
-                }
-            }
-            
-            if(valid)
-            {
-                if(slot->placement == SlotPlacement_None || (placement == slot->placement))
-                {
-                    result = slot;
-                    break;
-                }
-            }
-        }
-    }
-    
-    return result;
-}
-#endif
 
 inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, ObjectLayout* layout, AnimationVolatileParams* params)
 {
@@ -956,7 +906,7 @@ struct RenderAssResult
 	r32 distanceFromAssCenter;
 };
 
-inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender, Vec4 proceduralColor = V4(1, 1, 1, 1))
+inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender, b32 isEquipmentAss, Vec4 proceduralColor = V4(1, 1, 1, 1))
 {
     RenderAssResult result = {};
     
@@ -972,7 +922,6 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
     
     if(sprite->flags & Sprite_Entity)
     {
-		
         input->output->entityPresent = true;
         Vec3 offset = pieceParams.cameraOffset;
         input->output->entityOffset = offset;
@@ -1017,6 +966,8 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
             Assert(IsValid(BID));
             if(params->drawEmptySpaces)
             {
+                u32 currentObjectIndex = 0;
+                
                 Vec2 minDimTest = Hadamart(pieceParams.scale, ass->scale);
                 r32 minDim = Min(minDimTest.x, minDimTest.y);
                 r32 zoomCoeff = 1.0f / minDim;
@@ -1046,7 +997,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     
                     Vec3 cellDim = V3(cellWidth, cellHeight, 0);
                     
-                    i32 objectIndex = input->currentObjectIndex++;
+                    i32 objectIndex = currentObjectIndex++;
                     Object* object = input->objects + objectIndex;
                     
                     r32 objectScale = 1.0f;
@@ -1070,7 +1021,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                         if(!input->draggingEntity->taxonomy || input->draggingEntity->objects.objectCount == 0)
                         {
                             input->output->focusObjectIndex = objectIndex;
-                            if(!input->draggingEntityHashIDs[0])
+                            if(!input->draggingEntity)
                             {
                                 objectScale = 2.5f;
                             }
@@ -1198,15 +1149,30 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     
                 }
                 
-                if(sprite->flags & Sprite_SubPart)
+                
+                Vec3 offsetRealP = pieceParams.cameraOffset.x * group->gameCamera.X + pieceParams.cameraOffset.y * group->gameCamera.Y + pieceParams.cameraOffset.z * group->gameCamera.Z;
+                if(pieceParams.flipOnYAxis)
                 {
-                    Vec3 offsetRealP = pieceParams.cameraOffset.x * group->gameCamera.X + pieceParams.cameraOffset.y * group->gameCamera.Y + pieceParams.cameraOffset.z * group->gameCamera.Z;
-                    Vec3 groundP = P + ProjectOnGround(offsetRealP, group->gameCamera.P);
-                    r32 distanceSq = LengthSq(groundP - input->mousePOnGround);
+                    offsetRealP.x = -offsetRealP.x;
+                }
+                
+                Vec3 groundP = P + ProjectOnGround(offsetRealP, group->gameCamera.P);
+                r32 distanceSq = LengthSq(groundP - input->mousePOnGround);
+                
+                if(isEquipmentAss)
+                {
                     if(distanceSq < input->minFocusSlotDistanceSq)
                     {
                         result.onFocus = true;
                         input->minFocusSlotDistanceSq = distanceSq;
+                    }
+                }
+                else
+                {
+                    if(distanceSq < input->minHotAssDistanceSq)
+                    {
+                        result.onFocus = true;
+                        input->minHotAssDistanceSq = distanceSq;
                     }
                 }
             }
@@ -1215,27 +1181,6 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
     }
     
     params->zOffset += 0.01f;
-    return result;
-}
-
-inline b32 SlotIsOnFocus(AnimationFixedParams* input, EquipmentAnimationSlot* slot)
-{
-    b32 result = false;
-    
-#if 0    
-    if(!input->draggingEntity->taxonomy || slot->container)
-    {
-        for(u32 slotIndex = 0; slotIndex < input->oldFocusSlots.slotCount; ++slotIndex)
-        {
-            if((SlotName)slot->equipmentSlotIndex == input->oldFocusSlots.slots[slotIndex])
-            {
-                result = true;
-                break;
-            }
-        }
-    }
-#endif
-    
     return result;
 }
 
@@ -1283,7 +1228,6 @@ inline r32 GetAssAlphaFade(u64 identifier, u32 assIndex, u32 lifePointsSeedReset
 
 enum CycleAssOperation
 {
-    CycleAss_DetermineFocus,
     CycleAss_Render,
     CycleAss_RenderPivots,
 };
@@ -1293,7 +1237,7 @@ inline void ApplyAssAlterations(PieceAss* ass, AssAlterations* assAlt, Bone* par
 {
     if(assAlt->valid)
     {
-        ass->boneOffset += GetBoneAxisOffset(parentBone, assAlt->boneOffset);
+        ass->boneOffset += GetBoneAxisOffsetfromXY(parentBone, assAlt->boneOffset);
         ass->scale = Hadamart(ass->scale, assAlt->scale);
         
         if(assAlt->specialColoration)
@@ -1328,7 +1272,13 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                                             input->lifePointsSeedResetCounter, input->lifePointFadeDuration, input->lifePointThreesold, input->lifePointRatio, input->cameInTime, input->entity->status);
                 proceduralColor.a *= alpha;
                 
-				RenderAssResult render = RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, proceduralColor);
+				RenderAssResult render = RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, true,  proceduralColor);
+                
+                if(render.onFocus)
+                {
+                    input->output->nearestAss = (i16) assIndex;
+                }
+                
                 if(render.screenInRect && render.distanceFromAssCenter < bestAssDistance)
                 {
                     bestAssDistance = render.distanceFromAssCenter;
@@ -1374,129 +1324,16 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                     
                     pieceParams.properties = properties;
                     
-#if 0                    
-                    if(slot->ghost || SlotIsOnFocus(input, slot))
+                    if(equipment->drawModulated)
                     {
                         pieceParams.modulationWithFocusColor = input->defaultModulatonWithFocusColor;
                     }
-#endif
                     
-                    if(RenderPieceAss_(input, group, P, spriteInfo, parentBone, equipmentAss, &pieceParams, false).onFocus)
+                    if(RenderPieceAss_(input, group, P, spriteInfo, parentBone, equipmentAss, &pieceParams, false, true).onFocus)
                     {
-                        
-#if 0                        
-                        input->output->focusSlots.slotCount = 0;
-                        if(slot->stringHashID == slot->parentStringHashID)
-                        {
-                            input->output->focusSlots.slots[input->output->focusSlots.slotCount++] = (SlotName) slot->equipmentSlotIndex;
-                        }
-                        else
-                        {
-                            for(u32 equipmentIndex = 0; equipmentIndex < input->equipmentCount; ++equipmentIndex)
-                            {
-                                EquipmentAnimationSlot* equipmentSlot = input->equipment + equipmentIndex;
-                                if(equipmentSlot->parentStringHashID == slot->parentStringHashID)
-                                {
-                                    input->output->focusSlots.slots[input->output->focusSlots.slotCount++] = (SlotName) equipmentSlot->equipmentSlotIndex;
-                                }
-                            }
-                        }
-#endif
-                        
+                        input->output->focusSlots = equipment->slot;
                     }
                     params->zOffset = pieceParams.zOffset;
-                } break;
-                
-                case CycleAss_DetermineFocus:
-                {
-                    
-                    if(input->ghostAllowed)
-                    {
-                        Vec3 cameraOffset = AssOriginOffset(parentBone, equipmentAss, params->zOffset, params->scale);
-                        if(params->flipOnYAxis)
-                        {
-                            cameraOffset.x = -cameraOffset.x;
-                        }
-                        
-                        b32 matching = false;
-                        for(u32 idIndex = 0; idIndex < ArrayCount(input->draggingEntityHashIDs); ++idIndex)
-                        {
-                            if(spriteInfo->stringHashID == input->draggingEntityHashIDs[idIndex])
-                            {
-                                matching = true;
-                                break;
-                            }
-                        }
-                        
-                        if(matching)
-                        {
-#if 0
-                            EquipmentAnimationSlot* slot = Exists(input, spriteInfo->stringHashID, cameraOffset, true);
-                            if(!slot)
-                            {
-                                Vec3 offsetRealP = cameraOffset.x * group->gameCamera.X + cameraOffset.y * group->gameCamera.Y + cameraOffset.z * group->gameCamera.Z;
-                                Vec3 groundP = P + ProjectOnGround(offsetRealP, group->gameCamera.P);
-                                r32 distanceSq = LengthSq(groundP - input->mousePOnGround);
-                                
-                                Vec3 mouseRelativeDirection = input->mousePOnGround - groundP;
-                                SlotPlacement placement;
-                                if(params->flipOnYAxis)
-                                {
-                                    placement = (mouseRelativeDirection.x < 0) ? SlotPlacement_Right : SlotPlacement_Left;
-                                }
-                                else
-                                {
-                                    placement = (mouseRelativeDirection.x < 0) ? SlotPlacement_Left : SlotPlacement_Right;
-                                }
-                                
-                                if(distanceSq < input->minGhostDistanceSq)
-                                {
-                                    if(!input->output->nearestCompatibleSlot.slotCount)
-                                    {
-                                        EquipInfo info = PossibleToEquip_(input->taxTable, input->entity->taxonomy, input->entity->equipment,  input->draggingEntity->taxonomy, (i16) input->draggingEntity->status, placement);
-                                        if(info.slotCount)
-                                        {
-                                            InvalidCodePath;
-                                            
-#if 0                            
-                                            Assert(input->equipmentCount < input->maxEquipmentCount);
-                                            b32 dontRender = false;
-                                            if(info.slots[0] != input->oldFocusSlots.slots[0])
-                                            {
-                                                dontRender = true;
-                                            }
-                                            else
-                                            {
-                                                input->output->nearestCompatibleSlot = info;
-                                                input->minGhostDistanceSq = distanceSq;
-                                            }
-                                            
-                                            for(u32 slotIndex = 0; slotIndex < info.slotCount; ++slotIndex)
-                                            {
-                                                Assert(input->draggingEntityHashIDs[slotIndex]);
-                                                SlotName name = info.slots[slotIndex];
-                                                EquipmentAnimationSlot* newSlot = input->equipment + input->equipmentCount++;
-                                                newSlot->equipmentSlotIndex = name;
-                                                newSlot->stringHashID = input->draggingEntityHashIDs[slotIndex];
-                                                newSlot->taxonomy = input->draggingEntity->taxonomy;
-                                                newSlot->recipeIndex = input->draggingEntity->recipeIndex;
-                                                newSlot->status = (r32) input->draggingEntity->status;
-                                                newSlot->parentStringHashID = 0;
-                                                newSlot->placement = GetSlotPlacement(name);
-                                                newSlot->ghost = true;
-                                                newSlot->drawOpened = false;
-                                                newSlot->container = false;
-                                                newSlot->dontRender = dontRender;
-                                            }
-#endif
-                                            
-                                        }
-                                    }
-                                }
-                            }
-#endif
-                        }
-                    }
                 } break;
             }
         }
@@ -1516,7 +1353,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         Vec4 proceduralColor = input->defaultColoration;
         ApplyAssAlterations(&currentAss, assAlt, parentBone, &proceduralColor);
         
-        RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, Hadamart(proceduralColor, V4(0.1f, 0.1f, 0.1f, 1)));
+        RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, false, Hadamart(proceduralColor, V4(0.1f, 0.1f, 0.1f, 1)));
         
         if(input->debug.showPivots)
         {
@@ -1561,7 +1398,6 @@ inline AnimationId GetAnimationRecursive(Assets* assets, TaxonomyTable* table, u
     return result;
 }
 
-
 internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup* group, Animation* animation, u64 skeletonHashID, Vec3 P, AnimationState* animationState, AnimationVolatileParams* params, r32 timeToAdvance)
 {
     BlendResult blended;
@@ -1569,8 +1405,6 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
     
     TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, input->entity->taxonomy);
     GetEquipmentPieces(&blended, input->taxTable, &slot->equipmentMappings,  input->equipment);
-    //ComputeFocusSlot(??);
-    
     
     FrameData* referenceFrame = animation->frames + 0;
     Assert(referenceFrame->countBones == blended.boneCount);
@@ -1578,7 +1412,6 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
     
     if(!input->debug.hideBitmaps)
     {
-        AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_DetermineFocus);
         AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_Render);
     }
     
@@ -1624,7 +1457,6 @@ internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group
     
     if(!input->debug.hideBitmaps)
     {
-        AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_DetermineFocus);
         AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_Render);
     }
     
@@ -1647,10 +1479,11 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
     input->defaultModulatonWithFocusColor = worldMode->modulationWithFocusColor;
     r32 slotMaxDistance = 0.6f;
     input->minFocusSlotDistanceSq = Square(slotMaxDistance);
+    r32 hotAssMaxDistance = 0.3f;
+    input->minHotAssDistanceSq = Square(hotAssMaxDistance);
+    
     input->mousePOnGround = worldMode->worldMouseP;
     input->relativeScreenMouseP = worldMode->UI->relativeScreenMouse;
-    input->oldFocusSlots = entityC->animation.output.focusSlots;
-    input->currentObjectIndex = 0;
     
     
     r32 lifePointFadeDuration = 0.08f;
@@ -1663,10 +1496,10 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
     }
     
     input->cameInTime = entityC->animation.cameInTime;
-	if(timeToAdvance == 0 && input->cameInTime == 0)
-	{
-		input->cameInTime = R32_MAX;
-	}
+    if(timeToAdvance == 0 && input->cameInTime == 0)
+    {
+        input->cameInTime = R32_MAX;
+    }
     input->lifePointsSeedResetCounter = entityC->animation.lifePointsSeedResetCounter;
     input->lifePointRatio = lifePointRatio;
     input->lifePointFadeDuration = lifePointFadeDuration;
@@ -1693,6 +1526,8 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
                 dest->taxonomy = objectEntity->taxonomy;
                 dest->status = I16_MAX;
                 GetVisualProperties(&dest->properties, worldMode->table, objectEntity->taxonomy, objectEntity->recipeIndex, false, drawOpened);
+                
+                dest->slot.slot = (SlotName) slotIndex;
             }
         }
         else
@@ -1716,7 +1551,6 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
                     {
                         taxonomy = objectEntity->taxonomy;
                         recipeIndex = objectEntity->recipeIndex;
-                        
                     }
                     
                     EquipmentAnimationSlot* dest = input->equipment + slotCount++;
@@ -1731,6 +1565,10 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
                     dest->taxonomy = taxonomy;
                     dest->status = (i16) objectEntity->status;
                     GetVisualProperties(&dest->properties, worldMode->table, taxonomy, recipeIndex, false, drawOpened);
+                    dest->slot.slot = (SlotName) slotIndex;
+                    
+                    dest->drawModulated = (AreEqual(dest->slot, entityC->animation.output.focusSlots) ||
+                                           AreEqual(dest->slot, entityC->animation.nearestCompatibleSlotForDragging));
                 }
             }
         }
@@ -1739,38 +1577,10 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
     input->objectCount = entityC->objects.objectCount;
     input->objects = entityC->objects.objects;
     
-    input->ghostAllowed = worldMode->UI->animationGhostAllowed;
-    input->minGhostDistanceSq = R32_MAX;
-    
     input->draggingEntity = &worldMode->UI->draggingEntity;
-    TaxonomySlot* draggingSlot = GetSlotForTaxonomy(worldMode->UI->table, input->draggingEntity->taxonomy);
     
-    for(u32 idIndex = 0; idIndex < ArrayCount(input->draggingEntityHashIDs); ++idIndex)
-    {
-        input->draggingEntityHashIDs[idIndex] = 0;
-    }
-    
-#if 0    
-    if(!draggingSlot->firstPart)
-    {
-        input->draggingEntityHashIDs[0] = draggingSlot->stringHashID;
-    }
-    else
-    {
-        Assert(draggingSlot->firstPart->next);
-        u32 partCount = 0;
-        for(TaxonomyPart* part = draggingSlot->firstPart; part; part = part->next)
-        {
-            Assert(partCount < ArrayCount(input->draggingEntityHashIDs));
-            input->draggingEntityHashIDs[partCount] = part->stringHashID;
-            ++partCount;
-        }
-        
-    }
-#endif
     
     input->output = output;
-    output->nearestCompatibleSlot = {};
     output->focusSlots = {};
     output->focusObjectIndex = -1;
     output->additionalZoomCoeff = 1.0f;
@@ -1824,27 +1634,27 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
     result.originOffset = skeletonInfo.originOffset;
     
     if(forcedNameHashID)
-	{
+    {
         FindAnimationResult find = FindAnimationByName(assets, result.skeletonHashID, forcedNameHashID);
-		result.assetID = find.assetType;
-		result.AID = find.ID;	
-	}
-	else
-	{
-		result.assetID = GetAssetIDForEntity(assets, taxTable, taxonomy, action);
-		Assert(result.assetID);
+        result.assetID = find.assetType;
+        result.AID = find.ID;	
+    }
+    else
+    {
+        result.assetID = GetAssetIDForEntity(assets, taxTable, taxonomy, action);
+        Assert(result.assetID);
         
-		if(!result.skeletonHashID)
-		{
-			result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, result.assetID, &result.entityHashID, state);
-		}
-		else
-		{
-			TagVector match = {};
-			TagVector weight = {};
-			result.AID = GetMatchingAnimation(assets, result.assetID, result.skeletonHashID, &match, &weight);
-		}
-	}
+        if(!result.skeletonHashID)
+        {
+            result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, result.assetID, &result.entityHashID, state);
+        }
+        else
+        {
+            TagVector match = {};
+            TagVector weight = {};
+            result.AID = GetMatchingAnimation(assets, result.assetID, result.skeletonHashID, &match, &weight);
+        }
+    }
     
     return result;
 }
@@ -2371,7 +2181,19 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         
         oldSoundTime = entityC->animation.normalizedTime;
         
+        EquipInfo dragging = entityC->animation.nearestCompatibleSlotForDragging;
+        if(IsValid(dragging))
+        {
+            u64 ID = worldMode->UI->draggingEntity.identifier;
+            MarkAllSlotsAsOccupied(entityC->equipment, dragging, ID);
+        }
+        
         result = PlayAndDrawAnimation(worldMode, group, tileInfo.lightIndexes, entityC, animationScale, params.angle, params.offset, timeToUpdate, bodyColor, params.drawOpened, params.onTop, params.bounds, additionalZbias);
+        
+        if(IsValid(dragging))
+        {
+            MarkAllSlotsAsNull(entityC->equipment, dragging);
+        }
         
         soundAction = (EntityAction) entityC->animation.action;
         soundTime = entityC->animation.normalizedTime;

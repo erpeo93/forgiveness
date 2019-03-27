@@ -116,7 +116,6 @@ enum SpriteInfoFlags
     Sprite_Composed = (1 << 1),
     Sprite_EmptySpace = (1 << 2),
     Sprite_Entity = (1 << 3),
-    Sprite_SubPart = (1 << 4),
 };
 
 struct SpriteInfo

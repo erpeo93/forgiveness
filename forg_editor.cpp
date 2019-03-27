@@ -2954,7 +2954,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 EquipmentLayout* equipmentLayout;
                 TAXTABLE_ALLOC(equipmentLayout, EquipmentLayout);
                 equipmentLayout->layoutHashID = StringHash(layoutName);
-                equipmentLayout->slot = (SlotName) GetValuePreprocessor(SlotName, slotName);
+                equipmentLayout->slot = {(SlotName) GetValuePreprocessor(SlotName, slotName)};
                 
                 FREELIST_INSERT(equipmentLayout, mapping->firstEquipmentLayout);
                 

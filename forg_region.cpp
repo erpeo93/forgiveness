@@ -621,14 +621,11 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                     
                     u32 objectTaxonomy = GetObjectTaxonomy(region->taxTable, object);
                     EquipInfo info = PossibleToEquip(region, entity, object);
-                    if(info.slotCount)
+                    if(IsValid(info))
                     {
                         u64 ID = AddEntity(region, entity->P, objectTaxonomy, object->recipeIndex, EquippedBy(entity->identifier, object->quantity, object->status, 0));
-                        for(u32 slotIndex = 0; slotIndex < info.slotCount; ++slotIndex)
-                        {
-                            EquipmentSlot* equipmentSlot = creature->equipment + info.slots[slotIndex];
-                            equipmentSlot->ID = ID;
-                        }
+                        
+                        MarkAllSlotsAsOccupied(creature->equipment, info, ID);
                         
                         RemoveFromContainer(region, entity->identifier, container, equip->sourceObjectIndex);
                         
@@ -664,13 +661,14 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 
                 for(EquipmentLayout* layout = slotPresent.firstEquipmentLayout; layout; layout = layout->next)
                 {
-                    if(desired == layout->slot)
+                    if(desired == layout->slot.slot)
                     {
                         EquipmentSlot* equipmentSlot = creature->equipment + desired;
                         if(!equipmentSlot->ID)
                         {
-                            equipmentSlot->ID = AddEntity(region, entity->P, dragging->taxonomy, dragging->recipeIndex, EquippedBy(entity->identifier, (u16) dragging->quantity, (u16) dragging->status, objects));
+                            u64 ID = AddEntity(region, entity->P, dragging->taxonomy, dragging->recipeIndex, EquippedBy(entity->identifier, (u16) dragging->quantity, (u16) dragging->status, objects));
                             
+                            MarkAllSlotsAsOccupied(creature->equipment, layout->slot, ID);
                             creature->draggingEntity = 0;
                             player->draggingEntity.taxonomy = 0;
                             
@@ -706,14 +704,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 
                 if(Owned(toDisequip, entity->identifier))
                 {
-                    for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
-                    {
-                        EquipmentSlot* toDelete = creature->equipment + slotIndex;
-                        if(toDelete->ID == toDisequipID)
-                        {
-                            toDelete->ID = 0;
-                        }
-                    }
+                    MarkAsNullAllSlots(creature->equipment, toDisequipID);
                     
                     if(!disequip->destContainerID)
                     {
@@ -933,14 +924,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                             equipmentPiece->IDs[componentIndex] = 0;
                         }
                         
-                        for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
-                        {
-                            EquipmentSlot* toDelete = creature->equipment + slotIndex;
-                            if(toDelete->ID == pieceID)
-                            {
-                                toDelete->ID = 0;
-                            }
-                        }
+                        MarkAsNullAllSlots(creature->equipment, pieceID);
                     }
                     else
                     {

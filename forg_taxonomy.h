@@ -90,7 +90,7 @@ struct EquipmentAss
 struct EquipmentLayout
 {
     u64 layoutHashID;
-    SlotName slot;
+    EquipInfo slot;
     
     EquipmentAss* firstEquipmentAss;
     

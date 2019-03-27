@@ -42,6 +42,10 @@ struct EquipmentAnimationPiece
 {
     PieceAss ass;
     SpriteInfo sprite;
+    
+    b32 drawModulated;
+    EquipInfo slot;
+    
     i16 status;
     struct ComponentsProperties* properties;
 };
@@ -81,18 +85,23 @@ struct PieceResult
 
 struct EquipmentAnimationSlot
 {
+    
     u64 ID;
     struct ObjectLayout* layout;
     u32 taxonomy;
     i16 status;
     ComponentsProperties properties;
+    EquipInfo slot;
+    b32 drawModulated;
 };
 
 struct AnimationOutput
 {
     u64 playedAnimationNameHash;
-    EquipInfo nearestCompatibleSlot;
+    
+    i16 nearestAss;
     EquipInfo focusSlots;
+    
     i32 focusObjectIndex;
     r32 additionalZoomCoeff;
     
@@ -108,6 +117,8 @@ struct AnimationOutput
 struct AnimationState
 {
     AnimationOutput output;
+    EquipInfo nearestCompatibleSlotForDragging;
+    
     u32 action;
     u32 nextAction;
     r32 totalTime;
@@ -214,21 +225,15 @@ struct AnimationFixedParams
     b32 combatAnimation;
     r32 defaultModulatonWithFocusColor;
     
-    EquipInfo oldFocusSlots; 
-    i32 currentObjectIndex;
-    
     u8 objectCount;
     Object* objects;
     
-    b32 ghostAllowed;
-    
-    r32 minGhostDistanceSq;
     r32 minFocusSlotDistanceSq;
+    r32 minHotAssDistanceSq;
     
     AnimationEffect* firstActiveEffect;
     
     r32 cameInTime;
-    
     u32 lifePointsSeedResetCounter;
     r32 lifePointRatio;
     r32 lifePointThreesold;
@@ -236,7 +241,6 @@ struct AnimationFixedParams
     
     struct ClientEntity* entity;
     struct ClientEntity* draggingEntity;
-    u64 draggingEntityHashIDs[4];
     
     EquipmentAnimationSlot equipment[Slot_Count];
     Vec4 defaultColoration;

@@ -249,13 +249,10 @@ inline b32 IsOnFocus(ClientEntity* entityC, u32 slotIndex)
     b32 result = false;
     
     EquipInfo focusSlots = entityC->animation.output.focusSlots;
-    for(u32 focusSlotIndex = 0; focusSlotIndex < focusSlots.slotCount; ++focusSlotIndex)
+    
+    if(slotIndex == (u32) focusSlots.slot)
     {
-        if(slotIndex == (u32) focusSlots.slots[focusSlotIndex])
-        {
-            result = true;
-            break;
-        }
+        result = true;
     }
     
     return result;

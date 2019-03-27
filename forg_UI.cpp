@@ -1916,7 +1916,7 @@ inline void UIOverdrawInventoryView(UIState* UI)
         }
     }
     
-    if(UI->draggingEntity.taxonomy && !UI->player->animation.output.nearestCompatibleSlot.slotCount)
+    if(UI->draggingEntity.taxonomy && !IsValid(UI->player->animation.nearestCompatibleSlotForDragging))
     {
         UI->draggingEntity.animation.cameInTime = R32_MAX;
         Vec2 standardDraggingObjectDim = V2(1.5f, 1.5f);
@@ -2131,7 +2131,7 @@ internal void UIHandleContainer(UIState* UI, ClientEntity* container, PlatformIn
                     {
                         UIAddPossibility(&UI->possibleObjectActions, "Craft", objectName, UIStandardInventoryRequest(Craft, container->identifier, objectIndex));
                     }
-                    if(equipInfo.slotCount)
+                    if(IsValid(equipInfo))
                     {
                         UIAddPossibility(&UI->possibleObjectActions, "equip", objectName, UIStandardInventoryRequest(Equip, container->identifier, objectIndex));
                     }
@@ -2837,8 +2837,47 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
             UIMarkListToUpdateAndRender(UI, possibleObjectActions);
             
             EquipmentSlot* slots = player->equipment;       
-            u32 focusSlot = UI->player->animation.output.focusSlots.slots[0];
-            u64 focusEquipmentID = player->equipment[focusSlot].ID;
+            
+            EquipInfo focusSlot = UI->player->animation.output.focusSlots;
+            
+            EquipInfo compatibleWithDragging = {};
+
+            ClientEntity* dragging = &UI->draggingEntity;
+            u64 draggingID = 0;
+                        
+            if(dragging->taxonomy)
+            {
+                draggingID = dragging->identifier;
+                i16 currentHotAssIndex = player->animation.output.nearestAss;
+            if(currentHotAssIndex >= 0)
+            {
+                    if(dragging->status >= 0)
+                    {
+                        EquipmentMapping canEquip = InventorySlotPresent(UI->table, player->taxonomy, dragging->taxonomy);
+                        b32 found = false;
+                        for(EquipmentLayout* layout = canEquip.firstEquipmentLayout; layout && !found; layout = layout->next)
+                        {
+                            for(EquipmentAss* ass = layout->firstEquipmentAss; ass; ass = ass->next)
+                            {
+                                if((i16) ass->assIndex == currentHotAssIndex)
+                                {
+                                    compatibleWithDragging = layout->slot;
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }   
+                    }
+            }
+                            
+            }
+
+          
+            
+            player->animation.nearestCompatibleSlotForDragging = compatibleWithDragging;
+            
+                        
+            u64 focusEquipmentID = player->equipment[GetMainSlot(focusSlot)].ID;
             
             UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &UI->nextMode, UIMode_None));
             if(focusEquipmentID)
@@ -2905,12 +2944,12 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                             PickInfo pick = PossibleToPick(UI->worldMode, UI->table, UI->player, equipmentFocus->taxonomy, true);
                             if(equipmentFocus->objects.objectCount == 0 && pick.slot)
                             {
-                                UIRequest pickRequest = UIStandardSlotRequest(Disequip, focusSlot, pick.reference.containerID, pick.reference.objectIndex);
+                                UIRequest pickRequest = UIStandardSlotRequest(Disequip, GetMainSlot(focusSlot), pick.reference.containerID, pick.reference.objectIndex);
                                 UIAddPossibility(&UI->possibleObjectActions, "disequip", equipmentName, pickRequest);
                             }
                             else
                             {
-                                UIRequest dropRequest = UIStandardSlotRequest(Disequip, focusSlot, 0, 0);
+                                UIRequest dropRequest = UIStandardSlotRequest(Disequip, GetMainSlot(focusSlot), 0, 0);
                                 UIAddPossibility(&UI->possibleObjectActions, "drop", equipmentName, dropRequest);
                             }
                         }
@@ -2920,13 +2959,13 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                     UIInteraction mouseInteraction = ScrollableListRequestInteraction(UI_Click, &UI->possibleObjectActions);
                     UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
                     
-                    if(UI->player->animation.output.focusSlots.slotCount)
+                    if(IsValid(focusSlot))
                     {
                         if(!UI->draggingEntity.taxonomy)
                         {
                             UIRequest dragEquipmentRequest = {};
                             dragEquipmentRequest.requestCode = UIRequest_DragEquipment;
-                            dragEquipmentRequest.slot = focusSlot;
+                            dragEquipmentRequest.slot = GetMainSlot(focusSlot);
                             
                             UIInteraction dragEquipmentInteraction = mouseInteraction;
                             UIAddRequestAction(&dragEquipmentInteraction, UI_KeptPressed, dragEquipmentRequest);
@@ -2963,12 +3002,12 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                 if(UI->draggingEntity.taxonomy)
                 {
                     onlyOpenedContainerAllowed = true;
-                    if(focusSlot)
+                    if(IsValid(compatibleWithDragging))
                     {
                         specialEquipmentMode = false;
                         UIRequest equipDraggingRequest;
                         equipDraggingRequest.requestCode = UIRequest_EquipDragging;
-                        equipDraggingRequest.slot = focusSlot;
+                        equipDraggingRequest.slot = GetMainSlot(compatibleWithDragging);
                         
                         UIInteraction equipDraggingInteraction = {};
                         UIAddRequestAction(&equipDraggingInteraction, UI_Trigger, equipDraggingRequest);
