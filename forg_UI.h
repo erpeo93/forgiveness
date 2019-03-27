@@ -200,7 +200,7 @@ struct UIMemoryReference
     {
         struct
         {
-            u64 fixed;
+            EditorElementParents fixed;
         };
         
         struct
@@ -808,8 +808,7 @@ struct UIState
     char keyboardBuffer[32];
     char showBuffer[64];
     EditorElement* active;
-    EditorElement* activeParent;
-    EditorElement* activeGrandParent;
+    EditorElementParents activeParents;
     
     EditorElement* activeLabel;
     EditorWidget* activeWidget;

@@ -997,6 +997,7 @@ UIAddSetValueActionDefinition(b32);
 UIAddSetValueActionDefinition(UIMode);
 UIAddSetValueActionDefinition(char);
 UIAddSetValueActionDefinition(EditorElement*);
+UIAddSetValueActionDefinition(EditorElementParents);
 UIAddSetValueActionDefinition(EditorWidget*);
 
 #define UISetValueInteractionDefinition(type)\
@@ -1015,6 +1016,7 @@ UISetValueInteractionDefinition(b32);
 UISetValueInteractionDefinition(UIMode);
 UISetValueInteractionDefinition(char);
 UISetValueInteractionDefinition(EditorElement*);
+UISetValueInteractionDefinition(EditorElementParents);
 
 
 #define ScrollableList(list, field) ScrollableList_(list, OffsetOf(UIScrollableElement, field))
@@ -1313,7 +1315,16 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         
                         if(list->flags & EditorElem_LabelsEditable)
                         {
-                            FormatString(newElement->name, sizeof(newElement->name), "unnamed");
+                            u32 max = 0;
+                            for(EditorElement* listElem = list->firstInList; listElem; listElem = listElem->next)
+                            {
+                                u32 thisIndex = atoi(listElem->name);
+                                if(thisIndex > max)
+                                {
+                                    max = thisIndex;
+                                }
+                            }
+                            FormatString(newElement->name, sizeof(newElement->name), "%dunnamed", max + 1);
                         }
                         else
                         {
@@ -1322,8 +1333,8 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         
                         UIAddUndoRedoCommand(UI, UndoRedoAdd(widget, list, newElement));
                         
-                        newElement->next = list->firstChild;
-                        list->firstChild = newElement;
+                        newElement->next = list->firstInList;
+                        list->firstInList = newElement;
                     } break;
                     
                     

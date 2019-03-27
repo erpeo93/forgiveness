@@ -104,7 +104,7 @@ inline EquipInfo PossibleToEquip_(TaxonomyTable* table, u32 entityTaxonomy, Equi
     if(status >= 0)
     {
         EquipmentMapping slotPresent = InventorySlotPresent(table, entityTaxonomy, objectTaxonomy);
-        if(!slotPresent.multiPart)
+        if(true)
         {
             if(slotPresent.left || slotPresent.right)
             {

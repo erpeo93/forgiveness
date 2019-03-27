@@ -572,78 +572,48 @@ inline TaxonomyNode* AddToTaxonomyTree(TaxonomyTree* tree, TaxonomySlot* slot)
 
 
 
-global_variable EquipmentMapping* currentEquipmentMap_;
-
-inline void CanEquip(char* name, char* leftSlot, char* rightSlot, u32 assIndex, u8 index, Vec2 assOffset, r32 zOffset, r32 angle, Vec2 scale, Vec2 pivot)
+inline EquipmentMapping* AddEquipmentMapping(char* slotName, char* equipmentName)
 {
     TaxonomySlot* slot = currentSlot_;
-    TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
+    TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, equipmentName);
     
+    EquipmentMapping* result = 0;
     if(target)
     {
         EquipmentMapping* mapping;
         TAXTABLE_ALLOC(mapping, EquipmentMapping);
-        
-        mapping->multiPart = false;
-        mapping->left = (SlotName) GetValuePreprocessor(SlotName, leftSlot);
-        mapping->right = (SlotName) GetValuePreprocessor(SlotName, rightSlot);
-        
-        
-        EquipmentPiece* piece;
-        TAXTABLE_ALLOC(piece, EquipmentPiece);
-        
-        piece->assIndex = assIndex;
-        piece->stringHashID = StringHash(name);
-        piece->index = index;
-        piece->assOffset = assOffset;
-        piece->zOffset = zOffset;
-        piece->angle = angle;
-        piece->scale = scale;
-        piece->pivot = pivot;
-        piece->next = 0;
-        
-        mapping->firstEquipmentPiece = piece;
+        mapping->left = (SlotName) GetValuePreprocessor(SlotName, slotName);
+        mapping->right = (SlotName) GetValuePreprocessor(SlotName, slotName);
         
         TaxonomyNode* node = AddToTaxonomyTree(&currentSlot_->equipmentMappings, target);
         node->data.equipmentMapping = mapping;
+        
+        result = mapping;
     }
     else
     {
-        EditorErrorLog(name);
+        EditorErrorLog(equipmentName);
     }
-}
-
-inline void CanEquipMultipart(char* name)
-{
-    TaxonomySlot* slot = currentSlot_;
-    TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
     
-    if(target)
-    {
-        EquipmentMapping* mapping;
-        TAXTABLE_ALLOC(mapping, EquipmentMapping);
-        
-        mapping->multiPart = true;
-        currentEquipmentMap_ = mapping;
-        
-        TaxonomyNode* node = AddToTaxonomyTree(&currentSlot_->equipmentMappings, target);
-        node->data.equipmentMapping = mapping;
-    }
-    else
-    {
-        currentEquipmentMap_ = 0;
-        EditorErrorLog(name);
-    }
+    return result;
 }
 
-inline void AddPart(char* slot)
+inline void AddPiece(EquipmentLayout* equipmentLayout, u32 assIndex, char* pieceName, u8 index, Vec2 assOffset, r32 zOffset, r32 angle, Vec2 scale)
 {
-    if(currentEquipmentMap_)
-    {
-        EquipmentMapping* currentMapping = currentEquipmentMap_;
-        Assert(currentMapping->slotCount < ArrayCount(currentMapping->slots));
-        currentMapping->slots[currentMapping->slotCount++] = (SlotName) GetValuePreprocessor(SlotName, slot);
-    }
+    EquipmentAss* equipmentAss;
+    TAXTABLE_ALLOC(equipmentAss, EquipmentAss);
+    
+    equipmentAss->assIndex = assIndex;
+    equipmentAss->stringHashID = StringHash(pieceName);
+    equipmentAss->index = index;
+    equipmentAss->assOffset = assOffset;
+    equipmentAss->zOffset = zOffset;
+    equipmentAss->angle = angle;
+    equipmentAss->scale = scale;
+    
+    equipmentAss->next = 0;
+    
+    FREELIST_INSERT(equipmentAss, equipmentLayout->firstEquipmentAss);
 }
 
 inline void CanConsume(char* action, char* name)
@@ -1705,10 +1675,14 @@ inline void AddLabel(u64 ID, r32 value)
     FREELIST_INSERT(dest, slot->firstVisualLabel);
 }
 #endif
-inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, u64 componentHashID, u8 index, u32 flags = 0)
+inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle, Vec2 scale, r32 alpha, Vec2 pivot, char* componentName, u8 index, u32 flags = 0)
 {
+    u64 componentHashID = StringHash(componentName);
+    
     LayoutPiece* dest;
     TAXTABLE_ALLOC(dest, LayoutPiece);
+    
+    
     dest->offset = offset;
     dest->angle = angle;
     dest->scale = scale;
@@ -1717,6 +1691,8 @@ inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, Vec3 offset, r32 angle,
     dest->componentHashID = componentHashID;
 	dest->index = index;
     dest->flags = flags;
+    
+    FormatString(dest->name, sizeof(dest->name), "%s", componentName);
     dest->ingredientCount = 0;
     dest->parent = 0;
     
@@ -2901,8 +2877,15 @@ internal void FreeEquipmentTreeNodeRecursive(TaxonomyNode* root)
         
         if(root->data.equipmentMapping)
         {
-            FREELIST_FREE(root->data.equipmentMapping->firstEquipmentPiece, EquipmentPiece,  taxTable_->firstFreeEquipmentPiece);
-            root->data.equipmentMapping->firstEquipmentPiece = 0;
+            for(EquipmentLayout* layout = root->data.equipmentMapping->firstEquipmentLayout; layout; layout = layout->next)
+            {
+                FREELIST_FREE(layout->firstEquipmentAss, EquipmentAss, taxTable_->firstFreeEquipmentAss);
+                layout->firstEquipmentAss = 0;
+            }
+            
+            
+            FREELIST_FREE(root->data.equipmentMapping->firstEquipmentLayout, EquipmentLayout,  taxTable_->firstFreeEquipmentLayout);
+            root->data.equipmentMapping->firstEquipmentLayout = 0;
             
             FREELIST_DEALLOC(root->data.equipmentMapping, taxTable_->firstFreeEquipmentMapping);
         }
@@ -2949,60 +2932,52 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         FreeEquipmentTreeNodeRecursive(currentSlot_->equipmentMappings.root);
         currentSlot_->equipmentMappings.root = 0;
         
-        EditorElement* singleSlot = GetList(root, "singleSlot");
-        EditorElement* doubleSlot = GetList(root, "doubleSlot");
-        EditorElement* multiPart = GetList(root, "multiPart");
-        
-        
+        EditorElement* singleSlot = root->firstInList;
         while(singleSlot)
         {
-            char* equipName = GetValue(singleSlot, "equipment");
             char* slotName = GetValue(singleSlot, "slot");
+            char* equipmentName = GetValue(singleSlot, "equipment");
+            EquipmentMapping* mapping = AddEquipmentMapping(slotName, equipmentName);
             
-            u32 assIndex = ToU32(GetValue(singleSlot, "assIndex"));
-            u8 index = ToU8(GetValue(singleSlot, "index"));
-            Vec2 assOffset = ToV2(GetStruct(singleSlot, "assOffset"));
-            r32 zOffset = ToR32(GetValue(singleSlot, "zOffset"));
-            r32 angle = ToR32(GetValue(singleSlot, "angle"));
-            Vec2 scale = ToV2(GetStruct(singleSlot, "scale"));
-            Vec2 pivot = ToV2(GetStruct(singleSlot, "pivot"));
-            CanEquip(equipName, slotName, slotName, assIndex, index, assOffset, zOffset, angle, scale, pivot);
+            EditorElement* layouts = GetList(singleSlot, "layouts");
+            while(layouts)
+            {
+                char* layoutName = GetValue(layouts, "layoutName");
+                EquipmentLayout* equipmentLayout;
+                TAXTABLE_ALLOC(equipmentLayout, EquipmentLayout);
+                equipmentLayout->layoutHashID = StringHash(layoutName);
+                
+                FREELIST_INSERT(equipmentLayout, mapping->firstEquipmentLayout);
+                
+                EditorElement* pieces = GetList(layouts, "pieces");
+                while(pieces)
+                {
+                    u32 assIndex = ToU32(GetValue(pieces, "assIndex"));
+                    
+                    
+                    char* pieceName = GetValue(pieces, "pieceName");
+                    u8 index = ToU8(GetValue(pieces, "index"));
+                    
+                    if(StrEqual(pieceName, "all"))
+                    {
+                        index = 0xff;
+                    }
+                    Vec2 assOffset = ToV2(GetStruct(pieces, "assOffset"));
+                    r32 zOffset = ToR32(GetValue(pieces, "zOffset"));
+                    r32 angle = ToR32(GetValue(pieces, "angle"));
+                    Vec2 scale = ToV2(GetStruct(pieces, "scale"));
+                    
+                    AddPiece(equipmentLayout, assIndex, pieceName, index, assOffset, zOffset, angle, scale);
+                    
+                    pieces = pieces->next;
+                }
+                
+                
+                layouts = layouts->next;
+            }
             
             singleSlot = singleSlot->next;
         }
-        
-        while(doubleSlot)
-        {
-            
-#if 0            
-            char* equipName = GetValue(doubleSlot, "equipment");
-            char* slotName = GetValue(doubleSlot, "slot");
-            char* slotName2 = GetValue(doubleSlot, "slot2");
-            CanEquip(equipName, slotName, slotName2);
-#endif
-            
-            doubleSlot = doubleSlot->next;
-        }
-        
-        while(multiPart)
-        {
-            
-#if 0            
-            char* equipName = GetValue(multiPart, "equipment");
-            CanEquipMultipart(equipName);
-            
-            EditorElement* part = GetList(multiPart, "slots");
-            while(part)
-            {
-                char* partName = GetValue(part, "name");
-                AddPart(partName);
-                part = part->next;
-            }
-#endif
-            
-            multiPart = multiPart->next;
-        }
-        
     }
     
     
@@ -3432,6 +3407,8 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             ObjectLayout* newLayout;
             TAXTABLE_ALLOC(newLayout, ObjectLayout);
             
+            newLayout->nameHashID = StringHash(layouts->name);
+            FormatString(newLayout->name, sizeof(newLayout->name), "%s", layouts->name);
             
             EditorElement* pieces = GetList(layouts, "pieces");
             while(pieces)
@@ -3460,7 +3437,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
 						++index;
 					}
 				}
-                LayoutPiece* piece = AddLayoutPiece(newLayout, V3(x, y, z), angle, V2(scaleX, scaleY), pieceAlpha, pivot, pieceHash, index);
+                LayoutPiece* piece = AddLayoutPiece(newLayout, V3(x, y, z), angle, V2(scaleX, scaleY), pieceAlpha, pivot, pieceName, index);
                 
                 EditorElement* ingredient = GetList(pieces, "ingredients");
                 while(ingredient)
@@ -3487,7 +3464,6 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                     r32 childScaleY = ToR32(GetValue(scale, "y"));
                     r32 childAlpha = ToR32(GetValue(pieces, "alpha"));
                     char* childName = GetValue(decorationPieces, "component");
-                    u64 childHash = StringHash(childName);
                     
                     u8 childIndex = 0;
                     for(LayoutPiece* test = newLayout->firstPiece; test; test = test->next)
@@ -3498,7 +3474,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                         }
                     }
                     
-                    LayoutPiece* childPiece = AddLayoutPiece(newLayout, piece->offset + V3(childX, childY, childZ), piece->angle + childAngle, V2(scaleX, scaleY), childAlpha, V2(0.5f, 0.5f), childHash, childIndex);
+                    LayoutPiece* childPiece = AddLayoutPiece(newLayout, piece->offset + V3(childX, childY, childZ), piece->angle + childAngle, V2(scaleX, scaleY), childAlpha, V2(0.5f, 0.5f), childName, childIndex);
                     childPiece->parent = piece;
                     
                     decorationPieces = decorationPieces->next;
@@ -3529,6 +3505,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                     FREELIST_INSERT(newLayout, currentSlot_->firstOpenLayout);
                 } break;
             }
+            
             
             layouts = layouts->next;
         }

@@ -156,49 +156,6 @@ inline void UIRenderAutocomplete(UIState* UI, PlatformInput* input, UIAutocomple
     }
 }
 
-inline UIAutocomplete* UIFindAutocomplete(UIState* UI, u64 hash)
-{
-    UIAutocomplete* result = 0;
-	for(u32 autoIndex = 0; autoIndex < UI->autocompleteCount; ++autoIndex)
-    {
-        UIAutocomplete* test = UI->autocompletes + autoIndex;
-        if(hash == test->hash)
-        {
-            result = test;
-            break;
-        }
-    }
-    
-	return result;
-}
-
-inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElement* grandParent, EditorElement* parent, char* name)
-{
-	u64 hash = StringHash(name);
-	if(StrEqual(name, "animationName"))
-	{
-		TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
-		hash = GetSkeletonForTaxonomy(UI->table, slot).hashID;
-	}
-    else if(StrEqual(name, "sound"))
-    {
-        Assert(parent);
-        
-        char* soundType = GetValue(parent, "soundType");
-        hash = StringHash(soundType);
-    }
-    else if(StrEqual(name, "type"))
-    {
-        if(grandParent && grandParent->type == EditorElement_List)
-        {
-            hash = StringHash(grandParent->elementName);
-        }
-    }
-    
-	UIAutocomplete* result = UIFindAutocomplete(UI, hash);
-    
-    return result;
-}
 
 inline UIAutocomplete* UIAddAutocomplete(UIState* UI, char* name)
 {
@@ -206,6 +163,11 @@ inline UIAutocomplete* UIAddAutocomplete(UIState* UI, char* name)
     UIAutocomplete* result = UI->autocompletes + UI->autocompleteCount++;
     result->hash = StringHash(name);
     return result;
+}
+
+inline void UIFreeAutocompleteOptions(UIState* UI, UIAutocomplete* autocomplete)
+{
+    FREELIST_FREE(autocomplete->firstBlock, UIAutocompleteBlock, UI->firstFreeAutocompleteBlock);
 }
 
 inline void UIAddOption(UIState* UI, UIAutocomplete* autocomplete, char* option, u32 optionLength = 0)
@@ -322,6 +284,95 @@ inline void UIAddAutocompleteFromFiles(UIState* UI)
     platformAPI.GetAllFilesEnd(&autoGroup);
 }
 
+
+inline UIAutocomplete* UIFindAutocomplete(UIState* UI, u64 hash)
+{
+    UIAutocomplete* result = 0;
+	for(u32 autoIndex = 0; autoIndex < UI->autocompleteCount; ++autoIndex)
+    {
+        UIAutocomplete* test = UI->autocompletes + autoIndex;
+        if(hash == test->hash)
+        {
+            result = test;
+            break;
+        }
+    }
+    
+	return result;
+}
+
+inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents parents, char* name)
+{
+    EditorElement* grandGrandParent = parents.grandParents[1];
+    EditorElement* grandParent = parents.grandParents[0];
+    EditorElement* parent = parents.father;
+	u64 hash = StringHash(name);
+	if(StrEqual(name, "animationName"))
+	{
+		TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
+		hash = GetSkeletonForTaxonomy(UI->table, slot).hashID;
+	}
+    else if(StrEqual(name, "sound"))
+    {
+        Assert(parent);
+        
+        char* soundType = GetValue(parent, "soundType");
+        hash = StringHash(soundType);
+    }
+    else if(StrEqual(name, "type"))
+    {
+        if(grandParent && grandParent->type == EditorElement_List)
+        {
+            hash = StringHash(grandParent->elementName);
+        }
+    }
+    else if(StrEqual(name, "layoutName"))
+    {
+        UIAutocomplete* autocomplete = UIFindAutocomplete(UI, hash);
+        UIFreeAutocompleteOptions(UI, autocomplete);
+        
+        char* equipmentName = GetValue(grandGrandParent, "equipment");
+        TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(UI->table, equipmentName);
+        
+        for(ObjectLayout* layout = slot->firstDefaultLayout; layout; layout = layout->next)
+        {
+            UIAddOption(UI, autocomplete, layout->name);
+        }
+    }
+	else if(StrEqual(name, "pieceName"))
+	{
+		UIAutocomplete* autocomplete = UIFindAutocomplete(UI, hash);
+        UIFreeAutocompleteOptions(UI, autocomplete);
+        
+		char* equipmentName = GetValue(grandParent, "equipment");
+        char* layoutName = GetValue(parent, "layoutName");
+        
+        if(equipmentName && layoutName)
+        {
+            TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(UI->table, equipmentName);
+            
+            for(ObjectLayout* layout = slot->firstDefaultLayout; layout; layout = layout->next)
+            {
+                if(StrEqual(layout->name, layoutName))
+                {
+                    for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
+                    {
+                        if(!piece->parent)
+                        {
+                            UIAddOption(UI, autocomplete, piece->name);
+                        }
+                    }
+                    break;	
+                }
+            }   
+        }
+	}
+    
+	UIAutocomplete* result = UIFindAutocomplete(UI, hash);
+    
+    return result;
+}
+
 struct UIAddTabResult
 {
     Rect2 bounds;
@@ -334,8 +385,7 @@ inline void AddConfirmActions(UIState* UI, EditorWidget* widget, UIInteraction* 
 	UIAddStandardAction(interaction, UI_Trigger, dest, ColdPointer(dest), ColdPointer(UI->keyboardBuffer));
 	UIAddSetValueAction(interaction, UI_Trigger, &UI->activeLabel, 0); 
 	UIAddSetValueAction(interaction, UI_Trigger, &UI->active, 0);    
-	UIAddSetValueAction(interaction, UI_Trigger, &UI->activeParent, 0);    
-	UIAddSetValueAction(interaction, UI_Trigger, &UI->activeGrandParent, 0);    
+    UIAddClearAction(interaction, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));
 	UIAddSetValueAction(interaction, UI_Trigger, &UI->activeWidget, 0);    
             
             
@@ -383,6 +433,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                 }
                 else
                 {
+                    
                     b32 canEdit = false;
                     if(root->type == EditorElement_Signed || root->type == EditorElement_Unsigned ||
                        root->type == EditorElement_Real)
@@ -397,7 +448,8 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                         }
                         else
                         {
-                            UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parents.grandParents[0], parents.father, root->name);
+                           
+                            UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parents, root->name);
                             if(autocomplete)
                             {
                                 canEdit = true;
@@ -409,8 +461,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                     {
                         result.color = V4(1, 0, 1, 1);
                         mouseInteraction = UISetValueInteraction(UI_Click, &UI->active, root);
-                        UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->activeParent, parents.father);
-                        UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->activeGrandParent, parents.grandParents[0]);
+                        UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->activeParents, parents);
                         UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->activeWidget, widget); 
                         UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->currentAutocompleteSelectedIndex, -1);   UIAddClearAction(&mouseInteraction, UI_Click, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                         
@@ -450,7 +501,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
         
         if(root->type == EditorElement_String)
         {
-            UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parents.grandParents[0], parents.father, root->name);
+            UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parents, root->name);
             if(autocomplete)
             {
                 UIRenderAutocomplete(UI, input, autocomplete, layout, P -V2(0, layout->childStandardHeight), UI->keyboardBuffer);
@@ -564,6 +615,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     UIInteraction labelInteraction = UISetValueInteraction(UI_Trigger, &UI->activeLabel, root);
                     UIAddClearAction(&labelInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                     
+                    UIAddSetValueAction(&labelInteraction, UI_Trigger, &UI->activeWidget, widget); 
                     UIAddInteraction(UI, input, mouseRight, labelInteraction);
                 }
                 nameHot = true;
@@ -1015,8 +1067,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         {
                           
                             UIInteraction mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
-                            UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParent, father); 
-                            UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeGrandParent, grandFather); 
+                            UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParents, parents); 
                             UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeWidget, widget); 
                             UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                             UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
@@ -1037,8 +1088,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             addColor = V4(0, 1, 0, 1);
                             UIInteraction buttonInteraction = SendRequestInteraction(UI_Trigger, AddTaxonomyRequest(root->parentTaxonomy, UI->keyboardBuffer));
                             UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->active, 0);    
-                            UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->activeParent, 0);    
-                            UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->activeGrandParent, 0);    
+                            UIAddClearAction(&buttonInteraction, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));    
                             UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->activeWidget, 0);    
                             UIAddInteraction(UI, input, confirmButton, buttonInteraction);
                         }
@@ -1236,11 +1286,10 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     
     
     UIInteraction esc = UISetValueInteraction(UI_Trigger, &UI->active, 0);
-    UIAddSetValueAction(&esc, UI_Trigger, &UI->activeParent, 0);
-    UIAddSetValueAction(&esc, UI_Trigger, &UI->activeGrandParent, 0);
     UIAddSetValueAction(&esc, UI_Trigger, &UI->activeLabel, 0);
     UIAddSetValueAction(&esc, UI_Trigger, &UI->activeWidget, 0);
     UIAddClearAction(&esc, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+    UIAddClearAction(&esc, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));
     UIAddSetValueAction(&esc, UI_Trigger, &UI->copying, 0);
     UIAddSetValueAction(&esc, UI_Trigger, &UI->currentAutocompleteSelectedIndex, -1);
     UIAddInteraction(UI, input, escButton, esc);
@@ -1355,7 +1404,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             
             case EditorElement_String:
             {
-                UIAutocomplete* options = UIFindAutocomplete(UI, UI->activeGrandParent, UI->activeParent, UI->active->name);
+                UIAutocomplete* options = UIFindAutocomplete(UI, UI->activeParents, UI->active->name);
                 if(options)
                 {
                     UIAutocompleteBlock* block = options->firstBlock;
@@ -2394,6 +2443,9 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTable(UI, LayoutType, "layoutType");
         UIAddAutocompleteFromFiles(UI);
         
+        UIAddAutocomplete(UI, "layoutName");
+		UIAddAutocomplete(UI, "pieceName");
+        
         FormatString(UI->trueString, sizeof(UI->trueString), "true");
         FormatString(UI->falseString, sizeof(UI->falseString), "false");
     }
@@ -2682,7 +2734,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                     }
                     
                     UIResetListPossibility(UI, possibleOverlappingActions);
-                    if(overlapping->identifier == myPlayer->overlappingIdentifier)
+                    if(overlapping->identifier == myPlayer->overlappingIdentifier || (UI->worldMode->editingEnabled && input->altDown))
                     {
                         HandleOverlappingInteraction(UI, &output, input, overlapping);
                     }
@@ -2985,7 +3037,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                         }        
                         
                         UIResetListPossibility(UI, possibleOverlappingActions);
-                        if(overlapping->identifier == myPlayer->overlappingIdentifier)
+                        if(overlapping->identifier == myPlayer->overlappingIdentifier || (UI->worldMode->editingEnabled && input->altDown))
                         {
                             HandleOverlappingInteraction(UI, &output, input, overlapping);
                         }

@@ -661,7 +661,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 SlotName desired = (SlotName) equipDragging->slotIndex;
                 Assert(desired > Slot_None);
                 
-                if(slotPresent.multiPart)
+                if(false)
                 {
                     u64 ID = AddEntity(region, entity->P, dragging->taxonomy, dragging->recipeIndex, EquippedBy(entity->identifier, (u16) dragging->quantity, (u16) dragging->status, objects));
                     for(u32 slotIndex = 0; slotIndex < slotPresent.slotCount; ++slotIndex)

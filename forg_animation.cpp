@@ -421,68 +421,84 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
             TaxonomyNode* node = FindInTaxonomyTree(table, equipmentMappings->root, slot->taxonomy);
             if(node && node->data.equipmentMapping)
             {
-                EquipmentPiece* single = node->data.equipmentMapping->firstEquipmentPiece;
-                u32 assIndex = single->assIndex;
-                PieceAss* ass = blended->ass + assIndex;
-                Bone* parentBone = blended->bones + ass->boneID;
+                ObjectLayout* reference = slot->layout;
                 
-                ObjectLayout* layout = slot->layout;
-                for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
+                for(EquipmentLayout* layout = node->data.equipmentMapping->firstEquipmentLayout; layout; layout = layout->next)
                 {
-                    b32 found = false;
-                    r32 equipmentAngle;
-                    Vec2 equipmentOffset;
-                    Vec2 equipmentScale;
-                    r32 equipmentZOffset;
-                    
-                    if(false)
+                    if(layout->layoutHashID == reference->nameHashID)
                     {
-                        
-                    }
-                    else
-                    {
-                        equipmentAngle = single->angle;
-                        equipmentOffset = single->assOffset;
-                        equipmentScale = single->scale;
-                        equipmentZOffset = single->zOffset;
-                        found = true;
-                    }
-                    
-                    if(found)
-                    {
-                        Assert(blended->equipmentAssCount[assIndex] < ArrayCount(blended->equipment[0]));
-                        u32 equipmentAssIndex = blended->equipmentAssCount[assIndex]++;
-                        
-                        EquipmentAnimationPiece* dest = blended->equipment[assIndex] + equipmentAssIndex;
-                        PieceAss* destAss = &dest->ass;
-                        SpriteInfo* destSprite = &dest->sprite;
-                        
-                        *destAss = {};
-                        *destSprite = {};
-                        
-                        r32 finalAngle = DegToRad(AssFinalAngle(parentBone, ass) + equipmentAngle + piece->angle);
-                        
-                        Vec2 layoutX = V2(Cos(finalAngle), Sin(finalAngle));
-                        Vec2 layoutY = Perp(layoutX);
-                        
-                        layoutX *= equipmentScale.x;
-                        layoutY *= equipmentScale.y;
-                        
-                        Vec2 layoutOffset =  piece->offset.x * layoutX + piece->offset.y * layoutY;
-                        
-                        destAss->boneOffset = ass->boneOffset + GetBoneAxisOffset(parentBone, equipmentOffset + layoutOffset);
-                        destAss->additionalZOffset = equipmentZOffset + piece->offset.z;
-                        destAss->angle = ass->angle + equipmentAngle + piece->angle;
-                        destAss->scale = Hadamart(Hadamart(ass->scale, piece->scale), equipmentScale);
-                        destAss->alpha = 1.0f;
-                        
-                        destSprite->pivot = piece->pivot;
-                        destSprite->stringHashID = piece->componentHashID;
-                        destSprite->index = piece->index;
-                        destSprite->flags = 0;
-                        
-                        dest->status = slot->status;
-                        dest->properties = &slot->properties;
+                        for(LayoutPiece* piece = reference->firstPiece; piece; piece = piece->next)
+                        {
+							if(piece->parent)
+							{
+                                InvalidCodePath;
+#if 0
+								DoStuff;
+								sstringHash = parent->stringhash;
+								index = parent->index;
+								AddOffset(piece->parentOffset);
+								AddScale();
+								AddAngle();
+#endif
+                                
+                                
+							}
+                            
+                            for(EquipmentAss* eq = layout->firstEquipmentAss; eq; eq = eq->next)
+                            {
+                                u32 assIndex = eq->assIndex;
+                                PieceAss* ass = blended->ass + assIndex;
+                                Bone* parentBone = blended->bones + ass->boneID;
+                                
+                                if(eq->index == 0xff || (eq->stringHashID == piece->componentHashID && eq->index == piece->index))
+                                {
+                                    Assert(blended->equipmentAssCount[assIndex] < ArrayCount(blended->equipment[0]));
+                                    u32 equipmentAssIndex = blended->equipmentAssCount[assIndex]++;
+                                    
+                                    EquipmentAnimationPiece* dest = blended->equipment[assIndex] + equipmentAssIndex;
+                                    PieceAss* destAss = &dest->ass;
+                                    SpriteInfo* destSprite = &dest->sprite;
+                                    
+                                    *destAss = {};
+                                    *destSprite = {};
+                                    
+                                    
+                                    destAss->additionalZOffset = eq->zOffset;
+                                    destAss->angle = ass->angle + eq->angle;
+                                    destAss->scale = Hadamart(ass->scale, eq->scale);
+                                    
+                                    Vec2 layoutOffset = {};
+                                    if(eq->index == 0xff)
+                                    {
+                                        destAss->additionalZOffset += piece->offset.z;
+                                        destAss->angle += piece->angle;
+                                        destAss->scale = Hadamart(destAss->scale, piece->scale);
+                                        
+                                        
+                                        r32 finalAngle = DegToRad(AssFinalAngle(parentBone, ass) + eq->angle + piece->angle);
+                                        Vec2 layoutX = V2(Cos(finalAngle), Sin(finalAngle));
+                                        Vec2 layoutY = Perp(layoutX);
+                                        layoutX *= eq->scale.x;
+                                        layoutY *= eq->scale.y;
+                                        layoutOffset =  piece->offset.x * layoutX + piece->offset.y * layoutY;
+                                    }
+                                    
+                                    destAss->boneOffset = ass->boneOffset + GetBoneAxisOffset(parentBone, eq->assOffset + layoutOffset);
+                                    
+                                    
+                                    destAss->alpha = 1.0f;
+                                    
+                                    destSprite->pivot = piece->pivot;
+                                    destSprite->stringHashID = piece->componentHashID;
+                                    destSprite->index = piece->index;
+                                    destSprite->flags = 0;
+                                    
+                                    dest->status = slot->status;
+                                    dest->properties = &slot->properties;
+                                }
+                            }
+                        }
+                        break;
                     }
                 }
             }

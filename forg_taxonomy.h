@@ -68,30 +68,40 @@ struct AttributeSlot
     r32 valueR32;
 };
 
-
-struct EquipmentPiece
+struct EquipmentAss
 {
-    u32 assIndex;
     u64 stringHashID;
     u8 index;
+    
+    u32 assIndex;
+    
     Vec2 assOffset;
     r32 zOffset;
     r32 angle;
-    
     Vec2 scale;
-    Vec2 pivot;
     
     union
     {
-        EquipmentPiece* next;
-        EquipmentPiece* nextFree;
+        EquipmentAss* next;
+        EquipmentAss* nextFree;
+    };
+};
+
+struct EquipmentLayout
+{
+    u64 layoutHashID;
+    EquipmentAss* firstEquipmentAss;
+    
+    union
+    {
+        EquipmentLayout* next;
+        EquipmentLayout* nextFree;
     };
 };
 
 struct EquipmentMapping
 {
-    b32 multiPart;
-    EquipmentPiece* firstEquipmentPiece;
+    EquipmentLayout* firstEquipmentLayout;
     
     union
     {
@@ -141,6 +151,7 @@ struct LayoutPiece
     u8 index;
     u32 flags;
     
+    char name[32];
 	LayoutPiece* parent;
     u32 ingredientCount;
     u32 ingredientTaxonomies[MAX_COMPONENT_PER_MODULE];
@@ -162,6 +173,8 @@ printTable(noPrefix) enum LayoutType
 
 struct ObjectLayout
 {
+    char name[32];
+    u64 nameHashID;
     LayoutPiece* firstPiece;
     
     union
@@ -468,7 +481,8 @@ struct TaxonomyTable
     
     
     EquipmentMapping* firstFreeEquipmentMapping;
-    EquipmentPiece* firstFreeEquipmentPiece;
+    EquipmentLayout* firstFreeEquipmentLayout;
+    EquipmentAss* firstFreeEquipmentAss;
     ConsumeMapping* firstFreeConsumeMapping;
     TaxonomyNode* firstFreeTaxonomyNode;
     MemSynthOption* firstFreeMemSynthOption;
