@@ -145,6 +145,7 @@ enum EditorWidgetType
 
 struct WidgetPermanent
 {
+    r32 fontSize;
     Vec2 P;
     b32 expanded;
 };

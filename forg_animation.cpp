@@ -971,20 +971,11 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
             Assert(IsValid(BID));
             if(params->drawEmptySpaces)
             {
-                Vec2 minDimTest = Hadamart(pieceParams.scale, ass->scale);
-                r32 minDim = Min(minDimTest.x, minDimTest.y);
-                r32 zoomCoeff = 1.0f / minDim;
-                input->output->additionalZoomCoeff = Max(input->output->additionalZoomCoeff, zoomCoeff);
-                
                 Vec2 finalScale = Hadamart(pieceParams.scale, ass->scale);
                 Bitmap* bitmap = GetBitmap(group->assets, BID);
                 
-                ObjectTransform spaceTransform = UprightTransform();
-                spaceTransform.cameraOffset = pieceParams.cameraOffset;
-                
                 if(bitmap)
                 {
-                    Vec4 cellColor = V4(pieceParams.color.rgb, 0.5f);
                     r32 zOffset = 0.0f;
                     
                     Vec3 originalGridDim = V3(Hadamart(finalScale, V2(bitmap->widthOverHeight * bitmap->nativeHeight, bitmap->nativeHeight)), 0);
@@ -993,9 +984,22 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     u8 gridDimY = input->objectGridDimY;
                     r32 cellDim =ArrangeObjects(gridDimX, gridDimY, originalGridDim);
                     
+                    r32 zoomCoeff = 1.0f / cellDim;
+                    input->output->additionalZoomCoeff = Max(input->output->additionalZoomCoeff, zoomCoeff);
+                    
+                    
                     Vec3 gridDim = cellDim * V3(gridDimX, gridDimY, 0);
                     Vec3 halfGridDim = 0.5f * gridDim;
                     Vec3 lowLeftCorner = pieceParams.cameraOffset - halfGridDim + 0.5f * V3(cellDim, cellDim, 0);
+                    
+                    
+                    if(input->debug.ortho)
+                    {
+                        ObjectTransform debugCell = FlatTransform();
+                        debugCell.additionalZBias = params->additionalZbias;
+                        Rect2 cellDebugRect = RectCenterDim(P.xy + pieceParams.cameraOffset.xy, originalGridDim.xy);
+                        PushRect(group, debugCell, cellDebugRect, V4(0, 0, 0, 0.7f));
+                    }
                     
                     for(u8 Y = 0; Y < gridDimY; ++Y)
                     {
@@ -1019,28 +1023,43 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                             }
                             
                             Assert(P.z == 0.0f);
-                            Rect2 cellRect = ProjectOnGround(group, P, pieceParams.cameraOffset, V3(cellDim, cellDim, 0));
+                            Rect2 cellRect = ProjectOnGround(group, P, objectP, V3(cellDim, cellDim, 0));
                             
-                            if(PointInRect(cellRect, input->mousePOnGround.xy))
+                            if(input->debug.ortho)
                             {
-                                if(!input->draggingEntity->taxonomy || input->draggingEntity->objects.objectCount == 0)
+                                ObjectTransform debugCell = FlatTransform();
+                                debugCell.additionalZBias = params->additionalZbias;
+                                Rect2 cellDebugRect = RectCenterDim(P.xy + objectP.xy, V2(cellDim, cellDim));
+                                PushRect(group, debugCell, cellDebugRect, V4(1, 1, 1, 0.7f));
+                            }
+                            else
+                            {
+                                Vec4 cellColor = V4(pieceParams.color.rgb, 0.5f);
+                                if(PointInRect(cellRect, input->mousePOnGround.xy))
                                 {
-                                    input->output->focusObjectIndex = objectIndex;
-                                    if(!input->draggingEntity)
+                                    if(!input->draggingEntity->taxonomy || input->draggingEntity->objects.objectCount == 0)
                                     {
-                                        objectScale = 2.5f;
-                                    }
-                                    zOffset = 0.01f;
-                                    
-                                    if(input->draggingEntity->objects.objectCount == 0)
-                                    {
-                                        cellColor.a = 0.8f;
+                                        input->output->focusObjectIndex = objectIndex;
+                                        if(!input->draggingEntity)
+                                        {
+                                            objectScale = 2.5f;
+                                        }
+                                        zOffset = 0.01f;
+                                        
+                                        if(input->draggingEntity->objects.objectCount == 0)
+                                        {
+                                            cellColor.a = 0.8f;
+                                        }
                                     }
                                 }
+                                
+                                ObjectTransform spaceTransform = UprightTransform();
+                                spaceTransform.additionalZBias += params->additionalZbias;
+                                spaceTransform.cameraOffset = objectP;
+                                
+                                PushRect(group, spaceTransform, P, V2(cellDim, cellDim), cellColor, pieceParams.lightIndexes);
                             }
-                            spaceTransform.additionalZBias += params->additionalZbias;
                             
-                            PushBitmap_(group, spaceTransform, bitmap, P, 0, finalScale, cellColor, pieceParams.lightIndexes, V2(0.5f, 0.5f));
                             pieceParams.cameraOffset = objectP;
                             
                             u32 taxonomy = object->taxonomy;

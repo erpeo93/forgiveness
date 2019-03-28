@@ -386,7 +386,7 @@ struct UIAddTabResult
 inline void AddConfirmActions(UIState* UI, EditorWidget* widget, UIInteraction* interaction, char* dest, u32 destSize)
 {
 	UIAddUndoRedoAction(interaction, UI_Trigger, UndoRedoString(widget, dest, destSize, dest, UI->keyboardBuffer));            
-	UIAddStandardAction(interaction, UI_Trigger, dest, ColdPointer(dest), ColdPointer(UI->keyboardBuffer));
+	UIAddStandardAction_(interaction, UI_Trigger, destSize, ColdPointer(dest), ColdPointer(UI->keyboardBuffer));
 	UIAddSetValueAction(interaction, UI_Trigger, &UI->activeLabel, 0); 
 	UIAddSetValueAction(interaction, UI_Trigger, &UI->active, 0);    
     UIAddClearAction(interaction, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));
@@ -547,6 +547,8 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
     EditorElement* grandFather = parents.grandParents[0];
     
     Rect2 totalResult = InvertedInfinityRect2();
+    
+    u32 childIndex = 0;
     for(EditorElement* root = root_; root; root = root->next)
     {
 		if(root->flags & EditorElem_DontRender)
@@ -587,9 +589,20 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             
             Rect2 result = InvertedInfinityRect2();
             char name[128];
+            
+            b32 deleteName = false;
+            if(father && father->type == EditorElement_List && !root->name[0])
+            {
+                FormatString(root->name, sizeof(root->name), "000%d", childIndex);
+                deleteName = true;
+            }
             if(root->type == EditorElement_List)
             {
-                FormatString(name, sizeof(name), "%s |-|", root->name);
+                FormatString(name, sizeof(name), " [ ] %s", root->name);
+            }
+            else if(root->type == EditorElement_Struct)
+            {
+                FormatString(name, sizeof(name), "{ } %s", root->name);
             }
             else
             {
@@ -597,6 +610,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             }
             
             
+          
             
             Rect2 nameBounds = GetUIOrthoTextBounds(UI, name, layout->fontScale, layout->P);
             Vec4 nameColor = V4(1, 1, 1, 1);
@@ -665,6 +679,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
 					{
                         Vec4 shadowColor = V4(0.6f, 0.6f, 0.6f, 1.0f);
                         PushUIOrthoText(UI, root->value, layout->fontScale, valueP, shadowColor, layout->additionalZBias);
+                        result = Union(result, GetUIOrthoTextBounds(UI, root->value, layout->fontScale, valueP));
 					}
                     
                     UIAddTabResult addTab = UIAddTabValueInteraction(UI, widget, input, parents, root, valueP, layout, text);
@@ -700,7 +715,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             r32 thickness = 2;
                             ObjectTransform nameTranform = FlatTransform();
                             nameTranform.additionalZBias = layout->additionalZBias;
-                            PushRectOutline(UI->group, nameTranform, nameBounds, outlineColor, thickness);
+                            //PushRectOutline(UI->group, nameTranform, nameBounds, outlineColor, thickness);
                         }
                         else
                         {
@@ -729,7 +744,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             }
                         }
                         
-                        b32 moveHorizontally = (root->firstInList && root->firstInList->name[0]);
+                        b32 moveHorizontally = (root->firstInList != 0);
                         if(moveHorizontally)
                         {
                             layout->P += V2(layout->nameValueDistance, 0);
@@ -954,7 +969,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         ObjectTransform structTranform = FlatTransform();
                         structTranform.additionalZBias = layout->additionalZBias;
                         
-                        PushRectOutline(UI->group, structTranform, realBounds, outlineColor, thickness);
+                        //PushRectOutline(UI->group, structTranform, realBounds, outlineColor, thickness);
                     }
                 } break;
                 
@@ -1203,6 +1218,13 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             }
             
             totalResult = Union(totalResult, result);
+            
+            ++childIndex;
+            if(deleteName)
+            {
+                ZeroStruct(root->name);
+            }
+            
         }
     }
     
@@ -1387,7 +1409,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     
     if(UI->showCursor)
     {
-        FormatString(UI->showBuffer, sizeof(UI->showBuffer), "%s|", UI->keyboardBuffer);
+        FormatString(UI->showBuffer, sizeof(UI->showBuffer), "%s_", UI->keyboardBuffer);
     }
     else
     {
@@ -1526,6 +1548,14 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     for(u32 widgetIndex = 0; widgetIndex < EditorWidget_Count; ++widgetIndex)
     {
         EditorWidget* widget = UI->widgets + widgetIndex;
+        
+        widget->permanent.fontSize = Clamp(0.3f, widget->permanent.fontSize, 3.0f);
+        
+        EditorLayout layout_ = widget->layout;
+        layout_.fontScale *= widget->permanent.fontSize;
+        layout_.nameValueDistance *= widget->permanent.fontSize;
+        layout_.childStandardHeight *= widget->permanent.fontSize;
+        
         if(widget->necessaryRole & UI->worldMode->editorRoles)
         {
             if(widget->needsToBeReloaded)
@@ -1545,8 +1575,8 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             }
             
             Vec2 resizeP = widget->permanent.P;
-            Vec2 widgetP = resizeP + V2(20, -8);
-            Vec2 resizeDim = V2(8, 8);
+            Vec2 widgetP = resizeP + widget->permanent.fontSize * V2(20, -8);
+            Vec2 resizeDim = widget->permanent.fontSize * V2(8, 8);
             Rect2 rect = RectCenterDim(resizeP, resizeDim);
             Vec4 color = V4(1, 1, 1, 1);
             if(PointInRect(rect, UI->relativeScreenMouse))
@@ -1563,7 +1593,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             PushRect(UI->group, sizeTranform, rect, color);
             
             
-            EditorLayout* layout = &widget->layout;
+            EditorLayout* layout = &layout_;
             layout->P = widgetP;
             layout->additionalZBias = widgetZ;
             
@@ -1589,12 +1619,12 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                             Vec2 leftP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
                             
                             
-                            UIButton leftButton = UIBtn(UI, leftP, &widget->layout, V4(1, 0, 0, 1), " << ");
+                            UIButton leftButton = UIBtn(UI, leftP, layout, V4(1, 0, 0, 1), " << ");
                             UIButtonInteraction(&leftButton, UISetValueInteraction(UI_Trigger, &UI->editingTabIndex, UI->editingTabIndex - 1));
                             UIDrawButton(UI, input, &leftButton);
                             
                             Vec2 rightP = UIFollowingP(&leftButton, 10.0f);
-                            UIButton rightButton = UIBtn(UI, rightP, &widget->layout, V4(1, 0, 0, 1), " >> ");
+                            UIButton rightButton = UIBtn(UI, rightP, layout, V4(1, 0, 0, 1), " >> ");
                             UIButtonInteraction(&rightButton, UISetValueInteraction(UI_Trigger, &UI->editingTabIndex, UI->editingTabIndex + 1));
                             UIDrawButton(UI, input, &rightButton);
                             
@@ -1615,7 +1645,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                             
                             char* name = editingSlot->name[0] == '#' ? editingSlot->name + 1 : editingSlot->name;
                             FormatString(saveText, sizeof(saveText), "Save %s", name);
-                            UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1), saveText);
+                            UIButton saveButton = UIBtn(UI, saveP, layout, V4(1, 0, 0, 1), saveText);
                             UIButtonInteraction(&saveButton, saveInteraction);
                             UIDrawButton(UI, input, &saveButton, buttonAlpha);
                             
@@ -1623,7 +1653,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                             if(parentTaxonomy)
                             {
                                 Vec2 editParentP = UIFollowingP(&saveButton, 30.0f);
-                                UIButton editParentButton = UIBtn(UI, editParentP, &widget->layout, V4(1, 0, 0, 1), "Edit Parent");
+                                UIButton editParentButton = UIBtn(UI, editParentP, layout, V4(1, 0, 0, 1), "Edit Parent");
                                 
                                 
                                 UIButtonInteraction(&editParentButton, SendRequestInteraction(UI_Trigger, EditRequest(parentTaxonomy))); 
@@ -1639,7 +1669,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     case EditorWidget_GeneralButtons:
                     {
                         Vec2 reloadP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
-                        UIButton reloadButton = UIBtn(UI, reloadP, &widget->layout, V4(1, 0, 0, 1), " RELOAD ASSETS ");
+                        UIButton reloadButton = UIBtn(UI, reloadP, layout, V4(1, 0, 0, 1), " RELOAD ASSETS ");
                         
                         UIInteraction reloadInteraction = NullInteraction();
                         r32 reloadAlpha = 0.2f;
@@ -1655,7 +1685,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                         
                         
                         Vec2 patchCheckP = UIFollowingP(&reloadButton, 20);
-                        UIButton patchCheckButton = UIBtn(UI, patchCheckP, &widget->layout, V4(1, 0, 0, 1), " PATCH CHECK ");
+                        UIButton patchCheckButton = UIBtn(UI, patchCheckP, layout, V4(1, 0, 0, 1), " PATCH CHECK ");
                         
                         r32 checkAlpha = 0.2f;
                         UIInteraction checkInteraction = NullInteraction();
@@ -1670,7 +1700,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                         
                         
                         Vec2 patchP = UIFollowingP(&patchCheckButton, 20);
-                        UIButton patchButton = UIBtn(UI, patchP, &widget->layout, V4(1, 0, 0, 1), " PATCH SERVER ");
+                        UIButton patchButton = UIBtn(UI, patchP, layout, V4(1, 0, 0, 1), " PATCH SERVER ");
                         
                         r32 patchAlpha = 0.2f;
                         UIInteraction patchInteraction = NullInteraction();
@@ -1690,7 +1720,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                         
                         UIInteraction saveInteraction = NullInteraction();
                         
-                        UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1.0f), " SAVE ");
+                        UIButton saveButton = UIBtn(UI, saveP, layout, V4(1, 0, 0, 1.0f), " SAVE ");
                         
                         r32 buttonAlpha = 0.2f;
                         if(widget->changeCount)
@@ -1711,7 +1741,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                         
                         UIInteraction saveInteraction = NullInteraction();
                         
-                        UIButton saveButton = UIBtn(UI, saveP, &widget->layout, V4(1, 0, 0, 1.0f), " SAVE ");
+                        UIButton saveButton = UIBtn(UI, saveP, layout, V4(1, 0, 0, 1.0f), " SAVE ");
                         
                         r32 buttonAlpha = 0.2f;
                         if(widget->changeCount)
@@ -1740,11 +1770,24 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             ObjectTransform widgetBoundsTransform = FlatTransform();
             widgetBoundsTransform.additionalZBias = widgetZ - 0.001f;
             
-            PushRect(UI->group, widgetBoundsTransform, widgetBounds, V4(0, 0, 0, 0.5f));
+            r32 boundsAlpha = 0.5f;
             if(PointInRect(widgetBounds, UI->relativeScreenMouse))
             {
-                widget->permanent.P.y -= input->mouseWheelOffset * 10.0f;
+                    boundsAlpha = 0.8f;   
+                if(input->ctrlDown)
+                {
+                    if(input->mouseWheelOffset)
+                    {
+                    widget->permanent.fontSize += (r32) input->mouseWheelOffset * 0.1f;
+                        
+                    }                    
+                }
+                else
+                {
+                    widget->permanent.P.y -= input->mouseWheelOffset * 10.0f;
+                }
             }
+            PushRect(UI->group, widgetBoundsTransform, widgetBounds, V4(0, 0, 0, boundsAlpha));
             
             widgetZ += 1.0f;
         }
@@ -2266,6 +2309,7 @@ inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, u32 neces
     EditorWidget* result = UI->widgets + widget;
     *result = {};
     result->permanent.expanded = true;
+    result->permanent.fontSize = 1.0f;
     result->necessaryRole = necessaryRole;
     result->layout.fontScale = 0.42f;
     result->layout.nameValueDistance = 50;
@@ -2311,6 +2355,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             EditorElement* animationRoot;
             FREELIST_ALLOC(animationRoot, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
             animationRoot->type = EditorElement_Animation;
+            
             
             EditorElement* animationActionTimer;
             FREELIST_ALLOC(animationActionTimer, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));

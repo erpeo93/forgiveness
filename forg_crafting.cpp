@@ -157,7 +157,7 @@ internal void Craft(SimRegion* region, SimEntity* dest, u32 taxonomy, u64 recipe
         for(TaxonomyEssence* essenceSlot = ingredientSlot->essences; essenceSlot; essenceSlot = essenceSlot->next)
         {
             EssenceSlot essence = essenceSlot->essence;
-            essence.quantity *= ingredients.quantities[ingredientIndex];
+            essence.quantity += ingredients.quantities[ingredientIndex];
             
             Assert(availableEssenceCount < ArrayCount(availableEssences));
             availableEssences[availableEssenceCount++] = essence;

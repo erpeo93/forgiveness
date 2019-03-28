@@ -955,6 +955,9 @@ inline void SaveCreatureAttribute(char* attributeName, r32 value)
     attr->valueR32 = value;
 }
 
+#endif
+
+
 inline void InventorySpace(u8 width, u8 height)
 {
     TaxonomySlot* slot = currentSlot_;
@@ -962,8 +965,6 @@ inline void InventorySpace(u8 width, u8 height)
     slot->gridDimX = width;
     slot->gridDimY = height;
 }
-#endif
-
 
 inline void AddEssence(char* name, u32 quantity)
 {
@@ -3167,13 +3168,6 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         }
     }
     
-    else if(StrEqual(name, "space"))
-    {
-        u8 width = ToU8(GetValue(root, "width"));
-        u8 height = ToU8(GetValue(root, "height"));
-        
-        InventorySpace(width, height);
-    }
     else if(StrEqual(name, "plantPhases"))
     {
         EditorElement* status = root->firstInList;
@@ -3255,7 +3249,13 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         }
     }
 #endif
-    
+    else if(StrEqual(name, "space"))
+    {
+        u8 width = ToU8(GetValue(root, "width"));
+        u8 height = ToU8(GetValue(root, "height"));
+        
+        InventorySpace(width, height);
+    }
 #ifndef FORG_SERVER
     else if(StrEqual(name, "visualLabels"))
     {
