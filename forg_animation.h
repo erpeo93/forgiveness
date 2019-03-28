@@ -228,6 +228,9 @@ struct AnimationFixedParams
     u8 objectCount;
     Object* objects;
     
+    u8 objectGridDimX;
+    u8 objectGridDimY;
+    
     r32 minFocusSlotDistanceSq;
     r32 minHotAssDistanceSq;
     

@@ -356,7 +356,7 @@ struct TaxonomySlot
     
     b32 isPassiveSkill;
     EffectIdentifier effectID;
-    u8 spaceSlotCount;
+    
     u8 gridDimX;
     u8 gridDimY;
     

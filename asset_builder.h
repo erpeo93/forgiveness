@@ -114,7 +114,6 @@ struct PieceAss
 enum SpriteInfoFlags
 {
     Sprite_Composed = (1 << 1),
-    Sprite_EmptySpace = (1 << 2),
     Sprite_Entity = (1 << 3),
 };
 

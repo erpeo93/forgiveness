@@ -605,51 +605,40 @@ inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 entityHa
     TagVector match = {};
     TagVector weight = {};
     
-    if(sprite->flags & Sprite_EmptySpace)
+    match.E[Tag_firstHashHalf] = (r32) (entityHashID >> 32);
+    match.E[Tag_secondHashHalf] = (r32) (entityHashID & 0xFFFFFFFF);
+    weight.E[Tag_firstHashHalf] = 10.0f;
+    weight.E[Tag_secondHashHalf] = 10.0f;
+    u32 assetIndex = Asset_count + (sprite->stringHashID & (HASHED_ASSET_SLOTS - 1));
+    
+    if(properties && properties->componentCount)
     {
-        match.E[Tag_dimX] = 1.0f;
-        match.E[Tag_dimY] = 1.0f;
-        weight.E[Tag_dimX] = 1.0f;
-        weight.E[Tag_dimY] = 1.0f;
-        result = GetMatchingBitmap(group->assets, Asset_emptySpace, &match, &weight);
-    }
-    else
-    {
-        match.E[Tag_firstHashHalf] = (r32) (entityHashID >> 32);
-        match.E[Tag_secondHashHalf] = (r32) (entityHashID & 0xFFFFFFFF);
-        weight.E[Tag_firstHashHalf] = 10.0f;
-        weight.E[Tag_secondHashHalf] = 10.0f;
-        u32 assetIndex = Asset_count + (sprite->stringHashID & (HASHED_ASSET_SLOTS - 1));
+        LabelVector labels;
+        labels.labelCount = 0;
         
-        if(properties && properties->componentCount)
+        for(u32 componentIndex = 0; componentIndex < properties->componentCount; ++componentIndex)
         {
-            LabelVector labels;
-            labels.labelCount = 0;
-            
-            for(u32 componentIndex = 0; componentIndex < properties->componentCount; ++componentIndex)
+            VisualComponent* component = properties->components + componentIndex;
+            if(component->stringHashID == sprite->stringHashID && component->index == sprite->index)
             {
-                VisualComponent* component = properties->components + componentIndex;
-                if(component->stringHashID == sprite->stringHashID && component->index == sprite->index)
+                for(u32 labelIndex = 0; labelIndex < component->labelCount; ++labelIndex)
                 {
-                    for(u32 labelIndex = 0; labelIndex < component->labelCount; ++labelIndex)
+                    if(labels.labelCount < ArrayCount(labels.IDs))
                     {
-                        if(labels.labelCount < ArrayCount(labels.IDs))
-                        {
-                            VisualLabel* label = component->labels + labelIndex;
-                            u32 labelI = labels.labelCount++;
-                            labels.IDs[labelI] = label->ID;
-                            labels.values[labelI] = label->value;
-                        }
+                        VisualLabel* label = component->labels + labelIndex;
+                        u32 labelI = labels.labelCount++;
+                        labels.IDs[labelI] = label->ID;
+                        labels.values[labelI] = label->value;
                     }
                 }
             }
-            result = GetMatchingBitmapHashed(group->assets, sprite->stringHashID, &match, &weight, &labels);
-            
         }
-        else
-        {
-            result = GetMatchingBitmapHashed(group->assets, sprite->stringHashID, &match, &weight, 0);
-        }
+        result = GetMatchingBitmapHashed(group->assets, sprite->stringHashID, &match, &weight, &labels);
+        
+    }
+    else
+    {
+        result = GetMatchingBitmapHashed(group->assets, sprite->stringHashID, &match, &weight, 0);
     }
     
     return result;
@@ -899,6 +888,12 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
     }
 }
 
+inline r32 ArrangeObjects(u8 gridDimX,u8 gridDimY, Vec3 originalGridDim)
+{
+    r32 result = Min(originalGridDim.x / gridDimX, originalGridDim.y / gridDimY);
+    return result;
+}
+
 struct RenderAssResult
 {
     b32 onFocus;
@@ -919,6 +914,9 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
     pieceParams.angle = finalAngle;
     pieceParams.cameraOffset += originOffset;
     pieceParams.entityHashID = sprite->stringHashID;
+    
+    
+    u64 emptySpaceHashID = StringHash("emptySpace");
     
     if(sprite->flags & Sprite_Entity)
     {
@@ -961,13 +959,11 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
             }
 #endif
         }
-        else if(sprite->flags & Sprite_EmptySpace)
+        else if(sprite->stringHashID == emptySpaceHashID)
         {
             Assert(IsValid(BID));
             if(params->drawEmptySpaces)
             {
-                u32 currentObjectIndex = 0;
-                
                 Vec2 minDimTest = Hadamart(pieceParams.scale, ass->scale);
                 r32 minDim = Min(minDimTest.x, minDimTest.y);
                 r32 zoomCoeff = 1.0f / minDim;
@@ -982,101 +978,103 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                 if(bitmap)
                 {
                     Vec4 cellColor = V4(pieceParams.color.rgb, 0.5f);
-                    
-                    
                     r32 zOffset = 0.0f;
                     
-                    Vec3 gridDim = V3(Hadamart(finalScale, V2(bitmap->widthOverHeight * bitmap->nativeHeight, bitmap->nativeHeight)), 0);
+                    Vec3 originalGridDim = V3(Hadamart(finalScale, V2(bitmap->widthOverHeight * bitmap->nativeHeight, bitmap->nativeHeight)), 0);
                     
+                    u8 gridDimX = input->objectGridDimX;
+                    u8 gridDimY = input->objectGridDimY;
+                    r32 cellDim =ArrangeObjects(gridDimX, gridDimY, originalGridDim);
                     
-					//Vec2 cellDim = ?;
-					Vec3 halfGridDim = 0.5f * gridDim;
+                    Vec3 gridDim = cellDim * V3(gridDimX, gridDimY, 0);
+                    Vec3 halfGridDim = 0.5f * gridDim;
+                    Vec3 lowLeftCorner = pieceParams.cameraOffset - halfGridDim + 0.5f * V3(cellDim, cellDim, 0);
                     
-                    r32 cellWidth = gridDim.x;
-                    r32 cellHeight = gridDim.y;
-                    
-                    Vec3 cellDim = V3(cellWidth, cellHeight, 0);
-                    
-                    i32 objectIndex = currentObjectIndex++;
-                    Object* object = input->objects + objectIndex;
-                    
-                    r32 objectScale = 1.0f;
-                    Vec4 objectColor = V4(1, 1, 1, 1);
-                    if(object->status < 0)
+                    for(u8 Y = 0; Y < gridDimY; ++Y)
                     {
-                        objectColor = V4(0.5f, 0.5f, 0.5f, 0.5f);
-                    }
-                    else
-                    {
-                        r32 ratio = Clamp01MapToRange(0, (r32) object->status, (r32) I16_MAX);
-                        Vec4 statusColor = Lerp(bodyDead, ratio, V4(1, 1, 1, 1));
-                        objectColor = statusColor;
-                    }
-                    
-                    Assert(P.z == 0.0f);
-                    Rect2 cellRect = ProjectOnGround(group, P, pieceParams.cameraOffset, cellDim);
-                    
-                    if(PointInRect(cellRect, input->mousePOnGround.xy))
-                    {
-                        if(!input->draggingEntity->taxonomy || input->draggingEntity->objects.objectCount == 0)
+                        for(u8 X = 0; X < gridDimX; ++X)
                         {
-                            input->output->focusObjectIndex = objectIndex;
-                            if(!input->draggingEntity)
+                            i32 objectIndex = 0; 
+                            Object* object = input->objects + objectIndex;
+                            
+                            Vec3 objectP = lowLeftCorner + cellDim * V3(X, Y, 0);
+                            r32 objectScale = 1.0f;
+                            Vec4 objectColor = V4(1, 1, 1, 1);
+                            if(object->status < 0)
                             {
-                                objectScale = 2.5f;
+                                objectColor = V4(0.5f, 0.5f, 0.5f, 0.5f);
                             }
-                            zOffset = 0.01f;
-                            
-                            if(input->draggingEntity->objects.objectCount == 0)
+                            else
                             {
-                                cellColor.a = 0.8f;
+                                r32 ratio = Clamp01MapToRange(0, (r32) object->status, (r32) I16_MAX);
+                                Vec4 statusColor = Lerp(bodyDead, ratio, V4(1, 1, 1, 1));
+                                objectColor = statusColor;
+                            }
+                            
+                            Assert(P.z == 0.0f);
+                            Rect2 cellRect = ProjectOnGround(group, P, pieceParams.cameraOffset, V3(cellDim, cellDim, 0));
+                            
+                            if(PointInRect(cellRect, input->mousePOnGround.xy))
+                            {
+                                if(!input->draggingEntity->taxonomy || input->draggingEntity->objects.objectCount == 0)
+                                {
+                                    input->output->focusObjectIndex = objectIndex;
+                                    if(!input->draggingEntity)
+                                    {
+                                        objectScale = 2.5f;
+                                    }
+                                    zOffset = 0.01f;
+                                    
+                                    if(input->draggingEntity->objects.objectCount == 0)
+                                    {
+                                        cellColor.a = 0.8f;
+                                    }
+                                }
+                            }
+                            spaceTransform.additionalZBias += params->additionalZbias;
+                            
+                            PushBitmap_(group, spaceTransform, bitmap, P, 0, finalScale, cellColor, pieceParams.lightIndexes, V2(0.5f, 0.5f));
+                            pieceParams.cameraOffset = objectP;
+                            
+                            u32 taxonomy = object->taxonomy;
+                            u64 recipeIndex = object->recipeIndex;
+                            
+                            if(taxonomy)
+                            {
+                                if(IsRecipe(object))
+                                {
+                                    taxonomy = input->taxTable->recipeTaxonomy;
+                                    recipeIndex = 0;
+                                }
+                                TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, taxonomy);
+                                AnimationVolatileParams objectParams = pieceParams;
+                                objectParams.entityHashID = slot->stringHashID;
+                                
+                                ObjectLayout* layout = GetLayout(input->taxTable, taxonomy, true, false);
+                                Rect2 animationBounds = GetLayoutBounds(input, group, layout, &objectParams);
+                                if(HasArea(animationBounds))
+                                {
+                                    r32 cellFillPercentage = 0.9f;
+                                    Vec2 boundsDim = GetDim(animationBounds);
+                                    r32 scaleX = cellDim / boundsDim.x * cellFillPercentage;
+                                    r32 scaleY = cellDim / boundsDim.y * cellFillPercentage;
+                                    
+                                    r32 cellScale = Min(scaleX, scaleY);
+                                    objectParams.cameraOffset -= cellScale * V3(GetCenter(animationBounds), 0);
+                                    objectParams.scale *= Min(scaleX, scaleY);
+                                    objectParams.scale *= objectScale;
+                                    objectParams.color = objectColor;
+                                    objectParams.zOffset += zOffset;
+                                    objectParams.additionalZbias += 0.01f;
+                                    
+                                    ComponentsProperties objectProperties;
+                                    objectParams.properties = &objectProperties;
+                                    GetVisualProperties(&objectProperties, input->taxTable, taxonomy, recipeIndex, false, false);
+                                    
+                                    DrawModularPiece(input, group, P, slot->taxonomy, &objectParams, true, false, false);
+                                }
                             }
                         }
-                    }
-                    spaceTransform.additionalZBias += params->additionalZbias;
-                    
-                    PushBitmap_(group, spaceTransform, bitmap, P, 0, finalScale, cellColor, pieceParams.lightIndexes, V2(0.5f, 0.5f));
-                    Vec3 startingOffset = pieceParams.cameraOffset - halfGridDim + 0.5f * cellDim;
-                    pieceParams.cameraOffset = startingOffset;
-                    
-                    u32 taxonomy = object->taxonomy;
-                    u64 recipeIndex = object->recipeIndex;
-                    
-                    if(taxonomy)
-                    {
-                        if(IsRecipe(object))
-                        {
-                            taxonomy = input->taxTable->recipeTaxonomy;
-                            recipeIndex = 0;
-                        }
-                        TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, taxonomy);
-                        AnimationVolatileParams objectParams = pieceParams;
-                        objectParams.entityHashID = slot->stringHashID;
-                        
-                        ObjectLayout* layout = GetLayout(input->taxTable, taxonomy, true, false);
-                        Rect2 animationBounds = GetLayoutBounds(input, group, layout, &objectParams);
-                        if(HasArea(animationBounds))
-                        {
-                            r32 cellFillPercentage = 0.9f;
-                            Vec2 boundsDim = GetDim(animationBounds);
-                            r32 scaleX = cellDim.x / boundsDim.x * cellFillPercentage;
-                            r32 scaleY = cellDim.y / boundsDim.y * cellFillPercentage;
-                            
-                            r32 cellScale = Min(scaleX, scaleY);
-                            objectParams.cameraOffset -= cellScale * V3(GetCenter(animationBounds), 0);
-                            objectParams.scale *= Min(scaleX, scaleY);
-                            objectParams.scale *= objectScale;
-                            objectParams.color = objectColor;
-                            objectParams.zOffset += zOffset;
-                            objectParams.additionalZbias += 0.01f;
-                            
-                            ComponentsProperties objectProperties;
-                            objectParams.properties = &objectProperties;
-                            GetVisualProperties(&objectProperties, input->taxTable, taxonomy, recipeIndex, false, false);
-                            
-                            DrawModularPiece(input, group, P, slot->taxonomy, &objectParams, true, false, false);
-                        }
-                        
                     }
                 }
                 else
@@ -1576,6 +1574,10 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
     
     input->objectCount = entityC->objects.objectCount;
     input->objects = entityC->objects.objects;
+    
+    TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, entityC->taxonomy);
+    input->objectGridDimX = slot->gridDimX;
+    input->objectGridDimY = slot->gridDimY;
     
     input->draggingEntity = &worldMode->UI->draggingEntity;
     

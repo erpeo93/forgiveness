@@ -984,8 +984,6 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                     
                     u8 flags = 0;
                     b32 isComposed = false;
-                    b32 isEmptySpace = false;
-                    b32 isSubPart = false;
                     b32 isEntity = false;
                     
                     char* pieceName = GetXMLValues(&currentTag, "name");
@@ -1031,12 +1029,6 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                     }
                     stringHash = StringHash(pieceName, namelength);
                     
-                    isEmptySpace = StrEqual(StrLen("space"), "space", pieceName);
-                    if(isEmptySpace)
-                    {
-                        isEntity = false;
-                        isComposed = false;
-                    }
                     
                     tempSprite->stringHashID = stringHash;
                     tempSprite->pivot = pivot;
@@ -1045,11 +1037,6 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                     if(isComposed)
                     {
                         tempSprite->flags |= Sprite_Composed;
-                    }
-                    
-                    if(isEmptySpace)
-                    {
-                        tempSprite->flags |= Sprite_EmptySpace;
                     }
                     
                     if(isEntity)
@@ -2684,37 +2671,6 @@ internal void WriteComponents()
     free(subdir);
 }
 
-
-internal void WriteSpaces()
-{
-    Assets assets_;
-    Assets* assets = &assets_;
-    InitializeAssets(assets);
-    
-    BeginAssetType(assets, Asset_emptySpace);
-    
-    char emptySpacePath[64];
-    FormatString(emptySpacePath, sizeof(emptySpacePath), "%s/%s", "definition/equipment", "emptySpace");
-    
-    PlatformFileGroup fileGroup = Win32GetAllFilesBegin(PlatformFile_image, emptySpacePath);
-    Assert(fileGroup.fileCount == 1);
-    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex )
-    {
-        PlatformFileHandle handle = Win32OpenNextFile(&fileGroup, emptySpacePath);
-        AddBitmapAsset(emptySpacePath, handle.name);
-        
-        u8 dimX = 1;
-        u8 dimY = 1;
-        AddTag(Tag_dimX, dimX);
-        AddTag(Tag_dimY, dimY);
-    }
-    
-    Win32GetAllFilesEnd(&fileGroup );
-    EndAssetType();
-    
-    WritePak(assets, "forgemptyspaces.pak" );
-}
-
 internal void WriteLeafs()
 {
     char* leafPath = "definition/leafs";
@@ -2840,7 +2796,6 @@ internal void WriteAnimationAutocompleteFile(char* path, char* skeletonName)
 internal void WriteBitmapsAndAnimations()
 {
     WriteComponents();
-    WriteSpaces();
     WriteLeafs();
     WriteUI();
     
