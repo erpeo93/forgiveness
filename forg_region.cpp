@@ -1374,7 +1374,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             
             TaxonomySlot* slot = GetSlotForTaxonomy(server->activeTable, request.taxonomy);
             
-            if(slot->firstDefaultLayout)
+            if(slot->firstLayout)
             {
                 u64 recipeIndex = GetNextUInt32(&server->instantiateSequence);
                 params = Crafting(recipeIndex);

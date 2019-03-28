@@ -5,54 +5,20 @@ struct RecipeIngredients
     u32 quantities[16];
 };
 
-inline ObjectLayout* GetLayout(TaxonomyTable* table, u32 taxonomy, b32 onGround, b32 drawOpened)
+inline ObjectLayout* GetLayout(TaxonomyTable* table, u32 taxonomy)
 {
     ObjectLayout* result = 0;
     
-    
-    b32 found = false;
-    if(onGround)
+    u32 testTaxonomy = taxonomy;
+    while(testTaxonomy)
     {
-        u32 testTaxonomy = taxonomy;
-        while(testTaxonomy)
+        TaxonomySlot* slot = GetSlotForTaxonomy(table, testTaxonomy);
+        if(slot->firstLayout)
         {
-            TaxonomySlot* slot = GetSlotForTaxonomy(table, testTaxonomy);
-            if(slot->firstGroundLayout)
-            {
-                result = slot->firstGroundLayout;
-                break;
-            }
-            testTaxonomy = GetParentTaxonomy(table, testTaxonomy);
+            result = slot->firstLayout;
+            break;
         }
-    }
-    else if(drawOpened)
-    {
-        u32 testTaxonomy = taxonomy;
-        while(testTaxonomy)
-        {
-            TaxonomySlot* slot = GetSlotForTaxonomy(table, testTaxonomy);
-            if(slot->firstOpenLayout)
-            {
-                result = slot->firstOpenLayout;
-                break;
-            }
-            testTaxonomy = GetParentTaxonomy(table, testTaxonomy);
-        }
-    }
-    
-    if(!result)
-    {
-        u32 testTaxonomy = taxonomy;
-        while(testTaxonomy)
-        {
-            TaxonomySlot* slot = GetSlotForTaxonomy(table, testTaxonomy);
-            if(slot->firstDefaultLayout)
-            {
-                result = slot->firstDefaultLayout;
-                break;
-            }
-            testTaxonomy = GetParentTaxonomy(table, testTaxonomy);
-        }
+        testTaxonomy = GetParentTaxonomy(table, testTaxonomy);
     }
     
     return result;
@@ -65,7 +31,7 @@ internal void GetRecipeIngredients(RecipeIngredients* output, TaxonomyTable* tab
     
     RandomSequence seq = Seed((u32)recipeIndex);
     
-    ObjectLayout* layout = GetLayout(table, taxonomy, false, false);
+    ObjectLayout* layout = GetLayout(table, taxonomy);
     if(layout)
     {
         for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)

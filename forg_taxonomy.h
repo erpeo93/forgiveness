@@ -124,18 +124,33 @@ struct ConsumeMapping
     };
 };
 
-
-#define MAX_COMPONENT_PER_MODULE 8
-struct LayoutPiece
+printTable(noPrefix) enum ObjectState
 {
+    ObjectState_Default,
+    ObjectState_Ground,
+    ObjectState_Open,
+    ObjectState_GroundOpen,
+    
+    ObjectState_Count,
+};
+
+struct LayoutPieceParams
+{
+    b32 valid;
     Vec3 parentOffset;
     r32 parentAngle;
     Vec2 scale;
     r32 alpha;
     Vec2 pivot;
+};
+
+#define MAX_COMPONENT_PER_MODULE 8
+struct LayoutPiece
+{
     u64 componentHashID;
     u8 index;
-    u32 flags;
+    
+    LayoutPieceParams params[ObjectState_Count];
     
     char name[32];
 	LayoutPiece* parent;
@@ -150,12 +165,16 @@ struct LayoutPiece
     };
 };
 
-printTable(noPrefix) enum LayoutType
+inline LayoutPieceParams* GetParams(LayoutPiece* piece, ObjectState state)
 {
-    Layout_Default,
-    Layout_Ground,
-    Layout_Open,
-};
+    LayoutPieceParams* params = piece->params + state;
+    if(!params->valid)
+    {
+        params = piece->params + ObjectState_Default;
+    }
+    
+    return params;
+}
 
 struct ObjectLayout
 {
@@ -310,14 +329,8 @@ struct TaxonomySlot
     ConsumeMapping* firstConsumeMapping;
     PlayerPossibleAction* firstPossibleAction;
     
-    u32 defaultLayoutCount;
-    ObjectLayout* firstDefaultLayout;
-    
-    u32 groundLayoutCount;
-    ObjectLayout* firstGroundLayout;
-    
-    u32 openLayoutCount;
-    ObjectLayout* firstOpenLayout;
+    u32 layoutCount;
+    ObjectLayout* firstLayout;
     
     
     TaxonomyEssence* essences;

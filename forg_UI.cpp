@@ -336,7 +336,7 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
         char* equipmentName = GetValue(grandGrandParent, "equipment");
         TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(UI->table, equipmentName);
         
-        for(ObjectLayout* layout = slot->firstDefaultLayout; layout; layout = layout->next)
+        for(ObjectLayout* layout = slot->firstLayout; layout; layout = layout->next)
         {
             UIAddOption(UI, autocomplete, layout->name);
         }
@@ -353,7 +353,7 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
         {
             TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(UI->table, equipmentName);
             
-            for(ObjectLayout* layout = slot->firstDefaultLayout; layout; layout = layout->next)
+            for(ObjectLayout* layout = slot->firstLayout; layout; layout = layout->next)
             {
                 if(StrEqual(layout->name, layoutName))
                 {
@@ -1128,6 +1128,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         b32 showBones = ToB32(GetValue(pause, "showBones"));
                         b32 showBitmaps = ToB32(GetValue(pause, "showBitmaps"));
                         b32 showPivots = ToB32(GetValue(pause, "showPivots"));
+                        b32 drawOpened = ToB32(GetValue(pause, "drawOpened"));
                         r32 scale = ToR32(GetValue(pause, "scale"));
                         
                         r32 speed = ToR32(GetValue(pause, "speed"));
@@ -1163,7 +1164,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         Vec3 animationBase = P;
                         animationBase.xy += Hadamart(info.originOffset, animationScale);
                         
-                        AnimationOutput output =  PlayAndDrawAnimation(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), 0, 0, InvertedInfinityRect2(), 1, {true, showBones, !showBitmaps, showPivots, timer, nameHashID, UI->fakeEquipment});
+                        AnimationOutput output =  PlayAndDrawEntity(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), drawOpened, 0, InvertedInfinityRect2(), 1, {true, showBones, !showBitmaps, showPivots, timer, nameHashID, UI->fakeEquipment});
                         
                         if(output.hotBoneIndex >= 0)
                         {
@@ -2326,6 +2327,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             UIAddChild(UI->table, playButton, EditorElement_String, "showBones", "false");
             UIAddChild(UI->table, playButton, EditorElement_String, "showBitmaps", "true");
             UIAddChild(UI->table, playButton, EditorElement_String, "showPivots", "false");
+            UIAddChild(UI->table, playButton, EditorElement_String, "drawOpened", "false");
             UIAddChild(UI->table, playButton, EditorElement_Unsigned, "seed", "0");
             
             
@@ -2451,7 +2453,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTable(UI, SlotName, "slot");
         UIAddAutocompleteFromTable(UI, EntityAction, "action");
         UIAddAutocompleteFromTable(UI, SoundContainerType, "soundCType");
-        UIAddAutocompleteFromTable(UI, LayoutType, "layoutType");
+        UIAddAutocompleteFromTable(UI, ObjectState, "objectState");
         UIAddAutocompleteFromFiles(UI);
         
         UIAddAutocomplete(UI, "layoutName");

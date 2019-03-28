@@ -1988,49 +1988,6 @@ inline void GetNameWithoutPoint(char* dest, u32 destLength, char* source)
     *dest++ = 0;
 }
 
-inline void AddTagsBasedOnName(char* path, char* filename, u32 animationIndex)
-{
-    char animationName[32];
-    GetAnimationName(path, filename, animationIndex, animationName, sizeof(animationName));
-    
-    char* parse = animationName;
-    
-    b32 ground = false;
-    b32 open = false;
-    
-    while(*parse)
-    {
-        if(*parse == '_')
-        {
-            char* tagName = parse + 1;
-            if(StrEqual(StrLen("open"), "open", tagName))
-            {
-                open = true;
-            }
-            else if(StrEqual(StrLen("ground"), "ground", tagName))
-            {
-                ground = true;
-            }
-        }
-        
-        ++parse;
-    }
-    
-    if(open)
-    {
-        AddTag(Tag_ObjectState, ObjectState_Open);
-    }
-    else if(ground)
-    {
-        AddTag(Tag_ObjectState, ObjectState_Ground);
-    }
-    else
-    {
-        AddTag(Tag_ObjectState, ObjectState_None);
-    }
-}
-
-
 inline char* StringPresentInFile(char* file, char* token, b32 limitToSingleList)
 {
     char* result = 0;
@@ -2439,41 +2396,6 @@ internal void WriteAnimations(char* folder, char* name)
     WritePak(assets, pakName);
 }
 
-
-#if 0
-internal void WriteEquipmentMaps()
-{
-    Assets assets_;
-    Assets* assets = &assets_;
-    InitializeAssets(assets);
-    
-    BeginAssetType(assets, Asset_equipmentMap);
-    
-    char* equipmentPath = "definition/equipment";
-    
-    PlatformFileGroup fileGroup = Win32GetAllFilesBegin(PlatformFile_animation, equipmentPath);
-    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex )
-    {
-        PlatformFileHandle handle = Win32OpenNextFile(&fileGroup, equipmentPath );
-        char* filename = handle.name;
-        if(!StrEqual(StrLen("autosave"), filename, "autosave"))
-        {
-            u32 animationCount = CountAnimationInFile(equipmentPath, filename );
-            for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex )
-            {
-                AddAnimationAsset(equipmentPath, filename, animationIndex );
-                AddTagsBasedOnName(equipmentPath, filename, animationIndex);
-            }
-        }
-        Win32CloseHandle(&handle );
-    }
-    
-    Win32GetAllFilesEnd(&fileGroup );
-    EndAssetType();
-    
-    WritePak(assets, "equipmentmaps.pak" );
-}
-#endif
 
 internal void OutputFoldersAutocompleteFile(char* filename, char* path)
 {

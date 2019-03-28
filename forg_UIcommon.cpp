@@ -1404,7 +1404,7 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         EditorElement* grandParent = (EditorElement*) GetValue(action->grandParent, &interaction->data);
                         EditorElement* root = (EditorElement*) GetValue(action->root, &interaction->data);
                         
-                        b32 slotUsed[Slot_Count] = {};;
+                        b32 slotUsed[Slot_Count] = {};
                         
                         char* slot = GetValue(grandParent, "slot");
                         u8 slotInUse = SafeTruncateToU8(GetValuePreprocessor(SlotName, slot));
@@ -1422,7 +1422,7 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                             u64 recipeIndex = 0;
                             while(true)
                             {
-                                ObjectLayout* layout = GetLayout(UI->table, taxonomy, false, false);
+                                ObjectLayout* layout = GetLayout(UI->table, taxonomy);
                                 if(layout->nameHashID == layoutHashID)
                                 {
                                     break;

@@ -6,13 +6,6 @@ enum FontType
     Font_debug,
 };
 
-enum ObjectState
-{
-    ObjectState_None,
-    ObjectState_Ground,
-    ObjectState_Open,
-};
-
 printTable(noPrefix) enum Material
 {
     Material_None,
@@ -39,7 +32,6 @@ printTable(noPrefix) enum TagId
     
     Tag_dimX,
     Tag_dimY,
-    Tag_ObjectState,
     Tag_Material,
     
     Tag_count,

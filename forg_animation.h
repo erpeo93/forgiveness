@@ -85,7 +85,6 @@ struct PieceResult
 
 struct EquipmentAnimationSlot
 {
-    
     u64 ID;
     struct ObjectLayout* layout;
     u32 taxonomy;
@@ -93,6 +92,7 @@ struct EquipmentAnimationSlot
     ComponentsProperties properties;
     EquipInfo slot;
     b32 drawModulated;
+    b32 isOpen;
 };
 
 struct AnimationOutput

@@ -431,6 +431,9 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
         if(!alreadyInserted)
         {
             inserted[slotIndex] = slot->ID;
+            
+            ObjectState state = slot->isOpen ? ObjectState_Open : ObjectState_Default;
+            
             TaxonomyNode* node = FindInTaxonomyTree(table, equipmentMappings->root, slot->taxonomy);
             if(node && node->data.equipmentMapping)
             {
@@ -442,6 +445,7 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
                     {
                         for(LayoutPiece* piece = reference->firstPiece; piece; piece = piece->next)
                         {
+                            LayoutPieceParams* params = GetParams(piece, state);
                             u64 componentHashID = piece->componentHashID;
                             u8 index = piece->index;
                             b32 decorativePiece = false;
@@ -483,24 +487,25 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
                                     
                                     if(eq->index == 0xff)
                                     {
-                                        zOffset = piece->parentOffset.z;
-                                        angle = piece->parentAngle;
-                                        scale = piece->scale;
-                                        offset = piece->parentOffset.xy;
+                                        zOffset = params->parentOffset.z;
+                                        angle = params->parentAngle;
+                                        scale = params->scale;
+                                        offset = params->parentOffset.xy;
                                         
                                         if(decorativePiece)
                                         {
-                                            zOffset += piece->parent->parentOffset.z;
-                                            angle += piece->parent->parentAngle;
-                                            offset += piece->parent->parentOffset.xy;
+                                            LayoutPieceParams* parentParams = GetParams(piece->parent, state);
+                                            zOffset += parentParams->parentOffset.z;
+                                            angle += parentParams->parentAngle;
+                                            offset += parentParams->parentOffset.xy;
                                         }
                                     }
                                     else if(decorativePiece)
                                     {
-                                        zOffset = piece->parentOffset.z;
-                                        angle = piece->parentAngle;
-                                        scale = piece->scale;
-                                        offset = piece->parentOffset.xy;
+                                        zOffset = params->parentOffset.z;
+                                        angle = params->parentAngle;
+                                        scale = params->scale;
+                                        offset = params->parentOffset.xy;
                                     }
                                     
                                     
@@ -523,7 +528,7 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
                                     
                                     destAss->alpha = 1.0f;
                                     
-                                    destSprite->pivot = piece->pivot;
+                                    destSprite->pivot = params->pivot;
                                     destSprite->stringHashID = piece->componentHashID;
                                     destSprite->index = piece->index;
                                     destSprite->flags = 0;
@@ -558,12 +563,12 @@ inline b32 PushNewAction(AnimationState* animation, u32 action)
 }
 
 
-internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* table, u32 taxonomy, u64 recipeIndex, b32 onGround, b32 drawOpened)
+internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* table, u32 taxonomy, u64 recipeIndex)
 {
     dest->componentCount = 0;
     TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
     
-    ObjectLayout* layout = GetLayout(table, taxonomy, onGround, drawOpened);
+    ObjectLayout* layout = GetLayout(table, taxonomy);
     if(layout)
     {
         RandomSequence seq = Seed((u32)recipeIndex);
@@ -644,7 +649,7 @@ inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 entityHa
     return result;
 }
 
-inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, ObjectLayout* layout, AnimationVolatileParams* params)
+inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, ObjectLayout* layout, AnimationVolatileParams* params, ObjectState state)
 {
     output->boneCount = 1;
     output->assCount = 0;
@@ -658,6 +663,7 @@ inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, Ob
     
     for(LayoutPiece* source = layout->firstPiece; source; source = source->next)
     {
+        LayoutPieceParams* pieceParams = GetParams(source, state);
         Assert(output->assCount <= ArrayCount(output->ass));
         u32 pieceIndex = output->assCount++;
         PieceAss* destAss = output->ass + pieceIndex;
@@ -673,24 +679,25 @@ inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, Ob
         *destSprite = {};
         
         destAss->spriteIndex = pieceIndex;
-        destAss->boneOffset = source->parentOffset.xy;
-        destAss->additionalZOffset = source->parentOffset.z;
-        destAss->angle = source->parentAngle;
+        destAss->boneOffset = pieceParams->parentOffset.xy;
+        destAss->additionalZOffset = pieceParams->parentOffset.z;
+        destAss->angle = pieceParams->parentAngle;
         
         if(source->parent)
         {
-            destAss->boneOffset += source->parent->parentOffset.xy;
-            destAss->additionalZOffset += source->parent->parentOffset.z;
-            destAss->angle += source->parent->parentAngle;
+            LayoutPieceParams* parentParams = GetParams(source->parent, state);
+            destAss->boneOffset += parentParams->parentOffset.xy;
+            destAss->additionalZOffset += parentParams->parentOffset.z;
+            destAss->angle += parentParams->parentAngle;
         }
         
-        destAss->scale = source->scale;
-        destAss->alpha = source->alpha;
+        destAss->scale = pieceParams->scale;
+        destAss->alpha = pieceParams->alpha;
         
-        destSprite->pivot = source->pivot;
+        destSprite->pivot = pieceParams->pivot;
         destSprite->stringHashID = source->componentHashID;
         destSprite->index = source->index;
-        destSprite->flags = source->flags;
+        destSprite->flags = 0;
     }
 }
 
@@ -751,22 +758,22 @@ inline Rect2 GetPiecesBound(RenderGroup* group, BlendResult* blended, AnimationV
     return result;
 }
 
-inline Rect2 GetLayoutBounds(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, AnimationVolatileParams* params)
+inline Rect2 GetLayoutBounds(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, AnimationVolatileParams* params, ObjectState state)
 {
     BlendResult blended;
-    GetLayoutPieces(input, &blended, layout, params);
+    GetLayoutPieces(input, &blended, layout, params, state);
     Rect2 result = GetPiecesBound(group, &blended, params);
     
     return result;
 }
 
 
-internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, Vec3 P, AnimationVolatileParams* params);
+internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, Vec3 P, AnimationVolatileParams* params, ObjectState state);
 
-inline b32 DrawModularPiece(AnimationFixedParams* input, RenderGroup* group, Vec3 P, u32 pieceTaxonomy, AnimationVolatileParams* params, b32 onGround, b32 drawOpened, b32 dontRender)
+inline b32 DrawModularPiece(AnimationFixedParams* input, RenderGroup* group, Vec3 P, u32 pieceTaxonomy, AnimationVolatileParams* params, ObjectState state, b32 dontRender)
 {
     b32 result = false;
-    ObjectLayout* layout = GetLayout(input->taxTable, pieceTaxonomy, onGround, drawOpened);
+    ObjectLayout* layout = GetLayout(input->taxTable, pieceTaxonomy);
     if(layout)
     {
         Vec3 offset = params->cameraOffset;
@@ -787,7 +794,7 @@ inline b32 DrawModularPiece(AnimationFixedParams* input, RenderGroup* group, Vec
         if(!dontRender)
         {
             AnimationState pieceState = {};
-            RenderObjectLayout(input, group, layout, P, params);
+            RenderObjectLayout(input, group, layout, P, params, state);
         }
     }
     
@@ -1050,8 +1057,10 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                                 AnimationVolatileParams objectParams = pieceParams;
                                 objectParams.entityHashID = slot->stringHashID;
                                 
-                                ObjectLayout* layout = GetLayout(input->taxTable, taxonomy, true, false);
-                                Rect2 animationBounds = GetLayoutBounds(input, group, layout, &objectParams);
+                                ObjectLayout* layout = GetLayout(input->taxTable, taxonomy);
+                                ObjectState objectState = ObjectState_Default;
+                                
+                                Rect2 animationBounds = GetLayoutBounds(input, group, layout, &objectParams, objectState);
                                 if(HasArea(animationBounds))
                                 {
                                     r32 cellFillPercentage = 0.9f;
@@ -1069,9 +1078,9 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                                     
                                     ComponentsProperties objectProperties;
                                     objectParams.properties = &objectProperties;
-                                    GetVisualProperties(&objectProperties, input->taxTable, taxonomy, recipeIndex, false, false);
+                                    GetVisualProperties(&objectProperties, input->taxTable, taxonomy, recipeIndex);
                                     
-                                    DrawModularPiece(input, group, P, slot->taxonomy, &objectParams, true, false, false);
+                                    DrawModularPiece(input, group, P, slot->taxonomy, &objectParams, objectState, false);
                                 }
                             }
                         }
@@ -1365,7 +1374,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
 }
 
 
-inline AnimationId GetAnimationRecursive(Assets* assets, TaxonomyTable* table, u32 taxonomy, AssetTypeId assetID, u64* stringHashID, ObjectState state)
+inline AnimationId GetAnimationRecursive(Assets* assets, TaxonomyTable* table, u32 taxonomy, AssetTypeId assetID, u64* stringHashID)
 {
     AnimationId result = {};
     
@@ -1373,8 +1382,12 @@ inline AnimationId GetAnimationRecursive(Assets* assets, TaxonomyTable* table, u
     TagVector weight = {};
     weight.E[Tag_direction] = 1.0f;
     match.E[Tag_direction] = 0;
+    
+    
+#if 0    
     weight.E[Tag_ObjectState] = 10000.0f;
     match.E[Tag_ObjectState] = (r32) state;
+#endif
     
     u32 currentTaxonomy = taxonomy;
     do
@@ -1402,7 +1415,7 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
     GetAnimationPiecesAndAdvanceState(input, &blended, animation, animationState, timeToAdvance, params);
     
     TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, input->entity->taxonomy);
-    GetEquipmentPieces(&blended, input->taxTable, &slot->equipmentMappings,  input->equipment);
+    GetEquipmentPieces(&blended, input->taxTable, &slot->equipmentMappings, input->equipment);
     
     FrameData* referenceFrame = animation->frames + 0;
     Assert(referenceFrame->countBones == blended.boneCount);
@@ -1448,10 +1461,10 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
 }
 
 
-internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, Vec3 P, AnimationVolatileParams* params)
+internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, Vec3 P, AnimationVolatileParams* params, ObjectState state)
 {
     BlendResult blended;
-    GetLayoutPieces(input, &blended, layout, params);
+    GetLayoutPieces(input, &blended, layout, params, state);
     
     if(!input->debug.hideBitmaps)
     {
@@ -1517,13 +1530,12 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
             if(objectEntity->taxonomy)
             {
                 EquipmentAnimationSlot* dest = input->equipment + slotCount++;
-                b32 drawOpened = false;
                 
                 dest->ID = objectEntity->identifier;
-                dest->layout = GetLayout(worldMode->table, objectEntity->taxonomy, false, false);
+                dest->layout = GetLayout(worldMode->table, objectEntity->taxonomy);
                 dest->taxonomy = objectEntity->taxonomy;
                 dest->status = I16_MAX;
-                GetVisualProperties(&dest->properties, worldMode->table, objectEntity->taxonomy, objectEntity->recipeIndex, false, drawOpened);
+                GetVisualProperties(&dest->properties, worldMode->table, objectEntity->taxonomy, objectEntity->recipeIndex);
                 
                 dest->slot.slot = (SlotName) slotIndex;
             }
@@ -1552,21 +1564,23 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, Animatio
                     }
                     
                     EquipmentAnimationSlot* dest = input->equipment + slotCount++;
-                    b32 drawOpened = false;
-                    if(worldMode->UI->mode == UIMode_Equipment)
-                    {
-                        drawOpened = (objectEntityID == worldMode->UI->lockedInventoryID1 ||
-                                      objectEntityID == worldMode->UI->lockedInventoryID2);
-                    }
+                    
                     dest->ID = objectEntityID;
-                    dest->layout = GetLayout(worldMode->table, taxonomy, false, false);
+                    dest->layout = GetLayout(worldMode->table, taxonomy);
                     dest->taxonomy = taxonomy;
                     dest->status = (i16) objectEntity->status;
-                    GetVisualProperties(&dest->properties, worldMode->table, taxonomy, recipeIndex, false, drawOpened);
+                    GetVisualProperties(&dest->properties, worldMode->table, taxonomy, recipeIndex);
                     dest->slot.slot = (SlotName) slotIndex;
                     
                     dest->drawModulated = (AreEqual(dest->slot, entityC->animation.output.focusSlots) ||
                                            AreEqual(dest->slot, entityC->animation.nearestCompatibleSlotForDragging));
+                    
+                    dest->isOpen = false;
+                    if(worldMode->UI->mode == UIMode_Equipment)
+                    {
+                        dest->isOpen = (objectEntityID == worldMode->UI->lockedInventoryID1 ||
+                                        objectEntityID == worldMode->UI->lockedInventoryID2);
+                    }
                 }
             }
         }
@@ -1620,12 +1634,11 @@ struct GetAIDResult
     Vec2 originOffset;
 };
 
-inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy, u32 action, b32 drawOpened, u64 forcedNameHashID = 0)
+inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy, u32 action,u64 forcedNameHashID = 0)
 {
     GetAIDResult result = {};
     result.coloration = V4(1, 1, 1, 1);
     
-    ObjectState state = drawOpened ? ObjectState_Open : ObjectState_Ground;
     TaxonomySlot* slot = GetSlotForTaxonomy(taxTable, taxonomy);
     
     result.entityHashID = slot->stringHashID;
@@ -1648,7 +1661,7 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
         
         if(!result.skeletonHashID)
         {
-            result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, result.assetID, &result.entityHashID, state);
+            result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, result.assetID, &result.entityHashID);
         }
         else
         {
@@ -1661,7 +1674,7 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
     return result;
 }
 
-internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, ClientEntity* entityC, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, AnimationDebugParams debugParams = {})
+internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, ClientEntity* entityC, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, AnimationDebugParams debugParams = {})
 {
     AnimationOutput result = {};
     TaxonomyTable* taxTable = worldMode->table;
@@ -1690,16 +1703,17 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
     
     if(IsObject(worldMode->table, entityC->taxonomy))
     {
+        ObjectState state = drawOpened ? ObjectState_GroundOpen : ObjectState_Ground;
         input.defaultColoration = V4(1, 1, 1, 1);
         ComponentsProperties properties;
         params.properties = &properties;
-        b32 onGround = true;
-        GetVisualProperties(&properties, taxTable, entityC->taxonomy, entityC->recipeIndex, onGround, drawOpened);
         
-        ObjectLayout* layout = GetLayout(taxTable, entityC->taxonomy, onGround, drawOpened);
+        GetVisualProperties(&properties, taxTable, entityC->taxonomy, entityC->recipeIndex);
+        
+        ObjectLayout* layout = GetLayout(taxTable, entityC->taxonomy);
         if(layout)
         {
-            Rect2 animationBounds = GetLayoutBounds(&input, group, layout, &params);
+            Rect2 animationBounds = GetLayoutBounds(&input, group, layout, &params, state);
             if(HasArea(bounds))
             {
                 Vec2 boundsDim = GetDim(bounds);
@@ -1721,18 +1735,18 @@ internal AnimationOutput PlayAndDrawAnimation(GameModeWorld* worldMode, RenderGr
                 animationState->bounds = animationBounds;
             }
             
-            RenderObjectLayout(&input, group, layout, entityC->P, &params);
+            RenderObjectLayout(&input, group, layout, entityC->P, &params, state);
         }
     }
     else
     {
         if(PushNewAction(animationState, entityC->action))
         {
-            GetAIDResult prefetchAID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->nextAction, drawOpened);
+            GetAIDResult prefetchAID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->nextAction);
             PrefetchAnimation(group->assets, prefetchAID.AID);
         }
         
-        GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, drawOpened, debugParams.forcedNameHashID);
+        GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, debugParams.forcedNameHashID);
         
         input.defaultColoration = AID.coloration;
         input.combatAnimation = (AID.assetID == Asset_attacking);
@@ -2190,7 +2204,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             MarkAllSlotsAsOccupied(entityC->equipment, dragging, ID);
         }
         
-        result = PlayAndDrawAnimation(worldMode, group, tileInfo.lightIndexes, entityC, animationScale, params.angle, params.offset, timeToUpdate, bodyColor, params.drawOpened, params.onTop, params.bounds, additionalZbias);
+        result = PlayAndDrawEntity(worldMode, group, tileInfo.lightIndexes, entityC, animationScale, params.angle, params.offset, timeToUpdate, bodyColor, params.drawOpened, params.onTop, params.bounds, additionalZbias);
         
         if(IsValid(dragging))
         {

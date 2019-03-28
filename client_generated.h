@@ -139,11 +139,13 @@ MetaFlag MetaFlags_CanDoActionFlags[] =
 {"Empty",
 (1 << 3)},
 };
-char* MetaTable_LayoutType[] = 
+char* MetaTable_ObjectState[] = 
  {
 "Default",
 "Ground",
 "Open",
+"GroundOpen",
+"Count",
 };
 char* MetaTable_SoundContainerType[] = 
  {
@@ -170,7 +172,6 @@ char* MetaTable_TagId[] =
 "fontType",
 "dimX",
 "dimY",
-"ObjectState",
 "Material",
 "count",
 };

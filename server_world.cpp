@@ -314,7 +314,7 @@ internal void AddEntitySingleThread( SimRegion* region, u32 taxonomy, Vec3 P, u6
             creature->lifePoints = creature->maxLifePoints;
         }
         
-        if(slot_->firstDefaultLayout)
+        if(slot_->firstLayout)
         {
             Craft(region, &entity, entity.taxonomy, entity.recipeIndex);
         }
