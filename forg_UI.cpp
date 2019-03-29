@@ -625,6 +625,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             Rect2 square = RectCenterDim(layout->P, V2(layout->squareDim, layout->squareDim));
     
 
+            Vec4 internalSquareColor = V4(0, 0, 0, 1);
             b32 drawExpandedSign = (root->type >= EditorElement_List);
             if(PointInRect(square, UI->relativeScreenMouse) && drawExpandedSign)
             {
@@ -632,6 +633,8 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 u32 finalFlags = IsSet(root, EditorElem_Expanded) ? (root->flags & ~EditorElem_Expanded) : (root->flags | EditorElem_Expanded);
                 
                 UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &root->flags, finalFlags));
+                
+                internalSquareColor = V4(0.2f, 0.2f, 0.2f, 1.0f);
                 
             }
             
@@ -644,10 +647,10 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             
             if(drawExpandedSign)
             {
-                PushRect(UI->group, FlatTransform(layout->additionalZBias + 0.01f), Scale(square, 0.82f), V4(0, 0, 0, 1));                
+                PushRect(UI->group, FlatTransform(layout->additionalZBias + 0.01f), Scale(square, 0.82f), internalSquareColor);                
                 char* sign = IsSet(root, EditorElem_Expanded) ? "-" : "+";
                 
-                Vec2 insideDim = Hadamart(0.5f * GetDim(square), V2(0.3f, 0.5f));
+                Vec2 insideDim = Hadamart(0.5f * GetDim(square), V2(0.7f, 0.8f));
                 PushUIOrthoText(UI, sign, 0.42f * layout->fontScale, GetCenter(square) - insideDim, V4(1, 1, 1, 1), layout->additionalZBias + 0.01f);
             }
             
@@ -2344,10 +2347,10 @@ inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, u32 neces
     result->permanent.fontSize = 1.0f;
     result->necessaryRole = necessaryRole;
     result->layout.fontScale = 0.42f;
-    result->layout.nameValueDistance = 50;
+    result->layout.nameValueDistance = 24;
     result->layout.childStandardHeight = 30;
-    result->layout.squareDim = 8;
-    result->layout.lineThickness = 1.5f;
+    result->layout.squareDim = 16;
+    result->layout.lineThickness = 1.2f;
     FormatString(result->name, sizeof(result->name), name);
     
     return result;
