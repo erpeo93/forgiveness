@@ -58,6 +58,24 @@ inline void PushUIOrthoText(UIState* UI, char* text, r32 fontScale, Vec2 screenP
 }
 
 
+inline void PushCenteredOrthoText(UIState* UI, char* string, r32 fontScale, Vec2 screenP, r32 additionalZ, Vec4 color)
+{
+    Rect2 textRect = GetUIOrthoTextBounds(UI, string, fontScale, screenP);
+    Vec2 textCenter = GetCenter(textRect);
+    Vec2 textDim = GetDim(textRect);
+    
+    UIOrthoTextOp(UI->group, UI->font, UI->fontInfo, string, fontScale, V3(screenP - (0.5f * textDim), additionalZ), TextOp_draw, color);
+}
+
+inline void PushUICenteredOrthoTextWithDimension(UIState* UI, char* text, Vec2 screenP, Vec2 dim, r32 additionalZ, Vec4 color)
+{
+    Vec2 standardDim = GetDim(GetUIOrthoTextBounds(UI, text, UI->fontScale, screenP));
+    r32 coeffX = dim.x / standardDim.x;
+    r32 coeffY = dim.y / standardDim.y;
+    r32 coeff = Min(coeffX, coeffY);
+    PushCenteredOrthoText(UI, text, UI->fontScale * coeff, screenP, additionalZ, color);
+}
+
 internal Rect2 UITextOp(UIState* UI, RenderGroup* group, Font* font, PakFont* info, char* string, r32 fontScale, Vec2 PIn, Vec4 color, b32 computeRect = false)
 {
     Vec2 P = PIn;

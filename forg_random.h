@@ -588,6 +588,12 @@ inline Vec3 RandomBilV3(RandomSequence* sequence)
     return result;
 }
 
+inline Vec3 RandomUniV3(RandomSequence* sequence)
+{
+    Vec3 result = V3(RandomUni(sequence), RandomUni(sequence), RandomUni(sequence));
+    return result;
+}
+
 inline r32 RandomRangeFloat( RandomSequence* sequence, r32 min, r32 max )
 {
     r32 value = RandomUni( sequence );

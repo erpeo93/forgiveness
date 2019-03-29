@@ -115,6 +115,8 @@ struct EditorTabStack
 
 struct EditorLayout
 {
+    r32 lineThickness;
+    r32 squareDim;
     r32 fontScale;
     Vec2 P;
     r32 additionalZBias;

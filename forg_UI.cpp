@@ -532,7 +532,7 @@ inline b32 UIChildModified(TaxonomyTable* table, TaxonomySlot* slot)
     return result;
 }
 
-inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElementParents parents, EditorElement* parent_, EditorElement* root_, PlatformInput* input, b32 canDelete)
+inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElementParents parents, EditorElement* parent_, Vec4 parentSquareColor, EditorElement* root_, PlatformInput* input, b32 canDelete)
 {
     for(u32 parentIndex = ArrayCount(parents.grandParents) - 1; parentIndex > 0; --parentIndex)
     {
@@ -545,6 +545,8 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
     
     EditorElement* father = parents.father;
     EditorElement* grandFather = parents.grandParents[0];
+ 
+
     
     Rect2 totalResult = InvertedInfinityRect2();
     
@@ -608,25 +610,60 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             {
                 FormatString(name, sizeof(name), "%s", root->name);
             }
-            
-            
-          
-            
-            Rect2 nameBounds = GetUIOrthoTextBounds(UI, name, layout->fontScale, layout->P);
-            Vec4 nameColor = V4(1, 1, 1, 1);
-            
-            b32 nameHot = false;
-			char* shadowLabel = 0;
-            char* nameToShow = name;
-            b32 showName = (nameToShow[0]);
-            
-            if(PointInRect(nameBounds, UI->relativeScreenMouse))
+
+            Vec3 parentAlignedP = V3(layout->P, layout->additionalZBias);
+            if(father)
             {
-                nameColor = V4(1, 1, 0, 1);
+                parentAlignedP = V3(layout->P.x - layout->nameValueDistance, layout->P.y, layout->additionalZBias);
+            }
+            
+            
+            Vec3 lineStartP = V3(layout->P, layout->additionalZBias);
+          
+            Rect2 nameTestBounds = GetUIOrthoTextBounds(UI, name, layout->fontScale, layout->P);
+            
+            Rect2 square = RectCenterDim(layout->P, V2(layout->squareDim, layout->squareDim));
+    
+
+            b32 drawExpandedSign = (root->type >= EditorElement_List);
+            if(PointInRect(square, UI->relativeScreenMouse) && drawExpandedSign)
+            {
+                //nameColor = V4(1, 1, 0, 1);
                 u32 finalFlags = IsSet(root, EditorElem_Expanded) ? (root->flags & ~EditorElem_Expanded) : (root->flags | EditorElem_Expanded);
                 
                 UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &root->flags, finalFlags));
                 
+            }
+            
+            u32 seed = (u32) StringHash(root->name) + childIndex;
+            RandomSequence seq = Seed(seed);
+            Vec4 squareLineColor = drawExpandedSign ? V4(0.6f * RandomUniV3(&seq), 1) : V4(0, 0, 0.7f, 1.0f);
+                                      
+            PushLine(UI->group, parentSquareColor, parentAlignedP, lineStartP, layout->lineThickness);
+            PushRect(UI->group, FlatTransform(layout->additionalZBias), square, squareLineColor);
+            
+            if(drawExpandedSign)
+            {
+                PushRect(UI->group, FlatTransform(layout->additionalZBias + 0.01f), Scale(square, 0.82f), V4(0, 0, 0, 1));                
+                char* sign = IsSet(root, EditorElem_Expanded) ? "-" : "+";
+                
+                Vec2 insideDim = Hadamart(0.5f * GetDim(square), V2(0.3f, 0.5f));
+                PushUIOrthoText(UI, sign, 0.42f * layout->fontScale, GetCenter(square) - insideDim, V4(1, 1, 1, 1), layout->additionalZBias + 0.01f);
+            }
+            
+            Vec2 nameP = GetCenter(square) + V2(1.5f * GetDim(square).x, -0.4f * GetDim(nameTestBounds).y);
+            
+            Rect2 nameBounds =GetUIOrthoTextBounds(UI, name, layout->fontScale, nameP);
+            
+            Vec4 nameColor = V4(1, 1, 1, 1);
+            
+			char* shadowLabel = 0;
+            char* nameToShow = name;
+            b32 showName = (nameToShow[0]);
+            
+           
+            if(PointInRect(nameBounds, UI->relativeScreenMouse))
+            {                
                 if(!UI->activeLabel && !UI->active && father && (father->flags & EditorElem_LabelsEditable))
                 {
                     nameColor = V4(1, 0, 0, 1);
@@ -636,7 +673,6 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     UIAddSetValueAction(&labelInteraction, UI_Trigger, &UI->activeWidget, widget); 
                     UIAddInteraction(UI, input, mouseRight, labelInteraction);
                 }
-                nameHot = true;
             }
             
             if(root == UI->activeLabel)
@@ -653,16 +689,13 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 UIAddInteraction(UI, input, confirmButton, confirmInteraction);
             }
             
-            Vec2 nameP = layout->P;
-            result = nameBounds;
+            result = Union(square, nameBounds);
             
             if(showName)
             {
                 layout->P += V2(0, -layout->childStandardHeight);
             }
             
-            Vec2 lineStartP = nameP + V2(0.2f * layout->nameValueDistance, -0.2f * layout->childStandardHeight);
-            Vec3 lineEndOffset = V3(0.2f * layout->nameValueDistance, 1.2f * layout->childStandardHeight, 0);
             
             switch(root->type)
             {
@@ -693,7 +726,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 {
                     if(IsSet(root, EditorElem_Expanded))
                     {
-                        Vec3 verticalStartP = V3(lineStartP, 0);
+                        Vec3 verticalStartP = lineStartP;
                         for(EditorElement** elementPtr = &root->firstInList; *elementPtr;)
                         {
                             EditorElement* element = *elementPtr;
@@ -762,15 +795,15 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         {
                             canDeleteElements = !IsSet(root, EditorElem_CantBeDeleted);
                         }
-                        result = Union(result, UIRenderEditorTree(UI, widget, layout, parents, root, root->firstInList, input, canDeleteElements));
+                        result = Union(result, UIRenderEditorTree(UI, widget, layout, parents, root, squareLineColor, root->firstInList, input, canDeleteElements));
                         
                         if(moveHorizontally)
                         {
                             layout->P -= V2(layout->nameValueDistance, 0);
                         }
                         
-                        Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
-                        PushLine(UI->group, V4(1, 1, 1, 1), verticalStartP, verticalEndP, 1);
+                        Vec3 verticalEndP = V3(layout->P.x, layout->P.y + layout->childStandardHeight, layout->additionalZBias);
+                        PushLine(UI->group, squareLineColor, verticalStartP, verticalEndP, layout->lineThickness);
                         
                         
                         if(root->emptyElement)
@@ -794,7 +827,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 {
                     if(IsSet(root, EditorElem_Expanded) || !root->name[0])
                     {
-                        Vec3 verticalStartP = V3(lineStartP, 0);
+                        Vec3 verticalStartP = lineStartP;
                         layout->P += V2(layout->nameValueDistance, 0);
                         
                         
@@ -828,7 +861,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                                 }
                             }
                         }
-                        Rect2 structBounds = UIRenderEditorTree(UI, widget, layout, parents, root, root->firstValue, input, false);
+                        Rect2 structBounds = UIRenderEditorTree(UI, widget, layout, parents, root, squareLineColor, root->firstValue, input, false);
                         
                         if(canDelete)
                         {
@@ -897,9 +930,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                       
                         }
                         
-                        r32 padding = 5;
-                        layout->P += V2(0, -padding);
-                        Rect2 realBounds = AddRadius(structBounds, V2(padding, padding));
+                        Rect2 realBounds = structBounds;
                         
                         
                         r32 thickness = 1.0f;
@@ -961,10 +992,9 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         
                         result = Union(result, realBounds);
                         layout->P += V2(-layout->nameValueDistance, 0);
-                        layout->P += V2(0, -padding);
                         
-                        Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
-                        PushLine(UI->group, V4(1, 1, 1, 1), verticalStartP, verticalEndP, 1);
+                        Vec3 verticalEndP = V3(layout->P.x, layout->P.y + layout->childStandardHeight, layout->additionalZBias);
+                        PushLine(UI->group, squareLineColor, verticalStartP, verticalEndP, layout->lineThickness);
                         
                         ObjectTransform structTranform = FlatTransform();
                         structTranform.additionalZBias = layout->additionalZBias;
@@ -1067,16 +1097,16 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         }
                         
                         
-                        Vec3 verticalStartP = V3(lineStartP, 0);
+                        Vec3 verticalStartP = lineStartP;
                         
                         layout->P += V2(layout->nameValueDistance, 0);
                         
-                        result = Union(result, UIRenderEditorTree(UI, widget, layout, parents, root, root->firstChild, input, false));
+                        result = Union(result, UIRenderEditorTree(UI, widget, layout, parents, root, squareLineColor, root->firstChild, input, false));
                         
                         layout->P += V2(-layout->nameValueDistance, 0);
                         
-                        Vec3 verticalEndP = V3(layout->P, 0) + lineEndOffset;
-                        PushLine(UI->group, V4(1, 1, 1, 1), verticalStartP, verticalEndP, 1);
+                        Vec3 verticalEndP = V3(layout->P.x, layout->P.y + layout->childStandardHeight, layout->additionalZBias);
+                        PushLine(UI->group, squareLineColor, verticalStartP, verticalEndP, 1);
                     }
                 } break;
                 
@@ -1555,6 +1585,8 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         layout_.fontScale *= widget->permanent.fontSize;
         layout_.nameValueDistance *= widget->permanent.fontSize;
         layout_.childStandardHeight *= widget->permanent.fontSize;
+        layout_.squareDim *= widget->permanent.fontSize;
+        layout_.lineThickness *= widget->permanent.fontSize;
         
         if(widget->necessaryRole & UI->worldMode->editorRoles)
         {
@@ -1764,7 +1796,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             if(widget->permanent.expanded && widget->root)
             {
                 EditorElementParents parents = {};
-                widgetBounds = UIRenderEditorTree(UI, widget, layout, parents, 0, widget->root, input, false);
+                widgetBounds = UIRenderEditorTree(UI, widget, layout, parents, 0, V4(1, 1, 1, 1), widget->root, input, false);
             }
             
             ObjectTransform widgetBoundsTransform = FlatTransform();
@@ -1820,7 +1852,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         EditorElementParents parents = {};
         
         EditorElement* oldNext = UI->dragging->next;
-        UIRenderEditorTree(UI, 0, &layout, parents, 0, UI->dragging, input, false);
+        UIRenderEditorTree(UI, 0, &layout, parents, 0, V4(1, 1, 1, 1), UI->dragging, input, false);
         UI->dragging->next = oldNext;
     }
 }
@@ -2314,6 +2346,8 @@ inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, u32 neces
     result->layout.fontScale = 0.42f;
     result->layout.nameValueDistance = 50;
     result->layout.childStandardHeight = 30;
+    result->layout.squareDim = 8;
+    result->layout.lineThickness = 1.5f;
     FormatString(result->name, sizeof(result->name), name);
     
     return result;

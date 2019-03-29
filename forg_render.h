@@ -251,9 +251,10 @@ inline ObjectTransform UprightTransform()
     return result;
 }
 
-inline ObjectTransform FlatTransform()
+inline ObjectTransform FlatTransform(r32 additionalZBias = 0)
 {
     ObjectTransform result = {};
+    result.additionalZBias = additionalZBias;
     return result;
 }
 

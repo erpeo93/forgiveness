@@ -855,6 +855,12 @@ inline Rect2 AddRadius( Rect2 rect, Vec2 dim )
     return result;
 }
 
+inline Rect2 Scale(Rect2 rect, r32 coeff)
+{
+    Rect2 result = RectCenterDim(GetCenter(rect), coeff * GetDim(rect));
+    return result;
+}
+
 //NOTE(leonardo):the check needs to be inclusive on the low part and exclusive on the
 //high part, cause the activeRect thing rely on that.
 inline b32 PointInRect( Rect2 rect, Vec2 p )
