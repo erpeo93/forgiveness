@@ -50,6 +50,25 @@ struct EquipmentAnimationPiece
     struct ComponentsProperties* properties;
 };
 
+struct BlendedBone
+{
+    Bone bone;
+    BoneAlterations alterations;
+    
+    BlendedBone* next;
+};
+
+struct BlendedAss
+{
+    PieceAss ass;
+    AssAlterations alterations;
+    SpriteInfo sprite;
+    
+    EquipmentAnimationPiece associatedEquipment[8];
+    
+    BlendedAss* next;
+};
+
 struct BlendResult
 {
     u32 boneCount;
@@ -59,7 +78,6 @@ struct BlendResult
     u32 assCount;
     PieceAss ass[32];
     AssAlterations assAlterations[32];
-    
     SpriteInfo sprites[32];
     
     
