@@ -551,6 +551,7 @@ enum UIInteractionActionType
     UIInteractionAction_Clear,
     UIInteractionAction_SendRequestDirectly,
     UIInteractionAction_OffsetRealEditor,
+    UIInteractionAction_OffsetReal,
     UIInteractionAction_AddEmptyEditorElement,
     UIInteractionAction_PlaySound,
     UIInteractionAction_ShowLabeledBitmap,
@@ -619,6 +620,12 @@ struct UIInteractionAction
     
     r32 timer;
     r32 targetTimer;
+    
+    union
+    {
+        UIInteractionAction* next;
+        UIInteractionAction* nextFree;
+    };
 };
 
 struct UIInteractionCheck
@@ -633,8 +640,8 @@ struct UIInteraction
     UIInteractionPriority priority;
     UIInteractionButtonGroup* excludeFromReset;
     
-    u32 actionCount;
-    UIInteractionAction actions[12];
+    UIInteractionAction* firstAction;
+    UIInteractionAction* lastAction;
     
     u32 checkCount;
     UIInteractionCheck checks[4];
@@ -670,6 +677,8 @@ struct UISkill
 
 struct UIButton
 {
+    b32 enabled;
+    
     Rect2 bounds;
     r32 Z;
     UIInteraction interaction;
@@ -704,6 +713,7 @@ struct UIAutocomplete
 struct UIState
 {
     b32 initialized;
+    b32 previousFrameWasAllowedToQuit;
     
     RenderGroup* group;
     TaxonomyTable* table;
@@ -788,6 +798,8 @@ struct UIState
     BookReference* firstFreeReference;
     MemoryPool bookReferencePool;
     
+    MemoryPool interactionPool;
+    UIInteractionAction* firstFreeInteractionAction;
     
     char tooltipText[128];
     b32 prefix;
@@ -828,6 +840,9 @@ struct UIState
     
     
     EditorElement* copying;
+    
+    r32 pastedTimeLeft;
+    EditorElement* pasted;
     
     b32 hotStructThisFrame;
     Rect2 hotStructBounds;

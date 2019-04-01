@@ -334,7 +334,7 @@ inline void OpenGLDisplayBitmap( u32 bufferWidth, u32 bufferHeight, void* memory
     glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP );
     
     glEnable( GL_TEXTURE_2D );
-    glDisable( GL_SCISSOR_TEST );
+    glEnable( GL_SCISSOR_TEST );
     glClearColor( 1.0f, 0.0f, 1.0f, 0.0f );
     glClear( GL_COLOR_BUFFER_BIT );
     

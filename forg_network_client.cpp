@@ -254,7 +254,7 @@ inline void SendPopMessage(b32 list, b32 pop = true)
 internal void SendEditorElements(EditorElement* root)
 {
     StartStandardPacket(EditorElement);
-    Pack("sLL", root->name, root->type, root->flags);
+    Pack("sLLL", root->name, root->type, root->flags, root->versionNumber);
     if(root->type < EditorElement_List)
     {
         Pack("s", root->value);

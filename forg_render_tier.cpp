@@ -470,7 +470,7 @@ void DrawRectangleQuickly( Bitmap * buffer, Bitmap* texture,
     r32 InvXAxisLengthSq = 1.0f / LengthSq(XAxis);
     r32 InvYAxisLengthSq = 1.0f / LengthSq(YAxis);
     
-    Rect2i fillRect = InvertedInfinityRect();
+    Rect2i fillRect = InvertedInfinityRect2i();
     
     Vec2 P[4] = {origin, origin + XAxis, origin + XAxis + YAxis, origin + YAxis};
     for(int PIndex = 0;

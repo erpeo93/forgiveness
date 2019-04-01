@@ -1184,7 +1184,7 @@ inline b32 HasArea( Rect2i rect )
     return result;
 }
 
-inline Rect2i InvertedInfinityRect()
+inline Rect2i InvertedInfinityRect2i()
 {
     Rect2i result;
     result.minX = result.minY = I32_MAX;

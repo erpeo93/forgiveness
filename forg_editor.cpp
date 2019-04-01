@@ -2248,6 +2248,16 @@ inline char* OutputToBuffer(char* buffer, u32* bufferSize, char* string)
     return result;
 }
 
+
+inline char* OutputToBuffer(char* buffer, u32* bufferSize, u32 number)
+{
+    u32 written = (u32) FormatString(buffer, *bufferSize, "%d", number);
+    *bufferSize = *bufferSize - written;
+    char* result = buffer + written;
+    
+    return result;
+}
+
 inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element)
 {
 	while(element)
@@ -2259,6 +2269,14 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
                 buffer = OutputToBuffer(buffer, bufferSize, "\"");
                 buffer = OutputToBuffer(buffer, bufferSize, element->name);
                 buffer = OutputToBuffer(buffer, bufferSize, "\"");
+                
+                if(element->versionNumber)
+                {
+                    buffer = OutputToBuffer(buffer, bufferSize, " *");
+                    buffer = OutputToBuffer(buffer, bufferSize, element->versionNumber);
+                }
+                
+                
                 buffer = OutputToBuffer(buffer, bufferSize, " = ");
             }
             else
@@ -2399,7 +2417,7 @@ enum LoadElementsMode
     LoadElements_Asset,
 };
 
-inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* tokenizer, b32* end)
+inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tokenizer, b32* end)
 {
 	EditorElement* newElement;
     FREELIST_ALLOC(newElement, taxTable_->firstFreeElement, PushStruct(taxPool_, EditorElement));
@@ -2416,6 +2434,13 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
 	if(firstToken.type == Token_Identifier)
 	{
         StrCpy(firstToken.text, firstToken.textLength, newElement->name, sizeof(newElement->name));
+        
+        if(NextTokenIs(tokenizer, Token_Asterisk))
+        {
+            Token ast = GetToken(tokenizer);
+            Token version = GetToken(tokenizer);
+            newElement->versionNumber = atoi(version.text);
+        }
         
 		if(RequireToken(tokenizer, Token_EqualSign))
 		{
@@ -2481,7 +2506,7 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                             {
                                 if(RequireToken(tokenizer, Token_EqualSign))
                                 {
-                                    newElement->emptyElement = LoadElementInMemory(mode, tokenizer, end);
+                                    newElement->emptyElement = LoadElementsInMemory(mode, tokenizer, end);
                                     FormatString(newElement->emptyElement->name, sizeof(newElement->emptyElement->name), "empty");
                                 }
                             }
@@ -2548,7 +2573,7 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                     }
                     else
                     {
-                        newElement->firstInList = LoadElementInMemory(mode, tokenizer, end);
+                        newElement->firstInList = LoadElementsInMemory(mode, tokenizer, end);
                         if(!RequireToken(tokenizer, Token_CloseParen))
                         {
                             InvalidCodePath;
@@ -2559,7 +2584,7 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
                 case Token_OpenBraces:
                 {
                     newElement->type = EditorElement_Struct;
-                    newElement->firstValue = LoadElementInMemory(mode, tokenizer, end);
+                    newElement->firstValue = LoadElementsInMemory(mode, tokenizer, end);
                     
                     if(!RequireToken(tokenizer, Token_CloseBraces))
                     {
@@ -2579,7 +2604,7 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
         if(firstToken.type == Token_OpenBraces)
         {
             newElement->type = EditorElement_Struct;
-            newElement->firstValue = LoadElementInMemory(mode, tokenizer, end);
+            newElement->firstValue = LoadElementsInMemory(mode, tokenizer, end);
             
             if(!RequireToken(tokenizer, Token_CloseBraces))
             {
@@ -2597,7 +2622,7 @@ inline EditorElement* LoadElementInMemory(LoadElementsMode mode, Tokenizer* toke
            NextTokenIs(tokenizer, Token_String) || 
            NextTokenIs(tokenizer, Token_OpenBraces))
         {
-            newElement->next = LoadElementInMemory(mode, tokenizer, end);
+            newElement->next = LoadElementsInMemory(mode, tokenizer, end);
         }
     }
     else if(NextTokenIs(tokenizer, Token_EndOfFile))
@@ -2693,7 +2718,7 @@ internal void LoadFileInTaxonomySlot(char* content, u32 editorRoles)
         Assert(currentSlot_->tabCount < ArrayCount(currentSlot_->tabs));
         
         EditorTab* newTab = currentSlot_->tabs + currentSlot_->tabCount++;
-        newTab->root = LoadElementInMemory(LoadElements_Tab, &tokenizer, &end);
+        newTab->root = LoadElementsInMemory(LoadElements_Tab, &tokenizer, &end);
         newTab->editable = IsEditableByRole(newTab->root, editorRoles);
         
         if(end)
@@ -3336,16 +3361,24 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     }
     else if(StrEqual(name, "soundEvents"))
     {
-        taxTable_->eventCount = 0;
-        EditorElement* events = root->firstInList;
-        while(events)
+        switch(root->versionNumber)
         {
-            char* eventName = events->name;
-            SoundContainer* rootContainer = AddSoundEvent(eventName);
+            case 1:
+            {
+                taxTable_->eventCount = 0;
+                EditorElement* events = root->firstInList;
+                while(events)
+                {
+                    char* eventName = events->name;
+                    SoundContainer* rootContainer = AddSoundEvent(eventName);
+                    
+                    AddSoundAndChildContainersRecursively(rootContainer, events);
+                    
+                    events = events->next;
+                }
+            } break;
             
-            AddSoundAndChildContainersRecursively(rootContainer, events);
-            
-            events = events->next;
+            InvalidDefaultCase;
         }
     }
     else if(StrEqual(name, "boneAlterations"))
@@ -3630,20 +3663,20 @@ internal void ImportAllAssetFiles(GameModeWorld* worldMode, char* dataPath, Memo
         b32 ign = false;
         if(StrEqual(handle.name, "sound.fad"))
         {
-            worldMode->table->soundNamesRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
+            worldMode->table->soundNamesRoot = LoadElementsInMemory(LoadElements_Asset, &tokenizer, &ign);
         }
         else if(StrEqual(handle.name, "soundEvents.fad"))
         {
-            worldMode->table->soundEventsRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
+            worldMode->table->soundEventsRoot = LoadElementsInMemory(LoadElements_Asset, &tokenizer, &ign);
             Import(0, worldMode->table->soundEventsRoot);
         }
         else if(StrEqual(handle.name, "components.fad"))
         {
-            worldMode->table->componentsRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
+            worldMode->table->componentsRoot = LoadElementsInMemory(LoadElements_Asset, &tokenizer, &ign);
         }
         else if(StrEqual(handle.name, "componentvanilla.fad"))
         {
-            worldMode->table->oldComponentsRoot = LoadElementInMemory(LoadElements_Asset, &tokenizer, &ign);
+            worldMode->table->oldComponentsRoot = LoadElementsInMemory(LoadElements_Asset, &tokenizer, &ign);
             
             for(EditorElement** componentTypePtr = &worldMode->table->componentsRoot; *componentTypePtr; )
             {
@@ -3930,7 +3963,7 @@ internal void RecursivelyMerge(char* toMergeDefinitionName, char* toMergePath, c
         b32 endSource = false;
         while(true)
         {
-            EditorElement* root = LoadElementInMemory(LoadElements_Tab, &sourceT, &endSource);
+            EditorElement* root = LoadElementsInMemory(LoadElements_Tab, &sourceT, &endSource);
             Assert(sourceTabCount < ArrayCount(sourceTabs));
             sourceTabs[sourceTabCount++] = root;
             if(endSource)
@@ -3952,7 +3985,7 @@ internal void RecursivelyMerge(char* toMergeDefinitionName, char* toMergePath, c
             b32 endDest = false;
             while(true)
             {
-                EditorElement* root = LoadElementInMemory(LoadElements_Tab, &destT, &endDest);
+                EditorElement* root = LoadElementsInMemory(LoadElements_Tab, &destT, &endDest);
                 Assert(destTabCount < ArrayCount(destTabs));
                 destTabs[destTabCount++] = root;
                 if(endDest)

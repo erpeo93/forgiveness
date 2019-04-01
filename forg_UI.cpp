@@ -8,7 +8,7 @@ inline Vec2 UIFollowingP(UIButton* button, r32 separator)
     
 }
 
-inline UIButton UIBtn(UIState* UI, Vec2 P, EditorLayout* layout, Vec4 color, char* text)
+inline UIButton UIBtn(UIState* UI, Vec2 P, EditorLayout* layout, Vec4 color, char* text, b32 enabled = true, UIInteraction interaction = NullInteraction())
 {
     UIButton result;
     
@@ -19,12 +19,22 @@ inline UIButton UIBtn(UIState* UI, Vec2 P, EditorLayout* layout, Vec4 color, cha
     Vec2 boundsDim = result.textDim * 1.1f;
     Vec2 boundsCenter = GetCenter(bounds);
     
-    result.bounds = RectCenterDim(boundsCenter, boundsDim);
+    result.bounds = AddRadius(RectCenterDim(boundsCenter, boundsDim), V2(layout->padding, layout->padding));
     result.fontScale = layout->fontScale;
     result.Z = layout->additionalZBias;
     
     result.color = color;
     result.text = text;
+    
+    result.enabled = enabled;
+    if(enabled)
+    {
+            result.interaction = interaction;
+    }
+    else
+    {
+        result.interaction = NullInteraction();
+    }
     
     return result;
 }
@@ -40,7 +50,7 @@ struct DrawButtonResult
     b32 hot;
 };
 
-inline DrawButtonResult UIDrawButton(UIState* UI, PlatformInput* input, UIButton* button, r32 alpha = 1.0f)
+inline DrawButtonResult UIDrawButton(UIState* UI, PlatformInput* input, UIButton* button)
 {
     DrawButtonResult result = {};
     
@@ -48,20 +58,32 @@ inline DrawButtonResult UIDrawButton(UIState* UI, PlatformInput* input, UIButton
     buttonTranform.additionalZBias = button->Z + 0.001f;
     
     Vec4 buttonColor = button->color;
-    buttonColor.a *= alpha;
     
-    if(PointInRect(button->bounds, UI->relativeScreenMouse) && button->interaction.actionCount)
+    r32 textAlpha = 1.0f;
+    if(button->enabled)
     {
-        UIAddInteraction(UI, input, mouseLeft, button->interaction);
-        result.hot = true;
+        if(PointInRect(button->bounds, UI->relativeScreenMouse))
+        {
+            UIAddInteraction(UI, input, mouseLeft, button->interaction);
+            result.hot = true;
+        }
+        else
+        {
+            buttonColor.a *= 0.45f;
+            textAlpha = 0.6f;
+        }
+        
+   
     }
     else
     {
-        buttonColor.a *= 0.2f;
+        textAlpha = 0.3f;
+        buttonColor.a *= 0.07f;     
     }
-    
+        
     PushRect(UI->group, buttonTranform, button->bounds, buttonColor);
-    PushUIOrthoText(UI, button->text, button->fontScale, button->textP, V4(1, 1, 1, alpha), button->Z + 0.002f);
+    PushRectOutline(UI->group, buttonTranform, button->bounds, V4(1, 1, 1, textAlpha), 1.4f);
+    PushUIOrthoText(UI, button->text, button->fontScale, button->textP, V4(1, 1, 1, textAlpha), button->Z + 0.002f);
     
     result.bounds = button->bounds;
     return result;
@@ -97,7 +119,7 @@ inline void UIRenderAutocomplete(UIState* UI, PlatformInput* input, UIAutocomple
                     autocompleteColor = V4(0, 1, 0, 1);
                     
                     UIInteraction autoInteraction = {};
-                    UIAddStandardAction(&autoInteraction, UI_Trigger, block->names[nameIndex], ColdPointer(UI->keyboardBuffer), ColdPointer(block->names[nameIndex]));
+                    UIAddStandardAction(UI, &autoInteraction, UI_Trigger, block->names[nameIndex], ColdPointer(UI->keyboardBuffer), ColdPointer(block->names[nameIndex]));
                     UIAddInteraction(UI, input, switchButton, autoInteraction);
                 }
                 
@@ -132,8 +154,8 @@ inline void UIRenderAutocomplete(UIState* UI, PlatformInput* input, UIAutocomple
         {
             prevIndex = nameCount - 1;
         }
-        UIAddInteraction(UI, input, actionDown, UISetValueInteraction(UI_Trigger, &UI->currentAutocompleteSelectedIndex, nextIndex));
-        UIAddInteraction(UI, input, actionUp, UISetValueInteraction(UI_Trigger, &UI->currentAutocompleteSelectedIndex, prevIndex));
+        UIAddInteraction(UI, input, actionDown, UISetValueInteraction(UI, UI_Trigger, &UI->currentAutocompleteSelectedIndex, nextIndex));
+        UIAddInteraction(UI, input, actionUp, UISetValueInteraction(UI, UI_Trigger, &UI->currentAutocompleteSelectedIndex, prevIndex));
     }
     else
     {
@@ -377,30 +399,31 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
     return result;
 }
 
-struct UIAddTabResult
+inline void AddConfirmActions(UIState* UI, EditorWidget* widget, UIInteraction* interaction, char* dest, u32 destSize)
 {
+	UIAddUndoRedoAction(UI, interaction, UI_Trigger, UndoRedoString(widget, dest, destSize, dest, UI->keyboardBuffer));            
+	UIAddStandardAction_(UI, interaction, UI_Trigger, destSize, ColdPointer(dest), ColdPointer(UI->keyboardBuffer));
+	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->activeLabel, 0); 
+	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->active, 0);    
+    UIAddClearAction(UI, interaction, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));
+	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->activeWidget, 0);    
+    
+    
+	UIAddReloadElementAction(UI, interaction, UI_Trigger, widget->root);
+	if(StrEqual(widget->name, "Editing Tabs"))
+	{
+		UIAddRequestAction(UI, interaction, UI_Trigger, SendDataFileRequest());
+	}        
+	UIAddClearAction(UI, interaction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+    
+}
+
+
+struct UIAddTabResult
+{    
     Rect2 bounds;
     Vec4 color;
 };
-
-inline void AddConfirmActions(UIState* UI, EditorWidget* widget, UIInteraction* interaction, char* dest, u32 destSize)
-{
-	UIAddUndoRedoAction(interaction, UI_Trigger, UndoRedoString(widget, dest, destSize, dest, UI->keyboardBuffer));            
-	UIAddStandardAction_(interaction, UI_Trigger, destSize, ColdPointer(dest), ColdPointer(UI->keyboardBuffer));
-	UIAddSetValueAction(interaction, UI_Trigger, &UI->activeLabel, 0); 
-	UIAddSetValueAction(interaction, UI_Trigger, &UI->active, 0);    
-    UIAddClearAction(interaction, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));
-	UIAddSetValueAction(interaction, UI_Trigger, &UI->activeWidget, 0);    
-            
-            
-	UIAddReloadElementAction(interaction, UI_Trigger, widget->root);
-	if(StrEqual(widget->name, "Editing Tabs"))
-	{
-		UIAddRequestAction(interaction, UI_Trigger, SendDataFileRequest());
-	}        
-	UIAddClearAction(interaction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
-                
-}
 
 inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget, PlatformInput* input, EditorElementParents parents, EditorElement* root, Vec2 P, EditorLayout* layout, char* text)
 {
@@ -410,30 +433,30 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
     if(root != UI->active)
     {
         result.bounds = GetUIOrthoTextBounds(UI, text, layout->fontScale, P);
-        result.color = V4(0, 1, 0, 1);
+        result.color = V4(0.7f, 0.7f, 0, 1);
         if(!UI->activeLabel)
         {
             if(PointInRect(result.bounds, UI->relativeScreenMouse))
             {
                 UIInteraction mouseInteraction = {};
-
+                
 				if(UI->active && UI->bufferValid)
 				{
 					AddConfirmActions(UI, widget, &mouseInteraction, UI->active->value, sizeof(UI->active->value));
 				}
-
+                
                 if(StrEqual(text, "true"))
                 {
                     result.color = V4(1, 0, 1, 1);
-                    UIAddStandardAction_(&mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(root->value), ColdPointer(UI->falseString));
-                    UIAddReloadElementAction(&mouseInteraction, UI_Trigger, widget->root);
+                    UIAddStandardAction_(UI, &mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(root->value), ColdPointer(UI->falseString));
+                    UIAddReloadElementAction(UI, &mouseInteraction, UI_Trigger, widget->root);
                     
                 }
                 else if(StrEqual(text, "false"))
                 {
                     result.color = V4(1, 0, 1, 1);
-                    UIAddStandardAction_(&mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(root->value), ColdPointer(UI->trueString));
-                    UIAddReloadElementAction(&mouseInteraction, UI_Trigger, widget->root);
+                    UIAddStandardAction_(UI, &mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(root->value), ColdPointer(UI->trueString));
+                    UIAddReloadElementAction(UI, &mouseInteraction, UI_Trigger, widget->root);
                 }
                 else
                 {
@@ -452,7 +475,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                         }
                         else
                         {
-                           
+                            
                             UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parents, root->name);
                             if(autocomplete)
                             {
@@ -464,22 +487,22 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                     if(!UI->active && canEdit)
                     {
                         result.color = V4(1, 0, 1, 1);
-                        mouseInteraction = UISetValueInteraction(UI_Click, &UI->active, root);
-                        UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->activeParents, parents);
-                        UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->activeWidget, widget); 
-                        UIAddSetValueAction(&mouseInteraction, UI_Click, &UI->currentAutocompleteSelectedIndex, -1);   UIAddClearAction(&mouseInteraction, UI_Click, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+                        mouseInteraction = UISetValueInteraction(UI, UI_Click, &UI->active, root);
+                        UIAddSetValueAction(UI, &mouseInteraction, UI_Click, &UI->activeParents, parents);
+                        UIAddSetValueAction(UI, &mouseInteraction, UI_Click, &UI->activeWidget, widget); 
+                        UIAddSetValueAction(UI, &mouseInteraction, UI_Click, &UI->currentAutocompleteSelectedIndex, -1);   UIAddClearAction(UI, &mouseInteraction, UI_Click, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                         
                         
                         if(root->type == EditorElement_Real)
                         {
-                            UIAddStandardAction_(&mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(UI->realDragging), ColdPointer(root->value));
-                            UIAddOffsetStringEditorElement(&mouseInteraction, UI_Idle, ColdPointer(root->value), ColdPointer(&UI->deltaScreenMouseP.y), 0.01f);
-                            UIAddUndoRedoAction(&mouseInteraction, UI_Release, UndoRedoDelayedString(widget, root->value, sizeof(root->value), root->value, ColdPointer(root->value)));
-                            UIAddReloadElementAction(&mouseInteraction, UI_Idle, widget->root);
-                            UIAddReloadElementAction(&mouseInteraction, UI_Release, widget->root);
+                            UIAddStandardAction_(UI, &mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(UI->realDragging), ColdPointer(root->value));
+                            UIAddOffsetStringEditorElement(UI, &mouseInteraction, UI_Idle, ColdPointer(root->value), ColdPointer(&UI->deltaScreenMouseP.y), 0.01f);
+                            UIAddUndoRedoAction(UI, &mouseInteraction, UI_Release, UndoRedoDelayedString(widget, root->value, sizeof(root->value), root->value, ColdPointer(root->value)));
+                            UIAddReloadElementAction(UI, &mouseInteraction, UI_Idle, widget->root);
+                            UIAddReloadElementAction(UI, &mouseInteraction, UI_Release, widget->root);
                             if(StrEqual(widget->name, "Editing Tabs"))
                             {
-                                UIAddRequestAction(&mouseInteraction, UI_Release, SendDataFileRequest());
+                                UIAddRequestAction(UI, &mouseInteraction, UI_Release, SendDataFileRequest());
                             }
                             
                         }
@@ -532,8 +555,214 @@ inline b32 UIChildModified(TaxonomyTable* table, TaxonomySlot* slot)
     return result;
 }
 
-inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElementParents parents, EditorElement* parent_, Vec4 parentSquareColor, EditorElement* root_, PlatformInput* input, b32 canDelete)
+struct StructButtonsResult
 {
+    Rect2 completeBounds;
+    b32 hot;
+    Vec4 nameColor;
+};
+
+
+inline void DrawStructActionButton(UIState* UI, PlatformInput* input, StructButtonsResult* result, UIButton* button)
+{
+    DrawButtonResult btn = UIDrawButton(UI, input, button);
+    
+    result->completeBounds = Union(result->completeBounds, btn.bounds);
+    
+    if(btn.hot)
+    {
+        result->hot = true;
+        result->nameColor = button->color;
+    }
+}
+
+inline StructButtonsResult DrawStructButtons(UIState* UI, PlatformInput* input, EditorLayout* layout, Rect2 nameBounds, EditorElementParents parents, EditorElement* grandFather, EditorElement* father, EditorElement* root, b32 canDelete)
+{
+    StructButtonsResult result = {};
+    result.completeBounds = nameBounds;
+    
+    
+    Vec2 nameDim = GetDim(nameBounds);
+    Vec2 buttonP = nameBounds.min + V2(nameDim.x + layout->nameValueDistance, 0.3f * nameDim.y);
+    if(canDelete)
+    {
+        if(root != UI->copying)
+        {
+            Vec4 deleteColor = V4(1, 0, 0, 1);
+            UIButton deleteButton = UIBtn(UI, buttonP, layout, deleteColor, "delete", true, UISetValueInteraction(UI, UI_Trigger, &root->flags, (root->flags | EditorElem_Deleted)));
+            
+     
+            DrawStructActionButton(UI, input, &result, &deleteButton);            
+            buttonP.x = result.completeBounds.max.x + layout->nameValueDistance;
+        }
+    }
+    
+    if(root->firstValue && father)
+    {
+        if(father->flags & EditorElem_PlaySoundButton)
+        {
+            u64 soundTypeHash = StringHash(father->name);
+            u64 soundNameHash = StringHash(root->firstValue->value);
+            
+            UIButton playButton = UIBtn(UI, buttonP, layout, V4(0, 1, 0, 1), "play", true, UIPlaySoundInteraction(UI, UI_Trigger, soundTypeHash, soundNameHash));
+            
+            DrawStructActionButton(UI, input, &result, &playButton);
+        }
+        else if(father->flags & EditorElem_PlayEventSoundButton)
+        {
+            
+            char* soundType = GetValue(root, "soundType");
+            char* soundName = GetValue(root, "sound");
+            u64 soundTypeHash = StringHash(soundType);
+            u64 soundNameHash = StringHash(soundName);
+            
+            UIButton playButton = UIBtn(UI, buttonP, layout, V4(0, 1, 0, 1), "play", true, UIPlaySoundInteraction(UI, UI_Trigger, soundTypeHash, soundNameHash));
+            
+            DrawStructActionButton(UI, input, &result, &playButton);
+        }
+        else if(father->flags & EditorElem_PlayEventButton)
+        {
+            UIButton playButton = UIBtn(UI, buttonP, layout, V4(0, 1, 0, 1), "play");
+            
+            u64 eventNameHash = StringHash(root->name);
+            
+            UIButtonInteraction(&playButton, UIPlaySoundEventInteraction(UI, UI_Trigger, eventNameHash));
+            DrawStructActionButton(UI, input, &result, &playButton);
+        }
+        else if(father->flags & EditorElem_EquipInAnimationButton)
+        {
+            UIButton equipButton = UIBtn(UI, buttonP, layout, V4(0, 1, 0, 1), "try");
+            
+            UIButtonInteraction(&equipButton, UIEquipInAnimationWidgetInteraction(UI, UI_Trigger, grandFather, root));
+            DrawStructActionButton(UI, input, &result, &equipButton);
+        }
+        
+        else if(father->flags & EditorElem_ShowLabelBitmapButton)
+        {
+            UIButton showButton = UIBtn(UI,buttonP, layout, V4(0, 1, 0, 1), "view");
+            
+            EditorElement* grandGrandFather = parents.grandParents[1];
+            u64 componentNameHash = StringHash(grandGrandFather->name);
+            u64 bitmapNameHash = StringHash(GetValue(grandFather,
+                                                     "componentName"));
+            
+            Vec4 coloration = ToV4Color(GetElement(root, "coloration"));
+            UIButtonInteraction(&showButton, UIShowBitmapInteraction(UI, UI_Idle, componentNameHash, bitmapNameHash, coloration));
+            
+            DrawStructActionButton(UI, input, &result, &showButton);
+        }
+        
+    }
+    
+    return result;
+   
+}
+
+struct CopyPasteInteractionRes
+{
+    b32 propagateColor;
+    Vec4 color;
+};
+
+inline  CopyPasteInteractionRes AddCopyPasteInteraction(UIState* UI, PlatformInput* input, EditorWidget* widget, EditorLayout* layout, EditorElement* root, b32 canDelete, Rect2 nameBounds)
+{    
+    CopyPasteInteractionRes result = {};
+                            if(root == UI->copying)
+                        {
+        Vec4 copyColor = V4(0, 0, 1, 1);
+        result.propagateColor = true;
+        result.color = copyColor;
+        PushRectOutline(UI->group, FlatTransform(layout->additionalZBias), nameBounds, copyColor, 2.0f);
+                        
+                        }
+                        else
+                        {
+                            if(!UI->hotStructThisFrame && PointInRect(nameBounds, UI->relativeScreenMouse))
+                            {
+            Vec4 defaultColor = V4(0.7f, 0.7f, 0.0f, 1.0f);
+            
+            result.propagateColor = true;
+            result.color = defaultColor;
+            
+                                UI->hotStructThisFrame = true;
+                                UI->hotStructBounds = nameBounds;
+                                UI->hotStructZ = layout->additionalZBias;
+                                UI->hotStructColor = defaultColor;
+                                UI->hotStruct = root;
+                                UI->hotWidget = widget;
+                                
+                                UIAddInteraction(UI, input, copyButton, UISetValueInteraction(UI, UI_Trigger, &UI->copying, root));
+                                if(UI->copying)
+                                {
+                                    b32 matches = false;
+                
+                if(UI->copying->type == root->type)
+                {
+                    switch(root->type)
+                    {
+                        case EditorElement_Struct:
+                        {
+                            matches = (canDelete);
+                            EditorElement* test = root->firstChild;
+                            for(EditorElement* match = UI->copying->firstChild; match; match = match->next)
+                            {
+                                if(!test || !StrEqual(match->name, test->name))
+                                {
+                                    matches = false;
+                                    break;
+                                }
+                                
+                                test = test->next;
+                            }
+                            
+                        } break;
+                        
+                        case EditorElement_List:
+                        {
+                        matches = StrEqual(root->name, UI->copying->name);
+                        } break;
+                    }
+                }
+
+                if(matches)
+                {
+                    result.propagateColor = true;
+                    Vec4 canPasteColor = V4(0, 1, 0, 1);
+                    
+                    result.color = canPasteColor;
+                    UI->hotStructColor = canPasteColor;
+                                        UIAddInteraction(UI, input, pasteButton, UISetValueInteraction(UI, UI_Trigger, &root->flags, root->flags | EditorElem_Pasted));
+                }
+                
+                                }
+                            }
+                        }
+    return result;                        
+}
+
+
+inline void PushEditorLine(RenderGroup* group, b32 propagated, Vec4 color, Vec3 fromP, Vec3 toP, r32 thickness, r32 lineSegmentLength, r32 lineSpacing)
+{
+    if(propagated)
+    {
+        PushLine(group, color, fromP, toP, 1.5f * thickness);
+    }
+    else
+    {
+        PushDottedLine(group, color, fromP, toP, thickness, lineSegmentLength, lineSpacing);   
+    }
+}
+
+struct UIRenderTreeResult
+{
+    Rect2 bounds;
+    r32 lineEndY;
+};
+
+inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElementParents parents, EditorElement* parent_, b32 propagateLineColor, Vec4 parentSquareColor, EditorElement* root_, PlatformInput* input, b32 canDelete)
+{
+    UIRenderTreeResult totalResult = {};
+    
     for(u32 parentIndex = ArrayCount(parents.grandParents) - 1; parentIndex > 0; --parentIndex)
     {
         parents.grandParents[parentIndex] = parents.grandParents[parentIndex - 1];
@@ -545,10 +774,11 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
     
     EditorElement* father = parents.father;
     EditorElement* grandFather = parents.grandParents[0];
- 
-
     
-    Rect2 totalResult = InvertedInfinityRect2();
+    
+    
+    totalResult.bounds = InvertedInfinityRect2();
+    totalResult.lineEndY = layout->P.y;
     
     u32 childIndex = 0;
     for(EditorElement* root = root_; root; root = root->next)
@@ -561,6 +791,9 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
 		{
 			if(IsSet(root, EditorElem_Pasted))
             {
+                UI->pasted = root;
+                UI->pastedTimeLeft = 2.0f;
+                
                 ClearFlags(root, EditorElem_Pasted);
                 EditorElement oldElem = *root;
                 
@@ -606,11 +839,19 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             {
                 FormatString(name, sizeof(name), "{ } %s", root->name);
             }
+            else if(root->type == EditorElement_EmptyTaxonomy)
+            {
+                FormatString(name, sizeof(name), "Add new -%s-", father->name);
+            }
+            else if(root->type <= EditorElement_Real)
+            {
+                FormatString(name, sizeof(name), "%s =", root->name);
+            }
             else
             {
                 FormatString(name, sizeof(name), "%s", root->name);
             }
-
+            
             Vec3 parentAlignedP = V3(layout->P, layout->additionalZBias);
             if(father)
             {
@@ -619,30 +860,67 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             
             
             Vec3 lineStartP = V3(layout->P, layout->additionalZBias);
-          
+            
             Rect2 nameTestBounds = GetUIOrthoTextBounds(UI, name, layout->fontScale, layout->P);
             
-            Rect2 square = RectCenterDim(layout->P, V2(layout->squareDim, layout->squareDim));
-    
+            u32 seed = (u32) StringHash(root->name) + childIndex;
+            RandomSequence seq = Seed(seed);
+            
+            r32 squareDim = layout->squareDim;
+            if(root->type < EditorElement_List)
+            {
+                squareDim *= 0.6f;
+            }
+            
+            Vec4 squareLineColor;
+            
+            if(root == UI->copying)
+            {
+                squareLineColor = V4(0, 0, 1, 1);
+            }
+            else
+            {
+                if(propagateLineColor || root->type == EditorElement_EmptyTaxonomy)
+                {
+                    squareLineColor = parentSquareColor;
+                }
+                else
+                {
+                    squareLineColor = V4(0.6f * RandomUniV3(&seq), 1);
+                    if(root->type < EditorElement_List)
+                    {
+                        if(root->type == EditorElement_String)
+                        {
+                            squareLineColor = V4(0, 0, 0.2f, 1.0f);
+                        }
+                        else
+                        {
+                            squareLineColor = V4(0, 0.2f, 0.0f, 1.0f);
+                        }
+                    }
+                    
+                }
+                
+            }
 
+            Rect2 square = RectCenterDim(layout->P, V2(squareDim, squareDim));
+            
+            
             Vec4 internalSquareColor = V4(0, 0, 0, 1);
-            b32 drawExpandedSign = (root->type >= EditorElement_List);
+            b32 drawExpandedSign = (root->type == EditorElement_List || root->type == EditorElement_Struct || root->type == EditorElement_Taxonomy);
             if(PointInRect(square, UI->relativeScreenMouse) && drawExpandedSign)
             {
                 //nameColor = V4(1, 1, 0, 1);
                 u32 finalFlags = IsSet(root, EditorElem_Expanded) ? (root->flags & ~EditorElem_Expanded) : (root->flags | EditorElem_Expanded);
                 
-                UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &root->flags, finalFlags));
+                UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &root->flags, finalFlags));
                 
-                internalSquareColor = V4(0.2f, 0.2f, 0.2f, 1.0f);
+                internalSquareColor = V4(0.9f, 0.2f, 0.1f, 1.0f);
                 
             }
             
-            u32 seed = (u32) StringHash(root->name) + childIndex;
-            RandomSequence seq = Seed(seed);
-            Vec4 squareLineColor = drawExpandedSign ? V4(0.6f * RandomUniV3(&seq), 1) : V4(0, 0, 0.7f, 1.0f);
-                                      
-            PushLine(UI->group, parentSquareColor, parentAlignedP, lineStartP, layout->lineThickness);
+            
+            PushEditorLine(UI->group, propagateLineColor, parentSquareColor, parentAlignedP, lineStartP, layout->lineThickness, layout->lineSegmentLength, layout->lineSpacing);
             PushRect(UI->group, FlatTransform(layout->additionalZBias), square, squareLineColor);
             
             if(drawExpandedSign)
@@ -651,29 +929,35 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 char* sign = IsSet(root, EditorElem_Expanded) ? "-" : "+";
                 
                 Vec2 insideDim = Hadamart(0.5f * GetDim(square), V2(0.7f, 0.8f));
-                PushUIOrthoText(UI, sign, 0.42f * layout->fontScale, GetCenter(square) - insideDim, V4(1, 1, 1, 1), layout->additionalZBias + 0.01f);
+                PushUIOrthoText(UI, sign, 0.6f * layout->fontScale, GetCenter(square) - insideDim, V4(1, 1, 1, 1), layout->additionalZBias + 0.01f);
             }
             
+            totalResult.lineEndY = GetCenter(square).y;
             Vec2 nameP = GetCenter(square) + V2(1.5f * GetDim(square).x, -0.4f * GetDim(nameTestBounds).y);
             
-            Rect2 nameBounds =GetUIOrthoTextBounds(UI, name, layout->fontScale, nameP);
+            Rect2 nameBounds = AddRadius(GetUIOrthoTextBounds(UI, name, layout->fontScale, nameP), V2(layout->padding, layout->padding));
             
             Vec4 nameColor = V4(1, 1, 1, 1);
+            if(root == UI->pasted)
+            {
+                r32 lerp = Clamp01MapToRange(2.0f, UI->pastedTimeLeft, 0);
+                nameColor = Lerp(V4(0, 1, 0, 1), lerp, nameColor);
+            }
             
-			char* shadowLabel = 0;
+			char shadowLabel[64] = {};
             char* nameToShow = name;
             b32 showName = (nameToShow[0]);
             
-           
+            
             if(PointInRect(nameBounds, UI->relativeScreenMouse))
             {                
                 if(!UI->activeLabel && !UI->active && father && (father->flags & EditorElem_LabelsEditable))
                 {
                     nameColor = V4(1, 0, 0, 1);
-                    UIInteraction labelInteraction = UISetValueInteraction(UI_Trigger, &UI->activeLabel, root);
-                    UIAddClearAction(&labelInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+                    UIInteraction labelInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->activeLabel, root);
+                    UIAddClearAction(UI, &labelInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                     
-                    UIAddSetValueAction(&labelInteraction, UI_Trigger, &UI->activeWidget, widget); 
+                    UIAddSetValueAction(UI, &labelInteraction, UI_Trigger, &UI->activeWidget, widget); 
                     UIAddInteraction(UI, input, mouseRight, labelInteraction);
                 }
             }
@@ -681,15 +965,36 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
             if(root == UI->activeLabel)
             {
                 nameToShow = UI->showBuffer;
-
+                
 				if(UI->keyboardBuffer[0] == 0)
 				{
-					shadowLabel = root->name;
+                    switch(root->type)
+                    {
+                        case EditorElement_String:
+                        {
+                            FormatString(shadowLabel, sizeof(shadowLabel), "{ } %s", root->name);
+                        } break;
+                        
+                        case EditorElement_List:
+                        {
+                            FormatString(shadowLabel, sizeof(shadowLabel), "[ ] %s", root->name);
+                        } break;
+                        
+                        default:
+                        {
+                            FormatString(shadowLabel, sizeof(shadowLabel), "%s", root->name);
+                        } break;
+                    }
 				}
                 
 				UIInteraction confirmInteraction = {};
 				AddConfirmActions(UI, widget, &confirmInteraction, root->name, sizeof(root->name));
                 UIAddInteraction(UI, input, confirmButton, confirmInteraction);
+            }
+            
+            if(root == UI->active && root->type == EditorElement_EmptyTaxonomy)
+            {
+                nameToShow = UI->showBuffer;
             }
             
             result = Union(square, nameBounds);
@@ -710,7 +1015,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     r32 xAdvance = Max(layout->nameValueDistance, GetDim(nameBounds).x + 10.0f);
                     Vec2 valueP = nameP + V2(xAdvance, 0);
                     char* text = (root == UI->active) ? UI->showBuffer : root->value;
-
+                    
 					if(root == UI->active && UI->keyboardBuffer[0] == 0)
 					{
                         Vec4 shadowColor = V4(0.6f, 0.6f, 0.6f, 1.0f);
@@ -721,12 +1026,22 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                     UIAddTabResult addTab = UIAddTabValueInteraction(UI, widget, input, parents, root, valueP, layout, text);
                     
                     PushUIOrthoText(UI, text, layout->fontScale, valueP, addTab.color, layout->additionalZBias);
-                    result = Union(result, addTab.bounds);
+                    result = Union(result, AddRadius(addTab.bounds, V2(layout->padding, layout->padding)));
                     
                 } break;
                 
                 case EditorElement_List:
                 {
+                    CopyPasteInteractionRes copyPaste = AddCopyPasteInteraction(UI, input, widget, layout, root, canDelete, nameBounds);
+
+                    b32 propagateLineC = propagateLineColor;
+                    if(copyPaste.propagateColor)
+                    {
+                        propagateLineC = true;
+                        squareLineColor = copyPaste.color;
+                    }
+                    
+
                     if(IsSet(root, EditorElem_Expanded))
                     {
                         Vec3 verticalStartP = lineStartP;
@@ -745,40 +1060,28 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             }
                         }
                         
-                        if(root == UI->copying)
+                        
+                        
+                        if(root->emptyElement)
                         {
-                            Vec4 outlineColor = V4(0, 0, 1, 1);
-                            r32 thickness = 2;
-                            ObjectTransform nameTranform = FlatTransform();
-                            nameTranform.additionalZBias = layout->additionalZBias;
-                            //PushRectOutline(UI->group, nameTranform, nameBounds, outlineColor, thickness);
-                        }
-                        else
-                        {
-                            if(!UI->hotStructThisFrame && PointInRect(nameBounds, UI->relativeScreenMouse))
+                            layout->P.y -= layout->childStandardHeight;
+                            Vec2 addP = nameP + V2(layout->nameValueDistance, -layout->childStandardHeight);
+                            
+                            UIButton addButton = UIBtn(UI, addP, layout, V4(1, 0, 0, 1), "add");
+                            UIInteraction addInteraction = UIAddEmptyElementToListInteraction(UI, UI_Trigger, widget, root);
+                            
+                            if(StrEqual(widget->name, "Editing Tabs"))
                             {
-                                UI->hotStructThisFrame = true;
-                                UI->hotStructBounds = nameBounds;
-                                UI->hotStructZ = layout->additionalZBias;
-                                UI->hotStructColor = V4(0, 1, 0, 1);
-                                UI->hotStruct = root;
-                                UI->hotWidget = widget;
-                                
-                                UIAddInteraction(UI, input, copyButton, UISetValueInteraction(UI_Trigger, &UI->copying, root));
-                                if(UI->copying)
-                                {
-                                    b32 matches = StrEqual(root->name, UI->copying->name);
-                                    if(matches && canDelete)
-                                    {
-                                        UIAddInteraction(UI, input, pasteButton, UISetValueInteraction(UI_Trigger, &root->flags, root->flags | EditorElem_Pasted));
-                                    }
-                                    else
-                                    {
-                                        UI->hotStructColor.a = 0;
-                                    }
-                                }
+                                UIAddRequestAction(UI, &addInteraction, UI_Trigger, SendDataFileRequest());
                             }
+                            
+                            UIAddReloadElementAction(UI, &addInteraction, UI_Trigger, widget->root);
+                            UIButtonInteraction(&addButton, addInteraction);
+                            result = Union(result, UIDrawButton(UI, input, &addButton).bounds);
+                            
                         }
+                        
+                        
                         
                         b32 moveHorizontally = (root->firstInList != 0);
                         if(moveHorizontally)
@@ -786,7 +1089,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             layout->P += V2(layout->nameValueDistance, 0);
                         }
                         
-
+                        
                         
                         b32 canDeleteElements;
                         if(IsSet(root, EditorElem_AtLeastOneInList))
@@ -798,36 +1101,47 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         {
                             canDeleteElements = !IsSet(root, EditorElem_CantBeDeleted);
                         }
-                        result = Union(result, UIRenderEditorTree(UI, widget, layout, parents, root, squareLineColor, root->firstInList, input, canDeleteElements));
+                        
+                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstInList, input, canDeleteElements);
+                        
+                        result = Union(result, childs.bounds);
                         
                         if(moveHorizontally)
                         {
                             layout->P -= V2(layout->nameValueDistance, 0);
                         }
                         
-                        Vec3 verticalEndP = V3(layout->P.x, layout->P.y + layout->childStandardHeight, layout->additionalZBias);
-                        PushLine(UI->group, squareLineColor, verticalStartP, verticalEndP, layout->lineThickness);
+                        Vec3 verticalEndP = V3(verticalStartP.x, childs.lineEndY, layout->additionalZBias);
                         
-                        
-                        if(root->emptyElement)
+                        if(root->firstInList)
                         {
-                            UIButton addButton = UIBtn(UI, nameP + V2(GetDim(nameBounds).x, 0) + V2(30, 0), layout, V4(1, 0, 0, 1), "add");
-                            UIInteraction addInteraction = UIAddEmptyElementToListInteraction(UI_Trigger, widget, root);
-                            
-                            if(StrEqual(widget->name, "Editing Tabs"))
-                            {
-                                UIAddRequestAction(&addInteraction, UI_Trigger, SendDataFileRequest());
-                            }
-                            
-                            UIAddReloadElementAction(&addInteraction, UI_Trigger, widget->root);
-                            UIButtonInteraction(&addButton, addInteraction);
-                            result = Union(result, UIDrawButton(UI, input, &addButton).bounds);
+                            PushEditorLine(UI->group, propagateLineC, squareLineColor, verticalStartP, verticalEndP, layout->lineThickness, layout->lineSegmentLength, layout->lineSpacing);   
                         }
+                        
                     }
                 } break;
                 
                 case EditorElement_Struct:
                 {
+                    StructButtonsResult structButtons = DrawStructButtons(UI, input, layout, nameBounds, parents, grandFather, father, root, canDelete);
+                    result = Union(result, structButtons.completeBounds);
+                    
+                    b32 propagateLineC = propagateLineColor;
+                    if(structButtons.hot)
+                    {
+                        nameColor = structButtons.nameColor;
+                        propagateLineC = true;
+                        squareLineColor = nameColor;
+                    }
+
+                    CopyPasteInteractionRes copyPaste = AddCopyPasteInteraction(UI, input, widget, layout, root, canDelete, nameBounds);
+
+                    if(copyPaste.propagateColor)
+                    {
+                        propagateLineC = true;
+                        squareLineColor = copyPaste.color;
+                    }
+                    
                     if(IsSet(root, EditorElem_Expanded) || !root->name[0])
                     {
                         Vec3 verticalStartP = lineStartP;
@@ -864,145 +1178,32 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                                 }
                             }
                         }
-                        Rect2 structBounds = UIRenderEditorTree(UI, widget, layout, parents, root, squareLineColor, root->firstValue, input, false);
                         
-                        if(canDelete)
-                        {
-                            if(root != UI->copying)
-                            {
-                                UIButton deleteButton = UIBtn(UI, GetCenter(structBounds) + V2(30, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(1, 0, 0, 1), "delete");
-                                UIButtonInteraction(&deleteButton, UISetValueInteraction(UI_Trigger, &root->flags, (root->flags | EditorElem_Deleted)));
-                                structBounds = Union(structBounds, UIDrawButton(UI, input, &deleteButton).bounds);
-                            }
-                        }
                         
-                        if(root->firstValue && father)
-                        {
-                            if(father->flags & EditorElem_PlaySoundButton)
-                            {
-                                UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(70, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
-                                
-                                u64 soundTypeHash = StringHash(father->name);
-                                u64 soundNameHash = StringHash(root->firstValue->value);
-                                
-                                UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
-                                structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton).bounds);
-                            }
-                            else if(father->flags & EditorElem_PlayEventSoundButton)
-                            {
-                                UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(70, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
-                                
-                                char* soundType = GetValue(root, "soundType");
-                                char* soundName = GetValue(root, "sound");
-                                u64 soundTypeHash = StringHash(soundType);
-                                u64 soundNameHash = StringHash(soundName);
-                                
-                                UIButtonInteraction(&playButton, UIPlaySoundInteraction(UI_Trigger, soundTypeHash, soundNameHash));
-                                structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton).bounds);
-                            }
-                            else if(father->flags & EditorElem_PlayEventButton)
-                            {
-                                UIButton playButton = UIBtn(UI, GetCenter(structBounds) + V2(20, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "play");
-                                
-                                u64 eventNameHash = StringHash(root->name);
-                                
-                                UIButtonInteraction(&playButton, UIPlaySoundEventInteraction(UI_Trigger, eventNameHash));
-                                structBounds = Union(structBounds, UIDrawButton(UI, input, &playButton).bounds);
-                            }
-                            else if(father->flags & EditorElem_EquipInAnimationButton)
-                            {
-                                UIButton equipButton = UIBtn(UI, GetCenter(structBounds) + V2(20, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "try");
-                                                                
-                                UIButtonInteraction(&equipButton, UIEquipInAnimationWidgetInteraction(UI_Trigger, grandFather, root));
-                                structBounds = Union(structBounds, UIDrawButton(UI, input, &equipButton).bounds);
-                            }
-                            
-                            else if(father->flags & EditorElem_ShowLabelBitmapButton)
-                            {
-                                UIButton showButton = UIBtn(UI, GetCenter(structBounds) + V2(20, 0) +0.5f * V2(GetDim(structBounds).x, 0), layout, V4(0, 1, 0, 1), "view");
-                                
-                                EditorElement* grandGrandFather = parents.grandParents[1];
-                                u64 componentNameHash = StringHash(grandGrandFather->name);
-                                u64 bitmapNameHash = StringHash(GetValue(grandFather,
- "componentName"));
+                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, false);
+                                                
 
-                                Vec4 coloration = ToV4Color(GetElement(root, "coloration"));
-                                UIButtonInteraction(&showButton, UIShowBitmapInteraction(UI_Idle, componentNameHash, bitmapNameHash, coloration));
-                                structBounds = Union(structBounds, UIDrawButton(UI, input, &showButton).bounds);
-                            }
-                      
-                        }
-                        
-                        Rect2 realBounds = structBounds;
-                        
-                        
-                        r32 thickness = 1.0f;
-                        Vec4 outlineColor = V4(1, 1, 1, 1);
-                        if(root == UI->copying)
-                        {
-                            thickness = 2.0f;
-                            outlineColor = V4(0, 0, 1, 1);
-                        }
-                        else
-                        {
-                            if(!UI->hotStructThisFrame && PointInRect(realBounds, UI->relativeScreenMouse))
-                            {
-                                UI->hotStructThisFrame = true;
-                                UI->hotStructBounds = realBounds;
-                                UI->hotStructZ = layout->additionalZBias;
-                                UI->hotStructColor = V4(0, 1, 0, 1);
-                                UI->hotStruct = root;
-                                UI->hotWidget = widget;
-                                
-                                UIAddInteraction(UI, input, copyButton, UISetValueInteraction(UI_Trigger, &UI->copying, root));
-                                if(UI->copying)
-                                {
-                                    b32 matches = true;
-                                    EditorElement* test = root->firstChild;
-                                    for(EditorElement* match = UI->copying->firstChild; match; match = match->next)
-                                    {
-                                        if(!test || !StrEqual(match->name, test->name))
-                                        {
-                                            matches = false;
-                                            break;
-                                        }
-                                        
-                                        test = test->next;
-                                    }
-                                    
-                                    if(matches && canDelete)
-                                    {
-                                        UIAddInteraction(UI, input, pasteButton, UISetValueInteraction(UI_Trigger, &root->flags, root->flags | EditorElem_Pasted));
-                                    }
-                                    else
-                                    {
-                                        UI->hotStructColor.a = 0;
-                                    }
-                                }
-                            }
-                        }
-                        
                         if(!canDelete)
                         {
                             if(UI->hotStructThisFrame && root == UI->hotStruct)
                             {
-                                UIInteraction dragInteraction = UISetValueInteraction(UI_Trigger, &UI->dragging, root);
-                                UIAddSetValueAction(&dragInteraction, UI_Trigger, &UI->draggingParent, father);
-                                UIAddReleaseDragAction(&dragInteraction, UI_Release);
+                                UIInteraction dragInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->dragging, root);
+                                UIAddSetValueAction(UI, &dragInteraction, UI_Trigger, &UI->draggingParent, father);
+                                UIAddReleaseDragAction(UI, &dragInteraction, UI_Release);
                                 UIAddInteraction(UI, input, mouseRight, dragInteraction);
                             }
                         }
                         
-                        result = Union(result, realBounds);
+                        result = Union(result, childs.bounds);
                         layout->P += V2(-layout->nameValueDistance, 0);
                         
-                        Vec3 verticalEndP = V3(layout->P.x, layout->P.y + layout->childStandardHeight, layout->additionalZBias);
-                        PushLine(UI->group, squareLineColor, verticalStartP, verticalEndP, layout->lineThickness);
+                        Vec3 verticalEndP = V3(verticalStartP.x, childs.lineEndY, layout->additionalZBias);
+                        PushEditorLine(UI->group, propagateLineC, squareLineColor, verticalStartP, verticalEndP, layout->lineThickness, layout->lineSegmentLength, layout->lineSpacing);
                         
                         ObjectTransform structTranform = FlatTransform();
                         structTranform.additionalZBias = layout->additionalZBias;
                         
-                        //PushRectOutline(UI->group, structTranform, realBounds, outlineColor, thickness);
+                      
                     }
                 } break;
                 
@@ -1020,6 +1221,14 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         nameColor = V4(1, 0, 0, 1);
                     }
                     
+                    b32 propagateLineC = propagateLineColor;
+                    if(PointInRect(nameBounds, UI->relativeScreenMouse))
+                    {
+
+                        nameColor = squareLineColor;
+                        propagateLineC = true;
+                    }
+                    
                     if(IsSet(root, EditorElem_Expanded))
                     {
                         if(IsSet(root, EditorElem_Editable))
@@ -1030,17 +1239,17 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             
                             if(UI->worldMode->editorRoles & EditorRole_GameDesigner)
                             {
+                                b32 cancActive = UI->previousFrameWasAllowedToQuit;
                                 char* cancText = "canc";
-                                UIInteraction cancReviveInteraction = SendRequestInteraction(UI_Trigger, DeleteTaxonomyRequest(root->taxonomy));
+                                UIInteraction cancReviveInteraction = SendRequestInteraction(UI, UI_Trigger, DeleteTaxonomyRequest(root->taxonomy));
                                 
                                 if(root->name[0] == '#')
                                 {
                                     cancText = "revive";
-                                    cancReviveInteraction = SendRequestInteraction(UI_Trigger, ReviveTaxonomyRequest(root->taxonomy));
+                                    cancReviveInteraction = SendRequestInteraction(UI, UI_Trigger, ReviveTaxonomyRequest(root->taxonomy));
                                 }
                                 
-                                UIButton deleteButton = UIBtn(UI, startingPos, layout, V4(1, 0, 0, 1), cancText);
-                                UIButtonInteraction(&deleteButton, cancReviveInteraction);
+                                UIButton deleteButton = UIBtn(UI, startingPos, layout, V4(1, 0, 0, 1), cancText, cancActive, cancReviveInteraction);
                                 
                                 DrawButtonResult cancDraw = UIDrawButton(UI, input, &deleteButton);
                                 if(cancDraw.hot)
@@ -1052,22 +1261,15 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                                 instantiateP = UIFollowingP(&deleteButton, buttonSeparator);
                             }
                             
-                            UIButton instantiateButton = UIBtn(UI, instantiateP, layout, V4(0, 0, 1, 1), "place");
+                            UIInteraction instantiateInteraction = SendRequestInteraction(UI, UI_Click, InstantiateTaxonomyRequest(root->taxonomy, V3(1, 0, 0)));
+                            UIAddSetValueAction(UI, &instantiateInteraction, UI_Idle, &UI->instantiatingTaxonomy, root->taxonomy);
+                            UIAddSetValueAction(UI, &instantiateInteraction, UI_Release, &UI->instantiatingTaxonomy, 0); 
                             
-                            UIInteraction instantiateInteraction = NullInteraction();
+                            b32 active = (root->name[0] != '#');
+                            UIButton instantiateButton = UIBtn(UI, instantiateP, layout, V4(0, 0, 1, 1), "place", active, instantiateInteraction);
                             
-                            r32 instantiateAlpha = 0.2f;
-                            if(root->name[0] != '#')
-                            {
-                                instantiateAlpha = 1.0f;
-                                instantiateInteraction = SendRequestInteraction(UI_Click, InstantiateTaxonomyRequest(root->taxonomy, V3(1, 0, 0)));
-                                UIAddSetValueAction(&instantiateInteraction, UI_Idle, &UI->instantiatingTaxonomy, root->taxonomy);
-                                UIAddSetValueAction(&instantiateInteraction, UI_Release, &UI->instantiatingTaxonomy, 0); 
-                            }
                             
-                            UIButtonInteraction(&instantiateButton, instantiateInteraction);
-                            
-                            DrawButtonResult placeDraw = UIDrawButton(UI, input, &instantiateButton, instantiateAlpha);
+                            DrawButtonResult placeDraw = UIDrawButton(UI, input, &instantiateButton);
                             if(placeDraw.hot)
                             {
                                 nameColor = V4(0, 1, 0, 1);
@@ -1075,23 +1277,10 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                             result = Union(result, placeDraw.bounds);
                             
                             
-                            
-                            UIButton editButton = UIBtn(UI, UIFollowingP(&instantiateButton, buttonSeparator), layout, V4(0, 1, 0, 1), "edit");
-                            
-                            UIInteraction editInteraction = NullInteraction();
-                            r32 editAlpha = 0.2f;
-                            
-                            if(true)//root->name[0] != '#')
-                            {
-                                editAlpha = 1.0f;
-                                editInteraction = SendRequestInteraction(UI_Trigger,
-                                                                       EditRequest(root->taxonomy));
-                              
-                            }
-                            
-                            UIButtonInteraction(&editButton, editInteraction);
-                            
-                            DrawButtonResult editDraw = UIDrawButton(UI, input, &editButton, editAlpha);
+                            UIInteraction editInteraction = SendRequestInteraction(UI, UI_Trigger,EditRequest(root->taxonomy));
+                            UIButton editButton = UIBtn(UI, UIFollowingP(&instantiateButton, buttonSeparator), layout, V4(0, 1, 0, 1), "edit", true, editInteraction);
+                                                        
+                            DrawButtonResult editDraw = UIDrawButton(UI, input, &editButton);
                             result = Union(result, editDraw.bounds);
                             if(editDraw.hot)
                             {
@@ -1104,56 +1293,50 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                         
                         layout->P += V2(layout->nameValueDistance, 0);
                         
-                        result = Union(result, UIRenderEditorTree(UI, widget, layout, parents, root, squareLineColor, root->firstChild, input, false));
+                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstChild, input, false);
+                        result = Union(result, childs.bounds);
                         
                         layout->P += V2(-layout->nameValueDistance, 0);
                         
-                        Vec3 verticalEndP = V3(layout->P.x, layout->P.y + layout->childStandardHeight, layout->additionalZBias);
-                        PushLine(UI->group, squareLineColor, verticalStartP, verticalEndP, 1);
+                        Vec3 verticalEndP = V3(verticalStartP.x, childs.lineEndY, layout->additionalZBias);
+                        PushEditorLine(UI->group, propagateLineC, squareLineColor, verticalStartP, verticalEndP, layout->lineThickness, layout->lineSegmentLength, layout->lineSpacing);
                     }
                 } break;
                 
                 case EditorElement_EmptyTaxonomy:
                 {
-                    Vec4 addColor = V4(1, 1, 0.5f, 1);
                     if(root != UI->active)
-                    {
-                        char* text = "Add new...";
-                        nameBounds = GetUIOrthoTextBounds(UI, text, layout->fontScale, nameP); 
-                        layout->P += V2(0, -layout->childStandardHeight);
-                        
+                    {                            
+                        if(UI->previousFrameWasAllowedToQuit)
+                        {
                         if(PointInRect(nameBounds, UI->relativeScreenMouse))
                         {
-                          
-                            UIInteraction mouseInteraction = UISetValueInteraction(UI_Trigger, &UI->active, root);
-                            UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeParents, parents); 
-                            UIAddSetValueAction(&mouseInteraction, UI_Trigger, &UI->activeWidget, widget); 
-                            UIAddClearAction(&mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+                            UIInteraction mouseInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->active, root);
+                            UIAddSetValueAction(UI, &mouseInteraction, UI_Trigger, &UI->activeParents, parents); 
+                            UIAddSetValueAction(UI, &mouseInteraction, UI_Trigger, &UI->activeWidget, widget); 
+                            UIAddClearAction(UI, &mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                             UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
-                            addColor = V4(1, 0, 0, 1);
+                                nameColor = parentSquareColor;
+                        }   
                         }
-                        
-                        result = GetUIOrthoTextBounds(UI, text, layout->fontScale, nameP);
-                        PushUIOrthoText(UI, text, layout->fontScale, nameP, addColor, layout->additionalZBias);
+                        else
+                        {
+                            nameColor.a = 0.3f;
+                        }
                     }
                     else
                     {
-                        layout->P += V2(0, -layout->childStandardHeight);
-                        char* text = UI->showBuffer;
-                        addColor = V4(1, 0, 0, 1);
+                        nameColor = V4(1, 0, 0, 1);
                         
                         if(UI->bufferValid)
                         {
-                            addColor = V4(0, 1, 0, 1);
-                            UIInteraction buttonInteraction = SendRequestInteraction(UI_Trigger, AddTaxonomyRequest(root->parentTaxonomy, UI->keyboardBuffer));
-                            UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->active, 0);    
-                            UIAddClearAction(&buttonInteraction, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));    
-                            UIAddSetValueAction(&buttonInteraction, UI_Trigger, &UI->activeWidget, 0);    
+                            nameColor = V4(0, 1, 0, 1);
+                            UIInteraction buttonInteraction = SendRequestInteraction(UI, UI_Trigger, AddTaxonomyRequest(root->parentTaxonomy, UI->keyboardBuffer));
+                            UIAddSetValueAction(UI, &buttonInteraction, UI_Trigger, &UI->active, 0);    
+                            UIAddClearAction(UI, &buttonInteraction, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));    
+                            UIAddSetValueAction(UI, &buttonInteraction, UI_Trigger, &UI->activeWidget, 0);    
                             UIAddInteraction(UI, input, confirmButton, buttonInteraction);
-                        }
-                        
-                        result = GetUIOrthoTextBounds(UI, text, layout->fontScale, nameP);
-                        PushUIOrthoText(UI, text, layout->fontScale, nameP, addColor, layout->additionalZBias);
+                        }                        
                     }
                 } break;
                 
@@ -1240,7 +1423,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 } break;
             }
             
-			if(shadowLabel)
+			if(shadowLabel[0])
 			{
 				Vec4 shadowColor = V4(0.6f, 0.6f, 0.6f, 1.0f);
 				PushUIOrthoText(UI, shadowLabel, layout->fontScale, nameP, shadowColor, layout->additionalZBias);
@@ -1250,7 +1433,7 @@ inline Rect2 UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout*
                 PushUIOrthoText(UI, nameToShow, layout->fontScale, nameP, nameColor, layout->additionalZBias);
             }
             
-            totalResult = Union(totalResult, result);
+            totalResult.bounds = Union(totalResult.bounds, result);
             
             ++childIndex;
             if(deleteName)
@@ -1288,13 +1471,13 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     
     SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / width, 0.0f, 0.0f), V3(0.0f, 2.0f / width, 0.0f), V3( 0, 0, 1));
     
-    UIAddInteraction(UI, input, undo, UIUndoInteraction(UI_Trigger));
-    UIAddInteraction(UI, input, redo, UIRedoInteraction(UI_Trigger));
+    UIAddInteraction(UI, input, undo, UIUndoInteraction(UI, UI_Trigger));
+    UIAddInteraction(UI, input, redo, UIRedoInteraction(UI, UI_Trigger));
     
     if(UI->instantiatingTaxonomy)
     {
         Vec3 mouseOffset = UI->worldMouseP;
-        UIAddInteraction(UI, input, mouseRight,SendRequestInteraction(UI_Trigger, InstantiateTaxonomyRequest(UI->instantiatingTaxonomy, mouseOffset)));
+        UIAddInteraction(UI, input, mouseRight,SendRequestInteraction(UI, UI_Trigger, InstantiateTaxonomyRequest(UI->instantiatingTaxonomy, mouseOffset)));
     }
     UI->saveWidgetLayoutTimer += UI->worldMode->originalTimeToAdvance;
     if(UI->saveWidgetLayoutTimer >= 10.0f)
@@ -1352,15 +1535,15 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     UI->widgets[5].root = UI->table->soundEventsRoot;
     
     
-    UIInteraction esc = UISetValueInteraction(UI_Trigger, &UI->active, 0);
-    UIAddSetValueAction(&esc, UI_Trigger, &UI->activeLabel, 0);
-    UIAddSetValueAction(&esc, UI_Trigger, &UI->activeWidget, 0);
-    UIAddClearAction(&esc, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
-    UIAddClearAction(&esc, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));
-    UIAddSetValueAction(&esc, UI_Trigger, &UI->copying, 0);
-    UIAddSetValueAction(&esc, UI_Trigger, &UI->currentAutocompleteSelectedIndex, -1);
+    UIInteraction esc = UISetValueInteraction(UI, UI_Trigger, &UI->active, 0);
+    UIAddSetValueAction(UI, &esc, UI_Trigger, &UI->activeLabel, 0);
+    UIAddSetValueAction(UI, &esc, UI_Trigger, &UI->activeWidget, 0);
+    UIAddClearAction(UI, &esc, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+    UIAddClearAction(UI, &esc, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));
+    UIAddSetValueAction(UI, &esc, UI_Trigger, &UI->copying, 0);
+    UIAddSetValueAction(UI, &esc, UI_Trigger, &UI->currentAutocompleteSelectedIndex, -1);
     UIAddInteraction(UI, input, escButton, esc);
-
+    
 	if(UI->bufferValid)
 	{
 		if(UI->active)
@@ -1377,13 +1560,13 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             
 		}
 	}
-    #if 0
+#if 0
     if(UI->active)
 	{
 		if(ctrlDown)
 		{
 			How do we update the grandparent?
-			UpOneLevel();
+                UpOneLevel();
 		}
 		else if(shiftDown)
 		{
@@ -1401,17 +1584,17 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
 				{
 					AddConfirmInteraction();
 				}
-
+                
 				AddClearAction(keyboardBuffer);
 				AddAction(moveDown, UI->active, UI->active->next);
-
+                
 				AddAction(moveUp, UI->active, UI->active->prev);
 			}
 		}
 	}
 #endif
-
-
+    
+    
     u32 current = StrLen(UI->keyboardBuffer);
     u32 maxToCopy = sizeof(UI->keyboardBuffer) - (current + 1);
     char* appendHere = UI->keyboardBuffer + current;
@@ -1590,6 +1773,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         layout_.childStandardHeight *= widget->permanent.fontSize;
         layout_.squareDim *= widget->permanent.fontSize;
         layout_.lineThickness *= widget->permanent.fontSize;
+        layout_.padding *= widget->permanent.fontSize;
         
         if(widget->necessaryRole & UI->worldMode->editorRoles)
         {
@@ -1611,13 +1795,18 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             
             Vec2 resizeP = widget->permanent.P;
             Vec2 widgetP = resizeP + widget->permanent.fontSize * V2(20, -8);
-            Vec2 resizeDim = widget->permanent.fontSize * V2(8, 8);
-            Rect2 rect = RectCenterDim(resizeP, resizeDim);
+            Vec2 moveDim = widget->permanent.fontSize * V2(8, 8);
+            Rect2 rect = RectCenterDim(resizeP, moveDim);
             Vec4 color = V4(1, 1, 1, 1);
             if(PointInRect(rect, UI->relativeScreenMouse))
             {
                 UIInteraction moveInteraction = {};
-                UIAddStandardAction(&moveInteraction, UI_Idle, Vec2, ColdPointer(&widget->permanent.P),ColdPointer(&UI->relativeScreenMouse));
+                UIAddStandardAction(UI, &moveInteraction, UI_Idle, Vec2, ColdPointer(&widget->permanent.P),ColdPointer(&UI->relativeScreenMouse));
+                UIAddSetValueAction(UI, &moveInteraction, UI_Trigger, &widget->moving, true);
+                UIAddSetValueAction(UI, &moveInteraction, UI_Release, &widget->moving, false);
+                UIAddSetValueAction(UI, &moveInteraction, UI_Trigger, &widget->movingClipWidth, widget->oldClipWidth);
+                UIAddSetValueAction(UI, &moveInteraction, UI_Trigger, &widget->movingClipHeight, widget->oldClipHeight);
+                
                 UIAddInteraction(UI, input, mouseLeft, moveInteraction);
                 color = V4(1, 0, 0, 1);
             }
@@ -1639,7 +1828,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             if(PointInRect(widgetTitleBounds, UI->relativeScreenMouse))
             {
                 widgetColor = V4(1, 0, 0, 1);
-                UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &widget->permanent.expanded, !widget->permanent.expanded));
+                UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &widget->permanent.expanded, !widget->permanent.expanded));
             }
             PushUIOrthoText(UI, widget->name, layout->fontScale, widgetP, widgetColor, layout->additionalZBias);
             
@@ -1655,34 +1844,27 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                             
                             
                             UIButton leftButton = UIBtn(UI, leftP, layout, V4(1, 0, 0, 1), " << ");
-                            UIButtonInteraction(&leftButton, UISetValueInteraction(UI_Trigger, &UI->editingTabIndex, UI->editingTabIndex - 1));
+                            UIButtonInteraction(&leftButton, UISetValueInteraction(UI, UI_Trigger, &UI->editingTabIndex, UI->editingTabIndex - 1));
                             UIDrawButton(UI, input, &leftButton);
                             
                             Vec2 rightP = UIFollowingP(&leftButton, 10.0f);
                             UIButton rightButton = UIBtn(UI, rightP, layout, V4(1, 0, 0, 1), " >> ");
-                            UIButtonInteraction(&rightButton, UISetValueInteraction(UI_Trigger, &UI->editingTabIndex, UI->editingTabIndex + 1));
+                            UIButtonInteraction(&rightButton, UISetValueInteraction(UI, UI_Trigger, &UI->editingTabIndex, UI->editingTabIndex + 1));
                             UIDrawButton(UI, input, &rightButton);
                             
                             
                             
                             Vec2 saveP = UIFollowingP(&rightButton, 30.0f);
-                            
-                            r32 buttonAlpha = 0.2f;
-                            
-                            UIInteraction saveInteraction = NullInteraction();
-                            if(editingSlot->editorChangeCount)
-                            {
-                                buttonAlpha = 1.0f;
-                                saveInteraction = SendRequestInteraction(UI_Trigger, SaveTaxonomyTabRequest());
-                            }
+                                                        
+                            b32 saveActive = (editingSlot->editorChangeCount);
+                                UIInteraction saveInteraction = SendRequestInteraction(UI, UI_Trigger, SaveTaxonomyTabRequest());
                             
                             char saveText[128];
                             
                             char* name = editingSlot->name[0] == '#' ? editingSlot->name + 1 : editingSlot->name;
                             FormatString(saveText, sizeof(saveText), "Save %s", name);
-                            UIButton saveButton = UIBtn(UI, saveP, layout, V4(1, 0, 0, 1), saveText);
-                            UIButtonInteraction(&saveButton, saveInteraction);
-                            UIDrawButton(UI, input, &saveButton, buttonAlpha);
+                            UIButton saveButton = UIBtn(UI, saveP, layout, V4(1, 0, 0, 1), saveText, saveActive, saveInteraction);
+                            UIDrawButton(UI, input, &saveButton);
                             
                             u32 parentTaxonomy = GetParentTaxonomy(UI->table, editingSlot->taxonomy);
                             if(parentTaxonomy)
@@ -1691,7 +1873,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                                 UIButton editParentButton = UIBtn(UI, editParentP, layout, V4(1, 0, 0, 1), "Edit Parent");
                                 
                                 
-                                UIButtonInteraction(&editParentButton, SendRequestInteraction(UI_Trigger, EditRequest(parentTaxonomy))); 
+                                UIButtonInteraction(&editParentButton, SendRequestInteraction(UI, UI_Trigger, EditRequest(parentTaxonomy))); 
                                 UIDrawButton(UI, input, &editParentButton);
                             }
                         }
@@ -1704,48 +1886,30 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     case EditorWidget_GeneralButtons:
                     {
                         Vec2 reloadP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
-                        UIButton reloadButton = UIBtn(UI, reloadP, layout, V4(1, 0, 0, 1), " RELOAD ASSETS ");
                         
-                        UIInteraction reloadInteraction = NullInteraction();
-                        r32 reloadAlpha = 0.2f;
+                        b32 reloadActive = (!UI->reloadingAssets && !UI->patchingLocalServer);
+                            UIInteraction reloadInteraction = SendRequestInteraction(UI, UI_Trigger, ReloadAssetsRequest());
+                        UIButton reloadButton = UIBtn(UI, reloadP, layout, V4(1, 0, 0, 1), " RELOAD ASSETS ", reloadActive, reloadInteraction);
                         
-                        if(!UI->reloadingAssets && !UI->patchingLocalServer)
-                        {
-                            reloadInteraction = SendRequestInteraction(UI_Trigger, ReloadAssetsRequest());
-                            reloadAlpha = 1.0f;
-                        }
-                        UIButtonInteraction(&reloadButton, reloadInteraction);
-                        UIDrawButton(UI, input, &reloadButton, reloadAlpha);
+                        UIDrawButton(UI, input, &reloadButton);
                         
                         
                         
+                        b32 checkActive = (!UI->reloadingAssets && !UI->patchingLocalServer && !UIChildModified(UI->table, &UI->table->root));
+                        UIInteraction checkInteraction = SendRequestInteraction(UI, UI_Trigger, PatchCheckRequest());
                         Vec2 patchCheckP = UIFollowingP(&reloadButton, 20);
                         UIButton patchCheckButton = UIBtn(UI, patchCheckP, layout, V4(1, 0, 0, 1), " PATCH CHECK ");
                         
-                        r32 checkAlpha = 0.2f;
-                        UIInteraction checkInteraction = NullInteraction();
-                        if(!UI->reloadingAssets && !UI->patchingLocalServer && !UIChildModified(UI->table, &UI->table->root))
-                        {
-                            checkInteraction = SendRequestInteraction(UI_Trigger, PatchCheckRequest());
-                            checkAlpha = 1.0f;
-                        }
-                        UIButtonInteraction(&patchCheckButton, checkInteraction);
-                        UIDrawButton(UI, input, &patchCheckButton, checkAlpha);
+                        UIDrawButton(UI, input, &patchCheckButton);
                         
                         
+                        b32 patchActive = (!UI->reloadingAssets && !UI->patchingLocalServer && !UI->table->errorCount);
                         
+                        UIInteraction patchInteraction = SendRequestInteraction(UI, UI_Trigger, PatchServerRequest());
                         Vec2 patchP = UIFollowingP(&patchCheckButton, 20);
-                        UIButton patchButton = UIBtn(UI, patchP, layout, V4(1, 0, 0, 1), " PATCH SERVER ");
+                        UIButton patchButton = UIBtn(UI, patchP, layout, V4(1, 0, 0, 1), " PATCH SERVER ", patchActive, patchInteraction);
                         
-                        r32 patchAlpha = 0.2f;
-                        UIInteraction patchInteraction = NullInteraction();
-                        if(!UI->reloadingAssets && !UI->patchingLocalServer && !UI->table->errorCount)
-                        {
-                            patchInteraction = SendRequestInteraction(UI_Trigger, PatchServerRequest());
-                            patchAlpha = 1.0f;
-                        }
-                        UIButtonInteraction(&patchButton, patchInteraction);
-                        UIDrawButton(UI, input, &patchButton, patchAlpha);
+                        UIDrawButton(UI, input, &patchButton);
                         
                     } break;
                     
@@ -1753,77 +1917,140 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     {
                         Vec2 saveP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
                         
-                        UIInteraction saveInteraction = NullInteraction();
+                        UIInteraction saveInteraction =SendRequestInteraction(UI, UI_Trigger, SaveAssetFadFileRequest("soundEvents", widget));
+                        UIAddReloadElementAction(UI, &saveInteraction, UI_Trigger, UI->table->soundEventsRoot);
+                        b32 saveActive = (widget->changeCount);
                         
-                        UIButton saveButton = UIBtn(UI, saveP, layout, V4(1, 0, 0, 1.0f), " SAVE ");
-                        
-                        r32 buttonAlpha = 0.2f;
-                        if(widget->changeCount)
-                        {
-                            buttonAlpha = 1.0f;
-                            saveInteraction =SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("soundEvents", widget));
-                            UIAddReloadElementAction(&saveInteraction, UI_Trigger, UI->table->soundEventsRoot);
-                        }
-                        
-                        
-                        UIButtonInteraction(&saveButton, saveInteraction);
-                        UIDrawButton(UI, input, &saveButton, buttonAlpha);
+                        UIButton saveButton = UIBtn(UI, saveP, layout, V4(1, 0, 0, 1.0f), " SAVE ", saveActive, saveInteraction);
+                                                
+                        UIDrawButton(UI, input, &saveButton);
                     } break;
                     
                     case EditorWidget_Components:
                     {
                         Vec2 saveP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
                         
-                        UIInteraction saveInteraction = NullInteraction();
+                        UIInteraction saveInteraction = SendRequestInteraction(UI, UI_Trigger, SaveAssetFadFileRequest("components", widget));
+                        b32 saveActive = (widget->changeCount);
                         
-                        UIButton saveButton = UIBtn(UI, saveP, layout, V4(1, 0, 0, 1.0f), " SAVE ");
+                        UIButton saveButton = UIBtn(UI, saveP, layout, V4(1, 0, 0, 1.0f), " SAVE ", saveActive, saveInteraction);
                         
-                        r32 buttonAlpha = 0.2f;
-                        if(widget->changeCount)
-                        {
-                            buttonAlpha = 1.0f;
-                            saveInteraction =SendRequestInteraction(UI_Trigger, SaveAssetFadFileRequest("components", widget));
-                        }
-                        
-                        
-                        UIButtonInteraction(&saveButton, saveInteraction);
-                        UIDrawButton(UI, input, &saveButton, buttonAlpha);
+                        UIDrawButton(UI, input, &saveButton);
                     } break;
                 }
             }
             
             
             layout->P.y -= layout->childStandardHeight;
+
             
-            Rect2 widgetBounds = InvertedInfinityRect2();
+            r32 widgetMaxY = 0.5f * height + widget->permanent.P.y - 20;
+            r32 widgetMinX = 0.5f * width + widget->permanent.P.x;
+            
+            if(widget->moving)
+            {
+                widget->permanent.resizeP.x = widget->permanent.P.x + widget->movingClipWidth;
+                widget->permanent.resizeP.y = widget->permanent.P.y - widget->movingClipHeight;
+            }
+            
+            r32 suggestedX = widget->permanent.resizeP.x - widget->permanent.P.x;
+            r32 suggestedY = widget->permanent.P.y - widget->permanent.resizeP.y;
+
+            r32 clipWidth = Max(suggestedX, 60);
+            r32 clipHeight = Max(suggestedY, 60);
+            
+            
+           
+            r32 widgetMinY = widgetMaxY - clipHeight;
+            r32 widgetMaxX = widgetMinX + clipWidth;
+            
+            Rect2i clipRect = RectMinMax((i32) widgetMinX, (i32) widgetMinY, (i32) widgetMaxX, (i32) widgetMaxY);
+            widget->oldClipWidth = clipRect.maxX - clipRect.minX;
+            widget->oldClipHeight = clipRect.maxY - clipRect.minY;
+                        
+            Rect2 clipRectReal = RectMinMax(V2((r32) clipRect.minX - 0.5f * width, (r32) clipRect.minY - 0.5f * height), V2((r32) clipRect.maxX - 0.5f * width, (r32) clipRect.maxY - 0.5f * height));
+            
+            
+            PushClipRect(group, clipRect);
+            
+            widget->permanent.dataOffsetY = Min(widget->permanent.dataOffsetY, clipRect.maxY - 20 * layout->fontScale);
+            layout->P.y += widget->permanent.dataOffsetY;
+            
+            widget->maxDataY = (i32) (layout->P.y + 0.5f * height);
+            
             if(widget->permanent.expanded && widget->root)
             {
                 EditorElementParents parents = {};
-                widgetBounds = UIRenderEditorTree(UI, widget, layout, parents, 0, V4(1, 1, 1, 1), widget->root, input, false);
-            }
-            
-            ObjectTransform widgetBoundsTransform = FlatTransform();
-            widgetBoundsTransform.additionalZBias = widgetZ - 0.001f;
-            
-            r32 boundsAlpha = 0.5f;
-            if(PointInRect(widgetBounds, UI->relativeScreenMouse))
+                Rect2 widgetBounds = UIRenderEditorTree(UI, widget, layout, parents, 0, false, V4(1, 1, 1, 1), widget->root, input, false).bounds;
+                
+                widget->minDataY = (i32) (widgetBounds.min.y + 0.5f * height);
+                
+                
+                
+                r32 resizeDim = layout->squareDim;
+                Vec4 resizeColor = V4(1, 1, 1, 1);
+                
+                Vec2 clipRectrightDown = V2(clipRectReal.max.x, clipRectReal.min.y);
+                Vec2 resizeMin = V2(clipRectrightDown.x - resizeDim, clipRectrightDown.y);
+                Vec2 resizeMax = V2(clipRectrightDown.x, clipRectrightDown.y + resizeDim);
+                
+                
+                Rect2 resizeRect = RectMinMax(resizeMin, resizeMax);
+                if(PointInRect(resizeRect, UI->relativeScreenMouse))
+                {
+                    resizeColor = V4(1, 0, 0, 1);
+                    UIInteraction mouseInteraction = {};                    
+                    
+                    UIAddStandardAction(UI, &mouseInteraction, UI_Idle, r32, ColdPointer(&widget->permanent.resizeP.x), ColdPointer(&UI->relativeScreenMouse.x));
+                    UIAddStandardAction(UI, &mouseInteraction, UI_Idle, r32,  ColdPointer(&widget->permanent.resizeP.y), ColdPointer(&UI->relativeScreenMouse.y));
+
+                    
+                    UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
+                }
+                PushRect(group, FlatTransform(layout->additionalZBias), resizeRect, resizeColor);
+                
+                r32 boundsAlpha = 0.5f;
+                
+                
+            if(PointInRect(clipRectReal, UI->relativeScreenMouse))
             {
-                    boundsAlpha = 0.8f;   
+                boundsAlpha = 0.8f;   
                 if(input->ctrlDown)
                 {
                     if(input->mouseWheelOffset)
                     {
-                    widget->permanent.fontSize += (r32) input->mouseWheelOffset * 0.1f;
+                        widget->permanent.fontSize += (r32) input->mouseWheelOffset * 0.1f;
                         
                     }                    
                 }
                 else
                 {
-                    widget->permanent.P.y -= input->mouseWheelOffset * 10.0f;
+                    b32 allowScrolling = false;
+                    if(input->mouseWheelOffset > 0)
+                    {
+                        allowScrolling = (widget->maxDataY >= clipRect.maxY - 20);                       
+                    }
+                    else if(input->mouseWheelOffset < 0)
+                    {
+                        allowScrolling = (widget->minDataY <= (clipRect.minY + 20));                       
+                    }
+                    
+                    
+                    if(allowScrolling)
+                    {
+                        widget->permanent.dataOffsetY -= input->mouseWheelOffset * 10.0f;   
+                    }
                 }
             }
-            PushRect(UI->group, widgetBoundsTransform, widgetBounds, V4(0, 0, 0, boundsAlpha));
-            
+        
+            ObjectTransform widgetBoundsTransform = FlatTransform();
+            widgetBoundsTransform.additionalZBias = widgetZ - 0.001f;
+            PushRect(UI->group, widgetBoundsTransform, clipRectReal, V4(0, 0, 0, boundsAlpha));
+            PushRectOutline(UI->group, widgetBoundsTransform, clipRectReal, V4(1, 1, 1, boundsAlpha), 2.0f);
+        
+            }
+                        
+                
             widgetZ += 1.0f;
         }
         
@@ -1831,6 +2058,18 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         {
             input->allowedToQuit = false;
         }
+        
+        
+        if(UI->hotStructThisFrame)
+        {
+            ObjectTransform structBoundsTranform = FlatTransform();
+            structBoundsTranform.additionalZBias = UI->hotStructZ;
+            
+            PushRectOutline(UI->group, structBoundsTranform, UI->hotStructBounds, UI->hotStructColor, 2);
+        }
+        
+        
+        PushClipRect(group, RectMinMax(0, 0, (i32) width, (i32) height));
     }
     
     if(input->allowedToQuit && UIChildModified(UI->table, &UI->table->root))
@@ -1838,12 +2077,10 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         input->allowedToQuit = false;
     }
     
-    if(UI->hotStructThisFrame)
+    UI->pastedTimeLeft -= UI->worldMode->originalTimeToAdvance;
+    if(UI->pastedTimeLeft <= 0)
     {
-        ObjectTransform structBoundsTranform = FlatTransform();
-        structBoundsTranform.additionalZBias = UI->hotStructZ;
-        
-        PushRectOutline(UI->group, structBoundsTranform, UI->hotStructBounds, UI->hotStructColor, 2);
+        UI->pasted = 0;
     }
     
     if(UI->dragging)
@@ -1855,7 +2092,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         EditorElementParents parents = {};
         
         EditorElement* oldNext = UI->dragging->next;
-        UIRenderEditorTree(UI, 0, &layout, parents, 0, V4(1, 1, 1, 1), UI->dragging, input, false);
+        UIRenderEditorTree(UI, 0, &layout, parents, 0, false, V4(1, 1, 1, 1), UI->dragging, input, false);
         UI->dragging->next = oldNext;
     }
 }
@@ -2242,11 +2479,11 @@ internal void UIHandleContainer(UIState* UI, ClientEntity* container, PlatformIn
                     }
                     
                     
-                    UIInteraction mouseInteraction = ScrollableListRequestInteraction(UI_Click, &UI->possibleObjectActions);
+                    UIInteraction mouseInteraction = ScrollableListRequestInteraction(UI, UI_Click, &UI->possibleObjectActions);
                     
                     UIRequest request = UIStandardInventoryRequest(Swap, container->identifier, objectIndex);
-                    UIAddRequestAction(&mouseInteraction, UI_KeptPressed, request);
-                    UIAddObjectToEntityAction(&mouseInteraction, UI_KeptPressed, ColdPointer(&UI->draggingEntity), focusObject);
+                    UIAddRequestAction(UI, &mouseInteraction, UI_KeptPressed, request);
+                    UIAddObjectToEntityAction(UI, &mouseInteraction, UI_KeptPressed, ColdPointer(&UI->draggingEntity), focusObject);
                     UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
                 }
                 else if(UI->draggingEntity.taxonomy && 
@@ -2258,8 +2495,8 @@ internal void UIHandleContainer(UIState* UI, ClientEntity* container, PlatformIn
                     UIInteraction swapInteraction = {};
                     UIRequest request = UIStandardInventoryRequest(Swap, container->identifier, objectIndex);
                     
-                    UIAddRequestAction(&swapInteraction, UI_Trigger, request);
-                    UIAddObjectToEntityAction(&swapInteraction, UI_Trigger, ColdPointer(&UI->draggingEntity), focusObject);
+                    UIAddRequestAction(UI, &swapInteraction, UI_Trigger, request);
+                    UIAddObjectToEntityAction(UI, &swapInteraction, UI_Trigger, ColdPointer(&UI->draggingEntity), focusObject);
                     
                     UIAddInteraction(UI, input, mouseLeft, swapInteraction);
                 }
@@ -2271,8 +2508,8 @@ internal void UIHandleContainer(UIState* UI, ClientEntity* container, PlatformIn
                 {              
                     UIInteraction swapInteraction = {};
                     UIRequest request = UIStandardInventoryRequest(Swap, container->identifier, objectIndex);
-                    UIAddRequestAction(&swapInteraction, UI_Trigger, request);
-                    UIAddClearAction(&swapInteraction, UI_Trigger, ColdPointer(&UI->draggingEntity), sizeof(UI->draggingEntity));
+                    UIAddRequestAction(UI, &swapInteraction, UI_Trigger, request);
+                    UIAddClearAction(UI, &swapInteraction, UI_Trigger, ColdPointer(&UI->draggingEntity), sizeof(UI->draggingEntity));
                     
                     UIAddInteraction(UI, input, mouseLeft, swapInteraction);
                 }
@@ -2339,18 +2576,24 @@ inline void UIAddChild(TaxonomyTable* table, EditorElement* element, EditorEleme
     element->firstChild = newElement;
 }
 
-inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, u32 necessaryRole, char* name)
+inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, Vec2 P, u32 necessaryRole, char* name)
 {
     EditorWidget* result = UI->widgets + widget;
     *result = {};
     result->permanent.expanded = true;
     result->permanent.fontSize = 1.0f;
+    result->permanent.dataOffsetY = 0;
+    result->permanent.P = P;
+    result->permanent.resizeP = P;
     result->necessaryRole = necessaryRole;
     result->layout.fontScale = 0.42f;
     result->layout.nameValueDistance = 24;
     result->layout.childStandardHeight = 30;
-    result->layout.squareDim = 16;
-    result->layout.lineThickness = 1.2f;
+    result->layout.squareDim = 12;
+    result->layout.lineThickness = 1.1f;
+    result->layout.lineSegmentLength = 6.0f;
+    result->layout.lineSpacing = 2.0f;
+    result->layout.padding = 4.0f;
     FormatString(result->name, sizeof(result->name), name);
     
     return result;
@@ -2368,19 +2611,17 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             FormatString(UI->uneditableTabRoot.name, sizeof(UI->uneditableTabRoot.name), "YOU CAN'T EDIT THIS");
             
             
-            EditorWidget* taxonomyTree = StartWidget(UI, EditorWidget_TaxonomyTree, 0xffffffff, "Taxonomy Tree");
-            taxonomyTree->permanent.P = V2(-800, -100);
-
-
+            EditorWidget* taxonomyTree = StartWidget(UI, EditorWidget_TaxonomyTree, V2(-800, -100), 0xffffffff, "Taxonomy Tree");
+            
+            
 #if 0            
 			AddChild(recipeParameters);
 			AddChild("taxonomy");
 			AddChild("recipeIndex");
-            #endif
-
+#endif
             
-            EditorWidget* taxonomyEditing = StartWidget(UI, EditorWidget_EditingTaxonomyTabs, 0xffffffff, "Editing Tabs");
-            taxonomyEditing->permanent.P = V2(100, -100);
+            
+            EditorWidget* taxonomyEditing = StartWidget(UI, EditorWidget_EditingTaxonomyTabs, V2(100, -100),  0xffffffff, "Editing Tabs");
             
             
             EditorElement* animationStruct;
@@ -2418,36 +2659,30 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             animationStruct->firstValue = animationRoot;
             
             
-            EditorWidget* animation = StartWidget(UI, EditorWidget_Animation, 0xffffffff, "Animation");
-            animation->permanent.P = V2(-300, -300);
+            EditorWidget* animation = StartWidget(UI, EditorWidget_Animation, V2(-300, -300), 0xffffffff, "Animation");
             animation->root = animationRoot;
             
             
-            EditorWidget* soundDatabase = StartWidget(UI, EditorWidget_SoundDatabase, EditorRole_SoundDesigner, "Sound Database");
-            soundDatabase->permanent.P = V2(300, 200);
+            EditorWidget* soundDatabase = StartWidget(UI, EditorWidget_SoundDatabase, V2(300,200), EditorRole_SoundDesigner, "Sound Database");
             soundDatabase->root = UI->table->soundNamesRoot;
             
-            EditorWidget* componentDatabase = StartWidget(UI, EditorWidget_Components, EditorRole_GameDesigner, "Visual Components");
-            componentDatabase->permanent.P = V2(300, 200);
+            EditorWidget* componentDatabase = StartWidget(UI, EditorWidget_Components, V2(300, 200), EditorRole_GameDesigner, "Visual Components");
             componentDatabase->root = UI->table->componentsRoot;
             
             
-            EditorWidget* actions = StartWidget(UI, EditorWidget_GeneralButtons, 0xffffffff, "Actions:");
-            actions->permanent.P = V2(200, 100);
+            EditorWidget* actions = StartWidget(UI, EditorWidget_GeneralButtons, V2(200, 100), 0xffffffff, "Actions:");
             
             
-            EditorWidget* misc = StartWidget(UI, EditorWidget_Misc, 0xffffffff, "Miscellaneous");
-                        FREELIST_ALLOC(misc->root, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            EditorWidget* misc = StartWidget(UI, EditorWidget_Misc, V2(200, 100), 0xffffffff, "Miscellaneous");
+            FREELIST_ALLOC(misc->root, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
             misc->root->type = EditorElement_Struct;
             
-            misc->permanent.P = V2(200, 100);
             UIAddChild(UI->table, misc->root, EditorElement_String, "recipeTaxonomy", "objects");
             UIAddChild(UI->table, misc->root, EditorElement_Unsigned, "recipeIndex", "0");
-           
             
             
-            EditorWidget* soundEvents = StartWidget(UI, EditorWidget_SoundEvents, EditorRole_SoundDesigner, "Sound Events");
-            soundEvents->permanent.P = V2(-200, 100);
+            
+            EditorWidget* soundEvents = StartWidget(UI, EditorWidget_SoundEvents, V2(-200, 100), EditorRole_SoundDesigner, "Sound Events");
             soundEvents->root = UI->table->soundEventsRoot;
             
             
@@ -2664,7 +2899,7 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
 {
     if(UI->mode == UIMode_Equipment && overlapping->identifier == myPlayer->openedContainerID)
     {
-        UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &UI->nextMode, UIMode_Loot));
+        UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_Loot));
     }
     else
     {
@@ -2685,7 +2920,7 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
                 UIRequest impersonateRequest = ImpersonateRequest(overlapping->identifier);
                 UIAddPossibility(&UI->possibleOverlappingActions, "impersonate", entityName, impersonateRequest);
                 
-                UIInteraction mouseInteraction = ScrollableListRequestInteraction(UI_Click, &UI->possibleOverlappingActions);
+                UIInteraction mouseInteraction = ScrollableListRequestInteraction(UI, UI_Click, &UI->possibleOverlappingActions);
                 UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
             }
         }
@@ -2702,7 +2937,7 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
             
             UIInteraction actionListInteraction = {};
             actionListInteraction.flags |= UI_MaintainWhenModeChanges;
-            UIAddScrollableTargetInteraction(&actionListInteraction, &UI->possibleOverlappingActions, output);
+            UIAddScrollableTargetInteraction(UI, &actionListInteraction, &UI->possibleOverlappingActions, output);
             UIAddInvalidCondition(&actionListInteraction, u32,ColdPointerDataOffset(myPlayer->targetPossibleActions, OffsetOf(UIInteractionData, actionIndex)), Fixed((b32)false), 0);                      
             UIAddInvalidCondition(&actionListInteraction, u32,ColdPointer(&output->desiredAction), Fixed((u32)Action_Attack), UI_Ended);
             UIAddInvalidCondition(&actionListInteraction, b32,ColdPointer(&UI->movingWithKeyboard), Fixed((b32)true), 0);
@@ -2712,7 +2947,7 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
             if(myPlayer->overlappingPossibleActions[Action_Cast])
             {
                 UIInteraction castInteraction = {};
-                UIAddStandardTargetInteraction(&castInteraction, output, Action_Cast, overlapping->identifier);
+                UIAddStandardTargetInteraction(UI, &castInteraction, output, Action_Cast, overlapping->identifier);
                 UIAddInvalidCondition(&castInteraction, u32,ColdPointer(myPlayer->targetPossibleActions + Action_Cast), Fixed(false));
                 UIAddInteraction(UI, input, mouseCenter, castInteraction);
             }
@@ -2727,7 +2962,7 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
 }
 
 internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, ClientEntity** overlappingEntities, u32 maxOverlappingEntities)
-{
+{    
     input->allowedToQuit = true;
     
     i32 scrollOffset = input->mouseWheelOffset;
@@ -2759,10 +2994,10 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
     {
         UI->movingWithKeyboard = true;
     }
-    UIAddInteraction(UI, input, moveLeft, UISetValueInteraction(UI_Idle, &output.inputAcc.x, -1.0f), UIPriority_Standard, &UI->movementGroup);
-    UIAddInteraction(UI, input, moveRight, UISetValueInteraction(UI_Idle, &output.inputAcc.x, 1.0f), UIPriority_Standard, &UI->movementGroup);
-    UIAddInteraction(UI, input, moveDown, UISetValueInteraction(UI_Idle, &output.inputAcc.y, -1.0f), UIPriority_Standard, &UI->movementGroup);
-    UIAddInteraction(UI, input, moveUp, UISetValueInteraction(UI_Idle, &output.inputAcc.y, 1.0f), UIPriority_Standard, &UI->movementGroup);
+    UIAddInteraction(UI, input, moveLeft, UISetValueInteraction(UI, UI_Idle, &output.inputAcc.x, -1.0f), UIPriority_Standard, &UI->movementGroup);
+    UIAddInteraction(UI, input, moveRight, UISetValueInteraction(UI, UI_Idle, &output.inputAcc.x, 1.0f), UIPriority_Standard, &UI->movementGroup);
+    UIAddInteraction(UI, input, moveDown, UISetValueInteraction(UI, UI_Idle, &output.inputAcc.y, -1.0f), UIPriority_Standard, &UI->movementGroup);
+    UIAddInteraction(UI, input, moveUp, UISetValueInteraction(UI, UI_Idle, &output.inputAcc.y, 1.0f), UIPriority_Standard, &UI->movementGroup);
     switch(UI->mode)
     {
         case UIMode_None:
@@ -2806,15 +3041,15 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                             FormatString(tooltip, sizeof(tooltip), "edit %s", slot->name);
                             PushUITooltip(UI, tooltip, V4(1, 0, 0, 1));
                             
-                            UIInteraction mouseInteraction = SendRequestInteraction(UI_Click, EditRequest(overlapping->taxonomy));
+                            UIInteraction mouseInteraction = SendRequestInteraction(UI, UI_Click, EditRequest(overlapping->taxonomy));
                             UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
                         }
                         else
                         {
                             PushUITooltip(UI, "inventory", V4(1, 0, 0, 1));
                             
-                            UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &UI->nextMode, UIMode_Equipment));
-                            UIAddInteraction(UI, input, mouseRight, UISetValueInteraction(UI_Trigger, &UI->nextMode, UIMode_Book));
+                            UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_Equipment));
+                            UIAddInteraction(UI, input, mouseRight, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_Book));
                             UIMarkListToUpdate(UI, possibleTargets);
                         }
                     }
@@ -2843,14 +3078,14 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
             {
                 UIResetListIndex(UI, possibleOverlappingActions);
                 UIInteraction mouseMovement = {};
-                UIAddStandardAction(&mouseMovement, UI_Click, Vec3, ColdPointer(&UI->deltaMouseP), ColdPointer(&UI->worldMouseP));
-                UIAddStandardAction(&mouseMovement, UI_Idle, u32, ColdPointer(&UI->mouseMovement), Fixed(UIMouseMovement_MouseDir));
+                UIAddStandardAction(UI, &mouseMovement, UI_Click, Vec3, ColdPointer(&UI->deltaMouseP), ColdPointer(&UI->worldMouseP));
+                UIAddStandardAction(UI, &mouseMovement, UI_Idle, u32, ColdPointer(&UI->mouseMovement), Fixed(UIMouseMovement_MouseDir));
                 UIAddInvalidCondition(&mouseMovement, b32, ColdPointer(&UI->movingWithKeyboard), Fixed(true), UI_Ended);
                 
                 if(false)
                 {
-                    UIAddStandardAction(&mouseMovement, UI_Click, b32, ColdPointer(&UI->reachedPosition), Fixed(false));
-                    UIAddStandardAction(&mouseMovement, UI_Click | UI_Retroactive, u32, ColdPointer(&UI->mouseMovement), Fixed(UIMouseMovement_ToMouseP));
+                    UIAddStandardAction(UI, &mouseMovement, UI_Click, b32, ColdPointer(&UI->reachedPosition), Fixed(false));
+                    UIAddStandardAction(UI, &mouseMovement, UI_Click | UI_Retroactive, u32, ColdPointer(&UI->mouseMovement), Fixed(UIMouseMovement_ToMouseP));
                     UIAddInvalidCondition(&mouseMovement, b32, ColdPointer(&UI->reachedPosition), Fixed(true), UI_Ended);
                 }
                 
@@ -2892,7 +3127,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
         case UIMode_Loot:
         {
             UIResetListPossibility(UI, possibleObjectActions);
-            UIAddInteraction(UI, input, mouseRight, UISetValueInteraction(UI_Trigger, &UI->nextMode, UIMode_Equipment));
+            UIAddInteraction(UI, input, mouseRight, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_Equipment));
             
             ClientEntity* containerEntityC = GetEntityClient(worldMode, UI->openedContainerID);
             if(containerEntityC && GetFocusObject(containerEntityC))
@@ -2901,7 +3136,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
             }
             else
             {
-                UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &UI->nextMode, UIMode_None));
+                UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_None));
             }
             
             Rect2 playerScreenBounds = ProjectOnScreenCameraAligned(UI->group, player->P, UI->player->animation.bounds);
@@ -2915,7 +3150,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
             b32 specialEquipmentMode = false;
             b32 onlyOpenedContainerAllowed = false;
             
-            UIAddInteraction(UI, input, mouseRight, UISetValueInteraction(UI_Trigger, &UI->nextMode, UI->previousMode));
+            UIAddInteraction(UI, input, mouseRight, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UI->previousMode));
             
             UIResetListPossibility(UI, possibleObjectActions);
             UIMarkListToUpdateAndRender(UI, possibleObjectActions);
@@ -2925,16 +3160,16 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
             EquipInfo focusSlot = UI->player->animation.output.focusSlots;
             
             EquipInfo compatibleWithDragging = {};
-
+            
             ClientEntity* dragging = &UI->draggingEntity;
             u64 draggingID = 0;
-                        
+            
             if(dragging->taxonomy)
             {
                 draggingID = dragging->identifier;
                 i16 currentHotAssIndex = player->animation.output.nearestAss;
-            if(currentHotAssIndex >= 0)
-            {
+                if(currentHotAssIndex >= 0)
+                {
                     if(dragging->status >= 0)
                     {
                         EquipmentMapping canEquip = InventorySlotPresent(UI->table, player->taxonomy, dragging->taxonomy);
@@ -2952,18 +3187,18 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                             }
                         }   
                     }
+                }
+                
             }
-                            
-            }
-
-          
+            
+            
             
             player->animation.nearestCompatibleSlotForDragging = compatibleWithDragging;
             
-                        
+            
             u64 focusEquipmentID = player->equipment[GetMainSlot(focusSlot)].ID;
             
-            UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &UI->nextMode, UIMode_None));
+            UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_None));
             if(focusEquipmentID)
             {
                 ClientEntity* equipmentFocus = GetEntityClient(worldMode, focusEquipmentID);
@@ -3040,7 +3275,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                         
                     }
                     
-                    UIInteraction mouseInteraction = ScrollableListRequestInteraction(UI_Click, &UI->possibleObjectActions);
+                    UIInteraction mouseInteraction = ScrollableListRequestInteraction(UI, UI_Click, &UI->possibleObjectActions);
                     UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
                     
                     if(IsValid(focusSlot))
@@ -3052,8 +3287,8 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                             dragEquipmentRequest.slot = GetMainSlot(focusSlot);
                             
                             UIInteraction dragEquipmentInteraction = mouseInteraction;
-                            UIAddRequestAction(&dragEquipmentInteraction, UI_KeptPressed, dragEquipmentRequest);
-                            UIAddStandardAction(&dragEquipmentInteraction, UI_KeptPressed, ClientEntity, ColdPointer(&UI->draggingEntity), ColdPointer(equipmentFocus));
+                            UIAddRequestAction(UI, &dragEquipmentInteraction, UI_KeptPressed, dragEquipmentRequest);
+                            UIAddStandardAction(UI, &dragEquipmentInteraction, UI_KeptPressed, ClientEntity, ColdPointer(&UI->draggingEntity), ColdPointer(equipmentFocus));
                             
                             UIAddInteraction(UI, input, mouseLeft, dragEquipmentInteraction);
                         }
@@ -3064,8 +3299,8 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                             {
                                 UIInteraction swapInteraction = {};
                                 UIRequest request = UIStandardInventoryRequest(Swap, freeSlot.containerID, freeSlot.objectIndex);
-                                UIAddRequestAction(&swapInteraction, UI_Trigger, request);
-                                UIAddClearAction(&swapInteraction, UI_Trigger, ColdPointer(&UI->draggingEntity), sizeof(UI->draggingEntity));
+                                UIAddRequestAction(UI, &swapInteraction, UI_Trigger, request);
+                                UIAddClearAction(UI, &swapInteraction, UI_Trigger, ColdPointer(&UI->draggingEntity), sizeof(UI->draggingEntity));
                                 
                                 UIAddInteraction(UI, input, mouseLeft, swapInteraction);
                             }
@@ -3094,8 +3329,8 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                         equipDraggingRequest.slot = GetMainSlot(compatibleWithDragging);
                         
                         UIInteraction equipDraggingInteraction = {};
-                        UIAddRequestAction(&equipDraggingInteraction, UI_Trigger, equipDraggingRequest);
-                        UIAddClearAction(&equipDraggingInteraction, UI_Trigger, ColdPointer(&UI->draggingEntity), sizeof(UI->draggingEntity));
+                        UIAddRequestAction(UI, &equipDraggingInteraction, UI_Trigger, equipDraggingRequest);
+                        UIAddClearAction(UI, &equipDraggingInteraction, UI_Trigger, ColdPointer(&UI->draggingEntity), sizeof(UI->draggingEntity));
                         
                         UIAddInteraction(UI, input, mouseLeft, equipDraggingInteraction);
                     }
@@ -3103,8 +3338,8 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                     {
                         UIRequest dropRequest = UIStandardInventoryRequest(Drop, 0, 0);
                         UIInteraction dropInteraction = {};
-                        UIAddRequestAction(&dropInteraction, UI_Trigger, dropRequest);
-                        UIAddClearAction(&dropInteraction, UI_Trigger, ColdPointer(&UI->draggingEntity), sizeof(UI->draggingEntity));
+                        UIAddRequestAction(UI, &dropInteraction, UI_Trigger, dropRequest);
+                        UIAddClearAction(UI, &dropInteraction, UI_Trigger, ColdPointer(&UI->draggingEntity), sizeof(UI->draggingEntity));
                         
                         UIAddInteraction(UI, input, mouseLeft, dropInteraction);
                     }
@@ -3158,7 +3393,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                     ClientEntity* overlapping = activeElement->entity;
                     if(overlapping)
                     {
-                        UIAddInteraction(UI, input, switchButton, UISetValueInteraction(UI_Trigger, &UI->possibleTargets.currentIndex, UI->possibleTargets.currentIndex + 1));
+                        UIAddInteraction(UI, input, switchButton, UISetValueInteraction(UI, UI_Trigger, &UI->possibleTargets.currentIndex, UI->possibleTargets.currentIndex + 1));
                         UIResetListPossibility(UI, possibleOverlappingActions);
                         if(overlapping->identifier != player->identifier)
                         {
@@ -3192,7 +3427,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
             
             if(!bookOnFocus)
             {
-                UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI_Trigger, &UI->nextMode, UIMode_None));
+                UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_None));
             }
             if(true)
             {
@@ -3312,6 +3547,8 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
     
     UIRenderTooltip(UI);
     
+    UI->previousFrameWasAllowedToQuit = input->allowedToQuit;
+    
     for(u32 buttonIndex = 0; buttonIndex < MAX_BUTTON_COUNT; ++buttonIndex)
     {
         UIInteraction* interaction = UI->hotInteractions + buttonIndex;
@@ -3320,9 +3557,16 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
             PlatformButton* button = input->buttons + buttonIndex;
             if(Pressed(button))
             {
+                FREELIST_FREE(UI->activeInteractions[buttonIndex].firstAction, UIInteractionAction, UI->firstFreeInteractionAction);
+                
                 UIResetActiveInteractions(UI, buttonIndex, interaction->excludeFromReset);
                 UIDispatchInteraction(UI, interaction, UI_Trigger, input->timeToAdvance);
+                
+               
                 UI->activeInteractions[buttonIndex] = *interaction;
+                
+                interaction->firstAction = 0;
+                interaction->lastAction = 0;
             }
             
             interaction->priority = UIPriority_NotValid;
@@ -3364,6 +3608,6 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
             }
         }
     }
-    
+        
     return output;
 }

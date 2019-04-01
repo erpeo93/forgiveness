@@ -257,6 +257,34 @@ inline void PushLine(RenderGroup* group, Vec4 color, Vec3 fromP, Vec3 toP, r32 t
     }
 }
 
+inline void PushDottedLine(RenderGroup* group, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, r32 segmentLength, r32 spacing, Vec4 lightIndexes = V4(-1, -1, -1, -1))
+{
+    Vec3 delta = toP - fromP;
+    r32 lineLength = Length(delta);
+    r32 fakeSegmentLength = segmentLength + spacing;
+    
+    u32 segmentNumber = Ceil(lineLength / fakeSegmentLength);
+    
+    TexturedQuadsCommand* entry = GetCurrentQuads(group, segmentNumber);
+    if(entry)
+    {
+        Vec3 normDelta = Normalize(delta);
+        
+        Vec3 startP = fromP;
+        for(u32 segmentIndex = 0; segmentIndex < segmentNumber; ++segmentIndex)
+        {
+            Vec3 endP = startP + segmentLength * normDelta;
+            if(segmentIndex == segmentNumber - 1)
+            {
+                endP = toP;
+            }
+            PushLineSegment(group, group->whiteTexture, color, startP, endP, tickness, lightIndexes);
+            
+            startP = endP + spacing * normDelta;
+        }
+    }
+}
+
 inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 color, Vec4 lightIndexes = V4(-1, -1, -1, -1))
 {
     GameRenderCommands* commands = renderGroup->commands;

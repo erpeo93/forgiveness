@@ -38,6 +38,7 @@ enum EditorElementFlags
 struct EditorElement
 {
 	char name[32];
+    u32 versionNumber;
     u32 flags;
 	u32 type;
     union
@@ -116,6 +117,10 @@ struct EditorTabStack
 struct EditorLayout
 {
     r32 lineThickness;
+    r32 lineSegmentLength;
+    r32 lineSpacing;
+    r32 padding;
+    
     r32 squareDim;
     r32 fontScale;
     Vec2 P;
@@ -149,6 +154,9 @@ struct WidgetPermanent
 {
     r32 fontSize;
     Vec2 P;
+    r32 dataOffsetY;
+    Vec2 resizeP;
+    
     b32 expanded;
 };
 
@@ -163,6 +171,15 @@ struct EditorWidget
     
     EditorLayout layout;
     
+    b32 moving;
+    i32 movingClipWidth;
+    i32 movingClipHeight;
+    
+    i32 oldClipWidth;
+    i32 oldClipHeight;
+    
+    i32 maxDataY;
+    i32 minDataY;
     
     char name[32];
     EditorElement* root;

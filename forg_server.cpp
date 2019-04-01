@@ -569,7 +569,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                                 FREELIST_ALLOC(element, taxTable->firstFreeElement, PushStruct(&taxTable->pool, EditorElement));
                                 *element = {};
                                 
-                                packetPtr = unpack(packetPtr, "sLL", element->name, &element->type, &element->flags);
+                                packetPtr = unpack(packetPtr, "sLLL", element->name, &element->type, &element->flags, &element->versionNumber);
                                 if(element->type < EditorElement_List)
                                 {
                                     packetPtr =  unpack(packetPtr, "s", element->value);

@@ -818,6 +818,9 @@ inline void UIAddInteraction_(UIState* UI, u32 buttonIndex, UIInteraction newInt
     UIInteraction* interaction = UI->hotInteractions + buttonIndex;
     if(priority >= interaction->priority)
     {
+        FREELIST_FREE(interaction->firstAction, UIInteractionAction, UI->firstFreeInteractionAction);
+        
+        
         *interaction = newInteraction;
         interaction->priority = priority;
         interaction->excludeFromReset = group;
@@ -825,21 +828,36 @@ inline void UIAddInteraction_(UIState* UI, u32 buttonIndex, UIInteraction newInt
 }
 
 
-inline UIInteractionAction* UIGetFreeAction(UIInteraction* interaction)
+inline UIInteractionAction* UIGetFreeAction(UIState* UI, UIInteraction* interaction)
 {
-    Assert(interaction->actionCount < ArrayCount(interaction->actions));
-    UIInteractionAction* result = interaction->actions + interaction->actionCount++;
-    return result;
+    UIInteractionAction* action;
+    FREELIST_ALLOC(action, UI->firstFreeInteractionAction, PushStruct(&UI->interactionPool, UIInteractionAction));
+    
+    action->next = 0;
+    UIInteractionAction* currentLastOne = interaction->lastAction;
+    
+    if(currentLastOne)
+    {
+        currentLastOne->next = action;
+    }
+    else
+    {
+        interaction->firstAction = action;
+    }
+    
+    interaction->lastAction = action;
+    return action;
 }
 
-inline void UIAddAction(UIInteraction* interaction, UIInteractionAction source)
+inline void UIAddAction(UIState* UI, UIInteraction* interaction, UIInteractionAction source)
 {
-    UIInteractionAction* dest = UIGetFreeAction(interaction);
+    UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
     *dest = source;
+    dest->next = 0;
 }
 
-#define UIAddStandardAction(interaction, flags, structure, dest, source) UIAddStandardAction_(interaction, flags, sizeof(structure), dest, source)
-inline void UIAddStandardAction_(UIInteraction* interaction, u32 flags, u32 size, UIMemoryReference dest, UIMemoryReference source)
+#define UIAddStandardAction(UI, interaction, flags, structure, dest, source) UIAddStandardAction_(UI, interaction, flags, sizeof(structure), dest, source)
+inline void UIAddStandardAction_(UIState* UI, UIInteraction* interaction, u32 flags, u32 size, UIMemoryReference dest, UIMemoryReference source)
 {
     UIInteractionAction action;
     action.type = UIInteractionAction_Copy;
@@ -850,21 +868,21 @@ inline void UIAddStandardAction_(UIInteraction* interaction, u32 flags, u32 size
     copy->source = source;
     copy->size = size;
     
-    UIAddAction(interaction, action);
+    UIAddAction(UI, interaction, action);
 }
 
-inline void UIAddRequestAction(UIInteraction* interaction, u32 flags, UIRequest request)
+inline void UIAddRequestAction(UIState* UI, UIInteraction* interaction, u32 flags, UIRequest request)
 {
-    UIInteractionAction* dest = UIGetFreeAction(interaction);
+    UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
     interaction->data.request = request;
     dest->type = UIInteractionAction_SendRequest;
     dest->flags = flags;
     dest->request = UIDataPointer(request);
 }
 
-inline void UIAddObjectToEntityAction(UIInteraction* interaction, u32 flags, UIMemoryReference entityDest, Object* object)
+inline void UIAddObjectToEntityAction(UIState* UI, UIInteraction* interaction, u32 flags, UIMemoryReference entityDest, Object* object)
 {
-    UIInteractionAction* dest = UIGetFreeAction(interaction);
+    UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
     Assert(interaction->data.object.taxonomy == 0);
     interaction->data.object = *object;
     dest->type = UIInteractionAction_ObjectToEntity;
@@ -872,9 +890,9 @@ inline void UIAddObjectToEntityAction(UIInteraction* interaction, u32 flags, UIM
     dest->objectToEntity = entityDest;
 }
 
-inline void UIAddClearAction(UIInteraction* interaction, u32 flags, UIMemoryReference toClear, u32 size)
+inline void UIAddClearAction(UIState* UI, UIInteraction* interaction, u32 flags, UIMemoryReference toClear, u32 size)
 {
-    UIInteractionAction* dest = UIGetFreeAction(interaction);
+    UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
     dest->type = UIInteractionAction_Clear;
     dest->flags = flags;
     UIMemoryPair* pair = &dest->clear;
@@ -883,9 +901,9 @@ inline void UIAddClearAction(UIInteraction* interaction, u32 flags, UIMemoryRefe
 }
 
 
-inline void UIAddOffsetStringEditorElement(UIInteraction* interaction, u32 flags, UIMemoryReference value, UIMemoryReference offset, r32 speed)
+inline void UIAddOffsetStringEditorElement(UIState* UI, UIInteraction* interaction, u32 flags, UIMemoryReference value, UIMemoryReference offset, r32 speed)
 {
-    UIInteractionAction* dest = UIGetFreeAction(interaction);
+    UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
     dest->type = UIInteractionAction_OffsetRealEditor;
     dest->flags = flags;
     dest->value = value;
@@ -893,10 +911,20 @@ inline void UIAddOffsetStringEditorElement(UIInteraction* interaction, u32 flags
     dest->speed = speed;
 }
 
-inline UIInteraction UIAddEmptyElementToListInteraction(u32 flags, EditorWidget* widget, EditorElement* list)
+inline void UIAddOffsetRealAction(UIState* UI, UIInteraction* interaction, u32 flags, UIMemoryReference value, UIMemoryReference offset, r32 speed)
+{
+    UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
+    dest->type = UIInteractionAction_OffsetReal;
+    dest->flags = flags;
+    dest->value = value;
+    dest->offset = offset;
+    dest->speed = speed;
+}
+
+inline UIInteraction UIAddEmptyElementToListInteraction(UIState* UI, u32 flags, EditorWidget* widget, EditorElement* list)
 {
     UIInteraction result = {};
-    UIInteractionAction* dest = UIGetFreeAction(&result);
+    UIInteractionAction* dest = UIGetFreeAction(UI, &result);
     dest->type = UIInteractionAction_AddEmptyEditorElement;
     dest->flags = flags;
     dest->list = ColdPointer(list);
@@ -905,10 +933,10 @@ inline UIInteraction UIAddEmptyElementToListInteraction(u32 flags, EditorWidget*
     return result;
 }
 
-inline UIInteraction UIPlaySoundInteraction(u32 flags, u64 soundTypeHash, u64 soundNameHash)
+inline UIInteraction UIPlaySoundInteraction(UIState* UI, u32 flags, u64 soundTypeHash, u64 soundNameHash)
 {
     UIInteraction result = {};
-    UIInteractionAction* dest = UIGetFreeAction(&result);
+    UIInteractionAction* dest = UIGetFreeAction(UI, &result);
     dest->type = UIInteractionAction_PlaySound;
     dest->flags = flags;
     dest->soundTypeHash = soundTypeHash;
@@ -918,10 +946,10 @@ inline UIInteraction UIPlaySoundInteraction(u32 flags, u64 soundTypeHash, u64 so
 }
 
 
-inline UIInteraction UIPlaySoundEventInteraction(u32 flags, u64 eventNameHash)
+inline UIInteraction UIPlaySoundEventInteraction(UIState* UI, u32 flags, u64 eventNameHash)
 {
     UIInteraction result = {};
-    UIInteractionAction* dest = UIGetFreeAction(&result);
+    UIInteractionAction* dest = UIGetFreeAction(UI, &result);
     dest->type = UIInteractionAction_PlaySoundEvent;
     dest->flags = flags;
     dest->eventNameHash = eventNameHash;
@@ -929,10 +957,10 @@ inline UIInteraction UIPlaySoundEventInteraction(u32 flags, u64 eventNameHash)
     return result;
 }
 
-inline UIInteraction UIEquipInAnimationWidgetInteraction(u32 flags, EditorElement* grandParent, EditorElement* root)
+inline UIInteraction UIEquipInAnimationWidgetInteraction(UIState* UI, u32 flags, EditorElement* grandParent, EditorElement* root)
 {
     UIInteraction result = {};
-    UIInteractionAction* dest = UIGetFreeAction(&result);
+    UIInteractionAction* dest = UIGetFreeAction(UI, &result);
     dest->type = UIInteractionAction_EquipInAnimationWidget;
     dest->flags = flags;
     dest->grandParent = ColdPointer(grandParent);
@@ -941,10 +969,10 @@ inline UIInteraction UIEquipInAnimationWidgetInteraction(u32 flags, EditorElemen
     return result;
 }
 
-inline UIInteraction UIShowBitmapInteraction(u32 flags, u64 componentNameHash, u64 bitmapNameHash, Vec4 coloration)
+inline UIInteraction UIShowBitmapInteraction(UIState* UI, u32 flags, u64 componentNameHash, u64 bitmapNameHash, Vec4 coloration)
 {
     UIInteraction result = {};
-    UIInteractionAction* dest = UIGetFreeAction(&result);
+    UIInteractionAction* dest = UIGetFreeAction(UI, &result);
     dest->type = UIInteractionAction_ShowLabeledBitmap;
     dest->flags = flags;
     dest->componentNameHash = componentNameHash;
@@ -954,24 +982,24 @@ inline UIInteraction UIShowBitmapInteraction(u32 flags, u64 componentNameHash, u
     return result;
 }
 
-inline void UIAddReloadElementAction(UIInteraction* interaction, u32 flags, EditorElement* toReload)
+inline void UIAddReloadElementAction(UIState* UI, UIInteraction* interaction, u32 flags, EditorElement* toReload)
 {
-    UIInteractionAction* dest = UIGetFreeAction(interaction);
+    UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
     dest->type = UIInteractionAction_ReloadElement;
     dest->flags = flags;
     dest->toReload = ColdPointer(toReload);
 }
 
-inline void UIAddReleaseDragAction(UIInteraction* interaction, u32 flags)
+inline void UIAddReleaseDragAction(UIState* UI, UIInteraction* interaction, u32 flags)
 {
-    UIInteractionAction* dest = UIGetFreeAction(interaction);
+    UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
     dest->type = UIInteractionAction_ReleaseDragging;
     dest->flags = flags;
 }
 
-inline void UIAddUndoRedoAction(UIInteraction* interaction, u32 flags, UndoRedoCommand command)
+inline void UIAddUndoRedoAction(UIState* UI, UIInteraction* interaction, u32 flags, UndoRedoCommand command)
 {
-    UIInteractionAction* dest = UIGetFreeAction(interaction);
+    UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
     dest->type = UIInteractionAction_UndoRedoCommand;
     dest->flags = flags;
     dest->undoRedo = command;
@@ -982,39 +1010,42 @@ inline UIInteraction NullInteraction()
     UIInteraction result;
     result.priority = UIPriority_NotValid;
     result.flags = 0;
-    result.actionCount = 0;
+    result.firstAction = 0;
+    result.lastAction = 0;
     result.checkCount = 0;
     result.excludeFromReset = 0;
     
     return result;
 }
 
-inline UIInteraction UIUndoInteraction(u32 flags)
+inline UIInteraction UIUndoInteraction(UIState* UI, u32 flags)
 {
     UIInteraction result = NullInteraction();
-    result.actionCount = 1;
-    result.actions[0].type = UIInteractionAction_Undo;
-    result.actions[0].flags = flags;
+    
+    UIInteractionAction* dest = UIGetFreeAction(UI, &result);
+    dest->type = UIInteractionAction_Undo;
+    dest->flags = flags;
     
     return result;
 }
 
-inline UIInteraction UIRedoInteraction(u32 flags)
+inline UIInteraction UIRedoInteraction(UIState* UI, u32 flags)
 {
     UIInteraction result = NullInteraction();
-    result.actionCount = 1;
-    result.actions[0].type = UIInteractionAction_Redo;
-    result.actions[0].flags = flags;
+    
+    UIInteractionAction* dest = UIGetFreeAction(UI, &result);
+    dest->type = UIInteractionAction_Redo;
+    dest->flags = flags;
     
     return result;
 }
 
 #define UIAddSetValueActionDefinition(type)\
-inline void UIAddSetValueAction(UIInteraction* interaction, u32 flags, type* destination, type value)\
+inline void UIAddSetValueAction(UIState* UI, UIInteraction* interaction, u32 flags, type* destination, type value)\
 {\
     UIMemoryReference source = Fixed_(&value, sizeof(type));\
     UIMemoryReference dest = ColdPointer(destination);\
-    UIAddStandardAction(interaction, flags, value, dest, source);\
+    UIAddStandardAction(UI, interaction, flags, value, dest, source);\
 }
 
 
@@ -1028,13 +1059,14 @@ UIAddSetValueActionDefinition(EditorElementParents);
 UIAddSetValueActionDefinition(EditorWidget*);
 
 #define UISetValueInteractionDefinition(type)\
-inline UIInteraction UISetValueInteraction(u32 flags, type* destination, type value)\
+inline UIInteraction UISetValueInteraction(UIState* UI, u32 flags, type* destination, type value)\
 {\
     UIInteraction result;\
     result.flags = 0;\
-    result.actionCount = 0;\
+    result.firstAction = 0;\
+    result.lastAction = 0;\
     result.checkCount = 0;\
-    UIAddSetValueAction(&result, flags, destination, value);\
+    UIAddSetValueAction(UI, &result, flags, destination, value);\
     return result;\
 }
 UISetValueInteractionDefinition(r32);
@@ -1053,7 +1085,7 @@ inline UIMemoryReference ScrollableList_(UIScrollableList* list, u32 possibility
     return result;
 }
 
-inline UIInteraction SendRequestInteraction(u32 flags, UIRequest request)
+inline UIInteraction SendRequestInteraction(UIState* UI, u32 flags, UIRequest request)
 {
     UIInteraction result = {};
     
@@ -1061,12 +1093,12 @@ inline UIInteraction SendRequestInteraction(u32 flags, UIRequest request)
     requestAction.type = UIInteractionAction_SendRequestDirectly;
     requestAction.flags = flags;
     requestAction.directRequest = request;
-    UIAddAction(&result, requestAction);
+    UIAddAction(UI, &result, requestAction);
     
     return  result;
 }
 
-inline UIInteraction ScrollableListRequestInteraction(u32 flags, UIScrollableList* list)
+inline UIInteraction ScrollableListRequestInteraction(UIState* UI, u32 flags, UIScrollableList* list)
 {
     UIInteraction result = {};
     
@@ -1074,33 +1106,33 @@ inline UIInteraction ScrollableListRequestInteraction(u32 flags, UIScrollableLis
     requestAction.type = UIInteractionAction_SendRequest;
     requestAction.flags = flags;
     requestAction.request = ScrollableList(list, request);
-    UIAddAction(&result, requestAction);
+    UIAddAction(UI, &result, requestAction);
     
     return result;
 }
 
-inline void UIAddScrollableTargetInteraction(UIInteraction* interaction, UIScrollableList* list, UIOutput* output)
+inline void UIAddScrollableTargetInteraction(UIState* UI, UIInteraction* interaction, UIScrollableList* list, UIOutput* output)
 {
-    UIAddStandardAction(interaction, UI_Trigger, u32, UIDataPointer(actionIndex), ScrollableList(list, request.action));
-    UIAddStandardAction(interaction, UI_Idle | UI_Retroactive, u32, ColdPointer(&output->desiredAction), UIDataPointer(actionIndex));
+    UIAddStandardAction(UI, interaction, UI_Trigger, u32, UIDataPointer(actionIndex), ScrollableList(list, request.action));
+    UIAddStandardAction(UI, interaction, UI_Idle | UI_Retroactive, u32, ColdPointer(&output->desiredAction), UIDataPointer(actionIndex));
     
-    UIAddStandardAction(interaction, UI_Trigger, u64, UIDataPointer(identifier), ScrollableList(list, request.identifier));
-    UIAddStandardAction(interaction, UI_Idle | UI_Retroactive, u64, ColdPointer(&output->targetEntityID), UIDataPointer(identifier)); 
+    UIAddStandardAction(UI, interaction, UI_Trigger, u64, UIDataPointer(identifier), ScrollableList(list, request.identifier));
+    UIAddStandardAction(UI, interaction, UI_Idle | UI_Retroactive, u64, ColdPointer(&output->targetEntityID), UIDataPointer(identifier)); 
     
-    UIAddStandardAction_(interaction, UI_Trigger, sizeof(myPlayer->targetPossibleActions[0]) * Action_Count, ColdPointer(myPlayer->targetPossibleActions), ColdPointer(myPlayer->overlappingPossibleActions));     
-    UIAddStandardAction(interaction, UI_Trigger, u64, ColdPointer(&myPlayer->targetIdentifier), ColdPointer(&myPlayer->overlappingIdentifier));     
+    UIAddStandardAction_(UI, interaction, UI_Trigger, sizeof(myPlayer->targetPossibleActions[0]) * Action_Count, ColdPointer(myPlayer->targetPossibleActions), ColdPointer(myPlayer->overlappingPossibleActions));     
+    UIAddStandardAction(UI, interaction, UI_Trigger, u64, ColdPointer(&myPlayer->targetIdentifier), ColdPointer(&myPlayer->overlappingIdentifier));     
 }
 
-inline void UIAddStandardTargetInteraction(UIInteraction* interaction, UIOutput* out, u32 actionIndex, u64 identifier)
+inline void UIAddStandardTargetInteraction(UIState* UI, UIInteraction* interaction, UIOutput* out, u32 actionIndex, u64 identifier)
 {
-    UIAddStandardAction(interaction, UI_Trigger, u32, UIDataPointer(actionIndex), Fixed(actionIndex));
-    UIAddStandardAction(interaction, UI_Trigger | UI_Retroactive, u32, ColdPointer(&out->desiredAction), UIDataPointer(actionIndex));
+    UIAddStandardAction(UI, interaction, UI_Trigger, u32, UIDataPointer(actionIndex), Fixed(actionIndex));
+    UIAddStandardAction(UI, interaction, UI_Trigger | UI_Retroactive, u32, ColdPointer(&out->desiredAction), UIDataPointer(actionIndex));
     
-    UIAddStandardAction(interaction, UI_Trigger, u64, UIDataPointer(identifier), Fixed(identifier));
-    UIAddStandardAction(interaction, UI_Trigger | UI_Retroactive, u64, ColdPointer(&out->targetEntityID), UIDataPointer(identifier)); 
+    UIAddStandardAction(UI, interaction, UI_Trigger, u64, UIDataPointer(identifier), Fixed(identifier));
+    UIAddStandardAction(UI, interaction, UI_Trigger | UI_Retroactive, u64, ColdPointer(&out->targetEntityID), UIDataPointer(identifier)); 
     
-    UIAddStandardAction_(interaction, UI_Trigger, sizeof(myPlayer->targetPossibleActions[0]) * Action_Count, ColdPointer(myPlayer->targetPossibleActions), ColdPointer(myPlayer->overlappingPossibleActions));     
-    UIAddStandardAction(interaction, UI_Trigger, u64, ColdPointer(&myPlayer->targetIdentifier), ColdPointer(&myPlayer->overlappingIdentifier));     
+    UIAddStandardAction_(UI, interaction, UI_Trigger, sizeof(myPlayer->targetPossibleActions[0]) * Action_Count, ColdPointer(myPlayer->targetPossibleActions), ColdPointer(myPlayer->overlappingPossibleActions));     
+    UIAddStandardAction(UI, interaction, UI_Trigger, u64, ColdPointer(&myPlayer->targetIdentifier), ColdPointer(&myPlayer->overlappingIdentifier));     
 }
 
 #define UIAddInvalidCondition(interaction, type, ref1, ref2, ...) UIAddInvalidCondition_(interaction, sizeof(type), ref1, ref2, __VA_ARGS__)
@@ -1243,9 +1275,8 @@ inline void UIAddUndoRedoCommand(UIState* UI, UndoRedoCommand command)
 
 inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 flag, r32 timeToAdvance, b32 onlyNotActivated = false)
 {
-    for(u32 actionIndex = 0; actionIndex < interaction->actionCount; ++actionIndex)
+    for(UIInteractionAction* action = interaction->firstAction; action; action = action->next)
     {
-        UIInteractionAction* action = interaction->actions + actionIndex;
         if(!onlyNotActivated || !(action->flags & UI_Activated))
         {
             if((action->flags & flag) == flag)
@@ -1316,6 +1347,16 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         
                         FormatString(value, 32, "%f", newValue);
                     }break;
+                    
+                    case UIInteractionAction_OffsetReal:
+                    {
+                        r32 speed = action->speed;
+                        r32* value = (r32*) GetValue(action->value, &interaction->data);
+                        r32* offset = (r32*) GetValue(action->offset, &interaction->data);
+                        
+                        r32 current = *value;
+                        *value = current + speed * *offset;
+                    } break;
                     
                     case UIInteractionAction_AddEmptyEditorElement:
                     {
