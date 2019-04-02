@@ -1690,6 +1690,8 @@ inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, char* componentName, u8
     
     FREELIST_INSERT(dest, layout->firstPiece);
     
+    ++layout->pieceCount;
+    
     return dest;
 }
 

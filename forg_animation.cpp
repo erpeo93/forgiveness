@@ -141,22 +141,17 @@ inline PieceAss* FindAss(Animation* animation, u32 timeLineIndex, u32 startingFr
     return result;
 }
 
-internal void BlendFrames_(Animation* animation, BlendResult* in, u32 lowerFrameIndex, u32 timelineMS, u32 upperFrameIndex)
+internal void BlendFrames_(MemoryPool* tempPool, Animation* animation, BlendResult* in, u32 lowerFrameIndex, u32 timelineMS, u32 upperFrameIndex)
 {
     FrameData* reference = animation->frames + 0;
     
-    u32 boneCount = reference->countBones;
-    u32 assCount = reference->countAss;
-    
-    Assert(boneCount < ArrayCount(in->bones));
-    Assert(assCount < ArrayCount(in->ass));
-    
-    in->boneCount = boneCount;
-    in->assCount = assCount;
-    
+    in->boneCount = reference->countBones;
+    in->bones = PushArray(tempPool, BlendedBone, in->boneCount);
+    in->assCount = reference->countAss;
+    in->ass = PushArray(tempPool, BlendedAss, in->assCount);
     
     Bone* firstRefBone = animation->bones + reference->firstBoneIndex;
-    for(u32 boneIndex = 0; boneIndex < boneCount; boneIndex++)
+    for(u32 boneIndex = 0; boneIndex < in->boneCount; boneIndex++)
     {
         u32 lowerTimeLine = reference->timelineMS;
         u32 upperTimeLine = reference->timelineMS + animation->header->durationMS;
@@ -179,14 +174,15 @@ internal void BlendFrames_(Animation* animation, BlendResult* in, u32 lowerFrame
         
         u32 exceedingLower = timelineMS - lowerTimeLine;
         r32 lerp = SafeRatio1((r32) exceedingLower, (r32) (upperTimeLine - lowerTimeLine));
-        in->bones[boneIndex] = BlendBones_(b1, lerp, b2);
         
-        in->boneAlterations[boneIndex] = {};
+        BlendedBone* dest = in->bones + boneIndex;
+        dest->bone = BlendBones_(b1, lerp, b2);
+        dest->alterations = {};
     }
     
     
     PieceAss* firstRefAss = animation->ass + reference->firstAssIndex;
-    for(u32 assIndex = 0; assIndex < assCount; assIndex++)
+    for(u32 assIndex = 0; assIndex < in->assCount; assIndex++)
     {
         u32 lowerTimeLine = reference->timelineMS;
         u32 upperTimeLine = reference->timelineMS + animation->header->durationMS;
@@ -209,21 +205,20 @@ internal void BlendFrames_(Animation* animation, BlendResult* in, u32 lowerFrame
         
         u32 exceedingLower = timelineMS - lowerTimeLine;
         r32 lerp = SafeRatio1((r32) exceedingLower, (r32) (upperTimeLine - lowerTimeLine));
-        in->ass[assIndex] = BlendAss_(a1, lerp, a2);
         
-        u32 boneIndex = in->ass[assIndex].boneID;
-        in->equipmentAssCount[assIndex] = 0;
+        BlendedAss* dest = in->ass + assIndex;
+        dest->ass = BlendAss_(a1, lerp, a2);
+        dest->equipmentAssCount = 0;
+        dest->alterations = {};
         
-        in->assAlterations[assIndex] = {};
+        Assert(dest->ass.spriteIndex < animation->spriteInfoCount);
         
-        Assert(in->ass[assIndex].spriteIndex < animation->spriteInfoCount);
-        
-        SpriteInfo* sprite = animation->spriteInfos + in->ass[assIndex].spriteIndex;
-        in->sprites[assIndex] = *sprite;
+        SpriteInfo* sprite = animation->spriteInfos + dest->ass.spriteIndex;
+        dest->sprite = *sprite;
     }
 }
 
-internal Vec2 CalculateFinalBoneOffset_(AnimationFixedParams* input, Bone* frameBones, i32 countBones, Bone* bone, AnimationVolatileParams* params)
+internal Vec2 CalculateFinalBoneOffset_(AnimationFixedParams* input, BlendedBone* frameBones, i32 countBones, Bone* bone, AnimationVolatileParams* params)
 {
     Assert(bone->parentID < countBones);
     Vec2 baseOffset = V2(0, 0);
@@ -234,7 +229,7 @@ internal Vec2 CalculateFinalBoneOffset_(AnimationFixedParams* input, Bone* frame
     Vec2 offsetFromParentScale = V2(1, 1);
     if(bone->parentID >= 0)
     {
-        Bone* parent = frameBones + bone->parentID;
+        Bone* parent = &frameBones[bone->parentID].bone;
         Assert(parent->id <= bone->id);
         
         baseOffset = parent->finalOriginOffset;
@@ -338,19 +333,25 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
     {
         upperFrameIndex = 0;
     }
-    BlendFrames_(animation, blended, lowerFrameIndex, animTimeMod, upperFrameIndex);
+    BlendFrames_(input->tempPool, animation, blended, lowerFrameIndex, animTimeMod, upperFrameIndex);
     
     TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, input->entity->taxonomy);
     for(TaxonomyBoneAlterations* boneAlt = slot->firstBoneAlteration; boneAlt; boneAlt = boneAlt->next)
     {
-        Assert(boneAlt->boneIndex < ArrayCount(blended->boneAlterations));
-        blended->boneAlterations[boneAlt->boneIndex] = boneAlt->alt;
+        if(boneAlt->boneIndex < blended->boneCount)
+        {
+            BlendedBone* bone = blended->bones + boneAlt->boneIndex;
+            bone->alterations = boneAlt->alt;
+        }
     }
     
     for(TaxonomyAssAlterations* assAlt = slot->firstAssAlteration; assAlt; assAlt = assAlt->next)
     {
-        Assert(assAlt->assIndex < ArrayCount(blended->assAlterations));
-        blended->assAlterations[assAlt->assIndex] = assAlt->alt;
+        if(assAlt->assIndex < blended->assCount)
+        {
+            BlendedAss* ass = blended->ass + assAlt->assIndex;
+            ass->alterations = assAlt->alt;
+        }
     }
     
     
@@ -370,12 +371,15 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
     
     for(u32 boneIndex = 0; boneIndex < blended->boneCount; boneIndex++)
     {
-        Bone* bone = blended->bones + boneIndex;
-        BoneAlterations* boneAlt = blended->boneAlterations + boneIndex;
+        BlendedBone* blendedBone = blended->bones + boneIndex;
+        
+        Bone* bone = &blendedBone->bone;
+        BoneAlterations* boneAlt = &blendedBone->alterations;
         
         if(bone->parentID != -1)
         {
-            Bone* parent = blended->bones + bone->parentID;
+            BlendedBone* parentBlended = blended->bones + bone->parentID;
+            Bone* parent = &parentBlended->bone;
             bone->finalAngle += parent->finalAngle;
         }
         else
@@ -410,6 +414,33 @@ inline r32 AssFinalAngle(Bone* parentBone, PieceAss* ass)
 {
     r32 finalAngle = parentBone->finalAngle + ass->angle;
     return finalAngle;
+}
+
+inline PieceAss* GetAss(BlendResult* blended, u32 assIndex)
+{
+    Assert(assIndex < blended->assCount);
+    BlendedAss* ass = blended->ass + assIndex;
+    PieceAss* result = &ass->ass;
+    
+    return result;
+}
+
+inline Bone* GetBone(BlendResult* blended, u32 boneIndex)
+{
+    Assert(boneIndex < blended->boneCount);
+    BlendedBone* bone = blended->bones + boneIndex;
+    Bone* result = &bone->bone;
+    
+    return result;
+}
+
+inline SpriteInfo* GetSprite(BlendResult* blended, u32 spriteIndex)
+{
+    Assert(spriteIndex < blended->assCount);
+    BlendedAss* ass = blended->ass + spriteIndex;
+    SpriteInfo* result = &ass->sprite;
+    
+    return result;
 }
 
 internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, TaxonomyTree* equipmentMappings, EquipmentAnimationSlot* slots)
@@ -460,15 +491,16 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
                             for(EquipmentAss* eq = layout->firstEquipmentAss; eq; eq = eq->next)
                             {
                                 u32 assIndex = eq->assIndex;
-                                PieceAss* ass = blended->ass + assIndex;
-                                Bone* parentBone = blended->bones + ass->boneID;
+                                BlendedAss* blendedAss = blended->ass + assIndex;
+                                PieceAss* ass = &blendedAss->ass;
+                                Bone* parentBone = GetBone(blended, ass->boneID);
                                 
                                 if(eq->index == 0xff || (eq->stringHashID == componentHashID && eq->index == index))
                                 {
-                                    Assert(blended->equipmentAssCount[assIndex] < ArrayCount(blended->equipment[0]));
-                                    u32 equipmentAssIndex = blended->equipmentAssCount[assIndex]++;
+                                    Assert(blendedAss->equipmentAssCount < ArrayCount(blendedAss->associatedEquipment));
                                     
-                                    EquipmentAnimationPiece* dest = blended->equipment[assIndex] + equipmentAssIndex;
+                                    EquipmentAnimationPiece* dest = blendedAss->associatedEquipment + blendedAss->equipmentAssCount++;
+                                    
                                     PieceAss* destAss = &dest->ass;
                                     SpriteInfo* destSprite = &dest->sprite;
                                     
@@ -652,31 +684,29 @@ inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 entityHa
 inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, ObjectLayout* layout, AnimationVolatileParams* params, ObjectState state)
 {
     output->boneCount = 1;
-    output->assCount = 0;
-    Bone* bone = output->bones + 0;
-    *bone = {};
-    bone->mainAxis = V2(1, 0);
-    bone->parentID = -1;
+    output->bones = PushArray(input->tempPool, BlendedBone, output->boneCount);
     
-    BoneAlterations* boneAlt = output->boneAlterations + 0;
-    boneAlt->valid = false;
+    output->assCount = layout->pieceCount;
+    output->ass = PushArray(input->tempPool, BlendedAss, output->assCount);
     
+    BlendedBone* bone = output->bones + 0;
+    bone->bone.mainAxis = V2(1, 0);
+    bone->bone.parentID = -1;
+    
+    u32 pieceIndex = 0;
     for(LayoutPiece* source = layout->firstPiece; source; source = source->next)
     {
         LayoutPieceParams* pieceParams = GetParams(source, state);
-        Assert(output->assCount <= ArrayCount(output->ass));
-        u32 pieceIndex = output->assCount++;
-        PieceAss* destAss = output->ass + pieceIndex;
         
-        output->equipmentAssCount[pieceIndex] = 0;
+        BlendedAss* ass = output->ass + pieceIndex++;
+        PieceAss* destAss = &ass->ass;
         
-        AssAlterations* destAlt = output->assAlterations + pieceIndex;
+        ass->equipmentAssCount = 0;
+        
+        AssAlterations* destAlt = &ass->alterations;
         destAlt->valid = false;
         
-        SpriteInfo* destSprite = output->sprites + pieceIndex;
-        
-        *destAss = {};
-        *destSprite = {};
+        SpriteInfo* destSprite = &ass->sprite;
         
         destAss->spriteIndex = pieceIndex;
         destAss->boneOffset = pieceParams->parentOffset.xy;
@@ -722,9 +752,9 @@ inline Rect2 GetPiecesBound(RenderGroup* group, BlendResult* blended, AnimationV
     Rect2 result = InvertedInfinityRect2();
     for(u32 assIndex = 0; assIndex < blended->assCount; ++assIndex)
     {
-        PieceAss* ass = blended->ass + assIndex;
-        Bone* parentBone = blended->bones + ass->boneID;
-        SpriteInfo* sprite = blended->sprites + assIndex;
+        PieceAss* ass = GetAss(blended, assIndex);
+        Bone* parentBone = GetBone(blended, + ass->boneID);
+        SpriteInfo* sprite = GetSprite(blended, assIndex);
         
         Vec3 originOffset = AssOriginOffset(parentBone, ass, params->zOffset, params->scale);
         r32 finalAngle = AssFinalAngle(parentBone, ass);
@@ -1282,10 +1312,12 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
     
     for(u32 assIndex = 0;assIndex < blended->assCount; ++assIndex)
     {
-        PieceAss currentAss = blended->ass[assIndex];
-        AssAlterations* assAlt = blended->assAlterations + assIndex;
-        Bone* parentBone = blended->bones + currentAss.boneID;
-        SpriteInfo* sprite = blended->sprites + assIndex;
+        BlendedAss* blendedAss = blended->ass + assIndex;
+        PieceAss currentAss = *(GetAss(blended, assIndex));
+        
+        AssAlterations* assAlt = &blendedAss->alterations;
+        Bone* parentBone = GetBone(blended, currentAss.boneID);
+        SpriteInfo* sprite = GetSprite(blended, assIndex);
         
         
         Vec4 proceduralColor = input->defaultColoration;
@@ -1323,11 +1355,9 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         }
         
         
-        for(u32 equipmentIndex = 0; equipmentIndex < blended->equipmentAssCount[assIndex]; ++equipmentIndex)
+        for(u32 equipmentIndex = 0; equipmentIndex < blendedAss->equipmentAssCount; ++equipmentIndex)
         {
-            u32 equipmentAssIndex = progressiveEquipmentIndex + equipmentIndex;
-            
-            EquipmentAnimationPiece* equipment = blended->equipment[assIndex] + equipmentAssIndex;
+            EquipmentAnimationPiece* equipment = blendedAss->associatedEquipment + equipmentIndex;
             PieceAss* equipmentAss = &equipment->ass;
             SpriteInfo* spriteInfo = &equipment->sprite;
             i16 status = equipment->status;
@@ -1371,10 +1401,11 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
     i16 hotAssIndex = input->output->hotAssIndex;
     if(hotAssIndex >= 0)
     {
-        PieceAss currentAss = blended->ass[hotAssIndex];
-        AssAlterations* assAlt = blended->assAlterations + hotAssIndex;
-        Bone* parentBone = blended->bones + currentAss.boneID;
-        SpriteInfo* sprite = blended->sprites + hotAssIndex;
+        BlendedAss* blendedAss = blended->ass + hotAssIndex;
+        PieceAss currentAss = *(GetAss(blended, hotAssIndex));
+        AssAlterations* assAlt = &blendedAss->alterations;
+        Bone* parentBone = GetBone(blended, currentAss.boneID);
+        SpriteInfo* sprite = GetSprite(blended, hotAssIndex);
         
         Vec4 proceduralColor = input->defaultColoration;
         ApplyAssAlterations(&currentAss, assAlt, parentBone, &proceduralColor);
@@ -1430,7 +1461,8 @@ inline AnimationId GetAnimationRecursive(Assets* assets, TaxonomyTable* table, u
 
 internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup* group, Animation* animation, u64 skeletonHashID, Vec3 P, AnimationState* animationState, AnimationVolatileParams* params, r32 timeToAdvance)
 {
-    BlendResult blended;
+    BlendResult blended = {};
+    
     GetAnimationPiecesAndAdvanceState(input, &blended, animation, animationState, timeToAdvance, params);
     
     TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, input->entity->taxonomy);
@@ -1451,7 +1483,7 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
     {
         for(u32 boneIndex = 0; boneIndex < blended.boneCount; ++boneIndex)
         {
-            Bone* bone = blended.bones + boneIndex;
+            Bone* bone = GetBone(&blended, boneIndex);
             Vec2 startP = P.xy + params->cameraOffset.xy + bone->finalOriginOffset;
             
             r32 thickness = 2.5f;
@@ -1499,10 +1531,11 @@ internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group
 
 
 
-inline void InitializeAnimationInputOutput(AnimationFixedParams* input, AnimationOutput* output, GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToAdvance, ClientEntity* fakeEquipment = 0)
+inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPool* tempPool, AnimationOutput* output, GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToAdvance, ClientEntity* fakeEquipment = 0)
 {
     AnimationState* animationState = &entityC->animation;
     
+    input->tempPool = tempPool;
     input->timeToAdvance = timeToAdvance;
     input->worldMode = worldMode;
     input->taxTable = worldMode->table;
@@ -1702,7 +1735,9 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
     
     AnimationFixedParams input;
     
-    InitializeAnimationInputOutput(&input, &result, worldMode, entityC, timeToAdvance, debugParams.fakeEquipment);
+    MemoryPool tempPool = {};
+    
+    InitializeAnimationInputOutput(&input, &tempPool, &result, worldMode, entityC, timeToAdvance, debugParams.fakeEquipment);
     input.debug = debugParams;
     
     AnimationVolatileParams params;
@@ -1817,6 +1852,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
         }
     }
     
+    Clear(&tempPool);
     
     return result;
 }

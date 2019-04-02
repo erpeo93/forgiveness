@@ -180,6 +180,8 @@ struct ObjectLayout
 {
     char name[32];
     u64 nameHashID;
+    
+    u32 pieceCount;
     LayoutPiece* firstPiece;
     
     union

@@ -54,8 +54,6 @@ struct BlendedBone
 {
     Bone bone;
     BoneAlterations alterations;
-    
-    BlendedBone* next;
 };
 
 struct BlendedAss
@@ -64,27 +62,17 @@ struct BlendedAss
     AssAlterations alterations;
     SpriteInfo sprite;
     
+    u32 equipmentAssCount;
     EquipmentAnimationPiece associatedEquipment[8];
-    
-    BlendedAss* next;
 };
 
 struct BlendResult
 {
     u32 boneCount;
-    Bone bones[32];
-    BoneAlterations boneAlterations[32];
+    BlendedBone* bones;
     
     u32 assCount;
-    PieceAss ass[32];
-    AssAlterations assAlterations[32];
-    SpriteInfo sprites[32];
-    
-    
-    
-    
-    u32 equipmentAssCount[32];
-    EquipmentAnimationPiece equipment[32][8];
+    BlendedAss* ass;
 };
 
 struct PieceResult
@@ -234,6 +222,8 @@ struct AnimationDebugParams
 struct AnimationFixedParams
 {
     AnimationDebugParams debug;
+    
+    MemoryPool* tempPool;
     
     r32 timeToAdvance;
     struct GameModeWorld* worldMode;

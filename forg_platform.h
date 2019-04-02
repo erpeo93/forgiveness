@@ -186,6 +186,11 @@ if((element)->next)\
 #define FREELIST_ALLOC( result, firstFreePtr, allocationCode ) if( ( result ) = ( firstFreePtr ) ) { ( firstFreePtr ) = ( result )->nextFree; } else{ ( result ) = allocationCode; } Assert( ( result ) != ( firstFreePtr ) ); 
 #define FREELIST_DEALLOC( result, firstFreePtr ) Assert( ( result ) != ( firstFreePtr ) ); if( ( result ) ) { ( result )->nextFree = ( firstFreePtr ); ( firstFreePtr ) = ( result ); Assert( ( firstFreePtr )->next != ( result ) ); }
 #define FREELIST_INSERT( newFirst, firstPtr ) Assert( ( firstPtr ) != ( newFirst ) ); ( newFirst )->next = ( firstPtr ); ( firstPtr ) = ( newFirst );
+
+#define FREELIST_INSERT_AS_LAST(newLast, firstPtr, lastPtr) \
+if(lastPtr){(lastPtr)->next = newLast; lastPtr = newLast;} else{ (firstPtr) = (lastPtr) = dest; }
+
+
 #define FREELIST_FREE( listPtr, type, firstFreePtr ) for( type* element = ( listPtr ); element; ) { Assert( element != element->next ); type* nextElement = element->next; FREELIST_DEALLOC( element, firstFreePtr ); element = nextElement; } ( listPtr ) = 0;
 #define FREELIST_COPY( destList, type, toCopy, firstFree, pool, ... ){ type* currentElement_ = ( toCopy ); while( currentElement_ ) { type* elementToCopy_; FREELIST_ALLOC( elementToCopy_, ( firstFree ), PushStruct( ( pool ), type ) ); ##__VA_ARGS__; *elementToCopy_ = *currentElement_; FREELIST_INSERT( elementToCopy_, ( destList ) ); currentElement_ = currentElement_->next; } }
 //
