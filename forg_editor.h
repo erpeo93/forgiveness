@@ -13,6 +13,7 @@ enum EditorElementType
     EditorElement_EmptyTaxonomy,
     
     EditorElement_Animation,
+    EditorElement_ColorPicker,
     EditorElement_Count,
 };
 
@@ -146,6 +147,7 @@ enum EditorWidgetType
     EditorWidget_SoundEvents,
     EditorWidget_Components,
     EditorWidget_Misc,
+    EditorWidget_ColorPicker,
     
     EditorWidget_Count,
 };

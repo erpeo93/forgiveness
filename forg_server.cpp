@@ -1029,7 +1029,7 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     
     
     server->networkPool.allocationFlags = PlatformMemory_NotRestored;
-    server->sendPakBufferSize = MegaBytes(1);
+    server->sendPakBufferSize = KiloBytes(200);
     server->sendPakBuffer = PushArray(&server->networkPool, char, server->sendPakBufferSize);
     server->players = PushArray( &server->networkPool, ServerPlayer, MAXIMUM_SERVER_PLAYERS );
     //server->otherServers = PushArray( &server->pool, Server, MAX_OTHER_SERVERS );

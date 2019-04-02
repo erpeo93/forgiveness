@@ -285,7 +285,7 @@ inline void PushDottedLine(RenderGroup* group, Vec4 color, Vec3 fromP, Vec3 toP,
     }
 }
 
-inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 color, Vec4 lightIndexes = V4(-1, -1, -1, -1))
+inline void PushRect4Colors(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 c1, Vec4 c2, Vec4 c3, Vec4 c4, Vec4 lightIndexes)
 {
     GameRenderCommands* commands = renderGroup->commands;
     TexturedQuadsCommand* entry = GetCurrentQuads(renderGroup, 1);
@@ -320,11 +320,21 @@ inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, 
         Vec2 maxUV = V2(1.0f, 1.0f);
         
         PushQuad(renderGroup, renderGroup->whiteTexture, lightIndexes,
-                 V4(min.x, min.y, min.z, objectTransform.additionalZBias), V2(minUV.x, minUV.y), color,
-                 V4(max.x, min.y, min.z, objectTransform.additionalZBias), V2(maxUV.x, minUV.y), color,
-                 V4(max.x, max.y, max.z, objectTransform.additionalZBias), V2(maxUV.x, maxUV.y), color,
-                 V4(min.x, max.y, max.z, objectTransform.additionalZBias), V2(minUV.x, maxUV.y), color, objectTransform.modulationPercentage);
+                 V4(min.x, min.y, min.z, objectTransform.additionalZBias), V2(minUV.x, minUV.y), c1,
+                 V4(max.x, min.y, min.z, objectTransform.additionalZBias), V2(maxUV.x, minUV.y), c2,
+                 V4(max.x, max.y, max.z, objectTransform.additionalZBias), V2(maxUV.x, maxUV.y), c3,
+                 V4(min.x, max.y, max.z, objectTransform.additionalZBias), V2(minUV.x, maxUV.y), c4, objectTransform.modulationPercentage);
     }
+}
+
+inline void PushRect4Colors(RenderGroup* renderGroup, ObjectTransform objectTransform, Rect2 rect, Vec4 c0, Vec4 c1, Vec4 c2, Vec4 c3, Vec4 lightIndexes = V4(-1, -1, -1, -1))
+{
+    PushRect4Colors(renderGroup, objectTransform, V3(GetCenter(rect), 0.0f), GetDim(rect), c0, c1, c2, c3, lightIndexes);
+}
+
+inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 color, Vec4 lightIndexes = V4(-1, -1, -1, -1))
+{
+    PushRect4Colors(renderGroup, objectTransform, P, dim, color, color, color, color, lightIndexes);
 }
 
 inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Rect2 rect, Vec4 color, Vec4 lightIndexes = V4(-1, -1, -1, -1))

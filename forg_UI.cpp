@@ -753,6 +753,19 @@ inline void PushEditorLine(RenderGroup* group, b32 propagated, Vec4 color, Vec3 
     }
 }
 
+struct Rect24C
+{
+    Rect2 rect;
+    Vec4 c0, c1, c2, c3;
+};
+
+inline void SetColorsVertical(Rect24C* rect, Vec4 cStart, Vec4 cEnd)
+{
+    rect->c0 = rect->c3 = cStart;
+    rect->c1 = rect->c2 = cEnd;
+}
+
+
 struct UIRenderTreeResult
 {
     Rect2 bounds;
@@ -1421,6 +1434,136 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         }
                     }
                 } break;
+
+				case EditorElement_ColorPicker:
+				{
+                    r32 baseColorRealHeight = 1 * layout->childStandardHeight;
+                    
+                    
+                    r32 baseColorWidth = 5.0f * layout->nameValueDistance;
+                    r32 baseColorHeight = 0.6f * baseColorRealHeight;
+                    
+                    Vec3 P = V3(layout->P, 0);
+                    P.x += 0.5f * layout->nameValueDistance;
+                                        
+					Rect2 baseColorRect = RectMinDim(P.xy - 0.5f * V2(0, baseColorHeight), V2(baseColorWidth, baseColorHeight));
+                    
+                    Vec4 c0 = V4(1, 0, 0, 1);
+                    Vec4 c1 = V4(1, 1, 0, 1);
+                    Vec4 c2 = V4(0, 1, 0, 1);
+                    Vec4 c3 = V4(0, 1, 1, 1);
+                    Vec4 c4 = V4(0, 0, 1, 1);
+                    Vec4 c5 = V4(1, 0, 1, 1);
+                    
+                    r32 colorWidth = baseColorWidth / 6.0f;
+                    r32 colorHeight = baseColorHeight;
+                    Rect24C colors[6];
+                    
+                    Vec2 runningP = P.xy - 0.5f * V2(0, baseColorHeight);
+                    Vec2 colorDim = V2(colorWidth, colorHeight);
+                    
+                    colors[0].rect = RectMinDim(runningP, colorDim);
+                    SetColorsVertical(colors + 0, c0, c1);
+                    runningP.x += colorWidth;
+                    
+                    colors[1].rect = RectMinDim(runningP, colorDim);
+                    SetColorsVertical(colors + 1, c1, c2);
+                    runningP.x += colorWidth;
+                    
+                    colors[2].rect = RectMinDim(runningP, colorDim);
+                    SetColorsVertical(colors + 2, c2, c3);
+                    runningP.x += colorWidth;
+                    
+                    colors[3].rect = RectMinDim(runningP, colorDim);
+                    SetColorsVertical(colors + 3, c3, c4);
+                    runningP.x += colorWidth;
+                    
+                    colors[4].rect = RectMinDim(runningP, colorDim);
+                    SetColorsVertical(colors + 4, c4, c5);
+                    runningP.x += colorWidth;
+                    
+                    colors[5].rect = RectMinDim(runningP, colorDim);
+                    SetColorsVertical(colors + 5, c5, c0);
+                    runningP.x += colorWidth;
+                    
+                    
+
+                    
+                    r32 baseColorLerp = 0.5f;
+                    Vec4 baseColor= {};
+                    
+                    r32 runningLerp = 0;
+                    for(u32 rectIndex = 0; rectIndex < ArrayCount(colors); ++rectIndex)
+                    {
+
+                        Rect24C* rect = colors + rectIndex;
+                        if(PointInRect(rect->rect, UI->relativeScreenMouse))
+                        {
+                            //AddInteraction(Idle, widget->baseColorP, UI->mouseRelativeP);
+                            
+                        }
+                        
+                        if(baseColorLerp < runningLerp)
+                        {
+                            r32 lerp = Clamp01MapToRange(runningLerp, baseColorLerp, runningLerp + colorWidth);
+                            baseColor = Lerp(rect->c0, lerp, rect->c1);
+                        }
+                        
+                        ObjectTransform baseTransform = FlatTransform(30.0f);
+                        PushRect4Colors(UI->group, baseTransform, rect->rect, rect->c0, rect->c1, rect->c2, rect->c3);
+                        runningLerp += colorWidth;
+                    }
+                    
+                    r32 pickColorWidth = 5.0f * layout->nameValueDistance;
+                    r32 pickColorRealHeight = 3 * layout->childStandardHeight;
+                    r32 pickColorHeight = 0.8f * pickColorRealHeight;
+                    
+                    
+                    layout->P.y -= layout->childStandardHeight;
+                    layout->P.y -= 0.5f * pickColorRealHeight;
+                    
+                    
+                    
+                    
+                    P = V3(layout->P, 0);
+                    P.x += 0.5f * layout->nameValueDistance;
+                                        
+					Rect2 pickColorRect = RectMinDim(P.xy - 0.5f * V2(0, pickColorHeight), V2(pickColorWidth, pickColorHeight));
+                    
+                   
+                    
+                    
+                    Vec4 pickColor = baseColor;
+					if(PointInRect(pickColorRect, UI->relativeScreenMouse))
+					{
+//						AddInteraction(Idle, widget->baseColorP, UI->mouseRelativeP);
+					}
+
+                    ObjectTransform pickTransform = FlatTransform(30.0f);
+                    PushRect(UI->group, pickTransform, pickColorRect, pickColor);
+                    
+
+                    layout->P.y -= 0.5f * pickColorRealHeight;
+                    layout->P.y -= layout->childStandardHeight;
+
+                    Vec4 color = V4(1, 1, 1, 1);
+                    
+                    EditorElement* colorElement = root->next;
+                    Assert(colorElement);
+                    
+                    EditorElement* r = GetElement(colorElement, "r");
+                    FormatString(r->value, sizeof(r->value), "%f", color.r);
+                    
+                    EditorElement* g = GetElement(colorElement, "g");
+                    FormatString(g->value, sizeof(g->value), "%f", color.g);
+                    
+                    EditorElement* b = GetElement(colorElement, "b");
+                    FormatString(b->value, sizeof(b->value), "%f", color.b);
+                    
+                    
+                    
+                    
+				} break;
             }
             
 			if(shadowLabel[0])
@@ -1453,7 +1596,8 @@ inline b32 ChangesMustBeSaved(u32 widgetIndex)
     
     if(widgetIndex == EditorWidget_Animation ||
        widgetIndex == EditorWidget_SoundDatabase ||
-       widgetIndex == EditorWidget_GeneralButtons)
+       widgetIndex == EditorWidget_GeneralButtons || 
+       widgetIndex == EditorWidget_ColorPicker)
     {
         result = false;
     }
@@ -2661,6 +2805,27 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             EditorWidget* animation = StartWidget(UI, EditorWidget_Animation, V2(-300, -300), 0xffffffff, "Animation");
             animation->root = animationRoot;
+
+            
+            EditorElement* colorPickerRoot;
+            FREELIST_ALLOC(colorPickerRoot, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            colorPickerRoot->type = EditorElement_ColorPicker;
+            
+            
+            EditorElement* color;
+            FREELIST_ALLOC(color, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            color->type = EditorElement_Struct;
+           
+            UIAddChild(UI->table, color, EditorElement_Real, "a", "1.0");
+            UIAddChild(UI->table, color, EditorElement_Real, "b", "0.0");
+            UIAddChild(UI->table, color, EditorElement_Real, "g", "0.0");
+            UIAddChild(UI->table, color, EditorElement_Real, "r", "0.0");
+            
+            
+            colorPickerRoot->next = color;
+            
+            EditorWidget* colorPicker = StartWidget(UI, EditorWidget_ColorPicker, V2(-300, -300), 0xffffffff, "Color Picker");
+            colorPicker->root = colorPickerRoot;
             
             
             EditorWidget* soundDatabase = StartWidget(UI, EditorWidget_SoundDatabase, V2(300,200), EditorRole_SoundDesigner, "Sound Database");
