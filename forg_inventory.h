@@ -15,7 +15,7 @@ enum RarityType
 struct Object
 {
     u32 taxonomy;
-    u64 recipeIndex;
+    GenerationData gen;
     u16 quantity;
     i16 status;
 };

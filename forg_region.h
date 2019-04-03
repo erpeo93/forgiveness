@@ -122,7 +122,6 @@ enum EntityComponentType
     Component_Count,
 };
 
-
 introspection() struct SimEntity
 {
     TaxonomySlot* slot;
@@ -145,7 +144,7 @@ introspection() struct SimEntity
     r32 quantity;
     r32 status;
 	u32 recipeTaxonomy;
-	u64 recipeIndex;  
+    GenerationData gen;
     u64 ownerID;
     
     u32 IDs[Component_Count];

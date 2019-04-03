@@ -145,7 +145,7 @@ inline b32 HasObjectOfKind(UIState* UI, ClientEntity* entity, u32 objectTaxonomy
 }
 
 
-internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 elementCenterP, Vec2 elementDim, TaxonomySlot* recipeSlot, u64 recipeIndex, PlatformInput* input)
+internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 elementCenterP, Vec2 elementDim, TaxonomySlot* recipeSlot, GenerationData gen, PlatformInput* input)
 {
     b32 result = false;
     
@@ -155,7 +155,7 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
     
     Object object = {};
     object.taxonomy = recipeSlot->taxonomy;
-    object.recipeIndex = recipeIndex;
+    object.gen = gen;
     r32 additionalZBias = 20.1f;
     Vec3 objectP = GetWorldP(group, elementCenterP + V2(0.3f * elementDim.x, 0));
     RenderObject(group, UI->worldMode, &object, objectP, V2(0.4f * elementDim.x, 0.6f * elementDim.y), additionalZBias);
@@ -164,7 +164,7 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
     PushUITextWithDimension(UI, recipeSlot->name, objectTextP, V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
     
     RecipeIngredients ingredients;
-    GetRecipeIngredients(&ingredients, UI->table, recipeSlot->taxonomy, recipeIndex);
+    GetRecipeIngredients(&ingredients, UI->table, recipeSlot->taxonomy, gen);
     
     Vec2 ingredientDim;
     ingredientDim.y = 0.2f * elementDim.y;
@@ -288,7 +288,7 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
                 r32 destTimer = 2.0f;
                 if(element->securityTimer >= destTimer)
                 {
-                    SendCraftRequest(recipeSlot->taxonomy, recipeIndex);
+                    SendCraftRequest(recipeSlot->taxonomy, gen);
                     //ActionBeganPrediciton(UI->player, Action_Craft);
                     UI->nextMode = UIMode_None;
                     
@@ -663,10 +663,10 @@ internal b32 UIDrawPage(UIState* UI, Vec2 pageP, Vec2 pageDim, u32 startingEleme
                 case Book_Recipe:
                 {
                     u32 taxonomy = toDraw->taxonomy;
-                    u64 recipeIndex = toDraw->recipeIndex;
+                    GenerationData gen = toDraw->gen;
                     
                     TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, taxonomy);
-                    UIDrawRecipeElement(UI, toDraw, elementCenterP, elementDim, slot, recipeIndex, input);
+                    UIDrawRecipeElement(UI, toDraw, elementCenterP, elementDim, slot, gen, input);
                     
                 } break;
                 

@@ -53,6 +53,7 @@ enum MetaType
     MetaType_PassiveSkillSlot,
     MetaType_PassiveSkillEffects,
     MetaType_Recipe,
+    MetaType_GenerationData,
 };
 
 enum MemberMetaFlags

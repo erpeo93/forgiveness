@@ -446,7 +446,7 @@ internal void HandleFluidInteraction( SimRegion* region, Vec3 fluidP, Fluid* flu
                         
                         if(!steam)
                         {
-                            AddEntity(region, clashP, taxonomy, 0,  FluidDirection(i1, myStartingIndex, i2, hisStartingIndex));
+                            AddEntity(region, clashP, taxonomy, NullGenerationData(),  FluidDirection(i1, myStartingIndex, i2, hisStartingIndex));
                         }
                         else
                         {

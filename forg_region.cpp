@@ -374,13 +374,13 @@ internal void EndSim(SimRegion* region)
                                 {
                                     if(entity->taxonomy == region->taxTable->recipeTaxonomy)
                                     {
-                                        AddEntity(region, entity->P, region->taxTable->recipeTaxonomy, 0, DroppedRecipeObject(dragging->taxonomy, dragging->recipeIndex, (i16) dragging->status));
+                                        AddEntity(region, entity->P, region->taxTable->recipeTaxonomy, dragging->gen, DroppedRecipeObject(dragging->taxonomy, (i16) dragging->status));
                                     }
                                     else
                                     {
                                         ObjectComponent* object = Object(region, dragging);
                                         
-                                        AddEntity(region, entity->P, dragging->taxonomy, dragging->recipeIndex, Dropped((u16) dragging->quantity, (i16) dragging->status, &object->objects));
+                                        AddEntity(region, entity->P, dragging->taxonomy, dragging->gen, Dropped((u16) dragging->quantity, (i16) dragging->status, &object->objects));
                                     }
                                     
                                     ServerPlayer* player = region->server->players + entity->playerID;
@@ -623,7 +623,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                     EquipInfo info = PossibleToEquip(region, entity, object);
                     if(IsValid(info))
                     {
-                        u64 ID = AddEntity(region, entity->P, objectTaxonomy, object->recipeIndex, EquippedBy(entity->identifier, object->quantity, object->status, 0));
+                        u64 ID = AddEntity(region, entity->P, objectTaxonomy, object->gen, EquippedBy(entity->identifier, object->quantity, object->status, 0));
                         
                         MarkAllSlotsAsOccupied(creature->equipment, info, ID);
                         
@@ -666,7 +666,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                         EquipmentSlot* equipmentSlot = creature->equipment + desired;
                         if(!equipmentSlot->ID)
                         {
-                            u64 ID = AddEntity(region, entity->P, dragging->taxonomy, dragging->recipeIndex, EquippedBy(entity->identifier, (u16) dragging->quantity, (u16) dragging->status, objects));
+                            u64 ID = AddEntity(region, entity->P, dragging->taxonomy, dragging->gen, EquippedBy(entity->identifier, (u16) dragging->quantity, (u16) dragging->status, objects));
                             
                             MarkAllSlotsAsOccupied(creature->equipment, layout->slot, ID);
                             creature->draggingEntity = 0;
@@ -713,7 +713,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                         ContainedObjects* objects = &object->objects;
                         
                         AddEntityAdditionalParams params = Dropped((u16) 1, (u16) toDisequip->status, objects);
-                        AddEntity(region, entity->P, toDisequip->taxonomy, toDisequip->recipeIndex, params);
+                        AddEntity(region, entity->P, toDisequip->taxonomy, toDisequip->gen, params);
                     }
                     else
                     {
@@ -759,11 +759,13 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                     ObjectComponent* object = Object(region, creature->draggingEntity);
                     ContainedObjects* objects = &object->objects;
                     AddEntityAdditionalParams params = Dropped((u16) creature->draggingEntity->quantity, (u16) creature->draggingEntity->status, objects);
-                    if(entity->taxonomy == region->taxTable->recipeTaxonomy)
+                    GenerationData gen = creature->draggingEntity->gen;
+                    
+                    if(creature->draggingEntity->taxonomy == region->taxTable->recipeTaxonomy)
                     {
-                        params = DroppedRecipeObject(entity->recipeTaxonomy, entity->recipeIndex, (i16) entity->status);
+                        params = DroppedRecipeObject(creature->draggingEntity->recipeTaxonomy, (i16) creature->draggingEntity->status);
                     }
-                    AddEntity(region, entity->P, creature->draggingEntity->taxonomy, creature->draggingEntity->recipeIndex, params);
+                    AddEntity(region, entity->P, creature->draggingEntity->taxonomy, creature->draggingEntity->gen, params);
                     creature->draggingEntity = 0;
                     player->draggingEntity.taxonomy = 0;
                 }
@@ -786,11 +788,11 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                         
                         if(IsRecipe(object))
                         {
-                            AddEntity(region, entity->P, region->taxTable->recipeTaxonomy, 0, DroppedRecipeObject(object->taxonomy, object->recipeIndex, object->status));
+                            AddEntity(region, entity->P, region->taxTable->recipeTaxonomy, object->gen, DroppedRecipeObject(object->taxonomy, object->status));
                         }
                         else
                         {
-                            AddEntity(region, entity->P, object->taxonomy, object->recipeIndex, Dropped(object->quantity, object->status, 0));
+                            AddEntity(region, entity->P, object->taxonomy, object->gen, Dropped(object->quantity, object->status, 0));
                         }
                         RemoveFromContainer(region, entity->identifier, container, drop->sourceObjectIndex);
                     }
@@ -945,7 +947,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
         case Type_CraftRequest:
         {
             CraftRequest craft_;
-            unpack(data, "LQ", &craft_.taxonomy, &craft_.recipeIndex);
+            unpack(data, "LQ", &craft_.taxonomy, &craft_.gen);
             
             CraftRequest* craft = &craft_;
             
@@ -953,7 +955,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             for(u32 recipeIndex = 0; recipeIndex < player->recipeCount; ++recipeIndex)
             {
                 Recipe* recipe = player->recipes + recipeIndex;
-                if(recipe->taxonomy == craft->taxonomy && recipe->recipeIndex == craft->recipeIndex)
+                if(recipe->taxonomy == craft->taxonomy && AreEqual(recipe->gen, craft->gen))
                 {
                     ownsRecipe = true;
                     break;
@@ -989,7 +991,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 if(hasAllTools)
                 {
                     RecipeIngredients ingredients;
-                    GetRecipeIngredients(&ingredients, region->taxTable, craft->taxonomy, craft->recipeIndex);
+                    GetRecipeIngredients(&ingredients, region->taxTable, craft->taxonomy, craft->gen);
                     
                     u32 markCount = 0;
                     MarkedObject marks[32];
@@ -1124,7 +1126,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                         }
                         
                         i16 status = -10;
-                        u64 identifier = AddEntity(region, entity->P, craft->taxonomy, craft->recipeIndex, Incomplete(entity->identifier, 0, status));
+                        u64 identifier = AddEntity(region, entity->P, craft->taxonomy, craft->gen, Incomplete(entity->identifier, 0, status));
                         
                         IgnoreAction(region, entity, Action_None);
                         entity->action = Action_Craft;
@@ -1161,7 +1163,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 if(toCraft)
                 {
                     
-                    u64 identifier = AddEntity(region, entity->P, toCraft->taxonomy, toCraft->recipeIndex, Incomplete(entity->identifier, toCraft->quantity, toCraft->status));
+                    u64 identifier = AddEntity(region, entity->P, toCraft->taxonomy, toCraft->gen, Incomplete(entity->identifier, toCraft->quantity, toCraft->status));
                     RemoveFromContainer(region, entity->identifier, container, SafeTruncateToU8(craftFromInventory->objectIndex));
                     
                     IgnoreAction(region, entity, Action_None);
@@ -1195,7 +1197,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 Assert(player->recipeCount < ArrayCount(player->recipes));
                 Recipe* recipe = player->recipes + player->recipeCount++;
                 recipe->taxonomy = recipeOjbect->taxonomy;
-                recipe->recipeIndex = recipeOjbect->recipeIndex;
+                recipe->gen = recipeOjbect->gen;
                 SendNewRecipeMessage(player, recipe);
                 RemoveFromContainer(region, entity->identifier, container, SafeTruncateToU8(learn->objectIndex));
             }
@@ -1220,7 +1222,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 
                 if(action)
                 {
-                    u64 entityID = AddEntity(region, entity->P, taxonomy, 0, EquippedBy(entity->identifier, object->quantity, object->status, 0));
+                    u64 entityID = AddEntity(region, entity->P, taxonomy, object->gen, EquippedBy(entity->identifier, object->quantity, object->status, 0));
                     entity->action = Action_Eat;
                     entity->targetID = entityID;
                     
@@ -1374,28 +1376,29 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             
             TaxonomySlot* slot = GetSlotForTaxonomy(server->activeTable, request.taxonomy);
             
+            GenerationData gen = NullGenerationData();
             if(slot->firstLayout)
             {
-                u64 recipeIndex = GetNextUInt32(&server->instantiateSequence);
-                params = Crafting(recipeIndex);
+                gen = RecipeIndexGenerationData(GetNextUInt32(&server->instantiateSequence));
+                params = Crafting();
             }
-            AddRandomEntity(region, seq, entity->P + request.offset, request.taxonomy, params);
+            AddRandomEntity(region, seq, entity->P + request.offset, request.taxonomy, gen, params);
         } break;
         
         case Type_InstantiateRecipe:
         {
             InstantiateRecipeRequest request;
-            unpack(data, "LQV", &request.taxonomy, &request.recipeIndex, &request.offset);
+            unpack(data, "LQV", &request.taxonomy, &request.gen, &request.offset);
             
             if(request.taxonomy)
             {
                 RandomSequence* seq = &server->instantiateSequence;
                 u32 recipeTaxonomy = GetRandomChild(server->activeTable, seq, request.taxonomy);
                 
-                AddEntityAdditionalParams params = RecipeObject(recipeTaxonomy, request.recipeIndex);
+                AddEntityAdditionalParams params = RecipeObject(recipeTaxonomy);
                 
                 u32 taxonomy = server->activeTable->recipeTaxonomy;
-                AddRandomEntity(region, seq, entity->P + request.offset, taxonomy, params);
+                AddRandomEntity(region, seq, entity->P + request.offset, taxonomy, request.gen, params);
             }
         } break;
         
@@ -1505,7 +1508,7 @@ internal b32 UpdateCreature(SimRegion* region, SimEntity* entity)
             if(!PickObject(region, entity, target))
             {
                 AddFlags(entity, Flag_deleted);
-                AddEntity(region, entity->P, target->taxonomy, target->recipeIndex, Dropped(1, (i16) target->status, 0));
+                AddEntity(region, entity->P, target->taxonomy, target->gen, Dropped(1, (i16) target->status, 0));
             }
         }
         

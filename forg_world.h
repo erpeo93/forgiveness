@@ -66,7 +66,6 @@ struct AddEntityAdditionalParams
         struct
         {
             u32 recipeTaxonomy;
-            u64 recipeIndex;
         };
     };
     
@@ -83,11 +82,10 @@ inline AddEntityAdditionalParams DefaultAddEntityParams()
 }
 
 
-inline AddEntityAdditionalParams Crafting(u64 recipeIndex)
+inline AddEntityAdditionalParams Crafting()
 {
     AddEntityAdditionalParams result = {};
 	result.status = I16_MAX;
-    result.recipeIndex = recipeIndex;
     return result;
 }
 
@@ -132,11 +130,10 @@ inline AddEntityAdditionalParams EntityFromObject(u64 ownerID, u16 quantity, i16
 }
 
 
-inline AddEntityAdditionalParams RecipeObject(u32 recipeTaxonomy, u64 recipeIndex, i16 status = I16_MAX)
+inline AddEntityAdditionalParams RecipeObject(u32 recipeTaxonomy, i16 status = I16_MAX)
 {
     AddEntityAdditionalParams result = EntityFromObject(0, 1, status);
     result.recipeTaxonomy = recipeTaxonomy;
-    result.recipeIndex = recipeIndex;
     
     return result;
 }
@@ -188,9 +185,9 @@ inline AddEntityAdditionalParams Incomplete(u64 owner, u16 quantity, i16 status)
 }
 
 
-inline AddEntityAdditionalParams DroppedRecipeObject(u32 recipeTaxonomy, u64 recipeRecipeIndex, i16 status)
+inline AddEntityAdditionalParams DroppedRecipeObject(u32 recipeTaxonomy, i16 status)
 {
-    AddEntityAdditionalParams result = RecipeObject(recipeTaxonomy, recipeRecipeIndex, status);
+    AddEntityAdditionalParams result = RecipeObject(recipeTaxonomy, status);
     result.dropped = true;
     
     return result;

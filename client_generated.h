@@ -44,7 +44,7 @@ MemberDefinition memberDefinitionOfSimEntity[] =
 { MetaType_r32, "quantity", (u32) ( &(( SimEntity* )0)->quantity ) }, 
 { MetaType_r32, "status", (u32) ( &(( SimEntity* )0)->status ) }, 
 { MetaType_u32, "recipeTaxonomy", (u32) ( &(( SimEntity* )0)->recipeTaxonomy ) }, 
-{ MetaType_u64, "recipeIndex", (u32) ( &(( SimEntity* )0)->recipeIndex ) }, 
+{ MetaType_GenerationData, "gen", (u32) ( &(( SimEntity* )0)->gen ) }, 
 { MetaType_u64, "ownerID", (u32) ( &(( SimEntity* )0)->ownerID ) }, 
 { MetaType_u32, "IDs", (u32) ( &(( SimEntity* )0)->IDs ) }, 
 };

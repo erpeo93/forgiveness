@@ -170,11 +170,11 @@ internal void SendEquipDraggingRequest(u32 slotIndex)
 }
 
 
-internal void SendCraftRequest(u32 taxonomy, u64 recipeIndex)
+internal void SendCraftRequest(u32 taxonomy, GenerationData gen)
 {
     StartStandardPacket(CraftRequest);
     
-    Pack("LQ", taxonomy, recipeIndex);
+    Pack("LQ", taxonomy, gen.generic);
     
     CloseAndSendStandardPacket();
 }
@@ -465,7 +465,7 @@ inline void AddToRecipeBlock(UIState* UI, Recipe recipe)
     BookElement element;
     element.type = Book_Recipe;
     element.taxonomy = recipe.taxonomy;
-    element.recipeIndex = recipe.recipeIndex;
+    element.gen = recipe.gen;
     
     AddToElementBlock(UI, UI->bookModes + UIBook_Recipes, element);
 }
@@ -594,7 +594,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                     EntityAction oldAction = e->action;
                     u32 oldTaxonomy = e->taxonomy;
                     
-                    Unpack("llVLLQCddCLddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->recipeIndex, &e->action, &e->plantTotalAge, &e->plantStatusPercentage, &e->plantStatus, &e->recipeTaxonomy, &e->lifePoints, &e->maxLifePoints, &e->status);
+                    Unpack("llVLLQCddCLddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->plantTotalAge, &e->plantStatusPercentage, &e->plantStatus, &e->recipeTaxonomy, &e->lifePoints, &e->maxLifePoints, &e->status);
                     
                     if(e->action != oldAction)
                     {
@@ -696,7 +696,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                     
                     Unpack("C", &objectIndex);
                     Object* dest = currentContainer->objects.objects + objectIndex;
-                    Unpack("LQHh", &dest->taxonomy, &dest->recipeIndex, &dest->quantity, &dest->status);
+                    Unpack("LQHh", &dest->taxonomy, &dest->gen, &dest->quantity, &dest->status);
                     ++currentContainer->objects.objectCount;
                 } break;
                 
@@ -863,7 +863,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                 case Type_NewRecipe:
                 {
                     Recipe recipe;
-                    Unpack("LQ", &recipe.taxonomy, &recipe.recipeIndex);
+                    Unpack("LQ", &recipe.taxonomy, &recipe.gen);
                     
                     AddToRecipeBlock(UI, recipe);
                 } break;

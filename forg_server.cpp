@@ -519,12 +519,12 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                                 Vec3 P = V3( 0.5f, 10.0f, 0 );
                                 
                                 TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName( region->taxTable, "centaur" );
-                                u64 identifier = AddEntity( region, P, slot->taxonomy, 0, PlayerAddEntityParams(player->playerID));
+                                u64 identifier = AddEntity( region, P, slot->taxonomy, NullGenerationData(), PlayerAddEntityParams(player->playerID));
                                 
                                 
 #if 1                             
                                 TaxonomySlot* testSlot = NORUNTIMEGetTaxonomySlotByName(region->taxTable, "strength");
-                                AddEntity(region, P + V3( 5.0f, 0.0f, 0.0f ), testSlot->taxonomy, 0, EntityFromObject(identifier, 0, 0));
+                                AddEntity(region, P + V3( 5.0f, 0.0f, 0.0f ), testSlot->taxonomy, NullGenerationData(), EntityFromObject(identifier, 0, 0));
 #endif
                                 
                                 
@@ -1296,7 +1296,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         for(u32 newEntityIndex = 0; newEntityIndex < server->newEntityCount; ++newEntityIndex)
         {
             NewEntity* newEntity = server->newEntities + newEntityIndex;
-            AddEntitySingleThread(newEntity->region, newEntity->taxonomy, newEntity->P, newEntity->identifier, newEntity->params);
+            AddEntitySingleThread(newEntity->region, newEntity->taxonomy, newEntity->P, newEntity->identifier, newEntity->gen, newEntity->params);
         }
         server->newEntityCount = 0;
         

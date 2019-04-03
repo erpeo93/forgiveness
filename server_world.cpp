@@ -119,7 +119,7 @@ inline void InitPlayerEntity(SimRegion* region, ServerPlayer* player, SimEntity*
     creature->activeSkillIndex = -1;
 }
 
-internal void AddEntitySingleThread( SimRegion* region, u32 taxonomy, Vec3 P, u64 identifier, AddEntityAdditionalParams params)
+internal void AddEntitySingleThread( SimRegion* region, u32 taxonomy, Vec3 P, u64 identifier, GenerationData gen, AddEntityAdditionalParams params)
 {
     ServerState* server = region->server;
     UniversePos universeP = GetUniverseP(region, P);
@@ -168,7 +168,6 @@ internal void AddEntitySingleThread( SimRegion* region, u32 taxonomy, Vec3 P, u6
         if(params.recipeTaxonomy)
         {
             entity.recipeTaxonomy = params.recipeTaxonomy;
-            entity.recipeIndex = params.recipeIndex;
         }
         
         
@@ -176,7 +175,7 @@ internal void AddEntitySingleThread( SimRegion* region, u32 taxonomy, Vec3 P, u6
         Assert(!slot_->subTaxonomiesCount);
         
         entity.taxonomy = taxonomy;
-        entity.recipeIndex = params.recipeIndex;
+        entity.gen = gen;
         
         u32 currentTaxonomy = 0;
         
@@ -316,13 +315,13 @@ internal void AddEntitySingleThread( SimRegion* region, u32 taxonomy, Vec3 P, u6
         
         if(slot_->firstLayout)
         {
-            Craft(region, &entity, entity.taxonomy, entity.recipeIndex);
+            Craft(region, &entity, entity.taxonomy, entity.gen);
         }
         PackEntityIntoChunk( region, &entity );
     }
 }
 
-inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, u64 recipeIndex = 0, AddEntityAdditionalParams params = DefaultAddEntityParams())
+inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, GenerationData gen, AddEntityAdditionalParams params = DefaultAddEntityParams())
 {
 	u64 result = 0;
 	if(region->border != Border_Mirror)
@@ -335,9 +334,9 @@ inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, u64 recipeIndex = 
 		NewEntity* newEntity = server->newEntities + index;
 		newEntity->region = region;
 		newEntity->taxonomy = taxonomy;
-		newEntity->recipeIndex = recipeIndex;
 		newEntity->P = P;
 		newEntity->identifier = GetIdentifier(server);
+        newEntity->gen = gen;
 		newEntity->params = params;
         
 		result = newEntity->identifier;
@@ -361,22 +360,21 @@ inline void DeleteEntityComponents(SimRegion* region, SimEntity* entity)
 }
 
 
-inline u64 AddRandomEntity(SimRegion* region, RandomSequence* sequence, Vec3 P, u32 taxonomy, AddEntityAdditionalParams params = DefaultAddEntityParams(), b32 immediate = false)
+inline u64 AddRandomEntity(SimRegion* region, RandomSequence* sequence, Vec3 P, u32 taxonomy, GenerationData gen = NullGenerationData(), AddEntityAdditionalParams params = DefaultAddEntityParams(), b32 immediate = false)
 {
     TaxonomyTable* table = region->taxTable;
     u32 finalTaxonomy = GetRandomChild(table, sequence, taxonomy);
-    u64 recipeIndex = 0;
     
     u64 result;
     if(region->context->immediateSpawn)
     {
         result = GetIdentifier(region->server);
-        AddEntitySingleThread( region, finalTaxonomy, P, result, params);
+        AddEntitySingleThread( region, finalTaxonomy, P, result, gen, params);
     }
     else
     {
         
-        result = AddEntity(region, P, finalTaxonomy, recipeIndex, params);
+        result = AddEntity(region, P, finalTaxonomy, gen, params);
     }
     return result;
 }
@@ -416,7 +414,7 @@ internal void BuildSimpleTestWorld(ServerState* server)
                 r32 offsetY = RandomRangeFloat( &grassSeq, -hrs, hrs);
                 
                 testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "wolf");
-                AddRandomEntity(region, &region->server->randomSequence, P + V3(offsetX, offsetY, 0.0f), testSlot->taxonomy);
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(offsetX, offsetY, 0.0f), testSlot->taxonomy, NullGenerationData());
             }
             
             for(u32 goblinIndex = 0; goblinIndex < goblinCount; ++goblinIndex)
@@ -425,7 +423,7 @@ internal void BuildSimpleTestWorld(ServerState* server)
                 r32 offsetY = RandomRangeFloat( &grassSeq, -hrs, hrs);
                 
                 testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "warriorgoblin");
-                AddRandomEntity(region, &region->server->randomSequence, P + V3(offsetX, offsetY, 0.0f), testSlot->taxonomy);
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(offsetX, offsetY, 0.0f), testSlot->taxonomy, NullGenerationData());
             }
 #endif
             
@@ -530,7 +528,7 @@ internal void BuildSimpleTestWorld(ServerState* server)
 #endif
             TaxonomySlot* recipeSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "sword");
             testSlot = NORUNTIMEGetTaxonomySlotByName( taxTable, "recipe" );
-            AddEntity( region, P + V3( 4.0f, 0.0f, 0.0f ), testSlot->taxonomy, 0, RecipeObject(recipeSlot->taxonomy, 12, I16_MAX));
+            AddEntity( region, P + V3( 4.0f, 0.0f, 0.0f ), testSlot->taxonomy, RecipeIndexGenerationData(12), RecipeObject(recipeSlot->taxonomy, I16_MAX));
             
 #endif
         }

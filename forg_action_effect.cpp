@@ -96,7 +96,7 @@ inline void EssenceDelta(SimRegion* region, SimEntity* entity, u32 essenceTaxono
     }
 }
 
-inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, u64 recipeIndex, AddEntityAdditionalParams params);
+inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, GenerationData gen, AddEntityAdditionalParams params);
 internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, Effect* effect)
 {
     u64 actorID = actor->identifier;
@@ -130,7 +130,9 @@ internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region,
         case generic_spawn:
         {
             Vec3 P = actor->P + V3(1, 0, 0);
-			targetID = AddEntity(region, P, effect->data.taxonomy, 0, DefaultAddEntityParams());
+            
+            GenerationData gen = NullGenerationData();
+			targetID = AddEntity(region, P, effect->data.taxonomy, gen, DefaultAddEntityParams());
         } break;
         
         case combat_nakedHandsDamage:

@@ -170,7 +170,7 @@ struct ClientPrediction
     EntityAction action;
     
     u32 taxonomy;
-    u64 recipeIndex;
+    GenerationData gen;
     u64 identifier;
 };
 
@@ -196,7 +196,7 @@ struct ClientEntity
     
     u32 flags; // TODO(Leonardo): we only need: deleted, equipped and if to draw it flipped
     u32 taxonomy; // NOTE(Leonardo): 4 bytes
-    u64 recipeIndex; // NOTE(Leonardo): 8 bytes
+    GenerationData gen; // NOTE(Leonardo): 8 bytes
     
     r32 status;
     r32 lifePoints;
@@ -225,7 +225,7 @@ struct ClientEntity
     
     // TODO(Leonardo): send these only when sending a recipe entity
     u32 recipeTaxonomy;
-    u64 recipeRecipeIndex;
+    GenerationData recipeGen;
     
     
     

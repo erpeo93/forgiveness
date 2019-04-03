@@ -595,7 +595,7 @@ inline b32 PushNewAction(AnimationState* animation, u32 action)
 }
 
 
-internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* table, u32 taxonomy, u64 recipeIndex)
+internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* table, u32 taxonomy, GenerationData gen)
 {
     dest->componentCount = 0;
     TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
@@ -603,7 +603,7 @@ internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* tab
     ObjectLayout* layout = GetLayout(table, taxonomy);
     if(layout)
     {
-        RandomSequence seq = Seed((u32)recipeIndex);
+        RandomSequence seq = Seed((u32)gen.recipeIndex);
         for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
         {
             Assert(dest->componentCount < ArrayCount(dest->components));
@@ -1093,14 +1093,14 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                             pieceParams.cameraOffset = objectP;
                             
                             u32 taxonomy = object->taxonomy;
-                            u64 recipeIndex = object->recipeIndex;
+                            GenerationData gen = object->gen;
                             
                             if(taxonomy)
                             {
                                 if(IsRecipe(object))
                                 {
                                     taxonomy = input->taxTable->recipeTaxonomy;
-                                    recipeIndex = 0;
+                                    gen = RecipeGenerationData();
                                 }
                                 TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, taxonomy);
                                 AnimationVolatileParams objectParams = pieceParams;
@@ -1127,7 +1127,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                                     
                                     ComponentsProperties objectProperties;
                                     objectParams.properties = &objectProperties;
-                                    GetVisualProperties(&objectProperties, input->taxTable, taxonomy, recipeIndex);
+                                    GetVisualProperties(&objectProperties, input->taxTable, taxonomy, gen);
                                     
                                     DrawModularPiece(input, group, P, slot->taxonomy, &objectParams, objectState, false);
                                 }
@@ -1587,7 +1587,7 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
                 dest->layout = GetLayout(worldMode->table, objectEntity->taxonomy);
                 dest->taxonomy = objectEntity->taxonomy;
                 dest->status = I16_MAX;
-                GetVisualProperties(&dest->properties, worldMode->table, objectEntity->taxonomy, objectEntity->recipeIndex);
+                GetVisualProperties(&dest->properties, worldMode->table, objectEntity->taxonomy, objectEntity->gen);
                 
                 dest->slot.slot = (SlotName) slotIndex;
             }
@@ -1603,16 +1603,16 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
                 if(objectEntity)
                 {
                     u32 taxonomy;
-                    u64 recipeIndex;
+                    GenerationData gen;
                     if(objectEntityID == 0xffffffffffffffff)
                     {
                         taxonomy = entityC->prediction.taxonomy;
-                        recipeIndex = entityC->prediction.recipeIndex;
+                        gen = entityC->prediction.gen;
                     }
                     else
                     {
                         taxonomy = objectEntity->taxonomy;
-                        recipeIndex = objectEntity->recipeIndex;
+                        gen = objectEntity->gen;
                     }
                     
                     EquipmentAnimationSlot* dest = input->equipment + slotCount++;
@@ -1621,7 +1621,7 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
                     dest->layout = GetLayout(worldMode->table, taxonomy);
                     dest->taxonomy = taxonomy;
                     dest->status = (i16) objectEntity->status;
-                    GetVisualProperties(&dest->properties, worldMode->table, taxonomy, recipeIndex);
+                    GetVisualProperties(&dest->properties, worldMode->table, taxonomy, gen);
                     dest->slot.slot = (SlotName) slotIndex;
                     
                     dest->drawModulated = (AreEqual(dest->slot, entityC->animation.output.focusSlots) ||
@@ -1762,7 +1762,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
         ComponentsProperties properties;
         params.properties = &properties;
         
-        GetVisualProperties(&properties, taxTable, entityC->taxonomy, entityC->recipeIndex);
+        GetVisualProperties(&properties, taxTable, entityC->taxonomy, entityC->gen);
         
         ObjectLayout* layout = GetLayout(taxTable, entityC->taxonomy);
         if(layout)
@@ -2304,7 +2304,7 @@ internal Rect2 RenderObject(RenderGroup* group, GameModeWorld* worldMode, Object
     clientEntity.animation.cameInTime = R32_MAX;
     
     clientEntity.taxonomy = object->taxonomy;
-    clientEntity.recipeIndex = object->recipeIndex;
+    clientEntity.gen = object->gen;
     clientEntity.P = P;
     clientEntity.status = object->status;
     

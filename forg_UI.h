@@ -85,7 +85,7 @@ struct UIRequest
         struct 
         {
             u32 taxonomy;
-            u64 recipeIndex;
+            GenerationData gen;
         };
         
         struct

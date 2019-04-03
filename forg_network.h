@@ -218,7 +218,7 @@ struct EquipDraggingRequest
 struct CraftRequest
 {
     u32 taxonomy;
-    u64 recipeIndex;
+    GenerationData gen;
 };
 
 struct CraftFromInventoryRequest
@@ -268,7 +268,7 @@ struct InstantiateRequest
 struct InstantiateRecipeRequest
 {
     u32 taxonomy;
-    u64 recipeIndex;
+    GenerationData gen;
     Vec3 offset;
 };
 

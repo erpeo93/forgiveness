@@ -183,7 +183,7 @@ internal void SendUnlockedSkillCatConfirm( ServerPlayer* player, u32 taxonomy)
 inline void SendNewRecipeMessage(ServerPlayer* player, Recipe* recipe)
 {
     StartStandardPacket(NewRecipe);
-    Pack("LQ", recipe->taxonomy, recipe->recipeIndex);
+    Pack("LQ", recipe->taxonomy, recipe->gen.generic);
     
     CloseAndStoreStandardPacket(player, ReliableOrdered);
 }
@@ -361,7 +361,7 @@ internal u16 PrepareEntityUpdate(SimRegion* region, SimEntity* entity, unsigned 
     }
     
     unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
-    Pack("llVLLQCddCLddd", P.chunkX, P.chunkY, P.chunkOffset, entity->flags, entity->taxonomy, entity->recipeIndex, SafeTruncateToU8(action), plantTotalAge, plantStatusPercentage, plantStatus, entity->recipeTaxonomy, lifePoints, maxLifePoints, entity->status);
+    Pack("llVLLQCddCLddd", P.chunkX, P.chunkY, P.chunkOffset, entity->flags, entity->taxonomy, entity->gen.generic, SafeTruncateToU8(action), plantTotalAge, plantStatusPercentage, plantStatus, entity->recipeTaxonomy, lifePoints, maxLifePoints, entity->status);
     u16 totalSize = ForgEndPacket( buff_, buff );
     return totalSize;
 }
@@ -666,7 +666,7 @@ inline void SendObjectRemoveUpdate(ServerPlayer* player, u8 objectIndex)
 inline void SendObjectAddUpdate(ServerPlayer* player, u8 objectIndex, Object* object)
 {
     StartStandardPacket(objectAdded);
-    Pack("CLQHh", objectIndex, object->taxonomy, object->recipeIndex, object->quantity, object->status);
+    Pack("CLQHh", objectIndex, object->taxonomy, object->gen.generic, object->quantity, object->status);
     CloseAndStoreStandardPacket(player, ReliableOrdered);
 }
 

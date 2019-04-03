@@ -36,15 +36,13 @@ inline void ObjectToEntity(TaxonomyTable* table, Object* object, SimEntity* enti
     if(IsRecipe(object))
     {
         entity->taxonomy = table->recipeTaxonomy;
-        entity->recipeIndex = 0;
-        
         entity->recipeTaxonomy = object->taxonomy;
-        entity->recipeIndex = object->recipeIndex;
+        entity->gen = object->gen;
     }
     else
     {
         entity->taxonomy = object->taxonomy;
-        entity->recipeIndex = object->recipeIndex;
+        entity->gen = object->gen;
         
         entity->recipeTaxonomy = 0;
         
@@ -62,13 +60,13 @@ inline void EntityToObject(SimEntity* entity, Object* object)
     if(entity->recipeTaxonomy)
     {
         object->taxonomy = entity->recipeTaxonomy;
-        object->recipeIndex = entity->recipeIndex;
+        object->gen = entity->gen;
         object->quantity = 0xffff;
     }
     else
     {
         object->taxonomy = entity->taxonomy;
-        object->recipeIndex = entity->recipeIndex;
+        object->gen = entity->gen;
         object->quantity = (u16) entity->quantity;
         if(!object->quantity)
         {

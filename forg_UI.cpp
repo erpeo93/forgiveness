@@ -1378,7 +1378,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         r32 speed = ToR32(GetValue(pause, "speed"));
                         r32 timeToAdvance = play ? input->timeToAdvance : 0;
                         
-                        test.recipeIndex = ToU64(GetValue(pause, "seed"));
+                        test.gen = RecipeIndexGenerationData(ToU64(GetValue(pause, "seed")));
                         EditorElement* animationElement = pause->next;
                         
                         char* animationName = GetValue(animationElement, "animationName");
@@ -1425,7 +1425,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         
                         
                         ObjectTransform originTransform = FlatTransform();
-                        originTransform.additionalZBias = 30.0f;
+                        originTransform.additionalZBias = layout->additionalZBias;
                         PushRect(UI->group, originTransform, P, V2(6, 6), V4(1, 0, 0, 1));
                         
                         if(play)
@@ -1437,10 +1437,10 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
 
 				case EditorElement_ColorPicker:
 				{
-                    r32 baseColorRealHeight = 1 * layout->childStandardHeight;
+                    r32 baseColorRealHeight = 2 * layout->childStandardHeight;
                     
-                    
-                    r32 baseColorWidth = 5.0f * layout->nameValueDistance;
+                   
+                    r32 baseColorWidth = 10.0f * layout->nameValueDistance;
                     r32 baseColorHeight = 0.6f * baseColorRealHeight;
                     
                     Vec3 P = V3(layout->P, 0);
@@ -1459,7 +1459,8 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     r32 colorHeight = baseColorHeight;
                     Rect24C colors[6];
                     
-                    Vec2 runningP = P.xy - 0.5f * V2(0, baseColorHeight);
+                    Vec2 startingRunningP = P.xy - 0.5f * V2(0, baseColorHeight);
+                    Vec2 runningP = startingRunningP;
                     Vec2 colorDim = V2(colorWidth, colorHeight);
                     
                     colors[0].rect = RectMinDim(runningP, colorDim);
@@ -1487,35 +1488,66 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     runningP.x += colorWidth;
                     
                     
+                    if(PointInRect(baseColorRect, UI->relativeScreenMouse))
+                    {
+                        UIInteraction baseInteraction = {};
+                        
+                        UIAddSetValueAction(UI, &baseInteraction, UI_Trigger, &root->scrolling, true);
+                        UIAddSetValueAction(UI, &baseInteraction, UI_Release, &root->scrolling, false);
 
+                        UIAddStandardAction(UI, &baseInteraction, UI_Idle, r32, ColdPointer(&root->relativeMouseX), ColdPointer(&UI->relativeScreenMouse.x));
+
+                        UIAddInteraction(UI, input, mouseLeft, baseInteraction);
+                    }
+
+                    if(root->scrolling)
+                    {
+                        root->norm = (r32) (root->relativeMouseX - baseColorRect.min.x) / baseColorWidth;
+                    }
+                    root->norm = Clamp01(root->norm);
+                    r32 norm = root->norm;
                     
-                    r32 baseColorLerp = 0.5f;
-                    Vec4 baseColor= {};
                     
-                    r32 runningLerp = 0;
+                    r32 baseColorLerp = norm * baseColorWidth;
+                    
+                    
+                    Vec4 baseColor= c0;
+                    
+                    r32 runningWidth = 0;
+                    b32 baseColorComputed = false;
+                    
                     for(u32 rectIndex = 0; rectIndex < ArrayCount(colors); ++rectIndex)
                     {
 
                         Rect24C* rect = colors + rectIndex;
-                        if(PointInRect(rect->rect, UI->relativeScreenMouse))
-                        {
-                            //AddInteraction(Idle, widget->baseColorP, UI->mouseRelativeP);
-                            
-                        }
                         
-                        if(baseColorLerp < runningLerp)
+                        r32 nextRunningWidth = runningWidth + colorWidth;
+                        if(!baseColorComputed && baseColorLerp <= nextRunningWidth)
                         {
-                            r32 lerp = Clamp01MapToRange(runningLerp, baseColorLerp, runningLerp + colorWidth);
+                            r32 lerp = Clamp01MapToRange(runningWidth, baseColorLerp, runningWidth + colorWidth);
                             baseColor = Lerp(rect->c0, lerp, rect->c1);
+                            baseColorComputed = true;
                         }
                         
-                        ObjectTransform baseTransform = FlatTransform(30.0f);
+                        ObjectTransform baseTransform = FlatTransform(layout->additionalZBias);
                         PushRect4Colors(UI->group, baseTransform, rect->rect, rect->c0, rect->c1, rect->c2, rect->c3);
-                        runningLerp += colorWidth;
+                        runningWidth = nextRunningWidth;
                     }
+
                     
-                    r32 pickColorWidth = 5.0f * layout->nameValueDistance;
-                    r32 pickColorRealHeight = 3 * layout->childStandardHeight;
+                   
+                    r32 markerWidth =8 * layout->fontScale;
+                    Rect2 lineRect = RectMinDim(baseColorRect.min + V2(baseColorLerp - 0.5f * markerWidth, 0), V2(markerWidth, colorHeight));
+                    
+                    PushRect(UI->group, FlatTransform(layout->additionalZBias + 0.1f), lineRect, baseColor);
+                    PushRectOutline(UI->group, FlatTransform(layout->additionalZBias + 0.1f), lineRect, V4(1, 1, 1, 1), 2 * layout->fontScale);
+                    
+                    
+                    
+                    
+                    
+                    r32 pickColorWidth = 10.0f * layout->nameValueDistance;
+                    r32 pickColorRealHeight = 6 * layout->childStandardHeight;
                     r32 pickColorHeight = 0.8f * pickColorRealHeight;
                     
                     
@@ -1536,29 +1568,88 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     Vec4 pickColor = baseColor;
 					if(PointInRect(pickColorRect, UI->relativeScreenMouse))
 					{
-//						AddInteraction(Idle, widget->baseColorP, UI->mouseRelativeP);
+                        UIInteraction pickInteraction = {};
+                        
+                        UIAddSetValueAction(UI, &pickInteraction, UI_Trigger, &root->scrolling2, true);
+                        UIAddSetValueAction(UI, &pickInteraction, UI_Release, &root->scrolling2, false);
+                        
+                        UIAddStandardAction(UI, &pickInteraction, UI_Idle, Vec2, ColdPointer(&root->relativeMouseP), ColdPointer(&UI->relativeScreenMouse));
+                        
+                        UIAddInteraction(UI, input, mouseLeft, pickInteraction);
 					}
 
-                    ObjectTransform pickTransform = FlatTransform(30.0f);
-                    PushRect(UI->group, pickTransform, pickColorRect, pickColor);
+                   
+                    
+                    
+                    Vec4 black = V4(0, 0, 0, 1);
+                    Vec4 white = V4(1, 1, 1, 1);
+                    
+                    ObjectTransform pickTransform = FlatTransform(layout->additionalZBias);
+                    PushRect4Colors(UI->group, pickTransform, pickColorRect, black, black, pickColor, white);
+                    
+                    if(root->scrolling2)
+                    {
+                        root->biLerp.x = (r32) (root->relativeMouseP.x - pickColorRect.min.x) / pickColorWidth;
+                        root->biLerp.y = (r32) (root->relativeMouseP.y - pickColorRect.min.y) / pickColorHeight;
+                       
+                    }
+                        root->biLerp.x = Clamp01(root->biLerp.x);
+                        root->biLerp.y = Clamp01(root->biLerp.y);
+                    
+                    Vec2 biLerp = root->biLerp;
+                    Vec4 finalColor = BiLerp(black, black, white, pickColor, biLerp.x, biLerp.y);
+                    
+                    
+                    Vec2 biLerpP = pickColorRect.min + Hadamart(biLerp, GetDim(pickColorRect));
+                    
+                    r32 biLerpDim = 18.0f * layout->fontScale;
+                    if(root->zooming)
+                    {
+                        biLerpDim *= 5.0f;
+                    }
+                    
+                    Rect2 pickMarkRect = RectCenterDim(biLerpP, V2(biLerpDim, biLerpDim));
+                    
+                    if(PointInRect(pickMarkRect, UI->relativeScreenMouse))
+                    {
+                        UIInteraction zoomInteraction = {};
+                        
+                        UIAddSetValueAction(UI, &zoomInteraction, UI_Trigger, &root->zooming, true);
+                        UIAddSetValueAction(UI, &zoomInteraction, UI_Release, &root->zooming, false);
+                                              
+                        UIAddInteraction(UI, input, mouseRight, zoomInteraction);
+                    }
+                    
+                    PushRect(UI->group, FlatTransform(layout->additionalZBias + 0.1f), pickMarkRect, finalColor);
+                    PushRectOutline(UI->group, FlatTransform(layout->additionalZBias + 0.1f), pickMarkRect, V4(1, 1, 1, 1), 1 * layout->fontScale);
+                    
+                    
+
+#if 0
+                    Vec2 finalColorP = GetCenter(pickColorRect) + V2(1.0f * GetDim(pickColorRect).x, 0);
+                    Vec2 finalColorDim = 0.4f * GetDim(pickColorRect);
+                    Rect2 finalColorRect = RectCenterDim(finalColorP, finalColorDim);
+                    PushRect(UI->group, FlatTransform(layout->additionalZBias), finalColorRect, finalColor);
+                    PushRectOutline(UI->group, FlatTransform(layout->additionalZBias), finalColorRect, V4(1, 1, 1, 1), 1 * layout->fontScale);
+                    #endif
+
+                    
                     
 
                     layout->P.y -= 0.5f * pickColorRealHeight;
                     layout->P.y -= layout->childStandardHeight;
-
-                    Vec4 color = V4(1, 1, 1, 1);
                     
                     EditorElement* colorElement = root->next;
                     Assert(colorElement);
                     
                     EditorElement* r = GetElement(colorElement, "r");
-                    FormatString(r->value, sizeof(r->value), "%f", color.r);
+                    FormatString(r->value, sizeof(r->value), "%f", finalColor.r);
                     
                     EditorElement* g = GetElement(colorElement, "g");
-                    FormatString(g->value, sizeof(g->value), "%f", color.g);
+                    FormatString(g->value, sizeof(g->value), "%f", finalColor.g);
                     
                     EditorElement* b = GetElement(colorElement, "b");
-                    FormatString(b->value, sizeof(b->value), "%f", color.b);
+                    FormatString(b->value, sizeof(b->value), "%f", finalColor.b);
                     
                     
                     
@@ -2815,7 +2906,8 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             EditorElement* color;
             FREELIST_ALLOC(color, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
             color->type = EditorElement_Struct;
-           
+            FormatString(color->name, sizeof(color->name), "color");
+            
             UIAddChild(UI->table, color, EditorElement_Real, "a", "1.0");
             UIAddChild(UI->table, color, EditorElement_Real, "b", "0.0");
             UIAddChild(UI->table, color, EditorElement_Real, "g", "0.0");

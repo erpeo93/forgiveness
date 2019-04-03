@@ -186,7 +186,7 @@ inline void EquipmentPresentPrediction(GameModeWorld* worldMode, ClientEntity* p
     playerC->prediction.type = Prediction_EquipmentAdded;
     playerC->prediction.slot = slot;
     playerC->prediction.taxonomy = entity->taxonomy;
-    playerC->prediction.recipeIndex = entity->recipeIndex;
+    playerC->prediction.gen = entity->gen;
     playerC->prediction.identifier = entity->identifier;
     if(!entity->identifier)
     {
@@ -571,7 +571,7 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
                     BookElement* element = recipeBlock->elements + recipeIndex;
                     if(element->type == Book_Recipe)
                     {
-                        if(element->taxonomy == request->taxonomy && element->recipeIndex == request->recipeIndex)
+                        if(element->taxonomy == request->taxonomy && AreEqual(element->gen, request->gen))
                         {
                             alreadyLearned = true;
                             break;
@@ -1305,18 +1305,18 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         if(IsRecipe(object))
                         {
                             entity->taxonomy = UI->table->recipeTaxonomy;
-                            entity->recipeIndex = 0;
+                            entity->gen = NullGenerationData();
                             
                             entity->recipeTaxonomy = object->taxonomy;
-                            entity->recipeRecipeIndex = object->recipeIndex;
+                            entity->recipeGen = object->gen;
                         }
                         else
                         {
                             entity->taxonomy = object->taxonomy;
-                            entity->recipeIndex = object->recipeIndex;
+                            entity->gen = object->gen;
                             
                             entity->recipeTaxonomy = 0;
-                            entity->recipeRecipeIndex = 0;
+                            entity->recipeGen = NullGenerationData();
                             
                             //entity->quantity = (r32) object->quantity;
                             entity->status = (r32) object->status;
@@ -1478,7 +1478,7 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                             char* layoutName = GetValue(root, "layoutName");
                             u64 layoutHashID = StringHash(layoutName);
                             
-                            u64 recipeIndex = 0;
+                            GenerationData gen = NullGenerationData();
                             while(true)
                             {
                                 ObjectLayout* layout = GetLayout(UI->table, taxonomy);
@@ -1487,7 +1487,7 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                                     break;
                                 }
                                 
-                                ++recipeIndex;
+                                ++gen.recipeIndex;
                             }
                             
                             
@@ -1517,7 +1517,7 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                                     }
                                     
                                     UI->fakeEquipment[slotIndex].taxonomy = taxonomy;
-                                    UI->fakeEquipment[slotIndex].recipeIndex = recipeIndex;
+                                    UI->fakeEquipment[slotIndex].gen = gen;
                                     UI->fakeEquipment[slotIndex].identifier = ID;
                                 }
                             }

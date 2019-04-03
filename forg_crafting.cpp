@@ -24,12 +24,12 @@ inline ObjectLayout* GetLayout(TaxonomyTable* table, u32 taxonomy)
     return result;
 }
 
-internal void GetRecipeIngredients(RecipeIngredients* output, TaxonomyTable* table, u32 taxonomy, u64 recipeIndex)
+internal void GetRecipeIngredients(RecipeIngredients* output, TaxonomyTable* table, u32 taxonomy, GenerationData gen)
 {
     TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
     output->count = 0;
     
-    RandomSequence seq = Seed((u32)recipeIndex);
+    RandomSequence seq = Seed((u32)gen.recipeIndex);
     
     ObjectLayout* layout = GetLayout(table, taxonomy);
     if(layout)
@@ -140,11 +140,11 @@ inline void AddEffectByLink(SimRegion* region, SimEntity* entity, CraftingEffect
 }
 
 
-internal void Craft(SimRegion* region, SimEntity* dest, u32 taxonomy, u64 recipeIndex)
+internal void Craft(SimRegion* region, SimEntity* dest, u32 taxonomy, GenerationData gen)
 {
     TaxonomyTable* taxTable = region->taxTable;
     RecipeIngredients ingredients;
-    GetRecipeIngredients(&ingredients, taxTable, taxonomy, recipeIndex);
+    GetRecipeIngredients(&ingredients, taxTable, taxonomy, gen);
     
     u32 totalAvailableEssences = 0;
     u32 availableEssenceCount = 0;
@@ -166,7 +166,7 @@ internal void Craft(SimRegion* region, SimEntity* dest, u32 taxonomy, u64 recipe
         }
     }
     
-    RandomSequence seq_ = Seed((u32) recipeIndex);
+    RandomSequence seq_ = Seed((u32) gen.recipeIndex);
     RandomSequence* seq = &seq_;
     
     TaxonomySlot* slot = GetSlotForTaxonomy(taxTable, taxonomy);

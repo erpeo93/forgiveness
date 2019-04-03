@@ -61,6 +61,19 @@ struct EditorElement
             EditorElement* firstChild;
             u32 taxonomy;
         };
+        
+        struct
+        {
+            b32 scrolling;
+            r32 relativeMouseX;
+            r32 norm;
+            
+            r32 scrolling2;
+            Vec2 relativeMouseP;
+            Vec2 biLerp;
+            
+            b32 zooming;
+        };
 	};
     
 	union

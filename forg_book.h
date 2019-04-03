@@ -59,7 +59,7 @@ struct BookElement
     u32 taxonomy;
     union
     {
-        u64 recipeIndex;
+        GenerationData gen;
         struct
         {
             u32 skillLevel;

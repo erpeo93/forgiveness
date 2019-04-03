@@ -172,9 +172,9 @@ struct NewEntity
 {
     SimRegion* region;
     u32 taxonomy;
-    u64 recipeIndex;
     Vec3 P;
     u64 identifier;
+    GenerationData gen;
     AddEntityAdditionalParams params;
 };
 
