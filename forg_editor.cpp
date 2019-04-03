@@ -2391,6 +2391,13 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
                     buffer = OutputToBuffer(buffer, bufferSize, outputElementName);
                 }
                 
+                if(element->labelName[0])
+                {
+                    char outputLabelName[64];
+                    FormatString(outputLabelName, sizeof(outputLabelName), "#labelName = %s ", element->labelName);
+                    buffer = OutputToBuffer(buffer, bufferSize, outputLabelName);
+                }
+                
                 buffer = WriteElements(buffer, bufferSize, element->firstInList);
 				buffer = OutputToBuffer(buffer, bufferSize, ") ");
 			} break;
@@ -2554,6 +2561,14 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
                                 {
 									Token elementName = GetToken(tokenizer);
                                     FormatString(newElement->elementName, sizeof(newElement->elementName), "%.*s", elementName.textLength, elementName.text);
+                                }
+							}
+                            else if(TokenEquals(paramName, "labelName"))
+							{
+								if(RequireToken(tokenizer, Token_EqualSign))
+                                {
+									Token labelName = GetToken(tokenizer);
+                                    FormatString(newElement->labelName, sizeof(newElement->labelName), "%.*s", labelName.textLength, labelName.text);
                                 }
 							}
                             else

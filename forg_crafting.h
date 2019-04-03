@@ -14,7 +14,12 @@ introspection() struct GenerationData
     union
     {
         u64 generic;
-        u64 recipeIndex;
+        
+        struct
+        {
+            u32 ingredientSeed;
+            u32 nameSeed;
+        };
     };
 };
 
@@ -31,10 +36,11 @@ inline GenerationData NullGenerationData()
     return result;
 }
 
-inline GenerationData RecipeIndexGenerationData(u64 recipeIndex)
+inline GenerationData RecipeIndexGenerationData(u32 recipeIndex)
 {
     GenerationData result;
-    result.recipeIndex = recipeIndex;
+    result.ingredientSeed = recipeIndex;
+    result.nameSeed = recipeIndex;
     
     return result;
 }

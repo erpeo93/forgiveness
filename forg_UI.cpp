@@ -404,6 +404,7 @@ inline void AddConfirmActions(UIState* UI, EditorWidget* widget, UIInteraction* 
 	UIAddUndoRedoAction(UI, interaction, UI_Trigger, UndoRedoString(widget, dest, destSize, dest, UI->keyboardBuffer));            
 	UIAddStandardAction_(UI, interaction, UI_Trigger, destSize, ColdPointer(dest), ColdPointer(UI->keyboardBuffer));
 	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->activeLabel, 0); 
+	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->activeLabelParent, 0); 
 	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->active, 0);    
     UIAddClearAction(UI, interaction, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));
 	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->activeWidget, 0);    
@@ -432,6 +433,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
     
     if(root != UI->active)
     {
+       
         result.bounds = GetUIOrthoTextBounds(UI, text, layout->fontScale, P);
         result.color = V4(0.7f, 0.7f, 0, 1);
         if(!UI->activeLabel)
@@ -966,12 +968,16 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
             {                
                 if(!UI->activeLabel && !UI->active && father && (father->flags & EditorElem_LabelsEditable))
                 {
-                    nameColor = V4(1, 0, 0, 1);
+                    if(!father->labelName[0] || UIFindAutocomplete(UI, parents, father->labelName))
+                    {
+                                         nameColor = V4(1, 0, 0, 1);
                     UIInteraction labelInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->activeLabel, root);
+                    UIAddSetValueAction(UI, &labelInteraction, UI_Trigger, &UI->activeLabelParent, father);
                     UIAddClearAction(UI, &labelInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                     
                     UIAddSetValueAction(UI, &labelInteraction, UI_Trigger, &UI->activeWidget, widget); 
-                    UIAddInteraction(UI, input, mouseRight, labelInteraction);
+                    UIAddInteraction(UI, input, mouseLeft, labelInteraction);   
+                    }
                 }
             }
             
@@ -1000,15 +1006,33 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     }
 				}
                 
-				UIInteraction confirmInteraction = {};
-				AddConfirmActions(UI, widget, &confirmInteraction, root->name, sizeof(root->name));
-                UIAddInteraction(UI, input, confirmButton, confirmInteraction);
+                
+                UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parents, father->labelName);
+                if(autocomplete)
+                {
+                    UIRenderAutocomplete(UI, input, autocomplete, layout, nameP -V2(0, layout->childStandardHeight), UI->keyboardBuffer);
+                }
+                
+                
+                if(UI->bufferValid)
+                {
+                    nameColor = V4(0, 1, 0, 1);
+                    UIInteraction confirmInteraction = {};
+                    AddConfirmActions(UI, widget, &confirmInteraction, root->name, sizeof(root->name));
+                    UIAddInteraction(UI, input, confirmButton, confirmInteraction);
+                }
+                else
+                {
+                    nameColor = V4(1, 0, 0, 1);
+                }
             }
             
             if(root == UI->active && root->type == EditorElement_EmptyTaxonomy)
             {
                 nameToShow = UI->showBuffer;
             }
+            
+           
             
             result = Union(square, nameBounds);
             
@@ -1136,17 +1160,22 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                 
                 case EditorElement_Struct:
                 {
-                    StructButtonsResult structButtons = DrawStructButtons(UI, input, layout, nameBounds, parents, grandFather, father, root, canDelete);
-                    result = Union(result, structButtons.completeBounds);
-                    
                     b32 propagateLineC = propagateLineColor;
-                    if(structButtons.hot)
+                    if(root != UI->activeLabel)
                     {
-                        nameColor = structButtons.nameColor;
-                        propagateLineC = true;
-                        squareLineColor = nameColor;
+                        StructButtonsResult structButtons = DrawStructButtons(UI, input, layout, nameBounds, parents, grandFather, father, root, canDelete);
+                        result = Union(result, structButtons.completeBounds);
+                    
+                        if(structButtons.hot)
+                        {
+                            nameColor = structButtons.nameColor;
+                            propagateLineC = true;
+                            squareLineColor = nameColor;
+                        }
+                        
                     }
-
+                    
+                    
                     CopyPasteInteractionRes copyPaste = AddCopyPasteInteraction(UI, input, widget, layout, root, canDelete, nameBounds);
 
                     if(copyPaste.propagateColor)
@@ -1378,7 +1407,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         r32 speed = ToR32(GetValue(pause, "speed"));
                         r32 timeToAdvance = play ? input->timeToAdvance : 0;
                         
-                        test.gen = RecipeIndexGenerationData(ToU64(GetValue(pause, "seed")));
+                        test.gen = RecipeIndexGenerationData(ToU32(GetValue(pause, "seed")));
                         EditorElement* animationElement = pause->next;
                         
                         char* animationName = GetValue(animationElement, "animationName");
@@ -1772,6 +1801,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     
     UIInteraction esc = UISetValueInteraction(UI, UI_Trigger, &UI->active, 0);
     UIAddSetValueAction(UI, &esc, UI_Trigger, &UI->activeLabel, 0);
+    UIAddSetValueAction(UI, &esc, UI_Trigger, &UI->activeLabelParent, 0);
     UIAddSetValueAction(UI, &esc, UI_Trigger, &UI->activeWidget, 0);
     UIAddClearAction(UI, &esc, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
     UIAddClearAction(UI, &esc, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));
@@ -1872,6 +1902,34 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     if(UI->keyboardBuffer[0] && UI->activeLabel)
     {
         UI->bufferValid = true;
+        char* labelType = UI->activeLabelParent->labelName;
+        if(labelType[0])
+        {
+            UI->bufferValid = false;
+            UIAutocomplete* options = UIFindAutocomplete(UI, UI->activeParents, labelType);
+            if(options)
+            {
+                UIAutocompleteBlock* block = options->firstBlock;
+                while(block && !UI->bufferValid)
+                {
+                    for(u32 nameIndex = 0; nameIndex < block->count; ++nameIndex)
+                    {
+                        char* name = block->names[nameIndex];
+                        if(StrEqual(name, UI->keyboardBuffer))
+                        {
+                            UI->bufferValid = true;
+                            break;
+                        }
+                    }
+                        
+                    block = block->next;
+                }
+            }
+        }
+        else
+        {
+            UI->bufferValid = true; 
+        }
     }
     else if(UI->keyboardBuffer[0] && UI->active)
     {
@@ -3032,6 +3090,8 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         
         UIAddAutocomplete(UI, "layoutName");
 		UIAddAutocomplete(UI, "pieceName");
+		
+        
         
         FormatString(UI->trueString, sizeof(UI->trueString), "true");
         FormatString(UI->falseString, sizeof(UI->falseString), "false");

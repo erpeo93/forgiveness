@@ -830,6 +830,7 @@ struct UIState
     EditorElementParents activeParents;
     
     EditorElement* activeLabel;
+    EditorElement* activeLabelParent;
     EditorWidget* activeWidget;
     
     EditorElement* dragging;

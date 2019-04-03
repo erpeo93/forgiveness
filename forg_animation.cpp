@@ -603,7 +603,7 @@ internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* tab
     ObjectLayout* layout = GetLayout(table, taxonomy);
     if(layout)
     {
-        RandomSequence seq = Seed((u32)gen.recipeIndex);
+        RandomSequence seq = Seed(gen.ingredientSeed);
         for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
         {
             Assert(dest->componentCount < ArrayCount(dest->components));

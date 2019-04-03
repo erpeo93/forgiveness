@@ -29,9 +29,9 @@ internal void GetRecipeIngredients(RecipeIngredients* output, TaxonomyTable* tab
     TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
     output->count = 0;
     
-    RandomSequence seq = Seed((u32)gen.recipeIndex);
     
     ObjectLayout* layout = GetLayout(table, taxonomy);
+    RandomSequence seq = Seed(gen.ingredientSeed);
     if(layout)
     {
         for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
@@ -166,7 +166,7 @@ internal void Craft(SimRegion* region, SimEntity* dest, u32 taxonomy, Generation
         }
     }
     
-    RandomSequence seq_ = Seed((u32) gen.recipeIndex);
+    RandomSequence seq_ = Seed((u32) gen.ingredientSeed);
     RandomSequence* seq = &seq_;
     
     TaxonomySlot* slot = GetSlotForTaxonomy(taxTable, taxonomy);

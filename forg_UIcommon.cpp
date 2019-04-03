@@ -1478,16 +1478,18 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                             char* layoutName = GetValue(root, "layoutName");
                             u64 layoutHashID = StringHash(layoutName);
                             
-                            GenerationData gen = NullGenerationData();
+                            u32 recipeIndex = 0;
+                            GenerationData gen;
                             while(true)
                             {
+                                gen = RecipeIndexGenerationData(recipeIndex);
                                 ObjectLayout* layout = GetLayout(UI->table, taxonomy);
                                 if(layout->nameHashID == layoutHashID)
                                 {
                                     break;
                                 }
                                 
-                                ++gen.recipeIndex;
+                                ++recipeIndex;
                             }
                             
                             

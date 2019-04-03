@@ -49,6 +49,7 @@ struct EditorElement
         struct
         {
             EditorElement* firstInList;
+            char labelName[16];
             char elementName[16];
             EditorElement* emptyElement;
 		};
