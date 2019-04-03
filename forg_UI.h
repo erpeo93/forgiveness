@@ -431,6 +431,8 @@ struct UndoRedoCommand
         {
             char oldString[32];
             UIMemoryReference newDelayedString;
+            char* newPtr;
+            u32 newMaxPtrSize;
         };
         
         struct
@@ -489,8 +491,8 @@ inline UndoRedoCommand UndoRedoDelayedString(EditorWidget* widget, char* ptr, u3
     UndoRedoCommand result = {};
     result.widget = widget;
     result.type = UndoRedo_DelayedStringCopy;
-    result.ptr = ptr;
-    result.maxPtrSize = ptrSize;
+    result.newPtr = ptr;
+    result.newMaxPtrSize = ptrSize;
     FormatString(result.oldString, sizeof(result.oldString), "%s", oldString);
     result.newDelayedString = newString;
     
@@ -557,6 +559,7 @@ enum UIInteractionActionType
     UIInteractionAction_ShowLabeledBitmap,
     UIInteractionAction_ReloadElement,
     UIInteractionAction_PlaySoundEvent,
+    UIInteractionAction_PlaySoundContainer,
     UIInteractionAction_EquipInAnimationWidget,
     UIInteractionAction_ReleaseDragging,
     UIInteractionAction_UndoRedoCommand,
@@ -587,11 +590,17 @@ struct UIInteractionAction
         {
             u64 soundTypeHash;
             u64 soundNameHash;
+            EditorElement* params;
         };
         
         struct
         {
             u64 eventNameHash;
+        };
+        
+        struct
+        {
+            u64 containerNameHash;
         };
         
         struct
@@ -613,8 +622,13 @@ struct UIInteractionAction
             UIMemoryReference root;
         };
         
-        UIMemoryReference toReload;
+        struct
+        {
+            UIMemoryReference current;
+            EditorElementParents parents;
+        };
         
+        UIMemoryReference toReload;
         UndoRedoCommand undoRedo;
     };
     

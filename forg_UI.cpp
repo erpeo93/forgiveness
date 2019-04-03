@@ -606,7 +606,7 @@ inline StructButtonsResult DrawStructButtons(UIState* UI, PlatformInput* input, 
             u64 soundTypeHash = StringHash(father->name);
             u64 soundNameHash = StringHash(root->firstValue->value);
             
-            UIButton playButton = UIBtn(UI, buttonP, layout, V4(0, 1, 0, 1), "play", true, UIPlaySoundInteraction(UI, UI_Trigger, soundTypeHash, soundNameHash));
+            UIButton playButton = UIBtn(UI, buttonP, layout, V4(0, 1, 0, 1), "play", true, UIPlaySoundInteraction(UI, UI_Trigger, soundTypeHash, soundNameHash, 0));
             
             DrawStructActionButton(UI, input, &result, &playButton);
         }
@@ -618,7 +618,7 @@ inline StructButtonsResult DrawStructButtons(UIState* UI, PlatformInput* input, 
             u64 soundTypeHash = StringHash(soundType);
             u64 soundNameHash = StringHash(soundName);
             
-            UIButton playButton = UIBtn(UI, buttonP, layout, V4(0, 1, 0, 1), "play", true, UIPlaySoundInteraction(UI, UI_Trigger, soundTypeHash, soundNameHash));
+            UIButton playButton = UIBtn(UI, buttonP, layout, V4(0, 1, 0, 1), "play", true, UIPlaySoundInteraction(UI, UI_Trigger, soundTypeHash, soundNameHash, GetElement(root, "params")));
             
             DrawStructActionButton(UI, input, &result, &playButton);
         }
@@ -629,6 +629,13 @@ inline StructButtonsResult DrawStructButtons(UIState* UI, PlatformInput* input, 
             u64 eventNameHash = StringHash(root->name);
             
             UIButtonInteraction(&playButton, UIPlaySoundEventInteraction(UI, UI_Trigger, eventNameHash));
+            DrawStructActionButton(UI, input, &result, &playButton);
+        }
+        else if(father->flags & EditorElem_PlayContainerButton)
+        {
+            UIButton playButton = UIBtn(UI, buttonP, layout, V4(0, 1, 0, 1), "play");
+            
+            UIButtonInteraction(&playButton, UIPlaySoundContainerInteraction(UI, UI_Trigger, root, parents));
             DrawStructActionButton(UI, input, &result, &playButton);
         }
         else if(father->flags & EditorElem_EquipInAnimationButton)
@@ -778,6 +785,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
 {
     UIRenderTreeResult totalResult = {};
     
+    Assert(parents.grandParents[ArrayCount(parents.grandParents) - 1] == 0);
     for(u32 parentIndex = ArrayCount(parents.grandParents) - 1; parentIndex > 0; --parentIndex)
     {
         parents.grandParents[parentIndex] = parents.grandParents[parentIndex - 1];
@@ -1184,6 +1192,18 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         squareLineColor = copyPaste.color;
                     }
                     
+                    if(!canDelete)
+                    {
+                        if(UI->hotStructThisFrame && root == UI->hotStruct)
+                        {
+                            UIInteraction dragInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->dragging, root);
+                            UIAddSetValueAction(UI, &dragInteraction, UI_Trigger, &UI->draggingParent, father);
+                            UIAddReleaseDragAction(UI, &dragInteraction, UI_Release);
+                            UIAddInteraction(UI, input, mouseRight, dragInteraction);
+                        }
+                    }
+                    
+                    
                     if(IsSet(root, EditorElem_Expanded) || !root->name[0])
                     {
                         Vec3 verticalStartP = lineStartP;
@@ -1222,19 +1242,9 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         }
                         
                         
-                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, false);
+                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, canDelete);
                                                 
 
-                        if(!canDelete)
-                        {
-                            if(UI->hotStructThisFrame && root == UI->hotStruct)
-                            {
-                                UIInteraction dragInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->dragging, root);
-                                UIAddSetValueAction(UI, &dragInteraction, UI_Trigger, &UI->draggingParent, father);
-                                UIAddReleaseDragAction(UI, &dragInteraction, UI_Release);
-                                UIAddInteraction(UI, input, mouseRight, dragInteraction);
-                            }
-                        }
                         
                         result = Union(result, childs.bounds);
                         layout->P += V2(-layout->nameValueDistance, 0);
@@ -1968,7 +1978,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                 }
                 else
                 {
-                    UI->bufferValid = true;
+                    //UI->bufferValid = true;
                 }
             } break;
             

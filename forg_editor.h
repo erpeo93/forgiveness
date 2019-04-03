@@ -32,8 +32,9 @@ enum EditorElementFlags
     EditorElem_EquipInAnimationButton = (1 << 11),
     EditorElem_ShowLabelBitmapButton = (1 << 12),
     EditorElem_PlayEventButton = (1 << 13),
-    EditorElem_RecursiveEmpty = (1 << 14),
-    EditorElem_DontRender = (1 << 15),
+    EditorElem_PlayContainerButton = (1 << 14),
+    EditorElem_RecursiveEmpty = (1 << 15),
+    EditorElem_DontRender = (1 << 16),
 };
 
 struct EditorElement
@@ -87,7 +88,7 @@ struct EditorElement
 
 struct EditorElementParents
 {
-    EditorElement* grandParents[8]; // NOTE(Leonardo): grandParents[0] is the grandParent
+    EditorElement* grandParents[16]; // NOTE(Leonardo): grandParents[0] is the grandParent
     EditorElement* father;
 };
 

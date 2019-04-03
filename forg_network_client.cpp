@@ -264,7 +264,7 @@ internal void SendEditorElements(EditorElement* root)
         
         if(root->type == EditorElement_List)
         {
-            Pack("s", root->elementName);
+            Pack("ss", root->elementName, root->labelName);
         }
     }
     CloseAndSendStandardPacket();
@@ -273,9 +273,16 @@ internal void SendEditorElements(EditorElement* root)
 	{
 		case EditorElement_Struct:
 		{
-			SendEditorElements(root->firstValue);
-			SendPopMessage(false);
-		} break;
+            if(root->firstValue)
+            {
+                SendEditorElements(root->firstValue);
+                SendPopMessage(false);
+            }
+            else
+            {
+                SendPopMessage(false, false);
+            }
+        } break;
         
 		case EditorElement_List:
 		{

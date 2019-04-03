@@ -414,6 +414,8 @@ struct LabeledSound
     u64 nameHash;
     
     r32 delay;
+    r32 volume;
+    r32 pitch;
     union
     {
         LabeledSound* next;

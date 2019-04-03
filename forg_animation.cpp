@@ -2096,10 +2096,12 @@ inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, Taxo
                         {
                             SoundId toPlay = pick.sounds[pickIndex];
                             r32 delay = pick.delays[pickIndex];
+                            r32 volume = pick.volumes[pickIndex];
+                            r32 pitch = pick.pitches[pickIndex];
                             
                             if(IsValid(toPlay))
                             {
-                                PlaySound(worldMode->soundState, toPlay, delay);
+                                PlaySound(worldMode->soundState, toPlay, volume, pitch, delay);
                                 found = true;
                             }
                         }

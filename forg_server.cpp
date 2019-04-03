@@ -579,7 +579,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                                     element->value[0] = 0;
                                     if(element->type == EditorElement_List)
                                     {
-                                        packetPtr = unpack(packetPtr, "s", element->elementName);
+                                        packetPtr = unpack(packetPtr, "ss", element->elementName, element->labelName);
                                     }
                                 }
                                 

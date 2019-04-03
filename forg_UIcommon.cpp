@@ -933,7 +933,7 @@ inline UIInteraction UIAddEmptyElementToListInteraction(UIState* UI, u32 flags, 
     return result;
 }
 
-inline UIInteraction UIPlaySoundInteraction(UIState* UI, u32 flags, u64 soundTypeHash, u64 soundNameHash)
+inline UIInteraction UIPlaySoundInteraction(UIState* UI, u32 flags, u64 soundTypeHash, u64 soundNameHash, EditorElement* params)
 {
     UIInteraction result = {};
     UIInteractionAction* dest = UIGetFreeAction(UI, &result);
@@ -941,6 +941,7 @@ inline UIInteraction UIPlaySoundInteraction(UIState* UI, u32 flags, u64 soundTyp
     dest->flags = flags;
     dest->soundTypeHash = soundTypeHash;
     dest->soundNameHash = soundNameHash;
+    dest->params = params;
     
     return result;
 }
@@ -953,6 +954,18 @@ inline UIInteraction UIPlaySoundEventInteraction(UIState* UI, u32 flags, u64 eve
     dest->type = UIInteractionAction_PlaySoundEvent;
     dest->flags = flags;
     dest->eventNameHash = eventNameHash;
+    
+    return result;
+}
+
+inline UIInteraction UIPlaySoundContainerInteraction(UIState* UI, u32 flags, EditorElement* current, EditorElementParents parents)
+{
+    UIInteraction result = {};
+    UIInteractionAction* dest = UIGetFreeAction(UI, &result);
+    dest->type = UIInteractionAction_PlaySoundContainer;
+    dest->flags = flags;
+    dest->current = ColdPointer(current);
+    dest->parents = parents;
     
     return result;
 }
@@ -1272,6 +1285,34 @@ inline void UIAddUndoRedoCommand(UIState* UI, UndoRedoCommand command)
     UI->canRedo = false;
 }
 
+inline u16 SLOWGetChildIndexInList(EditorElement* list, EditorElement* child)
+{
+    u16 result = 0xffff;
+    if(list->type == EditorElement_List)
+    {
+        u16 running = 0;
+        b32 found = false;
+        
+        u16 foundIndex = 0;
+        for(EditorElement* test = list->firstInList; test; test = test->next)
+        {
+            if(test == child)
+            {
+                foundIndex = running;
+                found = true;
+            }
+            
+            ++running;
+        }
+        
+        if(found)
+        {
+            result = (running - 1) - foundIndex;
+        }
+    }
+    
+    return result;
+}
 
 inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 flag, r32 timeToAdvance, b32 onlyNotActivated = false)
 {
@@ -1411,11 +1452,23 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         u64 soundTypeHash = action->soundTypeHash;
                         u64 soundNameHash = action->soundNameHash;
                         
+                        EditorElement* params = action->params;
+                        
+                        r32 volume = 1.0f;
+                        r32 pitch = 1.0f;
+                        r32 delay = 0;
+                        if(params)
+                        {
+                            volume = ToR32(GetValue(params, "volume"));
+                            pitch = ToR32(GetValue(params, "pitch"));
+                            delay = ToR32(GetValue(params, "delay"));
+                        }
+                        
                         SoundId ID = FindSoundByName(UI->group->assets, soundTypeHash, soundNameHash);
                         
                         if(IsValid(ID))
                         {
-                            PlaySound(UI->worldMode->soundState, ID);
+                            PlaySound(UI->worldMode->soundState, ID, volume, pitch, delay);
                         }
                     } break;
                     
@@ -1445,6 +1498,103 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         
                         
                         PickSoundResult pick = PickSoundFromEvent(UI->group->assets, event, labelCount, labels, &UI->table->eventSequence);
+                        
+                        for(u32 pickIndex = 0; pickIndex < pick.soundCount; ++pickIndex)
+                        {
+                            SoundId toPlay = pick.sounds[pickIndex];
+                            r32 volume = pick.volumes[pickIndex];
+                            r32 pitch = pick.pitches[pickIndex];
+                            r32 delay = pick.delays[pickIndex];
+                            
+                            if(IsValid(toPlay))
+                            {
+                                PlaySound(UI->worldMode->soundState, toPlay, volume, pitch, delay);
+                            }
+                        }
+                    } break;
+                    
+                    case UIInteractionAction_PlaySoundContainer:
+                    {
+                        EditorElement* current = (EditorElement*) GetValue(action->current, &interaction->data);
+                        
+                        EditorElementParents parents = action->parents;
+                        
+                        u32 deepness = 0;
+                        u32 choosenIndexes[64];
+                        
+                        Assert(parents.father);
+                        choosenIndexes[deepness++] = SLOWGetChildIndexInList(parents.father, current);
+                        
+                        
+                        char* eventName = 0;
+                        
+                        while(true)
+                        {
+                            u32 containerIndex = (deepness - 1) * 2;
+                            EditorElement* child = parents.grandParents[containerIndex];
+                            EditorElement* father = parents.grandParents[containerIndex + 1];
+                            
+                            if(!parents.grandParents[containerIndex + 2])
+                            {
+                                eventName = child->name;
+                                break;
+                            }
+                            else
+                            {
+                                u16 index = SLOWGetChildIndexInList(father, child);
+                                if(index < 0xffff)
+                                {
+                                    choosenIndexes[deepness++] = index;
+                                }
+                                else
+                                {
+                                    InvalidCodePath;
+                                }
+                            }
+                        }
+                        
+                        SoundEvent* event = GetSoundEvent(UI->table, StringHash(eventName));
+                        
+                        SoundContainer* container = &event->rootContainer;
+                        for(i32 deepnessLevel = deepness - 1; deepnessLevel >= 0; --deepnessLevel)
+                        {
+                            u32 containerIndex = choosenIndexes[deepnessLevel];
+                            Assert(containerIndex < container->containerCount);
+                            
+                            u32 runningIndex = 0;
+                            for(SoundContainer* child = container->firstChildContainer; child; child = child->next)
+                            {
+                                if(runningIndex++ == containerIndex)
+                                {
+                                    container = child;
+                                }
+                            }
+                        }
+                        
+                        Assert(container);
+                        
+                        EditorWidget* widget = UI->widgets + EditorWidget_SoundEvents;
+                        EditorElement* activeLabels = widget->root->next->firstInList;
+                        
+                        u32 labelCount = 0;
+                        SoundLabel labels[32];
+                        
+                        while(activeLabels)
+                        {
+                            char* labelName = GetValue(activeLabels, "name");
+                            char* labelValue = GetValue(activeLabels, "value");
+                            
+                            Assert(labelCount < ArrayCount(labels));
+                            SoundLabel* label = labels + labelCount++;
+                            
+                            label->hashID = StringHash(labelName);
+                            label->value = ToR32(labelValue);
+                            
+                            activeLabels = activeLabels->next;
+                        }
+                        
+                        
+                        PickSoundResult pick = PickSoundFromContainer(UI->group->assets, container, labelCount, labels, &UI->table->eventSequence);
                         
                         for(u32 pickIndex = 0; pickIndex < pick.soundCount; ++pickIndex)
                         {
@@ -1614,6 +1764,12 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         {
                             action->undoRedo.type = UndoRedo_StringCopy;
                             char* newString = (char*) GetValue(action->undoRedo.newDelayedString, &interaction->data);
+                            
+                            
+                            action->undoRedo.ptr = action->undoRedo.newPtr;
+                            action->undoRedo.maxPtrSize = action->undoRedo.newMaxPtrSize;
+                            
+                            
                             
                             FormatString(action->undoRedo.newString, sizeof(action->undoRedo.newString), "%s", newString);
                         }

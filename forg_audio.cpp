@@ -161,30 +161,40 @@ struct PickSoundResult
     u32 soundCount;
     SoundId sounds[MAX_SOUND_SEQUENCE_CONTAINER];
     r32 delays[MAX_SOUND_SEQUENCE_CONTAINER];
+    r32 volumes[MAX_SOUND_SEQUENCE_CONTAINER];
+    r32 pitches[MAX_SOUND_SEQUENCE_CONTAINER];
 };
 
-inline PickSoundResult PickSoundFromEvent(Assets* assets, SoundEvent* event, u32 labelCount, SoundLabel* labels, RandomSequence* sequence)
+inline PickSoundResult PickSoundFromContainer(Assets* assets, SoundContainer* container, u32 labelCount, SoundLabel* labels, RandomSequence* sequence)
 {
     PickSoundResult result = {};
     
     LabeledSound* sounds[MAX_SOUND_SEQUENCE_CONTAINER];
     u32 soundCount = 0;
     
-    PickSoundChild(&event->rootContainer, sounds, &soundCount, labelCount, labels, sequence);
+    PickSoundChild(container, sounds, &soundCount, labelCount, labels, sequence);
     
     result.soundCount = soundCount;
     for(u32 soundIndex = 0; soundIndex < soundCount; ++soundIndex)
     {
         LabeledSound* sound = sounds[soundIndex];
         result.sounds[soundIndex] = FindSoundByName(assets, sound->typeHash, sound->nameHash);
+        result.volumes[soundIndex] = sound->volume;
+        result.pitches[soundIndex] = sound->pitch;
         result.delays[soundIndex] = sound->delay;
     }
     
     return result;
 }
 
+inline PickSoundResult PickSoundFromEvent(Assets* assets, SoundEvent* event, u32 labelCount, SoundLabel* labels, RandomSequence* sequence)
+{
+    PickSoundResult result = PickSoundFromContainer(assets, &event->rootContainer, labelCount, labels, sequence);
+    return result;
+}
 
-internal PlayingSound* PlaySound(SoundState* soundState, SoundId ID, r32 delay = 0.0f,r32 frequency = 1.0f)
+
+internal PlayingSound* PlaySound(SoundState* soundState, SoundId ID, r32 volume = 1.0, r32 frequency = 1.0, r32 delay = 0.0f)
 {
     if( !soundState->firstFreeSound )
     {
@@ -193,7 +203,7 @@ internal PlayingSound* PlaySound(SoundState* soundState, SoundId ID, r32 delay =
     }
     
     PlayingSound* newSound = soundState->firstFreeSound;
-    newSound->currentVolume = V2(1.0f, 1.0f);
+    newSound->currentVolume = V2(volume, volume);
     newSound->playingIndex = 0;
     newSound->ID = ID;
     newSound->delay = delay;

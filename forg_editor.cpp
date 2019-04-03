@@ -426,9 +426,14 @@ inline b32 ToB32(char* string)
     return result;
 }
 
-inline r32 ToR32(char* string)
+inline r32 ToR32(char* string, r32 standard = 1.0f)
 {
-    r32 result = (r32) atof(string);
+    r32 result = standard;
+    
+    if(string)
+    {
+        result = (r32) atof(string);
+    }
     
     return result;
 }
@@ -1249,7 +1254,7 @@ inline SoundContainer* AddSoundEvent(char* eventName)
     return result;
 }
 
-inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundType, char* soundName, char* delay)
+inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundType, char* soundName, char* delay, r32 volume, r32 pitch)
 {
     ++container->soundCount;
     
@@ -1260,6 +1265,8 @@ inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundT
     sound->nameHash = StringHash(soundName);
     
     sound->delay = delay ? ToR32(delay) : 0;
+    sound->volume = volume;
+    sound->pitch = pitch;
     
     FREELIST_INSERT(sound, container->firstSound);
     
@@ -2374,6 +2381,11 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
                     buffer = OutputToBuffer(buffer, bufferSize, "#playEvent ");
                 }
                 
+                if(element->flags & EditorElem_PlayContainerButton)
+                {
+                    buffer = OutputToBuffer(buffer, bufferSize, "#playContainer ");
+                }
+                
                 if(element->flags & EditorElem_EquipInAnimationButton)
                 {
                     buffer = OutputToBuffer(buffer, bufferSize, "#equipInAnimation ");
@@ -2462,10 +2474,13 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
                     Token value = Stringize(t);
                     StrCpy(value.text, value.textLength, newElement->value, sizeof(newElement->value));
                     
+#if 0                    
                     if(TokenEquals(firstToken, "name"))
                     {
                         AddFlags(newElement, EditorElem_AlwaysEditable);
                     }
+#endif
+                    
                 } break;
                 
                 case Token_Number:
@@ -2547,6 +2562,10 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
 							{
 								newElement->flags |= EditorElem_PlayEventButton;
 							}
+                            else if(TokenEquals(paramName, "playContainer"))
+							{
+								newElement->flags |= EditorElem_PlayContainerButton;
+							}
                             else if(TokenEquals(paramName, "equipInAnimation"))
                             {
                                 newElement->flags |= EditorElem_EquipInAnimationButton;
@@ -2601,11 +2620,20 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
                 case Token_OpenBraces:
                 {
                     newElement->type = EditorElement_Struct;
-                    newElement->firstValue = LoadElementsInMemory(mode, tokenizer, end);
                     
-                    if(!RequireToken(tokenizer, Token_CloseBraces))
+                    if(NextTokenIs(tokenizer, Token_CloseBraces))
                     {
-                        InvalidCodePath;
+                        newElement->firstValue = 0;
+                        Token closed = GetToken(tokenizer);
+                    }
+                    else
+                    {
+                        newElement->firstValue = LoadElementsInMemory(mode, tokenizer, end);
+                        
+                        if(!RequireToken(tokenizer, Token_CloseBraces))
+                        {
+                            InvalidCodePath;
+                        }
                     }
                 }
             }
@@ -2885,15 +2913,20 @@ inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer,
         char* soundName = GetValue(sounds, "sound");
         
         char* delay = 0;
+        r32 volume = 1;
+        r32 pitch = 1;
         EditorElement* params = GetStruct(sounds, "params");
         if(params)
         {
             delay = GetValue(params, "delay");
+            volume = ToR32(GetValue(params, "volume"));
+            pitch = ToR32(GetValue(params, "pitch"));
+            
         }
         
         if(soundType && soundName)
         {
-            LabeledSound* sound = AddSoundToContainer(rootContainer, soundType, soundName, delay);
+            LabeledSound* sound = AddSoundToContainer(rootContainer, soundType, soundName, delay, volume, pitch);
 			EditorElement* soundLabels = GetList(sounds, "labels");
 			while(soundLabels)
 			{
@@ -3062,7 +3095,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         EditorElement* tools = root->firstInList;
         while(tools)
         {
-            char* toolName = GetValue(tools, "name");
+            char* toolName = tools->name;
             Requires(toolName);
             tools = tools->next;
         }
