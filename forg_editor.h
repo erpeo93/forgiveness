@@ -198,6 +198,7 @@ struct EditorWidget
     i32 maxDataY;
     i32 minDataY;
     
+    char fileName[32];
     char name[32];
     EditorElement* root;
 };

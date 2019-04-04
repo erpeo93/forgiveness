@@ -781,7 +781,7 @@ struct UIRenderTreeResult
     r32 lineEndY;
 };
 
-inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElementParents parents, EditorElement* parent_, b32 propagateLineColor, Vec4 parentSquareColor, EditorElement* root_, PlatformInput* input, b32 canDelete, b32 showNames = true)
+inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElementParents parents, EditorElement* parent_, b32 propagateLineColor, Vec4 parentSquareColor, EditorElement* root_, PlatformInput* input, b32 canDelete, b32 showNames = true, Vec2 parentNameP = {})
 {
     UIRenderTreeResult totalResult = {};
     
@@ -954,8 +954,14 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
             }
             
             
+			totalResult.lineEndY = GetCenter(square).y;
+            Vec2 nameP = GetCenter(square) + V2(1.5f * GetDim(square).x, -0.4f * GetDim(nameTestBounds).y);
             
-            if(showNames)
+            if(!showNames)
+            {
+				nameP = parentNameP;
+            }
+            else
             {
             PushEditorLine(UI->group, propagateLineColor, parentSquareColor, parentAlignedP, lineStartP, layout->lineThickness, layout->lineSegmentLength, layout->lineSpacing);
                 PushRect(UI->group, FlatTransform(layout->additionalZBias), square, squareLineColor);   
@@ -969,9 +975,6 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                 Vec2 insideDim = Hadamart(0.5f * GetDim(square), V2(0.7f, 0.8f));
                 PushUIOrthoText(UI, sign, 0.6f * layout->fontScale, GetCenter(square) - insideDim, V4(1, 1, 1, 1), layout->additionalZBias + 0.01f);
             }
-            
-            totalResult.lineEndY = GetCenter(square).y;
-            Vec2 nameP = GetCenter(square) + V2(1.5f * GetDim(square).x, -0.4f * GetDim(nameTestBounds).y);
             
             Rect2 nameBounds = AddRadius(GetUIOrthoTextBounds(UI, name, layout->fontScale, nameP), V2(layout->padding, layout->padding));
             
@@ -1191,14 +1194,12 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     {
                         //layout->P.y = nameP.y;
                         simpleValue = true;
-                        r32 oldX = layout->P.x;
-                        layout->P.x = nameBounds.max.x;
+						Vec2 drawHere = nameP;
+                        drawHere.x = nameBounds.max.x;
                         
-                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, canDelete, false);
+                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, canDelete, false, drawHere);
                         
-                        layout->P.x = oldX;
-                        
-                        nameBounds = Union(nameBounds, childs.bounds);
+                        nameBounds.max.x = childs.bounds.max.x;
                     }
                     
                     
@@ -1210,10 +1211,9 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         if(structButtons.hot)
                         {
                             nameColor = structButtons.nameColor;
-                            propagateLineC = true;
-                            squareLineColor = nameColor;
+                                propagateLineC = true;
+                                squareLineColor = nameColor;   
                         }
-                        
                     }
                     
                     
@@ -1806,6 +1806,32 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         platformAPI.DEBUGWriteFile("widget", toSave, sizeof(toSave));
     }
     
+    UI->saveWidgetTimer += UI->worldMode->originalTimeToAdvance;
+    if(UI->saveWidgetTimer >= 20.0f)
+    {
+        UI->saveWidgetTimer = 0;
+        
+        for(u32 widgetIndex = 0; widgetIndex < EditorWidget_Count; ++widgetIndex)
+        {
+            EditorWidget* widget = UI->widgets + widgetIndex;
+            if(widget->changeCount && widget->fileName)
+            {
+                widget->changeCount = 0;
+                SendSaveAssetDefinitionFile(widget->fileName, widget->root);
+            }
+        }
+        
+        
+        TaxonomySlot* editing = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
+        if(editing->editorChangeCount)
+        {
+            editing->editorChangeCount = 0;
+            SendSaveTabRequest(UI->editingTaxonomy);
+        }
+        
+    }
+    
+    
     Vec2 importantMessageP = V2(-900, +500);
     r32 importantMessageScale = 0.42f;
     Vec4 importantColor = V4(1, 0, 0, 1);
@@ -2105,6 +2131,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     for(u32 widgetIndex = 0; widgetIndex < EditorWidget_Count; ++widgetIndex)
     {
         EditorWidget* widget = UI->widgets + widgetIndex;
+       
         
         widget->permanent.fontSize = Clamp(0.3f, widget->permanent.fontSize, 3.0f);
         
@@ -2256,9 +2283,18 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     
                     case EditorWidget_SoundEvents:
                     {
+                        for(EditorElement* test = widget->root; test; test = test->next)
+                        {
+                            if(StrEqual(test->name, "test params"))
+                            {
+                                UI->fakeDistanceFromPlayer = ToR32(GetValue(test, "distanceFromPlayer"), 1);   
+                                break;
+                            }         
+                        }
+                        
                         Vec2 saveP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
                         
-                        UIInteraction saveInteraction =SendRequestInteraction(UI, UI_Trigger, SaveAssetFadFileRequest("soundEvents", widget));
+                        UIInteraction saveInteraction =SendRequestInteraction(UI, UI_Trigger, SaveAssetFadFileRequest(widget));
                         UIAddReloadElementAction(UI, &saveInteraction, UI_Trigger, UI->table->soundEventsRoot);
                         b32 saveActive = (widget->changeCount);
                         
@@ -2271,7 +2307,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     {
                         Vec2 saveP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
                         
-                        UIInteraction saveInteraction = SendRequestInteraction(UI, UI_Trigger, SaveAssetFadFileRequest("components", widget));
+                        UIInteraction saveInteraction = SendRequestInteraction(UI, UI_Trigger, SaveAssetFadFileRequest(widget));
                         b32 saveActive = (widget->changeCount);
                         
                         UIButton saveButton = UIBtn(UI, saveP, layout, V4(1, 0, 0, 1.0f), " SAVE ", saveActive, saveInteraction);
@@ -2917,7 +2953,7 @@ inline void UIAddChild(TaxonomyTable* table, EditorElement* element, EditorEleme
     element->firstChild = newElement;
 }
 
-inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, Vec2 P, u32 necessaryRole, char* name)
+inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, Vec2 P, u32 necessaryRole, char* name, char* fileName = 0)
 {
     EditorWidget* result = UI->widgets + widget;
     *result = {};
@@ -2936,6 +2972,10 @@ inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, Vec2 P, u
     result->layout.lineSpacing = 2.0f;
     result->layout.padding = 4.0f;
     FormatString(result->name, sizeof(result->name), name);
+    if(fileName)
+    {
+           FormatString(result->fileName, sizeof(result->fileName), fileName);
+    }
     
     return result;
 }
@@ -3029,7 +3069,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             EditorWidget* soundDatabase = StartWidget(UI, EditorWidget_SoundDatabase, V2(300,200), EditorRole_SoundDesigner, "Sound Database");
             soundDatabase->root = UI->table->soundNamesRoot;
             
-            EditorWidget* componentDatabase = StartWidget(UI, EditorWidget_Components, V2(300, 200), EditorRole_GameDesigner, "Visual Components");
+            EditorWidget* componentDatabase = StartWidget(UI, EditorWidget_Components, V2(300, 200), EditorRole_GameDesigner, "Visual Components", "components");
             componentDatabase->root = UI->table->componentsRoot;
             
             
@@ -3045,7 +3085,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             
             
-            EditorWidget* soundEvents = StartWidget(UI, EditorWidget_SoundEvents, V2(-200, 100), EditorRole_SoundDesigner, "Sound Events");
+            EditorWidget* soundEvents = StartWidget(UI, EditorWidget_SoundEvents, V2(-200, 100), EditorRole_SoundDesigner, "Sound Events", "soundEvents");
             soundEvents->root = UI->table->soundEventsRoot;
             
             
@@ -3140,9 +3180,11 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
 		UIAddAutocomplete(UI, "pieceName");
         
         UIAutocomplete* autocomplete = UIAddAutocomplete(UI, "soundParamName");
-        UIAddOption(UI, autocomplete, "volume");
+        UIAddOption(UI, autocomplete, "decibelOffset");
         UIAddOption(UI, autocomplete, "pitch");
         UIAddOption(UI, autocomplete, "delay");
+        UIAddOption(UI, autocomplete, "toleranceDistance");
+        UIAddOption(UI, autocomplete, "distanceFalloffCoeff");
         
         
         FormatString(UI->trueString, sizeof(UI->trueString), "true");

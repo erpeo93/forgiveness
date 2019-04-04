@@ -1254,7 +1254,7 @@ inline SoundContainer* AddSoundEvent(char* eventName)
     return result;
 }
 
-inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundType, char* soundName, r32 delay, r32 volume, r32 pitch)
+inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundType, char* soundName, r32 delay, r32 decibelOffset, r32 pitch, r32 toleranceDistance, r32 distanceFalloffCoeff)
 {
     ++container->soundCount;
     
@@ -1265,8 +1265,10 @@ inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundT
     sound->nameHash = StringHash(soundName);
     
     sound->delay = delay;
-    sound->volume = volume;
+    sound->decibelOffset = decibelOffset;
     sound->pitch = pitch;
+    sound->toleranceDistance = toleranceDistance;
+    sound->distanceFalloffCoeff = distanceFalloffCoeff;
     
     FREELIST_INSERT(sound, container->firstSound);
     
@@ -2913,8 +2915,10 @@ inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer,
         char* soundName = GetValue(sounds, "sound");
         
         r32 delay = 0;
-        r32 volume = 1;
+        r32 decibelOffset = 0;
         r32 pitch = 1;
+        r32 toleranceDistance = 1;
+        r32 distanceFalloffCoeff = 1;
         EditorElement* params = GetList(sounds, "params");
         while(params)
         {
@@ -2922,13 +2926,21 @@ inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer,
             {
                 delay = ToR32(GetValue(params, "value"), 0);
             }
-            else if(StrEqual(params->name, "volume"))
+            else if(StrEqual(params->name, "decibelOffset"))
             {
-                volume = ToR32(GetValue(params, "value"), 1);
+                decibelOffset = ToR32(GetValue(params, "value"), 0);
             }
             else if(StrEqual(params->name, "pitch"))
             {
                 pitch = ToR32(GetValue(params, "value"), 1);
+            }
+            else if(StrEqual(params->name, "toleranceDistance"))
+            {
+                toleranceDistance = ToR32(GetValue(params, "value"), 1);
+            }
+            else if(StrEqual(params->name, "distanceFalloffCoeff"))
+            {
+                distanceFalloffCoeff = ToR32(GetValue(params, "value"), 1);
             }
             
             params = params->next;
@@ -2936,7 +2948,7 @@ inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer,
         
         if(soundType && soundName)
         {
-            LabeledSound* sound = AddSoundToContainer(rootContainer, soundType, soundName, delay, volume, pitch);
+            LabeledSound* sound = AddSoundToContainer(rootContainer, soundType, soundName, delay, decibelOffset, pitch, toleranceDistance, distanceFalloffCoeff);
 			EditorElement* soundLabels = GetList(sounds, "labels");
 			while(soundLabels)
 			{

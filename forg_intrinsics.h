@@ -153,6 +153,15 @@ inline r32 Mod(r32 value, r32 max)
     return result;
 }
 
+inline r32 Log10(r32 value)
+{
+    r32 result = (r32) log10(value);
+    return result;
+}
 
-
+inline r32 Pow(r32 value, r32 exp)
+{
+    r32 result = (r32) pow(value, exp);
+    return result;
+}
 

@@ -2092,16 +2092,19 @@ inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, Taxo
                         
                         PickSoundResult pick = PickSoundFromEvent(assets, event, labelCount, labels, &worldMode->table->eventSequence);
                         
+                        r32 distanceFromPlayer = 0;
                         for(u32 pickIndex = 0; pickIndex < pick.soundCount; ++pickIndex)
                         {
                             SoundId toPlay = pick.sounds[pickIndex];
                             r32 delay = pick.delays[pickIndex];
-                            r32 volume = pick.volumes[pickIndex];
+                            r32 decibelOffset = pick.decibelOffsets[pickIndex];
                             r32 pitch = pick.pitches[pickIndex];
+                            r32 toleranceDistance = pick.toleranceDistance[pickIndex];
+                            r32 distanceFalloffCoeff = pick.distanceFalloffCoeff[pickIndex];
                             
                             if(IsValid(toPlay))
                             {
-                                PlaySound(worldMode->soundState, toPlay, volume, pitch, delay);
+                                PlaySound(worldMode->soundState, assets, toPlay, distanceFromPlayer, decibelOffset, pitch, delay, toleranceDistance, distanceFalloffCoeff);
                                 found = true;
                             }
                         }

@@ -452,11 +452,10 @@ inline UIRequest InstantiateTaxonomyRequest(u32 taxonomy, Vec3 offset)
     return result;
 }
 
-inline UIRequest SaveAssetFadFileRequest(char* fileName, EditorWidget* widget)
+inline UIRequest SaveAssetFadFileRequest(EditorWidget* widget)
 {
     UIRequest result = {};
     result.requestCode = UIRequest_SaveAssetFile;
-    FormatString(result.fileName, sizeof(result.fileName), "%s", fileName);
     result.widget = widget;
     
     return result;
@@ -691,7 +690,7 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         case UIRequest_SaveAssetFile:
         {
             request->widget->changeCount = 0;
-            SendSaveAssetDefinitionFile(request->fileName, request->widget->root);
+            SendSaveAssetDefinitionFile(request->widget->fileName, request->widget->root);
         } break;
         
         case UIRequest_ReloadAssets:
@@ -1453,18 +1452,20 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         u64 soundNameHash = action->soundNameHash;
                         
                         
-                        r32 volume = 1.0f;
+                        r32 decibelOffset = 0.0f;
                         r32 pitch = 1.0f;
                         r32 delay = 0;
+                        r32 toleranceDistance = 1;
+                        r32 distanceFalloffCoeff = 1;
                         
                         if(action->params)
                         {
                             EditorElement* param = action->params->firstInList;
                             while(param)
                             {
-                                if(StrEqual(param->name, "volume"))
+                                if(StrEqual(param->name, "decibelOffset"))
                                 {
-                                    volume = ToR32(GetValue(param, "value"));
+                                    decibelOffset = ToR32(GetValue(param, "value"));
                                 }
                                 else if(StrEqual(param->name, "pitch"))
                                 {
@@ -1473,6 +1474,14 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                                 else if(StrEqual(param->name, "delay"))
                                 {
                                     delay = ToR32(GetValue(param, "value"));
+                                }
+                                else if(StrEqual(param->name, "toleranceDistance"))
+                                {
+                                    toleranceDistance = ToR32(GetValue(param, "value"));
+                                }
+                                else if(StrEqual(param->name, "distanceFalloffCoeff"))
+                                {
+                                    distanceFalloffCoeff = ToR32(GetValue(param, "value"));
                                 }
                                 
                                 param = param->next;
@@ -1484,7 +1493,8 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         
                         if(IsValid(ID))
                         {
-                            PlaySound(UI->worldMode->soundState, ID, volume, pitch, delay);
+                            r32 distanceFromPlayer = UI->fakeDistanceFromPlayer;
+                            PlaySound(UI->worldMode->soundState, UI->group->assets, ID, distanceFromPlayer, decibelOffset, pitch, delay, toleranceDistance, distanceFalloffCoeff);
                         }
                     } break;
                     
@@ -1515,16 +1525,19 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         
                         PickSoundResult pick = PickSoundFromEvent(UI->group->assets, event, labelCount, labels, &UI->table->eventSequence);
                         
+                        r32 distanceFromPlayer = UI->fakeDistanceFromPlayer;
                         for(u32 pickIndex = 0; pickIndex < pick.soundCount; ++pickIndex)
                         {
                             SoundId toPlay = pick.sounds[pickIndex];
-                            r32 volume = pick.volumes[pickIndex];
+                            r32 decibelOffset = pick.decibelOffsets[pickIndex];
                             r32 pitch = pick.pitches[pickIndex];
                             r32 delay = pick.delays[pickIndex];
+                            r32 toleranceDistance = pick.toleranceDistance[pickIndex];
+                            r32 distanceFalloffCoeff = pick.distanceFalloffCoeff[pickIndex];
                             
                             if(IsValid(toPlay))
                             {
-                                PlaySound(UI->worldMode->soundState, toPlay, volume, pitch, delay);
+                                PlaySound(UI->worldMode->soundState, UI->group->assets, toPlay, distanceFromPlayer, decibelOffset, pitch, delay, toleranceDistance, distanceFalloffCoeff);
                             }
                         }
                     } break;
@@ -1612,14 +1625,20 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         
                         PickSoundResult pick = PickSoundFromContainer(UI->group->assets, container, labelCount, labels, &UI->table->eventSequence);
                         
+                        r32 distanceFromPlayer = UI->fakeDistanceFromPlayer;
                         for(u32 pickIndex = 0; pickIndex < pick.soundCount; ++pickIndex)
                         {
                             SoundId toPlay = pick.sounds[pickIndex];
+                            r32 decibelOffset = pick.decibelOffsets[pickIndex];
+                            r32 pitch = pick.pitches[pickIndex];
                             r32 delay = pick.delays[pickIndex];
+                            r32 toleranceDistance = pick.toleranceDistance[pickIndex];
+                            r32 distanceFalloffCoeff = pick.distanceFalloffCoeff[pickIndex];
+                            
                             
                             if(IsValid(toPlay))
                             {
-                                PlaySound(UI->worldMode->soundState, toPlay, delay);
+                                PlaySound(UI->worldMode->soundState, UI->group->assets, toPlay, distanceFromPlayer, decibelOffset, pitch, delay, toleranceDistance, distanceFalloffCoeff);
                             }
                         }
                     } break;

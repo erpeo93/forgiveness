@@ -665,6 +665,7 @@ internal LoadedSound LoadWAV(char* filename, u32 firstSampleIndex, u32 sectionSa
                     if(result.countChannels == 1)
                     {
                         result.samples[0] = (i16*) GetChunkData(iter);
+                        InvalidCodePath;
                     }
                     else
                     {
@@ -673,13 +674,24 @@ internal LoadedSound LoadWAV(char* filename, u32 firstSampleIndex, u32 sectionSa
                         
                         i16* leftChannel = ( i16*) GetChunkData(iter);
                         
+                        i16 maxSampleValue = I16_MIN;
                         for( u32 sampleIndex = 0; sampleIndex < sampleCount / 2; sampleIndex++ )
                         {
                             leftChannel[sampleIndex] = leftChannel[2 * sampleIndex];
+                            i16 sampleValue = leftChannel[sampleIndex];
+                            
+                            if(sampleValue > maxSampleValue)
+                            {
+                                maxSampleValue = sampleValue;
+                            }
                         }
                         
                         result.samples[0] = leftChannel;
                         result.countChannels = 1;
+                        
+                        Assert(maxSampleValue > 0);
+                        result.maxSampleValue = maxSampleValue;
+                        result.decibelLevel = 20 * Log10((r32) maxSampleValue / (r32) I16_MAX);
                         
                         b32 atEnd = true;
                         if(sectionSampleCount)
@@ -1804,6 +1816,8 @@ internal void WritePak(Assets* assets, char* fileName_)
                         LoadedSound sound = LoadWAV(source->sound.filename, source->sound.firstSampleIndex, dest->sound.sampleCount);
                         dest->sound.sampleCount = sound.countSamples;
                         dest->sound.channelCount = sound.countChannels;
+                        dest->sound.maxSampleValue = sound.maxSampleValue;
+                        dest->sound.decibelLevel = sound.decibelLevel;
                         
                         for(u32 channelIndex = 0; channelIndex < sound.countChannels; channelIndex++ )
                         {
@@ -2440,7 +2454,7 @@ inline char* AddFolderToFile(char* addHere, char* fileEnd, char* folder, char* p
     return result;
 }
 
-inline void AddAssetToFile(char* addHere, char* fileEnd, char* tag, char* assetName, b32 labeled)
+inline void AddAssetToFile(char* addHere, char* fileEnd, char* properties, b32 labeled)
 {
     u32 sizeToEnd = (u32) (fileEnd - addHere);
     
@@ -2448,11 +2462,11 @@ inline void AddAssetToFile(char* addHere, char* fileEnd, char* tag, char* assetN
     
     if(labeled)
     {
-		FormatString(toAdd, sizeof(toAdd), "{%s = \"%s\", colorations = (#atLeastOneInList #showBitmap #empty = {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#empty = {name = \"invalid\", value = 0.0})} {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#empty = {name = \"invalid\", value = 0.0})}) },", tag, assetName);
+		FormatString(toAdd, sizeof(toAdd), "{%s, colorations = (#atLeastOneInList #showBitmap #empty = {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#empty = {name = \"invalid\", value = 0.0})} {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#empty = {name = \"invalid\", value = 0.0})}) },", properties);
     }
     else
     {
-        FormatString(toAdd, sizeof(toAdd), "{%s = \"%s\"},", tag, assetName);
+        FormatString(toAdd, sizeof(toAdd), "{%s},", properties);
     }
     u32 roomToMake = StrLen(toAdd);
     Assert(roomToMake <= sizeToEnd);
@@ -2531,7 +2545,16 @@ internal void WriteAssetDefinitionFile(char* path, char* filename, char* definit
                 
                 if(!StringPresentInFile(folderPtr, soundHandle.name, true))
                 {
-                    AddAssetToFile(folderPtr, endFile, "soundName", soundHandle.name, false);
+                    char completePath[512];
+                    FormatString(completePath, sizeof(completePath), "%s/%s", folderPath, soundHandle.name);
+                    LoadedSound sound = LoadWAV(completePath, 0, 0);
+                    r32 decibel = sound.decibelLevel;
+                    
+                    free(sound.free);
+                    
+                    char properties[1024];
+                    FormatString(properties, sizeof(properties), "%s = \"%s\", decibels = \"%f\" ", "soundName", soundHandle.name, decibel);
+                    AddAssetToFile(folderPtr, endFile, properties, false);
                 }
                 
                 Win32CloseHandle(&soundHandle);
@@ -2547,7 +2570,9 @@ internal void WriteAssetDefinitionFile(char* path, char* filename, char* definit
                 
                 if(!StringPresentInFile(folderPtr, imageHandle.name, true))
                 {
-                    AddAssetToFile(folderPtr, endFile, "componentName", imageHandle.name, true);
+                    char properties[1024];
+                    FormatString(properties, sizeof(properties), "%s = \"%s\"", "componentName", imageHandle.name);
+                    AddAssetToFile(folderPtr, endFile, properties, true);
                 }
                 
                 Win32CloseHandle(&imageHandle);

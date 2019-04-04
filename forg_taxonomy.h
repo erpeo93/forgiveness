@@ -414,8 +414,10 @@ struct LabeledSound
     u64 nameHash;
     
     r32 delay;
-    r32 volume;
+    r32 decibelOffset;
     r32 pitch;
+    r32 toleranceDistance;
+    r32 distanceFalloffCoeff;
     union
     {
         LabeledSound* next;

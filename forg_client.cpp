@@ -773,7 +773,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 
                 Clear(&gameState->assetPool);
-                gameState->assets =InitAssets(gameState, gameState->textureQueue, MegaBytes(256));
+                gameState->assets = InitAssets(gameState, gameState->textureQueue, MegaBytes(256));
                 group->assets = gameState->assets;
                 
                 Clear(&worldMode->filePool);
@@ -783,7 +783,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 
 #if 0                
-                gameState->music = PlaySound(&gameState->soundState, GetFirstSound(gameState->assets, Asset_music), 1.0f);
+                gameState->music = PlaySound(&gameState->soundState, GetFirstSound(gameState->assets, Asset_music), 0, 0.0f);
                 ChangeVolume(&gameState->soundState, gameState->music, 1000.0f, V2(1.0f, 1.0f));
 #endif
                 
@@ -1708,7 +1708,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 #if FORGIVENESS_INTERNAL
         gameState->timeCoeff = 100.0f;
 #endif
-        InitializeSoundState(&gameState->soundState, &gameState->audioPool);
         
         for(u32 taskIndex = 0; 
             taskIndex < ArrayCount(gameState->tasks); 
@@ -1723,6 +1722,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         gameState->textureQueue = &memory->textureQueue;
         
         gameState->assets = InitAssets(gameState, gameState->textureQueue, MegaBytes(256));
+        
+        InitializeSoundState(&gameState->soundState, &gameState->audioPool);
     }
     
     

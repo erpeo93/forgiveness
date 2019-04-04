@@ -82,6 +82,9 @@ struct PakSound
     u32 channelCount;
     u32 chain;
     
+    i16 maxSampleValue;
+    r32 decibelLevel;
+    
     // NOTE( Leonardo ): data is:
     /*
     i16* samples[2];

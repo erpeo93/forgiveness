@@ -57,6 +57,9 @@ struct LoadedSound
     i32 countSamples;
     i16* samples[2];
     
+    i16 maxSampleValue;
+    r32 decibelLevel;
+    
     SoundId nextToPlay;
     
     void* free;

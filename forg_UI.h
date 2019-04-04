@@ -851,6 +851,7 @@ struct UIState
     EditorElement* draggingParent;
     
     r32 saveWidgetLayoutTimer;
+    r32 saveWidgetTimer;
     EditorWidget widgets[EditorWidget_Count];
     
     
@@ -865,6 +866,7 @@ struct UIState
     Vec4 hotStructColor;
     EditorElement* hotStruct;
     EditorWidget* hotWidget;
+    r32 fakeDistanceFromPlayer;
     
     char trueString[32];
     char falseString[32];

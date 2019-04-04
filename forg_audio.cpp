@@ -161,8 +161,10 @@ struct PickSoundResult
     u32 soundCount;
     SoundId sounds[MAX_SOUND_SEQUENCE_CONTAINER];
     r32 delays[MAX_SOUND_SEQUENCE_CONTAINER];
-    r32 volumes[MAX_SOUND_SEQUENCE_CONTAINER];
+    r32 decibelOffsets[MAX_SOUND_SEQUENCE_CONTAINER];
     r32 pitches[MAX_SOUND_SEQUENCE_CONTAINER];
+    r32 toleranceDistance[MAX_SOUND_SEQUENCE_CONTAINER];
+    r32 distanceFalloffCoeff[MAX_SOUND_SEQUENCE_CONTAINER];
 };
 
 inline PickSoundResult PickSoundFromContainer(Assets* assets, SoundContainer* container, u32 labelCount, SoundLabel* labels, RandomSequence* sequence)
@@ -179,9 +181,11 @@ inline PickSoundResult PickSoundFromContainer(Assets* assets, SoundContainer* co
     {
         LabeledSound* sound = sounds[soundIndex];
         result.sounds[soundIndex] = FindSoundByName(assets, sound->typeHash, sound->nameHash);
-        result.volumes[soundIndex] = sound->volume;
+        result.decibelOffsets[soundIndex] = sound->decibelOffset;
         result.pitches[soundIndex] = sound->pitch;
         result.delays[soundIndex] = sound->delay;
+        result.toleranceDistance[soundIndex] = sound->toleranceDistance;
+        result.distanceFalloffCoeff[soundIndex] = sound->distanceFalloffCoeff;
     }
     
     return result;
@@ -194,18 +198,35 @@ inline PickSoundResult PickSoundFromEvent(Assets* assets, SoundEvent* event, u32
 }
 
 
-internal PlayingSound* PlaySound(SoundState* soundState, SoundId ID, r32 volume = 1.0, r32 frequency = 1.0, r32 delay = 0.0f)
+internal PlayingSound* PlaySound(SoundState* soundState, Assets* assets, SoundId ID, r32 distanceFromPlayer, r32 decibelOffset = 0, r32 frequency = 1.0, r32 delay = 0.0f, r32 toleranceDistance = 1.0f,r32 distanceFalloffCoeff = 1.0f)
 {
     if( !soundState->firstFreeSound )
     {
         soundState->firstFreeSound = PushStruct( soundState->pool, PlayingSound );
         soundState->firstFreeSound;
     }
+    PakSound* info = GetSoundInfo(assets, ID);
+    r32 decibel = Min(info->decibelLevel + decibelOffset, 0);
+    
+    if(distanceFromPlayer > toleranceDistance)
+    {
+        decibel *= (distanceFalloffCoeff * Square(distanceFromPlayer));
+    }
+    
+    
+    
+    r32 desiredSampleValue = (i16) (Pow(10, decibel / 20) * (r32) I16_MAX);
+    r32 volume = desiredSampleValue / (r32) info->maxSampleValue;
+    
     
     PlayingSound* newSound = soundState->firstFreeSound;
     newSound->currentVolume = V2(volume, volume);
     newSound->playingIndex = 0;
     newSound->ID = ID;
+    
+    
+    
+    
     newSound->delay = delay;
     newSound->dSample = frequency;
     
