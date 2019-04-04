@@ -1254,7 +1254,7 @@ inline SoundContainer* AddSoundEvent(char* eventName)
     return result;
 }
 
-inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundType, char* soundName, char* delay, r32 volume, r32 pitch)
+inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundType, char* soundName, r32 delay, r32 volume, r32 pitch)
 {
     ++container->soundCount;
     
@@ -1264,7 +1264,7 @@ inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundT
     sound->typeHash = StringHash(soundType);
     sound->nameHash = StringHash(soundName);
     
-    sound->delay = delay ? ToR32(delay) : 0;
+    sound->delay = delay;
     sound->volume = volume;
     sound->pitch = pitch;
     
@@ -2912,16 +2912,26 @@ inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer,
         char* soundType = GetValue(sounds, "soundType");
         char* soundName = GetValue(sounds, "sound");
         
-        char* delay = 0;
+        r32 delay = 0;
         r32 volume = 1;
         r32 pitch = 1;
-        EditorElement* params = GetStruct(sounds, "params");
-        if(params)
+        EditorElement* params = GetList(sounds, "params");
+        while(params)
         {
-            delay = GetValue(params, "delay");
-            volume = ToR32(GetValue(params, "volume"));
-            pitch = ToR32(GetValue(params, "pitch"));
+            if(StrEqual(params->name, "delay"))
+            {
+                delay = ToR32(GetValue(params, "value"), 0);
+            }
+            else if(StrEqual(params->name, "volume"))
+            {
+                volume = ToR32(GetValue(params, "value"), 1);
+            }
+            else if(StrEqual(params->name, "pitch"))
+            {
+                pitch = ToR32(GetValue(params, "value"), 1);
+            }
             
+            params = params->next;
         }
         
         if(soundType && soundName)

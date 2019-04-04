@@ -1452,16 +1452,32 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         u64 soundTypeHash = action->soundTypeHash;
                         u64 soundNameHash = action->soundNameHash;
                         
-                        EditorElement* params = action->params;
                         
                         r32 volume = 1.0f;
                         r32 pitch = 1.0f;
                         r32 delay = 0;
-                        if(params)
+                        
+                        if(action->params)
                         {
-                            volume = ToR32(GetValue(params, "volume"));
-                            pitch = ToR32(GetValue(params, "pitch"));
-                            delay = ToR32(GetValue(params, "delay"));
+                            EditorElement* param = action->params->firstInList;
+                            while(param)
+                            {
+                                if(StrEqual(param->name, "volume"))
+                                {
+                                    volume = ToR32(GetValue(param, "value"));
+                                }
+                                else if(StrEqual(param->name, "pitch"))
+                                {
+                                    pitch = ToR32(GetValue(param, "value"));
+                                }
+                                else if(StrEqual(param->name, "delay"))
+                                {
+                                    delay = ToR32(GetValue(param, "value"));
+                                }
+                                
+                                param = param->next;
+                            }
+                            
                         }
                         
                         SoundId ID = FindSoundByName(UI->group->assets, soundTypeHash, soundNameHash);
@@ -1748,6 +1764,8 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                                             hot->firstInList = newSound;
                                             
                                             hotWidget->needsToBeReloaded = true;
+                                            
+                                            UIAddUndoRedoCommand(UI, UndoRedoAdd(hotWidget, hot, newSound));
                                         }
                                     }
                                 }

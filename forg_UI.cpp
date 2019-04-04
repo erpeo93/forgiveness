@@ -1203,7 +1203,23 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         }
                     }
                     
-                    
+                    if(root->firstValue && !root->firstValue->next && StrEqual(root->firstValue->name, "value"))
+                    {
+                        InvalidCodePath;
+                        //b32 hideNames = true;
+                        //DrawChildInline(root->firstValue);
+                        r32 oldX = layout->P.x;
+                        layout->P.x = oldX + 100;
+                        
+                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, canDelete);
+                        
+                        layout->P.x = oldX;
+                        
+                        result = Union(result, childs.bounds);
+                    }
+                    else
+                    {
+                   
                     if(IsSet(root, EditorElem_Expanded) || !root->name[0])
                     {
                         Vec3 verticalStartP = lineStartP;
@@ -1251,12 +1267,11 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         
                         Vec3 verticalEndP = V3(verticalStartP.x, childs.lineEndY, layout->additionalZBias);
                         PushEditorLine(UI->group, propagateLineC, squareLineColor, verticalStartP, verticalEndP, layout->lineThickness, layout->lineSegmentLength, layout->lineSpacing);
-                        
-                        ObjectTransform structTranform = FlatTransform();
-                        structTranform.additionalZBias = layout->additionalZBias;
-                        
+                                               
                       
+                    }     
                     }
+                   
                 } break;
                 
                 case EditorElement_Taxonomy:
@@ -3100,7 +3115,11 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         
         UIAddAutocomplete(UI, "layoutName");
 		UIAddAutocomplete(UI, "pieceName");
-		
+        
+        UIAutocomplete* autocomplete = UIAddAutocomplete(UI, "soundParamName");
+        UIAddOption(UI, autocomplete, "volume");
+        UIAddOption(UI, autocomplete, "pitch");
+        UIAddOption(UI, autocomplete, "delay");
         
         
         FormatString(UI->trueString, sizeof(UI->trueString), "true");
