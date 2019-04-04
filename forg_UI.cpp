@@ -781,7 +781,7 @@ struct UIRenderTreeResult
     r32 lineEndY;
 };
 
-inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElementParents parents, EditorElement* parent_, b32 propagateLineColor, Vec4 parentSquareColor, EditorElement* root_, PlatformInput* input, b32 canDelete)
+inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElementParents parents, EditorElement* parent_, b32 propagateLineColor, Vec4 parentSquareColor, EditorElement* root_, PlatformInput* input, b32 canDelete, b32 showNames = true)
 {
     UIRenderTreeResult totalResult = {};
     
@@ -868,7 +868,15 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
             }
             else if(root->type <= EditorElement_Real)
             {
-                FormatString(name, sizeof(name), "%s =", root->name);
+                if(showNames)
+                {
+                    FormatString(name, sizeof(name), "%s =", root->name); 
+                }
+                else
+                {
+                    FormatString(name, sizeof(name), " ="); 
+                }
+               
             }
             else
             {
@@ -895,17 +903,20 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                 squareDim *= 0.6f;
             }
             
+            Vec4 nameColor = V4(1, 1, 1, 1);
             Vec4 squareLineColor;
             
             if(root == UI->copying)
             {
                 squareLineColor = V4(0, 0, 1, 1);
+                nameColor = squareLineColor;
             }
             else
             {
                 if(propagateLineColor || root->type == EditorElement_EmptyTaxonomy)
                 {
                     squareLineColor = parentSquareColor;
+                    nameColor = parentSquareColor;
                 }
                 else
                 {
@@ -943,8 +954,12 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
             }
             
             
+            
+            if(showNames)
+            {
             PushEditorLine(UI->group, propagateLineColor, parentSquareColor, parentAlignedP, lineStartP, layout->lineThickness, layout->lineSegmentLength, layout->lineSpacing);
-            PushRect(UI->group, FlatTransform(layout->additionalZBias), square, squareLineColor);
+                PushRect(UI->group, FlatTransform(layout->additionalZBias), square, squareLineColor);   
+            }
             
             if(drawExpandedSign)
             {
@@ -960,7 +975,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
             
             Rect2 nameBounds = AddRadius(GetUIOrthoTextBounds(UI, name, layout->fontScale, nameP), V2(layout->padding, layout->padding));
             
-            Vec4 nameColor = V4(1, 1, 1, 1);
+           
             if(root == UI->pasted)
             {
                 r32 lerp = Clamp01MapToRange(2.0f, UI->pastedTimeLeft, 0);
@@ -1044,7 +1059,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
             
             result = Union(square, nameBounds);
             
-            if(showName)
+            if(showName && showNames)
             {
                 layout->P += V2(0, -layout->childStandardHeight);
             }
@@ -1169,6 +1184,24 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                 case EditorElement_Struct:
                 {
                     b32 propagateLineC = propagateLineColor;
+                    b32 simpleValue = false;
+                   
+                    
+                    if(root->firstValue && !root->firstValue->next && StrEqual(root->firstValue->name, "value"))
+                    {
+                        //layout->P.y = nameP.y;
+                        simpleValue = true;
+                        r32 oldX = layout->P.x;
+                        layout->P.x = nameBounds.max.x;
+                        
+                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, canDelete, false);
+                        
+                        layout->P.x = oldX;
+                        
+                        nameBounds = Union(nameBounds, childs.bounds);
+                    }
+                    
+                    
                     if(root != UI->activeLabel)
                     {
                         StructButtonsResult structButtons = DrawStructButtons(UI, input, layout, nameBounds, parents, grandFather, father, root, canDelete);
@@ -1203,19 +1236,9 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         }
                     }
                     
-                    if(root->firstValue && !root->firstValue->next && StrEqual(root->firstValue->name, "value"))
+                    if(simpleValue)
                     {
-                        InvalidCodePath;
-                        //b32 hideNames = true;
-                        //DrawChildInline(root->firstValue);
-                        r32 oldX = layout->P.x;
-                        layout->P.x = oldX + 100;
                         
-                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, canDelete);
-                        
-                        layout->P.x = oldX;
-                        
-                        result = Union(result, childs.bounds);
                     }
                     else
                     {
