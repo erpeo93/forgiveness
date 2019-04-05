@@ -623,13 +623,29 @@ struct UnackedPacket
     u8 data[2048];
 };
 
+struct NetworkAck
+{
+    u16 packetIndex;
+    
+    union
+    {
+        NetworkAck* next;
+        NetworkAck* nextFree;
+    };
+};
+
 #define SLIDING_WINDOW_SIZE 256
 struct NetworkChannelInfo
 {
     u16 nextProgressiveIndexSend;
     u16 nextProgressiveIndexRecv;
     
-    NetMutex unackedMutex;
+    NetMutex ackMutex;
+    NetworkAck* firstQueuedAck;
+    NetworkAck* lastQueueAck;
+    
+    NetworkAck* firstFreeAck;
+    
 	u32 unackedPacketCount;
     UnackedPacket unackedPackets[SLIDING_WINDOW_SIZE * 64];
     

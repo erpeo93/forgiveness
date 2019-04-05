@@ -220,11 +220,123 @@ inline u32 Win32GetNonBlockingSockedDescriptorServer(char* port)
     return result;
 }
 
+inline void DispatchAck(NetworkChannelInfo* info, u16 packetIndex)
+{
+    char ackedString[64];
+    sprintf(ackedString, "arrived ack: %u\n", packetIndex);
+    OutputDebugString(ackedString);
+    
+    for(u32 unackedIndex = 0; unackedIndex < info->unackedPacketCount;)
+    {
+        UnackedPacket* unacked = info->unackedPackets + unackedIndex;
+        Assert(unacked->size);
+        
+        u8* packet = unacked->data;
+        PacketHeader unackedHeader;
+        UnpackHeader_(packet, &unackedHeader);
+        sprintf(ackedString, "matching: %u\n", unackedHeader.progressiveIndex);
+        //OutputDebugString(ackedString);
+        
+        if(unackedHeader.progressiveIndex <= packetIndex ||
+           (unackedHeader.progressiveIndex - packetIndex >= (0xffff >> 1)))
+        {
+            sprintf(ackedString, "acked packet number: %u\n", unackedHeader.progressiveIndex);
+            OutputDebugString(ackedString);
+            
+            info->unackedPackets[unackedIndex] = info->unackedPackets[--info->unackedPacketCount];
+        }
+        else
+        {
+            ++unackedIndex;
+        }
+    }
+    
+}
+
+inline void DispatchQueuedAcks(NetworkChannelInfo* info)
+{
+    b32 dispatchMultiple = false;
+    b32 dispatchSingle = false;
+    u16 dispatchSingleIndex = 0;
+    
+    BeginNetMutex(&info->ackMutex);
+    NetworkAck* goUntil = info->lastQueueAck;
+    NetworkAck* first = info->firstQueuedAck;
+    if(goUntil)
+    {
+        dispatch = true;
+        if(goUntil == first)
+        {
+            dispatchMultiple = false;
+            dispatchSingle = true;
+            dispatchSingleIndex = first->packetIndex;
+            
+            first->next = info->firstFreeAck;
+            info->firstFreeAck = first;
+            info->firstQueuedAck = info->lastQueueAck = 0;
+            
+        }
+    }
+    EndNetMutex(&info->ackMutex);
+    
+    
+    
+    if(dispatchSingle)
+    {
+        DispatchAck(info, dispatchSingleIndex);
+    }
+    
+    if(dispatchMultiple)
+    {
+        for(NetworkAck* ack = first; ack != goUntil; ack = ack->next)
+        {
+            DispatchAck(info, ack->packetIndex);
+            
+            BeginNetMutex(&info->ackMutex);
+            
+            ack->next = info->firstFreeAck;
+            info->firstFreeAck = ack;
+            
+            EndNetMutex(&info->ackMutex);
+        }
+        
+        _WriteBarrier(); _mm_sfence(); 
+        info->firstQueuedAck = goUntil;
+    }
+}
+
+inline void QueueAck(NetworkChannelInfo* info, u16 packetIndex)
+{
+    BeginNetMutex(&info->ackMutex);
+    
+    NetworkAck* newAck = info->firstFreeAck;
+    if(!newAck)
+    {
+        newAck = (NetworkAck*) malloc(sizeof(NetworkAck));
+    }
+    newAck->packetIndex = packetIndex;
+    newAck->next = 0;
+    
+    
+    
+    if(info->lastQueueAck)
+    {
+        Assert(info->firstQueuedAck);
+        info->lastQueueAck->next = newAck;
+        info->lastQueueAck = newAck;
+    }
+    else
+    {
+        Assert(!info->firstQueuedAck);
+        info->firstQueuedAck = info->lastQueueAck = newAck;
+    }
+    
+    EndNetMutex(&info->ackMutex);
+    
+}
 
 
-
-
-
+static int resendingCount = 0;
 NETWORK_SEND_DATA(Win32SendData)
 {
     NetworkConnection* connection = network->connections + connectionSlot;
@@ -253,7 +365,8 @@ NETWORK_SEND_DATA(Win32SendData)
         
         if(channel->ordered)
         {
-            BeginNetMutex(&channelInfo->unackedMutex);
+            DispatchQueuedAcks(channelInfo);
+            
             if(sendUnackedPackets)
             {
                 for(u32 unackedIndex = 0; unackedIndex < channelInfo->unackedPacketCount; ++unackedIndex)
@@ -261,7 +374,7 @@ NETWORK_SEND_DATA(Win32SendData)
                     UnackedPacket* unacked = channelInfo->unackedPackets + unackedIndex;
                     u16 packetSize = unacked->size;
                     Assert(packetSize);
-                    if(unacked->touchedCount++ >= 2)
+                    if(unacked->touchedCount++ >= 3)
                     {
                         unacked->touchedCount = 0;
                         u8* packet = unacked->data;
@@ -274,11 +387,12 @@ NETWORK_SEND_DATA(Win32SendData)
                         if(sendto(network->fd, (const char*) packet, packetSize, 0,
                                   (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
                         {
+                            InvalidCodePath;
                             sprintf(resendString, "ERROR Resending: %u\n", resendHeader.progressiveIndex);
                         }
                         else
                         {
-                            sprintf(resendString, "SUCCESS Resending: %u\n", resendHeader.progressiveIndex);
+                            sprintf(resendString, "SUCCESS Resending: %u %d\n", resendHeader.progressiveIndex, resendingCount++);
                         }
                         OutputDebugString(resendString);
                     }
@@ -294,14 +408,13 @@ NETWORK_SEND_DATA(Win32SendData)
             memcpy(dest, buff_, totalSize);
             unacked->size = totalSize;
             unacked->touchedCount = 0;
-            
-            EndNetMutex(&channelInfo->unackedMutex);
         }
         
         char sendString[64];
         if(sendto(network->fd, (const char*) buff_, totalSize, 0,
                   (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
         {
+            InvalidCodePath;
             sprintf(sendString, "ERROR Sending: %u\n", sendingIndex);
         }
         else
@@ -549,6 +662,7 @@ inline u16 CopyOrderedPacketsToApplicationBuffer(NetworkConnection* connection, 
     return ack;
 }
 
+static int ackCount = 0;
 inline void DispatchToApplicationBuffer(NetworkInterface* network, NetworkConnection* connection, u8* msg, u16 dataSize, u8 channelIndex, u16 progressiveIndex)
 {
     NetworkChannel* channel = network->channels + channelIndex;
@@ -583,7 +697,7 @@ inline void DispatchToApplicationBuffer(NetworkInterface* network, NetworkConnec
         u16 ack = CopyOrderedPacketsToApplicationBuffer(connection, channelIndex);
         
         char debugString[64];
-        sprintf(debugString, "Sending Ack: %d\n", ack);
+        sprintf(debugString, "Sending Ack: %d, %d\n", ack, ackCount++);
         OutputDebugString(debugString);
         
         unsigned char ackPacket[64];
@@ -789,40 +903,12 @@ NETWORK_RECEIVE_DATA(Win32ReceiveData)
                         
                         else if(header.magicNumber == ACKNUMBER)
                         {  
-                            char ackedString[64];
-                            sprintf(ackedString, "arrived ack: %u\n", header.progressiveIndex);
-                            OutputDebugString(ackedString);
                             
                             u16 arrived = header.progressiveIndex;
                             NetworkConnection* connection = network->connections + header.connectionSlot;
                             NetworkChannelInfo* channelInfo = connection->channelInfo + header.channelIndex;
                             
-                            BeginNetMutex(&channelInfo->unackedMutex);
-                            for(u32 unackedIndex = 0; unackedIndex < channelInfo->unackedPacketCount;)
-                            {
-                                UnackedPacket* unacked = channelInfo->unackedPackets + unackedIndex;
-                                Assert(unacked->size);
-                                
-                                u8* packet = unacked->data;
-                                PacketHeader unackedHeader;
-                                UnpackHeader_(packet, &unackedHeader);
-                                sprintf(ackedString, "matching: %u\n", unackedHeader.progressiveIndex);
-                                //OutputDebugString(ackedString);
-                                
-                                if(unackedHeader.progressiveIndex <= arrived ||
-                                   (unackedHeader.progressiveIndex - arrived >= (0xffff >> 1)))
-                                {
-                                    sprintf(ackedString, "acked packet number: %u\n", unackedHeader.progressiveIndex);
-                                    OutputDebugString(ackedString);
-                                    
-                                    channelInfo->unackedPackets[unackedIndex] = channelInfo->unackedPackets[--channelInfo->unackedPacketCount];
-                                }
-                                else
-                                {
-                                    ++unackedIndex;
-                                }
-                            }
-                            EndNetMutex(&channelInfo->unackedMutex);
+                            QueueAck(channelInfo, arrived);
                         }
                         else if(header.magicNumber == STARTNUMBER)
                         {
