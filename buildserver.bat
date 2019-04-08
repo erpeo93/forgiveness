@@ -1,4 +1,4 @@
-call buildcommon.bat
+@echo off 
 
 IF NOT EXIST ..\build mkdir ..\build
 pushd ..\build

@@ -1689,8 +1689,10 @@ internal void SimulateRegionServer(SimRegion* region, MemoryPool* pool)
     {
         Assert(!region->updateHash);
         //UpdateRegionTiles(region);
+        
         UpdateRegionEntities(region, pool);
     }
+    
     EndSim(region);
     
     EndTemporaryMemory(simulationMemory);

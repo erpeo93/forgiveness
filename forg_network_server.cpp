@@ -59,32 +59,19 @@ inline void CloseAndStore(ServerPlayer* player, unsigned char* buff_, unsigned c
     }
 }
 
-inline void FlushAllPackets(ServerState* server, ServerPlayer* player)
+inline void QueueAndFlushAllPackets(ServerState* server, ServerPlayer* player, r32 timeToAdvance)
 {
     for(u8 channelIndex = 0; channelIndex < ForgNetwork_Count; ++channelIndex)
     {
         ForgNetworkPacketQueue* queue = player->packetQueues + channelIndex;
-        if(!queue->packetCount)
+        for(u32 packetIndex = 0; packetIndex < queue->packetCount; ++packetIndex)
         {
-            b32 sendUnackedPackets = true;
-            platformAPI.net.SendData(&server->clientInterface, player->connectionSlot, channelIndex, 0, 0, sendUnackedPackets);
+            b32 sendUnackedPackets = (packetIndex == 0);
+            ForgNetworkPacket* toSend = queue->packets + packetIndex;
+            platformAPI.net.QueuePacket(&server->clientInterface, player->connectionSlot, channelIndex, toSend->data, toSend->size);
+            toSend->size = 0;
         }
-        else
-        {
-            for(u32 packetIndex = 0; packetIndex < queue->packetCount; ++packetIndex)
-            {
-                b32 sendUnackedPackets = (packetIndex == 0);
-                ForgNetworkPacket* toSend = queue->packets + packetIndex;
-                b32 sended = platformAPI.net.SendData(&server->clientInterface, player->connectionSlot, channelIndex, toSend->data, toSend->size, sendUnackedPackets);
-                toSend->size = 0;
-                if(!sended)
-                {
-                    int err = errno;
-                    Assert(err == ERANGE);
-                }
-            }
-            queue->packetCount = 0;
-        }
+        queue->packetCount = 0;
     }
     
     if(player->connectionClosed)
@@ -92,6 +79,8 @@ inline void FlushAllPackets(ServerState* server, ServerPlayer* player)
         platformAPI.net.CloseConnection(&server->clientInterface, player->connectionSlot);
         //PutOnFreeList();
     }
+    
+    platformAPI.net.FlushSendQueue(&server->clientInterface, player->connectionSlot, timeToAdvance);
 }
 
 #define StartStandardPacket(type) unsigned char buff_[2048]; unsigned char* buff = ForgPackHeader( buff_, Type_##type);

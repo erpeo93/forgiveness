@@ -1061,7 +1061,7 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                 else if(StrEqual(currentTag.title, "animation"))
                 {
                     i32 length = 0; 
-                    Assert(GetXMLValuei(&currentTag, "length", &length ) );
+                    GetXMLValuei(&currentTag, "length", &length );
                     char* animationName = GetXMLValues(&currentTag, "name" );
                     Assert(animationName );
                     
@@ -1160,7 +1160,7 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                     
                     Assert(parentID < tempFrame->countBones );
                     i32 timeLineIndex = 0;
-                    Assert(GetXMLValuei(&currentTag, "timeline", &timeLineIndex ) );
+                    GetXMLValuei(&currentTag, "timeline", &timeLineIndex );
                     
                     Assert(tempFrame->countBones < ArrayCount(tempFrame->bones));
                     TempBone* tempBone = tempFrame->tempBones + tempFrame->countBones++;
@@ -1184,12 +1184,12 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                     Assert(tempFrame );
                     
                     i32 parentID = 0;
-                    Assert(GetXMLValuei(&currentTag, "parent", &parentID ) );
+                    GetXMLValuei(&currentTag, "parent", &parentID );
                     Assert(parentID < tempFrame->countBones ); 
                     i32 timeLineIndex = 0;
-                    Assert(GetXMLValuei(&currentTag, "timeline", &timeLineIndex ) );
+                    GetXMLValuei(&currentTag, "timeline", &timeLineIndex );
                     i32 zIndex = 0;
-                    Assert(GetXMLValuei(&currentTag, "z_index", &zIndex ) );
+                    GetXMLValuei(&currentTag, "z_index", &zIndex );
                     
                     Assert(tempFrame->countAss < ArrayCount(tempFrame->ass ) );
                     TempAss* tempAss = tempFrame->tempAss + tempFrame->countAss++;
@@ -1219,7 +1219,7 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                     
                     mainLineActive = false;
                     timeLineActive = 0;
-                    Assert(GetXMLValuei(&currentTag, "id", &timeLineActive ) );
+                    GetXMLValuei(&currentTag, "id", &timeLineActive );
                     timeLineActive += 1;
                     activeTimelineName = GetXMLValue(&currentTag, "name" );
                     keyiedOnFirst = false;
@@ -1299,9 +1299,9 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                     ass->boneID = boneID;
                     
                     i32 fileIndex = 0;
-                    Assert(GetXMLValuei(&currentTag, "file", &fileIndex ) );
+                    GetXMLValuei(&currentTag, "file", &fileIndex );
                     i32 folderIndex = 0;
-                    Assert(GetXMLValuei(&currentTag, "folder", &folderIndex ) );
+                    GetXMLValuei(&currentTag, "folder", &folderIndex );
                     
                     
                     

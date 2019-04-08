@@ -103,7 +103,6 @@ inline UniversePos GetUniverseP(SimRegion* region, Vec3 p)
 #include "forg_action_effect.cpp"
 #include "forg_crafting.cpp"
 #include "server_world.cpp"
-#include "forg_network.cpp"
 #include "forg_fluid.cpp"
 #include "forg_region.cpp"
 
@@ -170,6 +169,8 @@ internal void FillGenerationData(ServerState* server)
     ImportAllFiles("assets", (u32) 0xffffffff, freeTabs);
     ReadBehaviors();
     ReadSynthesisRules();
+    
+    OutputDebugString("DEBUG0\n");
 }
 
 inline void TranslateServerChunks(ServerState* server)
@@ -447,8 +448,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
             }
             
             
-            
-            FlushAllPackets(server, player);
+            QueueAndFlushAllPackets(server, player, server->elapsedTime);
             if(player->connectionClosed)
             {
                 platformAPI.net.RecycleConnection(&server->clientInterface, player->connectionSlot);
@@ -466,16 +466,10 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                         player->connectionClosed = true;
                     }
                     
-                    unsigned char* packetPtr = received.packetPtr;
+                    unsigned char* packetPtr = received.data;
                     if(!packetPtr)
                     {
                         break;
-                    }
-                    
-                    if(received.info.brokeChain)
-                    {
-                        InvalidCodePath;
-                        //context = 0;
                     }
                     
                     ForgNetworkHeader header;
@@ -876,9 +870,9 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                                 if(player->requestCount < ArrayCount(player->requests))
                                 {
                                     PlayerRequest* request = player->requests + player->requestCount++;
-                                    Assert(received.info.dataSize < ArrayCount(request->data));
+                                    Assert(received.dataSize < ArrayCount(request->data));
                                     
-                                    Copy(received.info.dataSize, request->data, received.packetPtr);
+                                    Copy(received.dataSize, request->data, received.data);
                                 }
                             }
 						} break;
@@ -896,8 +890,8 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                             if(!server->gamePaused && player->requestCount < ArrayCount(player->requests))
                             {
                                 PlayerRequest* request = player->requests + player->requestCount++;
-                                Assert(received.info.dataSize < ArrayCount(request->data));
-                                Copy(received.info.dataSize, request->data, received.packetPtr);
+                                Assert(received.dataSize < ArrayCount(request->data));
+                                Copy(received.dataSize, request->data, received.data);
                             }
                         } break;
                         
@@ -1017,7 +1011,7 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     {
         RegionWorkContext* context = server->threadContext + contextIndex;
         *context = {};
-        context->pool.minimumBlockSize = MegaBytes(128);
+        context->pool.minimumBlockSize = MegaBytes(32);
     }
     
     MemoryPool* pool = &server->worldPool;
@@ -1029,7 +1023,7 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     
     
     server->networkPool.allocationFlags = PlatformMemory_NotRestored;
-    server->sendPakBufferSize = KiloBytes(400);
+    server->sendPakBufferSize = KiloBytes(100);
     server->sendPakBuffer = PushArray(&server->networkPool, char, server->sendPakBufferSize);
     server->players = PushArray( &server->networkPool, ServerPlayer, MAXIMUM_SERVER_PLAYERS );
     //server->otherServers = PushArray( &server->pool, Server, MAX_OTHER_SERVERS );
@@ -1040,15 +1034,13 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     Assert(universeIndex < ArrayCount(globalUserPorts));
     
     
-    u16 maxConnectionCount = 64;
+    u16 maxConnectionCount = 2;
     NetworkConnection* connections = PushArray(&server->networkPool, NetworkConnection, maxConnectionCount, NoClear());
     Assert(connections);
     for(u16 connectionIndex = 0; connectionIndex < maxConnectionCount; ++connectionIndex)
     {
         NetworkConnection* connection = connections + connectionIndex;
         connection->connected = false;
-        u32 recvBufferSize = MegaBytes(3);
-        connection->appRecv = ForgAllocateNetworkBuffer(&server->networkPool, recvBufferSize);
     }
     
     u16 clientPort = globalUserPorts[universeIndex];
@@ -1152,7 +1144,6 @@ extern "C" SERVER_INITIALIZE(InitializeServer)
     
     FillGenerationData(server);
     BuildWorld(server, universeIndex);
-    
 }
 
 struct SimulateWorldRegionWork
@@ -1301,10 +1292,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         server->newEntityCount = 0;
         
         
-        
-        
-        
-        
         // NOTE(Leonardo): we first simulate all the mirror region, so that we dispatch all the update first, and then we update all the other regions
         u32 realServerRegionSpan = SERVER_REGION_SPAN + 2;
         for(u32 Y = 0; Y < realServerRegionSpan; Y++)
@@ -1320,7 +1307,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
                         // NOTE(Leonardo): single thread simulation toggle
 #if 0
                         region->context = server->threadContext + 0;
-                        SimulateRegionServer(region, &server->pool);
+                        SimulateRegionServer(region, &server->testPool);
 #else
                         if(!SimulateWorldRegion(server, region))
                         {
@@ -1349,7 +1336,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
                         // NOTE(Leonardo): single thread simulation toggle
 #if 0
                         region->context = server->threadContext + 0;
-                        SimulateRegionServer(region, &server->pool);
+                        SimulateRegionServer(region, &server->testPool);
 #else
                         if(!AllNeighBorsFinished(server, region) ||
                            !SimulateWorldRegion(server, region))
@@ -1366,12 +1353,12 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         FlushSimulationQueue(server, true);
         
-        
         for(u32 contextIndex = 0; contextIndex < ArrayCount(server->threadContext); contextIndex++)
         {
             RegionWorkContext* context = server->threadContext + contextIndex;
             Assert(!context->used);
         }
+        
     }
 }
 #if FORGIVENESS_INTERNAL

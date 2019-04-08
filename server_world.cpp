@@ -406,7 +406,7 @@ internal void BuildSimpleTestWorld(ServerState* server)
             RandomSequence grassSeq = Seed(regionX * regionY + (1 << regionX));
             
 #if GENERATE_ENEMIES
-            u32 goblinCount = 10;
+            u32 goblinCount = 0;
             
             for(u32 goblinIndex = 0; goblinIndex < goblinCount; ++goblinIndex)
             {

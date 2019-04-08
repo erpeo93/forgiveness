@@ -136,7 +136,7 @@ union Vec4
 
 
 #if FORGIVENESS_SLOW
-#define Assert( expression ) if( !( expression ) ) { *( ( int* ) 0 ) = 0; }
+#define Assert( expression ) if( !( expression ) ) {*((int*) 0 ) = 0; }
 #else
 #define Assert( expression )
 #endif

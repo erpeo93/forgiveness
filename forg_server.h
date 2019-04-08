@@ -198,6 +198,7 @@ struct ServerState
     b32 editor;
     b32 gamePaused;
     
+    r32 elapsedTime;
     u8 elapsedMS5x;
     
     u32 universeX;
@@ -223,6 +224,7 @@ struct ServerState
     
     EntityComponentArray components[Component_Count];
     
+    MemoryPool testPool;
     MemoryPool worldPool;
     MemoryPool networkPool;
     

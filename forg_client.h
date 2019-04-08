@@ -87,7 +87,6 @@ struct ClientPlayer
     r32 serverFPS;
     r32 networkTimeElapsed;
     NetworkInterface* network;
-    NetworkBuffer appRecv;
     
     b32 changedWorld;
     i32 changedWorldDeltaX;

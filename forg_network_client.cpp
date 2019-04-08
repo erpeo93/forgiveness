@@ -1,6 +1,11 @@
 internal void SendData(void* data, u16 size)
 {
-    platformAPI.net.SendData(myPlayer->network, 0, ForgNetwork_LastDataGuaranteed, data, size, true);
+    platformAPI.net.QueuePacket(myPlayer->network, 0, ForgNetwork_LastDataGuaranteed, data, size);
+}
+
+inline void FlushAllQueuedPackets(r32 timeToAdvance)
+{
+    platformAPI.net.FlushSendQueue(myPlayer->network, 0, timeToAdvance);
 }
 
 internal void LoginRequest(i32 password)
@@ -514,7 +519,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
     while(true)
     {
         packet = platformAPI.net.GetPacketOnSlot(myPlayer->network, 0);
-        unsigned char* packetPtr = packet.packetPtr;
+        unsigned char* packetPtr = packet.data;
         if(!packetPtr)
         {
             break;
@@ -523,7 +528,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
         ClientEntity* currentEntity = 0;
         ClientEntity* currentContainer = 0;
         u32 readSize = 0;
-        u32 toReadSize = packet.info.dataSize;
+        u32 toReadSize = packet.dataSize;
         
         u32 lastReceived = 0;
         
@@ -550,7 +555,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
                     
                     u32 salt = 11111;
                     platformAPI.net.CloseConnection(myPlayer->network, 0);
-                    platformAPI.net.OpenConnection(myPlayer->network, server, login.port,salt,ForgNetwork_Count, forgNetworkChannelParams, myPlayer->appRecv);
+                    platformAPI.net.OpenConnection(myPlayer->network, server, login.port,salt,ForgNetwork_Count, forgNetworkChannelParams);
                     GameAccessRequest(login.challenge);
                 } break;
                 

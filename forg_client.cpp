@@ -12,7 +12,6 @@ global_variable ClientPlayer* myPlayer;
 #include "forg_physics.cpp"
 #include "forg_rule.cpp"
 #include "forg_world_generation.cpp"
-#include "forg_network.cpp"
 
 inline void AddFlags(ClientEntity* entity, u32 flags)
 {
@@ -359,9 +358,8 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     myPlayer = &result->player;
     
     u32 sendBufferSize = KiloBytes(4);
-    u32 recvBufferSize = MegaBytes(1);
+    u32 recvBufferSize = MegaBytes(16);
     
-    myPlayer->appRecv = ForgAllocateNetworkBuffer(&gameState->modePool, recvBufferSize);
     myPlayer->network = input->network;
 #if 0
     char* loginServer = "forgiveness.hopto.org";
@@ -370,7 +368,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
 #endif
     
     u32 salt = 22222;
-    platformAPI.net.OpenConnection(myPlayer->network, loginServer, LOGIN_PORT, salt, ForgNetwork_Count, forgNetworkChannelParams, myPlayer->appRecv);
+    platformAPI.net.OpenConnection(myPlayer->network, loginServer, LOGIN_PORT, salt, ForgNetwork_Count, forgNetworkChannelParams);
     
     LoginRequest(1111);
     
@@ -773,7 +771,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 
                 Clear(&gameState->assetPool);
-                gameState->assets = InitAssets(gameState, gameState->textureQueue, MegaBytes(256));
+                gameState->assets = InitAssets(gameState, gameState->textureQueue, MegaBytes(32));
                 group->assets = gameState->assets;
                 
                 Clear(&worldMode->filePool);
@@ -1500,6 +1498,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 SendUpdate(output.inputAcc, output.targetEntityID, output.desiredAction, output.overlappingEntityID);
                 
+                FlushAllQueuedPackets(worldMode->originalTimeToAdvance);
+                
                 Rect3 worldCameraBounds = GetScreenBoundsAtTargetDistance(group);
                 Rect2 screenBounds = RectCenterDim(V2(0, 0), V2(worldCameraBounds.max.x - worldCameraBounds.min.x, worldCameraBounds.max.y - worldCameraBounds.min.y));
                 //PushRectOutline(group, FlatTransform(), screenBounds, V4(1.0f, 0.0f, 0.0f, 1.0f), 0.1f); 
@@ -1721,7 +1721,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         gameState->slowQueue = memory->lowPriorityQueue;
         gameState->textureQueue = &memory->textureQueue;
         
-        gameState->assets = InitAssets(gameState, gameState->textureQueue, MegaBytes(256));
+        gameState->assets = InitAssets(gameState, gameState->textureQueue, MegaBytes(32));
         
         InitializeSoundState(&gameState->soundState, &gameState->audioPool);
     }

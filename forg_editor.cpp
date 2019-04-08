@@ -476,6 +476,11 @@ inline void StartingLoadingMessageServer()
     printf("\n\n\nStarting Loading Datafiles...\n\n\n");
 }
 
+inline void EndingLoadingMessageServer()
+{
+    printf("\n\n\nDatafiles Loaded.\n\n\n");
+}
+
 inline void EditorErrorLogServer(char* functionName, char* wasSearching)
 {
     Assert(currentSlot_);
@@ -3654,7 +3659,7 @@ internal void ImportAllFiles(char* dataPath, u32 editorRoles, b32 freeTab)
     MemoryPool tempPool = {};
     TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
     
-    u32 bufferSize = MegaBytes(64);
+    u32 bufferSize = MegaBytes(16);
     char* buffer = (char*) PushSize(&tempPool, bufferSize, NoClear());
     
     for(u32 effectIndex = 0; effectIndex < ArrayCount(MetaTable_EffectIdentifier); ++effectIndex)
@@ -3711,13 +3716,15 @@ internal void ImportAllFiles(char* dataPath, u32 editorRoles, b32 freeTab)
     platformAPI.GetAllFilesEnd(&fileGroup);
     
     EndTemporaryMemory(fileMemory);
+    
+    EndingLoadingMessageServer();
 }
 
 #ifndef FORG_SERVER
 internal void ImportAllAssetFiles(GameModeWorld* worldMode, char* dataPath, MemoryPool* tempPool)
 {
     TempMemory fileMemory = BeginTemporaryMemory(tempPool);
-    u32 bufferSize = MegaBytes(64);
+    u32 bufferSize = MegaBytes(16);
     char* buffer = (char*) PushSize(tempPool, bufferSize, NoClear());
     
     
@@ -3909,7 +3916,7 @@ internal void SendDataFiles(b32 editorMode, ServerPlayer* player,b32 sendTaxonom
     MemoryPool tempPool = {};
     TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
     
-    u32 bufferSize = MegaBytes(64);
+    u32 bufferSize = MegaBytes(16);
     char* buffer = (char*) PushSize(&tempPool, bufferSize, NoClear());
     
     

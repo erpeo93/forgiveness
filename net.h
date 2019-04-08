@@ -50,6 +50,44 @@ inline void EndNetMutex(NetMutex* mutex)
     NetAtomicIncrementU64(&mutex->serving, 1);
 }
 
+#define NETDLLIST_INSERT( sentinel, element ) \
+(element)->next = (sentinel)->next; \
+(element)->prev = (sentinel); \
+(element)->prev->next = (element); \
+(element)->next->prev = (element);
+
+#define NETDLLIST_REMOVE(element) \
+if((element)->next)\
+{\
+    (element)->prev->next = (element)->next; \
+    (element)->next->prev = (element)->prev;\
+    (element)->next = 0;\
+    (element)->prev = 0;\
+}
+
+#define NETDLLIST_ISEMPTY(sentinel) ((sentinel)->next == (sentinel))
+
+#define NETDLLIST_INSERT_AS_LAST( sentinel, element ) \
+(element)->next = (sentinel); \
+(element)->prev = (sentinel)->prev; \
+(element)->prev->next = (element); \
+(element)->next->prev = (element);
+
+
+#define NETDLLIST_INIT( sentinel ) \
+(sentinel)->next = ( sentinel );\
+(sentinel)->prev = ( sentinel );
+
+#define NETFREELIST_ALLOC( result, firstFreePtr, allocationCode ) if( ( result ) = ( firstFreePtr ) ) { ( firstFreePtr ) = ( result )->nextFree; } else{ ( result ) = allocationCode; } Assert( ( result ) != ( firstFreePtr ) ); 
+#define NETFREELIST_DEALLOC( result, firstFreePtr ) Assert( ( result ) != ( firstFreePtr ) ); if( ( result ) ) { ( result )->nextFree = ( firstFreePtr ); ( firstFreePtr ) = ( result ); Assert( ( firstFreePtr )->next != ( result ) ); }
+#define NETFREELIST_INSERT( newFirst, firstPtr ) Assert( ( firstPtr ) != ( newFirst ) ); ( newFirst )->next = ( firstPtr ); ( firstPtr ) = ( newFirst );
+
+#define NETFREELIST_INSERT_AS_LAST(newLast, firstPtr, lastPtr) \
+if(lastPtr){(lastPtr)->next = newLast; lastPtr = newLast;} else{ (firstPtr) = (lastPtr) = dest; }
+
+
+#define NETFREELIST_FREE( listPtr, type, firstFreePtr ) for( type* element = ( listPtr ); element; ) { Assert( element != element->next ); type* nextElement = element->next; FREELIST_DEALLOC( element, firstFreePtr ); element = nextElement; } ( listPtr ) = 0;
+#define NETFREELIST_COPY( destList, type, toCopy, firstFree, pool, ... ){ type* currentElement_ = ( toCopy ); while( currentElement_ ) { type* elementToCopy_; FREELIST_ALLOC( elementToCopy_, ( firstFree ), PushStruct( ( pool ), type ) ); ##__VA_ARGS__; *elementToCopy_ = *currentElement_; FREELIST_INSERT( elementToCopy_, ( destList ) ); currentElement_ = currentElement_->next; } }
 
 inline u64 pack754(long double f, unsigned bits, unsigned expbits)
 {
@@ -542,15 +580,18 @@ inline unsigned char* unpack(unsigned char *buf, char *format, ...)
 #define STARTNUMBER 123456789
 #define ENDNUMBER 987654321
 #define HELLONUMBER 1234554321
-#define ACKNUMBER 1111222233
 #define DISCONNECTNUMBER 999888777
 #pragma pack(push, 1)
 struct PacketHeader
 {
-    u16 totalPacketSize;
+    u16 dataSize;
     i32 magicNumber;
     u16 connectionSlot;
     u16 progressiveIndex;
+    
+    u16 acked;
+    u32 ackedBits;
+    
     u8 channelIndex;
 };
 
@@ -562,40 +603,35 @@ struct PacketTrailer
 
 inline unsigned char* PackHeader_(unsigned char* buff, i32 magicNumber, u16 connectionSlot, u8 channelIndex, u16 progressiveIndex)
 {
-    u16 totalPacketSize = 0;
+    u16 dataSize = 0;
     unsigned char* result = buff;
-    result += pack(result, "HlHCH", totalPacketSize, (i32) magicNumber, connectionSlot, channelIndex, progressiveIndex);
+    result += pack(result, "HlHCH", dataSize, (i32) magicNumber, connectionSlot, channelIndex, progressiveIndex);
     
     return result;
 }
 
 inline unsigned char* UnpackHeader_(unsigned char* buff, PacketHeader* header)
 {
-    buff = unpack(buff, "HlHCH", &header->totalPacketSize, &header->magicNumber, &header->connectionSlot, &header->channelIndex, &header->progressiveIndex);
+    buff = unpack(buff, "HlHCH", &header->dataSize, &header->magicNumber, &header->connectionSlot, &header->channelIndex, &header->progressiveIndex);
     return buff;
 }
 
 inline u16 PackTrailer_(unsigned char* original, unsigned char* current)
 {
     current += pack(current, "l", (i32) ENDNUMBER);
-    u16 totalSize = (u16) (current - original);
+    u16 totalSize = (u16) (current - original - sizeof(PacketHeader) - sizeof(PacketTrailer));
     pack(original, "H", totalSize);
     return totalSize;
 }
 
-struct NetworkApplicationHeader
-{
-    u32 dataSize;
-    u16 progressiveIndex;
-    u8 channelIndex;
-    b32 brokeChain;
-};
-
 struct NetworkPacketReceived
 {
     b32 disconnected;
-    NetworkApplicationHeader info;
-    unsigned char* packetPtr;
+    
+    u8 channelIndex;
+    u16 progressiveIndex;
+    u32 dataSize;
+    unsigned char data[2048];
 };
 
 struct PendingConnection
@@ -603,71 +639,64 @@ struct PendingConnection
     u32 challenge;
 };
 
-struct NetworkChannel
-{
-    b32 ordered;
-    //flags;
-};
 
-
-struct NetworkBuffer
+struct NetworkBufferedPacket
 {
-    u8* buffer;
-    u32 size;
-};
-
-struct UnackedPacket
-{
-    u16 size;
-    u16 touchedCount;
+    u8 channelIndex;
+    u16 progressiveIndex;
+    u32 dataSize;
     u8 data[2048];
+    
+    r32 timeInFlight;
+    union
+    {
+        NetworkBufferedPacket* next;
+        NetworkBufferedPacket* nextFree;
+    };
+    NetworkBufferedPacket* prev;
 };
 
 struct NetworkAck
 {
-    u16 packetIndex;
-    
+    u16 progressiveIndex;
+    u32 ackBits;
+};
+
+struct NetworkBufferedAck
+{
+    NetworkAck ack;
     union
     {
-        NetworkAck* next;
-        NetworkAck* nextFree;
+        NetworkBufferedAck* next;
+        NetworkBufferedAck* nextFree;
     };
 };
 
-#define SLIDING_WINDOW_SIZE 256
-struct NetworkChannelInfo
-{
-    u16 nextProgressiveIndexSend;
-    u16 nextProgressiveIndexRecv;
-    
-    NetMutex ackMutex;
-    NetworkAck* firstQueuedAck;
-    NetworkAck* lastQueueAck;
-    
-    NetworkAck* firstFreeAck;
-    
-	u32 unackedPacketCount;
-    UnackedPacket unackedPackets[SLIDING_WINDOW_SIZE * 64];
-    
-    u16 packetSize[SLIDING_WINDOW_SIZE];
-    u8 receivingSlidingWindow[SLIDING_WINDOW_SIZE][2048];
-};
-
-#define MAX_CHANNELS 4
 struct NetworkConnection
 {
-    u32 salt;
     b32 connected;
+    
+    u32 salt;
+    u16 counterpartConnectionSlot;
     u8 counterpartAddress[64];
     int counterpartAddrSize;
     
-    u16 counterpartConnectionSlot;
     
-    u32 filledRecvBufferSize;
-    u32 contextFirstPacketOffset;
-    NetworkBuffer appRecv;
+    u16 nextProgressiveIndex;
+    NetworkBufferedPacket* firstNotSent;
+    NetworkBufferedPacket sendQueueSentinel;
+    NetworkBufferedPacket recvQueueSentinel;
+    NetworkBufferedPacket* firstFreePacket;
     
-    NetworkChannelInfo channelInfo[MAX_CHANNELS];
+    
+    NetMutex mutex;
+    NetworkBufferedAck* firstQueuedAck;
+    NetworkBufferedAck* firstFreeAck;
+    
+    
+    NetworkAck ackToInclude;
+    //HashTable lastReceivedPackets;
+    
     
     NetworkConnection* nextFree;
 };
@@ -681,11 +710,7 @@ struct NetworkNewConnection
 struct NetworkInterface
 {
     u32 totalBytesReceived;
-    
     u32 fd;
-    
-    u32 channelCount;
-    NetworkChannel channels[4];
     
     b32 newConnectionsAccepted;
     u16 newConnectionCount;
@@ -707,8 +732,11 @@ struct NetworkChannelParams
     b32 ordered;
 };
 
-#define NETWORK_SEND_DATA(name) b32 name(NetworkInterface* network, u16 connectionSlot, u8 channelIndex,void* data, u16 size, b32 sendUnackedPackets)
-typedef NETWORK_SEND_DATA(network_platform_send_data);
+#define NETWORK_QUEUE_PACKET(name) void name(NetworkInterface* network, u16 connectionSlot, u8 channelIndex,void* data, u16 size)
+typedef NETWORK_QUEUE_PACKET(network_platform_queue_packet);
+
+#define NETWORK_FLUSH_SEND_QUEUE(name) void name(NetworkInterface* network, u16 connectionSlot, r32 elapsedTime)
+typedef NETWORK_FLUSH_SEND_QUEUE(network_platform_flush_send_queue);
 
 #define NETWORK_RECEIVE_DATA(name) void name(NetworkInterface* network)
 typedef NETWORK_RECEIVE_DATA(network_platform_receive_data);
@@ -719,7 +747,7 @@ typedef NETWORK_ACCEPT(network_platform_accept);
 #define NETWORK_GET_PACKET(name) NetworkPacketReceived name(NetworkInterface* network, u16 connectionSlot)
 typedef NETWORK_GET_PACKET(network_platform_get_packet);
 
-#define NETWORK_OPEN_CONNECTION(name) void name(NetworkInterface* network, char* IP, u16 port, u32 salt, u8 channelCount, NetworkChannelParams* channelParams, NetworkBuffer appRecv)
+#define NETWORK_OPEN_CONNECTION(name) void name(NetworkInterface* network, char* IP, u16 port, u32 salt, u8 channelCount, NetworkChannelParams* channelParams)
 typedef NETWORK_OPEN_CONNECTION(network_platform_open_connection);
 
 #define NETWORK_CLOSE_CONNECTION(name) void name(NetworkInterface* network, u16 connectionSlot)
@@ -735,8 +763,9 @@ typedef NETWORK_RECYCLE_CONNECTION(network_platform_recycle_connection);
 
 struct NetworkAPI
 {
-    network_platform_send_data* SendData;
+    network_platform_queue_packet* QueuePacket;
     network_platform_receive_data* ReceiveData;
+    network_platform_flush_send_queue* FlushSendQueue;
     network_platform_accept* Accept;
     network_platform_get_packet* GetPacketOnSlot;
     
