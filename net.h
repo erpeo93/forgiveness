@@ -588,11 +588,11 @@ struct PacketHeader
     i32 magicNumber;
     u16 connectionSlot;
     u16 progressiveIndex;
+    u8 flags;
     
     u16 acked;
     u32 ackedBits;
-    
-    u8 channelIndex;
+    ;
 };
 
 struct PacketTrailer
@@ -601,18 +601,18 @@ struct PacketTrailer
 };
 #pragma pack(pop)
 
-inline unsigned char* PackHeader_(unsigned char* buff, i32 magicNumber, u16 connectionSlot, u8 channelIndex, u16 progressiveIndex)
+inline unsigned char* PackHeader_(unsigned char* buff, i32 magicNumber, u16 connectionSlot, u8 flags, u16 progressiveIndex)
 {
     u16 dataSize = 0;
     unsigned char* result = buff;
-    result += pack(result, "HlHCH", dataSize, (i32) magicNumber, connectionSlot, channelIndex, progressiveIndex);
+    result += pack(result, "HlHCH", dataSize, (i32) magicNumber, connectionSlot, flags, progressiveIndex);
     
     return result;
 }
 
 inline unsigned char* UnpackHeader_(unsigned char* buff, PacketHeader* header)
 {
-    buff = unpack(buff, "HlHCH", &header->dataSize, &header->magicNumber, &header->connectionSlot, &header->channelIndex, &header->progressiveIndex);
+    buff = unpack(buff, "HlHCH", &header->dataSize, &header->magicNumber, &header->connectionSlot, &header->flags, &header->progressiveIndex);
     return buff;
 }
 
@@ -627,9 +627,6 @@ inline u16 PackTrailer_(unsigned char* original, unsigned char* current)
 struct NetworkPacketReceived
 {
     b32 disconnected;
-    
-    u8 channelIndex;
-    u16 progressiveIndex;
     u32 dataSize;
     unsigned char data[2048];
 };
@@ -642,10 +639,10 @@ struct PendingConnection
 
 struct NetworkBufferedPacket
 {
-    u8 channelIndex;
     u16 progressiveIndex;
     u32 dataSize;
     u8 data[2048];
+    u8 flags;
     
     r32 timeInFlight;
     union
@@ -659,7 +656,7 @@ struct NetworkBufferedPacket
 struct NetworkAck
 {
     u16 progressiveIndex;
-    u32 ackBits;
+    u32 bits;
 };
 
 struct NetworkBufferedAck
@@ -732,7 +729,12 @@ struct NetworkChannelParams
     b32 ordered;
 };
 
-#define NETWORK_QUEUE_PACKET(name) void name(NetworkInterface* network, u16 connectionSlot, u8 channelIndex,void* data, u16 size)
+enum NetworkFlags
+{
+    NetworkFlags_GuaranteedDelivery = (1 << 1),
+};
+
+#define NETWORK_QUEUE_PACKET(name) void name(NetworkInterface* network, u16 connectionSlot, u8 flags,void* data, u16 size)
 typedef NETWORK_QUEUE_PACKET(network_platform_queue_packet);
 
 #define NETWORK_FLUSH_SEND_QUEUE(name) void name(NetworkInterface* network, u16 connectionSlot, r32 elapsedTime)

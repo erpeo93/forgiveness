@@ -220,9 +220,70 @@ inline u32 Win32GetNonBlockingSockedDescriptorServer(char* port)
     return result;
 }
 
-inline b32 Acked(NetworkBufferedAck* ack, u16 packetIndex)
+inline b32 PacketIndexGreater(u16 s1, u16 s2)
 {
-    b32 result = false;
+    b32 result = (( s1 > s2) && (s1 - s2 <= 32768)) || 
+        ((s1 < s2) && (s2 - s1  > 32768));
+    return result;
+}
+
+inline b32 PacketIndexSmaller(u16 s1, u16 s2)
+{
+    b32 result = !PacketIndexGreater(s1, s2);
+    return result;
+}
+
+inline b32 IsSet(u32 ackedBits, u16 bitIndex)
+{
+    Assert(bitIndex < 32);
+    b32 result = (ackedBits & (1 << bitIndex));
+    return result;
+}
+
+inline u32 SetBitIndex(u32 bits, u16 bitIndex)
+{
+    Assert(bitIndex < 32);
+    u32 result = bits | (1 << bitIndex);
+    return result;
+}
+
+inline u16 Delta(u16 packetIndex1, u16 packetIndex2)
+{
+    Assert(PacketIndexSmaller(packetIndex2, packetIndex1));
+    u32 p1 = (u32) packetIndex1;
+    u32 p2 = (u32) packetIndex2;
+    
+    if(packetIndex2 > packetIndex1)
+    {
+        p1 += 0xffff;
+    }
+    
+    u16 result = (u16) (p1 - p2);
+    return result;
+}
+
+inline b32 Acked(NetworkAck ack, u16 packetIndex)
+{
+    b32 result;
+    
+    if(packetIndex == ack.progressiveIndex)
+    {
+        result = true;
+    }
+    else
+    {
+        result = false;
+        if(PacketIndexSmaller(packetIndex, ack.progressiveIndex))
+        {
+            u16 delta = Delta(ack.progressiveIndex, packetIndex);
+            if(delta <= 32)
+            {
+                result = IsSet(ack.bits, (u32) delta - 1);
+            }
+            
+        }
+    }
+    
     return result;
 }
 
@@ -238,7 +299,7 @@ inline void DispatchQueuedAcks(NetworkConnection* connection)
     {
         for(NetworkBufferedPacket* packet = connection->sendQueueSentinel.next; packet != &connection->sendQueueSentinel; packet = packet->next)
         {
-            if(Acked(toDispatch, packet->progressiveIndex))
+            if(Acked(toDispatch->ack, packet->progressiveIndex))
             {
                 NETDLLIST_REMOVE(packet);
             }
@@ -259,62 +320,79 @@ inline void QueueAck(NetworkConnection* connection, u16 ackedIndex, u32 ackedBit
     NetworkBufferedAck* ack;
     NETFREELIST_ALLOC(ack, connection->firstFreeAck, (NetworkBufferedAck*) malloc(sizeof(NetworkAck)));
     ack->ack.progressiveIndex = ackedIndex;
-    ack->ack.ackBits = ackedBits;
+    ack->ack.bits = ackedBits;
     NETFREELIST_INSERT(ack, connection->firstQueuedAck);
     EndNetMutex(&connection->mutex);
 }
 
-inline b32 Bigger(u16 progr1, u16 progr2)
+inline void RemoveFromHashTable(NetworkConnection* connection, u16 packetIndex)
+{
+    
+}
+
+inline void InsertInHashTable(NetworkConnection* connection, u16 packetIndex)
+{
+    
+}
+
+inline b32 PresentInHashTable(NetworkConnection* connection, u16 packetIndex)
 {
     b32 result = false;
     return result;
 }
 
-inline i16 Delta(u16 progr1, u16 progr2)
-{
-    i16 result = progr1 - progr2;
-    return result;
-}
-
-inline u32 AcketBits(u8 channelIndex)
-{
-    u32 result = 32;
-    return result;
-}
-
-inline void InsertIntoLastReceivedHashTable(NetworkConnection* connection, u16 packetIndex)
+inline void UpdateLastReceivedHashTable(NetworkConnection* connection, u16 packetIndex)
 {
     NetworkAck newAckToInclude = connection->ackToInclude;
-    i16 delta = Delta(packetIndex, newAckToInclude.progressiveIndex);
     
-#if 0    
-    u32 bitsToInclude = 32;
-    if(delta > 0)
+    if(packetIndex != newAckToInclude.progressiveIndex)
     {
-        u16 oldBiggest = newAckToInclude.progressiveIndex;
-        
-        
-        for(u16 index = oldBiggest; index < newBiggest - bitsToInclude; ++index)
+        u16 bitsToInclude = 32;
+        if(PacketIndexGreater(packetIndex, newAckToInclude.progressiveIndex))
         {
-            RemoveFromHashTable(index);
+            u16 oldBiggest = newAckToInclude.progressiveIndex;
+            u16 newBiggest = packetIndex;
+            
+            newAckToInclude.progressiveIndex = newBiggest;
+            newAckToInclude.bits = 0;
+            
+            
+            u16 index = oldBiggest;
+            u16 destIndex = newBiggest - bitsToInclude;
+            Assert(index != destIndex);
+            while(PacketIndexSmaller(index, destIndex))
+            {
+                RemoveFromHashTable(connection, index++);
+            }
+            
+            
+            index = newBiggest - bitsToInclude;
+            destIndex = newBiggest - 1;
+            while(true)
+            {
+                b32 present = PresentInHashTable(connection, index);
+                if(present)
+                {
+                    newAckToInclude.bits = SetBitIndex(newAckToInclude.bits, index);
+                }
+                
+                if(++index == destIndex)
+                {
+                    break;
+                }
+            }
         }
-        
-        u32 bitIndex = bitsToInclude;
-        for(u16 index = newBiggest - bitsToInclude; index < newBiggest; ++index)
+        else
         {
-            b32 present = ?;
-            SetBitIndex(bitIndex, present);
+            u16 delta = Delta(newAckToInclude.progressiveIndex, packetIndex);
+            Assert(delta > 0);
+            if(delta <= bitsToInclude)
+            {
+                InsertInHashTable(connection, packetIndex);
+                newAckToInclude.bits = SetBitIndex(newAckToInclude.bits, delta - 1);
+            }
         }
     }
-    else if(delta < 0)
-    {
-        if(delta < bitsToInclude)
-        {
-            InsertIntoHashSlot();
-            SetBitIndex(bitIndex, true);
-        }
-    }
-#endif
     
     BeginNetMutex(&connection->mutex);
     connection->ackToInclude = newAckToInclude;
@@ -333,12 +411,6 @@ inline u32 GetBandwidth(NetworkConnection* connection)
     return result;
 }
 
-inline b32 GuaranteedDelivery(u8 channelIndex)
-{
-    b32 result = (channelIndex == 1);
-    return result;
-}
-
 NETWORK_QUEUE_PACKET(Win32QueuePacket)
 {
     NetworkConnection* connection = network->connections + connectionSlot;
@@ -348,13 +420,14 @@ NETWORK_QUEUE_PACKET(Win32QueuePacket)
     NETFREELIST_ALLOC(newPacket, connection->firstFreePacket, (NetworkBufferedPacket*) malloc(sizeof(NetworkBufferedPacket)));
     EndNetMutex(&connection->mutex);
     
-    newPacket->channelIndex = channelIndex;
     newPacket->progressiveIndex = connection->nextProgressiveIndex++;
     
     Assert(size && size <= ArrayC(newPacket->data));
-    
     newPacket->dataSize = size;
     memcpy(data, newPacket->data, size);
+    
+    newPacket->flags = flags;
+    newPacket->timeInFlight = 0;
     
     NETDLLIST_INSERT_AS_LAST(&connection->sendQueueSentinel, newPacket);
 }
@@ -372,7 +445,6 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
     }
     
     NetworkBufferedPacket* packet = connection->sendQueueSentinel.next;
-    
     while(dataToSend > 0 && packet != &connection->sendQueueSentinel)
     {
         packet->timeInFlight += elapsedTime;
@@ -381,11 +453,17 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
             SignalPacketLost();
             NETDLLIST_REMOVE(packet);
             
-            if(GuaranteedDelivery(packet->channelIndex))
+            if(packet->flags & NetworkFlags_GuaranteedDelivery)
             {
                 packet->timeInFlight = 0;
                 packet->progressiveIndex = connection->nextProgressiveIndex++;
                 NETDLLIST_INSERT_AS_LAST(&connection->sendQueueSentinel, packet);
+            }
+            else
+            {
+                BeginNetMutex(&connection->mutex);
+                NETFREELIST_INSERT(packet, connection->firstFreePacket);
+                EndNetMutex(&connection->mutex);
             }
         }
         
@@ -396,7 +474,6 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
         
         if(sendPackets)
         {
-            
             BeginNetMutex(&connection->mutex);
             NetworkAck ackToInclude = connection->ackToInclude;
             EndNetMutex(&connection->mutex);
@@ -415,6 +492,7 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
             buff += size;
             totalSize = PackTrailer_(buff_, buff);
 #endif
+            
             
             
             dataToSend -= totalSize;
@@ -536,8 +614,6 @@ NETWORK_GET_PACKET(Win32GetPacket)
 	BeginNetMutex(&connection->mutex);
     NetworkBufferedPacket* firstToReceive = connection->recvQueueSentinel.next;
     result.disconnected = false;
-    result.channelIndex = firstToReceive->channelIndex;
-    result.progressiveIndex = firstToReceive->progressiveIndex;
     result.dataSize = firstToReceive->dataSize;
     memcpy(result.data, firstToReceive->data, firstToReceive->dataSize);
     
@@ -679,16 +755,18 @@ NETWORK_RECEIVE_DATA(Win32ReceiveData)
                                 
                                 if(connection->salt)
                                 {
-                                    InsertIntoLastReceivedHashTable(connection, header.progressiveIndex);
+                                    UpdateLastReceivedHashTable(connection, header.progressiveIndex);
                                     QueueAck(connection, header.acked, header.ackedBits);
                                     
                                     BeginNetMutex(&connection->mutex);
                                     NetworkBufferedPacket* recv;
                                     NETFREELIST_ALLOC(recv, connection->firstFreePacket, (NetworkBufferedPacket*) malloc(sizeof(NetworkBufferedPacket)));
-                                    recv->channelIndex = header.channelIndex;
+                                    recv->flags = header.flags;
                                     recv->progressiveIndex = header.progressiveIndex;
                                     recv->dataSize = header.dataSize;
                                     memcpy(recv->data, start, header.dataSize);
+                                    
+                                    NETDLLIST_INSERT_AS_LAST(&connection->recvQueueSentinel, recv);
                                     EndNetMutex(&connection->mutex);
                                 }
                             }
