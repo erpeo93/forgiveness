@@ -1,6 +1,5 @@
-inline u8* ForgReserveSpace(ServerPlayer* player, u16 size, ForgNetworkChannels channel, u64 identifier)
+inline u8* ForgReserveSpace(ForgNetworkPacketQueue* queue, u16 size, u64 identifier)
 {
-    ForgNetworkPacketQueue* queue = player->packetQueues + channel;
     Assert(queue->maxPacketCount);
     Assert(queue->packetCount <= queue->maxPacketCount);
     
@@ -44,14 +43,23 @@ inline u8* ForgReserveSpace(ServerPlayer* player, u16 size, ForgNetworkChannels 
         }
         packet->size += size;
     }
+    
     return result;
 }
 
-#define CloseAndStoreStandardPacket(player, channel, ...) CloseAndStore(player, buff_, buff, ForgNetwork_##channel, __VA_ARGS__)
-inline void CloseAndStore(ServerPlayer* player, unsigned char* buff_, unsigned char* buff, ForgNetworkChannels channel, u64 identifier = 0)
+inline u8* ForgReserveSpace(ServerPlayer* player, b32 reliableAndOrdered, u16 size, u64 identifier)
+{
+    ForgNetworkPacketQueue* queue = &player->packetQueue;
+    u8* result = ForgReserveSpace(queue, size, identifier);
+    
+    return result;
+}
+
+#define CloseAndStoreStandardPacket(player, reliableAndOrdered, ...) CloseAndStore(player, buff_, buff, reliableAndOrdered, __VA_ARGS__)
+inline void CloseAndStore(ServerPlayer* player, unsigned char* buff_, unsigned char* buff, b32 reliableAndOrdered, u64 identifier = 0)
 {
     u16 totalSize = ForgEndPacket(buff_, buff);
-    u8* writeHere = ForgReserveSpace(player, totalSize, channel, identifier);
+    u8* writeHere = ForgReserveSpace(player, reliableAndOrdered, totalSize, identifier);
     Assert(writeHere);
     if(writeHere)
     {
@@ -61,18 +69,14 @@ inline void CloseAndStore(ServerPlayer* player, unsigned char* buff_, unsigned c
 
 inline void QueueAndFlushAllPackets(ServerState* server, ServerPlayer* player, r32 timeToAdvance)
 {
-    for(u8 channelIndex = 0; channelIndex < ForgNetwork_Count; ++channelIndex)
+    ForgNetworkPacketQueue* queue = &player->packetQueue;
+    for(u32 packetIndex = 0; packetIndex < queue->packetCount; ++packetIndex)
     {
-        ForgNetworkPacketQueue* queue = player->packetQueues + channelIndex;
-        for(u32 packetIndex = 0; packetIndex < queue->packetCount; ++packetIndex)
-        {
-            b32 sendUnackedPackets = (packetIndex == 0);
-            ForgNetworkPacket* toSend = queue->packets + packetIndex;
-            platformAPI.net.QueuePacket(&server->clientInterface, player->connectionSlot, channelIndex, toSend->data, toSend->size);
-            toSend->size = 0;
-        }
-        queue->packetCount = 0;
+        ForgNetworkPacket* toSend = queue->packets + packetIndex;
+        platformAPI.net.QueuePacket(&server->clientInterface, player->connectionSlot, NetworkFlags_GuaranteedDelivery, toSend->data, toSend->size);
+        toSend->size = 0;
     }
+    queue->packetCount = 0;
     
     if(player->connectionClosed)
     {
@@ -119,10 +123,7 @@ internal ServerPlayer* FirstFreePlayer(ServerState* server)
         result->playerID = index;
         
         u32 maxUnreliablePacketCount = 128;
-        u32 maxReliablePacketCount = 4000;
-        
-        ForgInitPacketQueue(&server->networkPool, result->packetQueues + ForgNetwork_LastDataGuaranteed, maxUnreliablePacketCount);
-        ForgInitPacketQueue(&server->networkPool, result->packetQueues + ForgNetwork_ReliableOrdered, maxReliablePacketCount);
+        ForgInitPacketQueue(&server->networkPool, &result->packetQueue, maxUnreliablePacketCount);
     }
     
     result->connectionClosed = false;
@@ -150,14 +151,14 @@ internal void SendLoginResponse(ServerPlayer* player, u16 port, u32 challenge, b
 {
     StartStandardPacket(login);
     Pack("HLl", port, challenge, editingEnabled);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 internal void SendGameAccessConfirm(ServerPlayer* player, i32 universeX, i32 universeY,u64 identifier, u64 openedContainerID, u8 additionalMS5x)
 {
     StartStandardPacket(gameAccess);
     Pack("llQQC", universeX, universeY, identifier, openedContainerID, additionalMS5x);
-    CloseAndStoreStandardPacket(player, LastDataGuaranteed);
+    CloseAndStoreStandardPacket(player, false);
 }
 
 
@@ -165,7 +166,7 @@ internal void SendUnlockedSkillCatConfirm( ServerPlayer* player, u32 taxonomy)
 {
     StartStandardPacket(UnlockSkillCategoryRequest);
     Pack("L", taxonomy);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 
@@ -174,7 +175,7 @@ inline void SendNewRecipeMessage(ServerPlayer* player, Recipe* recipe)
     StartStandardPacket(NewRecipe);
     Pack("LQ", recipe->taxonomy, recipe->gen.generic);
     
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 
@@ -227,7 +228,7 @@ internal void SendAvailableRecipes(ServerPlayer* player, TaxonomyTable* table)
     Pack("L", categoryCount);
     
     buff = SubCategoryOperation(table, player, recipeRoot, &categoryCount, buff);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
     
     for(u32 recipeIndex = 0; recipeIndex < player->recipeCount; ++recipeIndex)
     {
@@ -243,7 +244,7 @@ internal void SendSkillLevel(ServerPlayer* player, u32 taxonomy, u32 level, b32 
 {
     StartStandardPacket(SkillLevel);
     Pack("lLLld", levelUp, taxonomy, level, isPassiveSkill, power);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 inline void SendSkillLevelUp(ServerPlayer* player, SkillSlot* skill, b32 passive)
@@ -294,7 +295,7 @@ internal void SendSkills(SimRegion* region, SimEntity* entity, ServerPlayer* pla
     Pack("L", categoryCount);
     
     buff = SubCategoryOperation(table, player, skillsRoot, &categoryCount, buff);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
     
     
     SendAllSkills(region, entity, player, table, skillsRoot);
@@ -554,7 +555,7 @@ internal void SendPossibleActions(SimRegion* region, SimEntity* actor, SimEntity
     
     pack(actionCountDest, "L", actionCount);
     
-    CloseAndStoreStandardPacket(player, LastDataGuaranteed);
+    CloseAndStoreStandardPacket(player, false);
 }
 
 
@@ -576,7 +577,7 @@ internal void SendDeleteMessage(SimRegion* region, SimEntity* entity)
                     StartStandardPacket(deletedEntity);
                     
                     Pack("Q", entity->identifier);
-                    CloseAndStoreStandardPacket(player, ReliableOrdered);
+                    CloseAndStoreStandardPacket(player, true);
                 }
             }
         }
@@ -593,14 +594,14 @@ inline void SendEntityHeader(ServerPlayer* player, u64 ID)
 {
     StartStandardPacket(entityHeader);
     Pack("Q", ID);
-    CloseAndStoreStandardPacket(player, LastDataGuaranteed);
+    CloseAndStoreStandardPacket(player, false);
 }
 
 inline void SendEntityHeaderReliably(ServerPlayer* player, u64 ID)
 {
     StartStandardPacket(entityHeader);
     Pack("Q", ID);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 inline void SendEquipmentID(ServerPlayer* player, u64 entityID, u8 slotIndex, u64 ID)
@@ -608,35 +609,35 @@ inline void SendEquipmentID(ServerPlayer* player, u64 entityID, u8 slotIndex, u6
     Assert(ID != 2497);
     StartStandardPacket(equipmentSlot);
     Pack("CQ", slotIndex, ID);
-    CloseAndStoreStandardPacket(player, LastDataGuaranteed, entityID);
+    CloseAndStoreStandardPacket(player, false, entityID);
 }
 
 inline void SendStartedAction(ServerPlayer* player, u64 entityID, u8 actionIndex, u64 targetID)
 {
     StartStandardPacket(StartedAction);
     Pack("CQ", actionIndex, targetID);
-    CloseAndStoreStandardPacket(player, LastDataGuaranteed, entityID);
+    CloseAndStoreStandardPacket(player, false, entityID);
 }
 
 inline void SendCompletedAction(ServerPlayer* player, u64 entityID, u8 actionIndex, u64 targetID)
 {
     StartStandardPacket(CompletedAction);
     Pack("CQ", actionIndex, targetID);
-    CloseAndStoreStandardPacket(player, ReliableOrdered, entityID);
+    CloseAndStoreStandardPacket(player, true, entityID);
 }
 
 inline void SendObjectEntityHeader(ServerPlayer* player, u64 containerID)
 {
     StartStandardPacket(containerHeader);
     Pack("Q", containerID);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 inline void SendContainerInfo_(ServerPlayer* player, u8 maxObjectCount)
 {
     StartStandardPacket(containerInfo);
     Pack("C", maxObjectCount);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 inline void SendContainerInfo(ServerPlayer* player, u64 identifier, u8 maxObjectCount)
@@ -649,14 +650,14 @@ inline void SendObjectRemoveUpdate(ServerPlayer* player, u8 objectIndex)
 {
     StartStandardPacket(objectRemoved);
     Pack("C", objectIndex);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 inline void SendObjectAddUpdate(ServerPlayer* player, u8 objectIndex, Object* object)
 {
     StartStandardPacket(objectAdded);
     Pack("CLQHh", objectIndex, object->taxonomy, object->gen.generic, object->quantity, object->status);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 inline Object* GetObject(SimRegion* region, SimEntity* container, u32 objectIndex);
@@ -684,14 +685,14 @@ inline void SendEssenceDelta(ServerPlayer* player, u32 essenceTaxonomy, i16 delt
 {
     StartStandardPacket(essenceDelta);
     Pack("Lh", essenceTaxonomy, delta);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 inline void SendEffectTriggered(ServerPlayer* player, EffectTriggeredToSend* toSend)
 {
     StartStandardPacket(effectTriggered);
     Pack("QQL", toSend->actor, toSend->target, toSend->effectTaxonomy);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 internal void SendEntityUpdate(SimRegion* region, SimEntity* entity)
@@ -715,9 +716,8 @@ internal void SendEntityUpdate(SimRegion* region, SimEntity* entity)
             if(collider->insideRegion)
             {
                 SendEntityHeader(player, entity->identifier);
-                ForgNetworkChannels channel = ForgNetwork_LastDataGuaranteed;
                 
-                u8* writeHere = ForgReserveSpace(player, totalSize, channel, entity->identifier);
+                u8* writeHere = ForgReserveSpace(player, totalSize, false, entity->identifier);
                 Assert(writeHere);
                 if(writeHere)
                 {
@@ -790,14 +790,14 @@ inline void SendDataFileHeader(ServerPlayer* player, char* name, u32 fileSize, u
 {
     StartStandardPacket(DataFileHeader);
     Pack("sLL", name, fileSize, chunkSize);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 inline void SendPakFileHeader(ServerPlayer* player, char* name, u32 fileSize, u32 chunkSize)
 {
     StartStandardPacket(PakFileHeader);
     Pack("sLL", name, fileSize, chunkSize);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 inline void SendFileChunks(ServerPlayer* player, char* source, u32 sizeToSend, u32 chunkSize)
@@ -813,7 +813,7 @@ inline void SendFileChunks(ServerPlayer* player, char* source, u32 sizeToSend, u
         buff += toSent;
         runningSource += toSent;
         
-        CloseAndStoreStandardPacket(player, ReliableOrdered);
+        CloseAndStoreStandardPacket(player, true);
         sentSize += toSent;
     }
 }
@@ -832,19 +832,19 @@ internal void SendAllDataFileSentMessage(ServerPlayer* player, b32 loadTaxonomie
 {
     StartStandardPacket(AllDataFileSent);
     Pack("l", loadTaxonomies);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 internal void SendAllPakFileSentMessage(ServerPlayer* player)
 {
     StartStandardPacket(AllPakFileSent);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 internal void SendPatchDoneMessage(ServerPlayer* player)
 {
     StartStandardPacket(PatchLocalServer);
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
+    CloseAndStoreStandardPacket(player, true);
 }
 
 inline void SendPatchDoneMessageToAllPlayers(ServerState* server)

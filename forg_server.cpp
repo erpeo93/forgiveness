@@ -380,7 +380,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
         {
             if(player->allDataFileSent && !player->allPakFileSent)
             {
-#if 1
+#if 0
                 u32 chunkSize = KiloBytes(1);
                 
                 char* pakPath = "assets";
@@ -466,12 +466,12 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                         player->connectionClosed = true;
                     }
                     
-                    unsigned char* packetPtr = received.data;
-                    if(!packetPtr)
+                    if(!received.dataSize)
                     {
                         break;
                     }
                     
+                    unsigned char* packetPtr = received.data;
                     ForgNetworkHeader header;
                     packetPtr = ForgUnpackHeader(packetPtr, &header);
                     switch(header.packetType)
@@ -1044,7 +1044,7 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     }
     
     u16 clientPort = globalUserPorts[universeIndex];
-    platformAPI.net.InitServer(&server->clientInterface, clientPort, ForgNetwork_Count, forgNetworkChannelParams, connections, maxConnectionCount);
+    platformAPI.net.InitServer(&server->clientInterface, clientPort, connections, maxConnectionCount);
     
     server->receivePacketWork.network = &server->clientInterface;
     server->receivePacketWork.ReceiveData = platformAPI.net.ReceiveData;

@@ -587,8 +587,8 @@ struct PacketHeader
     u16 dataSize;
     i32 magicNumber;
     u16 connectionSlot;
-    u16 progressiveIndex;
     u8 flags;
+    u16 progressiveIndex;
     
     u16 acked;
     u32 ackedBits;
@@ -601,26 +601,28 @@ struct PacketTrailer
 };
 #pragma pack(pop)
 
-inline unsigned char* PackHeader_(unsigned char* buff, i32 magicNumber, u16 connectionSlot, u8 flags, u16 progressiveIndex)
+inline unsigned char* PackHeader_(unsigned char* buff, i32 magicNumber, u16 connectionSlot, u8 flags, u16 progressiveIndex, u16 acked, u32 ackedBits)
 {
     u16 dataSize = 0;
     unsigned char* result = buff;
-    result += pack(result, "HlHCH", dataSize, (i32) magicNumber, connectionSlot, flags, progressiveIndex);
+    result += pack(result, "HlHCHHL", dataSize, (i32) magicNumber, connectionSlot, flags, progressiveIndex, acked, ackedBits);
     
     return result;
 }
 
 inline unsigned char* UnpackHeader_(unsigned char* buff, PacketHeader* header)
 {
-    buff = unpack(buff, "HlHCH", &header->dataSize, &header->magicNumber, &header->connectionSlot, &header->flags, &header->progressiveIndex);
+    buff = unpack(buff, "HlHCHHL", &header->dataSize, &header->magicNumber, &header->connectionSlot, &header->flags, &header->progressiveIndex, &header->acked, &header->ackedBits);
     return buff;
 }
 
 inline u16 PackTrailer_(unsigned char* original, unsigned char* current)
 {
     current += pack(current, "l", (i32) ENDNUMBER);
-    u16 totalSize = (u16) (current - original - sizeof(PacketHeader) - sizeof(PacketTrailer));
-    pack(original, "H", totalSize);
+    
+    u16 totalSize = (u16) (current - original);
+    u16 dataSize = (u16) (totalSize - sizeof(PacketHeader) - sizeof(PacketTrailer));
+    pack(original, "H", dataSize);
     return totalSize;
 }
 
@@ -640,9 +642,10 @@ struct PendingConnection
 struct NetworkBufferedPacket
 {
     u16 progressiveIndex;
+    u8 flags;
+    
     u32 dataSize;
     u8 data[2048];
-    u8 flags;
     
     r32 timeInFlight;
     union
@@ -669,11 +672,18 @@ struct NetworkBufferedAck
     };
 };
 
+
+struct PacketData
+{
+	u32 packetIndex;
+};
+
+
 struct NetworkConnection
 {
     b32 connected;
-    
     u32 salt;
+    
     u16 counterpartConnectionSlot;
     u8 counterpartAddress[64];
     int counterpartAddrSize;
@@ -690,10 +700,8 @@ struct NetworkConnection
     NetworkBufferedAck* firstQueuedAck;
     NetworkBufferedAck* firstFreeAck;
     
-    
     NetworkAck ackToInclude;
-    //HashTable lastReceivedPackets;
-    
+    PacketData receivedPackets[1024];
     
     NetworkConnection* nextFree;
 };
@@ -749,13 +757,13 @@ typedef NETWORK_ACCEPT(network_platform_accept);
 #define NETWORK_GET_PACKET(name) NetworkPacketReceived name(NetworkInterface* network, u16 connectionSlot)
 typedef NETWORK_GET_PACKET(network_platform_get_packet);
 
-#define NETWORK_OPEN_CONNECTION(name) void name(NetworkInterface* network, char* IP, u16 port, u32 salt, u8 channelCount, NetworkChannelParams* channelParams)
+#define NETWORK_OPEN_CONNECTION(name) void name(NetworkInterface* network, char* IP, u16 port, u32 salt)
 typedef NETWORK_OPEN_CONNECTION(network_platform_open_connection);
 
 #define NETWORK_CLOSE_CONNECTION(name) void name(NetworkInterface* network, u16 connectionSlot)
 typedef NETWORK_CLOSE_CONNECTION(network_platform_close_connection);
 
-#define NETWORK_INIT_SERVER(name) void name(NetworkInterface* network, u16 port, u8 channelCount, NetworkChannelParams* channelParams, NetworkConnection* connections, u16 maxConnectionCount)
+#define NETWORK_INIT_SERVER(name) void name(NetworkInterface* network, u16 port, NetworkConnection* connections, u16 maxConnectionCount)
 typedef NETWORK_INIT_SERVER(network_platform_init_server);
 
 

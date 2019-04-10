@@ -368,7 +368,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
 #endif
     
     u32 salt = 22222;
-    platformAPI.net.OpenConnection(myPlayer->network, loginServer, LOGIN_PORT, salt, ForgNetwork_Count, forgNetworkChannelParams);
+    platformAPI.net.OpenConnection(myPlayer->network, loginServer, LOGIN_PORT, salt);
     
     LoginRequest(1111);
     
@@ -1657,6 +1657,11 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
     PushRect(group, rectTransform, serverRect, serverColor);
     PushRect(group, rectTransform, editorRect, editorColor);
     PushRect(group, rectTransform, joinRect, joinColor);
+    
+    if(myPlayer)
+    {
+        FlushAllQueuedPackets(input->timeToAdvance);
+    }
     
     return 0;
 }

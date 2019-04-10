@@ -2,22 +2,8 @@
 
 #define LOGIN_PORT 1313
 #define MTU (KiloBytes(1) + 2 * (sizeof(ForgNetworkHeader) + sizeof(EntityHeader)))
-
-enum ForgNetworkChannels
-{
-    ForgNetwork_LastDataGuaranteed,
-    ForgNetwork_ReliableOrdered,
-    
-    ForgNetwork_Count,
-};
-
-global_variable NetworkChannelParams forgNetworkChannelParams[] =
-{
-    {false},
-    {true},
-};
-
 #pragma pack(push, 1)
+
 struct ForgNetworkHeader
 {
     u8 packetType;
