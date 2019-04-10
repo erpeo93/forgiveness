@@ -322,6 +322,463 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 }
 
 
+internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* player, unsigned char* packetPtr, u16 dataSize)
+{
+    u32 challenge = 1111;
+    
+    
+    ForgNetworkHeader header;
+    packetPtr = ForgUnpackHeader(packetPtr, &header);
+    switch(header.packetType)
+    {
+        // TODO( Leonardo ): type_register, type_activate and type_selectHero
+        case Type_login:
+        {
+            // TODO( Leonardo ): get these from the client!
+            char* username = "leo";
+            char* password = "1234";
+            
+            if(true)//SQLCheckPassword( server->conn, username, password ) )
+            {
+                // TODO( Leonardo ): send message to correct server so that it can add the serverPlayer! in this case WE ARE ALWAYS the correct server.
+                //ResetSecureSeeds(newC, &server->playerSeedSequence); 
+                // TODO( Leonardo ): change login port whit whatever port 
+                //the player is in
+                b32 editingEnabled = server->editor;
+                SendLoginResponse(player, LOGIN_PORT, challenge, editingEnabled);
+                player->connectionClosed = true;
+            }
+            else
+            {
+                InvalidCodePath;
+                //SendLoginResponse(player, 0, 0);
+            }
+        } break;
+        
+        case Type_gameAccess:
+        {
+            GameAccessRequest clientReq;
+            unpack(packetPtr, "L", &clientReq.challenge ); 
+            if(challenge == clientReq.challenge)
+            {
+                SendDataFiles(server->editor, player, true, true);
+                player->allDataFileSent = true;
+                //EntitySQL ep = SQLRetriveHero( server->conn, newPlayer->username, newPlayer->heroSlot );
+                SimRegion* region = GetServerRegion( server, 0, 0 );
+                Vec3 P = V3( 0.5f, 10.0f, 0 );
+                
+                TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName( region->taxTable, "centaur" );
+                u64 identifier = AddEntity( region, P, slot->taxonomy, NullGenerationData(), PlayerAddEntityParams(player->playerID));
+                
+                
+#if 1                             
+                TaxonomySlot* testSlot = NORUNTIMEGetTaxonomySlotByName(region->taxTable, "strength");
+                AddEntity(region, P + V3( 5.0f, 0.0f, 0.0f ), testSlot->taxonomy, NullGenerationData(), EntityFromObject(identifier, 0, 0));
+#endif
+                
+                
+                SendGameAccessConfirm(player, server->universeX, server->universeY, identifier, 0, server->elapsedMS5x);
+                
+#if FORGIVENESS_INTERNAL
+                if(!server->debugPlayer)
+                {
+                    server->debugPlayer = player;
+                }
+#endif
+            }
+            else
+            {
+                InvalidCodePath;
+            }
+        } break;
+        
+        
+        
+        
+        
+        
+        
+        
+        case Type_NewEditorTab:
+        {
+            if(server->editor)
+            {
+                EditorTabStack* stack = &server->editorStack;
+                stack->counter = 0;
+                stack->previousElementType = EditorElement_Count;
+            }
+        } break;
+        
+        case Type_EditorElement:
+        {
+            if(server->editor)
+            {
+                TaxonomyTable* taxTable = server->activeTable;
+                EditorElement* element;
+                FREELIST_ALLOC(element, taxTable->firstFreeElement, PushStruct(&taxTable->pool, EditorElement));
+                *element = {};
+                
+                packetPtr = unpack(packetPtr, "sLLL", element->name, &element->type, &element->flags, &element->versionNumber);
+                if(element->type < EditorElement_List)
+                {
+                    packetPtr =  unpack(packetPtr, "s", element->value);
+                }
+                else
+                {
+                    element->value[0] = 0;
+                    if(element->type == EditorElement_List)
+                    {
+                        packetPtr = unpack(packetPtr, "ss", element->elementName, element->labelName);
+                    }
+                }
+                
+                EditorTabStack* stack = &server->editorStack;
+                EditorElement* current;
+                u32 currentStackIndex = 0;
+                
+                if(!stack->counter)
+                {
+                    stack->stack[stack->counter++] = element;
+                    current = element;
+                    stack->result = element;
+                }
+                else
+                {
+                    Assert(stack->counter > 0);
+                    currentStackIndex = stack->counter - 1;
+                    current = stack->stack[currentStackIndex];
+                }
+                
+                
+                if(StrEqual(element->name, "empty"))
+                {
+                    Assert(current->type == EditorElement_List);
+                    current->emptyElement = element;
+                    Assert(stack->counter < ArrayCount(stack->stack));
+                    stack->stack[stack->counter++] = element;
+                }
+                else
+                {
+                    switch(stack->previousElementType)
+                    {
+                        case EditorElement_String:
+                        case EditorElement_Real:
+                        case EditorElement_Signed:
+                        case EditorElement_Unsigned:
+                        {
+                            current->next = element;
+                            stack->stack[currentStackIndex] = element;
+                        } break;
+                        
+                        case EditorElement_Struct:
+                        {
+                            current->firstValue = element;
+                            
+                            Assert(stack->counter < ArrayCount(stack->stack));
+                            stack->stack[stack->counter++] = element;
+                        } break;
+                        
+                        case EditorElement_List:
+                        {
+                            current->firstInList = element;
+                            
+                            Assert(stack->counter < ArrayCount(stack->stack));
+                            stack->stack[stack->counter++] = element;
+                        } break;
+                        
+                        case EditorElement_Count:
+                        {
+                            //editingSlot->tabs[editingSlot->tabCount++] = current;
+                        } break;
+                        
+                        InvalidDefaultCase;
+                    }
+                    
+                    stack->previousElementType = element->type;
+                    
+                }
+                
+            }
+        } break;
+        
+        case Type_PopEditorElement:
+        {
+            if(server->editor)
+            {
+                b32 list;
+                b32 pop;
+                
+                packetPtr = unpack(packetPtr, "ll", &list, &pop);
+                
+                EditorTabStack* stack = &server->editorStack;
+                
+                if(pop)
+                {
+                    Assert(stack->counter > 0);
+                    --stack->counter;
+                }
+                
+                if(list)
+                {
+                    stack->previousElementType = EditorElement_List;
+                }
+                else
+                {
+                    stack->previousElementType = EditorElement_String;
+                }
+            }
+        } break;
+        
+        case Type_ReloadEditingSlot:
+        {
+            if(server->editor)
+            {
+                EditorTabStack* stack = &server->editorStack;
+                TaxonomyTable* taxTable = server->activeTable;
+                
+                u32 taxonomy;
+                u32 tab;
+                packetPtr = unpack(packetPtr, "LL", &taxonomy, &tab);
+                
+                
+                TaxonomySlot* editingSlot = GetSlotForTaxonomy(taxTable, taxonomy);
+                
+                FreeElement(editingSlot->tabs[tab].root);
+                editingSlot->tabs[tab].root = stack->result;
+                stack->counter = 0;
+                
+                for(u32 tabIndex = 0; tabIndex < editingSlot->tabCount; ++tabIndex)
+                {
+                    EditorTab* tabToReload = editingSlot->tabs + tabIndex;
+                    Import(editingSlot, tabToReload->root);
+                }
+            }
+        } break;
+        
+        case Type_SaveAssetFadFile:
+        {
+            if(server->editor)
+            {
+                EditorTabStack* stack = &server->editorStack;
+                TaxonomyTable* taxTable = server->activeTable;
+                
+                char fileName[64];
+                packetPtr = unpack(packetPtr, "s", fileName);
+                
+                char completePath[256];
+                FormatString(completePath, sizeof(completePath), "definition/%s/%s.fad", fileName, fileName);
+                
+                MemoryPool* tempPool = &taxTable->pool;
+                TempMemory fileMemory = BeginTemporaryMemory(tempPool);
+                
+                u32 bufferSize = MegaBytes(2);
+                char* buffer = PushArray(tempPool, char, bufferSize);
+                
+                
+                stack->result;
+                u32 freeSize = bufferSize;
+                WriteElements(buffer, &freeSize, stack->result);
+                u32 written = bufferSize - freeSize;
+                
+                platformAPI.DEBUGWriteFile(completePath, buffer, written);
+                EndTemporaryMemory(fileMemory);
+                
+                
+                FreeElement(stack->result);
+                stack->counter = 0;
+                
+            }
+        } break;
+        
+        case Type_SaveSlotTabToFile:
+        {
+            if(server->editor)
+            {
+                TaxonomyTable* taxTable = server->activeTable;
+                
+                u32 taxonomy;
+                packetPtr = unpack(packetPtr, "L", &taxonomy);
+                TaxonomySlot* slot = GetSlotForTaxonomy(taxTable, taxonomy);
+                WriteToFile(taxTable, slot);
+            }
+        } break;
+        
+        case Type_ReloadAssets:
+        {
+            if(server->editor)
+            {
+                LoadAssets();
+                for(u32 toResetIndex = 0; 
+                    toResetIndex < MAXIMUM_SERVER_PLAYERS; 
+                    toResetIndex++)
+                {
+                    ServerPlayer* toReset = server->players + toResetIndex;
+                    if(toReset->connectionSlot)
+                    {
+                        toReset->allPakFileSent = false;
+                        SendDataFiles(server->editor, player, false, true);
+                        toReset->pakFileIndex = 0;
+                        toReset->pakFileOffset = 0;
+                    }
+                }
+            }
+        } break;
+        
+        case Type_PatchCheck:
+        {
+            if(server->editor)
+            {
+                ReloadServer(server);
+                if(!server->activeTable->errorCount)
+                {
+                    printf("Yay! you can patch the local server!\n");
+                }
+                else
+                {
+                    InvalidCodePath;
+                }
+                
+                SendPatchDoneMessageToAllPlayers(server);
+            } break;
+        } break;
+        
+        case Type_PatchLocalServer:
+        {
+            if(server->editor)
+            {
+                PatchLocalServer(server);
+            }
+        } break;
+        
+        case Type_AddTaxonomy:
+        {
+            if(server->editor)
+            {
+                u32 parentTaxonomy;
+                char name[32];
+                
+                packetPtr = unpack(packetPtr, "Ls", &parentTaxonomy, name);
+                
+                char destPath[512];
+                char referenceTaxonomyPath[512];
+                
+                BuildTaxonomyDataPath(server->activeTable, parentTaxonomy, name, destPath, sizeof(destPath), referenceTaxonomyPath, sizeof(referenceTaxonomyPath));
+                
+                char finalSource[512];
+                FormatString(finalSource, sizeof(finalSource), "%s/reference", referenceTaxonomyPath);
+                
+                char finalDest[512];
+                FormatString(finalDest, sizeof(finalDest), "%s/%s.fed", destPath, name);
+                
+                if(platformAPI.CreateFolder(destPath))
+                {
+                    platformAPI.CopyFileOrFolder(finalSource, finalDest);
+                    ReloadServer(server);
+                }
+            }
+            
+        } break;
+        
+        
+        case Type_DeleteTaxonomy:
+        {
+            if(server->editor)
+            {
+                char path[512];
+                char ignored[512];
+                
+                u32 toDelete;
+                packetPtr = unpack(packetPtr, "L", &toDelete);
+                
+                TaxonomySlot* toDeleteSlot = GetSlotForTaxonomy(server->activeTable, toDelete);
+                BuildTaxonomyDataPath(server->activeTable, toDelete, "", path, sizeof(path), ignored, sizeof(ignored));
+                
+                PoundToNameAndFedFileRecursively(path, toDeleteSlot->name, true);
+                ReloadServer(server);
+            }
+        } break;
+        
+        case Type_ReviveTaxonomy:
+        {
+            if(server->editor)
+            {
+                char path[512];
+                char ignored[512];
+                
+                u32 toDelete;
+                packetPtr = unpack(packetPtr, "L", &toDelete);
+                
+                TaxonomySlot* toDeleteSlot = GetSlotForTaxonomy(server->activeTable, toDelete);
+                BuildTaxonomyDataPath(server->activeTable, toDelete, "", path, sizeof(path), ignored, sizeof(ignored));
+                
+                PoundToNameAndFedFileRecursively(path, toDeleteSlot->name, false);
+                ReloadServer(server);
+            }
+        } break;
+        
+        case Type_InstantiateTaxonomy:
+        case Type_InstantiateRecipe:
+        case Type_DeleteEntity:
+        {
+            if(server->editor)
+            {
+                if(player->requestCount < ArrayCount(player->requests))
+                {
+                    PlayerRequest* request = player->requests + player->requestCount++;
+                    Assert(dataSize < ArrayCount(request->data));
+                    
+                    Copy(dataSize, request->data, packetPtr);
+                }
+            }
+        } break;
+        
+        case Type_PauseToggle:
+        {
+            if(server->editor)
+            {
+                server->gamePaused = !server->gamePaused;
+            }
+        } break;
+        
+        default:
+        {
+            if(!server->gamePaused && player->requestCount < ArrayCount(player->requests))
+            {
+                PlayerRequest* request = player->requests + player->requestCount++;
+                Assert(dataSize < ArrayCount(request->data));
+                Copy(dataSize, request->data, packetPtr);
+            }
+        } break;
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+#if 0
+        default:
+        {
+#if FORGIVENESS_INTERNAL
+            if( player == server->debugPlayer )
+            {
+                HandleDebugMessage( memory, player, status.packetType, packetPtr );
+            }
+#endif
+        } break;
+#endif
+        
+    }
+    
+#if FORGIVENESS_INTERNAL
+    //platformAPI.PlatformInputRecordingHandlePlayer( server, &player->request );
+#endif
+}
+
 extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
 {
     platformAPI = memory->api;
@@ -370,7 +827,6 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
     //
     //
     
-    u32 challenge = 1111;
     for( u32 playerIndex = 0; 
         playerIndex < MAXIMUM_SERVER_PLAYERS; 
         playerIndex++ )
@@ -475,457 +931,51 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                         break;
                     }
                     
-                    unsigned char* packetPtr = received.data;
-                    ForgNetworkHeader header;
-                    packetPtr = ForgUnpackHeader(packetPtr, &header);
-                    switch(header.packetType)
-                    {
-                        // TODO( Leonardo ): type_register, type_activate and type_selectHero
-                        case Type_login:
-                        {
-                            // TODO( Leonardo ): get these from the client!
-                            char* username = "leo";
-                            char* password = "1234";
-                            
-                            if(true)//SQLCheckPassword( server->conn, username, password ) )
-                            {
-                                // TODO( Leonardo ): send message to correct server so that it can add the serverPlayer! in this case WE ARE ALWAYS the correct server.
-                                //ResetSecureSeeds(newC, &server->playerSeedSequence); 
-                                // TODO( Leonardo ): change login port whit whatever port 
-                                //the player is in
-                                b32 editingEnabled = server->editor;
-                                SendLoginResponse(player, LOGIN_PORT, challenge, editingEnabled);
-                                player->connectionClosed = true;
-                            }
-                            else
-                            {
-                                InvalidCodePath;
-                                //SendLoginResponse(player, 0, 0);
-                            }
-                        } break;
-                        
-                        case Type_gameAccess:
-                        {
-                            GameAccessRequest clientReq;
-                            unpack(packetPtr, "L", &clientReq.challenge ); 
-							if(challenge == clientReq.challenge)
-                            {
-                                SendDataFiles(server->editor, player, true, true);
-                                player->allDataFileSent = true;
-                                //EntitySQL ep = SQLRetriveHero( server->conn, newPlayer->username, newPlayer->heroSlot );
-                                SimRegion* region = GetServerRegion( server, 0, 0 );
-                                Vec3 P = V3( 0.5f, 10.0f, 0 );
-                                
-                                TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName( region->taxTable, "centaur" );
-                                u64 identifier = AddEntity( region, P, slot->taxonomy, NullGenerationData(), PlayerAddEntityParams(player->playerID));
-                                
-                                
-#if 1                             
-                                TaxonomySlot* testSlot = NORUNTIMEGetTaxonomySlotByName(region->taxTable, "strength");
-                                AddEntity(region, P + V3( 5.0f, 0.0f, 0.0f ), testSlot->taxonomy, NullGenerationData(), EntityFromObject(identifier, 0, 0));
-#endif
-                                
-                                
-                                SendGameAccessConfirm(player, server->universeX, server->universeY, identifier, 0, server->elapsedMS5x);
-                                
-#if FORGIVENESS_INTERNAL
-                                if(!server->debugPlayer)
-                                {
-                                    server->debugPlayer = player;
-                                }
-#endif
-                            }
-                            else
-                            {
-                                InvalidCodePath;
-                            }
-                        } break;
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        case Type_NewEditorTab:
-                        {
-                            if(server->editor)
-                            {
-                                EditorTabStack* stack = &server->editorStack;
-                                stack->counter = 0;
-                                stack->previousElementType = EditorElement_Count;
-                            }
-                        } break;
-                        
-                        case Type_EditorElement:
-                        {
-                            if(server->editor)
-                            {
-                                TaxonomyTable* taxTable = server->activeTable;
-                                EditorElement* element;
-                                FREELIST_ALLOC(element, taxTable->firstFreeElement, PushStruct(&taxTable->pool, EditorElement));
-                                *element = {};
-                                
-                                packetPtr = unpack(packetPtr, "sLLL", element->name, &element->type, &element->flags, &element->versionNumber);
-                                if(element->type < EditorElement_List)
-                                {
-                                    packetPtr =  unpack(packetPtr, "s", element->value);
-                                }
-                                else
-                                {
-                                    element->value[0] = 0;
-                                    if(element->type == EditorElement_List)
-                                    {
-                                        packetPtr = unpack(packetPtr, "ss", element->elementName, element->labelName);
-                                    }
-                                }
-                                
-                                EditorTabStack* stack = &server->editorStack;
-                                EditorElement* current;
-                                u32 currentStackIndex = 0;
-                                
-                                if(!stack->counter)
-                                {
-                                    stack->stack[stack->counter++] = element;
-                                    current = element;
-                                    stack->result = element;
-                                }
-                                else
-                                {
-                                    Assert(stack->counter > 0);
-                                    currentStackIndex = stack->counter - 1;
-                                    current = stack->stack[currentStackIndex];
-                                }
-                                
-                                
-                                if(StrEqual(element->name, "empty"))
-                                {
-                                    Assert(current->type == EditorElement_List);
-                                    current->emptyElement = element;
-                                    Assert(stack->counter < ArrayCount(stack->stack));
-                                    stack->stack[stack->counter++] = element;
-                                }
-                                else
-                                {
-                                    switch(stack->previousElementType)
-                                    {
-                                        case EditorElement_String:
-                                        case EditorElement_Real:
-                                        case EditorElement_Signed:
-                                        case EditorElement_Unsigned:
-                                        {
-                                            current->next = element;
-                                            stack->stack[currentStackIndex] = element;
-                                        } break;
-                                        
-                                        case EditorElement_Struct:
-                                        {
-                                            current->firstValue = element;
-                                            
-                                            Assert(stack->counter < ArrayCount(stack->stack));
-                                            stack->stack[stack->counter++] = element;
-                                        } break;
-                                        
-                                        case EditorElement_List:
-                                        {
-                                            current->firstInList = element;
-                                            
-                                            Assert(stack->counter < ArrayCount(stack->stack));
-                                            stack->stack[stack->counter++] = element;
-                                        } break;
-                                        
-                                        case EditorElement_Count:
-                                        {
-                                            //editingSlot->tabs[editingSlot->tabCount++] = current;
-                                        } break;
-                                        
-                                        InvalidDefaultCase;
-                                    }
-                                    
-                                    stack->previousElementType = element->type;
-                                    
-                                }
-                                
-                            }
-                        } break;
-                        
-                        case Type_PopEditorElement:
-                        {
-                            if(server->editor)
-                            {
-                                b32 list;
-                                b32 pop;
-                                
-                                packetPtr = unpack(packetPtr, "ll", &list, &pop);
-                                
-                                EditorTabStack* stack = &server->editorStack;
-                                
-                                if(pop)
-                                {
-                                    Assert(stack->counter > 0);
-                                    --stack->counter;
-                                }
-                                
-                                if(list)
-                                {
-                                    stack->previousElementType = EditorElement_List;
-                                }
-                                else
-                                {
-                                    stack->previousElementType = EditorElement_String;
-                                }
-                            }
-                        } break;
-                        
-                        case Type_ReloadEditingSlot:
-                        {
-                            if(server->editor)
-                            {
-                                EditorTabStack* stack = &server->editorStack;
-                                TaxonomyTable* taxTable = server->activeTable;
-                                
-                                u32 taxonomy;
-                                u32 tab;
-                                packetPtr = unpack(packetPtr, "LL", &taxonomy, &tab);
-                                
-                                
-                                TaxonomySlot* editingSlot = GetSlotForTaxonomy(taxTable, taxonomy);
-                                
-                                FreeElement(editingSlot->tabs[tab].root);
-                                editingSlot->tabs[tab].root = stack->result;
-                                stack->counter = 0;
-                                
-                                for(u32 tabIndex = 0; tabIndex < editingSlot->tabCount; ++tabIndex)
-                                {
-                                    EditorTab* tabToReload = editingSlot->tabs + tabIndex;
-                                    Import(editingSlot, tabToReload->root);
-                                }
-                            }
-                        } break;
-                        
-                        case Type_SaveAssetFadFile:
-                        {
-                            if(server->editor)
-                            {
-                                EditorTabStack* stack = &server->editorStack;
-                                TaxonomyTable* taxTable = server->activeTable;
-                                
-                                char fileName[64];
-                                packetPtr = unpack(packetPtr, "s", fileName);
-                                
-                                char completePath[256];
-                                FormatString(completePath, sizeof(completePath), "definition/%s/%s.fad", fileName, fileName);
-                                
-                                MemoryPool* tempPool = &taxTable->pool;
-                                TempMemory fileMemory = BeginTemporaryMemory(tempPool);
-                                
-                                u32 bufferSize = MegaBytes(2);
-                                char* buffer = PushArray(tempPool, char, bufferSize);
-                                
-                                
-                                stack->result;
-                                u32 freeSize = bufferSize;
-                                WriteElements(buffer, &freeSize, stack->result);
-                                u32 written = bufferSize - freeSize;
-                                
-                                platformAPI.DEBUGWriteFile(completePath, buffer, written);
-                                EndTemporaryMemory(fileMemory);
-                                
-                                
-                                FreeElement(stack->result);
-                                stack->counter = 0;
-                                
-                            }
-                        } break;
-                        
-						case Type_SaveSlotTabToFile:
-						{
-                            if(server->editor)
-                            {
-                                TaxonomyTable* taxTable = server->activeTable;
-                                
-                                u32 taxonomy;
-                                packetPtr = unpack(packetPtr, "L", &taxonomy);
-                                TaxonomySlot* slot = GetSlotForTaxonomy(taxTable, taxonomy);
-                                WriteToFile(taxTable, slot);
-                            }
-						} break;
-                        
-                        case Type_ReloadAssets:
-                        {
-                            if(server->editor)
-                            {
-                                LoadAssets();
-                                for(u32 toResetIndex = 0; 
-                                    toResetIndex < MAXIMUM_SERVER_PLAYERS; 
-                                    toResetIndex++)
-                                {
-                                    ServerPlayer* toReset = server->players + toResetIndex;
-                                    if(toReset->connectionSlot)
-                                    {
-                                        toReset->allPakFileSent = false;
-                                        SendDataFiles(server->editor, player, false, true);
-                                        toReset->pakFileIndex = 0;
-                                        toReset->pakFileOffset = 0;
-                                    }
-                                }
-                            }
-                        } break;
-                        
-                        case Type_PatchCheck:
-                        {
-                            if(server->editor)
-                            {
-                                ReloadServer(server);
-                                if(!server->activeTable->errorCount)
-                                {
-                                    printf("Yay! you can patch the local server!\n");
-                                }
-                                else
-                                {
-                                    InvalidCodePath;
-                                }
-                                
-                                SendPatchDoneMessageToAllPlayers(server);
-                            } break;
-                        } break;
-                        
-                        case Type_PatchLocalServer:
-                        {
-                            if(server->editor)
-                            {
-                                PatchLocalServer(server);
-                            }
-                        } break;
-                        
-						case Type_AddTaxonomy:
-						{
-                            if(server->editor)
-                            {
-                                u32 parentTaxonomy;
-                                char name[32];
-                                
-                                packetPtr = unpack(packetPtr, "Ls", &parentTaxonomy, name);
-                                
-                                char destPath[512];
-                                char referenceTaxonomyPath[512];
-                                
-                                BuildTaxonomyDataPath(server->activeTable, parentTaxonomy, name, destPath, sizeof(destPath), referenceTaxonomyPath, sizeof(referenceTaxonomyPath));
-                                
-                                char finalSource[512];
-                                FormatString(finalSource, sizeof(finalSource), "%s/reference", referenceTaxonomyPath);
-                                
-                                char finalDest[512];
-                                FormatString(finalDest, sizeof(finalDest), "%s/%s.fed", destPath, name);
-                                
-                                if(platformAPI.CreateFolder(destPath))
-                                {
-                                    platformAPI.CopyFileOrFolder(finalSource, finalDest);
-                                    ReloadServer(server);
-                                }
-                            }
-                            
-						} break;
-                        
-                        
-						case Type_DeleteTaxonomy:
-						{
-                            if(server->editor)
-                            {
-                                char path[512];
-                                char ignored[512];
-                                
-                                u32 toDelete;
-                                packetPtr = unpack(packetPtr, "L", &toDelete);
-                                
-                                TaxonomySlot* toDeleteSlot = GetSlotForTaxonomy(server->activeTable, toDelete);
-                                BuildTaxonomyDataPath(server->activeTable, toDelete, "", path, sizeof(path), ignored, sizeof(ignored));
-                                
-								PoundToNameAndFedFileRecursively(path, toDeleteSlot->name, true);
-                                ReloadServer(server);
-                            }
-						} break;
-                        
-						case Type_ReviveTaxonomy:
-						{
-                            if(server->editor)
-                            {
-                                char path[512];
-                                char ignored[512];
-                                
-                                u32 toDelete;
-                                packetPtr = unpack(packetPtr, "L", &toDelete);
-                                
-                                TaxonomySlot* toDeleteSlot = GetSlotForTaxonomy(server->activeTable, toDelete);
-                                BuildTaxonomyDataPath(server->activeTable, toDelete, "", path, sizeof(path), ignored, sizeof(ignored));
-                                
-                                PoundToNameAndFedFileRecursively(path, toDeleteSlot->name, false);
-                                ReloadServer(server);
-                            }
-						} break;
-                        
-						case Type_InstantiateTaxonomy:
-						case Type_InstantiateRecipe:
-                        case Type_DeleteEntity:
-						{
-                            if(server->editor)
-                            {
-                                if(player->requestCount < ArrayCount(player->requests))
-                                {
-                                    PlayerRequest* request = player->requests + player->requestCount++;
-                                    Assert(received.dataSize < ArrayCount(request->data));
-                                    
-                                    Copy(received.dataSize, request->data, received.data);
-                                }
-                            }
-						} break;
-                        
-                        case Type_PauseToggle:
-                        {
-                            if(server->editor)
-                            {
-                                server->gamePaused = !server->gamePaused;
-                            }
-                        } break;
-                        
-                        default:
-                        {
-                            if(!server->gamePaused && player->requestCount < ArrayCount(player->requests))
-                            {
-                                PlayerRequest* request = player->requests + player->requestCount++;
-                                Assert(received.dataSize < ArrayCount(request->data));
-                                Copy(received.dataSize, request->data, received.data);
-                            }
-                        } break;
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-#if 0
-                        default:
-                        {
-#if FORGIVENESS_INTERNAL
-                            if( player == server->debugPlayer )
-                            {
-                                HandleDebugMessage( memory, player, status.packetType, packetPtr );
-                            }
-#endif
-                        } break;
-#endif
-                        
-                    }
                     
-#if FORGIVENESS_INTERNAL
-                    //platformAPI.PlatformInputRecordingHandlePlayer( server, &player->request );
-#endif
+                    unsigned char* packetPtr = received.data;
+                    
+                    ForgNetworkApplicationIndex applicationIndex;
+                    packetPtr = ForgUnpackApplicationIndex(packetPtr, &applicationIndex);
+                    
+                    ForgNetworkReceiver* receiver = &player->receiver;
+                    if(received.flags & NetworkFlags_GuaranteedDelivery)
+                    {
+                        u32 delta = ApplicationDelta(applicationIndex, receiver->orderedWaitingFor);
+                        if(delta < WINDOW_SIZE)
+                        {
+                            u32 index = (receiver->circularStartingIndex + delta) % WINDOW_SIZE;
+                            receiver->orderedWindow[index] = received;
+                        }
+                        
+                        u32 dispatched = 0;
+                        
+                        while(true)
+                        {
+                            u32 index = (receiver->circularStartingIndex + dispatched) % WINDOW_SIZE;
+                            NetworkPacketReceived* test = receiver->orderedWindow + index;
+                            if(test->dataSize)
+                            {
+                                DispatchApplicationPacket(server, player, test->data + sizeof(ForgNetworkApplicationIndex), test->dataSize - sizeof(ForgNetworkApplicationIndex));
+                                test->dataSize = 0;
+                                ++dispatched;
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        
+                        receiver->circularStartingIndex += dispatched;
+                        receiver->orderedWaitingFor.index += dispatched;
+                    }
+                    else
+                    {
+                        if(ApplicationIndexGreater(applicationIndex, receiver->unorderedBiggestReceived))
+                        {
+                            receiver->unorderedBiggestReceived = applicationIndex;
+                            DispatchApplicationPacket(server, player, packetPtr, received.dataSize - sizeof(ForgNetworkApplicationIndex));
+                        }
+                    }
                 }
             }
         }

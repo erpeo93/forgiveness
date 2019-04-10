@@ -567,7 +567,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     
     myPlayer = &worldMode->player;
     UIState* UI = worldMode->UI;
-    ReceiveNetworkPackets(worldMode, UI);
+    ReceiveNetworkPackets(worldMode);
     
 #if FORGIVENESS_INTERNAL
     myPlayer->networkTimeElapsed += input->timeToAdvance;

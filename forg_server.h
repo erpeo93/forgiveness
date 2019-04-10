@@ -61,6 +61,8 @@ struct ServerPlayer
     ForgNetworkPacketQueue standardPacketQueue;
     ForgNetworkPacketQueue reliablePacketQueue;
     
+    ForgNetworkReceiver receiver;
+    
     u32 playerID;
     u64 overlappingEntityID;
     

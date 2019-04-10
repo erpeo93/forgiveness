@@ -84,10 +84,10 @@ struct ClientPlayer
 {
     b32 spawnAsh;
     
-    u16 mostRecentReceivedProgressiveIndex;
+    ForgNetworkReceiver receiver;
     
-    u16 nextSendProgressiveIndex;
-    u16 nextSendReliableProgressiveIndex;
+    ForgNetworkApplicationIndex nextSendUnreliableApplicationIndex;
+    ForgNetworkApplicationIndex nextSendReliableApplicationIndex;
     
     r32 serverFPS;
     r32 networkTimeElapsed;

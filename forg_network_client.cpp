@@ -14,29 +14,60 @@ inline void FlushAllQueuedPackets(r32 timeToAdvance)
     platformAPI.net.FlushSendQueue(myPlayer->network, 0, timeToAdvance);
 }
 
-#define RELIABLE myPlayer->nextSendReliableProgressiveIndex++
-#define UNRELIABLE myPlayer->nextSendProgressiveIndex++
+
+inline void CloseAndSend(unsigned char* buff_, unsigned char* buff, b32 reliable)
+{
+    ForgNetworkApplicationIndex index;
+    
+    if(reliable)
+    {
+        index = myPlayer->nextSendReliableApplicationIndex;
+        myPlayer->nextSendReliableApplicationIndex.index++;
+    }
+    else
+    {
+        index = myPlayer->nextSendUnreliableApplicationIndex;
+        myPlayer->nextSendUnreliableApplicationIndex.index++;
+    }
+    
+    unsigned char* indexDest = buff_ + sizeof(PacketHeader);
+    ForgPackApplicationIndex(indexDest, index);
+    
+    u16 totalSize = ForgEndPacket_( buff_, buff);
+    if(reliable)
+    {
+        SendReliableData(buff_, totalSize);
+    }
+    else
+    {
+        SendUnreliableData(buff_, totalSize);
+    }
+}
+
+#define StartPacket(type) unsigned char buff_[1024]; unsigned char* buff = ForgPackHeader( buff_, Type_##type);buff += sizeof(ForgNetworkApplicationIndex);
+
+#define Pack(formatString, ...) buff += pack(buff, formatString, ##__VA_ARGS__)
+#define Unpack(formatString, ...) packetPtr = unpack(packetPtr, formatString, ##__VA_ARGS__)
+
+#define CloseAndSendStandardPacket() CloseAndSend(buff_, buff, false)
+#define CloseAndSendReliablePacket() CloseAndSend(buff_, buff, true)
+
+
 
 internal void LoginRequest(i32 password)
 {
-    unsigned char buff_[1024];
-    unsigned char* buff = ForgPackHeader(buff_, Type_login, RELIABLE);
-    
-    buff += pack(buff, "l", password);
-    
-    u16 totalSize = ForgEndPacket(buff_, buff);
-    SendReliableData(buff_, totalSize);
+    StartPacket(login);
+    Pack("l", password);
+    CloseAndSendReliablePacket();
 }
 
 internal void GameAccessRequest(u32 challenge)
 {
-    unsigned char buff_[1024];
-    unsigned char* buff = ForgPackHeader(buff_, Type_gameAccess, RELIABLE);
+    StartPacket(gameAccess);
     
-    buff += pack(buff, "L", challenge);
+    Pack("L", challenge);
     
-    u16 totalSize = ForgEndPacket(buff_, buff);
-    SendReliableData(buff_, totalSize);
+    CloseAndSendReliablePacket();
 }
 
 #if FORGIVENESS_INTERNAL
@@ -46,7 +77,7 @@ internal void SendEditingEvent( DebugEvent* event )
     if( myPlayer )
     {
         unsigned char buff_[2048];
-        unsigned char* buff = ForgPackHeader(buff_, Type_debugEvent, RELIABLE);
+        unsigned char* buff = ForgPackHeader(buff_, Type_debugEvent);
         
         buff += pack(buff, "QQLHCQQ", event->clock, event->pointer, event->threadID, event->coreIndex, event->type, event->overNetwork[0], event->overNetwork[1]);
         
@@ -69,32 +100,6 @@ internal void SendInputRecordingMessage( b32 recording, b32 startAutomatically )
     }
 }
 #endif
-
-#define CloseAndSendStandardPacket() CloseAndSend(buff_, buff, false)
-#define CloseAndSendReliablePacket() CloseAndSend(buff_, buff, true)
-
-inline void CloseAndSend(unsigned char* buff_, unsigned char* buff, b32 reliable)
-{
-    u16 totalSize = ForgEndPacket( buff_, buff );
-    
-    if(reliable)
-    {
-        SendReliableData(buff_, totalSize);
-    }
-    else
-    {
-        SendUnreliableData(buff_, totalSize);
-    }
-}
-
-#define StartStandardPacket(type) unsigned char buff_[1024]; unsigned char* buff = ForgPackHeader( buff_, Type_##type, UNRELIABLE);
-
-#define StartReliablePacket(type) unsigned char buff_[1024]; unsigned char* buff = ForgPackHeader( buff_, Type_##type, RELIABLE);
-
-
-
-#define Pack(formatString, ...) buff += pack(buff, formatString, ##__VA_ARGS__)
-#define Unpack(formatString, ...) packetPtr = unpack(packetPtr, formatString, ##__VA_ARGS__)
 
 internal void TrackUpdate( ClientPlayer* player, Vec3 acceleration, Vec3 velocity )
 {
@@ -125,18 +130,16 @@ internal void SendUpdate( Vec3 acceleration, u64 targetEntityID, u32 desiredActi
         desiredAction = Action_Move;
     }
     
-    unsigned char buff_[1024];
-    unsigned char* buff = ForgPackHeader(buff_, Type_ActionRequest, UNRELIABLE);
+    StartPacket(ActionRequest);
     
-    buff += pack(buff, "LVLQQ", 0, acceleration, desiredAction, targetEntityID, overlappingEntityID);
+    Pack("LVLQQ", 0, acceleration, desiredAction, targetEntityID, overlappingEntityID);
     
-    u16 totalSize = ForgEndPacket(buff_, buff);
-    SendUnreliableData( buff_, totalSize);
+    CloseAndSendStandardPacket();
 }
 
 internal void SendEquipRequest(u64 sourceContainerID, u8 objectIndex)
 {
-    StartReliablePacket(EquipRequest);
+    StartPacket(EquipRequest);
     
     Pack("QC", sourceContainerID, objectIndex);
     
@@ -145,7 +148,7 @@ internal void SendEquipRequest(u64 sourceContainerID, u8 objectIndex)
 
 internal void SendDisequipRequest(u32 slotIndex, u64 destContainerID, u8 destObjectIndex)
 {
-    StartReliablePacket(DisequipRequest);
+    StartPacket(DisequipRequest);
     
     Pack("LQC", slotIndex, destContainerID, destObjectIndex);
     
@@ -154,7 +157,7 @@ internal void SendDisequipRequest(u32 slotIndex, u64 destContainerID, u8 destObj
 
 internal void SendDropRequest(u64 sourceContainerID, u8 objectIndex)
 {
-    StartReliablePacket(DropRequest);
+    StartPacket(DropRequest);
     
     Pack("QC", sourceContainerID, objectIndex);
     
@@ -164,7 +167,7 @@ internal void SendDropRequest(u64 sourceContainerID, u8 objectIndex)
 internal void SendMoveRequest(u64 sourceContainerID, u8 objectIndex, u64 destContainerID, u8 destObjectIndex)
 {
     
-    StartReliablePacket(MoveRequest);
+    StartPacket(MoveRequest);
     
     Pack("QCQC", sourceContainerID, objectIndex, destContainerID, destObjectIndex);
     
@@ -173,7 +176,7 @@ internal void SendMoveRequest(u64 sourceContainerID, u8 objectIndex, u64 destCon
 
 internal void SendSwapRequest(u64 sourceContainerID, u8 sourceObjectIndex)
 {
-    StartReliablePacket(SwapRequest);
+    StartPacket(SwapRequest);
     
     Pack("QC", sourceContainerID, sourceObjectIndex);
     
@@ -182,7 +185,7 @@ internal void SendSwapRequest(u64 sourceContainerID, u8 sourceObjectIndex)
 
 internal void SendDragEquipmentRequest(u32 slotIndex)
 {
-    StartReliablePacket(DragEquipmentRequest);
+    StartPacket(DragEquipmentRequest);
     
     Pack("L", slotIndex);
     
@@ -191,7 +194,7 @@ internal void SendDragEquipmentRequest(u32 slotIndex)
 
 internal void SendEquipDraggingRequest(u32 slotIndex)
 {
-    StartReliablePacket(EquipDraggingRequest);
+    StartPacket(EquipDraggingRequest);
     
     Pack("L", slotIndex);
     
@@ -201,7 +204,7 @@ internal void SendEquipDraggingRequest(u32 slotIndex)
 
 internal void SendCraftRequest(u32 taxonomy, GenerationData gen)
 {
-    StartReliablePacket(CraftRequest);
+    StartPacket(CraftRequest);
     
     Pack("LQ", taxonomy, gen.generic);
     
@@ -210,7 +213,7 @@ internal void SendCraftRequest(u32 taxonomy, GenerationData gen)
 
 internal void SendCraftFromInventoryRequest(u64 containerID, u32 objectIndex)
 {
-    StartReliablePacket(CraftFromInventoryRequest);
+    StartPacket(CraftFromInventoryRequest);
     
     Pack("QL", containerID, objectIndex);
     
@@ -220,7 +223,7 @@ internal void SendCraftFromInventoryRequest(u64 containerID, u32 objectIndex)
 
 internal void SendActiveSkillRequest(u32 taxonomy)
 {
-    StartReliablePacket(ActiveSkillRequest);
+    StartPacket(ActiveSkillRequest);
     
     Pack("L", taxonomy);
     
@@ -229,7 +232,7 @@ internal void SendActiveSkillRequest(u32 taxonomy)
 
 internal void SendPassiveSkillRequest(u32 taxonomy, b32 deactivate)
 {
-    StartReliablePacket(PassiveSkillRequest);
+    StartPacket(PassiveSkillRequest);
     
     Pack("Ll", taxonomy, deactivate);
     
@@ -238,7 +241,7 @@ internal void SendPassiveSkillRequest(u32 taxonomy, b32 deactivate)
 
 internal void SendUnlockSkillCategoryRequest(u32 taxonomy)
 {
-    StartReliablePacket(UnlockSkillCategoryRequest);
+    StartPacket(UnlockSkillCategoryRequest);
     
     Pack("L", taxonomy);
     
@@ -247,7 +250,7 @@ internal void SendUnlockSkillCategoryRequest(u32 taxonomy)
 
 internal void SendSkillLevelUpRequest(u32 taxonomy)
 {
-    StartReliablePacket(SkillLevelUpRequest);
+    StartPacket(SkillLevelUpRequest);
     
     Pack("L", taxonomy);
     
@@ -256,7 +259,7 @@ internal void SendSkillLevelUpRequest(u32 taxonomy)
 
 internal void SendLearnRequest(u64 containerID, u32 objectIndex)
 {
-    StartReliablePacket(LearnRequest);
+    StartPacket(LearnRequest);
     
     Pack("QL", containerID, objectIndex);
     
@@ -265,7 +268,7 @@ internal void SendLearnRequest(u64 containerID, u32 objectIndex)
 
 internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
 {
-    StartReliablePacket(ConsumeRequest);
+    StartPacket(ConsumeRequest);
     
     Pack("QL", containerID, objectIndex);
     
@@ -274,7 +277,7 @@ internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
 
 inline void SendPopMessage(b32 list, b32 pop = true)
 {
-    StartReliablePacket(PopEditorElement);
+    StartPacket(PopEditorElement);
     Pack("ll", list, pop);
     CloseAndSendStandardPacket();
 }
@@ -282,7 +285,7 @@ inline void SendPopMessage(b32 list, b32 pop = true)
 
 internal void SendEditorElements(EditorElement* root)
 {
-    StartReliablePacket(EditorElement);
+    StartPacket(EditorElement);
     Pack("sLLL", root->name, root->type, root->flags, root->versionNumber);
     if(root->type < EditorElement_List)
     {
@@ -351,7 +354,7 @@ internal void SendEditorElements(EditorElement* root)
 
 inline void SendNewTabMessage()
 {
-    StartReliablePacket(NewEditorTab);
+    StartPacket(NewEditorTab);
     CloseAndSendStandardPacket();
 }
 
@@ -360,67 +363,67 @@ inline void SendSaveAssetDefinitionFile(char* fileName, EditorElement* root)
     SendNewTabMessage();
     SendEditorElements(root);
     
-    StartReliablePacket(SaveAssetFadFile);
+    StartPacket(SaveAssetFadFile);
     Pack("s", fileName);
     CloseAndSendStandardPacket();
 }
 
 inline void SendReloadAssetsRequest()
 {
-    StartReliablePacket(ReloadAssets);
+    StartPacket(ReloadAssets);
     CloseAndSendStandardPacket();
 }
 
 inline void SendPatchServerRequest()
 {
-    StartReliablePacket(PatchLocalServer);
+    StartPacket(PatchLocalServer);
     CloseAndSendStandardPacket();
 }
 
 inline void SendPatchCheckRequest()
 {
-    StartReliablePacket(PatchCheck);
+    StartPacket(PatchCheck);
     CloseAndSendStandardPacket();
 }
 
 inline void SendSaveTabRequest(u32 taxonomy)
 {
-    StartReliablePacket(SaveSlotTabToFile);
+    StartPacket(SaveSlotTabToFile);
     Pack("L", taxonomy);
     CloseAndSendStandardPacket();
 }
 
 inline void SendReloadEditingMessage(u32 taxonomy, u32 tabIndex)
 {
-    StartReliablePacket(ReloadEditingSlot);
+    StartPacket(ReloadEditingSlot);
     Pack("LL", taxonomy, tabIndex);
     CloseAndSendStandardPacket();
 }
 
 inline void SendAddTaxonomyRequest(u32 parentTaxonomy, char* name)
 {
-    StartReliablePacket(AddTaxonomy);
+    StartPacket(AddTaxonomy);
     Pack("Ls", parentTaxonomy, name);
     CloseAndSendStandardPacket();
 }
 
 inline void SendDeleteTaxonomyRequest(u32 taxonomy)
 {
-    StartReliablePacket(DeleteTaxonomy);
+    StartPacket(DeleteTaxonomy);
     Pack("L", taxonomy);
     CloseAndSendStandardPacket();
 }
 
 inline void SendReviveTaxonomyRequest(u32 taxonomy)
 {
-    StartReliablePacket(ReviveTaxonomy);
+    StartPacket(ReviveTaxonomy);
     Pack("L", taxonomy);
     CloseAndSendStandardPacket();
 }
 
 inline void SendInstantiateRecipeRequest(u32 taxonomy, u64 recipeIndex, Vec3 offset)
 {
-    StartReliablePacket(InstantiateRecipe);
+    StartPacket(InstantiateRecipe);
     Pack("LQV", taxonomy, recipeIndex, offset);
     CloseAndSendStandardPacket();
 }
@@ -428,28 +431,28 @@ inline void SendInstantiateRecipeRequest(u32 taxonomy, u64 recipeIndex, Vec3 off
 
 inline void SendInstantiateTaxonomyRequest(u32 taxonomy, Vec3 offset)
 {
-    StartReliablePacket(InstantiateTaxonomy);
+    StartPacket(InstantiateTaxonomy);
     Pack("LV", taxonomy, offset);
     CloseAndSendStandardPacket();
 }
 
 inline void SendDeleteRequest(u64 identifier)
 {
-    StartReliablePacket(DeleteEntity);
+    StartPacket(DeleteEntity);
     Pack("Q", identifier);
     CloseAndSendStandardPacket();
 }
 
 inline void SendImpersonateRequest(u64 identifier)
 {
-    StartReliablePacket(ImpersonateEntity);
+    StartPacket(ImpersonateEntity);
     Pack("Q", identifier);
     CloseAndSendStandardPacket();
 }
 
 inline void SendPauseToggleMessage()
 {
-    StartReliablePacket(PauseToggle);
+    StartPacket(PauseToggle);
     CloseAndSendStandardPacket();
 }
 
@@ -537,7 +540,601 @@ inline void AddToSkillCategoryBlock(UIState* UI, SkillCategory skillCategory)
     AddToElementBlock(UI, UI->bookModes + UIBook_Skills, element);
 }
 
-internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
+internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
+{
+    UIState* UI = worldMode->UI;
+    ClientEntity* currentEntity = 0;
+    ClientEntity* currentContainer = 0;
+    u16 readSize = 0;
+    u16 toReadSize = dataSize;
+    
+    u32 lastReceived = 0;
+    while(readSize < toReadSize)
+    {
+        unsigned char* oldPacketPtr = packetPtr;
+        ForgNetworkHeader header;
+        packetPtr = ForgUnpackHeader(packetPtr, &header);
+        
+        switch(header.packetType)
+        {
+            case Type_login:
+            {
+#if 0
+                char* server = "forgiveness.hopto.org";
+#else
+                char* server = "127.0.0.1";
+#endif
+                LoginResponse login;
+                
+                Unpack("HLl", &login.port, &login.challenge, &login.editingEnabled);
+                worldMode->editingEnabled = login.editingEnabled;
+                
+                u32 salt = 11111;
+                platformAPI.net.CloseConnection(myPlayer->network, 0);
+                platformAPI.net.OpenConnection(myPlayer->network, server, login.port,salt);
+                GameAccessRequest(login.challenge);
+            } break;
+            
+            case Type_gameAccess:
+            {
+                u64 openedContainerID;
+                u8 serverMS5x;
+                
+                Unpack("llQQC", &myPlayer->universeX, &myPlayer->universeY, &myPlayer->identifier, &openedContainerID, &serverMS5x);
+                
+                r32 lastFrameFPS = 1000.0f / (serverMS5x * 5.0f);
+                myPlayer->serverFPS = Lerp(myPlayer->serverFPS, 0.8f, lastFrameFPS);
+                myPlayer->openedContainerID = openedContainerID;
+            } break;
+            
+            case Type_tileUpdate:
+            {
+                i32 chunkX;
+                i32 chunkY;
+                
+                u32 tileX;
+                u32 tileY;
+                
+                r32 waterAmount;
+                
+                Unpack("llLLd", &chunkX, &chunkY, &tileX, &tileY, &waterAmount );
+                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, &worldMode->chunkPool);
+                
+                chunk->waterAmount[tileY][tileX] = waterAmount;
+            } break;
+            
+            case Type_entityHeader:
+            {
+                u64 identifier;
+                Unpack("Q", &identifier);
+                
+                currentEntity = GetEntityClient(worldMode, identifier, true);
+                currentEntity->identifier = identifier;
+                currentEntity->timeFromLastUpdate = 0.0f;
+            } break;
+            
+            case Type_entityBasics:
+            {
+                UniversePos P;
+                ClientEntity* e = currentEntity;
+                Assert(e);
+                
+                EntityAction oldAction = e->action;
+                u32 oldTaxonomy = e->taxonomy;
+                
+                Unpack("llVLLQCddCLddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->plantTotalAge, &e->plantStatusPercentage, &e->plantStatus, &e->recipeTaxonomy, &e->lifePoints, &e->maxLifePoints, &e->status);
+                
+                if(e->action != oldAction)
+                {
+                    e->actionTime = 0;
+                }
+                
+                for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
+                {
+                    e->equipment[slotIndex].ID = 0;
+                }
+                
+                if(e->flags & Flag_deleted)
+                {
+                    InvalidCodePath;
+                }
+                
+                
+                i32 lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
+                if(e->identifier == myPlayer->identifier && ChunkOutsideWorld(lateralChunkSpan, P.chunkX, P.chunkY))
+                {
+                    myPlayer->changedWorld = true;
+                    if(P.chunkX < 0)
+                    {
+                        myPlayer->changedWorldDeltaX += lateralChunkSpan;
+                    }
+                    else if(P.chunkX >= lateralChunkSpan)
+                    {
+                        myPlayer->changedWorldDeltaX -= lateralChunkSpan;
+                    }
+                    
+                    if(P.chunkY < 0)
+                    {
+                        myPlayer->changedWorldDeltaY += lateralChunkSpan;
+                    }
+                    else if(P.chunkY >= lateralChunkSpan)
+                    {
+                        myPlayer->changedWorldDeltaY -= lateralChunkSpan;
+                    }
+                }
+                
+                
+                r32 maxDistancePrediction = 4.0f;
+                Vec3 deltaP = Subtract(P, e->universeP);
+                r32 deltaLength = Length(deltaP);
+                if(deltaLength >= maxDistancePrediction || (e->flags & Flag_Equipped))
+                {
+                    e->universeP = P;
+                    e->velocity = {};
+                }
+                else
+                {
+                    e->velocity = deltaP * myPlayer->serverFPS;
+                    if(e->identifier == myPlayer->identifier)
+                    {
+                        myPlayer->distanceCoeffFromServerP = deltaLength / maxDistancePrediction;
+                    }
+                }
+            } break;
+            
+            case Type_equipmentSlot:
+            {
+                u8 slotIndex;
+                u64 identifier;
+                Unpack("CQ", &slotIndex, &identifier);
+                
+                currentEntity->equipment[slotIndex].ID = identifier;
+            } break;
+            
+            
+            case Type_containerHeader:
+            {
+                u64 identifier;
+                Unpack("Q", &identifier);
+                currentContainer = GetEntityClient(worldMode, identifier, true);
+                currentContainer->identifier = identifier;
+            } break;
+            
+            case Type_containerInfo:
+            {
+                u8 maxObjectCount;
+                Unpack("C", &maxObjectCount);
+                currentContainer->objects.maxObjectCount = maxObjectCount;
+                currentContainer->objects.objectCount = 0;
+            } break;
+            
+            case Type_objectRemoved:
+            {
+                u8 objectIndex;
+                Unpack("C", &objectIndex);
+                
+                currentContainer->objects.objects[objectIndex].taxonomy = 0;
+                Assert(currentContainer->objects.objectCount > 0);
+                --currentContainer->objects.objectCount;
+            } break;
+            
+            case Type_objectAdded:
+            {
+                u8 objectIndex;
+                
+                Unpack("C", &objectIndex);
+                Object* dest = currentContainer->objects.objects + objectIndex;
+                Unpack("LQHh", &dest->taxonomy, &dest->gen, &dest->quantity, &dest->status);
+                ++currentContainer->objects.objectCount;
+            } break;
+            
+            case Type_deletedEntity:
+            {
+                u64 deletedID;
+                Unpack("Q", &deletedID);
+                ClientEntity* entityC = GetEntityClient(worldMode, deletedID);
+                if(entityC)
+                {
+                    entityC->timeFromLastUpdate = R32_MAX;
+                }
+                
+                if(deletedID == myPlayer->targetIdentifier)
+                {
+                    for(u32 actionIndex = 0; actionIndex < Action_Count; ++actionIndex)
+                    {
+                        myPlayer->targetPossibleActions[actionIndex] = false;
+                    }
+                }
+            } break;
+            
+            case Type_essenceDelta:
+            {
+                u32 essenceTaxonomy;
+                i16 delta;
+                
+                Unpack("Lh", &essenceTaxonomy, &delta);
+                
+                b32 found = false;
+                for(u32 essenceIndex = 0; essenceIndex < MAX_DIFFERENT_ESSENCES; ++essenceIndex)
+                {
+                    EssenceSlot* essence = myPlayer->essences + essenceIndex;
+                    if(essence->taxonomy == essenceTaxonomy)
+                    {
+                        u32 diff = delta < 0 ? (u32) -delta : (u32) delta;
+                        if(delta < 0)
+                        {
+                            Assert(essence->quantity >= diff);
+                            essence->quantity -= diff;
+                        }
+                        else
+                        {
+                            essence->quantity += diff;
+                        }
+                        
+                        found = true;
+                        break;
+                    }
+                }
+                
+                
+                if(!found)
+                {
+                    Assert(myPlayer->essenceCount < MAX_DIFFERENT_ESSENCES);
+                    Assert(delta > 0);
+                    
+                    EssenceSlot* newEssence = myPlayer->essences + myPlayer->essenceCount++;
+                    newEssence->taxonomy = essenceTaxonomy;
+                    newEssence->quantity = delta;
+                }
+                
+            } break;
+            
+            case Type_effectTriggered:
+            {
+                u64 actorID;
+                u64 targetID;
+                u32 effectTaxonomy;
+                
+                Unpack("QQL", &actorID, &targetID, &effectTaxonomy);
+                
+                ClientEntity* actor = GetEntityClient(worldMode, actorID);
+                if(actor)
+                {
+                    b32 found = false;
+                    u32 currentTaxonomy = actor->taxonomy;
+                    while(currentTaxonomy && !found)
+                    {
+                        TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, currentTaxonomy);
+                        for(AnimationEffect* effect = slot->firstAnimationEffect; effect; effect = effect->next)
+                        {
+                            if(effect->triggerEffectTaxonomy == effectTaxonomy)
+                            {
+                                AnimationEffect* newEffect;
+                                FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, AnimationEffect, NoClear()));
+                                
+                                *newEffect = *effect;
+                                newEffect->targetID = targetID;
+                                FREELIST_INSERT(newEffect, actor->firstActiveEffect);
+                                found = true;
+                                break;
+                            }
+                        }
+                        currentTaxonomy = GetParentTaxonomy(worldMode->table, currentTaxonomy);
+                    }
+                }
+                
+            } break;
+            
+            case Type_possibleActions:
+            {
+                EntityPossibleActions u;
+                Unpack("LQl", &u.actionCount, &u.identifier, &u.overlapping);
+                
+                b32* possibleActions;
+                b32 idMatch = true;
+                if(u.overlapping)
+                {
+                    myPlayer->overlappingIdentifier = u.identifier;
+                    possibleActions = myPlayer->overlappingPossibleActions;
+                }
+                else
+                {
+                    idMatch = (myPlayer->targetIdentifier == u.identifier);
+                    possibleActions = myPlayer->targetPossibleActions;
+                }
+                
+                if(idMatch)
+                {
+                    for(u32 actionIndex = 0; actionIndex < Action_Count; ++actionIndex)
+                    {
+                        possibleActions[actionIndex] = false;
+                    }
+                }
+                
+                
+                for(u32 counter = 0; counter < u.actionCount; ++counter)
+                {
+                    u32 actionIndex;
+                    Unpack("L", &actionIndex);
+                    if(idMatch)
+                    {
+                        possibleActions[actionIndex] = true;
+                    }
+                }
+                
+            } break;
+            
+            case Type_AvailableRecipes:
+            {
+                BookMode* mode = UI->bookModes + UIBook_Recipes;
+                
+                u32 categoryCount;
+                Unpack("L", &categoryCount);
+                for(u32 categoryIndex = 0; categoryIndex < categoryCount; ++categoryIndex)
+                {
+                    b32 ignored;
+                    u32 taxonomy;
+                    Unpack("lL", &ignored, &taxonomy);
+                    
+                    if(categoryIndex == 0)
+                    {
+                        mode->rootTaxonomy = taxonomy;
+                        mode->filterTaxonomy = taxonomy;
+                    }
+                    else
+                    {
+                        AddToRecipeCategoryBlock(UI, taxonomy);
+                    }
+                }
+            } break;
+            
+            case Type_NewRecipe:
+            {
+                Recipe recipe;
+                Unpack("LQ", &recipe.taxonomy, &recipe.gen);
+                
+                AddToRecipeBlock(UI, recipe);
+            } break;
+            
+            case Type_SkillCategories:
+            {
+                BookMode* mode = UI->bookModes + UIBook_Skills;
+                
+                u32 categoryCount;
+                Unpack("L", &categoryCount);
+                for(u32 categoryIndex = 0; categoryIndex < categoryCount; ++categoryIndex)
+                {
+                    SkillCategory skillCategory;
+                    Unpack("lL", &skillCategory.unlocked, &skillCategory.taxonomy);
+                    
+                    if(categoryIndex == 0)
+                    {
+                        mode->rootTaxonomy = skillCategory.taxonomy;
+                        mode->filterTaxonomy = skillCategory.taxonomy;
+                    }
+                    else
+                    {
+                        AddToSkillCategoryBlock(UI, skillCategory);
+                    }
+                }
+            } break;
+            
+            case Type_UnlockSkillCategoryRequest:
+            {
+                u32 taxonomy;
+                Unpack("L", &taxonomy);
+                
+                BookElementsBlock* block = UI->bookModes[UIBook_Skills].elements;
+                
+                b32 found = false;
+                while(block && !found)
+                {
+                    for(u32 elementIndex = 0; elementIndex < block->elementCount; ++elementIndex)
+                    {
+                        BookElement* element = block->elements + elementIndex;
+                        if(element->taxonomy == taxonomy)
+                        {
+                            element->unlocked = true;
+                            found = true;
+                            break;
+                        }
+                    }
+                    
+                    block = block->next;
+                }
+            } break;
+            
+            case Type_SkillLevel:
+            {
+                SkillSlot skill;
+                b32 isPassive;
+                b32 levelUp;
+                
+                Unpack("lLLld", &levelUp, &skill.taxonomy, &skill.level, &isPassive, &skill.power);
+                
+                if(levelUp)
+                {
+                    BookElementsBlock* block = UI->bookModes[UIBook_Skills].elements;
+                    
+                    b32 found = false;
+                    while(block && !found)
+                    {
+                        for(u32 elementIndex = 0; elementIndex < block->elementCount; ++elementIndex)
+                        {
+                            BookElement* element = block->elements + elementIndex;
+                            if(element->taxonomy == skill.taxonomy)
+                            {
+                                element->skillLevel = skill.level;
+                                found = true;
+                                break;
+                            }
+                        }
+                        block = block->next;
+                    }
+                    
+                    //Assert(found);
+                }
+                else
+                {
+                    AddToSkillBlock(UI, skill);
+                }
+            } break;
+            
+            case Type_StartedAction:
+            {
+                u64 target;
+                u8 action;
+                Unpack("CQ", &action, &target);
+                
+                ClientEntity* targetEntity = GetEntityClient(worldMode, target);
+                if(targetEntity)
+                {
+                    Vec3 relative = targetEntity->P - currentEntity->P;
+                    currentEntity->animation.flipOnYAxis = (relative.x < 0);
+                }
+            } break;
+            
+            case Type_CompletedAction:
+            {
+                u64 target;
+                u8 action;
+                Unpack("CQ", &action, &target);
+                
+                if(action == Action_Attack)
+                {
+                    ClientEntity* t = GetEntityClient(worldMode, target);
+                    if(t)
+                    {
+                        t->animation.spawnAshParticlesCount = 3;
+                    }
+                }
+#if 0                    
+                else if(action == Action_Craft && currentEntity->identifier == myPlayer->identifier)
+                {
+                    UI->player->prediction.type = Prediction_None;
+                    UI->nextMode = UI->previousMode;
+                }
+#endif
+                
+            } break;
+            
+            case Type_DataFileHeader:
+            {
+                DataFileArrived* dataFile = PushStruct(&worldMode->filePool, DataFileArrived);
+                FREELIST_INSERT(dataFile, worldMode->firstDataFileArrived);
+                Unpack("sLL", dataFile->name, &dataFile->fileSize, &dataFile->chunkSize);
+                
+                dataFile->data = PushSize(&worldMode->filePool, dataFile->fileSize);
+                dataFile->runningFileSize = 0;
+                
+                worldMode->currentFile = dataFile;
+            } break;
+            
+            case Type_PakFileHeader:
+            {
+                DataFileArrived* pakFile = PushStruct(&worldMode->filePool, DataFileArrived);
+                FREELIST_INSERT(pakFile, worldMode->firstPakFileArrived);
+                Unpack("sLL", pakFile->name, &pakFile->fileSize, &pakFile->chunkSize);
+                
+                pakFile->data = PushSize(&worldMode->filePool, pakFile->fileSize);
+                pakFile->runningFileSize = 0;
+                
+                worldMode->currentFile = pakFile;
+            } break;
+            
+            case Type_FileChunk:
+            {
+                DataFileArrived* file = worldMode->currentFile;
+                u8* source = packetPtr;
+                u8* dest = file->data + file->runningFileSize;
+                
+                u32 sizeToCopy = Min(file->chunkSize, file->fileSize - file->runningFileSize);
+                Copy(sizeToCopy, dest, packetPtr);
+                
+                packetPtr += sizeToCopy;
+                
+                file->runningFileSize += sizeToCopy;
+                
+                Assert(file->runningFileSize <= file->fileSize);
+            } break;
+            
+            case Type_AllDataFileSent:
+            {
+                CompletePastWritesBeforeFutureWrites;
+                worldMode->allDataFilesArrived = true;
+                Unpack("l", &worldMode->loadTaxonomies);
+            } break;
+            
+            case Type_AllPakFileSent:
+            {
+                CompletePastWritesBeforeFutureWrites;
+                worldMode->allPakFilesArrived = true;
+            } break;
+            
+            case Type_PatchLocalServer:
+            {
+                worldMode->UI->patchingLocalServer = false;
+            } break;
+            
+#if FORGIVENESS_INTERNAL
+            case Type_InputRecording:
+            {
+                b32 started;
+                Unpack("l", &started );
+                if( started )
+                {
+                    //clientSideMovement = false;
+                    //ResetParticleSystem();
+                }
+                else
+                {
+                    //clientSideMovement = true;
+                }
+            } break;
+            
+            case Type_debugEvent:
+            {
+                DebugEvent event = {};
+                
+                Unpack("QQ", &event.clock, &event.pointer );
+                SavedNameSlot* slot = GetNameSlot( globalDebugTable, ( u64 ) event.pointer );
+                event.GUID = slot->GUID;
+                event.name = slot->name;
+                Unpack("ssLHCQQ", event.GUID, event.name, &event.threadID, &event.coreIndex, &event.type, event.overNetwork, event.overNetwork + 1 );
+                Assert( event.pointer );
+                
+                if( event.pointer == globalDebugTable->pointerToIgnore )
+                {
+                    // NOTE(Leonardo): we ignore the event cause the data it contains will be wrong... we have just finished editing that
+                    //event, so the server can't have the updated information.
+                    globalDebugTable->pointerToIgnore = 0;
+                    event.overNetwork[0] = globalDebugTable->overNetworkEdit[0];
+                    event.overNetwork[1] = globalDebugTable->overNetworkEdit[1];
+                }
+                
+                u32 arrayIndex = globalDebugTable->currentServerEventArrayIndex;
+                u32 eventIndex = globalDebugTable->serverEventCount[arrayIndex]++;
+                globalDebugTable->serverEvents[arrayIndex][eventIndex] = event;
+            } break;
+            
+            
+            case Type_memoryStats:
+            {
+                DebugPlatformMemoryStats* serverStats = &globalDebugTable->serverStats;
+                Unpack("LQQ", &serverStats->blockCount, &serverStats->totalUsed, &serverStats->totalSize );
+                globalDebugTable->serverFinished = true;
+            } break;
+            
+#endif
+            InvalidDefaultCase;
+        }
+        
+        readSize += (u16) (packetPtr - oldPacketPtr);
+        lastReceived = header.packetType;
+    }
+}
+
+internal void ReceiveNetworkPackets(GameModeWorld* worldMode)
 {
     NetworkPacketReceived packet;
     while(true)
@@ -549,597 +1146,50 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode, UIState* UI)
         }
         
         unsigned char* packetPtr = packet.data;
-        ClientEntity* currentEntity = 0;
-        ClientEntity* currentContainer = 0;
-        u32 readSize = 0;
-        u32 toReadSize = packet.dataSize;
         
-        u32 lastReceived = 0;
         
-        while(readSize < toReadSize)
+        ForgNetworkApplicationIndex applicationIndex;
+        packetPtr = ForgUnpackApplicationIndex(packetPtr, &applicationIndex);
+        
+        
+        ForgNetworkReceiver* receiver = &myPlayer->receiver;
+        if(packet.flags & NetworkFlags_GuaranteedDelivery)
         {
-            unsigned char* oldPacketPtr = packetPtr;
-            
-            ForgNetworkHeader header;
-            packetPtr = ForgUnpackHeader(packetPtr, &header);
-            
-            switch(header.packetType)
+            u32 delta = ApplicationDelta(applicationIndex, receiver->orderedWaitingFor);
+            if(delta < WINDOW_SIZE)
             {
-                case Type_login:
-                {
-#if 0
-                    char* server = "forgiveness.hopto.org";
-#else
-                    char* server = "127.0.0.1";
-#endif
-                    LoginResponse login;
-                    
-                    Unpack("HLl", &login.port, &login.challenge, &login.editingEnabled);
-                    worldMode->editingEnabled = login.editingEnabled;
-                    
-                    u32 salt = 11111;
-                    platformAPI.net.CloseConnection(myPlayer->network, 0);
-                    platformAPI.net.OpenConnection(myPlayer->network, server, login.port,salt);
-                    GameAccessRequest(login.challenge);
-                } break;
-                
-                case Type_gameAccess:
-                {
-                    u64 openedContainerID;
-                    u8 serverMS5x;
-                    
-                    Unpack("llQQC", &myPlayer->universeX, &myPlayer->universeY, &myPlayer->identifier, &openedContainerID, &serverMS5x);
-                    
-                    r32 lastFrameFPS = 1000.0f / (serverMS5x * 5.0f);
-                    myPlayer->serverFPS = Lerp(myPlayer->serverFPS, 0.8f, lastFrameFPS);
-                    myPlayer->openedContainerID = openedContainerID;
-                } break;
-                
-                case Type_tileUpdate:
-                {
-                    i32 chunkX;
-                    i32 chunkY;
-                    
-                    u32 tileX;
-                    u32 tileY;
-                    
-                    r32 waterAmount;
-                    
-                    Unpack("llLLd", &chunkX, &chunkY, &tileX, &tileY, &waterAmount );
-                    WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, &worldMode->chunkPool);
-                    
-                    chunk->waterAmount[tileY][tileX] = waterAmount;
-                } break;
-                
-                case Type_entityHeader:
-                {
-                    u64 identifier;
-                    Unpack("Q", &identifier);
-                    
-                    currentEntity = GetEntityClient(worldMode, identifier, true);
-                    currentEntity->identifier = identifier;
-                    currentEntity->timeFromLastUpdate = 0.0f;
-                } break;
-                
-                case Type_entityBasics:
-                {
-                    UniversePos P;
-                    ClientEntity* e = currentEntity;
-                    Assert(e);
-                    
-                    EntityAction oldAction = e->action;
-                    u32 oldTaxonomy = e->taxonomy;
-                    
-                    Unpack("llVLLQCddCLddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->plantTotalAge, &e->plantStatusPercentage, &e->plantStatus, &e->recipeTaxonomy, &e->lifePoints, &e->maxLifePoints, &e->status);
-                    
-                    if(e->action != oldAction)
-                    {
-                        e->actionTime = 0;
-                    }
-                    
-                    for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
-                    {
-                        e->equipment[slotIndex].ID = 0;
-                    }
-                    
-                    if(e->flags & Flag_deleted)
-                    {
-                        InvalidCodePath;
-                    }
-                    
-                    
-                    i32 lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
-                    if(e->identifier == myPlayer->identifier && ChunkOutsideWorld(lateralChunkSpan, P.chunkX, P.chunkY))
-                    {
-                        myPlayer->changedWorld = true;
-                        if(P.chunkX < 0)
-                        {
-                            myPlayer->changedWorldDeltaX += lateralChunkSpan;
-                        }
-                        else if(P.chunkX >= lateralChunkSpan)
-                        {
-                            myPlayer->changedWorldDeltaX -= lateralChunkSpan;
-                        }
-                        
-                        if(P.chunkY < 0)
-                        {
-                            myPlayer->changedWorldDeltaY += lateralChunkSpan;
-                        }
-                        else if(P.chunkY >= lateralChunkSpan)
-                        {
-                            myPlayer->changedWorldDeltaY -= lateralChunkSpan;
-                        }
-                    }
-                    
-                    
-                    r32 maxDistancePrediction = 4.0f;
-                    Vec3 deltaP = Subtract(P, e->universeP);
-                    r32 deltaLength = Length(deltaP);
-                    if(deltaLength >= maxDistancePrediction || (e->flags & Flag_Equipped))
-                    {
-                        e->universeP = P;
-                        e->velocity = {};
-                    }
-                    else
-                    {
-                        e->velocity = deltaP * myPlayer->serverFPS;
-                        if(e->identifier == myPlayer->identifier)
-                        {
-                            myPlayer->distanceCoeffFromServerP = deltaLength / maxDistancePrediction;
-                        }
-                    }
-                } break;
-                
-                case Type_equipmentSlot:
-                {
-                    u8 slotIndex;
-                    u64 identifier;
-                    Unpack("CQ", &slotIndex, &identifier);
-                    
-                    currentEntity->equipment[slotIndex].ID = identifier;
-                } break;
-                
-                
-                case Type_containerHeader:
-                {
-                    u64 identifier;
-                    Unpack("Q", &identifier);
-                    currentContainer = GetEntityClient(worldMode, identifier, true);
-                    currentContainer->identifier = identifier;
-                } break;
-                
-                case Type_containerInfo:
-                {
-                    u8 maxObjectCount;
-                    Unpack("C", &maxObjectCount);
-                    currentContainer->objects.maxObjectCount = maxObjectCount;
-                    currentContainer->objects.objectCount = 0;
-                } break;
-                
-                case Type_objectRemoved:
-                {
-                    u8 objectIndex;
-                    Unpack("C", &objectIndex);
-                    
-                    currentContainer->objects.objects[objectIndex].taxonomy = 0;
-                    Assert(currentContainer->objects.objectCount > 0);
-                    --currentContainer->objects.objectCount;
-                } break;
-                
-                case Type_objectAdded:
-                {
-                    u8 objectIndex;
-                    
-                    Unpack("C", &objectIndex);
-                    Object* dest = currentContainer->objects.objects + objectIndex;
-                    Unpack("LQHh", &dest->taxonomy, &dest->gen, &dest->quantity, &dest->status);
-                    ++currentContainer->objects.objectCount;
-                } break;
-                
-                case Type_deletedEntity:
-                {
-                    u64 deletedID;
-                    Unpack("Q", &deletedID);
-                    ClientEntity* entityC = GetEntityClient(worldMode, deletedID);
-                    if(entityC)
-                    {
-                        entityC->timeFromLastUpdate = R32_MAX;
-                    }
-                    
-                    if(deletedID == myPlayer->targetIdentifier)
-                    {
-                        for(u32 actionIndex = 0; actionIndex < Action_Count; ++actionIndex)
-                        {
-                            myPlayer->targetPossibleActions[actionIndex] = false;
-                        }
-                    }
-                } break;
-                
-                case Type_essenceDelta:
-                {
-                    u32 essenceTaxonomy;
-                    i16 delta;
-                    
-                    Unpack("Lh", &essenceTaxonomy, &delta);
-                    
-                    b32 found = false;
-                    for(u32 essenceIndex = 0; essenceIndex < MAX_DIFFERENT_ESSENCES; ++essenceIndex)
-                    {
-                        EssenceSlot* essence = myPlayer->essences + essenceIndex;
-                        if(essence->taxonomy == essenceTaxonomy)
-                        {
-                            u32 diff = delta < 0 ? (u32) -delta : (u32) delta;
-                            if(delta < 0)
-                            {
-                                Assert(essence->quantity >= diff);
-                                essence->quantity -= diff;
-                            }
-                            else
-                            {
-                                essence->quantity += diff;
-                            }
-                            
-                            found = true;
-                            break;
-                        }
-                    }
-                    
-                    
-                    if(!found)
-                    {
-                        Assert(myPlayer->essenceCount < MAX_DIFFERENT_ESSENCES);
-                        Assert(delta > 0);
-                        
-                        EssenceSlot* newEssence = myPlayer->essences + myPlayer->essenceCount++;
-                        newEssence->taxonomy = essenceTaxonomy;
-                        newEssence->quantity = delta;
-                    }
-                    
-                } break;
-                
-                case Type_effectTriggered:
-                {
-                    u64 actorID;
-                    u64 targetID;
-                    u32 effectTaxonomy;
-                    
-                    Unpack("QQL", &actorID, &targetID, &effectTaxonomy);
-                    
-                    ClientEntity* actor = GetEntityClient(worldMode, actorID);
-                    if(actor)
-                    {
-                        b32 found = false;
-                        u32 currentTaxonomy = actor->taxonomy;
-                        while(currentTaxonomy && !found)
-                        {
-                            TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, currentTaxonomy);
-                            for(AnimationEffect* effect = slot->firstAnimationEffect; effect; effect = effect->next)
-                            {
-                                if(effect->triggerEffectTaxonomy == effectTaxonomy)
-                                {
-                                    AnimationEffect* newEffect;
-                                    FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, AnimationEffect, NoClear()));
-                                    
-                                    *newEffect = *effect;
-                                    newEffect->targetID = targetID;
-                                    FREELIST_INSERT(newEffect, actor->firstActiveEffect);
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            currentTaxonomy = GetParentTaxonomy(worldMode->table, currentTaxonomy);
-                        }
-                    }
-                    
-                } break;
-                
-                case Type_possibleActions:
-                {
-                    EntityPossibleActions u;
-                    Unpack("LQl", &u.actionCount, &u.identifier, &u.overlapping);
-                    
-                    b32* possibleActions;
-                    b32 idMatch = true;
-                    if(u.overlapping)
-                    {
-                        myPlayer->overlappingIdentifier = u.identifier;
-                        possibleActions = myPlayer->overlappingPossibleActions;
-                    }
-                    else
-                    {
-                        idMatch = (myPlayer->targetIdentifier == u.identifier);
-                        possibleActions = myPlayer->targetPossibleActions;
-                    }
-                    
-                    if(idMatch)
-                    {
-                        for(u32 actionIndex = 0; actionIndex < Action_Count; ++actionIndex)
-                        {
-                            possibleActions[actionIndex] = false;
-                        }
-                    }
-                    
-                    
-                    for(u32 counter = 0; counter < u.actionCount; ++counter)
-                    {
-                        u32 actionIndex;
-                        Unpack("L", &actionIndex);
-                        if(idMatch)
-                        {
-                            possibleActions[actionIndex] = true;
-                        }
-                    }
-                    
-                } break;
-                
-                case Type_AvailableRecipes:
-                {
-                    BookMode* mode = UI->bookModes + UIBook_Recipes;
-                    
-                    u32 categoryCount;
-                    Unpack("L", &categoryCount);
-                    for(u32 categoryIndex = 0; categoryIndex < categoryCount; ++categoryIndex)
-                    {
-                        b32 ignored;
-                        u32 taxonomy;
-                        Unpack("lL", &ignored, &taxonomy);
-                        
-                        if(categoryIndex == 0)
-                        {
-                            mode->rootTaxonomy = taxonomy;
-                            mode->filterTaxonomy = taxonomy;
-                        }
-                        else
-                        {
-                            AddToRecipeCategoryBlock(UI, taxonomy);
-                        }
-                    }
-                } break;
-                
-                case Type_NewRecipe:
-                {
-                    Recipe recipe;
-                    Unpack("LQ", &recipe.taxonomy, &recipe.gen);
-                    
-                    AddToRecipeBlock(UI, recipe);
-                } break;
-                
-                case Type_SkillCategories:
-                {
-                    BookMode* mode = UI->bookModes + UIBook_Skills;
-                    
-                    u32 categoryCount;
-                    Unpack("L", &categoryCount);
-                    for(u32 categoryIndex = 0; categoryIndex < categoryCount; ++categoryIndex)
-                    {
-                        SkillCategory skillCategory;
-                        Unpack("lL", &skillCategory.unlocked, &skillCategory.taxonomy);
-                        
-                        if(categoryIndex == 0)
-                        {
-                            mode->rootTaxonomy = skillCategory.taxonomy;
-                            mode->filterTaxonomy = skillCategory.taxonomy;
-                        }
-                        else
-                        {
-                            AddToSkillCategoryBlock(UI, skillCategory);
-                        }
-                    }
-                } break;
-                
-                case Type_UnlockSkillCategoryRequest:
-                {
-                    u32 taxonomy;
-                    Unpack("L", &taxonomy);
-                    
-                    BookElementsBlock* block = UI->bookModes[UIBook_Skills].elements;
-                    
-                    b32 found = false;
-                    while(block && !found)
-                    {
-                        for(u32 elementIndex = 0; elementIndex < block->elementCount; ++elementIndex)
-                        {
-                            BookElement* element = block->elements + elementIndex;
-                            if(element->taxonomy == taxonomy)
-                            {
-                                element->unlocked = true;
-                                found = true;
-                                break;
-                            }
-                        }
-                        
-                        block = block->next;
-                    }
-                } break;
-                
-                case Type_SkillLevel:
-                {
-                    SkillSlot skill;
-                    b32 isPassive;
-                    b32 levelUp;
-                    
-                    Unpack("lLLld", &levelUp, &skill.taxonomy, &skill.level, &isPassive, &skill.power);
-                    
-                    if(levelUp)
-                    {
-                        BookElementsBlock* block = UI->bookModes[UIBook_Skills].elements;
-                        
-                        b32 found = false;
-                        while(block && !found)
-                        {
-                            for(u32 elementIndex = 0; elementIndex < block->elementCount; ++elementIndex)
-                            {
-                                BookElement* element = block->elements + elementIndex;
-                                if(element->taxonomy == skill.taxonomy)
-                                {
-                                    element->skillLevel = skill.level;
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            block = block->next;
-                        }
-                        
-                        //Assert(found);
-                    }
-                    else
-                    {
-                        AddToSkillBlock(UI, skill);
-                    }
-                } break;
-                
-                case Type_StartedAction:
-                {
-                    u64 target;
-                    u8 action;
-                    Unpack("CQ", &action, &target);
-                    
-                    ClientEntity* targetEntity = GetEntityClient(worldMode, target);
-                    if(targetEntity)
-                    {
-                        Vec3 relative = targetEntity->P - currentEntity->P;
-                        currentEntity->animation.flipOnYAxis = (relative.x < 0);
-                    }
-                } break;
-                
-                case Type_CompletedAction:
-                {
-                    u64 target;
-                    u8 action;
-                    Unpack("CQ", &action, &target);
-                    
-                    if(action == Action_Attack)
-                    {
-                        ClientEntity* t = GetEntityClient(worldMode, target);
-                        if(t)
-                        {
-                            t->animation.spawnAshParticlesCount = 3;
-                        }
-                    }
-#if 0                    
-                    else if(action == Action_Craft && currentEntity->identifier == myPlayer->identifier)
-                    {
-                        UI->player->prediction.type = Prediction_None;
-                        UI->nextMode = UI->previousMode;
-                    }
-#endif
-                    
-                } break;
-                
-                case Type_DataFileHeader:
-                {
-                    DataFileArrived* dataFile = PushStruct(&worldMode->filePool, DataFileArrived);
-                    FREELIST_INSERT(dataFile, worldMode->firstDataFileArrived);
-                    Unpack("sLL", dataFile->name, &dataFile->fileSize, &dataFile->chunkSize);
-                    
-                    dataFile->data = PushSize(&worldMode->filePool, dataFile->fileSize);
-                    dataFile->runningFileSize = 0;
-                    
-                    worldMode->currentFile = dataFile;
-                } break;
-                
-                case Type_PakFileHeader:
-                {
-                    DataFileArrived* pakFile = PushStruct(&worldMode->filePool, DataFileArrived);
-                    FREELIST_INSERT(pakFile, worldMode->firstPakFileArrived);
-                    Unpack("sLL", pakFile->name, &pakFile->fileSize, &pakFile->chunkSize);
-                    
-                    pakFile->data = PushSize(&worldMode->filePool, pakFile->fileSize);
-                    pakFile->runningFileSize = 0;
-                    
-                    worldMode->currentFile = pakFile;
-                } break;
-                
-                case Type_FileChunk:
-                {
-                    DataFileArrived* file = worldMode->currentFile;
-                    u8* source = packetPtr;
-                    u8* dest = file->data + file->runningFileSize;
-                    
-                    u32 sizeToCopy = Min(file->chunkSize, file->fileSize - file->runningFileSize);
-                    Copy(sizeToCopy, dest, packetPtr);
-                    
-                    packetPtr += sizeToCopy;
-                    
-                    file->runningFileSize += sizeToCopy;
-                    
-                    Assert(file->runningFileSize <= file->fileSize);
-                } break;
-                
-                case Type_AllDataFileSent:
-                {
-                    CompletePastWritesBeforeFutureWrites;
-                    worldMode->allDataFilesArrived = true;
-                    Unpack("l", &worldMode->loadTaxonomies);
-                } break;
-                
-                case Type_AllPakFileSent:
-                {
-                    CompletePastWritesBeforeFutureWrites;
-                    worldMode->allPakFilesArrived = true;
-                } break;
-                
-                case Type_PatchLocalServer:
-                {
-                    worldMode->UI->patchingLocalServer = false;
-                } break;
-                
-#if FORGIVENESS_INTERNAL
-                case Type_InputRecording:
-                {
-                    b32 started;
-                    Unpack("l", &started );
-                    if( started )
-                    {
-                        //clientSideMovement = false;
-                        //ResetParticleSystem();
-                    }
-                    else
-                    {
-                        //clientSideMovement = true;
-                    }
-                } break;
-                
-                case Type_debugEvent:
-                {
-                    DebugEvent event = {};
-                    
-                    Unpack("QQ", &event.clock, &event.pointer );
-                    SavedNameSlot* slot = GetNameSlot( globalDebugTable, ( u64 ) event.pointer );
-                    event.GUID = slot->GUID;
-                    event.name = slot->name;
-                    Unpack("ssLHCQQ", event.GUID, event.name, &event.threadID, &event.coreIndex, &event.type, event.overNetwork, event.overNetwork + 1 );
-                    Assert( event.pointer );
-                    
-                    if( event.pointer == globalDebugTable->pointerToIgnore )
-                    {
-                        // NOTE(Leonardo): we ignore the event cause the data it contains will be wrong... we have just finished editing that
-                        //event, so the server can't have the updated information.
-                        globalDebugTable->pointerToIgnore = 0;
-                        event.overNetwork[0] = globalDebugTable->overNetworkEdit[0];
-                        event.overNetwork[1] = globalDebugTable->overNetworkEdit[1];
-                    }
-                    
-                    u32 arrayIndex = globalDebugTable->currentServerEventArrayIndex;
-                    u32 eventIndex = globalDebugTable->serverEventCount[arrayIndex]++;
-                    globalDebugTable->serverEvents[arrayIndex][eventIndex] = event;
-                } break;
-                
-                
-                case Type_memoryStats:
-                {
-                    DebugPlatformMemoryStats* serverStats = &globalDebugTable->serverStats;
-                    Unpack("LQQ", &serverStats->blockCount, &serverStats->totalUsed, &serverStats->totalSize );
-                    globalDebugTable->serverFinished = true;
-                } break;
-                
-#endif
-                InvalidDefaultCase;
+                u32 index = (receiver->circularStartingIndex + delta) % WINDOW_SIZE;
+                receiver->orderedWindow[index] = packet;
             }
             
-            readSize += (u32) (packetPtr - oldPacketPtr);
-            lastReceived = header.packetType;
+            u32 dispatched = 0;
+            
+            while(true)
+            {
+                u32 index = (receiver->circularStartingIndex + dispatched) % WINDOW_SIZE;
+                NetworkPacketReceived* test = receiver->orderedWindow + index;
+                if(test->dataSize)
+                {
+                    DispatchApplicationPacket(worldMode, test->data + sizeof(ForgNetworkApplicationIndex), test->dataSize - sizeof(ForgNetworkApplicationIndex));
+                    test->dataSize = 0;
+                    ++dispatched;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            
+            receiver->circularStartingIndex += dispatched;
+            receiver->orderedWaitingFor.index += dispatched;
+        }
+        else
+        {
+            if(ApplicationIndexGreater(applicationIndex, receiver->unorderedBiggestReceived))
+            {
+                receiver->unorderedBiggestReceived = applicationIndex;
+                DispatchApplicationPacket(worldMode, packetPtr, packet.dataSize - sizeof(ForgNetworkApplicationIndex));
+            }
         }
     }
-    
 }

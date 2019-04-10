@@ -4,12 +4,39 @@
 #define MTU KiloBytes(1)
 #pragma pack(push, 1)
 
+struct ForgNetworkApplicationIndex
+{
+    u32 index;
+};
+
+inline unsigned char* ForgPackApplicationIndex(unsigned char* buff, ForgNetworkApplicationIndex index)
+{
+    buff += pack(buff, "L", index.index);
+    return buff;
+}
+
+inline unsigned char* ForgUnpackApplicationIndex(unsigned char* buff, ForgNetworkApplicationIndex* index)
+{
+    buff = unpack(buff, "L", &index->index);
+    return buff;
+}
+
 struct ForgNetworkHeader
 {
     u8 packetType;
-    u16 progressiveIndex;
 };
 
+inline unsigned char* ForgPackHeader(unsigned char* buff, u8 packetType)
+{
+    buff += pack(buff, "C", packetType);
+    return buff;
+}
+
+inline unsigned char* ForgUnpackHeader(unsigned char* buff, ForgNetworkHeader* header)
+{
+    buff = unpack(buff, "C", &header->packetType);
+    return buff;
+}
 
 struct EntityHeader
 {
@@ -29,30 +56,61 @@ struct ForgNetworkPacket
     u8 data[MTU];
 };
 
-
 struct ForgNetworkPacketQueue
 {
     TicketMutex mutex;
     
-    u16 nextProgressiveIndex;
+    ForgNetworkApplicationIndex nextSendApplicationIndex;
     u32 packetCount;
     u32 maxPacketCount;
     ForgNetworkPacket* packets;
 };
 
-inline unsigned char* ForgPackHeader(unsigned char* buff, u8 packetType, u16 progressiveIndex)
+
+#define WINDOW_SIZE 1024
+struct ForgNetworkReceiver
 {
-    buff += pack(buff, "CH", packetType, progressiveIndex);
-    return buff;
+    ForgNetworkApplicationIndex unorderedBiggestReceived;
+    ForgNetworkApplicationIndex orderedWaitingFor;
+    
+    u32 circularStartingIndex;
+    u32 circularEndingIndex;
+    NetworkPacketReceived orderedWindow[WINDOW_SIZE];
+};
+
+
+inline b32 ApplicationIndexGreater(ForgNetworkApplicationIndex s1, ForgNetworkApplicationIndex s2)
+{
+    b32 result = (( s1.index > s2.index) && (s1.index - s2.index <= 2147483647)) || 
+        ((s1.index < s2.index) && (s2.index - s1.index  > 2147483647));
+    return result;
 }
 
-inline unsigned char* ForgUnpackHeader(unsigned char* buff, ForgNetworkHeader* header)
+
+inline b32 ApplicationIndexSmaller(ForgNetworkApplicationIndex s1, ForgNetworkApplicationIndex s2)
 {
-    buff = unpack(buff, "CH", &header->packetType, &header->progressiveIndex);
-    return buff;
+    b32 result = (s1.index != s2.index) && (!ApplicationIndexGreater(s1, s2));
+    return result;
 }
 
-inline u16 ForgEndPacket(unsigned char* original, unsigned char* current)
+inline u32 ApplicationDelta(ForgNetworkApplicationIndex packetIndex1, ForgNetworkApplicationIndex packetIndex2)
+{
+    Assert(ApplicationIndexSmaller(packetIndex2, packetIndex1));
+    u64 p1 = (u64) packetIndex1.index;
+    u64 p2 = (u64) packetIndex2.index;
+    
+    if(packetIndex2.index > packetIndex1.index)
+    {
+        p1 += 0xffffffff;
+    }
+    
+    u32 result = (u32) (p1 - p2);
+    return result;
+}
+
+
+
+inline u16 ForgEndPacket_(unsigned char* original, unsigned char* current)
 {
     u16 result = (u16) (current - original);
     return result;

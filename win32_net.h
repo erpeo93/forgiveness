@@ -708,6 +708,7 @@ NETWORK_GET_PACKET(Win32GetPacket)
     {
         result.disconnected = !connection->connected;
         result.dataSize = firstToReceive->dataSize;
+        result.flags = firstToReceive->flags;
         memcpy(result.data, firstToReceive->data, firstToReceive->dataSize);
         
         NETDLLIST_REMOVE(firstToReceive);

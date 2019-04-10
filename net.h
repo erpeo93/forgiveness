@@ -629,7 +629,8 @@ inline u16 PackTrailer_(unsigned char* original, unsigned char* current)
 struct NetworkPacketReceived
 {
     b32 disconnected;
-    u32 dataSize;
+    u8 flags;
+    u16 dataSize;
     unsigned char data[2048];
 };
 
@@ -644,7 +645,7 @@ struct NetworkBufferedPacket
     u16 progressiveIndex;
     u8 flags;
     
-    u32 dataSize;
+    u16 dataSize;
     u8 data[2048];
     
     r32 timeInFlight;
