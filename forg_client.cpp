@@ -704,10 +704,13 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             char* filePath = "assets";
             if(worldMode->allDataFilesArrived)
             {
+                
+#if 0                
                 if(worldMode->loadTaxonomies)
                 {
                     platformAPI.DeleteFileWildcards(filePath, "*.fed");
                 }
+#endif
                 
                 WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstDataFileArrived, false);
                 worldMode->firstDataFileArrived = 0;
@@ -1498,8 +1501,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 SendUpdate(output.inputAcc, output.targetEntityID, output.desiredAction, output.overlappingEntityID);
                 
-                FlushAllQueuedPackets(worldMode->originalTimeToAdvance);
-                
                 Rect3 worldCameraBounds = GetScreenBoundsAtTargetDistance(group);
                 Rect2 screenBounds = RectCenterDim(V2(0, 0), V2(worldCameraBounds.max.x - worldCameraBounds.min.x, worldCameraBounds.max.y - worldCameraBounds.min.y));
                 //PushRectOutline(group, FlatTransform(), screenBounds, V4(1.0f, 0.0f, 0.0f, 1.0f), 0.1f); 
@@ -1658,11 +1659,6 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
     PushRect(group, rectTransform, editorRect, editorColor);
     PushRect(group, rectTransform, joinRect, joinColor);
     
-    if(myPlayer)
-    {
-        FlushAllQueuedPackets(input->timeToAdvance);
-    }
-    
     return 0;
 }
 
@@ -1773,6 +1769,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         
     }
     while(rerun);
+    
+    if(myPlayer)
+    {
+        FlushAllQueuedPackets(input->timeToAdvance);
+    }
     
     EndRenderGroup(&group);
     EndTemporaryMemory(renderMemory);

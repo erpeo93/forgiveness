@@ -86,8 +86,8 @@ if((element)->next)\
 if(lastPtr){(lastPtr)->next = newLast; lastPtr = newLast;} else{ (firstPtr) = (lastPtr) = dest; }
 
 
-#define NETFREELIST_FREE( listPtr, type, firstFreePtr ) for( type* element = ( listPtr ); element; ) { Assert( element != element->next ); type* nextElement = element->next; FREELIST_DEALLOC( element, firstFreePtr ); element = nextElement; } ( listPtr ) = 0;
-#define NETFREELIST_COPY( destList, type, toCopy, firstFree, pool, ... ){ type* currentElement_ = ( toCopy ); while( currentElement_ ) { type* elementToCopy_; FREELIST_ALLOC( elementToCopy_, ( firstFree ), PushStruct( ( pool ), type ) ); ##__VA_ARGS__; *elementToCopy_ = *currentElement_; FREELIST_INSERT( elementToCopy_, ( destList ) ); currentElement_ = currentElement_->next; } }
+#define NETFREELIST_FREE( listPtr, type, firstFreePtr ) for( type* element = ( listPtr ); element; ) { Assert( element != element->next ); type* nextElement = element->next; NETFREELIST_DEALLOC( element, firstFreePtr ); element = nextElement; } ( listPtr ) = 0;
+#define NETFREELIST_COPY( destList, type, toCopy, firstFree, pool, ... ){ type* currentElement_ = ( toCopy ); while( currentElement_ ) { type* elementToCopy_; NETFREELIST_ALLOC( elementToCopy_, ( firstFree ), PushStruct( ( pool ), type ) ); ##__VA_ARGS__; *elementToCopy_ = *currentElement_; NETFREELIST_INSERT( elementToCopy_, ( destList ) ); currentElement_ = currentElement_->next; } }
 
 inline u64 pack754(long double f, unsigned bits, unsigned expbits)
 {
@@ -703,6 +703,7 @@ struct NetworkConnection
     NetworkAck ackToInclude;
     PacketData receivedPackets[1024];
     
+    
     NetworkConnection* nextFree;
 };
 
@@ -721,6 +722,7 @@ struct NetworkInterface
     u16 newConnectionCount;
     NetworkNewConnection newConnections[128];
     
+    NetMutex connectionMutex;
     u16 nextConnectionIndex;
     NetworkConnection* firstFreeConnection;
     
@@ -767,9 +769,6 @@ typedef NETWORK_CLOSE_CONNECTION(network_platform_close_connection);
 typedef NETWORK_INIT_SERVER(network_platform_init_server);
 
 
-#define NETWORK_RECYCLE_CONNECTION(name) void name(NetworkInterface* network, u16 connectionSlot)
-typedef NETWORK_RECYCLE_CONNECTION(network_platform_recycle_connection);
-
 
 struct NetworkAPI
 {
@@ -782,6 +781,4 @@ struct NetworkAPI
     network_platform_open_connection* OpenConnection;
     network_platform_close_connection* CloseConnection;
     network_platform_init_server* InitServer;
-    
-    network_platform_recycle_connection* RecycleConnection;
 };

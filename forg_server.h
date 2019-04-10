@@ -58,7 +58,8 @@ struct ServerPlayer
     u32 pakFileIndex;
     u32 pakFileOffset;
     
-    ForgNetworkPacketQueue packetQueue;
+    ForgNetworkPacketQueue standardPacketQueue;
+    ForgNetworkPacketQueue reliablePacketQueue;
     
     u32 playerID;
     u64 overlappingEntityID;

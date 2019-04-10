@@ -1,12 +1,13 @@
 #pragma once
 
 #define LOGIN_PORT 1313
-#define MTU (KiloBytes(1) + 2 * (sizeof(ForgNetworkHeader) + sizeof(EntityHeader)))
+#define MTU KiloBytes(1)
 #pragma pack(push, 1)
 
 struct ForgNetworkHeader
 {
     u8 packetType;
+    u16 progressiveIndex;
 };
 
 
@@ -24,7 +25,6 @@ struct ContainerHeader
 
 struct ForgNetworkPacket
 {
-    u8 channelIndex;
     u16 size;
     u8 data[MTU];
 };
@@ -33,20 +33,22 @@ struct ForgNetworkPacket
 struct ForgNetworkPacketQueue
 {
     TicketMutex mutex;
+    
+    u16 nextProgressiveIndex;
     u32 packetCount;
     u32 maxPacketCount;
     ForgNetworkPacket* packets;
 };
 
-inline unsigned char* ForgPackHeader(unsigned char* buff, u32 packetType)
+inline unsigned char* ForgPackHeader(unsigned char* buff, u8 packetType, u16 progressiveIndex)
 {
-    buff += pack(buff, "C", packetType);
+    buff += pack(buff, "CH", packetType, progressiveIndex);
     return buff;
 }
 
 inline unsigned char* ForgUnpackHeader(unsigned char* buff, ForgNetworkHeader* header)
 {
-    buff = unpack(buff, "C", &header->packetType);
+    buff = unpack(buff, "CH", &header->packetType, &header->progressiveIndex);
     return buff;
 }
 

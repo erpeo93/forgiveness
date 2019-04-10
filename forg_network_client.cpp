@@ -1,6 +1,12 @@
-internal void SendData(void* data, u16 size)
+internal void SendUnreliableData(void* data, u16 size)
 {
     platformAPI.net.QueuePacket(myPlayer->network, 0, 0, data, size);
+}
+
+internal void SendReliableData(void* data, u16 size)
+{
+    u8 flags = NetworkFlags_GuaranteedDelivery;
+    platformAPI.net.QueuePacket(myPlayer->network, 0, flags, data, size);
 }
 
 inline void FlushAllQueuedPackets(r32 timeToAdvance)
@@ -8,26 +14,29 @@ inline void FlushAllQueuedPackets(r32 timeToAdvance)
     platformAPI.net.FlushSendQueue(myPlayer->network, 0, timeToAdvance);
 }
 
+#define RELIABLE myPlayer->nextSendReliableProgressiveIndex++
+#define UNRELIABLE myPlayer->nextSendProgressiveIndex++
+
 internal void LoginRequest(i32 password)
 {
     unsigned char buff_[1024];
-    unsigned char* buff = ForgPackHeader(buff_, Type_login);
+    unsigned char* buff = ForgPackHeader(buff_, Type_login, RELIABLE);
     
     buff += pack(buff, "l", password);
     
     u16 totalSize = ForgEndPacket(buff_, buff);
-    SendData(buff_, totalSize);
+    SendReliableData(buff_, totalSize);
 }
 
 internal void GameAccessRequest(u32 challenge)
 {
     unsigned char buff_[1024];
-    unsigned char* buff = ForgPackHeader(buff_, Type_gameAccess);
+    unsigned char* buff = ForgPackHeader(buff_, Type_gameAccess, RELIABLE);
     
     buff += pack(buff, "L", challenge);
     
     u16 totalSize = ForgEndPacket(buff_, buff);
-    SendData(buff_, totalSize);
+    SendReliableData(buff_, totalSize);
 }
 
 #if FORGIVENESS_INTERNAL
@@ -37,12 +46,12 @@ internal void SendEditingEvent( DebugEvent* event )
     if( myPlayer )
     {
         unsigned char buff_[2048];
-        unsigned char* buff = ForgPackHeader(buff_, Type_debugEvent);
+        unsigned char* buff = ForgPackHeader(buff_, Type_debugEvent, RELIABLE);
         
         buff += pack(buff, "QQLHCQQ", event->clock, event->pointer, event->threadID, event->coreIndex, event->type, event->overNetwork[0], event->overNetwork[1]);
         
         u16 totalSize = ForgEndPacket(buff_, buff);
-        SendData( buff_, totalSize);
+        SendReliableData( buff_, totalSize);
     }
 }
 
@@ -51,24 +60,39 @@ internal void SendInputRecordingMessage( b32 recording, b32 startAutomatically )
     if( myPlayer )
     {
         unsigned char buff_[2048];
-        unsigned char* buff = ForgPackHeader( buff_, Type_InputRecording);
+        unsigned char* buff = ForgPackHeader( buff_, Type_InputRecording, RELIABLE);
         
         buff += pack(buff, "ll", recording, startAutomatically);
         
         u16 totalSize = ForgEndPacket( buff_, buff );
-        SendData( buff_, totalSize );
+        SendReliableData( buff_, totalSize );
     }
 }
 #endif
 
-#define CloseAndSendStandardPacket() CloseAndSend(buff_, buff)
-inline void CloseAndSend(unsigned char* buff_, unsigned char* buff)
+#define CloseAndSendStandardPacket() CloseAndSend(buff_, buff, false)
+#define CloseAndSendReliablePacket() CloseAndSend(buff_, buff, true)
+
+inline void CloseAndSend(unsigned char* buff_, unsigned char* buff, b32 reliable)
 {
     u16 totalSize = ForgEndPacket( buff_, buff );
-    SendData( buff_, totalSize );
+    
+    if(reliable)
+    {
+        SendReliableData(buff_, totalSize);
+    }
+    else
+    {
+        SendUnreliableData(buff_, totalSize);
+    }
 }
 
-#define StartStandardPacket(type) unsigned char buff_[1024]; unsigned char* buff = ForgPackHeader( buff_, Type_##type);
+#define StartStandardPacket(type) unsigned char buff_[1024]; unsigned char* buff = ForgPackHeader( buff_, Type_##type, UNRELIABLE);
+
+#define StartReliablePacket(type) unsigned char buff_[1024]; unsigned char* buff = ForgPackHeader( buff_, Type_##type, RELIABLE);
+
+
+
 #define Pack(formatString, ...) buff += pack(buff, formatString, ##__VA_ARGS__)
 #define Unpack(formatString, ...) packetPtr = unpack(packetPtr, formatString, ##__VA_ARGS__)
 
@@ -102,137 +126,137 @@ internal void SendUpdate( Vec3 acceleration, u64 targetEntityID, u32 desiredActi
     }
     
     unsigned char buff_[1024];
-    unsigned char* buff = ForgPackHeader(buff_, Type_ActionRequest);
+    unsigned char* buff = ForgPackHeader(buff_, Type_ActionRequest, UNRELIABLE);
     
     buff += pack(buff, "LVLQQ", 0, acceleration, desiredAction, targetEntityID, overlappingEntityID);
     
     u16 totalSize = ForgEndPacket(buff_, buff);
-    SendData( buff_, totalSize);
+    SendUnreliableData( buff_, totalSize);
 }
 
 internal void SendEquipRequest(u64 sourceContainerID, u8 objectIndex)
 {
-    StartStandardPacket(EquipRequest);
+    StartReliablePacket(EquipRequest);
     
     Pack("QC", sourceContainerID, objectIndex);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 internal void SendDisequipRequest(u32 slotIndex, u64 destContainerID, u8 destObjectIndex)
 {
-    StartStandardPacket(DisequipRequest);
+    StartReliablePacket(DisequipRequest);
     
     Pack("LQC", slotIndex, destContainerID, destObjectIndex);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 internal void SendDropRequest(u64 sourceContainerID, u8 objectIndex)
 {
-    StartStandardPacket(DropRequest);
+    StartReliablePacket(DropRequest);
     
     Pack("QC", sourceContainerID, objectIndex);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 internal void SendMoveRequest(u64 sourceContainerID, u8 objectIndex, u64 destContainerID, u8 destObjectIndex)
 {
     
-    StartStandardPacket(MoveRequest);
+    StartReliablePacket(MoveRequest);
     
     Pack("QCQC", sourceContainerID, objectIndex, destContainerID, destObjectIndex);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 internal void SendSwapRequest(u64 sourceContainerID, u8 sourceObjectIndex)
 {
-    StartStandardPacket(SwapRequest);
+    StartReliablePacket(SwapRequest);
     
     Pack("QC", sourceContainerID, sourceObjectIndex);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 internal void SendDragEquipmentRequest(u32 slotIndex)
 {
-    StartStandardPacket(DragEquipmentRequest);
+    StartReliablePacket(DragEquipmentRequest);
     
     Pack("L", slotIndex);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 internal void SendEquipDraggingRequest(u32 slotIndex)
 {
-    StartStandardPacket(EquipDraggingRequest);
+    StartReliablePacket(EquipDraggingRequest);
     
     Pack("L", slotIndex);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 
 internal void SendCraftRequest(u32 taxonomy, GenerationData gen)
 {
-    StartStandardPacket(CraftRequest);
+    StartReliablePacket(CraftRequest);
     
     Pack("LQ", taxonomy, gen.generic);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 internal void SendCraftFromInventoryRequest(u64 containerID, u32 objectIndex)
 {
-    StartStandardPacket(CraftFromInventoryRequest);
+    StartReliablePacket(CraftFromInventoryRequest);
     
     Pack("QL", containerID, objectIndex);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 
 internal void SendActiveSkillRequest(u32 taxonomy)
 {
-    StartStandardPacket(ActiveSkillRequest);
+    StartReliablePacket(ActiveSkillRequest);
     
     Pack("L", taxonomy);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 internal void SendPassiveSkillRequest(u32 taxonomy, b32 deactivate)
 {
-    StartStandardPacket(PassiveSkillRequest);
+    StartReliablePacket(PassiveSkillRequest);
     
     Pack("Ll", taxonomy, deactivate);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 internal void SendUnlockSkillCategoryRequest(u32 taxonomy)
 {
-    StartStandardPacket(UnlockSkillCategoryRequest);
+    StartReliablePacket(UnlockSkillCategoryRequest);
     
     Pack("L", taxonomy);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 internal void SendSkillLevelUpRequest(u32 taxonomy)
 {
-    StartStandardPacket(SkillLevelUpRequest);
+    StartReliablePacket(SkillLevelUpRequest);
     
     Pack("L", taxonomy);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 internal void SendLearnRequest(u64 containerID, u32 objectIndex)
 {
-    StartStandardPacket(LearnRequest);
+    StartReliablePacket(LearnRequest);
     
     Pack("QL", containerID, objectIndex);
     
@@ -241,7 +265,7 @@ internal void SendLearnRequest(u64 containerID, u32 objectIndex)
 
 internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
 {
-    StartStandardPacket(ConsumeRequest);
+    StartReliablePacket(ConsumeRequest);
     
     Pack("QL", containerID, objectIndex);
     
@@ -250,7 +274,7 @@ internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
 
 inline void SendPopMessage(b32 list, b32 pop = true)
 {
-    StartStandardPacket(PopEditorElement);
+    StartReliablePacket(PopEditorElement);
     Pack("ll", list, pop);
     CloseAndSendStandardPacket();
 }
@@ -258,7 +282,7 @@ inline void SendPopMessage(b32 list, b32 pop = true)
 
 internal void SendEditorElements(EditorElement* root)
 {
-    StartStandardPacket(EditorElement);
+    StartReliablePacket(EditorElement);
     Pack("sLLL", root->name, root->type, root->flags, root->versionNumber);
     if(root->type < EditorElement_List)
     {
@@ -327,7 +351,7 @@ internal void SendEditorElements(EditorElement* root)
 
 inline void SendNewTabMessage()
 {
-    StartStandardPacket(NewEditorTab);
+    StartReliablePacket(NewEditorTab);
     CloseAndSendStandardPacket();
 }
 
@@ -336,67 +360,67 @@ inline void SendSaveAssetDefinitionFile(char* fileName, EditorElement* root)
     SendNewTabMessage();
     SendEditorElements(root);
     
-    StartStandardPacket(SaveAssetFadFile);
+    StartReliablePacket(SaveAssetFadFile);
     Pack("s", fileName);
     CloseAndSendStandardPacket();
 }
 
 inline void SendReloadAssetsRequest()
 {
-    StartStandardPacket(ReloadAssets);
+    StartReliablePacket(ReloadAssets);
     CloseAndSendStandardPacket();
 }
 
 inline void SendPatchServerRequest()
 {
-    StartStandardPacket(PatchLocalServer);
+    StartReliablePacket(PatchLocalServer);
     CloseAndSendStandardPacket();
 }
 
 inline void SendPatchCheckRequest()
 {
-    StartStandardPacket(PatchCheck);
+    StartReliablePacket(PatchCheck);
     CloseAndSendStandardPacket();
 }
 
 inline void SendSaveTabRequest(u32 taxonomy)
 {
-    StartStandardPacket(SaveSlotTabToFile);
+    StartReliablePacket(SaveSlotTabToFile);
     Pack("L", taxonomy);
     CloseAndSendStandardPacket();
 }
 
 inline void SendReloadEditingMessage(u32 taxonomy, u32 tabIndex)
 {
-    StartStandardPacket(ReloadEditingSlot);
+    StartReliablePacket(ReloadEditingSlot);
     Pack("LL", taxonomy, tabIndex);
     CloseAndSendStandardPacket();
 }
 
 inline void SendAddTaxonomyRequest(u32 parentTaxonomy, char* name)
 {
-    StartStandardPacket(AddTaxonomy);
+    StartReliablePacket(AddTaxonomy);
     Pack("Ls", parentTaxonomy, name);
     CloseAndSendStandardPacket();
 }
 
 inline void SendDeleteTaxonomyRequest(u32 taxonomy)
 {
-    StartStandardPacket(DeleteTaxonomy);
+    StartReliablePacket(DeleteTaxonomy);
     Pack("L", taxonomy);
     CloseAndSendStandardPacket();
 }
 
 inline void SendReviveTaxonomyRequest(u32 taxonomy)
 {
-    StartStandardPacket(ReviveTaxonomy);
+    StartReliablePacket(ReviveTaxonomy);
     Pack("L", taxonomy);
     CloseAndSendStandardPacket();
 }
 
 inline void SendInstantiateRecipeRequest(u32 taxonomy, u64 recipeIndex, Vec3 offset)
 {
-    StartStandardPacket(InstantiateRecipe);
+    StartReliablePacket(InstantiateRecipe);
     Pack("LQV", taxonomy, recipeIndex, offset);
     CloseAndSendStandardPacket();
 }
@@ -404,28 +428,28 @@ inline void SendInstantiateRecipeRequest(u32 taxonomy, u64 recipeIndex, Vec3 off
 
 inline void SendInstantiateTaxonomyRequest(u32 taxonomy, Vec3 offset)
 {
-    StartStandardPacket(InstantiateTaxonomy);
+    StartReliablePacket(InstantiateTaxonomy);
     Pack("LV", taxonomy, offset);
     CloseAndSendStandardPacket();
 }
 
 inline void SendDeleteRequest(u64 identifier)
 {
-    StartStandardPacket(DeleteEntity);
+    StartReliablePacket(DeleteEntity);
     Pack("Q", identifier);
     CloseAndSendStandardPacket();
 }
 
 inline void SendImpersonateRequest(u64 identifier)
 {
-    StartStandardPacket(ImpersonateEntity);
+    StartReliablePacket(ImpersonateEntity);
     Pack("Q", identifier);
     CloseAndSendStandardPacket();
 }
 
 inline void SendPauseToggleMessage()
 {
-    StartStandardPacket(PauseToggle);
+    StartReliablePacket(PauseToggle);
     CloseAndSendStandardPacket();
 }
 

@@ -84,6 +84,11 @@ struct ClientPlayer
 {
     b32 spawnAsh;
     
+    u16 mostRecentReceivedProgressiveIndex;
+    
+    u16 nextSendProgressiveIndex;
+    u16 nextSendReliableProgressiveIndex;
+    
     r32 serverFPS;
     r32 networkTimeElapsed;
     NetworkInterface* network;

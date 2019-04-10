@@ -3911,6 +3911,7 @@ inline void PatchLocalServer(ServerState* server)
 
 internal void SendDataFiles(b32 editorMode, ServerPlayer* player,b32 sendTaxonomyFiles, b32 sendMetaAssetFiles)
 {
+#if 0
     char* path = "assets";
     
     MemoryPool tempPool = {};
@@ -3988,8 +3989,9 @@ internal void SendDataFiles(b32 editorMode, ServerPlayer* player,b32 sendTaxonom
         }
     }
     
-    SendAllDataFileSentMessage(player, sendTaxonomyFiles);
     EndTemporaryMemory(fileMemory);
+#endif
+    SendAllDataFileSentMessage(player, sendTaxonomyFiles);
 }
 
 inline b32 TabHasPreemption(char* tabName, u32 roles)

@@ -448,12 +448,16 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
             }
             
             
+            server->elapsedTime = 0.1f;
             QueueAndFlushAllPackets(server, player, server->elapsedTime);
             if(player->connectionClosed)
             {
-                platformAPI.net.RecycleConnection(&server->clientInterface, player->connectionSlot);
-                player->connectionSlot = 0;
-                RecyclePlayer(server, player);
+                //if(noPacketsRemainToSend())
+                {
+                    platformAPI.net.CloseConnection(&server->clientInterface, player->connectionSlot);
+                    player->connectionSlot = 0;
+                    RecyclePlayer(server, player);
+                }
             }
             else
             {
