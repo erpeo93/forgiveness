@@ -255,7 +255,7 @@ inline u16 Delta(u16 packetIndex1, u16 packetIndex2)
     
     if(packetIndex2 > packetIndex1)
     {
-        p1 += 0xffff;
+        p1 += (0xffff + 1);
     }
     
     u16 result = (u16) (p1 - p2);

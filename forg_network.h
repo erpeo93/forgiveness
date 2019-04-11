@@ -67,17 +67,31 @@ struct ForgNetworkPacketQueue
 };
 
 
-#define WINDOW_SIZE 1024
+#define WINDOW_SIZE 64
 struct ForgNetworkReceiver
 {
     ForgNetworkApplicationIndex unorderedBiggestReceived;
-    ForgNetworkApplicationIndex orderedWaitingFor;
+    ForgNetworkApplicationIndex orderedBiggestReceived;
     
     u32 circularStartingIndex;
     u32 circularEndingIndex;
     NetworkPacketReceived orderedWindow[WINDOW_SIZE];
 };
 
+inline void ResetReceiver(ForgNetworkReceiver* receiver)
+{
+    receiver->unorderedBiggestReceived.index = 0xffffffff;
+    receiver->orderedBiggestReceived.index = 0xffffffff;
+    
+    receiver->circularStartingIndex = 0;
+    receiver->circularEndingIndex = 0;
+    
+    for(u32 packetIndex = 0; packetIndex < ArrayCount(receiver->orderedWindow); ++packetIndex)
+    {
+        receiver->orderedWindow[packetIndex].dataSize = 0;
+    }
+    
+}
 
 inline b32 ApplicationIndexGreater(ForgNetworkApplicationIndex s1, ForgNetworkApplicationIndex s2)
 {
@@ -95,16 +109,21 @@ inline b32 ApplicationIndexSmaller(ForgNetworkApplicationIndex s1, ForgNetworkAp
 
 inline u32 ApplicationDelta(ForgNetworkApplicationIndex packetIndex1, ForgNetworkApplicationIndex packetIndex2)
 {
-    Assert(ApplicationIndexSmaller(packetIndex2, packetIndex1));
-    u64 p1 = (u64) packetIndex1.index;
-    u64 p2 = (u64) packetIndex2.index;
-    
-    if(packetIndex2.index > packetIndex1.index)
+    u32 result = 0;
+    if(ApplicationIndexSmaller(packetIndex2, packetIndex1))
     {
-        p1 += 0xffffffff;
+        u64 p1 = (u64) packetIndex1.index;
+        u64 p2 = (u64) packetIndex2.index;
+        
+        if(packetIndex2.index > packetIndex1.index)
+        {
+            p1 += 0xffffffff;
+            p1 += 1;
+            
+        }
+        
+        result = (u32) (p1 - p2);
     }
-    
-    u32 result = (u32) (p1 - p2);
     return result;
 }
 

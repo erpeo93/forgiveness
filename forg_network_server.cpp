@@ -26,6 +26,7 @@ inline u8* ForgReserveSpace(ServerPlayer* player, b32 reliable, u16 size, u64 id
         {
             packet = queue->packets + queue->packetCount++;
             result = ForgPackApplicationIndex(packet->data, queue->nextSendApplicationIndex);
+            packet->size += sizeof(ForgNetworkApplicationIndex);
             queue->nextSendApplicationIndex.index++;
             
             if(identifier)
@@ -45,6 +46,10 @@ inline u8* ForgReserveSpace(ServerPlayer* player, b32 reliable, u16 size, u64 id
             packet->size += (u16) (result - packet->data);
         }
         packet->size += size;
+    }
+    else
+    {
+        InvalidCodePath;
     }
     
     return result;
@@ -134,6 +139,8 @@ internal ServerPlayer* FirstFreePlayer(ServerState* server)
     result->recipeCount = 0;
     result->allDataFileSent = false;
     result->allPakFileSent = false;
+    
+    ResetReceiver(&result->receiver);
     
     server->firstFree = result->next;
     result->next = 0;

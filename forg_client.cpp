@@ -369,6 +369,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     
     u32 salt = 22222;
     platformAPI.net.OpenConnection(myPlayer->network, loginServer, LOGIN_PORT, salt);
+    ResetReceiver(&myPlayer->receiver);
     
     LoginRequest(1111);
     

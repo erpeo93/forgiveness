@@ -1,6 +1,6 @@
 #pragma once
 #define MAX_OTHER_SERVERS 10
-#define MAXIMUM_SERVER_PLAYERS 10000
+#define MAXIMUM_SERVER_PLAYERS 1000
 #define INTROSPECTION
 
 #include "forg_basic_types.h"
@@ -40,7 +40,7 @@ global_variable u16 globalPorts[] =
 
 global_variable u16 globalUserPorts[] = 
 {
-    1313
+    LOGIN_PORT
 };
 
 struct PlayerRequest

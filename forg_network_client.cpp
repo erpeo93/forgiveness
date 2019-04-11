@@ -30,7 +30,7 @@ inline void CloseAndSend(unsigned char* buff_, unsigned char* buff, b32 reliable
         myPlayer->nextSendUnreliableApplicationIndex.index++;
     }
     
-    unsigned char* indexDest = buff_ + sizeof(PacketHeader);
+    unsigned char* indexDest = buff_;
     ForgPackApplicationIndex(indexDest, index);
     
     u16 totalSize = ForgEndPacket_( buff_, buff);
@@ -44,7 +44,7 @@ inline void CloseAndSend(unsigned char* buff_, unsigned char* buff, b32 reliable
     }
 }
 
-#define StartPacket(type) unsigned char buff_[1024]; unsigned char* buff = ForgPackHeader( buff_, Type_##type);buff += sizeof(ForgNetworkApplicationIndex);
+#define StartPacket(type) unsigned char buff_[1024]; unsigned char* buff = buff_ + sizeof(ForgNetworkApplicationIndex);buff = ForgPackHeader( buff, Type_##type);
 
 #define Pack(formatString, ...) buff += pack(buff, formatString, ##__VA_ARGS__)
 #define Unpack(formatString, ...) packetPtr = unpack(packetPtr, formatString, ##__VA_ARGS__)
@@ -572,6 +572,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 u32 salt = 11111;
                 platformAPI.net.CloseConnection(myPlayer->network, 0);
                 platformAPI.net.OpenConnection(myPlayer->network, server, login.port,salt);
+                ResetReceiver(&myPlayer->receiver);
                 GameAccessRequest(login.challenge);
             } break;
             
@@ -1155,10 +1156,10 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode)
         ForgNetworkReceiver* receiver = &myPlayer->receiver;
         if(packet.flags & NetworkFlags_GuaranteedDelivery)
         {
-            u32 delta = ApplicationDelta(applicationIndex, receiver->orderedWaitingFor);
-            if(delta < WINDOW_SIZE)
+            u32 delta = ApplicationDelta(applicationIndex, receiver->orderedBiggestReceived);
+            if(delta > 0 && delta < WINDOW_SIZE)
             {
-                u32 index = (receiver->circularStartingIndex + delta) % WINDOW_SIZE;
+                u32 index = (receiver->circularStartingIndex + (delta - 1)) % WINDOW_SIZE;
                 receiver->orderedWindow[index] = packet;
             }
             
@@ -1181,7 +1182,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode)
             }
             
             receiver->circularStartingIndex += dispatched;
-            receiver->orderedWaitingFor.index += dispatched;
+            receiver->orderedBiggestReceived.index += dispatched;
         }
         else
         {

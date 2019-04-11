@@ -940,10 +940,10 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                     ForgNetworkReceiver* receiver = &player->receiver;
                     if(received.flags & NetworkFlags_GuaranteedDelivery)
                     {
-                        u32 delta = ApplicationDelta(applicationIndex, receiver->orderedWaitingFor);
-                        if(delta < WINDOW_SIZE)
+                        u32 delta = ApplicationDelta(applicationIndex, receiver->orderedBiggestReceived);
+                        if(delta > 0 && delta < WINDOW_SIZE)
                         {
-                            u32 index = (receiver->circularStartingIndex + delta) % WINDOW_SIZE;
+                            u32 index = (receiver->circularStartingIndex + (delta - 1)) % WINDOW_SIZE;
                             receiver->orderedWindow[index] = received;
                         }
                         
@@ -966,7 +966,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                         }
                         
                         receiver->circularStartingIndex += dispatched;
-                        receiver->orderedWaitingFor.index += dispatched;
+                        receiver->orderedBiggestReceived.index += dispatched;
                     }
                     else
                     {

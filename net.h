@@ -631,7 +631,7 @@ struct NetworkPacketReceived
     b32 disconnected;
     u8 flags;
     u16 dataSize;
-    unsigned char data[2048];
+    unsigned char data[1024];
 };
 
 struct PendingConnection
@@ -646,7 +646,7 @@ struct NetworkBufferedPacket
     u8 flags;
     
     u16 dataSize;
-    u8 data[2048];
+    u8 data[1024];
     
     r32 timeInFlight;
     union
