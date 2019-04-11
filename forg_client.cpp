@@ -367,11 +367,12 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     char* loginServer = "127.0.0.1";
 #endif
     
-    u32 salt = 22222;
-    platformAPI.net.OpenConnection(myPlayer->network, loginServer, LOGIN_PORT, salt);
+    platformAPI.net.OpenConnection(myPlayer->network, loginServer, LOGIN_PORT);
+    myPlayer->nextSendUnreliableApplicationIndex = {};
+    myPlayer->nextSendReliableApplicationIndex = {};
     ResetReceiver(&myPlayer->receiver);
     
-    LoginRequest(1111);
+    LoginRequest(4444);
     
     
     gameState->receivePacketWork.network = &myPlayer->network;

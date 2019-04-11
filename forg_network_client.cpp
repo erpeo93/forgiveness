@@ -569,10 +569,11 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 Unpack("HLl", &login.port, &login.challenge, &login.editingEnabled);
                 worldMode->editingEnabled = login.editingEnabled;
                 
-                u32 salt = 11111;
                 platformAPI.net.CloseConnection(myPlayer->network, 0);
-                platformAPI.net.OpenConnection(myPlayer->network, server, login.port,salt);
+                platformAPI.net.OpenConnection(myPlayer->network, server, login.port);
                 ResetReceiver(&myPlayer->receiver);
+                myPlayer->nextSendUnreliableApplicationIndex = {};
+                myPlayer->nextSendReliableApplicationIndex = {};
                 GameAccessRequest(login.challenge);
             } break;
             
@@ -1171,6 +1172,8 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode)
                 NetworkPacketReceived* test = receiver->orderedWindow + index;
                 if(test->dataSize)
                 {
+                    ++receiver->orderedBiggestReceived.index;
+                    
                     DispatchApplicationPacket(worldMode, test->data + sizeof(ForgNetworkApplicationIndex), test->dataSize - sizeof(ForgNetworkApplicationIndex));
                     test->dataSize = 0;
                     ++dispatched;
@@ -1179,10 +1182,9 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode)
                 {
                     break;
                 }
+                
+                receiver->circularStartingIndex += dispatched;
             }
-            
-            receiver->circularStartingIndex += dispatched;
-            receiver->orderedBiggestReceived.index += dispatched;
         }
         else
         {

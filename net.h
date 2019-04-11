@@ -682,7 +682,6 @@ struct PacketData
 
 struct NetworkConnection
 {
-    b32 connected;
     u32 salt;
     
     u16 counterpartConnectionSlot;
@@ -748,7 +747,7 @@ enum NetworkFlags
 #define NETWORK_QUEUE_PACKET(name) void name(NetworkInterface* network, u16 connectionSlot, u8 flags,void* data, u16 size)
 typedef NETWORK_QUEUE_PACKET(network_platform_queue_packet);
 
-#define NETWORK_FLUSH_SEND_QUEUE(name) void name(NetworkInterface* network, u16 connectionSlot, r32 elapsedTime)
+#define NETWORK_FLUSH_SEND_QUEUE(name) b32 name(NetworkInterface* network, u16 connectionSlot, r32 elapsedTime)
 typedef NETWORK_FLUSH_SEND_QUEUE(network_platform_flush_send_queue);
 
 #define NETWORK_RECEIVE_DATA(name) void name(NetworkInterface* network)
@@ -760,7 +759,7 @@ typedef NETWORK_ACCEPT(network_platform_accept);
 #define NETWORK_GET_PACKET(name) NetworkPacketReceived name(NetworkInterface* network, u16 connectionSlot)
 typedef NETWORK_GET_PACKET(network_platform_get_packet);
 
-#define NETWORK_OPEN_CONNECTION(name) void name(NetworkInterface* network, char* IP, u16 port, u32 salt)
+#define NETWORK_OPEN_CONNECTION(name) void name(NetworkInterface* network, char* IP, u16 port)
 typedef NETWORK_OPEN_CONNECTION(network_platform_open_connection);
 
 #define NETWORK_CLOSE_CONNECTION(name) void name(NetworkInterface* network, u16 connectionSlot)

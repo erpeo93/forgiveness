@@ -70,22 +70,25 @@ inline void CloseAndStore(ServerPlayer* player, unsigned char* buff_, unsigned c
     }
 }
 
-inline void QueueAndFlushAllPackets(ServerState* server, ServerPlayer* player, ForgNetworkPacketQueue* queue)
+inline void QueueAndFlushAllPackets(ServerState* server, ServerPlayer* player, ForgNetworkPacketQueue* queue, b32 reliable)
 {
+    u8 flags = reliable ? NetworkFlags_GuaranteedDelivery : 0;
     for(u32 packetIndex = 0; packetIndex < queue->packetCount; ++packetIndex)
     {
         ForgNetworkPacket* toSend = queue->packets + packetIndex;
-        platformAPI.net.QueuePacket(&server->clientInterface, player->connectionSlot, NetworkFlags_GuaranteedDelivery, toSend->data, toSend->size);
+        platformAPI.net.QueuePacket(&server->clientInterface, player->connectionSlot, flags, toSend->data, toSend->size);
         toSend->size = 0;
     }
     queue->packetCount = 0;
 }
 
-inline void QueueAndFlushAllPackets(ServerState* server, ServerPlayer* player, r32 timeToAdvance)
+inline b32 QueueAndFlushAllPackets(ServerState* server, ServerPlayer* player, r32 timeToAdvance)
 {
-    QueueAndFlushAllPackets(server, player, &player->standardPacketQueue);
-    QueueAndFlushAllPackets(server, player, &player->reliablePacketQueue);
-    platformAPI.net.FlushSendQueue(&server->clientInterface, player->connectionSlot, timeToAdvance);
+    QueueAndFlushAllPackets(server, player, &player->standardPacketQueue, false);
+    QueueAndFlushAllPackets(server, player, &player->reliablePacketQueue, true);
+    b32 result = platformAPI.net.FlushSendQueue(&server->clientInterface, player->connectionSlot, timeToAdvance);
+    
+    return result;
 }
 
 #define StartPacket(player, type) unsigned char buff_[2048]; unsigned char* buff = ForgPackHeader( buff_, Type_##type);
@@ -111,6 +114,7 @@ inline void ForgInitPacketQueue(MemoryPool* pool, ForgNetworkPacketQueue* queue,
     queue->packetCount = 0;
     queue->maxPacketCount = maxPacketCount;
     queue->packets = PushArray(pool, ForgNetworkPacket, maxPacketCount);
+    queue->nextSendApplicationIndex = {};
 }
 
 internal ServerPlayer* FirstFreePlayer(ServerState* server)

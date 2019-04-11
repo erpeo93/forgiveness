@@ -346,7 +346,6 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 //the player is in
                 b32 editingEnabled = server->editor;
                 SendLoginResponse(player, LOGIN_PORT, challenge, editingEnabled);
-                player->connectionClosed = true;
             }
             else
             {
@@ -905,10 +904,10 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
             
             
             server->elapsedTime = 0.1f;
-            QueueAndFlushAllPackets(server, player, server->elapsedTime);
+            b32 allPacketSent = QueueAndFlushAllPackets(server, player, server->elapsedTime);
             if(player->connectionClosed)
             {
-                //if(noPacketsRemainToSend())
+                if(allPacketSent)
                 {
                     platformAPI.net.CloseConnection(&server->clientInterface, player->connectionSlot);
                     player->connectionSlot = 0;
@@ -924,6 +923,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                     if(received.disconnected)
                     {
                         player->connectionClosed = true;
+                        break;
                     }
                     
                     if(!received.dataSize)
@@ -1089,13 +1089,7 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     
     
     u16 maxConnectionCount = 2;
-    NetworkConnection* connections = PushArray(&server->networkPool, NetworkConnection, maxConnectionCount, NoClear());
-    Assert(connections);
-    for(u16 connectionIndex = 0; connectionIndex < maxConnectionCount; ++connectionIndex)
-    {
-        NetworkConnection* connection = connections + connectionIndex;
-        connection->connected = false;
-    }
+    NetworkConnection* connections = PushArray(&server->networkPool, NetworkConnection, maxConnectionCount);
     
     u16 clientPort = globalUserPorts[universeIndex];
     platformAPI.net.InitServer(&server->clientInterface, clientPort, connections, maxConnectionCount);
