@@ -626,12 +626,13 @@ inline u16 PackTrailer_(unsigned char* original, unsigned char* current)
     return totalSize;
 }
 
+#define PACKET_SIZE 1024 + 128
 struct NetworkPacketReceived
 {
     b32 disconnected;
     u8 flags;
     u16 dataSize;
-    unsigned char data[1024];
+    unsigned char data[PACKET_SIZE];
 };
 
 struct PendingConnection
@@ -646,7 +647,7 @@ struct NetworkBufferedPacket
     u8 flags;
     
     u16 dataSize;
-    u8 data[1024];
+    u8 data[PACKET_SIZE];
     
     r32 timeInFlight;
     union

@@ -557,6 +557,13 @@ global_variable r32 globalSine = 0;
 global_variable r32 global_cameraZStep = 6.0f;
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
+    
+    Vec3 inputAcc = {};
+    u64 targetEntityID = 0;
+    u32 desiredAction = 0;
+    u64 overlappingEntityID = 0;
+    
+    
     b32 result = false;
 #if 0    
     if(Pressed(&input->backButton))
@@ -1501,7 +1508,11 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     }
                 }
                 
-                SendUpdate(output.inputAcc, output.targetEntityID, output.desiredAction, output.overlappingEntityID);
+                inputAcc = output.inputAcc;
+                targetEntityID = targetEntityID;
+                desiredAction = output.desiredAction;
+                overlappingEntityID = output.overlappingEntityID;
+                
                 
                 Rect3 worldCameraBounds = GetScreenBoundsAtTargetDistance(group);
                 Rect2 screenBounds = RectCenterDim(V2(0, 0), V2(worldCameraBounds.max.x - worldCameraBounds.min.x, worldCameraBounds.max.y - worldCameraBounds.min.y));
@@ -1509,6 +1520,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             }
         }
     }
+    
+    SendUpdate(inputAcc, targetEntityID, desiredAction, overlappingEntityID);
     
     return result;
 }

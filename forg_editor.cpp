@@ -3911,7 +3911,7 @@ inline void PatchLocalServer(ServerState* server)
 
 internal void SendDataFiles(b32 editorMode, ServerPlayer* player,b32 sendTaxonomyFiles, b32 sendMetaAssetFiles)
 {
-#if 0
+#if 1
     char* path = "assets";
     
     MemoryPool tempPool = {};

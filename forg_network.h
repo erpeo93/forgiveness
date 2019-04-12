@@ -1,7 +1,7 @@
 #pragma once
 
 #define LOGIN_PORT 1313
-#define MTU KiloBytes(1)
+#define MTU KiloBytes(1) + 1
 #pragma pack(push, 1)
 
 struct ForgNetworkApplicationIndex
@@ -53,7 +53,7 @@ struct ContainerHeader
 struct ForgNetworkPacket
 {
     u16 size;
-    u8 data[MTU];
+    u8 data[MTU + sizeof(ForgNetworkHeader) + sizeof(u64) + sizeof(ForgNetworkApplicationIndex)];
 };
 
 struct ForgNetworkPacketQueue

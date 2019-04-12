@@ -5,7 +5,7 @@ inline u8* ForgReserveSpace(ServerPlayer* player, b32 reliable, u16 size, u64 id
     Assert(queue->packetCount <= queue->maxPacketCount);
     
     u8* result = 0;
-    Assert(size <= (MTU - sizeof(ForgNetworkHeader) - sizeof(identifier) - sizeof(ForgNetworkApplicationIndex)));
+    Assert(size <= MTU);
     ForgNetworkPacket* packet = 0;
     
     

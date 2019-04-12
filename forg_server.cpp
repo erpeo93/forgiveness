@@ -326,6 +326,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
 {
     u32 challenge = 1111;
     
+    unsigned char* original = packetPtr;
     
     ForgNetworkHeader header;
     packetPtr = ForgUnpackHeader(packetPtr, &header);
@@ -745,7 +746,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
             {
                 PlayerRequest* request = player->requests + player->requestCount++;
                 Assert(dataSize < ArrayCount(request->data));
-                Copy(dataSize, request->data, packetPtr);
+                Copy(dataSize, request->data, original);
             }
         } break;
         
