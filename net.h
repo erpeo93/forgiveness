@@ -690,7 +690,7 @@ struct NetworkConnection
     
     
     u16 nextProgressiveIndex;
-    NetworkBufferedPacket* firstNotSent;
+    NetworkBufferedPacket* lastSent;
     NetworkBufferedPacket sendQueueSentinel;
     NetworkBufferedPacket recvQueueSentinel;
     NetworkBufferedPacket* firstFreePacket;
