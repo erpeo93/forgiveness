@@ -1,12 +1,14 @@
 internal void SendUnreliableData(void* data, u16 size)
 {
-    platformAPI.net.QueuePacket(myPlayer->network, 0, 0, data, size);
+    NetworkSendParams params = {};
+    platformAPI.net.QueuePacket(myPlayer->network, 0, params, data, size);
 }
 
 internal void SendReliableData(void* data, u16 size)
 {
-    u8 flags = NetworkFlags_GuaranteedDelivery;
-    platformAPI.net.QueuePacket(myPlayer->network, 0, flags, data, size);
+    NetworkSendParams params = {};
+    params.guaranteedDelivery = GuaranteedDelivery_HalfASecond;
+    platformAPI.net.QueuePacket(myPlayer->network, 0, params, data, size);
 }
 
 inline void FlushAllQueuedPackets(r32 timeToAdvance)
@@ -17,21 +19,23 @@ inline void FlushAllQueuedPackets(r32 timeToAdvance)
 
 inline void CloseAndSend(unsigned char* buff_, unsigned char* buff, b32 reliable)
 {
-    ForgNetworkApplicationIndex index;
+    ForgNetworkApplicationData data;
     
     if(reliable)
     {
-        index = myPlayer->nextSendReliableApplicationIndex;
-        myPlayer->nextSendReliableApplicationIndex.index++;
+        data = myPlayer->nextSendReliableApplicationData;
+        myPlayer->nextSendReliableApplicationData.index++;
     }
     else
     {
-        index = myPlayer->nextSendUnreliableApplicationIndex;
-        myPlayer->nextSendUnreliableApplicationIndex.index++;
+        data = myPlayer->nextSendUnreliableApplicationData;
+        myPlayer->nextSendUnreliableApplicationData.index++;
     }
     
+    data.flags = reliable ? ForgNetworkFlag_Ordered : 0;
+    
     unsigned char* indexDest = buff_;
-    ForgPackApplicationIndex(indexDest, index);
+    ForgPackApplicationData(indexDest, data);
     
     u16 totalSize = ForgEndPacket_( buff_, buff);
     if(reliable)
@@ -44,7 +48,7 @@ inline void CloseAndSend(unsigned char* buff_, unsigned char* buff, b32 reliable
     }
 }
 
-#define StartPacket(type) unsigned char buff_[1024]; unsigned char* buff = buff_ + sizeof(ForgNetworkApplicationIndex);buff = ForgPackHeader( buff, Type_##type);
+#define StartPacket(type) unsigned char buff_[1024]; unsigned char* buff = buff_ + sizeof(ForgNetworkApplicationData);buff = ForgPackHeader( buff, Type_##type);
 
 #define Pack(formatString, ...) buff += pack(buff, formatString, ##__VA_ARGS__)
 #define Unpack(formatString, ...) packetPtr = unpack(packetPtr, formatString, ##__VA_ARGS__)
@@ -572,8 +576,8 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 platformAPI.net.CloseConnection(myPlayer->network, 0);
                 platformAPI.net.OpenConnection(myPlayer->network, server, login.port);
                 ResetReceiver(&myPlayer->receiver);
-                myPlayer->nextSendUnreliableApplicationIndex = {};
-                myPlayer->nextSendReliableApplicationIndex = {};
+                myPlayer->nextSendUnreliableApplicationData = {};
+                myPlayer->nextSendReliableApplicationData = {};
                 GameAccessRequest(login.challenge);
             } break;
             
@@ -1150,48 +1154,55 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode)
         unsigned char* packetPtr = packet.data;
         
         
-        ForgNetworkApplicationIndex applicationIndex;
-        packetPtr = ForgUnpackApplicationIndex(packetPtr, &applicationIndex);
+        ForgNetworkApplicationData applicationData;
+        packetPtr = ForgUnpackApplicationData(packetPtr, &applicationData);
         
         
         ForgNetworkReceiver* receiver = &myPlayer->receiver;
-        if(packet.flags & NetworkFlags_GuaranteedDelivery)
+        if(applicationData.flags & ForgNetworkFlag_Ordered)
         {
-            u32 delta = ApplicationDelta(applicationIndex, receiver->orderedBiggestReceived);
-            if(delta > 0 && delta < WINDOW_SIZE)
+            u32 delta = ApplicationDelta(applicationData, receiver->orderedBiggestReceived);
+            if(delta > 0)
             {
-                u32 index = (receiver->circularStartingIndex + (delta - 1)) % WINDOW_SIZE;
-                receiver->orderedWindow[index] = packet;
-            }
-            
-            u32 dispatched = 0;
-            
-            while(true)
-            {
-                u32 index = (receiver->circularStartingIndex + dispatched) % WINDOW_SIZE;
-                NetworkPacketReceived* test = receiver->orderedWindow + index;
-                if(test->dataSize)
+                if(delta < WINDOW_SIZE)
                 {
-                    ++receiver->orderedBiggestReceived.index;
+                    u32 placeHereIndex = (receiver->circularStartingIndex + (delta - 1)) % WINDOW_SIZE;
+                    receiver->orderedWindow[placeHereIndex] = packet;
                     
-                    DispatchApplicationPacket(worldMode, test->data + sizeof(ForgNetworkApplicationIndex), test->dataSize - sizeof(ForgNetworkApplicationIndex));
-                    test->dataSize = 0;
-                    ++dispatched;
+                    u32 dispatched = 0;
+                    
+                    while(true)
+                    {
+                        u32 index = (receiver->circularStartingIndex + dispatched) % WINDOW_SIZE;
+                        NetworkPacketReceived* test = receiver->orderedWindow + index;
+                        if(test->dataSize)
+                        {
+                            ++receiver->orderedBiggestReceived.index;
+                            
+                            DispatchApplicationPacket(worldMode, test->data + sizeof(ForgNetworkApplicationData), test->dataSize - sizeof(ForgNetworkApplicationData));
+                            test->dataSize = 0;
+                            ++dispatched;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                        
+                        receiver->circularStartingIndex += dispatched;
+                    }
                 }
                 else
                 {
-                    break;
+                    InvalidCodePath;
                 }
-                
-                receiver->circularStartingIndex += dispatched;
             }
         }
         else
         {
-            if(ApplicationIndexGreater(applicationIndex, receiver->unorderedBiggestReceived))
+            if(ApplicationIndexGreater(applicationData, receiver->unorderedBiggestReceived))
             {
-                receiver->unorderedBiggestReceived = applicationIndex;
-                DispatchApplicationPacket(worldMode, packetPtr, packet.dataSize - sizeof(ForgNetworkApplicationIndex));
+                receiver->unorderedBiggestReceived = applicationData;
+                DispatchApplicationPacket(worldMode, packetPtr, packet.dataSize - sizeof(ForgNetworkApplicationData));
             }
         }
     }

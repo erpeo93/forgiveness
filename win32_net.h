@@ -233,17 +233,28 @@ inline b32 PacketIndexSmaller(u16 s1, u16 s2)
     return result;
 }
 
-inline b32 IsSet(u32 ackedBits, u16 bitIndex)
+inline b32 IsSet(AckedBits ackedBits, u16 bitIndex)
 {
-    Assert(bitIndex < 32);
-    b32 result = (ackedBits & (1 << bitIndex));
+    Assert(bitIndex < 128);
+    
+    u16 index = bitIndex / 32;
+    u16 offset = index * 32;
+    
+    b32 result = (ackedBits.bits[index] & (1 << (bitIndex - offset)));
     return result;
 }
 
-inline u32 SetBitIndex(u32 bits, u16 bitIndex)
+inline AckedBits SetBitIndex(AckedBits bits, u16 bitIndex)
 {
-    Assert(bitIndex < 32);
-    u32 result = bits | (1 << bitIndex);
+    Assert(bitIndex < 128);
+    
+    AckedBits result = bits;
+    
+    u16 index = bitIndex / 32;
+    u16 offset = index * 32;
+    
+    result.bits[index] = result.bits[index] | (1 << (bitIndex - offset));
+    
     return result;
 }
 
@@ -288,6 +299,35 @@ inline b32 Acked(NetworkAck ack, u16 packetIndex)
     return result;
 }
 
+
+#define LOST_TIME 1.0f
+#define MINIMUM_BANDWIDTH KiloBytes(32)
+inline r32 NetLerp(r32 value1, r32 lerp, r32 value2)
+{
+    r32 result = ( 1.0f - lerp ) * value1 + lerp * value2;
+    return result;
+}
+
+inline void AdjustRTT(NetworkConnection* connection, r32 packetRTT)
+{
+    connection->estimatedRTT = NetLerp(connection->estimatedRTT, 0.2f, packetRTT);
+}
+
+inline void SignalPacketLost(NetworkConnection* connection)
+{
+	AdjustRTT(connection, LOST_TIME);
+    
+    connection->sendAllowedBandwidth /= 1.2f;
+    connection->sendAllowedBandwidth = Min(connection->sendAllowedBandwidth, MINIMUM_BANDWIDTH);
+}
+
+inline u32 GetBandwidth(NetworkConnection* connection, r32 elapsedTime)
+{
+    connection->sendAllowedBandwidth = Max(connection->sendAllowedBandwidth, MINIMUM_BANDWIDTH);
+    u32 result = (u32) (connection->sendAllowedBandwidth / elapsedTime);
+    return result;
+}
+
 inline void DispatchQueuedAcks(NetworkConnection* connection)
 {
     BeginNetMutex(&connection->mutex);
@@ -305,6 +345,9 @@ inline void DispatchQueuedAcks(NetworkConnection* connection)
                 NetworkBufferedPacket* next = packet->next;
                 if(Acked(toDispatch->ack, packet->progressiveIndex))
                 {
+                    AdjustRTT(connection, packet->lostTimer);
+                    connection->sendAllowedBandwidth += (r32) KiloBytes(1);
+                    
                     if(packet == connection->lastSent)
                     {
                         connection->lastSent = packet->prev;
@@ -330,13 +373,13 @@ inline void DispatchQueuedAcks(NetworkConnection* connection)
     }
 }
 
-inline void QueueAck(NetworkConnection* connection, u16 ackedIndex, u32 ackedBits)
+inline void QueueAck(NetworkConnection* connection, u16 ackedIndex, AckedBits bits)
 {
     BeginNetMutex(&connection->mutex);
     NetworkBufferedAck* ack;
     NETFREELIST_ALLOC(ack, connection->firstFreeAck, (NetworkBufferedAck*) malloc(sizeof(NetworkAck)));
     ack->ack.progressiveIndex = ackedIndex;
-    ack->ack.bits = ackedBits;
+    ack->ack.bits = bits;
     NETFREELIST_INSERT(ack, connection->firstQueuedAck);
     EndNetMutex(&connection->mutex);
 }
@@ -371,20 +414,22 @@ inline void AddPacketReceived(NetworkConnection* connection, u16 packetIndex)
 
 
 
-inline void UpdateLastReceived(NetworkConnection* connection, u16 packetIndex)
+inline void SignalReceivedPacket(NetworkConnection* connection, u16 packetIndex)
 {
+    ++connection->receivedPacketsLastTick;
+    
     NetworkAck newAckToInclude = connection->ackToInclude;
     
     if(packetIndex != newAckToInclude.progressiveIndex)
     {
-        u16 bitsToInclude = 32;
+        u16 bitsToInclude = sizeof(AckedBits) * 8;
         if(PacketIndexGreater(packetIndex, newAckToInclude.progressiveIndex))
         {
             u16 oldBiggest = newAckToInclude.progressiveIndex;
             u16 newBiggest = packetIndex;
             
             newAckToInclude.progressiveIndex = newBiggest;
-            newAckToInclude.bits = 0;
+            newAckToInclude.bits = {};
             
             
             u16 index = oldBiggest + 1;
@@ -398,7 +443,7 @@ inline void UpdateLastReceived(NetworkConnection* connection, u16 packetIndex)
             index = newBiggest - bitsToInclude;
             destIndex = newBiggest;
             
-			u16 bitIndex = 31;
+			u16 bitIndex = bitsToInclude - 1;
             while(true)
             {
                 if(Received(connection, index))
@@ -434,18 +479,6 @@ inline void UpdateLastReceived(NetworkConnection* connection, u16 packetIndex)
     }
 }
 
-inline void SignalPacketLost()
-{
-	//AdjustRTT();
-	//AdjustBandWidth();
-}
-
-inline u32 GetBandwidth(NetworkConnection* connection)
-{
-    u32 result = 100 * 1024;
-    return result;
-}
-
 NETWORK_QUEUE_PACKET(Win32QueuePacket)
 {
     NetworkConnection* connection = network->connections + connectionSlot;
@@ -461,8 +494,22 @@ NETWORK_QUEUE_PACKET(Win32QueuePacket)
     newPacket->dataSize = size;
     memcpy(newPacket->data, data, size);
     
+    
+    u8 flags = 0;
+    
+    flags = Set2BitsFlags(flags, CRITICAL_LEVEL_STARTING_BIT, (u8) params.criticalLevel);
+    flags = Set2BitsFlags(flags, GUARANTEED_DELIVERY_STARTING_BIT, (u8) params.guaranteedDelivery);
+    
+    
+    u32 receivingSpeedLimit = 256;
+    if(connection->receivingPacketPerSecond > receivingSpeedLimit)
+    {
+        flags = Set2BitsFlags(flags, ACK_BITS_NUMBER_STARTING_BIT, (u8) NetworkBits_64);
+    }
+    
     newPacket->flags = flags;
-    newPacket->timeInFlight = 0;
+    newPacket->resendTimer = 0;
+    newPacket->lostTimer = 0;
     
     NETDLLIST_INSERT_AS_LAST(&connection->sendQueueSentinel, newPacket);
 }
@@ -475,12 +522,17 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
     NetworkConnection* connection = network->connections + connectionSlot;
     DispatchQueuedAcks(connection);
     
-    u32 dataToSend = GetBandwidth(connection);
+    u32 dataToSend = GetBandwidth(connection, elapsedTime);
     b32 sendPackets = false;
     if(!connection->lastSent || connection->lastSent == &connection->sendQueueSentinel)
     {
         sendPackets = true;
     }
+    
+    r32 newReceivingSpeed = connection->receivedPacketsLastTick / elapsedTime;
+    connection->receivingPacketPerSecond = NetLerp(connection->receivingPacketPerSecond, 0.5f, newReceivingSpeed);
+    WriteBarrier;
+    connection->receivedPacketsLastTick = 0;
     
     
     NetworkBufferedPacket* packet = connection->sendQueueSentinel.next;
@@ -489,15 +541,31 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
         NetworkBufferedPacket* next = packet->next;
         Assert(next);
         
-        packet->timeInFlight += elapsedTime;
-        if(packet->timeInFlight >= 1.0f)
+        packet->resendTimer += elapsedTime;
+        packet->lostTimer += elapsedTime;
+        
+        
+        b32 packetExpired = false;
+        b32 guaranteedDelivery = false;
+        r32 timer = GetTargetTimer(packet->flags, &guaranteedDelivery);
+        
+        if(packet->lostTimer >= LOST_TIME)
         {
-            SignalPacketLost();
+            packetExpired = true;
+            SignalPacketLost(connection);
+            packet->lostTimer = 0;
+        }
+        else if(packet->resendTimer >= timer)
+        {
+            packetExpired = true;
+            packet->resendTimer = 0;
+        }
+        
+        if(packetExpired)
+        {
             NETDLLIST_REMOVE(packet);
-            
-            if(packet->flags & NetworkFlags_GuaranteedDelivery && connection->salt)
+            if(guaranteedDelivery && connection->salt)
             {
-                packet->timeInFlight = 0;
                 packet->progressiveIndex = connection->nextProgressiveIndex++;
                 NETDLLIST_INSERT_AS_LAST(&connection->sendQueueSentinel, packet);
             }
@@ -508,6 +576,7 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
                 EndNetMutex(&connection->mutex);
             }
         }
+        
         
         
 		if(dataToSend > 0)
@@ -524,15 +593,21 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
 				unsigned char* buff = PackHeader_(buff_, STARTNUMBER, connection->counterpartConnectionSlot, packet->flags, packet->progressiveIndex, ackToInclude.progressiveIndex, ackToInclude.bits);
 				memcpy(buff, packet->data, packet->dataSize);
 				buff += packet->dataSize;
-				totalSize = PackTrailer_(buff_, buff);
+				totalSize = PackTrailer_(buff_, buff, packet->flags);
                 
-				if(sendto(network->fd, (const char*) buff_, totalSize, 0,
-                          (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
-				{
-					InvalidCodePath;
-				}
                 
-				dataToSend -= totalSize;
+                u32 sendCount = GetSendCount(packet->flags);
+                for(u32 sendIndex = 0; sendIndex < sendCount; ++sendIndex)
+                {
+                    if(sendto(network->fd, (const char*) buff_, totalSize, 0,
+                              (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
+                    {
+                        InvalidCodePath;
+                    }
+                }
+                
+                dataToSend -= (sendCount * totalSize);
+                
                 connection->lastSent = packet;
 			}
             
@@ -597,9 +672,9 @@ NETWORK_CLOSE_CONNECTION(Win32CloseConnection)
     if(connection)
     {
         unsigned char disconnectMsg_[64];
-        unsigned char* disconnectMsg = PackHeader_(disconnectMsg_, DISCONNECTNUMBER, connection->counterpartConnectionSlot, 0, 0, 0, 0);
+        unsigned char* disconnectMsg = PackHeader_(disconnectMsg_, DISCONNECTNUMBER, connection->counterpartConnectionSlot, 0, 0, 0, {});
         disconnectMsg += pack(disconnectMsg, "L", connection->salt);
-        u32 totalSize = PackTrailer_(disconnectMsg_, disconnectMsg);
+        u32 totalSize = PackTrailer_(disconnectMsg_, disconnectMsg, 0);
         
         for(u32 i = 0; i < 10; ++i)
         {
@@ -678,9 +753,9 @@ NETWORK_OPEN_CONNECTION(Win32OpenConnection)
     while(true)
     {
         unsigned char helloMsg_[64];
-        unsigned char* endHelloMsg = PackHeader_(helloMsg_, HELLONUMBER, 0, 0, 0, 0, 0);
+        unsigned char* endHelloMsg = PackHeader_(helloMsg_, HELLONUMBER, 0, 0, 0, 0, {});
         endHelloMsg += pack(endHelloMsg, "L", clientSalt);
-        u32 totalSize = PackTrailer_(helloMsg_, endHelloMsg);
+        u32 totalSize = PackTrailer_(helloMsg_, endHelloMsg, 0);
         
         if(sendto(network->fd, (const char*) helloMsg_, totalSize, 0, &sockinfo, (int) addrlen) < 0)
         {
@@ -695,10 +770,9 @@ NETWORK_OPEN_CONNECTION(Win32OpenConnection)
             PacketHeader header;
             unsigned char* packet = UnpackHeader_(network->recvBuffer, &header);
             u32 salt;
-            u32 endNumber;
-            packet = unpack(packet, "LL", &salt, &endNumber);
+            packet = unpack(packet, "L", &salt);
             
-            if(header.magicNumber == HELLONUMBER && salt == clientSalt && endNumber == ENDNUMBER)
+            if(header.magicNumber == HELLONUMBER && salt == clientSalt)
             {
                 connection->counterpartConnectionSlot = header.connectionSlot;
                 
@@ -725,7 +799,6 @@ NETWORK_GET_PACKET(Win32GetPacket)
     if(firstToReceive != &connection->recvQueueSentinel)
     {
         result.dataSize = firstToReceive->dataSize;
-        result.flags = firstToReceive->flags;
         memcpy(result.data, firstToReceive->data, firstToReceive->dataSize);
         
         NETDLLIST_REMOVE(firstToReceive);
@@ -788,136 +861,132 @@ NETWORK_RECEIVE_DATA(Win32ReceiveData)
             }
             
             network->totalBytesReceived += bytesRead;
-            if(bytesRead > sizeof(PacketHeader))
+            if(bytesRead > sizeof(PacketHeader) - sizeof(AckedBits))
             {
                 PacketHeader header = {};
                 unsigned char* start = UnpackHeader_(network->recvBuffer, &header);
-                if((header.dataSize + sizeof(PacketHeader) + sizeof(PacketTrailer)) <= sizeof(network->recvBuffer))
+                if((header.dataSize + sizeof(PacketHeader)) <= sizeof(network->recvBuffer))
                 {
-                    i32 end = unpacki32(start + header.dataSize);
-                    if(end == ENDNUMBER)
+                    if(header.magicNumber == HELLONUMBER)
                     {
-                        if(header.magicNumber == HELLONUMBER)
+                        if(network->maxConnectionCount > 0)
                         {
-                            if(network->maxConnectionCount > 0)
+                            u16 connectionSlot = 0;
+                            u32 saltToSendBack = 0;
+                            
+                            b32 alreadyLogged = false;
+                            for(u16 connectionIndex = 0; connectionIndex < network->nextConnectionIndex; ++connectionIndex)
                             {
-                                u16 connectionSlot = 0;
-                                u32 saltToSendBack = 0;
-                                
-                                b32 alreadyLogged = false;
-                                for(u16 connectionIndex = 0; connectionIndex < network->nextConnectionIndex; ++connectionIndex)
+                                NetworkConnection* connection = network->connections + connectionIndex;
+                                if(!memcmp(connection->counterpartAddress, &client, size))
                                 {
-                                    NetworkConnection* connection = network->connections + connectionIndex;
-                                    if(!memcmp(connection->counterpartAddress, &client, size))
-                                    {
-                                        connectionSlot = connectionIndex;
-                                        saltToSendBack = connection->salt;
-                                        alreadyLogged = true;
-                                        break;
-                                    }
-                                }
-                                
-                                if(!alreadyLogged)
-                                {
-                                    u32 salt;
-                                    unpack(start, "L", &salt);
-                                    saltToSendBack = salt;
-                                    
-                                    BeginNetMutex(&network->connectionMutex);
-                                    NetworkConnection* connection = network->firstFreeConnection;
-                                    if(!connection)
-                                    {
-                                        connectionSlot = network->nextConnectionIndex++;
-                                        connection = network->connections + connectionSlot;
-                                    }
-                                    else
-                                    {
-                                        connectionSlot = (u16) (connection - network->connections);
-                                        network->firstFreeConnection = connection->nextFree;
-                                    }
-                                    EndNetMutex(&network->connectionMutex);
-                                    
-                                    connection->salt = salt;
-                                    
-                                    
-                                    connection->nextProgressiveIndex = 0;
-                                    connection->lastSent = 0;
-                                    
-                                    NETDLLIST_INIT(&connection->sendQueueSentinel);
-                                    NETDLLIST_INIT(&connection->recvQueueSentinel);
-                                    
-                                    Assert(!connection->firstQueuedAck);
-                                    connection->ackToInclude = {};
-                                    connection->ackToInclude.progressiveIndex = 0xffff;
-                                    
-                                    
-                                    Assert(size <= sizeof(connection->counterpartAddress));
-                                    memcpy(connection->counterpartAddress, &client, size);
-                                    connection->counterpartAddrSize = size;
-                                    
-                                    NetworkNewConnection* newConnection = network->newConnections + network->newConnectionCount;
-                                    
-                                    newConnection->accepted = false;
-                                    newConnection->slot = connectionSlot;
-                                    
-                                    WriteBarrier;
-                                    ++network->newConnectionCount;
-                                    
-                                }
-                                
-                                unsigned char helloResponse[64];
-                                unsigned char* packet = PackHeader_(helloResponse, HELLONUMBER, connectionSlot, 0, 0, 0, 0);
-                                packet += pack(packet, "L", saltToSendBack);
-                                u32 totalSize = PackTrailer_(helloResponse, packet);
-                                
-                                if(sendto(network->fd, (const char*) helloResponse, totalSize, 0, (sockaddr*) &client, size) < 0)
-                                {
-                                    InvalidCodePath;
+                                    connectionSlot = connectionIndex;
+                                    saltToSendBack = connection->salt;
+                                    alreadyLogged = true;
+                                    break;
                                 }
                             }
-                        }
-                        
-                        else if(header.magicNumber == STARTNUMBER)
-                        {
-                            if(!network->nextConnectionIndex || header.connectionSlot < network->nextConnectionIndex)
+                            
+                            if(!alreadyLogged)
                             {
-                                NetworkConnection* connection = network->connections + header.connectionSlot;
-                                
-                                if(connection->salt)
-                                {
-                                    UpdateLastReceived(connection, header.progressiveIndex);
-                                    QueueAck(connection, header.acked, header.ackedBits);
-                                    
-                                    BeginNetMutex(&connection->mutex);
-                                    NetworkBufferedPacket* recv;
-                                    NETFREELIST_ALLOC(recv, connection->firstFreePacket, (NetworkBufferedPacket*) malloc(sizeof(NetworkBufferedPacket)));
-                                    recv->flags = header.flags;
-                                    recv->progressiveIndex = header.progressiveIndex;
-                                    recv->dataSize = header.dataSize;
-                                    memcpy(recv->data, start, header.dataSize);
-                                    
-                                    NETDLLIST_INSERT_AS_LAST(&connection->recvQueueSentinel, recv);
-                                    EndNetMutex(&connection->mutex);
-                                }
-                            }
-                        }
-                        else if(header.magicNumber == DISCONNECTNUMBER)
-                        {
-                            if(!network->nextConnectionIndex || header.connectionSlot < network->nextConnectionIndex)
-                            {
-                                NetworkConnection* connection = network->connections + header.connectionSlot;
-                                
                                 u32 salt;
                                 unpack(start, "L", &salt);
-                                if(connection->salt == salt)
+                                saltToSendBack = salt;
+                                
+                                BeginNetMutex(&network->connectionMutex);
+                                NetworkConnection* connection = network->firstFreeConnection;
+                                if(!connection)
                                 {
-                                    connection->salt = 0;
+                                    connectionSlot = network->nextConnectionIndex++;
+                                    connection = network->connections + connectionSlot;
                                 }
+                                else
+                                {
+                                    connectionSlot = (u16) (connection - network->connections);
+                                    network->firstFreeConnection = connection->nextFree;
+                                }
+                                EndNetMutex(&network->connectionMutex);
+                                
+                                connection->salt = salt;
+                                
+                                
+                                connection->nextProgressiveIndex = 0;
+                                connection->lastSent = 0;
+                                
+                                NETDLLIST_INIT(&connection->sendQueueSentinel);
+                                NETDLLIST_INIT(&connection->recvQueueSentinel);
+                                
+                                Assert(!connection->firstQueuedAck);
+                                connection->ackToInclude = {};
+                                connection->ackToInclude.progressiveIndex = 0xffff;
+                                
+                                
+                                Assert(size <= sizeof(connection->counterpartAddress));
+                                memcpy(connection->counterpartAddress, &client, size);
+                                connection->counterpartAddrSize = size;
+                                
+                                NetworkNewConnection* newConnection = network->newConnections + network->newConnectionCount;
+                                
+                                newConnection->accepted = false;
+                                newConnection->slot = connectionSlot;
+                                
+                                WriteBarrier;
+                                ++network->newConnectionCount;
+                                
                             }
-                            else
+                            
+                            unsigned char helloResponse[64];
+                            unsigned char* packet = PackHeader_(helloResponse, HELLONUMBER, connectionSlot, 0, 0, 0, {});
+                            packet += pack(packet, "L", saltToSendBack);
+                            u32 totalSize = PackTrailer_(helloResponse, packet, 0);
+                            
+                            if(sendto(network->fd, (const char*) helloResponse, totalSize, 0, (sockaddr*) &client, size) < 0)
                             {
                                 InvalidCodePath;
                             }
+                        }
+                    }
+                    
+                    else if(header.magicNumber == STARTNUMBER)
+                    {
+                        if(!network->nextConnectionIndex || header.connectionSlot < network->nextConnectionIndex)
+                        {
+                            NetworkConnection* connection = network->connections + header.connectionSlot;
+                            
+                            if(connection->salt)
+                            {
+                                SignalReceivedPacket(connection, header.progressiveIndex);
+                                QueueAck(connection, header.acked, header.ackedBits);
+                                
+                                BeginNetMutex(&connection->mutex);
+                                NetworkBufferedPacket* recv;
+                                NETFREELIST_ALLOC(recv, connection->firstFreePacket, (NetworkBufferedPacket*) malloc(sizeof(NetworkBufferedPacket)));
+                                recv->flags = header.flags;
+                                recv->progressiveIndex = header.progressiveIndex;
+                                recv->dataSize = header.dataSize;
+                                memcpy(recv->data, start, header.dataSize);
+                                
+                                NETDLLIST_INSERT_AS_LAST(&connection->recvQueueSentinel, recv);
+                                EndNetMutex(&connection->mutex);
+                            }
+                        }
+                    }
+                    else if(header.magicNumber == DISCONNECTNUMBER)
+                    {
+                        if(!network->nextConnectionIndex || header.connectionSlot < network->nextConnectionIndex)
+                        {
+                            NetworkConnection* connection = network->connections + header.connectionSlot;
+                            
+                            u32 salt;
+                            unpack(start, "L", &salt);
+                            if(connection->salt == salt)
+                            {
+                                connection->salt = 0;
+                            }
+                        }
+                        else
+                        {
+                            InvalidCodePath;
                         }
                     }
                 }

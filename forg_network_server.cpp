@@ -1,17 +1,17 @@
 inline u8* ForgReserveSpace(ServerPlayer* player, b32 reliable, u16 size, u64 identifier)
 {
     ForgNetworkPacketQueue* queue = reliable ? &player->reliablePacketQueue : &player->standardPacketQueue;
-    Assert(queue->maxPacketCount);
-    Assert(queue->packetCount <= queue->maxPacketCount);
+    
+    u8 applicationFlags = reliable ? ForgNetworkFlag_Ordered : 0;
     
     u8* result = 0;
     Assert(size <= MTU);
     ForgNetworkPacket* packet = 0;
     
     
-    if(queue->packetCount)
+    if(queue->lastPacket)
     {
-        packet = queue->packets + (queue->packetCount - 1);
+        packet = queue->lastPacket;
         if((packet->size + size) > MTU)
         {
             packet = 0;
@@ -21,18 +21,29 @@ inline u8* ForgReserveSpace(ServerPlayer* player, b32 reliable, u16 size, u64 id
     b32 writeEntityHeader = false;
     if(!packet)
     {
-        Assert(queue->packetCount < queue->maxPacketCount);
-        if(queue->packetCount < queue->maxPacketCount)
+        packet = PushStruct(&queue->tempPool, ForgNetworkPacket);
+        
+        if(queue->lastPacket)
         {
-            packet = queue->packets + queue->packetCount++;
-            result = ForgPackApplicationIndex(packet->data, queue->nextSendApplicationIndex);
-            packet->size += sizeof(ForgNetworkApplicationIndex);
-            queue->nextSendApplicationIndex.index++;
-            
-            if(identifier)
-            {
-                writeEntityHeader = true;
-            }
+            queue->lastPacket->next = packet;
+            queue->lastPacket = packet;
+        }
+        else
+        {
+            Assert(!queue->firstPacket);
+            queue->firstPacket = queue->lastPacket = packet;
+        }
+        
+        ForgNetworkApplicationData data = queue->nextSendApplicationData;
+        data.flags = reliable ? ForgNetworkFlag_Ordered : 0;
+        
+        result = ForgPackApplicationData(packet->data, data);
+        packet->size += sizeof(ForgNetworkApplicationData);
+        queue->nextSendApplicationData.index++;
+        
+        if(identifier)
+        {
+            writeEntityHeader = true;
         }
     }
     
@@ -72,14 +83,20 @@ inline void CloseAndStore(ServerPlayer* player, unsigned char* buff_, unsigned c
 
 inline void QueueAndFlushAllPackets(ServerState* server, ServerPlayer* player, ForgNetworkPacketQueue* queue, b32 reliable)
 {
-    u8 flags = reliable ? NetworkFlags_GuaranteedDelivery : 0;
-    for(u32 packetIndex = 0; packetIndex < queue->packetCount; ++packetIndex)
+    NetworkSendParams params = {};
+    if(reliable)
     {
-        ForgNetworkPacket* toSend = queue->packets + packetIndex;
-        platformAPI.net.QueuePacket(&server->clientInterface, player->connectionSlot, flags, toSend->data, toSend->size);
-        toSend->size = 0;
+        params.guaranteedDelivery = GuaranteedDelivery_ResendEverySecond;
+        params.criticalLevel = NetworkCritical_Important;
     }
-    queue->packetCount = 0;
+    for(ForgNetworkPacket* toSend = queue->firstPacket; toSend; toSend = toSend->next)
+    {
+        platformAPI.net.QueuePacket(&server->clientInterface, player->connectionSlot, params, toSend->data, toSend->size);
+    }
+    
+    queue->firstPacket = 0;
+    queue->lastPacket = 0;
+    Clear(&queue->tempPool);
 }
 
 inline b32 QueueAndFlushAllPackets(ServerState* server, ServerPlayer* player, r32 timeToAdvance)
@@ -109,14 +126,6 @@ internal void AddServerInfoIfNecessary( ServerState* server, u32 otherIP, u16 ot
 }
 #endif
 
-inline void ForgInitPacketQueue(MemoryPool* pool, ForgNetworkPacketQueue* queue, u32 maxPacketCount)
-{
-    queue->packetCount = 0;
-    queue->maxPacketCount = maxPacketCount;
-    queue->packets = PushArray(pool, ForgNetworkPacket, maxPacketCount);
-    queue->nextSendApplicationIndex = {};
-}
-
 internal ServerPlayer* FirstFreePlayer(ServerState* server)
 {
     ServerPlayer* result = server->firstFree;
@@ -128,10 +137,8 @@ internal ServerPlayer* FirstFreePlayer(ServerState* server)
         result = server->players + index;
         result->playerID = index;
         
-        u32 maxUnreliablePacketCount = 128;
-        u32 maxReliablePacketCount = 128;
-        ForgInitPacketQueue(&server->networkPool, &result->standardPacketQueue, maxUnreliablePacketCount);
-        ForgInitPacketQueue(&server->networkPool, &result->reliablePacketQueue, maxReliablePacketCount);
+        result->standardPacketQueue = {};
+        result->reliablePacketQueue = {};
     }
     
     result->connectionClosed = false;

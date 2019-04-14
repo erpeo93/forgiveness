@@ -4,20 +4,26 @@
 #define MTU KiloBytes(1) + 1
 #pragma pack(push, 1)
 
-struct ForgNetworkApplicationIndex
+enum ForgNetworkFlags
 {
-    u32 index;
+    ForgNetworkFlag_Ordered = (1 << 1),
 };
 
-inline unsigned char* ForgPackApplicationIndex(unsigned char* buff, ForgNetworkApplicationIndex index)
+struct ForgNetworkApplicationData
 {
-    buff += pack(buff, "L", index.index);
+    u32 index;
+    u8 flags;
+};
+
+inline unsigned char* ForgPackApplicationData(unsigned char* buff, ForgNetworkApplicationData data)
+{
+    buff += pack(buff, "LC", data.index, data.flags);
     return buff;
 }
 
-inline unsigned char* ForgUnpackApplicationIndex(unsigned char* buff, ForgNetworkApplicationIndex* index)
+inline unsigned char* ForgUnpackApplicationData(unsigned char* buff, ForgNetworkApplicationData* data)
 {
-    buff = unpack(buff, "L", &index->index);
+    buff = unpack(buff, "LC", &data->index, &data->flags);
     return buff;
 }
 
@@ -53,25 +59,31 @@ struct ContainerHeader
 struct ForgNetworkPacket
 {
     u16 size;
-    u8 data[MTU + sizeof(ForgNetworkHeader) + sizeof(u64) + sizeof(ForgNetworkApplicationIndex)];
+    u8 data[MTU + sizeof(ForgNetworkHeader) + sizeof(u64) + sizeof(ForgNetworkApplicationData)];
+    
+    union
+    {
+        ForgNetworkPacket* next;
+        ForgNetworkPacket* nextFree;
+    };
 };
 
 struct ForgNetworkPacketQueue
 {
-    TicketMutex mutex;
+    ForgNetworkApplicationData nextSendApplicationData;
     
-    ForgNetworkApplicationIndex nextSendApplicationIndex;
-    u32 packetCount;
-    u32 maxPacketCount;
-    ForgNetworkPacket* packets;
+    ForgNetworkPacket* firstPacket;
+    ForgNetworkPacket* lastPacket;
+    
+    MemoryPool tempPool;
 };
 
 
-#define WINDOW_SIZE 64
+#define WINDOW_SIZE 256
 struct ForgNetworkReceiver
 {
-    ForgNetworkApplicationIndex unorderedBiggestReceived;
-    ForgNetworkApplicationIndex orderedBiggestReceived;
+    ForgNetworkApplicationData unorderedBiggestReceived;
+    ForgNetworkApplicationData orderedBiggestReceived;
     
     u32 circularStartingIndex;
     u32 circularEndingIndex;
@@ -93,7 +105,7 @@ inline void ResetReceiver(ForgNetworkReceiver* receiver)
     
 }
 
-inline b32 ApplicationIndexGreater(ForgNetworkApplicationIndex s1, ForgNetworkApplicationIndex s2)
+inline b32 ApplicationIndexGreater(ForgNetworkApplicationData s1, ForgNetworkApplicationData s2)
 {
     b32 result = (( s1.index > s2.index) && (s1.index - s2.index <= 2147483647)) || 
         ((s1.index < s2.index) && (s2.index - s1.index  > 2147483647));
@@ -101,13 +113,13 @@ inline b32 ApplicationIndexGreater(ForgNetworkApplicationIndex s1, ForgNetworkAp
 }
 
 
-inline b32 ApplicationIndexSmaller(ForgNetworkApplicationIndex s1, ForgNetworkApplicationIndex s2)
+inline b32 ApplicationIndexSmaller(ForgNetworkApplicationData s1, ForgNetworkApplicationData s2)
 {
     b32 result = (s1.index != s2.index) && (!ApplicationIndexGreater(s1, s2));
     return result;
 }
 
-inline u32 ApplicationDelta(ForgNetworkApplicationIndex packetIndex1, ForgNetworkApplicationIndex packetIndex2)
+inline u32 ApplicationDelta(ForgNetworkApplicationData packetIndex1, ForgNetworkApplicationData packetIndex2)
 {
     u32 result = 0;
     if(ApplicationIndexSmaller(packetIndex2, packetIndex1))
@@ -185,6 +197,7 @@ enum Packet_Type
     Type_DataFileHeader,
     Type_PakFileHeader,
     Type_FileChunk,
+    
     Type_AllDataFileSent,
     Type_AllPakFileSent,
     

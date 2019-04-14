@@ -368,8 +368,8 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
 #endif
     
     platformAPI.net.OpenConnection(myPlayer->network, loginServer, LOGIN_PORT);
-    myPlayer->nextSendUnreliableApplicationIndex = {};
-    myPlayer->nextSendReliableApplicationIndex = {};
+    myPlayer->nextSendUnreliableApplicationData = {};
+    myPlayer->nextSendReliableApplicationData = {};
     ResetReceiver(&myPlayer->receiver);
     
     LoginRequest(4444);
@@ -792,8 +792,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 worldMode->UI->font = 0;
                 
                 
-#if 0                
-                gameState->music = PlaySound(&gameState->soundState, GetFirstSound(gameState->assets, Asset_music), 0, 0.0f);
+#if 1
+                gameState->music = PlaySound(&gameState->soundState, gameState->assets, GetFirstSound(gameState->assets, Asset_music), 0.0f);
                 ChangeVolume(&gameState->soundState, gameState->music, 1000.0f, V2(1.0f, 1.0f));
 #endif
                 

@@ -21,6 +21,14 @@ typedef uintptr_t unm;
 typedef intptr_t snm;
 
 
+#define KiloBytes( value ) ( ( value ) * 1024 )
+#define MegaBytes( value ) ( ( value ) * 1024 * 1024 )
+#define GigaBytes( value ) ( ( value ) * 1024 * 1024 * 1024 )
+#define TeraBytes( value ) ( ( value ) * 1024 * 1024 * 1024 * 1024 )
+
+#define Max( A , B ) ( ( ( A ) > ( B ) ) ? ( A ) : ( B ) )
+#define Min( A , B ) ( ( ( A ) < ( B ) ) ? ( A ) : ( B ) )
+
 #define pack754_32(f) (pack754((f), 32, 8))
 #define pack754_64(f) (pack754((f), 64, 11))
 #define unpack754_32(i) (unpack754((i), 32, 8))
@@ -578,10 +586,14 @@ inline unsigned char* unpack(unsigned char *buf, char *format, ...)
 
 
 #define STARTNUMBER 123456789
-#define ENDNUMBER 987654321
 #define HELLONUMBER 1234554321
 #define DISCONNECTNUMBER 999888777
 #pragma pack(push, 1)
+struct AckedBits
+{
+    u32 bits[2];
+};
+
 struct PacketHeader
 {
     u16 dataSize;
@@ -591,37 +603,148 @@ struct PacketHeader
     u16 progressiveIndex;
     
     u16 acked;
-    u32 ackedBits;
-    ;
-};
-
-struct PacketTrailer
-{
-    i32 end;
+    AckedBits ackedBits;
 };
 #pragma pack(pop)
 
-inline unsigned char* PackHeader_(unsigned char* buff, i32 magicNumber, u16 connectionSlot, u8 flags, u16 progressiveIndex, u16 acked, u32 ackedBits)
+
+
+#define CRITICAL_LEVEL_STARTING_BIT 0
+enum NetworkCriticalLevel
+{
+    NetworkCritical_Standard = 0,
+    NetworkCritical_Important = 1,
+    NetworkCritical_VeryImportant = 2,
+    NetworkCritical_Critical = 3,
+};
+
+#define GUARANTEED_DELIVERY_STARTING_BIT 2
+enum GuaranteedDeliveryTime
+{
+    GuaranteedDelivery_None = 0,
+    GuaranteedDelivery_ResendEverySecond = 1,
+    GuaranteedDelivery_HalfASecond = 2,
+    GuaranteedDelivery_RTT = 3,
+};
+
+#define ACK_BITS_NUMBER_STARTING_BIT 4
+enum NetworkAckBitNumber
+{
+    NetworkBits_32,
+    NetworkBits_64,
+    NetworkBits_96,
+    NetworkBits_128,
+};
+
+struct NetworkSendParams
+{
+    NetworkCriticalLevel criticalLevel;
+    GuaranteedDeliveryTime guaranteedDelivery;
+};
+
+inline u32 Get2BitFlags(u8 flags, u8 startingBit)
+{
+    Assert(startingBit <= 6);
+    u32 result = (flags >> startingBit) & 3;
+    return result;
+}
+
+inline u8 Set2BitsFlags(u8 flags, u8 startingBit, u8 value)
+{
+    Assert(startingBit <= 6);
+    Assert(value < 4);
+    
+    u8 result = flags | (value << startingBit);
+    
+    return result;
+}
+
+inline r32 GetTargetTimer(u8 flags, b32* guaranteedDelivery)
+{
+    r32 result = 1.0f;
+    
+    GuaranteedDeliveryTime timeType = (GuaranteedDeliveryTime) Get2BitFlags(flags, GUARANTEED_DELIVERY_STARTING_BIT);
+    if(timeType > GuaranteedDelivery_None)
+    {
+        *guaranteedDelivery = true;
+        
+        switch(timeType)
+        {
+            case GuaranteedDelivery_ResendEverySecond:
+            {
+                1.0f;
+            } break;
+            
+            case GuaranteedDelivery_HalfASecond:
+            {
+                result = 0.5f;
+            } break;
+            
+            case GuaranteedDelivery_RTT:
+            {
+                result = 0.25f;
+            } break;
+        }
+    }
+    else
+    {
+        *guaranteedDelivery = false;
+    }
+    
+    return result;
+}
+
+inline u32 GetSendCount(u8 flags)
+{
+    u32 result = Get2BitFlags(flags, CRITICAL_LEVEL_STARTING_BIT) + 1;
+    return result;
+}
+
+inline u32 GetBitCount(u8 flags)
+{
+    u32 result = Get2BitFlags(flags, ACK_BITS_NUMBER_STARTING_BIT) + 1;
+    Assert(result && result <= 2);
+    return result;
+}
+
+inline unsigned char* PackHeader_(unsigned char* buff, i32 magicNumber, u16 connectionSlot, u8 flags, u16 progressiveIndex, u16 acked, AckedBits ackedBits)
 {
     u16 dataSize = 0;
     unsigned char* result = buff;
-    result += pack(result, "HlHCHHL", dataSize, (i32) magicNumber, connectionSlot, flags, progressiveIndex, acked, ackedBits);
+    result += pack(result, "HlHCHH", dataSize, (i32) magicNumber, connectionSlot, flags, progressiveIndex, acked);
+    
+    
+    u32 bitCount = GetBitCount(flags);
+    for(u32 bitIndex = 0; bitIndex < bitCount; ++bitIndex)
+    {
+        result += pack(result, "L", ackedBits.bits[bitIndex]);
+    }
     
     return result;
 }
 
 inline unsigned char* UnpackHeader_(unsigned char* buff, PacketHeader* header)
 {
-    buff = unpack(buff, "HlHCHHL", &header->dataSize, &header->magicNumber, &header->connectionSlot, &header->flags, &header->progressiveIndex, &header->acked, &header->ackedBits);
+    buff = unpack(buff, "HlHCHH", &header->dataSize, &header->magicNumber, &header->connectionSlot, &header->flags, &header->progressiveIndex, &header->acked);
+    
+    
+    u32 bitCount = GetBitCount(header->flags);
+    for(u32 bitIndex = 0; bitIndex < bitCount; ++bitIndex)
+    {
+        buff = unpack(buff, "L", &header->ackedBits.bits[bitIndex]);
+    }
+    
     return buff;
 }
 
-inline u16 PackTrailer_(unsigned char* original, unsigned char* current)
+inline u16 PackTrailer_(unsigned char* original, unsigned char* current, u8 headerFlags)
 {
-    current += pack(current, "l", (i32) ENDNUMBER);
-    
     u16 totalSize = (u16) (current - original);
-    u16 dataSize = (u16) (totalSize - sizeof(PacketHeader) - sizeof(PacketTrailer));
+    
+    u32 bitCount = GetBitCount(headerFlags);
+    u32 headerSize = sizeof(PacketHeader) -sizeof(AckedBits) + (sizeof(u32) * bitCount);
+    
+    u16 dataSize = (u16) (totalSize - headerSize);
     pack(original, "H", dataSize);
     return totalSize;
 }
@@ -630,7 +753,6 @@ inline u16 PackTrailer_(unsigned char* original, unsigned char* current)
 struct NetworkPacketReceived
 {
     b32 disconnected;
-    u8 flags;
     u16 dataSize;
     unsigned char data[PACKET_SIZE];
 };
@@ -649,7 +771,8 @@ struct NetworkBufferedPacket
     u16 dataSize;
     u8 data[PACKET_SIZE];
     
-    r32 timeInFlight;
+    r32 resendTimer;
+    r32 lostTimer;
     union
     {
         NetworkBufferedPacket* next;
@@ -661,7 +784,7 @@ struct NetworkBufferedPacket
 struct NetworkAck
 {
     u16 progressiveIndex;
-    u32 bits;
+    AckedBits bits;
 };
 
 struct NetworkBufferedAck
@@ -706,6 +829,13 @@ struct NetworkConnection
     
     
     NetworkConnection* nextFree;
+    
+    
+    u32 receivedPacketsLastTick;
+    r32 receivingPacketPerSecond;
+    
+    r32 estimatedRTT;
+    r32 sendAllowedBandwidth;
 };
 
 struct NetworkNewConnection
@@ -731,21 +861,11 @@ struct NetworkInterface
     NetworkConnection* connections;
     NetworkConnection clientConnection;
     
-    u8 recvBuffer[2048 + sizeof(PacketHeader) + sizeof(PacketTrailer)];
-    u8 sendBuffer[2048 + sizeof(PacketHeader) + sizeof(PacketTrailer)];
+    u8 recvBuffer[2048 + sizeof(PacketHeader)];
+    u8 sendBuffer[2048 + sizeof(PacketHeader)];
 };
 
-struct NetworkChannelParams
-{
-    b32 ordered;
-};
-
-enum NetworkFlags
-{
-    NetworkFlags_GuaranteedDelivery = (1 << 1),
-};
-
-#define NETWORK_QUEUE_PACKET(name) void name(NetworkInterface* network, u16 connectionSlot, u8 flags,void* data, u16 size)
+#define NETWORK_QUEUE_PACKET(name) void name(NetworkInterface* network, u16 connectionSlot, NetworkSendParams params,void* data, u16 size)
 typedef NETWORK_QUEUE_PACKET(network_platform_queue_packet);
 
 #define NETWORK_FLUSH_SEND_QUEUE(name) b32 name(NetworkInterface* network, u16 connectionSlot, r32 elapsedTime)

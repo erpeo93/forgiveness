@@ -2867,14 +2867,13 @@ internal void WriteMusic()
         {
             lastSampleIndex = remainingSamples;
         }
-        SoundId thisMusic = AddSoundAsset("definition/music/music_test.wav", 0, firstSampleIndex, lastSampleIndex);
+        SoundId thisMusic = AddSoundAsset("definition/music/test.wav", 0, firstSampleIndex, lastSampleIndex);
         if(lastMusic.value)
         {
             assets->assets[lastMusic.value].sound.chain = Chain_next;
         }
         
         lastMusic = thisMusic;
-        
     }
     
     EndAssetType();

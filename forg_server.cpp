@@ -836,7 +836,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
         {
             if(player->allDataFileSent && !player->allPakFileSent)
             {
-#if 0
+#if 1
                 u32 chunkSize = KiloBytes(1);
                 
                 char* pakPath = "assets";
@@ -935,13 +935,13 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                     
                     unsigned char* packetPtr = received.data;
                     
-                    ForgNetworkApplicationIndex applicationIndex;
-                    packetPtr = ForgUnpackApplicationIndex(packetPtr, &applicationIndex);
+                    ForgNetworkApplicationData applicationData;
+                    packetPtr = ForgUnpackApplicationData(packetPtr, &applicationData);
                     
                     ForgNetworkReceiver* receiver = &player->receiver;
-                    if(received.flags & NetworkFlags_GuaranteedDelivery)
+                    if(applicationData.flags & ForgNetworkFlag_Ordered)
                     {
-                        u32 delta = ApplicationDelta(applicationIndex, receiver->orderedBiggestReceived);
+                        u32 delta = ApplicationDelta(applicationData, receiver->orderedBiggestReceived);
                         if(delta > 0 && delta < WINDOW_SIZE)
                         {
                             u32 index = (receiver->circularStartingIndex + (delta - 1)) % WINDOW_SIZE;
@@ -956,7 +956,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                             NetworkPacketReceived* test = receiver->orderedWindow + index;
                             if(test->dataSize)
                             {
-                                DispatchApplicationPacket(server, player, test->data + sizeof(ForgNetworkApplicationIndex), test->dataSize - sizeof(ForgNetworkApplicationIndex));
+                                DispatchApplicationPacket(server, player, test->data + sizeof(ForgNetworkApplicationData), test->dataSize - sizeof(ForgNetworkApplicationData));
                                 test->dataSize = 0;
                                 ++dispatched;
                             }
@@ -971,10 +971,10 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                     }
                     else
                     {
-                        if(ApplicationIndexGreater(applicationIndex, receiver->unorderedBiggestReceived))
+                        if(ApplicationIndexGreater(applicationData, receiver->unorderedBiggestReceived))
                         {
-                            receiver->unorderedBiggestReceived = applicationIndex;
-                            DispatchApplicationPacket(server, player, packetPtr, received.dataSize - sizeof(ForgNetworkApplicationIndex));
+                            receiver->unorderedBiggestReceived = applicationData;
+                            DispatchApplicationPacket(server, player, packetPtr, received.dataSize - sizeof(ForgNetworkApplicationData));
                         }
                     }
                 }
@@ -1078,7 +1078,7 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     
     
     server->networkPool.allocationFlags = PlatformMemory_NotRestored;
-    server->sendPakBufferSize = KiloBytes(100);
+    server->sendPakBufferSize = KiloBytes(800);
     server->sendPakBuffer = PushArray(&server->networkPool, char, server->sendPakBufferSize);
     server->players = PushArray( &server->networkPool, ServerPlayer, MAXIMUM_SERVER_PLAYERS );
     //server->otherServers = PushArray( &server->pool, Server, MAX_OTHER_SERVERS );

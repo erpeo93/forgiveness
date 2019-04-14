@@ -86,8 +86,8 @@ struct ClientPlayer
     
     ForgNetworkReceiver receiver;
     
-    ForgNetworkApplicationIndex nextSendUnreliableApplicationIndex;
-    ForgNetworkApplicationIndex nextSendReliableApplicationIndex;
+    ForgNetworkApplicationData nextSendUnreliableApplicationData;
+    ForgNetworkApplicationData nextSendReliableApplicationData;
     
     r32 serverFPS;
     r32 networkTimeElapsed;
@@ -360,7 +360,6 @@ struct GameModeWorld
     r32 cameraPitch;
     r32 cameraDolly;
     
-    PlayingSound* music;
     SoundState* soundState;
     
 };
@@ -380,6 +379,7 @@ struct GameState
     MemoryPool audioPool;
     MemoryPool framePool;
     
+    PlayingSound* music;
     GameMode mode;
     union
     {
