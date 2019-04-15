@@ -206,6 +206,7 @@ struct ServerState
     
     u32 universeX;
     u32 universeY;
+    WorldGenerator generator;
     
 #if FORGIVENESS_INTERNAL
     b32 recompiled;

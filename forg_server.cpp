@@ -1192,6 +1192,7 @@ extern "C" SERVER_INITIALIZE(InitializeServer)
     }
     
     FillGenerationData(server);
+    InitializeWorldGenerator(&server->generator, server->universeX, server->universeY);
     BuildWorld(server, universeIndex);
 }
 

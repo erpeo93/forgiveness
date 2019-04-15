@@ -1859,71 +1859,35 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
 
 
 
-inline Vec3 GetBiomeColorDelta(u8 biome, RandomSequence* seq)
+inline Vec3 GetBiomeColorDelta(u32 biome, RandomSequence* seq)
 {
     Vec3 result = {};
-    switch(biome)
-    {
-        case Biome_forest:
-        {
-            //result.r = RandomBil(seq) * 0.01f;
-            result.g = RandomBil(seq) * 0.01f;
-            //result.b = RandomBil(seq) * 0.05f;
-        } break;
-    }
+    result.g = RandomBil(seq) * 0.01f;
     
     return result;
 }
 
 
-inline Vec4 GetBiomeColor(u8 biome)
+inline Vec4 GetBiomeColor(u32 biome)
 {
-    Vec4 color = {};
-    switch(biome)
-    {
-        case Biome_sea:
-        {
-            color = V4(0.05f, 0.24f,0.3f, 1.0f);
-        } break;
-        
-        case Biome_beach:
-        {
-            color = V4(0.9f, 0.9f, 0.6f, 1.0f);
-        } break;
-        
-        case Biome_forest:
-        {
-            color = V4(0.06f, 0.1f,  0.02f, 1.0f);
-        } break;
-        
-        case Biome_desert:
-        {
-            color = V4(1.0f, 0.85f,  0.0f, 1.0f);
-        } break;
-        
-        case Biome_mountain:
-        {
-            color = V4(0.35f, 0.35f,  0.25f, 1.0f);
-        } break;
-        
-        InvalidDefaultCase;
-    }
-    
+    Vec4 color = color = V4(0.06f, 0.4f,  0.02f, 1.0f);
     return color;
 }
 
 
 
-inline Vec4 GetBiomeColor(WorldChunk* chunk, u8 tileX, u8 tileY, RandomSequence* seq)
+inline Vec4 GetTileColor(WorldChunk* chunk, u8 tileX, u8 tileY)
 {
-    u8 biome = chunk->biomes[tileY][tileX];
-    Vec4 color = GetBiomeColor(biome);
-    color.rgb += GetBiomeColorDelta(biome, seq);
+    RandomSequence seq = Seed((chunk->worldX + 10 * tileX) * (chunk->worldY + 10 * tileY));
+    TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
+    Vec4 color = GetBiomeColor(tileData->biomeTaxonomy);
+    color.rgb += GetBiomeColorDelta(tileData->biomeTaxonomy, &seq);
     color = SRGBLinearize(color);
     return color;
 }
 
 
+#if 0
 inline r32 InfluenceOffDistance(Vec2 borderP, Vec2 tileCenter, r32 chunkSide)
 {
     Vec2 tileToP = borderP - tileCenter;
@@ -1934,6 +1898,7 @@ inline r32 InfluenceOffDistance(Vec2 borderP, Vec2 tileCenter, r32 chunkSide)
     return result;
     
 }
+
 
 inline Vec4 InterpolateColor(GameModeWorld* worldMode, Vec4 baseColor, Vec2 toBorderP, Vec2 tileCenter, i32 chunkX, i32 chunkY, u32 otherChunkSubIndex)
 {
@@ -1948,6 +1913,7 @@ inline Vec4 InterpolateColor(GameModeWorld* worldMode, Vec4 baseColor, Vec2 toBo
     
     return result;
 }
+#endif
 
 
 
@@ -1959,9 +1925,13 @@ inline Vec4 InterpolateColor(GameModeWorld* worldMode, Vec4 baseColor, Vec2 toBo
 
 
 // NOTE(Leonardo): API
-inline Vec4 ComputeTileColor(GameModeWorld* worldMode, WorldChunk* chunk, u8 tileX, u8 tileY, RandomSequence* seq)
+inline Vec4 ComputeTileColor(GameModeWorld* worldMode, WorldChunk* chunk, u8 tileX, u8 tileY)
 {
-    u8 biome = chunk->biomes[tileY][tileX];
+#if 0    
+    TileGenerationData* tileData = ?;
+    u32 biomeTaxonomy = tileData->taxonomy;
+    Vec4 biomeColor = GetBiomeColor(biomeTaxonomy);
+    
     u32 X = chunk->worldX;
     u32 Y = chunk->worldY;
     
@@ -1974,7 +1944,6 @@ inline Vec4 ComputeTileColor(GameModeWorld* worldMode, WorldChunk* chunk, u8 til
     Vec4 colorSide1 = {};
     Vec4 colorDiagonal = {};
     
-    Vec4 biomeColor = GetBiomeColor(biome);
     if(tileX < halfChunkDim)
     {
         if(tileY < halfChunkDim)
@@ -2030,32 +1999,11 @@ inline Vec4 ComputeTileColor(GameModeWorld* worldMode, WorldChunk* chunk, u8 til
     Vec4 myColor = GetBiomeColor(chunk, tileX, tileY, seq);
     r32 influence = chunk->influences[tileY][tileX];
     Vec4 result = Lerp(myColor, influence, averageOther);
-    return result;
-}
-
-inline void RenderWater(RenderGroup* group, Vec2 P, TileInfo tile, TileInfo adiacent, Vec3 lineBetweenStart, Vec3 lineBetweenEnd, b32 isOnLeftSide, r32 waterLevel)
-{
-    Vec4 waterColor = V4(0, 0.1f, 1, 0.6f);
-    if(adiacent.biome == Biome_forest)
-    {
-        lineBetweenStart.z = waterLevel;
-        lineBetweenEnd.z = waterLevel;
-    }
+#else
+    Vec4 result = GetTileColor(chunk, tileX, tileY);
+#endif
     
-    if(isOnLeftSide)
-    {
-        PushTriangle(group, group->whiteTexture, tile.lightIndexes, 
-                     V4(P, waterLevel, 0), waterColor, 
-                     V4(lineBetweenStart, 0), waterColor,
-                     V4(lineBetweenEnd, 0), waterColor, 0);
-    }
-    else
-    {
-        PushTriangle(group, group->whiteTexture, tile.lightIndexes, 
-                     V4(P, waterLevel, 0), waterColor, 
-                     V4(lineBetweenEnd, 0), waterColor,
-                     V4(lineBetweenStart, 0), waterColor, 0);
-    }
+    return result;
 }
 
 inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, TaxonomySlot* slot, u64 nameHash, r32 oldSoundTime, r32 soundTime)

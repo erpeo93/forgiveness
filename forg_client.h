@@ -43,7 +43,6 @@
 
 struct TileInfo
 {
-    u8 biome;
     Vec4 color;
     r32 height;
     Vec4 lightIndexes;
@@ -266,6 +265,8 @@ struct GameModeWorld
 {
     b32 editingEnabled;
     u32 editorRoles;
+    
+    WorldGenerator generator;
     
     b32 gamePaused;
     r32 originalTimeToAdvance;

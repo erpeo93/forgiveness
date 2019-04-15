@@ -69,25 +69,99 @@ inline r32 noise(r32 x, r32 y, r32 z, u32 seed)
                           grad(perlin_[BB+1], x-1, y-1, z-1 ))));
 }
 
-
-// NOTE( Leonardo ): world generation
-enum BiomeType
+struct NoiseParams
 {
-    Biome_sea,
-    Biome_beach,
-    Biome_forest,
-    Biome_desert,
-    Biome_mountain,
-    
-    Biome_count,
+    r32 frequency;
+    u32 octaves;
+    r32 persistance;
+    r32 offset;
+    r32 amplitude;
+    u32 seed;
 };
 
-enum GroupType
+
+struct MinMaxChoice
 {
-    Group_environment,
-    Group_enemyCommunity,
-    Group_humanCommunity,
-    Group_hotspot,
+    r32 min;
+    r32 max;
+};
+
+enum ChoiceType
+{
+    Choice_Noise,
+    Choice_MinMax,
+    Choice_Fixed,
+};
+
+
+union Choice
+{
+    NoiseParams params;
+    MinMaxChoice minMax;
+    r32 fixed;
+};
+
+struct Selector
+{
+    r32 minValue;
+    ChoiceType type;
+    u32 choiceCount;
+    r32 referencePoints[4];
+    Choice choices[4];
+};
+
+struct BiomePyramid
+{
+    // NOTE(Leonardo): vertical!
+    Selector drySelector;
     
-    Group_count,
+    // NOTE(Leonardo): horizontal, one for every "slice"
+    u32 rowCount;
+    Selector temperatureSelectors[4];
+};
+
+NoiseParams NoisePar(r32 frequency, u32 octaves, r32 offset, r32 amplitude, RandomSequence* seq, r32 persistance = 0.5f)
+{
+    NoiseParams result = {};
+    result.frequency = frequency;
+    result.octaves = octaves;
+    result.persistance = persistance;
+    result.offset = offset;
+    result.amplitude = amplitude;
+    result.seed = GetNextUInt32(seq);
+    return result;
+}
+
+MinMaxChoice MinMax(r32 min, r32 max)
+{
+    MinMaxChoice result = {};
+    result.min = min;
+    result.max = max;
+    
+    return result;
+}
+
+struct WorldGenerator
+{
+    u32 lateralChunkSpan;
+    i32 universeX;
+    i32 universeY;
+    
+    r32 maxHeight;
+    
+    NoiseParams landscapeNoise;
+    Selector landscapeSelect;
+    
+    NoiseParams temperatureNoise;
+    Selector temperatureSelect;
+    
+    NoiseParams drynessNoise;
+    
+    BiomePyramid biomePyramid;
+};
+
+struct TileGenerationData
+{
+    r32 height;
+    u32 biomeTaxonomy;
 };

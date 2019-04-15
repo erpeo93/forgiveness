@@ -317,19 +317,18 @@ inline Vec4 GetLightIndexes(GameModeWorld* worldMode, Vec3 P)
 
 inline TileInfo GetTileInfo(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
 {
-    
     TileInfo result = {};
     
     GetUniversePosQuery query = TranslateRelativePos(worldMode, baseP, P);
     
     if(query.chunk)
     {
-        u32 tileX = query.tileX;
-        u32 tileY = query.tileY;
+        u8 tileX = SafeTruncateToU8(query.tileX);
+        u8 tileY = SafeTruncateToU8(query.tileY);
         
-        result.color = query.chunk->colors[tileY][tileX];
-        result.biome = query.chunk->biomes[tileY][tileX];
-        result.height = query.chunk->heights[tileY][tileX] - baseP.chunkOffset.z;
+        TileGenerationData* tileData = &query.chunk->tileData[tileY][tileX];
+        result.color = ComputeTileColor(worldMode, query.chunk, tileX, tileY);
+        result.height = tileData->height;
         result.lightIndexes = query.chunk->lightIndexes[tileY][tileX];
     }
     
@@ -354,6 +353,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     SetGameMode(gameState, GameMode_Playing);
     GameModeWorld* result = PushStruct(&gameState->modePool, GameModeWorld);
     
+    InitializeWorldGenerator(&result->generator, 0, 0);
     result->editorRoles = gameState->editorRoles;
     myPlayer = &result->player;
     
@@ -1219,7 +1219,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 
                                 if(!chunk->initialized)
                                 {
-                                    BuildChunk(chunk, X, Y, myPlayer->universeX, myPlayer->universeY, lateralChunkSpan);
+                                    BuildChunk(&worldMode->generator, chunk, X, Y);
                                     
                                     for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
                                     {
@@ -1258,11 +1258,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 Assert(X == chunk->worldX);
                                 Assert(Y == chunk->worldY);
                                 
-                                for(u32 subchunkIndex = 0; subchunkIndex < ArrayCount(chunk->subchunkColor); ++subchunkIndex)
-                                {
-                                    chunk->subchunkColor[subchunkIndex] = GetBiomeColor(chunk->biomeSubChunks[subchunkIndex]);
-                                }
-                                
                                 for(u8 tileY = 0; tileY < worldMode->chunkDim; tileY++)
                                 {
                                     for(u8 tileX = 0; tileX < worldMode->chunkDim; tileX++)
@@ -1270,12 +1265,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                         Vec2 tileCenter = worldMode->voxelSide * V2(tileX + 0.5f, tileY + 0.5f);
                                         Vec2 destP2D = chunkLowLeftCornerOffset.xy + tileCenter;
                                         
-                                        chunk->colors[tileY][tileX] = ComputeTileColor(worldMode, chunk, tileX, tileY, &seq);
                                         
-                                        r32 tileNormX = chunk->tileNormals[tileY][tileX].x;
-                                        r32 tileNormY = chunk->tileNormals[tileY][tileX].y;
-                                        
-                                        r32 height = chunk->heights[tileY][tileX] - voronoiP.chunkOffset.z;
+                                        TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
+                                        r32 height = tileData->height - voronoiP.chunkOffset.z;
                                         
                                         Vec3 destP = V3(destP2D, height);
                                         
@@ -1289,6 +1281,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                     }
                                 }
                                 
+#if 0                                
                                 for(u32 decorationIndex = 0; decorationIndex < 1; ++decorationIndex)
                                 {
                                     i32 tileX = RandomChoice(&seq, chunkDim);
@@ -1307,6 +1300,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                     chunk->colors[tileY][tileX] = decorationColor;
                                     chunk->colors[otherTileY][otherTileX] = decorationColor;
                                 }
+#endif
+                                
                             }
                         }
                     }
@@ -1438,20 +1433,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                      V4(site0PCamera, QSite0.height, 0), V2(1, 1), QSite0.color, 
                                      V4(offsetToCamera, QTo.height, 0), V2(0, 1), CTo, 0);
                         }
-                    }
-                    
-                    
-                    r32 waterLevel = 0.05f;
-                    waterLevel += Sin(globalSine) * 0.01f;
-                    
-                    if(QSite0.biome == Biome_sea)
-                    {
-                        RenderWater(group, site0P, QSite0, QSite1, V3(offsetFrom, QFrom.height + 0.05f), V3(offsetTo, QTo.height + 0.05f), zeroIsOnLeftSide, waterLevel);
-                    }
-                    
-                    if(QSite1.biome == Biome_sea)
-                    {
-                        RenderWater(group, site1P, QSite1, QSite0, V3(offsetFrom, QFrom.height + 0.05f), V3(offsetTo, QTo.height + 0.05f), !zeroIsOnLeftSide, waterLevel);
                     }
 #endif
                     

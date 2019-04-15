@@ -303,3 +303,9 @@ inline AnimationEntityParams ContainerEntityParams(b32 onTop = false)
     result.onTop = onTop;
     return result;
 }
+
+struct TileAnimationData
+{
+    u8 lightCount;
+    Vec4 lightIndexes;
+};

@@ -183,7 +183,6 @@ enum Packet_Type
     Type_entityBasics,
     Type_equipmentSlot,
     Type_deletedEntity,
-    Type_tileUpdate,
     Type_essenceDelta,
     Type_effectTriggered,
     Type_possibleActions,

@@ -21,25 +21,14 @@ struct WorldChunk
     i32 worldY;
     i32 worldZ;
     
-    
-    u8 biomeSubChunks[4];
-    r32 temperature;
-    r32 dryness;
-    r32 heights[CHUNK_DIM][CHUNK_DIM];
-    r32 waterAmount[CHUNK_DIM][CHUNK_DIM];
-    r32 influences[CHUNK_DIM][CHUNK_DIM];
-    u8 biomes[CHUNK_DIM][CHUNK_DIM];
-    Vec2 tileNormals[CHUNK_DIM][CHUNK_DIM];
+    TileGenerationData tileData[CHUNK_DIM][CHUNK_DIM];
     
 #ifndef FORG_SERVER
-    Vec4 colors[CHUNK_DIM][CHUNK_DIM];
-    Vec4 subchunkColor[4];
     u8 lightCount[CHUNK_DIM][CHUNK_DIM];
     Vec4 lightIndexes[CHUNK_DIM][CHUNK_DIM];
 #endif
     
     EntityBlock* entities;
-    
     WorldChunk* next;
 };
 

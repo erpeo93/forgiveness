@@ -593,22 +593,6 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 myPlayer->openedContainerID = openedContainerID;
             } break;
             
-            case Type_tileUpdate:
-            {
-                i32 chunkX;
-                i32 chunkY;
-                
-                u32 tileX;
-                u32 tileY;
-                
-                r32 waterAmount;
-                
-                Unpack("llLLd", &chunkX, &chunkY, &tileX, &tileY, &waterAmount );
-                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, &worldMode->chunkPool);
-                
-                chunk->waterAmount[tileY][tileX] = waterAmount;
-            } break;
-            
             case Type_entityHeader:
             {
                 u64 identifier;
