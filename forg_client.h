@@ -43,6 +43,7 @@
 
 struct TileInfo
 {
+    r32 chunkyness;
     Vec4 color;
     r32 height;
     Vec4 lightIndexes;
@@ -344,7 +345,6 @@ struct GameModeWorld
     Vec3 worldMouseP;
     
     
-    r32 colorChunkyness;
     b32 voronoiGenerated;
     jcv_diagram voronoi;
     UniversePos voronoiP;

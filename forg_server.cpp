@@ -92,8 +92,8 @@ inline UniversePos GetUniverseP(SimRegion* region, Vec3 p)
 }
 
 #include "forg_rule.cpp"
-#include "forg_world_generation.cpp"
 #include "forg_taxonomy.cpp"
+#include "forg_world_generation.cpp"
 #include "forg_consideration.cpp"
 #include "forg_network_server.cpp"
 #include "forg_editor.cpp"
@@ -1192,7 +1192,7 @@ extern "C" SERVER_INITIALIZE(InitializeServer)
     }
     
     FillGenerationData(server);
-    InitializeWorldGenerator(&server->generator, server->universeX, server->universeY);
+    InitializeWorldGenerator(server->activeTable, &server->generator, server->universeX, server->universeY);
     BuildWorld(server, universeIndex);
 }
 

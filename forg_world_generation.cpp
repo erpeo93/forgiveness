@@ -100,6 +100,12 @@ inline void AddChoice(Selector* selector, r32 point, r32 fixed)
     choice->fixed = fixed;
 }
 
+inline void AddChoice(Selector* selector, r32 point, TaxonomyTable* table, char* taxonomyName)
+{
+    TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(table, taxonomyName);
+    AddChoice(selector, point, (r32) slot->taxonomy);
+}
+
 inline Selector* AddSelectorForDryness(BiomePyramid* pyramid, r32 threesold)
 {
     Assert(pyramid->rowCount < ArrayCount(pyramid->temperatureSelectors));
@@ -200,7 +206,7 @@ inline r32 Select(Selector* selector, r32 dx, r32 dy, r32 selectionValue)
 }
 
 
-inline void InitializeWorldGenerator(WorldGenerator* generator, i32 universeX, i32 universeY)
+inline void InitializeWorldGenerator(TaxonomyTable* table, WorldGenerator* generator, i32 universeX, i32 universeY)
 {
     generator->lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
     
@@ -229,7 +235,7 @@ inline void InitializeWorldGenerator(WorldGenerator* generator, i32 universeX, i
     //AddChoice(&landscapeSelect, highThreesold, high);
     
     generator->landscapeNoise = NoisePar(6.0f, 1, 0.0f, 1.0f, &worldSequence);
-    generator->temperatureNoise = NoisePar(6.0f, 1, 0.0f, 1.0f, &worldSequence);
+    generator->temperatureNoise = NoisePar(12.0f, 1, 0.0f, 1.0f, &worldSequence);
     generator->drynessNoise = NoisePar(3.0f, 1, 0.0f, 1.0f, &worldSequence);
     
     MinMaxChoice lowTemperature = MinMax(13.0f, 22.0f);
@@ -246,10 +252,11 @@ inline void InitializeWorldGenerator(WorldGenerator* generator, i32 universeX, i
     Selector* lowDryness = AddSelectorForDryness(&generator->biomePyramid, 0.99f);
     Selector* highDryness = AddSelectorForDryness(&generator->biomePyramid, 0.99f);
     
-    AddChoice(lowDryness, 6.0f, 0);
+    AddChoice(lowDryness, 13.0f, table, "grassTile");
+    AddChoice(lowDryness, 19.0f, table, "dirt");
     //AddChoice(lowDryness, 22.0f, Biome_mountain);
     
-    AddChoice(highDryness, 10.0f, 0);
+    AddChoice(highDryness, 10.0f, table, "grassTile");
     //AddChoice(highDryness, 15.0f, Biome_forest);
 }
 
@@ -293,6 +300,7 @@ inline TileGenerationData GenerateTile(WorldGenerator* generator, r32 tileNormX,
     
     result.height = finalHeight;
     result.biomeTaxonomy = biome;
+    Assert(result.biomeTaxonomy);
     
     return result;
 }
@@ -354,30 +362,6 @@ internal void BuildChunk(WorldGenerator* generator, WorldChunk* chunk, i32 chunk
             chunk->tileData[tileY][tileX] = GenerateTile(generator, tileNormX, tileNormY);
         }
     }
-    
-    
-#if 0    
-    u8 quarter = (CHUNK_DIM / 4);
-    u8 half = (CHUNK_DIM / 2);
-    
-    if(tileX == quarter && tileY == quarter)
-    {
-        chunk->biomeSubChunks[0] = (u8) finalBiome;
-    }
-    else if(tileX == (quarter + half) && tileY == quarter)
-    {
-        chunk->biomeSubChunks[1] = (u8) finalBiome;
-    }
-    else if(tileX == quarter && tileY == (quarter + half))
-    {
-        chunk->biomeSubChunks[2] = (u8) finalBiome;
-    }
-    else if(tileX == (quarter + half) && tileY == (quarter + half))
-    {
-        chunk->biomeSubChunks[3] = (u8) finalBiome;
-    }
-#endif
-    
 }
 
 #undef TARGET

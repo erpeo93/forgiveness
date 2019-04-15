@@ -205,6 +205,8 @@ struct GetUniversePosQuery
     WorldChunk* chunk;
     u32 tileX;
     u32 tileY;
+    
+    Vec2 chunkOffset;
 };
 
 GetUniversePosQuery TranslateRelativePos(GameModeWorld* worldMode, UniversePos baseP, Vec2 relativeP)
@@ -226,6 +228,8 @@ GetUniversePosQuery TranslateRelativePos(GameModeWorld* worldMode, UniversePos b
     {
         result.tileX = TruncateReal32ToI32(baseP.chunkOffset.x * worldMode->oneOverVoxelSide);
         result.tileY = TruncateReal32ToI32(baseP.chunkOffset.y * worldMode->oneOverVoxelSide);
+        
+        result.chunkOffset = baseP.chunkOffset.xy;
         
         if(result.tileX < CHUNK_DIM && result.tileY < CHUNK_DIM)
         {
@@ -318,7 +322,6 @@ inline Vec4 GetLightIndexes(GameModeWorld* worldMode, Vec3 P)
 inline TileInfo GetTileInfo(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
 {
     TileInfo result = {};
-    
     GetUniversePosQuery query = TranslateRelativePos(worldMode, baseP, P);
     
     if(query.chunk)
@@ -327,9 +330,12 @@ inline TileInfo GetTileInfo(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
         u8 tileY = SafeTruncateToU8(query.tileY);
         
         TileGenerationData* tileData = &query.chunk->tileData[tileY][tileX];
-        result.color = ComputeTileColor(worldMode, query.chunk, tileX, tileY);
+        result.color = GetTileColor(worldMode->table, query.chunk, query.tileX, query.tileY, query.chunkOffset);
         result.height = tileData->height;
         result.lightIndexes = query.chunk->lightIndexes[tileY][tileX];
+        
+        TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, tileData->biomeTaxonomy);
+        result.chunkyness = slot->chunkyness;
     }
     
     return result;
@@ -353,7 +359,6 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     SetGameMode(gameState, GameMode_Playing);
     GameModeWorld* result = PushStruct(&gameState->modePool, GameModeWorld);
     
-    InitializeWorldGenerator(&result->generator, 0, 0);
     result->editorRoles = gameState->editorRoles;
     myPlayer = &result->player;
     
@@ -427,7 +432,6 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     };
     
     result->tetraModel = CreateModel(&gameState->modePool, vertexes, ArrayCount(vertexes), faces, ArrayCount(faces));
-    result->colorChunkyness = 20.0f;
     
     result->firstFreeRock = 0;
     result->firstFreePlantSegment = 0;
@@ -743,7 +747,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     ImportAllFiles(filePath, worldMode->editorRoles, false);
                     ImportAllAssetFiles(worldMode, filePath, &worldMode->filePool);
                     ReadPlantChart();
-                    
+                    InitializeWorldGenerator(worldMode->table, &worldMode->generator, 0, 0);
                     
                     platformAPI.DEBUGWriteFile("editorErrors", worldMode->table->errors, sizeof(worldMode->table->errors[0]) * worldMode->table->errorCount);
                     
@@ -1138,6 +1142,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 }
                 
                 b32 forceVoronoiRegeneration = myPlayer->changedWorld || output.forceVoronoiRegeneration;
+                forceVoronoiRegeneration = true;
                 if(myPlayer->changedWorld)
                 {
                     myPlayer->oldUniverseP.chunkX += myPlayer->changedWorldDeltaX;
@@ -1187,8 +1192,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     u8 chunkDim = worldMode->chunkDim;
                     
                     i32 chunkApron = UI->chunkApron;
-                    u32 pointsPerTile = 2;
-                    
                     i32 originChunkX = voronoiP.chunkX;
                     i32 originChunkY = voronoiP.chunkY;
                     
@@ -1198,13 +1201,11 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     rect.min.y = -dim;
                     rect.max.x = dim;
                     rect.max.y = dim;
-                    r32 pointMaxOffset = 0.5f * voxelSide;
                     
-                    i32 count = Squarei(worldMode->chunkDim) * Squarei(2 * chunkApron + 1) * pointsPerTile;
-                    jcv_point* points = PushArray(worldMode->temporaryPool, jcv_point, count, NoClear());
+                    u32 maxPointsPerTile = 16;
+                    u32 maxPointCount = Squarei(worldMode->chunkDim) * Squarei(2 * chunkApron + 1) * maxPointsPerTile;
+                    jcv_point* points = PushArray(worldMode->temporaryPool, jcv_point, maxPointCount, NoClear());
                     
-                    u32 pointIndex = 0;
-                    u32 tileIndex = 0;
                     
                     for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
                     {
@@ -1235,6 +1236,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     }
                     
                     
+                    u32 pointIndex = 0;
                     for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
                     {
                         for(i32 X = originChunkX - chunkApron; X <= originChunkX + chunkApron; X++)
@@ -1267,41 +1269,20 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                         
                                         
                                         TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
-                                        r32 height = tileData->height - voronoiP.chunkOffset.z;
                                         
-                                        Vec3 destP = V3(destP2D, height);
+                                        TaxonomySlot* tileSlot = GetSlotForTaxonomy(worldMode->table, tileData->biomeTaxonomy);
+                                        r32 pointMaxOffset = Min(0.5f * voxelSide, tileSlot->groundPointMaxOffset);
+                                        u32 pointsPerTile = Min(maxPointsPerTile, tileSlot->groundPointPerTile);
                                         
                                         for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
                                         {
-                                            points[pointIndex].x = destP.x + RandomBil(&seq) * pointMaxOffset;
-                                            points[pointIndex].y = destP.y + RandomBil(&seq) * pointMaxOffset;
+                                            points[pointIndex].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
+                                            points[pointIndex].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
                                             
                                             ++pointIndex;
                                         }
                                     }
-                                }
-                                
-#if 0                                
-                                for(u32 decorationIndex = 0; decorationIndex < 1; ++decorationIndex)
-                                {
-                                    i32 tileX = RandomChoice(&seq, chunkDim);
-                                    i32 tileY = RandomChoice(&seq, chunkDim);
-                                    
-                                    i32 deltaX = RandomRangeInt(&seq, -1, 1);
-                                    i32 deltaY = RandomRangeInt(&seq, -1, 1);
-                                    
-                                    i32 otherTileX = tileX + deltaX;
-                                    i32 otherTileY = tileY + deltaY;
-                                    
-                                    otherTileX = Bounds(0, otherTileX, chunkDim - 1);
-                                    otherTileY = Bounds(0, otherTileY, chunkDim - 1);
-                                    
-                                    Vec4 decorationColor = V4(0.07f, 0.02f, 0.01f, 1.0f);
-                                    chunk->colors[tileY][tileX] = decorationColor;
-                                    chunk->colors[otherTileY][otherTileX] = decorationColor;
-                                }
-#endif
-                                
+                                }                         
                             }
                         }
                     }
@@ -1310,7 +1291,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     
                     // NOTE(Leonardo): voronoi ground
                     BEGIN_BLOCK("build diagram");
-                    jcv_diagram_generate(count,points, &rect, &worldMode->voronoi);
+                    jcv_diagram_generate(pointIndex, points, &rect, &worldMode->voronoi);
                     worldMode->voronoiGenerated = true;
                     END_BLOCK();
                 }
@@ -1350,10 +1331,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
 #endif
                 
                 BEGIN_BLOCK("voronoi rendering");
-#if 1     
                 jcv_site* sites = jcv_diagram_get_sites(&worldMode->voronoi);
-                DEBUG_VALUE(worldMode->colorChunkyness);
-                r32 chunkyness = Clamp01(worldMode->colorChunkyness / 100.0f);
                 
                 for(int i = 0; i < worldMode->voronoi.numsites; ++i)
                 {
@@ -1389,17 +1367,17 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     }
                     
                     TileInfo QFrom = GetTileInfo(worldMode, worldMode->voronoiP, offsetFrom);
-                    Vec4 CFrom = Lerp(QFrom.color, chunkyness, QSite0.color);
+                    
+                    Vec4 CFrom0 = Lerp(QFrom.color, QSite0.chunkyness, QSite0.color);
+                    Vec4 CFrom1 = Lerp(QFrom.color, QSite1.chunkyness, QSite1.color);
                     
                     TileInfo QTo = GetTileInfo(worldMode, worldMode->voronoiP, offsetTo);
-                    Vec4 CTo = Lerp(QTo.color, chunkyness, QSite1.color);
-                    
-                    
+                    Vec4 CTo0 = Lerp(QTo.color, QSite0.chunkyness, QSite0.color);
+                    Vec4 CTo1 = Lerp(QTo.color, QSite1.chunkyness, QSite1.color);
                     
                     
                     r32 outer0 = Outer(offsetFrom, offsetTo, site0P);
                     r32 probe0 = Outer(offsetFrom, offsetTo, offsetFrom - V2(1, 0));
-                    
                     b32 zeroIsOnLeftSide = false;
                     if((probe0 < 0 && outer0 < 0) || 
                        (probe0 > 0 && outer0 > 0))
@@ -1407,39 +1385,42 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         zeroIsOnLeftSide = true;
                     }
                     
-                    Vec2 site0PCamera = site0P + worldMode->voronoiDelta.xy;
-                    Vec2 site1PCamera = site1P + worldMode->voronoiDelta.xy;
+                    Vec4 site0PCamera = V4(site0P + worldMode->voronoiDelta.xy, QSite0.height, 0);
+                    Vec4 site1PCamera = V4(site1P + worldMode->voronoiDelta.xy, QSite1.height, 0);
+                    Vec4 offsetFromCamera = V4(offsetFrom + worldMode->voronoiDelta.xy, QFrom.height, 0);
+                    Vec4 offsetToCamera = V4(offsetTo + worldMode->voronoiDelta.xy, QTo.height, 0);
                     
-                    Vec2 offsetFromCamera = offsetFrom + worldMode->voronoiDelta.xy;
-                    Vec2 offsetToCamera = offsetTo + worldMode->voronoiDelta.xy;
                     
-                    
-                    TexturedQuadsCommand* entry = GetCurrentQuads(group, 1);
+                    TexturedQuadsCommand* entry = GetCurrentTriangles(group, 2, 6, 6);
                     if(entry)
                     {
                         if(zeroIsOnLeftSide)
                         {
-                            PushQuad(group, group->whiteTexture, QSite0.lightIndexes,
-                                     V4(site0PCamera, QSite0.height, 0), V2(0, 0), QSite0.color,
-                                     V4(offsetFromCamera, QFrom.height, 0), V2(1, 0), CFrom,
-                                     V4(site1PCamera, QSite1.height, 0), V2(1, 1), QSite1.color,
-                                     V4(offsetToCamera, QTo.height, 0), V2(0, 1), CTo, 0);
+                            PushTriangle(group, group->whiteTexture, QSite0.lightIndexes, 
+                                         site0PCamera, QSite0.color,
+                                         offsetFromCamera, CFrom0,
+                                         offsetToCamera, CTo0, 0);
+                            PushTriangle(group, group->whiteTexture, QSite1.lightIndexes,
+                                         site1PCamera, QSite1.color,
+                                         offsetToCamera, CTo1,
+                                         offsetFromCamera, CFrom1, 0);
                         }
                         else
                         {
-                            PushQuad(group, group->whiteTexture, QSite1.lightIndexes,
-                                     V4(site1PCamera, QSite1.height, 0), V2(0, 0), QSite1.color,
-                                     V4(offsetFromCamera, QFrom.height, 0), V2(1, 0), CFrom,
-                                     V4(site0PCamera, QSite0.height, 0), V2(1, 1), QSite0.color, 
-                                     V4(offsetToCamera, QTo.height, 0), V2(0, 1), CTo, 0);
+                            PushTriangle(group, group->whiteTexture, QSite0.lightIndexes, 
+                                         site1PCamera, QSite1.color,
+                                         offsetFromCamera, CFrom1,
+                                         offsetToCamera, CTo1, 0);
+                            PushTriangle(group, group->whiteTexture, QSite1.lightIndexes,
+                                         site0PCamera, QSite0.color,
+                                         offsetToCamera, CTo0,
+                                         offsetFromCamera, CFrom0, 0);
                         }
                     }
 #endif
                     
                     edge = edge->next;
                 }
-#endif
-                
                 END_BLOCK();
                 
                 

@@ -3358,6 +3358,13 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         
         InventorySpace(width, height);
     }
+    else if(StrEqual(name, "tileParams"))
+    {
+        currentSlot_->groundPointMaxOffset = ToR32(GetValue(root, "groundPointMaxOffset"));
+        currentSlot_->chunkyness = ToR32(GetValue(root, "chunkyness"));
+        currentSlot_->groundPointPerTile = ToU32(GetValue(root, "pointsPerTile"));
+        currentSlot_->tileColor = ToV4Color(GetElement(root, "color"));
+    }
 #ifndef FORG_SERVER
     else if(StrEqual(name, "visualLabels"))
     {

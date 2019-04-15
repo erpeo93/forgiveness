@@ -1859,152 +1859,39 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
 
 
 
-inline Vec3 GetBiomeColorDelta(u32 biome, RandomSequence* seq)
+inline Vec3 GetTileColorDelta(u32 biome, RandomSequence* seq)
 {
     Vec3 result = {};
-    result.g = RandomBil(seq) * 0.01f;
+    result.g = RandomBil(seq) * 0.2f;
+    result.r = RandomBil(seq) * 0.05f;
     
     return result;
 }
 
 
-inline Vec4 GetBiomeColor(u32 biome)
+inline Vec4 GetTileBaseColor(TaxonomyTable* table, u32 tile)
 {
-    Vec4 color = color = V4(0.06f, 0.4f,  0.02f, 1.0f);
+    TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, tile);
+    Vec4 color = tileSlot->tileColor;
     return color;
 }
 
 
 
-inline Vec4 GetTileColor(WorldChunk* chunk, u8 tileX, u8 tileY)
+inline Vec4 GetTileColor(TaxonomyTable* table, WorldChunk* chunk, u32 tileX, u32 tileY, Vec2 chunkOffset)
 {
-    RandomSequence seq = Seed((chunk->worldX + 10 * tileX) * (chunk->worldY + 10 * tileY));
+    Assert(tileX < CHUNK_DIM);
+    Assert(tileY < CHUNK_DIM);
     TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
-    Vec4 color = GetBiomeColor(tileData->biomeTaxonomy);
-    color.rgb += GetBiomeColorDelta(tileData->biomeTaxonomy, &seq);
+    Vec4 color = GetTileBaseColor(table, tileData->biomeTaxonomy);
+    
+    RandomSequence seq = Seed((chunk->worldX + 12 * (i32)chunkOffset.x) * (chunk->worldY + 12 * (i32) chunkOffset.y));
+    
+    color.rgb += GetTileColorDelta(tileData->biomeTaxonomy, &seq);
     color = SRGBLinearize(color);
     return color;
 }
 
-
-#if 0
-inline r32 InfluenceOffDistance(Vec2 borderP, Vec2 tileCenter, r32 chunkSide)
-{
-    Vec2 tileToP = borderP - tileCenter;
-    r32 length = Length(tileToP);
-    r32 result = 1.0f - (length / 0.5f * chunkSide);
-    result = Max(result, 0);
-    
-    return result;
-    
-}
-
-
-inline Vec4 InterpolateColor(GameModeWorld* worldMode, Vec4 baseColor, Vec2 toBorderP, Vec2 tileCenter, i32 chunkX, i32 chunkY, u32 otherChunkSubIndex)
-{
-    Vec4 result = {};
-    WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, 0);
-    if(chunk)
-    {
-        r32 lerp = InfluenceOffDistance(toBorderP, tileCenter, worldMode->chunkSide);
-        Vec4 otherSubChunkColor = chunk->subchunkColor[otherChunkSubIndex];
-        result = Lerp(baseColor, lerp, otherSubChunkColor);
-    }
-    
-    return result;
-}
-#endif
-
-
-
-
-
-
-
-
-
-
-// NOTE(Leonardo): API
-inline Vec4 ComputeTileColor(GameModeWorld* worldMode, WorldChunk* chunk, u8 tileX, u8 tileY)
-{
-#if 0    
-    TileGenerationData* tileData = ?;
-    u32 biomeTaxonomy = tileData->taxonomy;
-    Vec4 biomeColor = GetBiomeColor(biomeTaxonomy);
-    
-    u32 X = chunk->worldX;
-    u32 Y = chunk->worldY;
-    
-    u8 chunkDim = worldMode->chunkDim;
-    u8 halfChunkDim = chunkDim / 2;
-    r32 voxelSide = worldMode->voxelSide;
-    Vec2 tileCenter = voxelSide * V2(tileX + 0.5f, tileY + 0.5f);
-    
-    Vec4 colorSide0 = {};
-    Vec4 colorSide1 = {};
-    Vec4 colorDiagonal = {};
-    
-    if(tileX < halfChunkDim)
-    {
-        if(tileY < halfChunkDim)
-        {
-            Vec2 toLeft = V2(0, halfChunkDim * voxelSide);
-            colorSide0 = InterpolateColor(worldMode, biomeColor, toLeft, tileCenter, X - 1, Y, 1);
-            
-            Vec2 toDown = V2(halfChunkDim * voxelSide, 0);
-            colorSide1 = InterpolateColor(worldMode, biomeColor, toDown, tileCenter, X, Y - 1, 2);
-            
-            Vec2 toDownLeft = V2(0, 0);
-            colorDiagonal = InterpolateColor(worldMode, biomeColor, toDownLeft, tileCenter, X - 1, Y - 1, 3);
-        }
-        else
-        {
-            Vec2 toLeft = V2(0, halfChunkDim * voxelSide);
-            colorSide0 = InterpolateColor(worldMode, biomeColor, toLeft, tileCenter, X - 1, Y, 3);
-            
-            Vec2 toUp = V2(halfChunkDim * voxelSide, chunkDim * voxelSide);
-            colorSide1 = InterpolateColor(worldMode, biomeColor, toLeft, tileCenter, X, Y + 1, 0);
-            
-            Vec2 toUpLeft = V2(0, chunkDim * voxelSide);
-            colorDiagonal = InterpolateColor(worldMode, biomeColor, toUpLeft, tileCenter, X - 1, Y + 1, 1);
-        }
-    }
-    else
-    {
-        if(tileY < halfChunkDim)
-        {
-            Vec2 toRight = V2(chunkDim * voxelSide, halfChunkDim * voxelSide);
-            colorSide0 = InterpolateColor(worldMode, biomeColor, toRight, tileCenter, X + 1, Y, 0);
-            
-            Vec2 toDown = V2(halfChunkDim * voxelSide, 0);
-            colorSide1 = InterpolateColor(worldMode, biomeColor, toDown, tileCenter, X, Y - 1, 3);
-            
-            Vec2 toDownRight = V2(0, 0);
-            colorDiagonal = InterpolateColor(worldMode, biomeColor, toDownRight, tileCenter, X + 1, Y - 1, 2);
-        }
-        else
-        {
-            Vec2 toRight = V2(chunkDim * voxelSide, halfChunkDim * voxelSide);
-            colorSide0 = InterpolateColor(worldMode, biomeColor, toRight, tileCenter, X + 1, Y, 2);
-            
-            Vec2 toUp = V2(halfChunkDim * voxelSide, chunkDim * voxelSide);
-            colorSide1 = InterpolateColor(worldMode, biomeColor, toRight, tileCenter, X, Y + 1, 1);
-            
-            Vec2 toUpRight = voxelSide * V2(chunkDim, chunkDim);
-            colorDiagonal = InterpolateColor(worldMode, biomeColor, toUpRight, tileCenter, X + 1, Y + 1, 0);
-        }
-    }
-    
-    Vec4 averageOther = 0.33f * (colorSide0 + colorSide1 + colorDiagonal);
-    Vec4 myColor = GetBiomeColor(chunk, tileX, tileY, seq);
-    r32 influence = chunk->influences[tileY][tileX];
-    Vec4 result = Lerp(myColor, influence, averageOther);
-#else
-    Vec4 result = GetTileColor(chunk, tileX, tileY);
-#endif
-    
-    return result;
-}
 
 inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, TaxonomySlot* slot, u64 nameHash, r32 oldSoundTime, r32 soundTime)
 {
