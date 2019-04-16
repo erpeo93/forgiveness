@@ -80,34 +80,38 @@ struct NoiseParams
 };
 
 
-struct MinMaxChoice
+struct GenerationMinMax
 {
     r32 min;
     r32 max;
 };
 
-enum ChoiceType
+enum GenerationBucketType
 {
-    Choice_Noise,
-    Choice_MinMax,
-    Choice_Fixed,
+    Bucket_Noise,
+    Bucket_MinMax,
+    Bucket_Fixed,
 };
 
 
-union Choice
+struct GenerationBucket
 {
-    NoiseParams params;
-    MinMaxChoice minMax;
-    r32 fixed;
+    r32 referencePoint;
+    
+    union
+    {
+        NoiseParams params;
+        GenerationMinMax minMax;
+        r32 fixed;
+    };
 };
 
 struct Selector
 {
-    r32 minValue;
-    ChoiceType type;
-    u32 choiceCount;
-    r32 referencePoints[4];
-    Choice choices[4];
+    GenerationBucketType type;
+    
+    u32 bucketCount;
+    GenerationBucket buckets[4];
 };
 
 struct BiomePyramid
@@ -120,7 +124,7 @@ struct BiomePyramid
     Selector temperatureSelectors[4];
 };
 
-NoiseParams NoisePar(r32 frequency, u32 octaves, r32 offset, r32 amplitude, RandomSequence* seq, r32 persistance = 0.5f)
+inline NoiseParams NoisePar(r32 frequency, u32 octaves, r32 offset, r32 amplitude, RandomSequence* seq, r32 persistance = 0.5f)
 {
     NoiseParams result = {};
     result.frequency = frequency;
@@ -132,9 +136,9 @@ NoiseParams NoisePar(r32 frequency, u32 octaves, r32 offset, r32 amplitude, Rand
     return result;
 }
 
-MinMaxChoice MinMax(r32 min, r32 max)
+inline GenerationMinMax MinMax(r32 min, r32 max)
 {
-    MinMaxChoice result = {};
+    GenerationMinMax result = {};
     result.min = min;
     result.max = max;
     
