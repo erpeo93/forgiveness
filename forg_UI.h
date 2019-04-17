@@ -887,4 +887,11 @@ struct UIState
     ClientEntity fakeEquipment[Slot_Count];
     
     r32 backspacePressedTime;
+    
+    
+    
+    
+    b32 showGroundOutline;
+    b32 randomizeGroundColors;
+    GroundViewMode groundViewMode;
 };

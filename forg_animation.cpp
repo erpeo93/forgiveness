@@ -1859,7 +1859,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
 
 
 
-inline Vec3 GetTileColorDelta(u32 biome, RandomSequence* seq)
+inline Vec3 GetTileColorDelta(RandomSequence* seq)
 {
     Vec3 result = {};
     result.g = RandomBil(seq) * 0.2f;
@@ -1868,28 +1868,48 @@ inline Vec3 GetTileColorDelta(u32 biome, RandomSequence* seq)
     return result;
 }
 
-
-inline Vec4 GetTileBaseColor(TaxonomyTable* table, u32 tile)
-{
-    TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, tile);
-    Vec4 color = tileSlot->tileColor;
-    return color;
-}
-
-
-
-inline Vec4 GetTileColor(TaxonomyTable* table, WorldChunk* chunk, u32 tileX, u32 tileY, Vec2 chunkOffset)
+inline Vec4 GetBaseTileColor(TaxonomyTable* table, WorldChunk* chunk, u32 tileX, u32 tileY)
 {
     Assert(tileX < CHUNK_DIM);
     Assert(tileY < CHUNK_DIM);
     TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
-    Vec4 color = GetTileBaseColor(table, tileData->biomeTaxonomy);
     
-    RandomSequence seq = Seed((chunk->worldX + 12 * (i32)chunkOffset.x) * (chunk->worldY + 12 * (i32) chunkOffset.y));
+    TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, tileData->biomeTaxonomy);
+    Vec4 color = tileSlot->tileColor;
     
-    color.rgb += GetTileColorDelta(tileData->biomeTaxonomy, &seq);
+    return color;
+}
+
+inline Vec4 GetTileColor(TaxonomyTable* table, WorldChunk* chunk, u32 tileX, u32 tileY, b32 randomize, Vec2 randomOffset)
+{
+    Vec4 color = GetBaseTileColor(table, chunk, tileX, tileY);
+    
+    if(randomize)
+    {
+        RandomSequence seq = Seed((chunk->worldX + 12 * (i32)randomOffset.x) * (chunk->worldY + 12 * (i32) randomOffset.y));
+        
+        color.rgb += GetTileColorDelta(&seq);
+    }
+    
     color = SRGBLinearize(color);
     return color;
+}
+
+
+inline Vec4 ComputeWeightedChunkColor(GameModeWorld* worldMode, WorldChunk* chunk)
+{
+    Vec4 result = {};
+    
+    for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
+    {
+        for(u8 X = 0; X < CHUNK_DIM; ++X)
+        {
+            result += GetTileColor(worldMode->table, chunk, X, Y, false, V2(0, 0));
+        }
+    }
+    
+    result *= (1.0f / Square(CHUNK_DIM));
+    return result;
 }
 
 
@@ -1952,7 +1972,7 @@ inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, Taxo
     }
 }
 
-inline TileInfo GetTileInfo(GameModeWorld* worldMode, UniversePos baseP, Vec2 P);
+inline TileInfo GetTileInfo(GameModeWorld* worldMode, UniversePos baseP, Vec2 P, b32 randomizeColor);
 internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToUpdate, AnimationEntityParams params = StandardEntityParams())
 {
     r32 ratio;
@@ -1993,7 +2013,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     AnimationOutput result = {};
     
     ClientEntity* player = GetEntityClient(worldMode, myPlayer->identifier);
-    TileInfo tileInfo = GetTileInfo(worldMode, player->universeP, entityC->P.xy);
+    TileInfo tileInfo = GetTileInfo(worldMode, player->universeP, entityC->P.xy, false);
     TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, entityC->taxonomy);
     
     for(AnimationEffect* effect = entityC->firstActiveEffect; effect; effect = effect->next)

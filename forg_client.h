@@ -49,6 +49,12 @@ struct TileInfo
     Vec4 lightIndexes;
 };
 
+printTable(noPrefix) enum GroundViewMode
+{
+    GroundView_Voronoi,
+    GroundView_Tile,
+    GroundView_Chunk,
+};
 
 #define JC_VORONOI_IMPLEMENTATION
 #undef internal

@@ -14,6 +14,8 @@ enum EditorElementType
     
     EditorElement_Animation,
     EditorElement_ColorPicker,
+    
+    EditorElement_GroundParams,
     EditorElement_Count,
 };
 
@@ -77,6 +79,8 @@ struct EditorElement
             b32 zooming;
         };
 	};
+    
+    
     
 	union
 	{
@@ -163,6 +167,7 @@ enum EditorWidgetType
     EditorWidget_Components,
     EditorWidget_Misc,
     EditorWidget_ColorPicker,
+    EditorWidget_GroundParams,
     
     EditorWidget_Count,
 };

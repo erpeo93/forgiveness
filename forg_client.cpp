@@ -319,7 +319,22 @@ inline Vec4 GetLightIndexes(GameModeWorld* worldMode, Vec3 P)
     return result;
 }
 
-inline TileInfo GetTileInfo(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
+inline TileInfo GetTileInfo(GameModeWorld* worldMode, WorldChunk* chunk, u32 tileX, u32 tileY, b32 randomizeColor, Vec2 randomOffset)
+{
+    TileInfo result = {};
+    
+    TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
+    result.color = GetTileColor(worldMode->table, chunk, tileX, tileY, randomizeColor, randomOffset);
+    result.height = tileData->height;
+    result.lightIndexes = chunk->lightIndexes[tileY][tileX];
+    
+    TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, tileData->biomeTaxonomy);
+    result.chunkyness = slot->chunkyness;
+    
+    return result;
+}
+
+inline TileInfo GetTileInfo(GameModeWorld* worldMode, UniversePos baseP, Vec2 P, b32 randomizeColor)
 {
     TileInfo result = {};
     GetUniversePosQuery query = TranslateRelativePos(worldMode, baseP, P);
@@ -329,13 +344,7 @@ inline TileInfo GetTileInfo(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
         u8 tileX = SafeTruncateToU8(query.tileX);
         u8 tileY = SafeTruncateToU8(query.tileY);
         
-        TileGenerationData* tileData = &query.chunk->tileData[tileY][tileX];
-        result.color = GetTileColor(worldMode->table, query.chunk, query.tileX, query.tileY, query.chunkOffset);
-        result.height = tileData->height;
-        result.lightIndexes = query.chunk->lightIndexes[tileY][tileX];
-        
-        TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, tileData->biomeTaxonomy);
-        result.chunkyness = slot->chunkyness;
+        result = GetTileInfo(worldMode, query.chunk, tileX, tileY, randomizeColor, query.chunkOffset);
     }
     
     return result;
@@ -627,8 +636,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
 #endif
     
     worldMode->cameraPitch = 0.32f * PI32;
-    worldMode->cameraDolly = 0.0f;
+    worldMode->cameraDolly = 40.0f;
     worldMode->cameraOrbit = 0.0f;
+    
     
     m4x4 cameraO = ZRotation(worldMode->cameraOrbit) * XRotation(worldMode->cameraPitch);
     Vec3 cameraOffsetFinal = cameraO * (V3(worldMode->cameraEntityOffset, worldMode->cameraWorldOffset.z + worldMode->cameraDolly));
@@ -1297,131 +1307,165 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 }
                 
                 
-#if 0
-                for(u32 chunkIndex = 0; chunkIndex < ArrayCount(worldMode->chunks); ++chunkIndex)
+                if(UI->groundViewMode == GroundView_Tile || UI->groundViewMode == GroundView_Chunk)
                 {
-                    WorldChunk* chunk = worldMode->chunks[chunkIndex];
-                    while(chunk)
+                    for(u32 chunkIndex = 0; chunkIndex < ArrayCount(worldMode->chunks); ++chunkIndex)
                     {
-                        if(chunk->initialized)
+                        WorldChunk* chunk = worldMode->chunks[chunkIndex];
+                        while(chunk)
                         {
-                            Vec4 color = V4(1, 1, 1, 1);
-                            i32 lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
-                            if(ChunkOutsideWorld(lateralChunkSpan, chunk->worldX, chunk->worldY))
+                            if(chunk->initialized)
                             {
-                                color = V4(1, 0, 0, 1);
+                                i32 lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
+                                
+                                r32 chunkSide = worldMode->chunkSide;
+                                i32 originChunkX = voronoiP.chunkX;
+                                i32 originChunkY = voronoiP.chunkY;
+                                
+                                Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - player->universeP.chunkOffset;
+                                
+                                if(UI->groundViewMode == GroundView_Chunk)
+                                {
+                                    ObjectTransform chunkTransform = FlatTransform();
+                                    Rect2 rect = RectMinDim(chunkLowLeftCornerOffset.xy, V2(chunkSide, chunkSide));
+                                    
+                                    Vec4 chunkColor = ComputeWeightedChunkColor(worldMode, chunk);
+                                    if(ChunkOutsideWorld(lateralChunkSpan, chunk->worldX, chunk->worldY))
+                                    {
+                                        chunkColor = V4(1, 0, 0, 1);
+                                    }
+                                    
+                                    
+                                    PushRect(group, chunkTransform, rect, chunkColor);
+                                    
+                                    if(UI->showGroundOutline)
+                                    {
+                                        ObjectTransform chunkOutlineTransform = FlatTransform(0.01f);
+                                        PushRectOutline(group, chunkTransform, rect, V4(1, 1, 1, 1), 0.1f);
+                                    }
+                                }
+                                else
+                                {
+                                    for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
+                                    {
+                                        for(u8 X = 0; X < CHUNK_DIM; ++X)
+                                        {
+                                            Vec3 tileMin = chunkLowLeftCornerOffset + V3(X * worldMode->voxelSide, Y * worldMode->voxelSide, 0);
+                                            ObjectTransform tileTransform = FlatTransform();
+                                            Rect2 rect = RectMinDim(tileMin.xy, V2(worldMode->voxelSide, worldMode->voxelSide));
+                                            
+                                            Vec4 tileColor = GetTileColor(worldMode->table, chunk, X, Y, UI->randomizeGroundColors, V2(0, 0));
+                                            PushRect(group, tileTransform, rect, tileColor);
+                                            
+                                            if(UI->showGroundOutline)
+                                            {
+                                                PushRectOutline(group, tileTransform, rect, V4(1, 1, 1, 1), 0.1f);
+                                            }
+                                        }
+                                    }
+                                }
                             }
                             
-                            r32 chunkSide = worldMode->chunkSide;
-                            i32 originChunkX = voronoiP.chunkX;
-                            i32 originChunkY = voronoiP.chunkY;
-                            
-                            Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - player->universeP.chunkOffset;
-                            
-                            ObjectTransform chunkTransform = FlatTransform();
-                            Rect2 rect = RectMinDim(chunkLowLeftCornerOffset.xy, V2(chunkSide, chunkSide));
-                            
-                            PushRect(group, chunkTransform, rect, color);
-                            PushRectOutline(group, chunkTransform, rect, V4(0, 1, 0, 1), 0.1f);
+                            chunk = chunk->next;
+                        }
+                    }
+                    
+                }
+                else
+                {
+                    BEGIN_BLOCK("voronoi rendering");
+                    jcv_site* sites = jcv_diagram_get_sites(&worldMode->voronoi);
+                    
+                    for(int i = 0; i < worldMode->voronoi.numsites; ++i)
+                    {
+                        jcv_site* site = sites + i;
+                        Vec2 offsetP = V2(site->p.x, site->p.y);
+                        TileInfo QP = GetTileInfo(worldMode, worldMode->voronoiP, offsetP, UI->randomizeGroundColors);
+                        site->tile = QP;
+                    }
+                    
+                    const jcv_edge* edge = jcv_diagram_get_edges(&worldMode->voronoi);
+                    while(edge)
+                    {
+                        jcv_site* site0 = edge->sites[0];
+                        Vec2 site0P = V2(site0->p.x, site0->p.y);
+                        TileInfo QSite0 = site0->tile;
+                        
+                        jcv_site* site1 = edge->sites[1];
+                        Vec2 site1P = V2(site1->p.x, site1->p.y);
+                        TileInfo QSite1 = site1->tile;
+                        
+                        Vec2 offsetFrom = V2(edge->pos[0].x, edge->pos[0].y);
+                        Vec2 offsetTo = V2(edge->pos[1].x, edge->pos[1].y);
+                        
+                        if(UI->showGroundOutline)
+                        {
+                            PushLine(group, V4(1, 1, 1, 1), V3(offsetFrom, 0.01f), V3(offsetTo, 0.01f), 0.02f);
                         }
                         
-                        chunk = chunk->next;
-                    }
-                }
-#endif
-                
-                BEGIN_BLOCK("voronoi rendering");
-                jcv_site* sites = jcv_diagram_get_sites(&worldMode->voronoi);
-                
-                for(int i = 0; i < worldMode->voronoi.numsites; ++i)
-                {
-                    jcv_site* site = sites + i;
-                    Vec2 offsetP = V2(site->p.x, site->p.y);
-                    TileInfo QP = GetTileInfo(worldMode, worldMode->voronoiP, offsetP);
-                    site->tile = QP;
-                }
-                
-                const jcv_edge* edge = jcv_diagram_get_edges(&worldMode->voronoi);
-                while(edge)
-                {
-                    jcv_site* site0 = edge->sites[0];
-                    Vec2 site0P = V2(site0->p.x, site0->p.y);
-                    TileInfo QSite0 = site0->tile;
-                    
-                    jcv_site* site1 = edge->sites[1];
-                    Vec2 site1P = V2(site1->p.x, site1->p.y);
-                    TileInfo QSite1 = site1->tile;
-                    
-                    Vec2 offsetFrom = V2(edge->pos[0].x, edge->pos[0].y);
-                    Vec2 offsetTo = V2(edge->pos[1].x, edge->pos[1].y);
-                    
-#if 0
-                    PushLine(group, V4(1, 1, 1, 1), V3(offsetFrom, 0.5f), V3(offsetTo, 0.5f), 0.1f);
-                    
-#else
-                    if(offsetFrom.y > offsetTo.y)
-                    {
-                        Vec2 temp = offsetFrom;
-                        offsetFrom = offsetTo;
-                        offsetTo = temp;
-                    }
-                    
-                    TileInfo QFrom = GetTileInfo(worldMode, worldMode->voronoiP, offsetFrom);
-                    
-                    Vec4 CFrom0 = Lerp(QFrom.color, QSite0.chunkyness, QSite0.color);
-                    Vec4 CFrom1 = Lerp(QFrom.color, QSite1.chunkyness, QSite1.color);
-                    
-                    TileInfo QTo = GetTileInfo(worldMode, worldMode->voronoiP, offsetTo);
-                    Vec4 CTo0 = Lerp(QTo.color, QSite0.chunkyness, QSite0.color);
-                    Vec4 CTo1 = Lerp(QTo.color, QSite1.chunkyness, QSite1.color);
-                    
-                    
-                    r32 outer0 = Outer(offsetFrom, offsetTo, site0P);
-                    r32 probe0 = Outer(offsetFrom, offsetTo, offsetFrom - V2(1, 0));
-                    b32 zeroIsOnLeftSide = false;
-                    if((probe0 < 0 && outer0 < 0) || 
-                       (probe0 > 0 && outer0 > 0))
-                    {
-                        zeroIsOnLeftSide = true;
-                    }
-                    
-                    Vec4 site0PCamera = V4(site0P + worldMode->voronoiDelta.xy, QSite0.height, 0);
-                    Vec4 site1PCamera = V4(site1P + worldMode->voronoiDelta.xy, QSite1.height, 0);
-                    Vec4 offsetFromCamera = V4(offsetFrom + worldMode->voronoiDelta.xy, QFrom.height, 0);
-                    Vec4 offsetToCamera = V4(offsetTo + worldMode->voronoiDelta.xy, QTo.height, 0);
-                    
-                    
-                    TexturedQuadsCommand* entry = GetCurrentTriangles(group, 2, 6, 6);
-                    if(entry)
-                    {
-                        if(zeroIsOnLeftSide)
+                        if(offsetFrom.y > offsetTo.y)
                         {
-                            PushTriangle(group, group->whiteTexture, QSite0.lightIndexes, 
-                                         site0PCamera, QSite0.color,
-                                         offsetFromCamera, CFrom0,
-                                         offsetToCamera, CTo0, 0);
-                            PushTriangle(group, group->whiteTexture, QSite1.lightIndexes,
-                                         site1PCamera, QSite1.color,
-                                         offsetToCamera, CTo1,
-                                         offsetFromCamera, CFrom1, 0);
+                            Vec2 temp = offsetFrom;
+                            offsetFrom = offsetTo;
+                            offsetTo = temp;
                         }
-                        else
+                        
+                        TileInfo QFrom = GetTileInfo(worldMode, worldMode->voronoiP, offsetFrom, UI->randomizeGroundColors);
+                        
+                        Vec4 CFrom0 = Lerp(QFrom.color, QSite0.chunkyness, QSite0.color);
+                        Vec4 CFrom1 = Lerp(QFrom.color, QSite1.chunkyness, QSite1.color);
+                        
+                        TileInfo QTo = GetTileInfo(worldMode, worldMode->voronoiP, offsetTo, UI->randomizeGroundColors);
+                        Vec4 CTo0 = Lerp(QTo.color, QSite0.chunkyness, QSite0.color);
+                        Vec4 CTo1 = Lerp(QTo.color, QSite1.chunkyness, QSite1.color);
+                        
+                        
+                        r32 outer0 = Outer(offsetFrom, offsetTo, site0P);
+                        r32 probe0 = Outer(offsetFrom, offsetTo, offsetFrom - V2(1, 0));
+                        b32 zeroIsOnLeftSide = false;
+                        if((probe0 < 0 && outer0 < 0) || 
+                           (probe0 > 0 && outer0 > 0))
                         {
-                            PushTriangle(group, group->whiteTexture, QSite0.lightIndexes, 
-                                         site1PCamera, QSite1.color,
-                                         offsetFromCamera, CFrom1,
-                                         offsetToCamera, CTo1, 0);
-                            PushTriangle(group, group->whiteTexture, QSite1.lightIndexes,
-                                         site0PCamera, QSite0.color,
-                                         offsetToCamera, CTo0,
-                                         offsetFromCamera, CFrom0, 0);
+                            zeroIsOnLeftSide = true;
                         }
+                        
+                        Vec4 site0PCamera = V4(site0P + worldMode->voronoiDelta.xy, QSite0.height, 0);
+                        Vec4 site1PCamera = V4(site1P + worldMode->voronoiDelta.xy, QSite1.height, 0);
+                        Vec4 offsetFromCamera = V4(offsetFrom + worldMode->voronoiDelta.xy, QFrom.height, 0);
+                        Vec4 offsetToCamera = V4(offsetTo + worldMode->voronoiDelta.xy, QTo.height, 0);
+                        
+                        
+                        TexturedQuadsCommand* entry = GetCurrentTriangles(group, 2, 6, 6);
+                        if(entry)
+                        {
+                            if(zeroIsOnLeftSide)
+                            {
+                                PushTriangle(group, group->whiteTexture, QSite0.lightIndexes, 
+                                             site0PCamera, QSite0.color,
+                                             offsetFromCamera, CFrom0,
+                                             offsetToCamera, CTo0, 0);
+                                PushTriangle(group, group->whiteTexture, QSite1.lightIndexes,
+                                             site1PCamera, QSite1.color,
+                                             offsetToCamera, CTo1,
+                                             offsetFromCamera, CFrom1, 0);
+                            }
+                            else
+                            {
+                                PushTriangle(group, group->whiteTexture, QSite0.lightIndexes, 
+                                             site1PCamera, QSite1.color,
+                                             offsetFromCamera, CFrom1,
+                                             offsetToCamera, CTo1, 0);
+                                PushTriangle(group, group->whiteTexture, QSite1.lightIndexes,
+                                             site0PCamera, QSite0.color,
+                                             offsetToCamera, CTo0,
+                                             offsetFromCamera, CFrom0, 0);
+                            }
+                        }
+                        
+                        edge = edge->next;
                     }
-#endif
-                    
-                    edge = edge->next;
+                    END_BLOCK();
                 }
-                END_BLOCK();
                 
                 
                 BEGIN_BLOCK("particles");

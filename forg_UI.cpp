@@ -1515,7 +1515,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
 				case EditorElement_ColorPicker:
 				{
                     r32 baseColorRealHeight = 2 * layout->childStandardHeight;
-                    
+                   
                    
                     r32 baseColorWidth = 10.0f * layout->nameValueDistance;
                     r32 baseColorHeight = 0.6f * baseColorRealHeight;
@@ -1727,11 +1727,17 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     
                     EditorElement* b = GetElement(colorElement, "b");
                     FormatString(b->value, sizeof(b->value), "%f", finalColor.b);
-                    
-                    
-                    
-                    
 				} break;
+                
+                case EditorElement_GroundParams:
+                {
+                    EditorElement* paramsElement = root->next;
+                    Assert(paramsElement);
+                                       
+                    UI->showGroundOutline = ToB32(GetValue(paramsElement, "showBorders"));
+                    UI->randomizeGroundColors = ToB32(GetValue(paramsElement, "randomizeColors"));
+                    UI->groundViewMode = (GroundViewMode) GetValuePreprocessor(GroundViewMode, GetValue(paramsElement, "viewType"));
+                } break;
             }
             
 			if(shadowLabel[0])
@@ -3066,6 +3072,27 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             colorPicker->root = colorPickerRoot;
             
             
+            
+            EditorElement* groundParamsRoot;
+            FREELIST_ALLOC(groundParamsRoot, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            groundParamsRoot->type = EditorElement_GroundParams;
+            
+            
+            EditorElement* params;
+            FREELIST_ALLOC(params, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            params->type = EditorElement_Struct;
+            FormatString(params->name, sizeof(params->name), "params");
+            
+            UIAddChild(UI->table, params, EditorElement_String, "showBorders", "false");
+            UIAddChild(UI->table, params, EditorElement_String, "randomizeColors", "true");
+            UIAddChild(UI->table, params, EditorElement_String, "viewType", "Voronoi");
+            
+            groundParamsRoot->next = params;
+            
+            EditorWidget* groundParams = StartWidget(UI, EditorWidget_GroundParams, V2(-400, -300),
+                                                     0xffffffff, "Ground Params");
+            groundParams->root = groundParamsRoot;
+            
             EditorWidget* soundDatabase = StartWidget(UI, EditorWidget_SoundDatabase, V2(300,200), EditorRole_SoundDesigner, "Sound Database");
             soundDatabase->root = UI->table->soundNamesRoot;
             
@@ -3174,6 +3201,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTable(UI, EntityAction, "action");
         UIAddAutocompleteFromTable(UI, SoundContainerType, "soundCType");
         UIAddAutocompleteFromTable(UI, ObjectState, "objectState");
+        UIAddAutocompleteFromTable(UI, GroundViewMode, "viewType");
         UIAddAutocompleteFromFiles(UI);
         
         UIAddAutocomplete(UI, "layoutName");

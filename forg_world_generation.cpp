@@ -203,7 +203,7 @@ inline void InitializeWorldGenerator(TaxonomyTable* table, WorldGenerator* gener
     AddBucket(&generator->landscapeSelect, lowThreesold, lowLandscape);
     
     generator->landscapeNoise = NoisePar(6.0f, 1, 0.0f, 1.0f, &worldSequence);
-    generator->temperatureNoise = NoisePar(12.0f, 1, 0.0f, 1.0f, &worldSequence);
+    generator->temperatureNoise = NoisePar(64.0f, 1, 0.0f, 1.0f, &worldSequence);
     generator->drynessNoise = NoisePar(3.0f, 1, 0.0f, 1.0f, &worldSequence);
     
     
@@ -213,8 +213,9 @@ inline void InitializeWorldGenerator(TaxonomyTable* table, WorldGenerator* gener
     generator->biomePyramid = {};
     Selector* lowDryness = AddSelectorForDryness(&generator->biomePyramid, 0.5f);
     
+    AddBucket(lowDryness, 15.0f, table, "dirt");
+    AddBucket(lowDryness, 17.0f, table, "forest");
     AddBucket(lowDryness, 20.0f, table, "grassTile");
-    AddBucket(lowDryness, 17.0f, table, "dirt");
 }
 
 inline u32 SelectFromBiomePyramid(BiomePyramid* pyramid, r32 dryness, r32 temperature)
