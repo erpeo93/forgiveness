@@ -209,6 +209,7 @@ enum Packet_Type
     Type_DeleteTaxonomy,
     Type_ReviveTaxonomy,
     Type_InstantiateTaxonomy,
+    Type_MovePlayerInOtherRegion,
     Type_InstantiateRecipe,
     Type_DeleteEntity,
     Type_ImpersonateEntity,

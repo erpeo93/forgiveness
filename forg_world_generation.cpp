@@ -205,6 +205,7 @@ inline void InitializeWorldGenerator(TaxonomyTable* table, WorldGenerator* gener
     generator->landscapeNoise = NoisePar(6.0f, 1, 0.0f, 1.0f, &worldSequence);
     generator->temperatureNoise = NoisePar(64.0f, 1, 0.0f, 1.0f, &worldSequence);
     generator->drynessNoise = NoisePar(3.0f, 1, 0.0f, 1.0f, &worldSequence);
+    generator->tileLayoutNoise = NoisePar(10.0f, 1, 0.0f, 1.0f, &worldSequence);
     
     
     generator->temperatureSelect = {};
@@ -259,6 +260,8 @@ inline TileGenerationData GenerateTile(WorldGenerator* generator, r32 tileNormX,
     result.height = finalHeight;
     result.biomeTaxonomy = biome;
     Assert(result.biomeTaxonomy);
+    
+    result.layoutNoise = Evaluate(tileNormX, tileNormY, generator->tileLayoutNoise);
     
     return result;
 }

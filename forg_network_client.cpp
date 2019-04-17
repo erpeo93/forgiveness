@@ -440,6 +440,13 @@ inline void SendInstantiateTaxonomyRequest(u32 taxonomy, Vec3 offset)
     CloseAndSendStandardPacket();
 }
 
+inline void SendMovePlayerRequest(Vec3 offset)
+{
+    StartPacket(MovePlayerInOtherRegion);
+    Pack("V", offset);
+    CloseAndSendStandardPacket();
+}
+
 inline void SendDeleteRequest(u64 identifier)
 {
     StartPacket(DeleteEntity);

@@ -200,6 +200,7 @@ extern "C" {
         
         TileInfo tile;
         Vec4 lightIndexes;
+        b32 walked;
         int				index;	// Index into the original list of points
         jcv_graphedge* 	edges;	// The half edges owned by the cell
     } jcv_site;

@@ -1366,6 +1366,13 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             }
         } break;
         
+        case Type_MovePlayerInOtherRegion:
+        {
+            Vec3 offset;
+            unpack(data, "V", &offset);
+            entity->P += offset;
+        } break;
+        
         case Type_InstantiateTaxonomy:
         {
             InstantiateRequest request;

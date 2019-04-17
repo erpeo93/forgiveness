@@ -439,9 +439,9 @@ inline r32 ToR32(char* string, r32 standard = 1.0f)
 }
 
 inline char* GetValue(EditorElement* element, char* name);
-inline Vec4 ToV4Color(EditorElement* element)
+inline Vec4 ToV4Color(EditorElement* element, Vec4 default = V4(1, 1, 1, 1))
 {
-    Vec4 result = V4(1, 1, 1, 1);
+    Vec4 result = default;
     if(element)
     {
         result.r = ToR32(GetValue(element, "r"));
@@ -459,6 +459,18 @@ inline Vec2 ToV2(EditorElement* element, Vec2 default = {})
     {
         result.x = ToR32(GetValue(element, "x"));
         result.y = ToR32(GetValue(element, "y"));
+    }
+    return result;
+}
+
+inline Vec3 ToV3(EditorElement* element, Vec3 default = {})
+{
+    Vec3 result = default;
+    if(element)
+    {
+        result.x = ToR32(GetValue(element, "x"));
+        result.y = ToR32(GetValue(element, "y"));
+        result.z = ToR32(GetValue(element, "z"));
     }
     return result;
 }
@@ -3364,6 +3376,8 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         currentSlot_->chunkyness = ToR32(GetValue(root, "chunkyness"));
         currentSlot_->groundPointPerTile = ToU32(GetValue(root, "pointsPerTile"));
         currentSlot_->tileColor = ToV4Color(GetElement(root, "color"));
+        currentSlot_->tileBorderColor = ToV4Color(GetElement(root, "borderColor"), V4(0, 0, 0, 0));
+        currentSlot_->tilePointsLayout = GetValuePreprocessor(TilePointsLayout, GetValue(root, "tileLayout"));
     }
 #ifndef FORG_SERVER
     else if(StrEqual(name, "visualLabels"))

@@ -368,7 +368,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 Vec3 P = V3( 0.5f, 10.0f, 0 );
                 
                 TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName( region->taxTable, "centaur" );
-                u64 identifier = AddEntity( region, P, slot->taxonomy, NullGenerationData(), PlayerAddEntityParams(player->playerID));
+                u64 identifier = AddEntity(region, P, slot->taxonomy, NullGenerationData(), PlayerAddEntityParams(player->playerID));
                 
                 
 #if 1                             

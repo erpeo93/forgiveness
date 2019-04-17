@@ -45,6 +45,7 @@ struct TileInfo
 {
     r32 chunkyness;
     Vec4 color;
+    Vec4 borderColor;
     r32 height;
     Vec4 lightIndexes;
 };
@@ -54,6 +55,13 @@ printTable(noPrefix) enum GroundViewMode
     GroundView_Voronoi,
     GroundView_Tile,
     GroundView_Chunk,
+};
+
+printTable(noPrefix) enum TilePointsLayout
+{
+    TilePoints_Random,
+    TilePoints_StraightLine,
+    TilePoints_Pound,
 };
 
 #define JC_VORONOI_IMPLEMENTATION

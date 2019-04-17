@@ -35,6 +35,7 @@ enum UIRequestType
     UIRequest_DeleteTaxonomy,
     UIRequest_ReviveTaxonomy,
     UIRequest_InstantiateTaxonomy,
+    UIRequest_MovePlayerInOtherRegion,
     UIRequest_DeleteEntity,
     UIRequest_ImpersonateEntity,
     UIRequest_SaveAssetFile,
@@ -819,8 +820,6 @@ struct UIState
     b32 prefix;
     b32 suffix;
     
-    u32 chunkApron;
-    
     
     b32 reloadingAssets;
     b32 patchingLocalServer;
@@ -894,4 +893,6 @@ struct UIState
     b32 showGroundOutline;
     b32 randomizeGroundColors;
     GroundViewMode groundViewMode;
+    Vec3 cameraOffset;
+    u32 chunkApron;
 };

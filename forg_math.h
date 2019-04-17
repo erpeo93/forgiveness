@@ -1349,7 +1349,7 @@ inline m4x4_inv PerspectiveProjection( r32 aspectWidthOverHeight, r32 focalLengt
     r32 c = focalLength;
     
     r32 n = 0.05f; // NOTE(Leonardo): near clip plane
-    r32 f = 100.0f; // NOTE(Leonardo): far clip plane
+    r32 f = 20000.0f; // NOTE(Leonardo): far clip plane
     
     r32 d = (n + f) / ( n - f);
     r32 e = (2 * f * n ) / (n - f);

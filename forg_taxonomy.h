@@ -395,10 +395,12 @@ struct TaxonomySlot
     TaxonomyConsideration* consideration;
     
     
+    Vec4 tileBorderColor;
     Vec4 tileColor;
     r32 groundPointMaxOffset;
     u32 groundPointPerTile;
     r32 chunkyness;
+    u32 tilePointsLayout;
     
     
     

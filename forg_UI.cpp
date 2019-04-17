@@ -1737,6 +1737,19 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     UI->showGroundOutline = ToB32(GetValue(paramsElement, "showBorders"));
                     UI->randomizeGroundColors = ToB32(GetValue(paramsElement, "randomizeColors"));
                     UI->groundViewMode = (GroundViewMode) GetValuePreprocessor(GroundViewMode, GetValue(paramsElement, "viewType"));
+                    UI->chunkApron = ToU32(GetValue(paramsElement, "chunkApron"));
+
+                    if(UI->chunkApron >= 3)
+                    {
+                        UI->groundViewMode = Max(UI->groundViewMode, GroundView_Tile);
+                    }
+                    
+                    if(UI->chunkApron >= 8)
+                    {
+                        UI->groundViewMode = GroundView_Chunk;
+                    }
+                    
+                    UI->cameraOffset = ToV3(GetElement(paramsElement, "cameraOffset"));
                 } break;
             }
             
@@ -1771,7 +1784,8 @@ inline b32 ChangesMustBeSaved(u32 widgetIndex)
     if(widgetIndex == EditorWidget_Animation ||
        widgetIndex == EditorWidget_SoundDatabase ||
        widgetIndex == EditorWidget_GeneralButtons || 
-       widgetIndex == EditorWidget_ColorPicker)
+       widgetIndex == EditorWidget_ColorPicker ||
+       widgetIndex == EditorWidget_GroundParams)
     {
         result = false;
     }
@@ -1797,6 +1811,24 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         Vec3 mouseOffset = UI->worldMouseP;
         UIAddInteraction(UI, input, mouseRight,SendRequestInteraction(UI, UI_Trigger, InstantiateTaxonomyRequest(UI->instantiatingTaxonomy, mouseOffset)));
     }
+    
+    if(input->altDown)
+    {
+        UIInteraction moveInteraction = SendRequestInteraction(UI, UI_Trigger, MovePlayerRequest(V3(10, 0, 0)));
+        UIAddInteraction(UI, input, moveRight, moveInteraction);
+        
+        moveInteraction = SendRequestInteraction(UI, UI_Trigger, MovePlayerRequest(V3(-10, 0, 0)));
+        UIAddInteraction(UI, input, moveLeft, moveInteraction);
+        
+        moveInteraction = SendRequestInteraction(UI, UI_Trigger, MovePlayerRequest(V3(0, 10, 0)));
+        UIAddInteraction(UI, input, moveUp, moveInteraction);
+        
+        moveInteraction = SendRequestInteraction(UI, UI_Trigger, MovePlayerRequest(V3(0, -10, 0)));
+        UIAddInteraction(UI, input, moveDown, moveInteraction);
+        
+        
+    }
+    
     UI->saveWidgetLayoutTimer += UI->worldMode->originalTimeToAdvance;
     if(UI->saveWidgetLayoutTimer >= 10.0f)
     {
@@ -1820,7 +1852,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         for(u32 widgetIndex = 0; widgetIndex < EditorWidget_Count; ++widgetIndex)
         {
             EditorWidget* widget = UI->widgets + widgetIndex;
-            if(widget->changeCount && widget->fileName)
+            if(ChangesMustBeSaved(widgetIndex) && widget->changeCount && widget->fileName)
             {
                 widget->changeCount = 0;
                 SendSaveAssetDefinitionFile(widget->fileName, widget->root);
@@ -2945,7 +2977,7 @@ internal EditorElement* BuildEditorTaxonomyTree(u32 editorRoles, TaxonomyTable* 
     return result;
 }
 
-inline void UIAddChild(TaxonomyTable* table, EditorElement* element, EditorElementType type, char* name, char* value)
+inline EditorElement* UIAddChild(TaxonomyTable* table, EditorElement* element, EditorElementType type, char* name, char* value = 0)
 {
     EditorElement* newElement;
     FREELIST_ALLOC(newElement, table->firstFreeElement, PushStruct(&table->pool, EditorElement));
@@ -2953,10 +2985,16 @@ inline void UIAddChild(TaxonomyTable* table, EditorElement* element, EditorEleme
     
     newElement->type = type;
     FormatString(newElement->name, sizeof(newElement->name), "%s", name);
-    FormatString(newElement->value, sizeof(newElement->value), "%s", value);
+    
+    if(value)
+    {
+        FormatString(newElement->value, sizeof(newElement->value), "%s", value);
+    }
     
     newElement->next = element->firstChild;
     element->firstChild = newElement;
+    
+    return newElement;
 }
 
 inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, Vec2 P, u32 necessaryRole, char* name, char* fileName = 0)
@@ -3086,6 +3124,12 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             UIAddChild(UI->table, params, EditorElement_String, "showBorders", "false");
             UIAddChild(UI->table, params, EditorElement_String, "randomizeColors", "true");
             UIAddChild(UI->table, params, EditorElement_String, "viewType", "Voronoi");
+            UIAddChild(UI->table, params, EditorElement_Unsigned, "chunkApron", "2");
+            EditorElement* offset = UIAddChild(UI->table, params, EditorElement_Struct, "cameraOffset");
+            UIAddChild(UI->table, offset, EditorElement_Real, "x", "0.0");
+            UIAddChild(UI->table, offset, EditorElement_Real, "y", "0.0");
+            UIAddChild(UI->table, offset, EditorElement_Real, "z", "0.0");
+            
             
             groundParamsRoot->next = params;
             
@@ -3202,6 +3246,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTable(UI, SoundContainerType, "soundCType");
         UIAddAutocompleteFromTable(UI, ObjectState, "objectState");
         UIAddAutocompleteFromTable(UI, GroundViewMode, "viewType");
+        UIAddAutocompleteFromTable(UI, TilePointsLayout, "tileLayout");
         UIAddAutocompleteFromFiles(UI);
         
         UIAddAutocomplete(UI, "layoutName");

@@ -161,6 +161,10 @@ struct WorldGenerator
     
     NoiseParams drynessNoise;
     
+    
+    
+    NoiseParams tileLayoutNoise;
+    
     BiomePyramid biomePyramid;
 };
 
@@ -168,4 +172,5 @@ struct TileGenerationData
 {
     r32 height;
     u32 biomeTaxonomy;
+    r32 layoutNoise;
 };
