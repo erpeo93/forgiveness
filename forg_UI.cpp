@@ -1432,7 +1432,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                 
                 case EditorElement_Animation:
                 {
-                    Vec3 P = V3(layout->P + 2.0f * V2(0, layout->childStandardHeight), 0);
+                    Vec3 P = V3(layout->P, layout->additionalZBias) + V3(layout->nameValueDistance, layout->childStandardHeight, 0);
                     P.x += 0.5f * layout->nameValueDistance;
                     if(UI->editingTaxonomy)
                     {
@@ -1484,7 +1484,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         
                         Vec3 animationBase = P;
                         animationBase.xy += Hadamart(info.originOffset, animationScale);
-                        
+                                                
                         AnimationOutput output =  PlayAndDrawEntity(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), drawOpened, 0, InvertedInfinityRect2(), 1, {true, showBones, !showBitmaps, showPivots, timer, nameHashID, UI->fakeEquipment});
                         
                         if(output.hotBoneIndex >= 0)
@@ -2375,7 +2375,6 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             r32 clipHeight = Max(suggestedY, 60);
             
             
-           
             r32 widgetMinY = widgetMaxY - clipHeight;
             r32 widgetMaxX = widgetMinX + clipWidth;
             
@@ -2443,7 +2442,15 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     b32 allowScrolling = false;
                     if(input->mouseWheelOffset > 0)
                     {
-                        allowScrolling = (widget->maxDataY >= clipRect.maxY - 20);                       
+                            if(widgetIndex == EditorWidget_Animation)
+                            {
+                                allowScrolling = true;
+                            }
+                            else
+                            {
+                                allowScrolling = (widget->maxDataY >= clipRect.maxY - 20);                                                       
+                            }
+
                     }
                     else if(input->mouseWheelOffset < 0)
                     {

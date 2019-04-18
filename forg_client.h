@@ -275,6 +275,13 @@ struct ClientEntity
 
 #include "forg_UI.h"
 
+struct ForgVoronoiDiagram
+{
+    jcv_diagram diagram;
+    UniversePos originP;
+	Vec3 deltaP;
+};
+
 #define ALPHABET_LETTER_COUNT 24
 struct GameModeWorld
 {
@@ -359,10 +366,9 @@ struct GameModeWorld
     Vec3 worldMouseP;
     
     
-    b32 voronoiGenerated;
-    jcv_diagram voronoi;
-    UniversePos voronoiP;
-	Vec3 voronoiDelta;
+    b32 generatingVoronoi;
+    ForgVoronoiDiagram voronoiPingPong[2];
+    ForgVoronoiDiagram* activeDiagram;
     
     
     b32 useDebugCamera;

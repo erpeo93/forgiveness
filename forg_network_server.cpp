@@ -52,9 +52,10 @@ inline u8* ForgReserveSpace(ServerPlayer* player, b32 reliable, u16 size, u64 id
         result = packet->data + packet->size;
         if(writeEntityHeader)
         {
+            unsigned char* oldResult = result;
             result = ForgPackHeader(result, Type_entityHeader);
             result += pack(result, "Q", identifier);
-            packet->size += (u16) (result - packet->data);
+            packet->size += (u16) (result - oldResult);
         }
         packet->size += size;
     }

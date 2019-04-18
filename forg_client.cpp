@@ -566,6 +566,171 @@ internal Vec3 MoveEntityClient(GameModeWorld* worldMode, ClientEntity* entity, r
     return result;
 }
 
+struct GenerateVoronoiWork
+{
+    TaskWithMemory* task;
+    u32 pointCount;
+    jcv_point* points;
+    jcv_rect rect;
+    ForgVoronoiDiagram* diagram;
+    ForgVoronoiDiagram** activeDiagramPtr;
+    GameModeWorld* worldMode;
+};
+
+
+PLATFORM_WORK_CALLBACK(GenerateVoronoiPoints)
+{
+    GenerateVoronoiWork* work = (GenerateVoronoiWork*) param;
+    
+    jcv_diagram_generate(work->pointCount, work->points, &work->rect, &work->diagram->diagram);
+    
+    CompletePastWritesBeforeFutureWrites;
+    *work->activeDiagramPtr = work->diagram;
+    CompletePastWritesBeforeFutureWrites;
+    work->worldMode->generatingVoronoi = false;
+    
+    EndTaskWithMemory(work->task);
+}
+
+internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, ForgVoronoiDiagram* diagram, UniversePos originP, i32 originChunkX, i32 originChunkY, i32 chunkApron, i32 lateralChunkSpan)
+{
+    diagram->deltaP = {};
+    diagram->originP = originP;
+    
+    r32 voxelSide = worldMode->voxelSide;
+    r32 chunkSide = worldMode->chunkSide;
+    u8 chunkDim = worldMode->chunkDim;
+    
+    jcv_rect rect;
+    r32 dim = (chunkApron + 4.0f) * chunkSide;
+    rect.min.x = -dim;
+    rect.min.y = -dim;
+    rect.max.x = dim;
+    rect.max.y = dim;
+    
+    u32 maxPointsPerTile = 16;
+    u32 maxPointCount = Squarei(worldMode->chunkDim) * Squarei(2 * chunkApron + 1) * maxPointsPerTile;
+    
+    TaskWithMemory* task = BeginTaskWithMemory(gameState->tasks, ArrayCount(gameState->tasks), false);
+    if(task)
+    {
+        jcv_point* points = PushArray(&task->pool, jcv_point, maxPointCount, NoClear());
+        u32 pointCount = 0;
+        for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
+        {
+            for(i32 X = originChunkX - chunkApron; X <= originChunkX + chunkApron; X++)
+            {
+                Vec3 chunkLowLeftCornerOffset = V3(V2i(X - originChunkX, Y - originChunkY), 0.0f) * chunkSide - originP.chunkOffset;
+                Rect2 chunkRect = RectMinDim(chunkLowLeftCornerOffset.xy, V2(chunkSide, chunkSide));
+                
+                i32 chunkX = Wrap(0, X, lateralChunkSpan);
+                i32 chunkY = Wrap(0, Y, lateralChunkSpan);
+                
+                if(ChunkValid(lateralChunkSpan, X, Y))
+                {	
+                    RandomSequence seq = Seed((chunkX + 10) * (chunkY + 10));
+                    WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, &worldMode->chunkPool);
+                    
+                    if(!chunk->initialized)
+                    {
+                        InvalidCodePath;
+                    }
+                    
+                    Assert(X == chunk->worldX);
+                    Assert(Y == chunk->worldY);
+                    
+                    for(u8 tileY = 0; tileY < worldMode->chunkDim; tileY++)
+                    {
+                        for(u8 tileX = 0; tileX < worldMode->chunkDim; tileX++)
+                        {
+                            Vec2 tileCenter = worldMode->voxelSide * V2(tileX + 0.5f, tileY + 0.5f);
+                            Vec2 destP2D = chunkLowLeftCornerOffset.xy + tileCenter;
+                            
+                            
+                            TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
+                            
+                            TaxonomySlot* tileSlot = GetSlotForTaxonomy(worldMode->table, tileData->biomeTaxonomy);
+                            
+                            r32 pointMaxOffset = Min(0.5f * voxelSide, tileSlot->groundPointMaxOffset);
+                            u32 pointsPerTile = Min(maxPointsPerTile, tileSlot->groundPointPerTile);
+                            r32 tileLayoutNoise = tileData->layoutNoise;
+                            
+                            switch(tileSlot->tilePointsLayout)
+                            {
+                                case TilePoints_StraightLine:
+                                {
+                                    Vec2 arm = Arm2(DegToRad(tileLayoutNoise * 360.0f));
+                                    r32 voxelUsableDim = 0.9f * voxelSide;
+                                    Vec2 startingOffset = arm * voxelUsableDim;
+                                    Vec2 totalDelta = -2.0f * startingOffset;
+                                    
+                                    Vec2 pointSeparationVector = totalDelta *= (1.0f / pointsPerTile);
+                                    
+                                    destP2D += startingOffset;
+                                    
+                                    for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
+                                    {
+                                        points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
+                                        points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
+                                        
+                                        ++pointCount;
+                                        
+                                        destP2D -= pointSeparationVector;
+                                    }
+                                } break;
+                                
+                                case TilePoints_Random:
+                                {
+                                    for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
+                                    {
+                                        points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
+                                        points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
+                                        
+                                        ++pointCount;
+                                    }
+                                } break;
+                                
+                                case TilePoints_Pound:
+                                {
+                                    for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
+                                    {
+                                        points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
+                                        points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
+                                        
+                                        ++pointCount;
+                                    }
+                                } break;
+                            }
+                        }
+                    }                         
+                }
+            }
+        }
+        
+        
+        
+        if(diagram == worldMode->activeDiagram)
+        {
+            jcv_diagram_free(&diagram->diagram);
+            memset(&diagram->diagram, 0, sizeof(jcv_diagram));
+        }
+        
+        GenerateVoronoiWork* work = PushStruct(&task->pool, GenerateVoronoiWork);
+        work->task = task;
+        work->pointCount = pointCount;
+        work->points = points;
+        work->rect = rect;
+        work->diagram = diagram;
+        work->activeDiagramPtr = &worldMode->activeDiagram;
+        work->worldMode = worldMode;
+        platformAPI.PushWork(gameState->slowQueue, GenerateVoronoiPoints, work);
+    }
+    else
+    {
+        InvalidCodePath;
+    }
+}
+
 
 global_variable r32 globalSine = 0;
 global_variable r32 global_cameraZStep = 6.0f;
@@ -1176,7 +1341,11 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 }
                 particleCache->deltaParticleP = particleDelta;
                 UI->deltaMouseP += deltaP;
-                worldMode->voronoiDelta += deltaP;
+                
+                for(u32 voronoiIndex = 0; voronoiIndex < ArrayCount(worldMode->voronoiPingPong); ++voronoiIndex)
+                {
+                    worldMode->voronoiPingPong[voronoiIndex].deltaP += deltaP;
+                }
                 
                 UniversePos voronoiP = player->universeP;
                 
@@ -1220,136 +1389,18 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 
                 
-                if(changedChunk || !worldMode->voronoiGenerated || forceVoronoiRegeneration)
+                if(changedChunk || !worldMode->activeDiagram || forceVoronoiRegeneration)
                 {
-                    worldMode->voronoiDelta = {};
-                    worldMode->voronoiP = voronoiP;
-                    
-                    BEGIN_BLOCK("voronoi setup");
-                    r32 sorrounderChunksInfluence = 0.3f;
-                    
-                    
-                    r32 voxelSide = worldMode->voxelSide;
-                    r32 chunkSide = worldMode->chunkSide;
-                    u8 chunkDim = worldMode->chunkDim;
-                    
-                    jcv_rect rect;
-                    r32 dim = (chunkApron + 4.0f) * chunkSide;
-                    rect.min.x = -dim;
-                    rect.min.y = -dim;
-                    rect.max.x = dim;
-                    rect.max.y = dim;
-                    
-                    u32 maxPointsPerTile = 16;
-                    u32 maxPointCount = Squarei(worldMode->chunkDim) * Squarei(2 * chunkApron + 1) * maxPointsPerTile;
-                    jcv_point* points = PushArray(worldMode->temporaryPool, jcv_point, maxPointCount, NoClear());
-                    
-                    u32 pointIndex = 0;
-                    for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
+                    if(!worldMode->generatingVoronoi)
                     {
-                        for(i32 X = originChunkX - chunkApron; X <= originChunkX + chunkApron; X++)
+                        worldMode->generatingVoronoi = true;
+                        ForgVoronoiDiagram* dest = worldMode->voronoiPingPong + 0;
+                        if(dest == worldMode->activeDiagram)
                         {
-                            Vec3 chunkLowLeftCornerOffset = V3(V2i(X - originChunkX, Y - originChunkY), 0.0f) * chunkSide - voronoiP.chunkOffset;
-                            Rect2 chunkRect = RectMinDim(chunkLowLeftCornerOffset.xy, V2(chunkSide, chunkSide));
-                            
-                            i32 chunkX = Wrap(0, X, lateralChunkSpan);
-                            i32 chunkY = Wrap(0, Y, lateralChunkSpan);
-                            
-                            if(ChunkValid(lateralChunkSpan, X, Y))
-                            {	
-                                RandomSequence seq = Seed((chunkX + 10) * (chunkY + 10));
-                                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, &worldMode->chunkPool);
-                                
-                                if(!chunk->initialized)
-                                {
-                                    InvalidCodePath;
-                                }
-                                
-                                Assert(X == chunk->worldX);
-                                Assert(Y == chunk->worldY);
-                                
-                                for(u8 tileY = 0; tileY < worldMode->chunkDim; tileY++)
-                                {
-                                    for(u8 tileX = 0; tileX < worldMode->chunkDim; tileX++)
-                                    {
-                                        Vec2 tileCenter = worldMode->voxelSide * V2(tileX + 0.5f, tileY + 0.5f);
-                                        Vec2 destP2D = chunkLowLeftCornerOffset.xy + tileCenter;
-                                        
-                                        
-                                        TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
-                                        
-                                        TaxonomySlot* tileSlot = GetSlotForTaxonomy(worldMode->table, tileData->biomeTaxonomy);
-                                        
-                                        r32 pointMaxOffset = Min(0.5f * voxelSide, tileSlot->groundPointMaxOffset);
-                                        u32 pointsPerTile = Min(maxPointsPerTile, tileSlot->groundPointPerTile);
-                                        r32 tileLayoutNoise = tileData->layoutNoise;
-                                        
-                                        switch(tileSlot->tilePointsLayout)
-                                        {
-                                            case TilePoints_StraightLine:
-                                            {
-                                                Vec2 arm = Arm2(DegToRad(tileLayoutNoise * 360.0f));
-                                                r32 voxelUsableDim = 0.9f * voxelSide;
-                                                Vec2 startingOffset = arm * voxelUsableDim;
-                                                Vec2 totalDelta = -2.0f * startingOffset;
-                                                
-                                                Vec2 pointSeparationVector = totalDelta *= (1.0f / pointsPerTile);
-                                                
-                                                destP2D += startingOffset;
-                                                
-                                                for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
-                                                {
-                                                    points[pointIndex].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
-                                                    points[pointIndex].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
-                                                    
-                                                    ++pointIndex;
-                                                    
-                                                    destP2D -= pointSeparationVector;
-                                                }
-                                            } break;
-                                            
-                                            case TilePoints_Random:
-                                            {
-                                                for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
-                                                {
-                                                    points[pointIndex].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
-                                                    points[pointIndex].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
-                                                    
-                                                    ++pointIndex;
-                                                }
-                                            } break;
-                                            
-                                            case TilePoints_Pound:
-                                            {
-                                                for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
-                                                {
-                                                    points[pointIndex].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
-                                                    points[pointIndex].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
-                                                    
-                                                    ++pointIndex;
-                                                }
-                                            } break;
-                                        }
-                                    }
-                                }                         
-                            }
+                            dest = worldMode->voronoiPingPong + 1;
                         }
+                        GenerateVoronoi(gameState,worldMode, dest, voronoiP, originChunkX, originChunkY, chunkApron, lateralChunkSpan);
                     }
-                    END_BLOCK();
-                    
-                    
-                    
-                    //platformAPI.PushWork();
-                    BEGIN_BLOCK("build diagram");
-                    if(worldMode->voronoiGenerated)
-                    {
-                        jcv_diagram_free(&worldMode->voronoi);
-                        memset(&worldMode->voronoi, 0, sizeof(jcv_diagram));
-                    }
-                    
-                    jcv_diagram_generate(pointIndex, points, &rect, &worldMode->voronoi);
-                    worldMode->voronoiGenerated = true;
-                    END_BLOCK();
                 }
                 
                 
@@ -1415,21 +1466,22 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 }
                 else
                 {
-                    if(worldMode->voronoiGenerated)
+                    ForgVoronoiDiagram* voronoi = worldMode->activeDiagram;
+                    if(voronoi)
                     {
                         BEGIN_BLOCK("voronoi rendering");
-                        jcv_site* sites = jcv_diagram_get_sites(&worldMode->voronoi);
+                        jcv_site* sites = jcv_diagram_get_sites(&voronoi->diagram);
                         
-                        for(int i = 0; i < worldMode->voronoi.numsites; ++i)
+                        for(int i = 0; i < voronoi->diagram.numsites; ++i)
                         {
                             jcv_site* site = sites + i;
                             Vec2 offsetP = V2(site->p.x, site->p.y);
-                            TileInfo QP = GetTileInfo(worldMode, worldMode->voronoiP, offsetP, UI->randomizeGroundColors);
+                            TileInfo QP = GetTileInfo(worldMode, voronoi->originP, offsetP, UI->randomizeGroundColors);
                             site->tile = QP;
                             site->walked = false;
                         }
                         
-                        const jcv_edge* edge = jcv_diagram_get_edges(&worldMode->voronoi);
+                        const jcv_edge* edge = jcv_diagram_get_edges(&voronoi->diagram);
                         while(edge)
                         {
                             jcv_site* site0 = edge->sites[0];
@@ -1451,12 +1503,12 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 offsetTo = temp;
                             }
                             
-                            TileInfo QFrom = GetTileInfo(worldMode, worldMode->voronoiP, offsetFrom, UI->randomizeGroundColors);
+                            TileInfo QFrom = GetTileInfo(worldMode, voronoi->originP, offsetFrom, UI->randomizeGroundColors);
                             
                             Vec4 CFrom0 = Lerp(QFrom.color, QSite0.chunkyness, QSite0.color);
                             Vec4 CFrom1 = Lerp(QFrom.color, QSite1.chunkyness, QSite1.color);
                             
-                            TileInfo QTo = GetTileInfo(worldMode, worldMode->voronoiP, offsetTo, UI->randomizeGroundColors);
+                            TileInfo QTo = GetTileInfo(worldMode, voronoi->originP, offsetTo, UI->randomizeGroundColors);
                             Vec4 CTo0 = Lerp(QTo.color, QSite0.chunkyness, QSite0.color);
                             Vec4 CTo1 = Lerp(QTo.color, QSite1.chunkyness, QSite1.color);
                             
@@ -1470,10 +1522,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 zeroIsOnLeftSide = true;
                             }
                             
-                            Vec4 site0PCamera = V4(site0P + worldMode->voronoiDelta.xy, QSite0.height, 0);
-                            Vec4 site1PCamera = V4(site1P + worldMode->voronoiDelta.xy, QSite1.height, 0);
-                            Vec4 offsetFromCamera = V4(offsetFrom + worldMode->voronoiDelta.xy, QFrom.height, 0);
-                            Vec4 offsetToCamera = V4(offsetTo + worldMode->voronoiDelta.xy, QTo.height, 0);
+                            Vec4 site0PCamera = V4(site0P + voronoi->deltaP.xy, QSite0.height, 0);
+                            Vec4 site1PCamera = V4(site1P + voronoi->deltaP.xy, QSite1.height, 0);
+                            Vec4 offsetFromCamera = V4(offsetFrom + voronoi->deltaP.xy, QFrom.height, 0);
+                            Vec4 offsetToCamera = V4(offsetTo + voronoi->deltaP.xy, QTo.height, 0);
                             
                             
                             
