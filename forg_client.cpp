@@ -7,11 +7,11 @@ global_variable ClientPlayer* myPlayer;
 #include "forg_pool.cpp"
 #include "forg_world.cpp"
 #include "forg_taxonomy.cpp"
+#include "forg_world_generation.cpp"
 #include "forg_editor.cpp"
 #include "forg_inventory.cpp"
 #include "forg_physics.cpp"
 #include "forg_rule.cpp"
-#include "forg_world_generation.cpp"
 
 inline void AddFlags(ClientEntity* entity, u32 flags)
 {
@@ -925,7 +925,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     ImportAllFiles(filePath, worldMode->editorRoles, false);
                     ImportAllAssetFiles(worldMode, filePath, &worldMode->filePool);
                     ReadPlantChart();
-                    InitializeWorldGenerator(worldMode->table, &worldMode->generator, 0, 0);
                     
                     platformAPI.DEBUGWriteFile("editorErrors", worldMode->table->errors, sizeof(worldMode->table->errors[0]) * worldMode->table->errorCount);
                     
@@ -1359,6 +1358,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 i32 originChunkX = voronoiP.chunkX;
                 i32 originChunkY = voronoiP.chunkY;
                 
+                u32 seed = worldMode->worldSeed;
+                WorldGenerator* generator = NORUNTIMEGetTaxonomySlotByName(worldMode->table, "testGenerator")->generator;
+                
                 for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
                 {
                     for(i32 X = originChunkX - chunkApron; X <= originChunkX + chunkApron; X++)
@@ -1372,7 +1374,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             
                             if(!chunk->initialized)
                             {
-                                BuildChunk(&worldMode->generator, chunk, X, Y);
+                                forceVoronoiRegeneration = true;
+                                BuildChunk(generator, chunk, X, Y, seed);
                                 
                                 for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
                                 {

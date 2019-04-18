@@ -2317,6 +2317,16 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                         
                         UIDrawButton(UI, input, &patchButton);
                         
+                        
+                        EditorWidget* misc = UI->widgets + EditorWidget_Misc;
+                        u32 seed = ToU32(GetValue(misc->root, "worldSeed"));
+                        UIInteraction regenerateInteraction = SendRequestInteraction(UI, UI_Trigger, RegenerateWorldRequest(seed));
+                        Vec2 regenerateP = UIFollowingP(&patchButton, 20);
+                        UIButton regenerateButton = UIBtn(UI, regenerateP, layout, V4(1, 0, 0, 1), " RECREATE WORLD ", true, regenerateInteraction);
+                        
+                        UIDrawButton(UI, input, &regenerateButton);
+                        
+                        
                     } break;
                     
                     case EditorWidget_SoundEvents:
@@ -3160,6 +3170,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             UIAddChild(UI->table, misc->root, EditorElement_String, "recipeTaxonomy", "objects");
             UIAddChild(UI->table, misc->root, EditorElement_Unsigned, "recipeIndex", "0");
+            UIAddChild(UI->table, misc->root, EditorElement_Unsigned, "worldSeed", "0");
             
             
             

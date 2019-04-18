@@ -486,6 +486,15 @@ inline UIRequest PatchServerRequest()
     return result;
 }
 
+inline UIRequest RegenerateWorldRequest(u32 seed)
+{
+    UIRequest result = {};
+    result.requestCode = UIRequest_RegenerateWorldChunks;
+    result.seed = seed;
+    
+    return result;
+}
+
 inline UIRequest PatchCheckRequest()
 {
     UIRequest result = {};
@@ -723,6 +732,22 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         {
             UI->patchingLocalServer = 2;
             SendPatchCheckRequest();
+        } break;
+        
+        case UIRequest_RegenerateWorldChunks:
+        {
+            u32 newSeed = request->seed;
+            UI->worldMode->worldSeed = newSeed;
+            for(u32 chunkIndex = 0; chunkIndex < ArrayCount(UI->worldMode->chunks); ++chunkIndex)
+            {
+                WorldChunk* chunk = UI->worldMode->chunks[chunkIndex];
+                while(chunk)
+                {
+                    chunk->initialized = false;
+                    chunk = chunk->next;
+                }
+            }
+            SendRegenerateWorldChunksRequest(newSeed);
         } break;
         
         case UIRequest_SaveTaxonomyTab:

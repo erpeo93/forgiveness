@@ -76,7 +76,6 @@ struct NoiseParams
     r32 persistance;
     r32 offset;
     r32 amplitude;
-    u32 seed;
 };
 
 
@@ -124,7 +123,7 @@ struct BiomePyramid
     Selector temperatureSelectors[4];
 };
 
-inline NoiseParams NoisePar(r32 frequency, u32 octaves, r32 offset, r32 amplitude, RandomSequence* seq, r32 persistance = 0.5f)
+inline NoiseParams NoisePar(r32 frequency, u32 octaves, r32 offset, r32 amplitude,r32 persistance = 0.5f)
 {
     NoiseParams result = {};
     result.frequency = frequency;
@@ -132,7 +131,6 @@ inline NoiseParams NoisePar(r32 frequency, u32 octaves, r32 offset, r32 amplitud
     result.persistance = persistance;
     result.offset = offset;
     result.amplitude = amplitude;
-    result.seed = GetNextUInt32(seq);
     return result;
 }
 
@@ -147,25 +145,21 @@ inline GenerationMinMax MinMax(r32 min, r32 max)
 
 struct WorldGenerator
 {
-    u32 lateralChunkSpan;
-    i32 universeX;
-    i32 universeY;
-    
-    r32 maxHeight;
-    
     NoiseParams landscapeNoise;
     Selector landscapeSelect;
     
     NoiseParams temperatureNoise;
     Selector temperatureSelect;
     
-    NoiseParams drynessNoise;
+    NoiseParams precipitationNoise;
     
     
     
     NoiseParams tileLayoutNoise;
     
     BiomePyramid biomePyramid;
+    
+    WorldGenerator* nextFree;
 };
 
 struct TileGenerationData

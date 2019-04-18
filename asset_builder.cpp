@@ -2618,6 +2618,21 @@ internal void WriteComponents()
     free(subdir);
 }
 
+#if 0
+internal void WriteGroundDecorations()
+{
+    BeginAssetType(GroundDecoration);
+    for(everyFolderinGroundDecorationFolder)
+    {
+        u64 hash = Hash(name);
+        AddAsset(fileName, hash);
+    }
+    EndAssetType();
+    
+    WritePak(assets, "forgGroundDecorations.pak");
+}
+#endif
+
 internal void WriteLeafs()
 {
     char* leafPath = "definition/leafs";

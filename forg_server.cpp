@@ -64,7 +64,6 @@ inline SimRegion* GetServerRegionWrap(ServerState* server, i32 X, i32 Y)
         Y = -1;
     }
     
-    Assert(server->universeX == 0 && server->universeY == 0);
     SimRegion* destRegion = GetServerRegion(server, X, Y);
     
     return destRegion;
@@ -377,7 +376,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
 #endif
                 
                 
-                SendGameAccessConfirm(player, server->universeX, server->universeY, identifier, 0, server->elapsedMS5x);
+                SendGameAccessConfirm(player, server->worldSeed, identifier, 0, server->elapsedMS5x);
                 
 #if FORGIVENESS_INTERNAL
                 if(!server->debugPlayer)
@@ -587,6 +586,16 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 FreeElement(stack->result);
                 stack->counter = 0;
                 
+            }
+        } break;
+        
+        case Type_RegenerateWorldChunks:
+        {
+            if(server->editor)
+            {
+                u32 worldSeed;
+                packetPtr = unpack(packetPtr, "L", &worldSeed);
+                BuildServerChunks(server, worldSeed);
             }
         } break;
         
@@ -1191,9 +1200,9 @@ extern "C" SERVER_INITIALIZE(InitializeServer)
         ReadTaxonomiesFromFile();
     }
     
+    server->worldSeed = 1;
     FillGenerationData(server);
-    InitializeWorldGenerator(server->activeTable, &server->generator, server->universeX, server->universeY);
-    BuildWorld(server, universeIndex);
+    BuildWorld(server);
 }
 
 struct SimulateWorldRegionWork

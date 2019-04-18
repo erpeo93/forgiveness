@@ -467,6 +467,13 @@ inline void SendPauseToggleMessage()
     CloseAndSendStandardPacket();
 }
 
+inline void SendRegenerateWorldChunksRequest(u32 worldSeed)
+{
+    StartPacket(RegenerateWorldChunks);
+    Pack("L", worldSeed);
+    CloseAndSendStandardPacket();
+}
+
 #if FORGIVENESS_INTERNAL
 inline SavedNameSlot* GetNameSlot( DebugTable* debugTable, u64 pointer )
 {
@@ -593,7 +600,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 u64 openedContainerID;
                 u8 serverMS5x;
                 
-                Unpack("llQQC", &myPlayer->universeX, &myPlayer->universeY, &myPlayer->identifier, &openedContainerID, &serverMS5x);
+                Unpack("LQQC", &worldMode->worldSeed, &myPlayer->identifier, &openedContainerID, &serverMS5x);
                 
                 r32 lastFrameFPS = 1000.0f / (serverMS5x * 5.0f);
                 myPlayer->serverFPS = Lerp(myPlayer->serverFPS, 0.8f, lastFrameFPS);

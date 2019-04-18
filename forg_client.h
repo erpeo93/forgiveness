@@ -112,8 +112,6 @@ struct ClientPlayer
     i32 changedWorldDeltaY;
     
     u64 identifier;
-    i32 universeX;
-    i32 universeY;
     UniversePos universeP;
     UniversePos oldUniverseP;
     UniversePos oldVoronoiP;
@@ -285,10 +283,10 @@ struct ForgVoronoiDiagram
 #define ALPHABET_LETTER_COUNT 24
 struct GameModeWorld
 {
+    u32 worldSeed;
+    
     b32 editingEnabled;
     u32 editorRoles;
-    
-    WorldGenerator generator;
     
     b32 gamePaused;
     r32 originalTimeToAdvance;

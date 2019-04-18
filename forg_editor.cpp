@@ -2902,6 +2902,18 @@ inline EditorElement* GetList(EditorElement* element, char* listName)
     return result;
 }
 
+inline NoiseParams ParseNoiseParams(EditorElement* element)
+{
+    r32 frequency = ToR32(GetValue(element, "frequency"));
+    u32 octaves = ToU32(GetValue(element, "octaves"));
+    r32 offset = ToR32(GetValue(element, "offset"));
+    r32 amplitude = ToR32(GetValue(element, "amplitude"));
+    
+    NoiseParams result = NoisePar(frequency, octaves, offset, amplitude);
+    
+    return result;
+}
+
 #ifndef FORG_SERVER
 inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer, EditorElement* root)
 {
@@ -3520,6 +3532,60 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         }
     }
 #endif
+    else if(StrEqual(name, "generatorParams"))
+    {
+        if(currentSlot_->generator)
+        {
+            FREELIST_DEALLOC(currentSlot_->generator, taxTable_->firstFreeWorldGenerator);
+            currentSlot_->generator = 0;
+        }
+        TAXTABLE_ALLOC(currentSlot_->generator, WorldGenerator);
+        WorldGenerator* generator = currentSlot_->generator;
+        
+        
+        generator->landscapeNoise = ParseNoiseParams(GetStruct(root, "landscapeNoise"));
+        generator->temperatureNoise = ParseNoiseParams(GetStruct(root, "temperatureNoise"));
+        generator->precipitationNoise = ParseNoiseParams(GetStruct(root, "precipitationNoise"));
+        generator->tileLayoutNoise = ParseNoiseParams(GetStruct(root, "tileLayoutNoise"));
+        
+        
+        generator->landscapeSelect = {};
+        generator->temperatureSelect = {};
+        EditorElement* landscape = GetList(root, "landscapes");
+        while(landscape)
+        {
+            r32 threesold = ToR32(GetValue(landscape, "threesold"));
+            
+            NoiseParams noise = ParseNoiseParams(GetStruct(landscape, "noiseParams"));
+            AddBucket(&generator->landscapeSelect, threesold, noise);
+            
+            
+            r32 minTemperature = ToR32(GetValue(landscape, "minTemperature"));
+            r32 maxTemperature = ToR32(GetValue(landscape, "maxTemperature"));
+            AddBucket(&generator->temperatureSelect, threesold,MinMax(minTemperature, maxTemperature)); 
+            
+            landscape = landscape->next;
+        }
+        
+        generator->biomePyramid = {};
+        
+        EditorElement* precipitationBand = GetList(root, "precipitationBands");
+        while(precipitationBand)
+        {
+            r32 threesold = ToR32(GetValue(precipitationBand, "threesold"));
+            Selector* band = AddSelectorForDryness(&generator->biomePyramid, threesold);
+            
+            EditorElement* tiles = GetList(precipitationBand, "tileTypes");
+            while(tiles)
+            {
+                r32 temperature = ToR32(GetValue(tiles, "temperature"));
+                AddBucket(band, temperature, taxTable_, tiles->name);
+                tiles = tiles->next;
+            }
+            
+            precipitationBand = precipitationBand->next;
+        }
+    }
     else if(StrEqual(name, "layouts"))
     {
         for(ObjectLayout* toDelete = currentSlot_->firstLayout; toDelete; toDelete = toDelete->next)

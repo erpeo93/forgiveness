@@ -38,7 +38,7 @@ r32 NormalizedNoise(r32 dx, r32 dy, r32 frequency, u32 seed)
     return result;
 }
 
-inline r32 Evaluate(r32 dx, r32 dy, NoiseParams params)
+inline r32 Evaluate(r32 dx, r32 dy, NoiseParams params, u32 seed)
 {
     r32 total = 0;
     r32 maxValue = 0;
@@ -48,7 +48,7 @@ inline r32 Evaluate(r32 dx, r32 dy, NoiseParams params)
     Assert(params.octaves > 0);
     for(u32 octave = 0; octave < params.octaves; ++octave)
     {
-        total +=  (NormalizedNoise(dx, dy, frequency, params.seed) + params.offset) * amplitude;
+        total +=  (NormalizedNoise(dx, dy, frequency, seed) + params.offset) * amplitude;
         maxValue += amplitude;
         
         amplitude *= params.persistance;
@@ -115,7 +115,7 @@ inline Selector* AddSelectorForDryness(BiomePyramid* pyramid, r32 threesold)
     return result;
 }
 
-inline r32 Select(Selector* selector, r32 dx, r32 dy, r32 selectionValue)
+inline r32 Select(Selector* selector, r32 dx, r32 dy, r32 selectionValue, u32 seed)
 {
     Assert(selector->bucketCount > 0);
     r32 result = 0;
@@ -153,8 +153,8 @@ inline r32 Select(Selector* selector, r32 dx, r32 dy, r32 selectionValue)
     {
         case Bucket_Noise:
         {
-            r32 prev = Evaluate(dx, dy, previousBucket->params);
-            r32 current = Evaluate(dx, dy, currentBucket->params);
+            r32 prev = Evaluate(dx, dy, previousBucket->params, seed);
+            r32 current = Evaluate(dx, dy, currentBucket->params, seed);
             
             result = Lerp(prev, bucketLerping, current);
             
@@ -181,72 +181,32 @@ inline r32 Select(Selector* selector, r32 dx, r32 dy, r32 selectionValue)
     return result;
 }
 
-
-inline void InitializeWorldGenerator(TaxonomyTable* table, WorldGenerator* generator, i32 universeX, i32 universeY)
+inline u32 SelectFromBiomePyramid(BiomePyramid* pyramid, r32 precipitationLevel, r32 temperature, u32 seed)
 {
-    generator->lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
-    generator->maxHeight = 30.0f * VOXEL_SIZE;
-    
-    universeX = Wrap(0, universeX, UNIVERSE_DIM);
-    universeY = Wrap(0, universeY, UNIVERSE_DIM);
-    
-    generator->universeX = universeX;
-    generator->universeY = universeY;
-    
-    RandomSequence worldSequence = Seed(universeX * universeY);
-    // NOTE(Leonardo): these are the different "landscapes" we have
-    NoiseParams lowLandscape = NoisePar(1.0f, 1, 0.0f, 3.0f * VOXEL_SIZE, &worldSequence);
-    
-    r32 lowThreesold = 0.5f;
-    
-    generator->landscapeSelect = {};
-    AddBucket(&generator->landscapeSelect, lowThreesold, lowLandscape);
-    
-    generator->landscapeNoise = NoisePar(6.0f, 1, 0.0f, 1.0f, &worldSequence);
-    generator->temperatureNoise = NoisePar(64.0f, 1, 0.0f, 1.0f, &worldSequence);
-    generator->drynessNoise = NoisePar(3.0f, 1, 0.0f, 1.0f, &worldSequence);
-    generator->tileLayoutNoise = NoisePar(10.0f, 1, 0.0f, 1.0f, &worldSequence);
-    
-    
-    generator->temperatureSelect = {};
-    AddBucket(&generator->temperatureSelect, lowThreesold, MinMax(13.0f, 22.0f)); 
-    
-    generator->biomePyramid = {};
-    Selector* lowDryness = AddSelectorForDryness(&generator->biomePyramid, 0.5f);
-    
-    AddBucket(lowDryness, 15.0f, table, "dirt");
-    AddBucket(lowDryness, 17.0f, table, "forest");
-    AddBucket(lowDryness, 20.0f, table, "grassTile");
-}
-
-inline u32 SelectFromBiomePyramid(BiomePyramid* pyramid, r32 dryness, r32 temperature)
-{
-    Assert(Normalized(dryness));
-    r32 row = Select(&pyramid->drySelector, 0, 0, dryness);
+    r32 row = Select(&pyramid->drySelector, 0, 0, precipitationLevel, seed);
     Assert((u32) row < pyramid->rowCount);
     
     Selector* temperatureSelector = pyramid->temperatureSelectors + (u32) row;
-    r32 biome = Select(temperatureSelector, 0, 0, temperature);
+    r32 biome = Select(temperatureSelector, 0, 0, temperature, seed);
     
     u32 result = (u32) biome;
     return result;
 }
 
-inline TileGenerationData GenerateTile(WorldGenerator* generator, r32 tileNormX, r32 tileNormY)
+inline TileGenerationData GenerateTile(WorldGenerator* generator, r32 tileNormX, r32 tileNormY, u32 seed)
 {
     TileGenerationData result = {};
     
-    r32 tileLandscape = Evaluate(tileNormX, tileNormY, generator->landscapeNoise);
-    r32 finalHeight = Select(&generator->landscapeSelect, tileNormX, tileNormY, tileLandscape);
-    Assert(finalHeight <= generator->maxHeight);
+    r32 tileLandscape = Evaluate(tileNormX, tileNormY, generator->landscapeNoise, seed);
+    r32 finalHeight = Select(&generator->landscapeSelect, tileNormX, tileNormY, tileLandscape, seed);
     
     
-    r32 tileDryness = Evaluate(tileNormX, tileNormY, generator->drynessNoise);
-    r32 temperatureTurbolence = Evaluate(tileNormX, tileNormY, generator->temperatureNoise);
-    r32 tileTemperature = Select(&generator->temperatureSelect, temperatureTurbolence, temperatureTurbolence, tileLandscape);
+    r32 tilePrecipitation = Evaluate(tileNormX, tileNormY, generator->precipitationNoise, seed);
+    r32 temperatureTurbolence = Evaluate(tileNormX, tileNormY, generator->temperatureNoise, seed);
+    r32 tileTemperature = Select(&generator->temperatureSelect, temperatureTurbolence, temperatureTurbolence, tileLandscape, seed);
     
     
-    u32 biome = SelectFromBiomePyramid(&generator->biomePyramid, tileDryness, tileTemperature);
+    u32 biome = SelectFromBiomePyramid(&generator->biomePyramid, tilePrecipitation, tileTemperature, seed);
 #if 0    
     u32 terracesCount = 256;
     r32 terracesStep = maxHeight / terracesCount;
@@ -261,13 +221,13 @@ inline TileGenerationData GenerateTile(WorldGenerator* generator, r32 tileNormX,
     result.biomeTaxonomy = biome;
     Assert(result.biomeTaxonomy);
     
-    result.layoutNoise = Evaluate(tileNormX, tileNormY, generator->tileLayoutNoise);
+    result.layoutNoise = Evaluate(tileNormX, tileNormY, generator->tileLayoutNoise, seed);
     
     return result;
 }
 
 
-internal void BuildChunk(WorldGenerator* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY)
+internal void BuildChunk(WorldGenerator* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY, u32 seed)
 {
     Assert(CHUNK_DIM % 4 == 0);
     
@@ -275,10 +235,11 @@ internal void BuildChunk(WorldGenerator* generator, WorldChunk* chunk, i32 chunk
     chunk->worldX = chunkX;
     chunk->worldY = chunkY;
     
-    i32 universeX = generator->universeX;
-    i32 universeY = generator->universeY;
-    chunkX = Wrap(0, chunkX, generator->lateralChunkSpan, &universeX);
-    chunkY = Wrap(0, chunkY, generator->lateralChunkSpan, &universeY);
+    i32 universeX = 0;
+    i32 universeY = 0;
+    i32 lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
+    chunkX = Wrap(0, chunkX, lateralChunkSpan, &universeX);
+    chunkY = Wrap(0, chunkY, lateralChunkSpan, &universeY);
     
     
     //r32 chunkXInTiles = ((chunkX + 0.5f) * CHUNK_DIM) / (lateralChunkSpan * CHUNK_DIM);
@@ -314,16 +275,13 @@ internal void BuildChunk(WorldGenerator* generator, WorldChunk* chunk, i32 chunk
             u32 realTileY = baseTileY + tileY;
             
             // NOTE(Leonardo): normalized values
-            r32 tileNormX = (r32) realTileX / (generator->lateralChunkSpan * CHUNK_DIM);
-            r32 tileNormY = (r32) realTileY / (generator->lateralChunkSpan * CHUNK_DIM);
+            r32 tileNormX = (r32) realTileX / (lateralChunkSpan * CHUNK_DIM);
+            r32 tileNormY = (r32) realTileY / (lateralChunkSpan * CHUNK_DIM);
             
             Assert(Normalized(tileNormX));
             Assert(Normalized(tileNormY));
             
-            chunk->tileData[tileY][tileX] = GenerateTile(generator, tileNormX, tileNormY);
+            chunk->tileData[tileY][tileX] = GenerateTile(generator, tileNormX, tileNormY, seed);
         }
     }
 }
-
-#undef TARGET
-#undef ACTOR

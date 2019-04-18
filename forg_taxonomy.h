@@ -403,6 +403,8 @@ struct TaxonomySlot
     u32 tilePointsLayout;
     
     
+    struct WorldGenerator* generator;
+    
     
     b32 editorCollapsed;
     i32 editorChangeCount;
@@ -505,6 +507,7 @@ struct TaxonomyTable
     TaxonomyEssence* firstFreeTaxonomyEssence;
     CraftingEffectLink* firstFreeCraftingEffectLink;
     TaxonomyEffect* firstFreeTaxonomyEffect;
+    struct WorldGenerator* firstFreeWorldGenerator;
     
 #ifndef FORG_SERVER
     PlantParams* firstFreePlantParams;

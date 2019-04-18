@@ -538,12 +538,25 @@ internal void BuildSimpleTestWorld(ServerState* server)
     context->immediateSpawn = false;
 }
 
-internal void BuildWorld(ServerState * server, u32 universeIndex)
+internal void BuildServerChunks(ServerState* server, u32 worldSeed)
 {
-    server->universeX = universeIndex % UNIVERSE_DIM;
-    server->universeY = universeIndex / UNIVERSE_DIM;
-    Assert(server->universeY < UNIVERSE_DIM);
     
+    WorldGenerator* generator = NORUNTIMEGetTaxonomySlotByName(server->activeTable, "testGenerator")->generator;
+    
+    i32 offset = SIM_REGION_CHUNK_SPAN;
+    for(i32 Y = -offset; Y < server->lateralChunkSpan + offset; Y++)
+    {
+        for(i32 X = -offset; X < server->lateralChunkSpan + offset; X++)
+        {
+            Assert(ChunkValid(server->lateralChunkSpan, X, Y));
+            WorldChunk * chunk = GetChunk(server->chunks, ArrayCount(server->chunks), X, Y, &server->worldPool);
+            BuildChunk(generator, chunk, X, Y, worldSeed);
+        }
+    }
+}
+
+internal void BuildWorld(ServerState * server)
+{
     server->chunkDim = CHUNK_DIM;
     server->chunkSide = server->chunkDim * VOXEL_SIZE;
     server->oneOverChunkSide = 1.0f / server->chunkSide;
@@ -612,21 +625,10 @@ internal void BuildWorld(ServerState * server, u32 universeIndex)
         }
     }
     
-    u32 seed = server->universeX * server->universeY;
-    r32 chunkSide = VOXEL_SIZE * server->chunkDim;
-    server->randomSequence = Seed(seed);
-    server->objectSequence = Seed(seed + 1);
+    u32 worldSeed = 0;
+    server->randomSequence = Seed((i32) worldSeed);
+    server->objectSequence = Seed((i32) worldSeed + 1);
     
-    i32 offset = SIM_REGION_CHUNK_SPAN;
-    for(i32 Y = -offset; Y < server->lateralChunkSpan + offset; Y++)
-    {
-        for(i32 X = -offset; X < server->lateralChunkSpan + offset; X++)
-        {
-            Assert(ChunkValid(server->lateralChunkSpan, X, Y));
-            WorldChunk * chunk = GetChunk(server->chunks, ArrayCount(server->chunks), X, Y, &server->worldPool);
-            BuildChunk(&server->generator, chunk, X, Y);
-        }
-    }
-    
+    BuildServerChunks(server, worldSeed);
     BuildSimpleTestWorld(server);
 }

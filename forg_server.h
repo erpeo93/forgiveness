@@ -204,9 +204,7 @@ struct ServerState
     r32 elapsedTime;
     u8 elapsedMS5x;
     
-    u32 universeX;
-    u32 universeY;
-    WorldGenerator generator;
+    u32 worldSeed;
     
 #if FORGIVENESS_INTERNAL
     b32 recompiled;

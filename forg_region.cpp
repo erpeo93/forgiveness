@@ -334,7 +334,7 @@ internal void EndSim(SimRegion* region)
                     {
                         deleted = true;
                     }
-                    SendGameAccessConfirm(player, server->universeX, server->universeY, entity->identifier, creature->openedContainerID, server->elapsedMS5x);
+                    SendGameAccessConfirm(player, server->worldSeed, entity->identifier, creature->openedContainerID, server->elapsedMS5x);
                 }
                 
                 SendEntityUpdate(region, entity);
@@ -1431,7 +1431,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             
             player->requestCount = 0;
             
-            SendGameAccessConfirm(player, server->universeX, server->universeY, identifier, 0, server->elapsedMS5x);
+            SendGameAccessConfirm(player, server->worldSeed, identifier, 0, server->elapsedMS5x);
             InitPlayerEntity(region, player, entity);
             
         } break;

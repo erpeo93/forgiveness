@@ -172,10 +172,10 @@ internal void SendLoginResponse(ServerPlayer* player, u16 port, u32 challenge, b
     CloseAndStoreReliablePacket(player);
 }
 
-internal void SendGameAccessConfirm(ServerPlayer* player, i32 universeX, i32 universeY,u64 identifier, u64 openedContainerID, u8 additionalMS5x)
+internal void SendGameAccessConfirm(ServerPlayer* player, u64 worldSeed, u64 identifier, u64 openedContainerID, u8 additionalMS5x)
 {
     StartPacket(player, gameAccess);
-    Pack("llQQC", universeX, universeY, identifier, openedContainerID, additionalMS5x);
+    Pack("LQQC", worldSeed, identifier, openedContainerID, additionalMS5x);
     CloseAndStoreStandardPacket(player);
 }
 
@@ -433,8 +433,6 @@ internal void StoreUpdate(SimRegion* destRegion, SimRegion* sourceRegion, u64 id
 internal void SendUpdateTo(SimRegion* region, i32 destX, i32 destY, u64 identifier)
 {
     ServerState* server = region->server;
-    i32 universeX = server->universeX;
-    i32 universeY = server->universeY;
     
     if(UNIVERSE_DIM == 1)
     {
@@ -444,11 +442,14 @@ internal void SendUpdateTo(SimRegion* region, i32 destX, i32 destY, u64 identifi
     else
     {
         InvalidCodePath;
+        
+#if 0        
         destX = Wrap(0, destX, SERVER_REGION_SPAN, &universeX);
         destY = Wrap(0, destY, SERVER_REGION_SPAN, &universeY);
         
         universeX = Wrap(0, universeX, UNIVERSE_DIM);
         universeY = Wrap(0, universeY, UNIVERSE_DIM);
+#endif
         
         
 #if 0

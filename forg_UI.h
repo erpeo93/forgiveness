@@ -43,6 +43,7 @@ enum UIRequestType
     UIRequest_PatchServer,
     UIRequest_PatchCheck,
     UIRequest_SaveTaxonomyTab,
+    UIRequest_RegenerateWorldChunks,
 };
 
 struct UIRequest
@@ -121,6 +122,8 @@ struct UIRequest
             u32 taxonomy;
             Vec3 offset;
         };
+        
+        u32 seed;
     };
 };
 
