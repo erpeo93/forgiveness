@@ -2776,19 +2776,26 @@ internal void LoadFileInTaxonomySlot(char* content, u32 editorRoles)
     currentSlot_->tabCount = 0;
     
     
-    b32 end = false;
-    while(true)
+    if(content[0])
     {
-        Assert(currentSlot_->tabCount < ArrayCount(currentSlot_->tabs));
-        
-        EditorTab* newTab = currentSlot_->tabs + currentSlot_->tabCount++;
-        newTab->root = LoadElementsInMemory(LoadElements_Tab, &tokenizer, &end);
-        newTab->editable = IsEditableByRole(newTab->root, editorRoles);
-        
-        if(end)
+        b32 end = false;
+        while(true)
         {
-            break;
+            Assert(currentSlot_->tabCount < ArrayCount(currentSlot_->tabs));
+            
+            EditorTab* newTab = currentSlot_->tabs + currentSlot_->tabCount++;
+            newTab->root = LoadElementsInMemory(LoadElements_Tab, &tokenizer, &end);
+            newTab->editable = IsEditableByRole(newTab->root, editorRoles);
+            
+            if(end)
+            {
+                break;
+            }
         }
+    }
+    else
+    {
+        InvalidCodePath;
     }
 }
 
@@ -3031,6 +3038,19 @@ internal void FreeEquipmentTreeNodeRecursive(TaxonomyNode* root)
         root->data.equipmentMapping = 0;
         
         FREELIST_DEALLOC(root, taxTable_->firstFreeTaxonomyNode);
+    }
+}
+
+inline void AddTileBucket(Selector* band, char* tileName, r32 temperature)
+{
+    TaxonomySlot* tileSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, tileName);
+    if(tileSlot)
+    {
+        AddBucket(band, temperature, tileSlot->taxonomy);
+    }
+    else
+    {
+        EditorErrorLog(tileName);
     }
 }
 
@@ -3579,7 +3599,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             while(tiles)
             {
                 r32 temperature = ToR32(GetValue(tiles, "temperature"));
-                AddBucket(band, temperature, taxTable_, tiles->name);
+                
+                AddTileBucket(band, tiles->name, temperature);
+                
                 tiles = tiles->next;
             }
             

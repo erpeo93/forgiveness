@@ -3259,6 +3259,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTaxonomy(UI, "equipment");
         UIAddAutocompleteFromTaxonomy(UI, "root", "ingredient");
         UIAddAutocompleteFromTaxonomy(UI, "objects", "recipeTaxonomy");
+        UIAddAutocompleteFromTaxonomy(UI, "tiles", "tileType");
         UIAddAutocompleteFromTable(UI, SlotName, "slot");
         UIAddAutocompleteFromTable(UI, EntityAction, "action");
         UIAddAutocompleteFromTable(UI, SoundContainerType, "soundCType");

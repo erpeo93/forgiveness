@@ -99,10 +99,9 @@ inline void AddBucket(Selector* selector, r32 point, r32 fixed)
     bucket->fixed = fixed;
 }
 
-inline void AddBucket(Selector* selector, r32 point, TaxonomyTable* table, char* taxonomyName)
+inline void AddBucket(Selector* selector, r32 point, u32 taxonomy)
 {
-    TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(table, taxonomyName);
-    AddBucket(selector, point, (r32) slot->taxonomy);
+    AddBucket(selector, point, (r32) taxonomy);
 }
 
 inline Selector* AddSelectorForDryness(BiomePyramid* pyramid, r32 threesold)
@@ -117,66 +116,72 @@ inline Selector* AddSelectorForDryness(BiomePyramid* pyramid, r32 threesold)
 
 inline r32 Select(Selector* selector, r32 dx, r32 dy, r32 selectionValue, u32 seed)
 {
-    Assert(selector->bucketCount > 0);
     r32 result = 0;
-    
-    GenerationBucket* previousBucket = selector->buckets + 0;
-    GenerationBucket* currentBucket = 0;
-    r32 bucketLerping = 0;
-    
-    b32 bucketFound = false;
-    r32 previousRef = 0;
-    for(u32 bucketIndex = 0; bucketIndex < selector->bucketCount; ++bucketIndex)
+    if(selector->bucketCount > 0)
     {
-        currentBucket = selector->buckets + bucketIndex;
+        GenerationBucket* previousBucket = selector->buckets + 0;
+        GenerationBucket* currentBucket = 0;
+        r32 bucketLerping = 0;
         
-        r32 currentRef = currentBucket->referencePoint;
-        if(selectionValue >= previousRef && selectionValue < currentRef)
+        b32 bucketFound = false;
+        r32 previousRef = 0;
+        for(u32 bucketIndex = 0; bucketIndex < selector->bucketCount; ++bucketIndex)
         {
-            bucketFound = true;
-            bucketLerping = Clamp01MapToRange(previousRef, selectionValue, currentRef);
-            break;
+            currentBucket = selector->buckets + bucketIndex;
+            
+            r32 currentRef = currentBucket->referencePoint;
+            if(selectionValue >= previousRef && selectionValue < currentRef)
+            {
+                bucketFound = true;
+                bucketLerping = Clamp01MapToRange(previousRef, selectionValue, currentRef);
+                break;
+            }
+            
+            previousBucket = currentBucket;
+            previousRef = currentRef;
         }
         
-        previousBucket = currentBucket;
-        previousRef = currentRef;
+        if(!bucketFound)
+        {
+            GenerationBucket* lastBucket = currentBucket;
+            Assert(selectionValue >= lastBucket->referencePoint);
+            previousBucket = lastBucket;
+        }
+        
+        switch(selector->type)
+        {
+            case Bucket_Noise:
+            {
+                r32 prev = Evaluate(dx, dy, previousBucket->params, seed);
+                r32 current = Evaluate(dx, dy, currentBucket->params, seed);
+                
+                result = Lerp(prev, bucketLerping, current);
+                
+            } break;
+            
+            case Bucket_MinMax:
+            {
+                Assert(dx == dy);
+                
+                r32 prev = Evaluate(previousBucket->minMax, dx);
+                r32 current = Evaluate(currentBucket->minMax, dx);
+                
+                result = Lerp(prev, bucketLerping, current);
+                
+            } break;
+            
+            case Bucket_Fixed:
+            {
+                result = currentBucket->fixed;
+            } break;
+            InvalidDefaultCase;
+        }
+    }
+    else
+    {
+        InvalidCodePath;
     }
     
-    if(!bucketFound)
-    {
-        GenerationBucket* lastBucket = currentBucket;
-        Assert(selectionValue >= lastBucket->referencePoint);
-        previousBucket = lastBucket;
-    }
-    
-    switch(selector->type)
-    {
-        case Bucket_Noise:
-        {
-            r32 prev = Evaluate(dx, dy, previousBucket->params, seed);
-            r32 current = Evaluate(dx, dy, currentBucket->params, seed);
-            
-            result = Lerp(prev, bucketLerping, current);
-            
-        } break;
-        
-        case Bucket_MinMax:
-        {
-            Assert(dx == dy);
-            
-            r32 prev = Evaluate(previousBucket->minMax, dx);
-            r32 current = Evaluate(currentBucket->minMax, dx);
-            
-            result = Lerp(prev, bucketLerping, current);
-            
-        } break;
-        
-        case Bucket_Fixed:
-        {
-            result = currentBucket->fixed;
-        } break;
-        InvalidDefaultCase;
-    }
     
     return result;
 }
