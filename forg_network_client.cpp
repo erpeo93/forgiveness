@@ -267,7 +267,7 @@ internal void SendLearnRequest(u64 containerID, u32 objectIndex)
     
     Pack("QL", containerID, objectIndex);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
@@ -276,14 +276,14 @@ internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
     
     Pack("QL", containerID, objectIndex);
     
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendPopMessage(b32 list, b32 pop = true)
 {
     StartPacket(PopEditorElement);
     Pack("ll", list, pop);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 
@@ -303,7 +303,7 @@ internal void SendEditorElements(EditorElement* root)
             Pack("ss", root->elementName, root->labelName);
         }
     }
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
     
 	switch(root->type)
 	{
@@ -359,7 +359,7 @@ internal void SendEditorElements(EditorElement* root)
 inline void SendNewTabMessage()
 {
     StartPacket(NewEditorTab);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendSaveAssetDefinitionFile(char* fileName, EditorElement* root)
@@ -369,67 +369,67 @@ inline void SendSaveAssetDefinitionFile(char* fileName, EditorElement* root)
     
     StartPacket(SaveAssetFadFile);
     Pack("s", fileName);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendReloadAssetsRequest()
 {
     StartPacket(ReloadAssets);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendPatchServerRequest()
 {
     StartPacket(PatchLocalServer);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendPatchCheckRequest()
 {
     StartPacket(PatchCheck);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendSaveTabRequest(u32 taxonomy)
 {
     StartPacket(SaveSlotTabToFile);
     Pack("L", taxonomy);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendReloadEditingMessage(u32 taxonomy, u32 tabIndex)
 {
     StartPacket(ReloadEditingSlot);
     Pack("LL", taxonomy, tabIndex);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendAddTaxonomyRequest(u32 parentTaxonomy, char* name)
 {
     StartPacket(AddTaxonomy);
     Pack("Ls", parentTaxonomy, name);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendDeleteTaxonomyRequest(u32 taxonomy)
 {
     StartPacket(DeleteTaxonomy);
     Pack("L", taxonomy);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendReviveTaxonomyRequest(u32 taxonomy)
 {
     StartPacket(ReviveTaxonomy);
     Pack("L", taxonomy);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendInstantiateRecipeRequest(u32 taxonomy, u64 recipeIndex, Vec3 offset)
 {
     StartPacket(InstantiateRecipe);
     Pack("LQV", taxonomy, recipeIndex, offset);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 
@@ -437,41 +437,41 @@ inline void SendInstantiateTaxonomyRequest(u32 taxonomy, Vec3 offset)
 {
     StartPacket(InstantiateTaxonomy);
     Pack("LV", taxonomy, offset);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendMovePlayerRequest(Vec3 offset)
 {
     StartPacket(MovePlayerInOtherRegion);
     Pack("V", offset);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendDeleteRequest(u64 identifier)
 {
     StartPacket(DeleteEntity);
     Pack("Q", identifier);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendImpersonateRequest(u64 identifier)
 {
     StartPacket(ImpersonateEntity);
     Pack("Q", identifier);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendPauseToggleMessage()
 {
     StartPacket(PauseToggle);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 inline void SendRegenerateWorldChunksRequest(u32 worldSeed)
 {
     StartPacket(RegenerateWorldChunks);
     Pack("L", worldSeed);
-    CloseAndSendStandardPacket();
+    CloseAndSendReliablePacket();
 }
 
 #if FORGIVENESS_INTERNAL

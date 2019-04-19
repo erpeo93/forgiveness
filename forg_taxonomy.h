@@ -486,6 +486,8 @@ struct TaxonomyTable
     u32 effectTaxonomy;
     u32 essenceTaxonomy;
     u32 behaviorTaxonomy;
+    u32 tileTaxonomy;
+    u32 generatorTaxonomy;
     u32 rootBits;
     
     TaxonomySlot root;

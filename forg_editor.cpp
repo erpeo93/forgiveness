@@ -184,6 +184,15 @@ inline void FinalizeShortcut(ShortcutSlot* shortcut, u32 taxonomy)
     {
         taxTable_->behaviorTaxonomy = taxonomy;
     }
+    else if(StrEqual(name, "tiles"))
+    {
+        taxTable_->tileTaxonomy = taxonomy;
+    }
+    else if(StrEqual(name, "generators"))
+    {
+        taxTable_->generatorTaxonomy = taxonomy;
+    }
+    
 }
 
 
@@ -2465,6 +2474,7 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
     
     
 	Token firstToken = GetToken(tokenizer);
+    
     if(firstToken.type == Token_String)
     {
         firstToken = Stringize(firstToken);
@@ -2480,6 +2490,11 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
             Token ast = GetToken(tokenizer);
             Token version = GetToken(tokenizer);
             newElement->versionNumber = atoi(version.text);
+        }
+        
+        if(TokenEquals(firstToken, "testBand"))
+        {
+            int a = 5;
         }
         
 		if(RequireToken(tokenizer, Token_EqualSign))

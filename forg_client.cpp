@@ -887,6 +887,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     Vec3 groundMouseP = ProjectOnGround(unprojectedWorldMouseP, group->gameCamera.P);
     worldMode->worldMouseP = groundMouseP;
     
+    
+    b32 reloadTaxonomyAutocompletes = false;
+    b32 reloadAssetAutocompletes = false;
     if(myPlayer->identifier)
     {
         ClientEntity* player = GetEntityClient(worldMode, myPlayer->identifier);
@@ -946,6 +949,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     
                     TaxonomySlot* rootSlot = &worldMode->table->root;
                     UI->editorTaxonomyTree = BuildEditorTaxonomyTree(worldMode->editorRoles, worldMode->table, rootSlot);
+                    
+                    
+                    reloadTaxonomyAutocompletes = true;
                 }
                 worldMode->allDataFilesArrived = false;
             }
@@ -971,24 +977,23 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 worldMode->currentFile = 0;
                 
                 worldMode->UI->font = 0;
-                
-                
 #if 1
                 gameState->music = PlaySound(&gameState->soundState, gameState->assets, GetFirstSound(gameState->assets, Asset_music), 0.0f);
                 ChangeVolume(&gameState->soundState, gameState->music, 1000.0f, V2(1.0f, 1.0f));
 #endif
                 
+                reloadAssetAutocompletes = true;
+                
             }
             
             b32 canRender = (worldMode->patchSectionArrived >= 2);
-            
             if(canRender)
             {
                 player->identifier = myPlayer->identifier;
                 player->targetID = myPlayer->targetIdentifier;
                 player->P = V3(0, 0, 0);
                 
-                ResetUI(UI, worldMode, group, player, input, worldMode->cameraWorldOffset.z / worldMode->defaultCameraZ);
+                ResetUI(UI, worldMode, group, player, input, worldMode->cameraWorldOffset.z / worldMode->defaultCameraZ, reloadTaxonomyAutocompletes, reloadAssetAutocompletes);
                 
                 
                 ClientEntity* nearestEntities[8] = {};

@@ -275,6 +275,29 @@ inline b32 IsBehavior(TaxonomyTable* table, u32 taxonomy)
     return result;
 }
 
+inline b32 IsTile(TaxonomyTable* table, u32 taxonomy)
+{
+    b32 result = IsSubTaxonomy(taxonomy, table->tileTaxonomy, table->rootBits);
+    return result;
+}
+
+inline b32 IsGenerator(TaxonomyTable* table, u32 taxonomy)
+{
+    b32 result = IsSubTaxonomy(taxonomy, table->generatorTaxonomy, table->rootBits);
+    return result;
+}
+
+inline b32 IsSpawnable(TaxonomyTable* table, u32 taxonomy)
+{
+    b32 result = true;
+    if(IsTile(table, taxonomy) || IsGenerator(table, taxonomy))
+    {
+        result = false;
+    }
+    
+    return result;
+}
+
 inline AttributeSlot* GetAttribute(TaxonomySlot* slot, u32 offsetOf)
 {
     AttributeSlot* result = 0;

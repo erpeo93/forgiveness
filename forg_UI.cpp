@@ -192,6 +192,28 @@ inline void UIFreeAutocompleteOptions(UIState* UI, UIAutocomplete* autocomplete)
     FREELIST_FREE(autocomplete->firstBlock, UIAutocompleteBlock, UI->firstFreeAutocompleteBlock);
 }
 
+inline UIAutocomplete* UIFindAutocomplete(UIState* UI, u64 hash)
+{
+    UIAutocomplete* result = 0;
+	for(u32 autoIndex = 0; autoIndex < UI->autocompleteCount; ++autoIndex)
+    {
+        UIAutocomplete* test = UI->autocompletes + autoIndex;
+        if(hash == test->hash)
+        {
+            result = test;
+            break;
+        }
+    }
+    
+	return result;
+}
+
+inline UIAutocomplete* UIFindAutocomplete(UIState* UI, char* name)
+{
+    UIAutocomplete* result = UIFindAutocomplete(UI, StringHash(name));
+    return result;
+}
+
 inline void UIAddOption(UIState* UI, UIAutocomplete* autocomplete, char* option, u32 optionLength = 0)
 {
     UIAutocompleteBlock* block = autocomplete->firstBlock;
@@ -226,11 +248,21 @@ inline void UIAddTaxonomyToAutocomplete(UIState* UI, UIAutocomplete* autocomplet
 
 inline void UIAddAutocompleteFromTaxonomy(UIState* UI, char* name, char* autocompleteName = 0)
 {
+    UIAutocomplete* autocomplete = UIFindAutocomplete(UI, autocompleteName);
+    if(autocomplete)
+    {
+        UIFreeAutocompleteOptions(UI, autocomplete);    
+    }
+    else
+    {
+        autocomplete = UIAddAutocomplete(UI, autocompleteName);
+    }
+    
     if(!autocompleteName)
     {
         autocompleteName = name;
     }
-    UIAutocomplete* autocomplete = UIAddAutocomplete(UI, autocompleteName);
+   
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(UI->table, name);
     
     for(u32 childIndex = 0; childIndex < slot->subTaxonomiesCount; ++childIndex)
@@ -272,7 +304,18 @@ inline void UIAddAutocompleteFromFiles(UIState* UI)
         char nameNoPoint[64];
         GetNameWithoutPoint(nameNoPoint, sizeof(nameNoPoint), handle.name);
         
-        UIAutocomplete* autocomplete = UIAddAutocomplete(UI, nameNoPoint);
+        
+        UIAutocomplete* autocomplete = UIFindAutocomplete(UI, nameNoPoint);
+        
+        if(autocomplete)
+        {
+            UIFreeAutocompleteOptions(UI, autocomplete);
+        }
+        else
+        {
+            autocomplete = UIAddAutocomplete(UI, nameNoPoint);     
+        }
+       
         
         Tokenizer tokenizer = {};
         tokenizer.at = (char*) buffer;
@@ -307,21 +350,6 @@ inline void UIAddAutocompleteFromFiles(UIState* UI)
 }
 
 
-inline UIAutocomplete* UIFindAutocomplete(UIState* UI, u64 hash)
-{
-    UIAutocomplete* result = 0;
-	for(u32 autoIndex = 0; autoIndex < UI->autocompleteCount; ++autoIndex)
-    {
-        UIAutocomplete* test = UI->autocompletes + autoIndex;
-        if(hash == test->hash)
-        {
-            result = test;
-            break;
-        }
-    }
-    
-	return result;
-}
 
 inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents parents, char* name)
 {
@@ -1355,7 +1383,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                             UIAddSetValueAction(UI, &instantiateInteraction, UI_Idle, &UI->instantiatingTaxonomy, root->taxonomy);
                             UIAddSetValueAction(UI, &instantiateInteraction, UI_Release, &UI->instantiatingTaxonomy, 0); 
                             
-                            b32 active = (root->name[0] != '#');
+                            b32 active = (root->name[0] != '#' && IsSpawnable(UI->table, root->taxonomy));
                             UIButton instantiateButton = UIBtn(UI, instantiateP, layout, V4(0, 0, 1, 1), "place", active, instantiateInteraction);
                             
                             
@@ -3041,7 +3069,7 @@ inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, Vec2 P, u
     return result;
 }
 
-inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, ClientEntity* player, PlatformInput* input, r32 fontCoeff)
+inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, ClientEntity* player, PlatformInput* input, r32 fontCoeff, b32 loadTaxonomyAutocompletes, b32 loadAssetAutocompletes)
 {
     UI->table = worldMode->table;
     if(!UI->initialized)
@@ -3255,18 +3283,12 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         
         
         
-        
-        UIAddAutocompleteFromTaxonomy(UI, "equipment");
-        UIAddAutocompleteFromTaxonomy(UI, "root", "ingredient");
-        UIAddAutocompleteFromTaxonomy(UI, "objects", "recipeTaxonomy");
-        UIAddAutocompleteFromTaxonomy(UI, "tiles", "tileType");
         UIAddAutocompleteFromTable(UI, SlotName, "slot");
         UIAddAutocompleteFromTable(UI, EntityAction, "action");
         UIAddAutocompleteFromTable(UI, SoundContainerType, "soundCType");
         UIAddAutocompleteFromTable(UI, ObjectState, "objectState");
         UIAddAutocompleteFromTable(UI, GroundViewMode, "viewType");
         UIAddAutocompleteFromTable(UI, TilePointsLayout, "tileLayout");
-        UIAddAutocompleteFromFiles(UI);
         
         UIAddAutocomplete(UI, "layoutName");
 		UIAddAutocomplete(UI, "pieceName");
@@ -3282,6 +3304,21 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         FormatString(UI->trueString, sizeof(UI->trueString), "true");
         FormatString(UI->falseString, sizeof(UI->falseString), "false");
     }
+    
+    
+    if(loadTaxonomyAutocompletes)
+    {
+        UIAddAutocompleteFromTaxonomy(UI, "equipment");
+        UIAddAutocompleteFromTaxonomy(UI, "root", "ingredient");
+        UIAddAutocompleteFromTaxonomy(UI, "objects", "recipeTaxonomy");
+        UIAddAutocompleteFromTaxonomy(UI, "tiles", "tileType");
+    }
+    
+    if(loadAssetAutocompletes)
+    {
+        UIAddAutocompleteFromFiles(UI);
+    }
+    
     UI->player = player;
     
     
