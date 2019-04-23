@@ -1936,7 +1936,7 @@ inline Vec4 ComputeWeightedChunkColor(GameModeWorld* worldMode, WorldChunk* chun
 }
 
 
-inline Vec4 GetWaterColor(TileInfo tile, r32* computedWaterLevel)
+inline Vec4 GetWaterColor(TileInfo tile, b32* rippling)
 {
     
     r32 minGreen = 0.0f;
@@ -1945,13 +1945,14 @@ inline Vec4 GetWaterColor(TileInfo tile, r32* computedWaterLevel)
     r32 minBlue = 0.2f;
     r32 maxBlue = 1.0f;
     
-    r32 minAlpha = 0.02f;
+    r32 minAlpha = 0.03f;
     r32 maxAlpha = 0.95f;
     
     r32 maxColorDisplacement = 0.3f * WATER_LEVEL;
     r32 maxAlphaDisplacement = 0.35f * WATER_LEVEL;
     
     r32 sineWaterLevel = Clamp01MapToRange(0.8f * WATER_LEVEL, tile.waterLevel, WATER_LEVEL);
+	r32 normalizedWaterLevel = Clamp01MapToRange(0, tile.waterLevel, WATER_LEVEL);
     
     RandomSequence* seq = &tile.waterSeq;
     
@@ -1992,7 +1993,12 @@ inline Vec4 GetWaterColor(TileInfo tile, r32* computedWaterLevel)
     
     Vec4 waterColor = V4(0, green, blue, alpha);
     
-    *computedWaterLevel = 0.5f * (alpha + blue);
+    
+	r32 threesold = Lerp(0.7f, normalizedWaterLevel, 0.45f);
+	r32 rippleValue = 0.5f * (alpha + blue);
+    
+	*rippling = (rippleValue >= threesold);
+    
     return waterColor;
 }
 

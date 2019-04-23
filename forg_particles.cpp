@@ -42,9 +42,9 @@ internal void SpawnWaterRipples(ParticleCache* cache, Vec3 atPInit, Vec3 dP, r32
     
     lifeTime *= RandomRangeFloat(entropy, 0.7f, 1.3f);
     
-    atPInit.x +=  RandomBil(entropy) * 0.1f;
-    atPInit.y +=  RandomBil(entropy) * 0.1f;
-    atPInit.z +=  RandomBil(entropy) * 0.1f;
+    atPInit.x +=  RandomBil(entropy) * 0.5f;
+    atPInit.y +=  RandomBil(entropy) * 0.5f;
+    atPInit.z +=  RandomBil(entropy) * 0.5f;
     
     V3_4x atP = ToV3_4x( atPInit - cache->deltaParticleP );
     for( u32 newParticle = 0; newParticle < 1; newParticle++ )
@@ -70,19 +70,19 @@ internal void SpawnWaterRipples(ParticleCache* cache, Vec3 atPInit, Vec3 dP, r32
         A->ddP.y = MMSetExpr( 0.0f );
         A->ddP.z = MMSetExpr( 0.0f );
         
-        A->C.r = MMSetExpr( 1.0f - RandomUni(entropy) * 0.12f);
-        A->C.g = MMSetExpr( 0.6f + RandomBil(entropy) * 0.05f);
-        A->C.b = MMSetExpr( 0.0f );
+        A->C.r = MMSetExpr( 1.0f - RandomUni(entropy) * 0.05f);
+        A->C.g = MMSetExpr( 1.0f - RandomUni(entropy) * 0.05f);
+        A->C.b = MMSetExpr( 1.0f - RandomUni(entropy) * 0.05f);
         A->C.a = MMSetExpr( 1.0f );
         
         A->dC.r = MMSetExpr( -1.0f / lifeTime );
         A->dC.g = MMSetExpr( -1.0f / lifeTime );
-        A->dC.b = MMSetExpr( 0.0f );
+        A->dC.g = MMSetExpr( -1.0f / lifeTime );
         A->dC.a = MMSetExpr( -1.0f / lifeTime );
         
         r32 startingAngle = DegToRad(45.0f);
         A->angle4x = _mm_set_ps(DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f));
-        A->height4x = MMSetExpr(0.07f);
+        A->height4x = MMSetExpr(0.1f);
     }
 }
 
