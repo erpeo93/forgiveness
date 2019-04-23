@@ -1936,15 +1936,8 @@ inline Vec4 ComputeWeightedChunkColor(GameModeWorld* worldMode, WorldChunk* chun
 }
 
 
-inline Vec4 GetWaterColor(TileInfo tile, b32* rippling)
+inline Vec4 GetWaterColor(TileInfo tile)
 {
-    
-    r32 minGreen = 0.0f;
-    r32 maxGreen = 0.12f;
-    
-    r32 minBlue = 0.2f;
-    r32 maxBlue = 1.0f;
-    
     r32 minAlpha = 0.03f;
     r32 maxAlpha = 0.95f;
     
@@ -1954,50 +1947,52 @@ inline Vec4 GetWaterColor(TileInfo tile, b32* rippling)
     r32 sineWaterLevel = Clamp01MapToRange(0.8f * WATER_LEVEL, tile.waterLevel, WATER_LEVEL);
 	r32 normalizedWaterLevel = Clamp01MapToRange(0, tile.waterLevel, WATER_LEVEL);
     
+    
+    Vec3 minColorDeep = V3(0.0f, 0.05f, 0.2f);
+    Vec3 maxColorDeep = V3(0.0f, 0.15f, 1.0f);
+    
+    Vec3 minColorSwallow = V3(0.0f, 0.1f, 0.5f);
+    Vec3 maxColorSwallow = V3(0.75f, 0.85f, 1.0f);
+    
+    Vec3 minColor = Lerp(minColorDeep, normalizedWaterLevel, minColorSwallow);
+    Vec3 maxColor = Lerp(maxColorDeep, normalizedWaterLevel, maxColorSwallow);
+    
+    
     RandomSequence* seq = &tile.waterSeq;
     
     NoiseParams waterParams = NoisePar(4.0f, 2, 0.0f, 1.0f);
-    r32 greenNoise = Evaluate(tile.waterNormalizedNoise, 0, waterParams, GetNextUInt32(seq));
     r32 blueNoise = Evaluate(tile.waterNormalizedNoise, 0, waterParams, GetNextUInt32(seq));
     r32 alphaNoise = Evaluate(tile.waterNormalizedNoise, 0, waterParams, GetNextUInt32(seq));
     
-    greenNoise = UnilateralToBilateral(greenNoise);
     blueNoise = UnilateralToBilateral(blueNoise);
     alphaNoise = UnilateralToBilateral(alphaNoise);
     
     
     r32 sine = tile.waterSine;
-    r32 greenSine = sine;
     r32 blueSine = sine;
     r32 alphaSine = sine;
     
     
-    r32 greenNoiseSine = Lerp(greenNoise, sineWaterLevel, greenSine);
     r32 blueNoiseSine = Lerp(blueNoise, sineWaterLevel, blueSine);
     r32 alphaNoiseSine = Lerp(alphaNoise, sineWaterLevel, alphaSine);
     
     
-    r32 greenDisplacement = greenNoiseSine * maxColorDisplacement;
     r32 blueDisplacement = blueNoiseSine * maxColorDisplacement;
     r32 alphaDisplacement = alphaNoiseSine * maxAlphaDisplacement;
     
     
-    r32 greenLerp = Clamp01MapToRange(0, tile.waterLevel + greenDisplacement, WATER_LEVEL);
     r32 blueLerp = Clamp01MapToRange(0, tile.waterLevel + blueDisplacement, WATER_LEVEL);
     r32 alphaLerp = Clamp01MapToRange(0, tile.waterLevel + alphaDisplacement, WATER_LEVEL);
     
     
-    r32 green = Lerp(minGreen, greenLerp, maxGreen);
-    r32 blue = Lerp(minBlue, blueLerp, maxBlue);
+    Vec3 color = Lerp(minColor, blueLerp, maxColor);
     r32 alpha = Lerp(maxAlpha, alphaLerp, minAlpha);
     
-    Vec4 waterColor = V4(0, green, blue, alpha);
+    Vec4 waterColor = V4(color, alpha);
     
     
-	r32 threesold = Lerp(0.7f, normalizedWaterLevel, 0.45f);
-	r32 rippleValue = 0.5f * (alpha + blue);
-    
-	*rippling = (rippleValue >= threesold);
+	r32 threesold = Lerp(0.7f, normalizedWaterLevel, 0.3f);
+	r32 rippleValue = alpha;
     
     return waterColor;
 }

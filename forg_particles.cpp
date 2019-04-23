@@ -62,17 +62,17 @@ internal void SpawnWaterRipples(ParticleCache* cache, Vec3 atPInit, Vec3 dP, r32
         A->P.y = atP.y;
         A->P.z = atP.z;
         
-        A->dP.x = _mm_set_ps( dP.x + RandomBil(entropy) * 0.1f, dP.x + RandomBil(entropy) * 0.1f, dP.x + RandomBil(entropy) * 0.1f, dP.x + RandomBil(entropy) * 0.1f);
-        A->dP.y = _mm_set_ps( dP.y  + RandomBil(entropy) * 0.1f, dP.x + RandomBil(entropy) * 0.1f, dP.x + RandomBil(entropy) * 0.1f, dP.x + RandomBil(entropy) * 0.1f);
-        A->dP.z = _mm_set_ps( dP.z  + RandomBil(entropy) * 0.4f, dP.z  + RandomBil(entropy) * 0.4f, dP.z  + RandomBil(entropy) * 0.4f, dP.z  + RandomBil(entropy) * 0.4f);
+        A->dP.x = _mm_set_ps( dP.x + RandomBil(entropy) * 0.03f, dP.x + RandomBil(entropy) * 0.03f, dP.x + RandomBil(entropy) * 0.03f, dP.x + RandomBil(entropy) * 0.13f);
+        A->dP.y = _mm_set_ps( dP.y  + RandomBil(entropy) * 0.03f, dP.x + RandomBil(entropy) * 0.03f, dP.x + RandomBil(entropy) * 0.03f, dP.x + RandomBil(entropy) * 0.03f);
+        A->dP.z = _mm_set_ps( dP.z  + RandomBil(entropy) * 0.1f, dP.z  + RandomBil(entropy) * 0.1f, dP.z  + RandomBil(entropy) * 0.1f, dP.z  + RandomBil(entropy) * 0.1f);
         
         A->ddP.x = MMSetExpr( 0.0f );
         A->ddP.y = MMSetExpr( 0.0f );
         A->ddP.z = MMSetExpr( 0.0f );
         
-        A->C.r = MMSetExpr( 1.0f - RandomUni(entropy) * 0.05f);
+        A->C.r = MMSetExpr( 0.9f - RandomUni(entropy) * 0.05f);
         A->C.g = MMSetExpr( 1.0f - RandomUni(entropy) * 0.05f);
-        A->C.b = MMSetExpr( 1.0f - RandomUni(entropy) * 0.05f);
+        A->C.b = MMSetExpr( 0.9f - RandomUni(entropy) * 0.05f);
         A->C.a = MMSetExpr( 1.0f );
         
         A->dC.r = MMSetExpr( -1.0f / lifeTime );
@@ -82,7 +82,7 @@ internal void SpawnWaterRipples(ParticleCache* cache, Vec3 atPInit, Vec3 dP, r32
         
         r32 startingAngle = DegToRad(45.0f);
         A->angle4x = _mm_set_ps(DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f));
-        A->height4x = MMSetExpr(0.1f);
+        A->height4x = MMSetExpr(0.06f);
     }
 }
 
@@ -571,29 +571,35 @@ internal void UpdateAndRenderSystem( GameModeWorld* worldMode, ParticleSystem* s
                     M(A->C.a, subIndex)
                 };
                 
-                u32 C = StoreColor(color);
-                
                 r32 angle = M(A->angle4x, subIndex);
-                r32 cos = Cos(angle);
-                r32 sin = Sin(angle);
                 r32 height = M(A->height4x, subIndex);
                 
-                
-                
-                Vec3 XAxisHalf = height * 0.5f * (cos * renderGroup->gameCamera.X + sin * renderGroup->gameCamera.Y);
-                Vec3 YAxisHalf = height * 0.5f * (-sin * renderGroup->gameCamera.X + cos * renderGroup->gameCamera.Y);
-                
-                Vec4 P0 = V4(P - XAxisHalf - YAxisHalf, 0);
-                Vec4 P1 = V4(P + XAxisHalf - YAxisHalf, 0);
-                Vec4 P2 = V4(P + XAxisHalf + YAxisHalf, 0);
-                Vec4 P3 = V4(P - XAxisHalf + YAxisHalf, 0);
-                
-                
-                PushQuad(renderGroup, renderGroup->whiteTexture, lightIndexes,
-                         P0, UV, C,
-                         P1, UV, C,
-                         P2, UV, C,
-                         P3, UV, C, 0);
+				if(system->bitmapID.value)
+				{
+					ObjectTransform transform = UprightTransform();
+					transform.angle = angle;
+					PushBitmap(renderGroup, transform, system->bitmapID, P, height, V2(1.0f, 1.0f),  color, lightIndexes);
+				}
+				else
+				{
+					u32 C = StoreColor(color);
+                    
+					r32 cos = Cos(angle);
+					r32 sin = Sin(angle);
+					Vec3 XAxisHalf = height * 0.5f * (cos * renderGroup->gameCamera.X + sin * renderGroup->gameCamera.Y);
+					Vec3 YAxisHalf = height * 0.5f * (-sin * renderGroup->gameCamera.X + cos * renderGroup->gameCamera.Y);
+                    
+					Vec4 P0 = V4(P - XAxisHalf - YAxisHalf, 0);
+					Vec4 P1 = V4(P + XAxisHalf - YAxisHalf, 0);
+					Vec4 P2 = V4(P + XAxisHalf + YAxisHalf, 0);
+					Vec4 P3 = V4(P - XAxisHalf + YAxisHalf, 0);
+                    
+				    PushQuad(renderGroup, renderGroup->whiteTexture, lightIndexes,
+                             P0, UV, C,
+                             P1, UV, C,
+                             P2, UV, C,
+                             P3, UV, C, 0);
+				}
             }
         }
     }
@@ -686,6 +692,11 @@ internal void InitParticleCache( ParticleCache* particleCache, Assets* assets )
 {
     particleCache->particleEntropy = Seed( 1234 );
     
+	particleCache->waterRippleSystem.transform = UprightTransform();
+    //particleCache->waterRippleSystem.bitmapID = GetFirstBitmap(assets, Asset_waterRipple);
+    particleCache->waterRippleSystem.bitmapID = {};
+    particleCache->steamSystem.nextParticle4 = 0;
+    
     particleCache->ashSystem.transform = UprightTransform();
     particleCache->ashSystem.bitmapID = {};
     particleCache->ashSystem.nextParticle4 = 0;
@@ -699,7 +710,7 @@ internal void InitParticleCache( ParticleCache* particleCache, Assets* assets )
     particleCache->fireSystem.nextParticle4 = 0;
     
     particleCache->waterSystem.transform = UprightTransform();
-    particleCache->waterSystem.bitmapID = {};
+	particleCache->waterSystem.bitmapID = {};
     particleCache->waterSystem.nextParticle4 = 0;
     
     particleCache->steamSystem.transform = UprightTransform();

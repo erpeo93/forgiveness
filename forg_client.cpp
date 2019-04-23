@@ -1711,26 +1711,18 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 site1->walked = true;
                             }
                             
-                            b32 ripples0;
-                            Vec4 waterColor0 = GetWaterColor(QSite0, &ripples0);
+                            Vec4 waterColor0 = GetWaterColor(QSite0);
                             
-                            b32 ripples1;
-                            Vec4 waterColor1 = GetWaterColor(QSite1, &ripples1);
+                            Vec4 waterColor1 = GetWaterColor(QSite1);
                             
-                            b32 ign;
-                            Vec4 waterColorFrom = GetWaterColor(QFrom, &ign);
-                            Vec4 waterColorTo = GetWaterColor(QTo, &ign);
+                            Vec4 waterColorFrom = GetWaterColor(QFrom);
+                            Vec4 waterColorTo = GetWaterColor(QTo);
                             
                             Vec4 waterOffset = V4(0, 0, 0.01f, 0);
                             
                             
                             b32 spawnWaterRipples = false;
                             
-                            r32 random = RandomUni(&worldMode->waterRipplesSequence);
-                            if(random < 0.01f)
-                            {
-                                spawnWaterRipples = true;
-                            }
                             if(QSite0.waterLevel < WATER_LEVEL)
                             {
                                 
@@ -1753,10 +1745,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                     }
                                 }
                                 
-                                if(spawnWaterRipples && ripples0)
-                                {
-                                    SpawnWaterRipples(particleCache, site0PCamera.xyz, V3(0.5f, 0.5f, 0), 0.5f);
-                                }
                             }
                             
                             if(QSite1.waterLevel < WATER_LEVEL)
@@ -1780,11 +1768,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                                      offsetFromCamera + waterOffset, waterColorFrom,
                                                      offsetToCamera + waterOffset, waterColorTo, 0);
                                     }
-                                }
-                                
-                                if(spawnWaterRipples && ripples1)
-                                {
-                                    SpawnWaterRipples(particleCache, site1PCamera.xyz, V3(0.5f, 0.5f, 0), 0.5f);
                                 }
                             }
                             

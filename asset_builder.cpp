@@ -2656,8 +2656,8 @@ internal void WriteMisc()
     Assets* assets = &assets_;
     InitializeAssets(assets);
     
-    BeginAssetType(assets, Asset_water);
-    AddBitmapAsset(miscPath, "water.png");
+    BeginAssetType(assets, Asset_waterRipple);
+    AddBitmapAsset(miscPath, "ripple.png");
     EndAssetType();
     
     WritePak(assets, "forgmisc.pak" );
