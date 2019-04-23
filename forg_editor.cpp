@@ -3600,7 +3600,18 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         generator->precipitationNoise = ParseNoiseParams(GetStruct(root, "precipitationNoise"));
         generator->elevationNoise = ParseNoiseParams(GetStruct(root, "elevationNoise"));
         generator->elevationPower = ToR32(GetValue(root, "elevationPower"), 1.0f);
+        generator->beachThreesold = ToR32(GetValue(root, "beachThreesold"), 0.05f);
         
+        generator->beachTaxonomy = 0;
+        char* beachTaxonomy = GetValue(root, "beachTaxonomy");
+        if(beachTaxonomy)
+        {
+            TaxonomySlot* beachSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, beachTaxonomy);
+            if(beachSlot)
+            {
+                generator->beachTaxonomy = beachSlot->taxonomy;
+            }
+        }
         
         generator->landscapeSelect = {};
         generator->temperatureSelect = {};

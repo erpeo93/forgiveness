@@ -1909,7 +1909,7 @@ inline Vec4 GetTileColor(TaxonomyTable* table, WorldChunk* chunk, u32 tileX, u32
     
     if(!uniformColor)
     {
-        RandomSequence seq = Seed((chunk->worldX + 12 * (i32)randomOffset.x) * (chunk->worldY + 12 * (i32) randomOffset.y));
+        RandomSequence seq = Seed((chunk->worldX + 12 * (i32)(randomOffset.x * 20088.0f)) * (chunk->worldY + 12 * (i32) (randomOffset.y * 23400.0f)));
         
         color.rgb += GetTileColorDelta(table, chunk, tileX, tileY, &seq);
     }
@@ -1938,24 +1938,32 @@ inline Vec4 ComputeWeightedChunkColor(GameModeWorld* worldMode, WorldChunk* chun
 
 inline Vec4 GetWaterColor(TileInfo tile)
 {
-    r32 minAlpha = 0.03f;
-    r32 maxAlpha = 0.95f;
+    r32 maxColorDisplacement = 0.35f * WATER_LEVEL;
+    r32 maxAlphaDisplacement = 0.2f * WATER_LEVEL;
     
-    r32 maxColorDisplacement = 0.3f * WATER_LEVEL;
-    r32 maxAlphaDisplacement = 0.35f * WATER_LEVEL;
-    
-    r32 sineWaterLevel = Clamp01MapToRange(0.8f * WATER_LEVEL, tile.waterLevel, WATER_LEVEL);
+    r32 sineWaterLevel = Clamp01MapToRange(0.9f * WATER_LEVEL, tile.waterLevel, WATER_LEVEL);
 	r32 normalizedWaterLevel = Clamp01MapToRange(0, tile.waterLevel, WATER_LEVEL);
+    normalizedWaterLevel = Pow(normalizedWaterLevel, 3.0f);
     
     
-    Vec3 minColorDeep = V3(0.0f, 0.05f, 0.2f);
-    Vec3 maxColorDeep = V3(0.0f, 0.15f, 1.0f);
+    Vec3 minColorDeep = V3(0.0f, 0.03f, 0.05f);
+    Vec3 maxColorDeep = V3(0.0f, 0.08f, 0.4f);
     
-    Vec3 minColorSwallow = V3(0.0f, 0.1f, 0.5f);
-    Vec3 maxColorSwallow = V3(0.75f, 0.85f, 1.0f);
+    r32 maxAlphaDeep = 1.0f;
+    r32 minAlphaDeep = 0.7f;
+    
+    Vec3 minColorSwallow = V3(0.0f, 0.1f, 0.78f);
+    Vec3 maxColorSwallow = V3(0.25f, 0.35f, 1.0f);
+    
+    r32 maxAlphaSwallow = 1.0f;
+    r32 minAlphaSwallow = 0.0f;
     
     Vec3 minColor = Lerp(minColorDeep, normalizedWaterLevel, minColorSwallow);
     Vec3 maxColor = Lerp(maxColorDeep, normalizedWaterLevel, maxColorSwallow);
+    
+    
+    r32 minAlpha = Lerp(minAlphaDeep, normalizedWaterLevel, minAlphaSwallow);
+    r32 maxAlpha = Lerp(maxAlphaDeep, normalizedWaterLevel, maxAlphaSwallow);
     
     
     RandomSequence* seq = &tile.waterSeq;
@@ -1982,17 +1990,16 @@ inline Vec4 GetWaterColor(TileInfo tile)
     
     
     r32 blueLerp = Clamp01MapToRange(0, tile.waterLevel + blueDisplacement, WATER_LEVEL);
-    r32 alphaLerp = Clamp01MapToRange(0, tile.waterLevel + alphaDisplacement, WATER_LEVEL);
     
+    r32 alphaLevel = tile.waterLevel + alphaDisplacement;
+    
+    r32 alphaLerp = Clamp01MapToRange(0, alphaLevel, WATER_LEVEL);
+    alphaLerp = Pow(alphaLerp, 2.2f);
     
     Vec3 color = Lerp(minColor, blueLerp, maxColor);
     r32 alpha = Lerp(maxAlpha, alphaLerp, minAlpha);
     
     Vec4 waterColor = V4(color, alpha);
-    
-    
-	r32 threesold = Lerp(0.7f, normalizedWaterLevel, 0.3f);
-	r32 rippleValue = alpha;
     
     return waterColor;
 }

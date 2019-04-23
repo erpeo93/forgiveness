@@ -37,7 +37,7 @@ internal void Advect()
 
 internal void SpawnWaterRipples(ParticleCache* cache, Vec3 atPInit, Vec3 dP, r32 lifeTime)
 {
-    ParticleSystem* system = &cache->fireSystem;
+    ParticleSystem* system = &cache->waterRippleSystem;
     RandomSequence* entropy = &cache->particleEntropy;
     
     lifeTime *= RandomRangeFloat(entropy, 0.7f, 1.3f);
@@ -62,9 +62,9 @@ internal void SpawnWaterRipples(ParticleCache* cache, Vec3 atPInit, Vec3 dP, r32
         A->P.y = atP.y;
         A->P.z = atP.z;
         
-        A->dP.x = _mm_set_ps( dP.x + RandomBil(entropy) * 0.03f, dP.x + RandomBil(entropy) * 0.03f, dP.x + RandomBil(entropy) * 0.03f, dP.x + RandomBil(entropy) * 0.13f);
-        A->dP.y = _mm_set_ps( dP.y  + RandomBil(entropy) * 0.03f, dP.x + RandomBil(entropy) * 0.03f, dP.x + RandomBil(entropy) * 0.03f, dP.x + RandomBil(entropy) * 0.03f);
-        A->dP.z = _mm_set_ps( dP.z  + RandomBil(entropy) * 0.1f, dP.z  + RandomBil(entropy) * 0.1f, dP.z  + RandomBil(entropy) * 0.1f, dP.z  + RandomBil(entropy) * 0.1f);
+        A->dP.x = _mm_set_ps( dP.x + RandomBil(entropy) * 0.0f, dP.x + RandomBil(entropy) * 0.0f, dP.x + RandomBil(entropy) * 0.0f, dP.x + RandomBil(entropy) * 0.0f);
+        A->dP.y = _mm_set_ps( dP.y  + RandomBil(entropy) * 0.0f, dP.x + RandomBil(entropy) * 0.0f, dP.x + RandomBil(entropy) * 0.0f, dP.x + RandomBil(entropy) * 0.00f);
+        A->dP.z = _mm_set_ps( dP.z  + RandomBil(entropy) * 0.0f, dP.z  + RandomBil(entropy) * 0.0f, dP.z  + RandomBil(entropy) * 0.0f, dP.z  + RandomBil(entropy) * 0.0f);
         
         A->ddP.x = MMSetExpr( 0.0f );
         A->ddP.y = MMSetExpr( 0.0f );
@@ -80,9 +80,9 @@ internal void SpawnWaterRipples(ParticleCache* cache, Vec3 atPInit, Vec3 dP, r32
         A->dC.g = MMSetExpr( -1.0f / lifeTime );
         A->dC.a = MMSetExpr( -1.0f / lifeTime );
         
-        r32 startingAngle = DegToRad(45.0f);
-        A->angle4x = _mm_set_ps(DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f));
-        A->height4x = MMSetExpr(0.06f);
+        r32 startingAngle = DegToRad(0.0f);
+        A->angle4x = _mm_set_ps(DegToRad(startingAngle + RandomBil(entropy) * 0.0f), DegToRad(startingAngle + RandomBil(entropy) * 0.0f), DegToRad(startingAngle + RandomBil(entropy) * 0.0f), DegToRad(startingAngle + RandomBil(entropy) * 0.0f));
+        A->height4x = MMSetExpr(0.25f + (0.13f * RandomUni(entropy)));
     }
 }
 
@@ -693,9 +693,9 @@ internal void InitParticleCache( ParticleCache* particleCache, Assets* assets )
     particleCache->particleEntropy = Seed( 1234 );
     
 	particleCache->waterRippleSystem.transform = UprightTransform();
-    //particleCache->waterRippleSystem.bitmapID = GetFirstBitmap(assets, Asset_waterRipple);
-    particleCache->waterRippleSystem.bitmapID = {};
-    particleCache->steamSystem.nextParticle4 = 0;
+    particleCache->waterRippleSystem.bitmapID = GetFirstBitmap(assets, Asset_waterRipple);
+    //particleCache->waterRippleSystem.bitmapID = {};
+    particleCache->waterRippleSystem.nextParticle4 = 0;
     
     particleCache->ashSystem.transform = UprightTransform();
     particleCache->ashSystem.bitmapID = {};

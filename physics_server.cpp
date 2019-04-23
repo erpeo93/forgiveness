@@ -106,7 +106,7 @@ inline void AddToPartitionBlock(MemoryPool* pool, PartitionSurfaceEntityBlock** 
 
 inline void AddToSpacePartition(SimRegion* region, SpacePartition* partition, MemoryPool* tempPool, Vec3 P, Rect3 bounds, CollisionData collider)
 {
-    u32 surfaces[128];
+    u32 surfaces[256];
     u32 addedTo = GetOverlappingSurfaces(region, partition, P, V3(0, 0, 0), bounds, surfaces, ArrayCount(surfaces));
     
     for(u32 index = 0; index < addedTo; ++index)

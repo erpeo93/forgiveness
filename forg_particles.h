@@ -1,6 +1,6 @@
 #pragma once
 
-#define MAX_PARTICLE_COUNT 1024
+#define MAX_PARTICLE_COUNT 2048
 #define MAX_PARTICLE_COUNT_4 (MAX_PARTICLE_COUNT / 4)
 struct Particle_4x
 {

@@ -671,7 +671,7 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Fo
                                     Vec2 arm = Arm2(DegToRad(tileLayoutNoise * 360.0f));
                                     r32 voxelUsableDim = 0.9f * voxelSide;
                                     Vec2 startingOffset = arm * voxelUsableDim;
-                                    Vec2 totalDelta = -2.0f * startingOffset;
+                                    Vec2 totalDelta = 2.0f * startingOffset;
                                     
                                     Vec2 pointSeparationVector = totalDelta *= (1.0f / pointsPerTile);
                                     
@@ -1402,8 +1402,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             }
                             
                             
-                            r32 waterSpeed = 0.08f;
-                            r32 waterSineSpeed = 45.0f;
+                            r32 waterSpeed = 0.12f;
+                            r32 waterSineSpeed = 70.0f;
                             for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
                             {
                                 for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
@@ -1685,6 +1685,11 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 }
                             }
                             
+                            
+                            r32 rippleThreesold = 0.78f;
+                            r32 waterRandomPercentage = 0.002f;
+                            r32 ripplesLifetime = 3.0f;
+                            
                             if(!site0->walked)
                             {
                                 
@@ -1696,6 +1701,11 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                     PushRect(group, FlatTransform(QSite0.height + 0.01f), P.xyz, dim, color, QSite0.lightIndexes);
                                 }
                                 site0->walked = true;
+                                
+                                if(QSite0.waterLevel < rippleThreesold * WATER_LEVEL && RandomUni(&worldMode->waterRipplesSequence) < waterRandomPercentage)
+                                {
+                                    SpawnWaterRipples(particleCache, site0PCamera.xyz, V3(0, 0, 0), ripplesLifetime);
+                                }
                             }
                             
                             if(!site1->walked)
@@ -1705,10 +1715,15 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                     Vec4 P = site1PCamera;
                                     Vec2 dim = V2(0.1f, 0.1f);
                                     Vec4 color = V4(1, 1, 1, 1);
-                                    PushRect(group, FlatTransform(QSite0.height + 0.01f), P.xyz, dim, color, QSite0.lightIndexes);
+                                    PushRect(group, FlatTransform(QSite1.height + 0.01f), P.xyz, dim, color, QSite0.lightIndexes);
                                 }
                                 
                                 site1->walked = true;
+                                
+                                if(QSite1.waterLevel < rippleThreesold * WATER_LEVEL && RandomUni(&worldMode->waterRipplesSequence) < waterRandomPercentage)
+                                {
+                                    SpawnWaterRipples(particleCache, site1PCamera.xyz, V3(0, 0, 0), ripplesLifetime);
+                                }
                             }
                             
                             Vec4 waterColor0 = GetWaterColor(QSite0);

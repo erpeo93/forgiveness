@@ -371,6 +371,10 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
         char* soundType = GetValue(parent, "soundType");
         hash = StringHash(soundType);
     }
+    else if(StrEqual(name, "beachTaxonomy"))
+    {
+        hash = StringHash("tileType");
+    }
     else if(StrEqual(name, "type"))
     {
         if(grandParent && grandParent->type == EditorElement_List)
@@ -3144,7 +3148,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             UIAddChild(UI->table, playButton, EditorElement_String, "showBitmaps", "true");
             UIAddChild(UI->table, playButton, EditorElement_String, "showPivots", "false");
             UIAddChild(UI->table, playButton, EditorElement_String, "drawOpened", "false");
-            UIAddChild(UI->table, playButton, EditorElement_Unsigned, "seed", "0");
+            UIAddChild(UI->table, playButton, EditorElement_Unsigned, "seed", "1");
             
             
             playButton->next = animationActionTimer;
@@ -3192,7 +3196,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             UIAddChild(UI->table, params, EditorElement_String, "showBorders", "false");
             UIAddChild(UI->table, params, EditorElement_String, "uniformColors", "false");
             UIAddChild(UI->table, params, EditorElement_String, "viewType", "Voronoi");
-            UIAddChild(UI->table, params, EditorElement_Unsigned, "chunkApron", "2");
+            UIAddChild(UI->table, params, EditorElement_Unsigned, "chunkApron", "1");
             EditorElement* offset = UIAddChild(UI->table, params, EditorElement_Struct, "cameraOffset");
             UIAddChild(UI->table, offset, EditorElement_Real, "x", "0.0");
             UIAddChild(UI->table, offset, EditorElement_Real, "y", "0.0");
@@ -3254,7 +3258,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         
         
         
-        UI->chunkApron = 2;
+        UI->chunkApron = 1;
         UI->activeSkillSlotIndex = -1;
         UI->skillSlotMaxTimeout = 10.0f;
         

@@ -232,6 +232,12 @@ inline TileGenerationData GenerateTile(TaxonomyTable* table, WorldGenerator* gen
     result.waterLevel = elevation;
     
     
+    if(elevation >= (WATER_LEVEL - generator->beachThreesold) && elevation < (WATER_LEVEL + generator->beachThreesold) && generator->beachTaxonomy)
+    {
+        biome = GetSlotForTaxonomy(table, generator->beachTaxonomy)->taxonomy;
+    }
+    
+    
     result.height = finalHeight;
     result.biomeTaxonomy = biome;
     Assert(result.biomeTaxonomy);

@@ -147,6 +147,8 @@ struct WorldGenerator
     
     NoiseParams elevationNoise;
     r32 elevationPower;
+    r32 beachThreesold;
+    u32 beachTaxonomy;
     
     BiomePyramid biomePyramid;
     
