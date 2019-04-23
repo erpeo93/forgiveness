@@ -2648,6 +2648,22 @@ internal void WriteLeafs()
     WritePak(assets, "forgleafs.pak" );
 }
 
+internal void WriteMisc()
+{
+    char* miscPath = "definition/misc";
+    
+    Assets assets_;
+    Assets* assets = &assets_;
+    InitializeAssets(assets);
+    
+    BeginAssetType(assets, Asset_water);
+    AddBitmapAsset(miscPath, "water.png");
+    EndAssetType();
+    
+    WritePak(assets, "forgmisc.pak" );
+}
+
+
 internal void WriteUI()
 {
     char* UIPath = "definition/UI";
@@ -2759,6 +2775,7 @@ internal void WriteBitmapsAndAnimations()
 {
     WriteComponents();
     WriteLeafs();
+    WriteMisc();
     WriteUI();
     
     char* bitmapPath = "definition/root";

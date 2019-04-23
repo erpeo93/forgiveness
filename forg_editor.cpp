@@ -407,9 +407,9 @@ inline u8 ToU8(char* string)
     return result;
 }
 
-inline u32 ToU32(char* string)
+inline u32 ToU32(char* string, u32 default = 0)
 {
-    u32 result = 0;
+    u32 result = default;
     if(string)
     {
         i32 intValue = atoi(string);
@@ -2434,7 +2434,7 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
                 if(element->labelName[0])
                 {
                     char outputLabelName[64];
-                    FormatString(outputLabelName, sizeof(outputLabelName), "#labelName = %s ", element->labelName);
+                    FormatString(outputLabelName, sizeof(outputLabelName), "#labelName = \"%s\" ", element->labelName);
                     buffer = OutputToBuffer(buffer, bufferSize, outputLabelName);
                 }
                 
@@ -2621,6 +2621,11 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
 								if(RequireToken(tokenizer, Token_EqualSign))
                                 {
 									Token labelName = GetToken(tokenizer);
+                                    
+                                    if(labelName.type == Token_String)
+                                    {
+                                        labelName = Stringize(labelName);
+                                    }
                                     FormatString(newElement->labelName, sizeof(newElement->labelName), "%.*s", labelName.textLength, labelName.text);
                                 }
 							}
@@ -2926,10 +2931,18 @@ inline EditorElement* GetList(EditorElement* element, char* listName)
 
 inline NoiseParams ParseNoiseParams(EditorElement* element)
 {
-    r32 frequency = ToR32(GetValue(element, "frequency"));
-    u32 octaves = ToU32(GetValue(element, "octaves"));
-    r32 offset = ToR32(GetValue(element, "offset"));
-    r32 amplitude = ToR32(GetValue(element, "amplitude"));
+    r32 frequency = 1.0;
+    u32 octaves = 1;
+    r32 offset = 0;
+    r32 amplitude = 1.0f;
+    if(element)
+    {
+        frequency = ToR32(GetValue(element, "frequency"), 1.0f);
+        octaves = ToU32(GetValue(element, "octaves"), 1);
+        offset = ToR32(GetValue(element, "offset"));
+        amplitude = ToR32(GetValue(element, "amplitude"), 1.0f);
+        
+    }
     
     NoiseParams result = NoisePar(frequency, octaves, offset, amplitude);
     
@@ -3420,11 +3433,15 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     else if(StrEqual(name, "tileParams"))
     {
         currentSlot_->groundPointMaxOffset = ToR32(GetValue(root, "groundPointMaxOffset"));
-        currentSlot_->chunkyness = ToR32(GetValue(root, "chunkyness"));
+        currentSlot_->chunkynessWithSame = ToR32(GetValue(root, "chunkynessSame"), 0.5f);
+        currentSlot_->chunkynessWithOther = ToR32(GetValue(root, "chunkynessOther"), 0.5f);
         currentSlot_->groundPointPerTile = ToU32(GetValue(root, "pointsPerTile"));
         currentSlot_->tileColor = ToV4Color(GetElement(root, "color"));
+        currentSlot_->colorDelta = ToV4Color(GetElement(root, "colorDelta"), V4(0, 0, 0, 0));
         currentSlot_->tileBorderColor = ToV4Color(GetElement(root, "borderColor"), V4(0, 0, 0, 0));
         currentSlot_->tilePointsLayout = GetValuePreprocessor(TilePointsLayout, GetValue(root, "tileLayout"));
+        currentSlot_->colorRandomness = ToR32(GetValue(root, "colorRandomness"), 0.0f);
+        currentSlot_->tileNoise = ParseNoiseParams(GetStruct(root, "noise"));
     }
 #ifndef FORG_SERVER
     else if(StrEqual(name, "visualLabels"))
@@ -3581,7 +3598,8 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         generator->landscapeNoise = ParseNoiseParams(GetStruct(root, "landscapeNoise"));
         generator->temperatureNoise = ParseNoiseParams(GetStruct(root, "temperatureNoise"));
         generator->precipitationNoise = ParseNoiseParams(GetStruct(root, "precipitationNoise"));
-        generator->tileLayoutNoise = ParseNoiseParams(GetStruct(root, "tileLayoutNoise"));
+        generator->elevationNoise = ParseNoiseParams(GetStruct(root, "elevationNoise"));
+        generator->elevationPower = ToR32(GetValue(root, "elevationPower"), 1.0f);
         
         
         generator->landscapeSelect = {};

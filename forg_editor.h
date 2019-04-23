@@ -176,7 +176,6 @@ struct WidgetPermanent
 {
     r32 fontSize;
     Vec2 P;
-    r32 dataOffsetY;
     Vec2 resizeP;
     
     b32 expanded;
@@ -190,6 +189,7 @@ struct EditorWidget
     u32 necessaryRole;
     
     WidgetPermanent permanent;
+    r32 dataOffsetY;
     
     EditorLayout layout;
     

@@ -939,7 +939,7 @@ inline void UIAddClearAction(UIState* UI, UIInteraction* interaction, u32 flags,
 }
 
 
-inline void UIAddOffsetStringEditorElement(UIState* UI, UIInteraction* interaction, u32 flags, UIMemoryReference value, UIMemoryReference offset, r32 speed)
+inline void UIAddOffsetStringRealEditorElement(UIState* UI, UIInteraction* interaction, u32 flags, UIMemoryReference value, UIMemoryReference offset, r32 speed)
 {
     UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
     dest->type = UIInteractionAction_OffsetRealEditor;
@@ -947,6 +947,16 @@ inline void UIAddOffsetStringEditorElement(UIState* UI, UIInteraction* interacti
     dest->value = value;
     dest->offset = offset;
     dest->speed = speed;
+}
+
+inline void UIAddOffsetStringUnsignedEditorElement(UIState* UI, UIInteraction* interaction, u32 flags, UIMemoryReference value, UIMemoryReference offset, u32 speed)
+{
+    UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
+    dest->type = UIInteractionAction_OffsetUnsignedEditor;
+    dest->flags = flags;
+    dest->value = value;
+    dest->offset = offset;
+    dest->speed = (r32) speed;
 }
 
 inline void UIAddOffsetRealAction(UIState* UI, UIInteraction* interaction, u32 flags, UIMemoryReference value, UIMemoryReference offset, r32 speed)
@@ -1425,6 +1435,19 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                         r32 newValue = current + speed * *offset;
                         
                         FormatString(value, 32, "%f", newValue);
+                    }break;
+                    
+                    
+                    case UIInteractionAction_OffsetUnsignedEditor:
+                    {
+                        r32 speed = action->speed;
+                        char* value = (char*) GetValue(action->value, &interaction->data);
+                        u32* offset = (u32*) GetValue(action->offset, &interaction->data);
+                        
+                        u32 current = ToU32(value);
+                        u32 newValue = current + (u32) (speed * *offset);
+                        
+                        FormatString(value, 32, "%d", newValue);
                     }break;
                     
                     case UIInteractionAction_OffsetReal:

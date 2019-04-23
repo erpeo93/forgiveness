@@ -190,6 +190,7 @@ char* MetaTable_AssetTypeId[] =
 "casting",
 "equipmentRig",
 "leaf",
+"water",
 "emptySpace",
 "scrollUI",
 "UISphere",

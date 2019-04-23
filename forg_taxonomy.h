@@ -311,6 +311,15 @@ struct TaxonomyAssAlterations
 };
 #endif
 
+struct NoiseParams
+{
+    r32 frequency;
+    u32 octaves;
+    r32 persistance;
+    r32 offset;
+    r32 amplitude;
+};
+
 struct TaxonomySlot
 {
     u32 taxonomy;
@@ -397,11 +406,14 @@ struct TaxonomySlot
     
     Vec4 tileBorderColor;
     Vec4 tileColor;
+    Vec4 colorDelta;
     r32 groundPointMaxOffset;
     u32 groundPointPerTile;
-    r32 chunkyness;
+    r32 chunkynessWithSame;
+    r32 chunkynessWithOther;
     u32 tilePointsLayout;
-    
+    r32 colorRandomness;
+    NoiseParams tileNoise;
     
     struct WorldGenerator* generator;
     

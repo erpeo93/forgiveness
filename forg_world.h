@@ -26,6 +26,10 @@ struct WorldChunk
 #ifndef FORG_SERVER
     u8 lightCount[CHUNK_DIM][CHUNK_DIM];
     Vec4 lightIndexes[CHUNK_DIM][CHUNK_DIM];
+    
+    r32 waterPhase[CHUNK_DIM][CHUNK_DIM];
+    r32 waterSine[CHUNK_DIM][CHUNK_DIM];
+    b32 movingNegative[CHUNK_DIM][CHUNK_DIM];
 #endif
     
     EntityBlock* entities;

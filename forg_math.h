@@ -254,7 +254,13 @@ inline r32 Clamp01( r32 value )
     return result;
 }
 
-
+inline r32 UnilateralToBilateral(r32 value)
+{
+    r32 result = Clamp01(value);
+    
+    result = (result - 0.5f) * 2.0f;
+    return result;
+}
 
 inline r32 Lerp( r32 value1, r32 lerp, r32 value2 )
 {

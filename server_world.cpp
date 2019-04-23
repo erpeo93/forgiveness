@@ -550,7 +550,7 @@ internal void BuildServerChunks(ServerState* server, u32 worldSeed)
         {
             Assert(ChunkValid(server->lateralChunkSpan, X, Y));
             WorldChunk * chunk = GetChunk(server->chunks, ArrayCount(server->chunks), X, Y, &server->worldPool);
-            BuildChunk(generator, chunk, X, Y, worldSeed);
+            BuildChunk(server->activeTable, generator, chunk, X, Y, worldSeed);
         }
     }
 }

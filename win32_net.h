@@ -318,7 +318,7 @@ inline void SignalPacketLost(NetworkConnection* connection)
 	AdjustRTT(connection, LOST_TIME);
     
     connection->sendAllowedBandwidth /= 1.2f;
-    connection->sendAllowedBandwidth = Min(connection->sendAllowedBandwidth, MINIMUM_BANDWIDTH);
+    connection->sendAllowedBandwidth = Max(connection->sendAllowedBandwidth, MINIMUM_BANDWIDTH);
 }
 
 inline u32 GetBandwidth(NetworkConnection* connection, r32 elapsedTime)

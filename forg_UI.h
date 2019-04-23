@@ -557,6 +557,7 @@ enum UIInteractionActionType
     UIInteractionAction_Clear,
     UIInteractionAction_SendRequestDirectly,
     UIInteractionAction_OffsetRealEditor,
+    UIInteractionAction_OffsetUnsignedEditor,
     UIInteractionAction_OffsetReal,
     UIInteractionAction_AddEmptyEditorElement,
     UIInteractionAction_PlaySound,
@@ -853,7 +854,7 @@ struct UIState
     EditorElement* draggingParent;
     
     r32 saveWidgetLayoutTimer;
-    r32 saveWidgetTimer;
+    r32 autosaveWidgetTimer;
     EditorWidget widgets[EditorWidget_Count];
     
     
@@ -894,7 +895,7 @@ struct UIState
     
     
     b32 showGroundOutline;
-    b32 randomizeGroundColors;
+    b32 uniformGroundColors;
     GroundViewMode groundViewMode;
     Vec3 cameraOffset;
     u32 chunkApron;

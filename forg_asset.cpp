@@ -812,7 +812,6 @@ inline u32 GetFirstAsset_(Assets* assets, u32 assetID)
 {
     u32 result = 0;
     AssetType* type = assets->types + assetID;
-    
     if(type->onePastLastAssetIndex > type->firstAssetIndex)
     {
         result = type->firstAssetIndex;

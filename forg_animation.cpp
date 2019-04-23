@@ -1857,13 +1857,36 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
     return result;
 }
 
-
-
-inline Vec3 GetTileColorDelta(RandomSequence* seq)
+inline r32 GetChunkyness(TileInfo i0, TileInfo i1)
 {
-    Vec3 result = {};
-    result.g = RandomBil(seq) * 0.2f;
-    result.r = RandomBil(seq) * 0.05f;
+    r32 result = (i0.taxonomy == i1.taxonomy) ? i0.chunkynessSame : i0.chunkynessOther;
+    return result;
+}
+
+inline Vec3 GetTileColorDelta(TaxonomyTable* table, WorldChunk* chunk, u32 tileX, u32 tileY, RandomSequence* seq)
+{
+    Assert(tileX < CHUNK_DIM);
+    Assert(tileY < CHUNK_DIM);
+    TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
+    
+    TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, tileData->biomeTaxonomy);
+    Vec4 delta = tileSlot->colorDelta;
+    
+    r32 noiseBilateral = (tileData->layoutNoise - 0.5f) * 2.0f;
+    
+    Vec3 noisy;
+    noisy.r = delta.r * noiseBilateral;
+    noisy.g = delta.g * noiseBilateral;
+    noisy.b = delta.b * noiseBilateral;
+    
+    
+    Vec3 random;
+    random.r = delta.r * RandomBil(seq);
+    random.g = delta.g * RandomBil(seq);
+    random.b = delta.b * RandomBil(seq);
+    
+    
+    Vec3 result = Lerp(noisy, tileSlot->colorRandomness, random);
     
     return result;
 }
@@ -1880,21 +1903,21 @@ inline Vec4 GetBaseTileColor(TaxonomyTable* table, WorldChunk* chunk, u32 tileX,
     return color;
 }
 
-inline Vec4 GetTileColor(TaxonomyTable* table, WorldChunk* chunk, u32 tileX, u32 tileY, b32 randomize, Vec2 randomOffset)
+inline Vec4 GetTileColor(TaxonomyTable* table, WorldChunk* chunk, u32 tileX, u32 tileY, b32 uniformColor, Vec2 randomOffset)
 {
     Vec4 color = GetBaseTileColor(table, chunk, tileX, tileY);
     
-    if(randomize)
+    if(!uniformColor)
     {
         RandomSequence seq = Seed((chunk->worldX + 12 * (i32)randomOffset.x) * (chunk->worldY + 12 * (i32) randomOffset.y));
         
-        color.rgb += GetTileColorDelta(&seq);
+        color.rgb += GetTileColorDelta(table, chunk, tileX, tileY, &seq);
     }
     
+    color = Clamp01(color);
     color = SRGBLinearize(color);
     return color;
 }
-
 
 inline Vec4 ComputeWeightedChunkColor(GameModeWorld* worldMode, WorldChunk* chunk)
 {
@@ -1910,6 +1933,67 @@ inline Vec4 ComputeWeightedChunkColor(GameModeWorld* worldMode, WorldChunk* chun
     
     result *= (1.0f / Square(CHUNK_DIM));
     return result;
+}
+
+
+inline Vec4 GetWaterColor(TileInfo tile, r32* computedWaterLevel)
+{
+    
+    r32 minGreen = 0.0f;
+    r32 maxGreen = 0.12f;
+    
+    r32 minBlue = 0.2f;
+    r32 maxBlue = 1.0f;
+    
+    r32 minAlpha = 0.02f;
+    r32 maxAlpha = 0.95f;
+    
+    r32 maxColorDisplacement = 0.3f * WATER_LEVEL;
+    r32 maxAlphaDisplacement = 0.35f * WATER_LEVEL;
+    
+    r32 sineWaterLevel = Clamp01MapToRange(0.8f * WATER_LEVEL, tile.waterLevel, WATER_LEVEL);
+    
+    RandomSequence* seq = &tile.waterSeq;
+    
+    NoiseParams waterParams = NoisePar(4.0f, 2, 0.0f, 1.0f);
+    r32 greenNoise = Evaluate(tile.waterNormalizedNoise, 0, waterParams, GetNextUInt32(seq));
+    r32 blueNoise = Evaluate(tile.waterNormalizedNoise, 0, waterParams, GetNextUInt32(seq));
+    r32 alphaNoise = Evaluate(tile.waterNormalizedNoise, 0, waterParams, GetNextUInt32(seq));
+    
+    greenNoise = UnilateralToBilateral(greenNoise);
+    blueNoise = UnilateralToBilateral(blueNoise);
+    alphaNoise = UnilateralToBilateral(alphaNoise);
+    
+    
+    r32 sine = tile.waterSine;
+    r32 greenSine = sine;
+    r32 blueSine = sine;
+    r32 alphaSine = sine;
+    
+    
+    r32 greenNoiseSine = Lerp(greenNoise, sineWaterLevel, greenSine);
+    r32 blueNoiseSine = Lerp(blueNoise, sineWaterLevel, blueSine);
+    r32 alphaNoiseSine = Lerp(alphaNoise, sineWaterLevel, alphaSine);
+    
+    
+    r32 greenDisplacement = greenNoiseSine * maxColorDisplacement;
+    r32 blueDisplacement = blueNoiseSine * maxColorDisplacement;
+    r32 alphaDisplacement = alphaNoiseSine * maxAlphaDisplacement;
+    
+    
+    r32 greenLerp = Clamp01MapToRange(0, tile.waterLevel + greenDisplacement, WATER_LEVEL);
+    r32 blueLerp = Clamp01MapToRange(0, tile.waterLevel + blueDisplacement, WATER_LEVEL);
+    r32 alphaLerp = Clamp01MapToRange(0, tile.waterLevel + alphaDisplacement, WATER_LEVEL);
+    
+    
+    r32 green = Lerp(minGreen, greenLerp, maxGreen);
+    r32 blue = Lerp(minBlue, blueLerp, maxBlue);
+    r32 alpha = Lerp(maxAlpha, alphaLerp, minAlpha);
+    
+    Vec4 waterColor = V4(0, green, blue, alpha);
+    
+    *computedWaterLevel = 0.5f * (alpha + blue);
+    return waterColor;
 }
 
 

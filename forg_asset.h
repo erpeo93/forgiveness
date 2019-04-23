@@ -168,7 +168,7 @@ inline SoundId GetRandomSound( Assets* assets, u32 assetID, RandomSequence* seq 
 u32 GetFirstAsset_( Assets* assets, u32 assetID );
 inline BitmapId GetFirstBitmap( Assets* assets, u32 assetID )
 {
-    BitmapId result = { GetFirstAsset_( assets, assetID ) };
+    BitmapId result = { GetFirstAsset_( assets, assetID ), V4(1, 1, 1, 1)};
     return result;
 }
 

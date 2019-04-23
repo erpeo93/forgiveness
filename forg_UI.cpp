@@ -469,6 +469,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
             if(PointInRect(result.bounds, UI->relativeScreenMouse))
             {
                 UIInteraction mouseInteraction = {};
+                UIInteraction rightInteraction = {};
                 
 				if(UI->active && UI->bufferValid)
 				{
@@ -526,7 +527,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                         if(root->type == EditorElement_Real)
                         {
                             UIAddStandardAction_(UI, &mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(UI->realDragging), ColdPointer(root->value));
-                            UIAddOffsetStringEditorElement(UI, &mouseInteraction, UI_Idle, ColdPointer(root->value), ColdPointer(&UI->deltaScreenMouseP.y), 0.01f);
+                            UIAddOffsetStringRealEditorElement(UI, &mouseInteraction, UI_Idle, ColdPointer(root->value), ColdPointer(&UI->deltaScreenMouseP.y), 0.01f);
                             UIAddUndoRedoAction(UI, &mouseInteraction, UI_Release, UndoRedoDelayedString(widget, root->value, sizeof(root->value), root->value, ColdPointer(root->value)));
                             UIAddReloadElementAction(UI, &mouseInteraction, UI_Idle, widget->root);
                             UIAddReloadElementAction(UI, &mouseInteraction, UI_Release, widget->root);
@@ -536,10 +537,23 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                             }
                             
                         }
+                        
+                        if(root->type == EditorElement_Unsigned)
+                        {                            
+                            UIAddOffsetStringUnsignedEditorElement(UI, &rightInteraction, UI_Click, ColdPointer(root->value), Fixed(1), 1);
+                            UIAddUndoRedoAction(UI, &rightInteraction, UI_Click, UndoRedoDelayedString(widget, root->value, sizeof(root->value), root->value, ColdPointer(root->value)));
+                            UIAddReloadElementAction(UI, &rightInteraction, UI_Click, widget->root);
+                            if(StrEqual(widget->name, "Editing Tabs"))
+                            {
+                                UIAddRequestAction(UI, &rightInteraction, UI_Click, SendDataFileRequest());
+                            }
+                            
+                        }
                     }
                 }
                 
                 UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
+                UIAddInteraction(UI, input, mouseRight, rightInteraction);       
             }
         }
     }
@@ -739,7 +753,7 @@ inline  CopyPasteInteractionRes AddCopyPasteInteraction(UIState* UI, PlatformInp
                     {
                         case EditorElement_Struct:
                         {
-                            matches = (canDelete);
+                            matches = (true);
                             EditorElement* test = root->firstChild;
                             for(EditorElement* match = UI->copying->firstChild; match; match = match->next)
                             {
@@ -1688,9 +1702,18 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     
                     Vec4 black = V4(0, 0, 0, 1);
                     Vec4 white = V4(1, 1, 1, 1);
+                    Vec4 halfColor = Lerp(white, 0.5f, pickColor);
+                    
+                    Vec2 min = pickColorRect.min;
+                    Vec2 halfDim = Hadamart(V2(0.5f, 1.0f), GetDim(pickColorRect));
+                    Rect2 pickRectLeft = RectMinDim(min, halfDim);
+                    
+                    Vec2 minRight = min + V2(halfDim.x, 0);
+                    Rect2 pickRectRight = RectMinDim(minRight, halfDim);
                     
                     ObjectTransform pickTransform = FlatTransform(layout->additionalZBias);
-                    PushRect4Colors(UI->group, pickTransform, pickColorRect, black, black, pickColor, white);
+                    PushRect4Colors(UI->group, pickTransform, pickRectLeft, black, black, halfColor, white);
+                    PushRect4Colors(UI->group, pickTransform, pickRectRight, black, black, pickColor, halfColor);
                     
                     if(root->scrolling2)
                     {
@@ -1763,7 +1786,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     Assert(paramsElement);
                                        
                     UI->showGroundOutline = ToB32(GetValue(paramsElement, "showBorders"));
-                    UI->randomizeGroundColors = ToB32(GetValue(paramsElement, "randomizeColors"));
+                    UI->uniformGroundColors = ToB32(GetValue(paramsElement, "uniformColors"));
                     UI->groundViewMode = (GroundViewMode) GetValuePreprocessor(GroundViewMode, GetValue(paramsElement, "viewType"));
                     UI->chunkApron = ToU32(GetValue(paramsElement, "chunkApron"));
 
@@ -1774,7 +1797,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     
                     if(UI->chunkApron >= 8)
                     {
-                        UI->groundViewMode = GroundView_Chunk;
+                        //UI->groundViewMode = GroundView_Chunk;
                     }
                     
                     UI->cameraOffset = ToV3(GetElement(paramsElement, "cameraOffset"));
@@ -1872,10 +1895,10 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         platformAPI.DEBUGWriteFile("widget", toSave, sizeof(toSave));
     }
     
-    UI->saveWidgetTimer += UI->worldMode->originalTimeToAdvance;
-    if(UI->saveWidgetTimer >= 20.0f)
+    UI->autosaveWidgetTimer += UI->worldMode->originalTimeToAdvance;
+    if(UI->autosaveWidgetTimer >= 2000000.0f)
     {
-        UI->saveWidgetTimer = 0;
+        UI->autosaveWidgetTimer = 0;
         
         for(u32 widgetIndex = 0; widgetIndex < EditorWidget_Count; ++widgetIndex)
         {
@@ -2425,8 +2448,8 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             
             PushClipRect(group, clipRect);
             
-            widget->permanent.dataOffsetY = Min(widget->permanent.dataOffsetY, clipRect.maxY - 20 * layout->fontScale);
-            layout->P.y += widget->permanent.dataOffsetY;
+            widget->dataOffsetY = Min(widget->dataOffsetY, clipRect.maxY - 20 * layout->fontScale);
+            layout->P.y += widget->dataOffsetY;
             
             widget->maxDataY = (i32) (layout->P.y + 0.5f * height);
             
@@ -2498,7 +2521,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     
                     if(allowScrolling)
                     {
-                        widget->permanent.dataOffsetY -= input->mouseWheelOffset * 10.0f;   
+                        widget->dataOffsetY -= input->mouseWheelOffset * 10.0f;   
                     }
                 }
             }
@@ -3048,7 +3071,7 @@ inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, Vec2 P, u
     *result = {};
     result->permanent.expanded = true;
     result->permanent.fontSize = 1.0f;
-    result->permanent.dataOffsetY = 0;
+    result->dataOffsetY = 0;
     result->permanent.P = P;
     result->permanent.resizeP = P;
     result->necessaryRole = necessaryRole;
@@ -3167,7 +3190,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             FormatString(params->name, sizeof(params->name), "params");
             
             UIAddChild(UI->table, params, EditorElement_String, "showBorders", "false");
-            UIAddChild(UI->table, params, EditorElement_String, "randomizeColors", "true");
+            UIAddChild(UI->table, params, EditorElement_String, "uniformColors", "false");
             UIAddChild(UI->table, params, EditorElement_String, "viewType", "Voronoi");
             UIAddChild(UI->table, params, EditorElement_Unsigned, "chunkApron", "2");
             EditorElement* offset = UIAddChild(UI->table, params, EditorElement_Struct, "cameraOffset");

@@ -198,7 +198,7 @@ inline u32 SelectFromBiomePyramid(BiomePyramid* pyramid, r32 precipitationLevel,
     return result;
 }
 
-inline TileGenerationData GenerateTile(WorldGenerator* generator, r32 tileNormX, r32 tileNormY, u32 seed)
+inline TileGenerationData GenerateTile(TaxonomyTable* table, WorldGenerator* generator, r32 tileNormX, r32 tileNormY, u32 seed)
 {
     TileGenerationData result = {};
     
@@ -222,17 +222,28 @@ inline TileGenerationData GenerateTile(WorldGenerator* generator, r32 tileNormX,
     finalHeight = 0;
     
     
+    r32 elevation = Evaluate(tileNormX, tileNormY, generator->elevationNoise, seed);
+    
+    r32 distanceFromCenter = Clamp01(Length(V2(tileNormX, tileNormY) - V2(0.5f, 0.5f)) / 0.47f);
+    elevation = (1 + elevation - distanceFromCenter) / 2;
+    
+    elevation = Pow(elevation, generator->elevationPower);
+    Assert(Normalized(elevation));
+    result.waterLevel = elevation;
+    
+    
     result.height = finalHeight;
     result.biomeTaxonomy = biome;
     Assert(result.biomeTaxonomy);
     
-    result.layoutNoise = Evaluate(tileNormX, tileNormY, generator->tileLayoutNoise, seed);
+    TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, biome);
+    result.layoutNoise = Evaluate(tileNormX, tileNormY, tileSlot->tileNoise, seed);
     
     return result;
 }
 
 
-internal void BuildChunk(WorldGenerator* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY, u32 seed)
+internal void BuildChunk(TaxonomyTable* table, WorldGenerator* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY, u32 seed)
 {
     Assert(CHUNK_DIM % 4 == 0);
     
@@ -245,29 +256,6 @@ internal void BuildChunk(WorldGenerator* generator, WorldChunk* chunk, i32 chunk
     i32 lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
     chunkX = Wrap(0, chunkX, lateralChunkSpan, &universeX);
     chunkY = Wrap(0, chunkY, lateralChunkSpan, &universeY);
-    
-    
-    //r32 chunkXInTiles = ((chunkX + 0.5f) * CHUNK_DIM) / (lateralChunkSpan * CHUNK_DIM);
-    //r32 chunkYInTiles = ((chunkY + 0.5f) * CHUNK_DIM) / (lateralChunkSpan * CHUNK_DIM);
-    
-#if 0    
-    r32 halfWorld = (r32) lateralChunkSpan * 0.5f;
-    r32 halfWorldInTile = halfWorld * CHUNK_DIM;
-    
-    // NOTE(Leonardo): normalized values
-    r32 chunkNormX = (r32) chunkX / lateralChunkSpan;
-    r32 chunkNormY = (r32) chunkY / lateralChunkSpan;
-    
-    Assert(Normalized(chunkNormX));
-    Assert(Normalized(chunkNormY));
-    
-    r32 d = 2.0f * Max(Abs(chunkNormX), Abs(chunkNormY));
-    r32 dropOffCoeff = 1.0f - 0.79f * powf(d, 0.76f);
-    // NOTE(Leonardo): 0.1 minimum 0.15 max?
-    height = (height + 0.14f) * dropOffCoeff;
-    height = Max(height, 0.0f);
-#endif
-    
     
     u32 baseTileX = chunkX * CHUNK_DIM;
     u32 baseTileY = chunkY * CHUNK_DIM;
@@ -286,7 +274,7 @@ internal void BuildChunk(WorldGenerator* generator, WorldChunk* chunk, i32 chunk
             Assert(Normalized(tileNormX));
             Assert(Normalized(tileNormY));
             
-            chunk->tileData[tileY][tileX] = GenerateTile(generator, tileNormX, tileNormY, seed);
+            chunk->tileData[tileY][tileX] = GenerateTile(table, generator, tileNormX, tileNormY, seed);
         }
     }
 }

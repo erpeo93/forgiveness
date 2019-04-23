@@ -61,6 +61,7 @@ struct ParticleCache
     ParticleSystem fireSystem;
     ParticleSystem waterSystem;
     ParticleSystem steamSystem;
+    ParticleSystem waterRippleSystem;
     ParticleSystem ashSystem;
     ParticleSystem ashSineSystem;
     Vec3 deltaParticleP;

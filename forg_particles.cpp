@@ -34,6 +34,61 @@ internal void Advect()
 
 #define MMSetExpr(expr) _mm_set_ps(expr, expr, expr, expr)
 
+
+internal void SpawnWaterRipples(ParticleCache* cache, Vec3 atPInit, Vec3 dP, r32 lifeTime)
+{
+    ParticleSystem* system = &cache->fireSystem;
+    RandomSequence* entropy = &cache->particleEntropy;
+    
+    lifeTime *= RandomRangeFloat(entropy, 0.7f, 1.3f);
+    
+    atPInit.x +=  RandomBil(entropy) * 0.1f;
+    atPInit.y +=  RandomBil(entropy) * 0.1f;
+    atPInit.z +=  RandomBil(entropy) * 0.1f;
+    
+    V3_4x atP = ToV3_4x( atPInit - cache->deltaParticleP );
+    for( u32 newParticle = 0; newParticle < 1; newParticle++ )
+    {
+        u32 i = system->nextParticle4++;
+        
+        if( system->nextParticle4 >= MAX_PARTICLE_COUNT_4 )
+        {
+            system->nextParticle4 = 0;
+        }
+        
+        Particle_4x *A = system->particles + i;
+        
+        A->P.x = atP.x;
+        A->P.y = atP.y;
+        A->P.z = atP.z;
+        
+        A->dP.x = _mm_set_ps( dP.x + RandomBil(entropy) * 0.1f, dP.x + RandomBil(entropy) * 0.1f, dP.x + RandomBil(entropy) * 0.1f, dP.x + RandomBil(entropy) * 0.1f);
+        A->dP.y = _mm_set_ps( dP.y  + RandomBil(entropy) * 0.1f, dP.x + RandomBil(entropy) * 0.1f, dP.x + RandomBil(entropy) * 0.1f, dP.x + RandomBil(entropy) * 0.1f);
+        A->dP.z = _mm_set_ps( dP.z  + RandomBil(entropy) * 0.4f, dP.z  + RandomBil(entropy) * 0.4f, dP.z  + RandomBil(entropy) * 0.4f, dP.z  + RandomBil(entropy) * 0.4f);
+        
+        A->ddP.x = MMSetExpr( 0.0f );
+        A->ddP.y = MMSetExpr( 0.0f );
+        A->ddP.z = MMSetExpr( 0.0f );
+        
+        A->C.r = MMSetExpr( 1.0f - RandomUni(entropy) * 0.12f);
+        A->C.g = MMSetExpr( 0.6f + RandomBil(entropy) * 0.05f);
+        A->C.b = MMSetExpr( 0.0f );
+        A->C.a = MMSetExpr( 1.0f );
+        
+        A->dC.r = MMSetExpr( -1.0f / lifeTime );
+        A->dC.g = MMSetExpr( -1.0f / lifeTime );
+        A->dC.b = MMSetExpr( 0.0f );
+        A->dC.a = MMSetExpr( -1.0f / lifeTime );
+        
+        r32 startingAngle = DegToRad(45.0f);
+        A->angle4x = _mm_set_ps(DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f));
+        A->height4x = MMSetExpr(0.07f);
+    }
+}
+
+
+
+
 internal void SpawnAsh(ParticleCache* cache, Vec3 atPInit, Vec3 dP, r32 lifeTime, Vec4 ashColor, u32 particleCount4x, r32 ashParticleViewPercentage, r32 dim)
 {
     ParticleSystem* system = &cache->ashSystem;
@@ -659,6 +714,9 @@ internal void UpdateAndRenderParticleSystems(GameModeWorld* worldMode, ParticleC
     Vec3 frameDisplacement = particleCache->deltaParticleP;
     UpdateAndRenderSystem(worldMode, &particleCache->fireSystem, &particleCache->particleEntropy, dt, frameDisplacement, group);
     UpdateAndRenderSystem(worldMode, &particleCache->waterSystem, &particleCache->particleEntropy, dt, frameDisplacement, group);
+    
+    UpdateAndRenderSystem(worldMode, &particleCache->waterRippleSystem, &particleCache->particleEntropy, dt, frameDisplacement, group);
+    
     UpdateAndRenderSystem(worldMode, &particleCache->steamSystem, &particleCache->particleEntropy, dt, frameDisplacement, group);
     UpdateAndRenderSystem(worldMode, &particleCache->ashSystem, &particleCache->particleEntropy, dt, frameDisplacement, group);
     

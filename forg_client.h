@@ -43,11 +43,21 @@
 
 struct TileInfo
 {
-    r32 chunkyness;
+    r32 chunkynessSame;
+    r32 chunkynessOther;
+    
     Vec4 color;
     Vec4 borderColor;
     r32 height;
+    r32 waterLevel;
+    r32 waterSine;
     Vec4 lightIndexes;
+    
+    u32 taxonomy;
+    
+    
+    RandomSequence waterSeq;
+    r32 waterNormalizedNoise;
 };
 
 printTable(noPrefix) enum GroundViewMode
@@ -329,6 +339,7 @@ struct GameModeWorld
     WorldChunk* chunks[1024];
     
     
+    RandomSequence waterRipplesSequence;
     ParticleCache* particleCache;
     
     

@@ -69,16 +69,6 @@ inline r32 noise(r32 x, r32 y, r32 z, u32 seed)
                           grad(perlin_[BB+1], x-1, y-1, z-1 ))));
 }
 
-struct NoiseParams
-{
-    r32 frequency;
-    u32 octaves;
-    r32 persistance;
-    r32 offset;
-    r32 amplitude;
-};
-
-
 struct GenerationMinMax
 {
     r32 min;
@@ -113,6 +103,7 @@ struct Selector
     GenerationBucket buckets[4];
 };
 
+#define WATER_LEVEL 0.2f
 struct BiomePyramid
 {
     // NOTE(Leonardo): vertical!
@@ -154,8 +145,8 @@ struct WorldGenerator
     NoiseParams precipitationNoise;
     
     
-    
-    NoiseParams tileLayoutNoise;
+    NoiseParams elevationNoise;
+    r32 elevationPower;
     
     BiomePyramid biomePyramid;
     
@@ -165,6 +156,7 @@ struct WorldGenerator
 struct TileGenerationData
 {
     r32 height;
+    r32 waterLevel;
     u32 biomeTaxonomy;
     r32 layoutNoise;
 };
