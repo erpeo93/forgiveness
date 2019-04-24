@@ -13,6 +13,34 @@ struct EntityBlock
     };
 };
 
+
+struct WorldTile
+{
+    r32 height;
+    r32 waterLevel;
+    u32 taxonomy;
+    r32 layoutNoise;
+    
+#ifndef FORG_SERVER
+    u8 lightCount;
+    Vec4 lightIndexes;
+    
+    r32 waterPhase;
+    r32 waterSine;
+    b32 movingNegative;
+    RandomSequence waterSeq;
+    
+    r32 chunkynessSame;
+    r32 chunkynessOther;
+    Vec4 baseColor;
+    Vec4 colorDelta;
+    Vec4 borderColor;
+    
+    r32 waterNormalizedNoise;
+#endif
+};
+
+
 struct WorldChunk
 {
     b32 initialized;
@@ -21,16 +49,7 @@ struct WorldChunk
     i32 worldY;
     i32 worldZ;
     
-    TileGenerationData tileData[CHUNK_DIM][CHUNK_DIM];
-    
-#ifndef FORG_SERVER
-    u8 lightCount[CHUNK_DIM][CHUNK_DIM];
-    Vec4 lightIndexes[CHUNK_DIM][CHUNK_DIM];
-    
-    r32 waterPhase[CHUNK_DIM][CHUNK_DIM];
-    r32 waterSine[CHUNK_DIM][CHUNK_DIM];
-    b32 movingNegative[CHUNK_DIM][CHUNK_DIM];
-#endif
+    WorldTile tiles[CHUNK_DIM][CHUNK_DIM];
     
     EntityBlock* entities;
     WorldChunk* next;

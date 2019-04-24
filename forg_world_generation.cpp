@@ -19,7 +19,7 @@ BucketDistr({ Tree_Palm, 30, Tree_Oak, 30, Tree_Pine, 40 });
 
 
 
-internal RandomSequence GetChunkSeed(i32 worldX, i32 worldY, i32 universeX, i32 universeY)
+inline RandomSequence GetChunkSeed(i32 worldX, i32 worldY, i32 universeX, i32 universeY)
 {
     Assert(universeX >= 0);
     Assert(universeX < UNIVERSE_DIM);
@@ -31,7 +31,7 @@ internal RandomSequence GetChunkSeed(i32 worldX, i32 worldY, i32 universeX, i32 
 }
 
 
-r32 NormalizedNoise(r32 dx, r32 dy, r32 frequency, u32 seed)
+inline r32 NormalizedNoise(r32 dx, r32 dy, r32 frequency, u32 seed)
 {
     r32 noiseValue  = noise(dx * frequency, dy * frequency, 0.0f, seed);
     r32 result = (noiseValue + 1.0f) * 0.5f;
@@ -198,9 +198,9 @@ inline u32 SelectFromBiomePyramid(BiomePyramid* pyramid, r32 precipitationLevel,
     return result;
 }
 
-inline TileGenerationData GenerateTile(TaxonomyTable* table, WorldGenerator* generator, r32 tileNormX, r32 tileNormY, u32 seed)
+inline WorldTile GenerateTile(TaxonomyTable* table, WorldGenerator* generator, r32 tileNormX, r32 tileNormY, u32 seed)
 {
-    TileGenerationData result = {};
+    WorldTile result = {};
     
     r32 tileLandscape = Evaluate(tileNormX, tileNormY, generator->landscapeNoise, seed);
     r32 finalHeight = Select(&generator->landscapeSelect, tileNormX, tileNormY, tileLandscape, seed);
@@ -239,11 +239,29 @@ inline TileGenerationData GenerateTile(TaxonomyTable* table, WorldGenerator* gen
     
     
     result.height = finalHeight;
-    result.biomeTaxonomy = biome;
-    Assert(result.biomeTaxonomy);
+    result.taxonomy = biome;
+    Assert(result.taxonomy);
     
     TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, biome);
     result.layoutNoise = Evaluate(tileNormX, tileNormY, tileSlot->tileNoise, seed);
+    
+#if 0    
+    TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
+    TileInfo* info = GetTileInfo();
+    TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, tileData->biomeTaxonomy);
+    
+    result.baseColor = slot->color; 
+    result.deltaColor = slot->colorDelta;
+    result.borderColor = slot->tileBorderColor;
+    result.chunkynessSame = slot->chunkynessWithSame;
+    result.chunkynessOther = slot->chunkynessWithOther;
+    
+    
+    result.waterSeq = Seed(chunk->worldX * chunk->worldY + tileX * tileY);
+    result.waterNormalizedNoise = chunk->waterPhase[tileY][tileX];
+    result.waterSine = Sin(DegToRad(chunk->waterSine[tileY][tileX]));
+#endif
+    
     
     return result;
 }
@@ -280,7 +298,7 @@ internal void BuildChunk(TaxonomyTable* table, WorldGenerator* generator, WorldC
             Assert(Normalized(tileNormX));
             Assert(Normalized(tileNormY));
             
-            chunk->tileData[tileY][tileX] = GenerateTile(table, generator, tileNormX, tileNormY, seed);
+            chunk->tiles[tileY][tileX] = GenerateTile(table, generator, tileNormX, tileNormY, seed);
         }
     }
 }

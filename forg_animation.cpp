@@ -1857,9 +1857,9 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
     return result;
 }
 
-inline r32 GetChunkyness(TileInfo i0, TileInfo i1)
+inline r32 GetChunkyness(WorldTile* t0, WorldTile* t1)
 {
-    r32 result = (i0.taxonomy == i1.taxonomy) ? i0.chunkynessSame : i0.chunkynessOther;
+    r32 result = (t0->taxonomy == t1->taxonomy) ? t0->chunkynessSame : t0->chunkynessOther;
     return result;
 }
 
@@ -1867,12 +1867,12 @@ inline Vec3 GetTileColorDelta(TaxonomyTable* table, WorldChunk* chunk, u32 tileX
 {
     Assert(tileX < CHUNK_DIM);
     Assert(tileY < CHUNK_DIM);
-    TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
+    WorldTile* tile = &chunk->tiles[tileY][tileX];
     
-    TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, tileData->biomeTaxonomy);
+    TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, tile->taxonomy);
     Vec4 delta = tileSlot->colorDelta;
     
-    r32 noiseBilateral = (tileData->layoutNoise - 0.5f) * 2.0f;
+    r32 noiseBilateral = (tile->layoutNoise - 0.5f) * 2.0f;
     
     Vec3 noisy;
     noisy.r = delta.r * noiseBilateral;
@@ -1891,21 +1891,10 @@ inline Vec3 GetTileColorDelta(TaxonomyTable* table, WorldChunk* chunk, u32 tileX
     return result;
 }
 
-inline Vec4 GetBaseTileColor(TaxonomyTable* table, WorldChunk* chunk, u32 tileX, u32 tileY)
-{
-    Assert(tileX < CHUNK_DIM);
-    Assert(tileY < CHUNK_DIM);
-    TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
-    
-    TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, tileData->biomeTaxonomy);
-    Vec4 color = tileSlot->tileColor;
-    
-    return color;
-}
-
 inline Vec4 GetTileColor(TaxonomyTable* table, WorldChunk* chunk, u32 tileX, u32 tileY, b32 uniformColor, Vec2 randomOffset)
 {
-    Vec4 color = GetBaseTileColor(table, chunk, tileX, tileY);
+    WorldTile* tile = &chunk->tiles[tileY][tileX];
+    Vec4 color = tile->baseColor;
     
     if(!uniformColor)
     {
@@ -1936,45 +1925,47 @@ inline Vec4 ComputeWeightedChunkColor(GameModeWorld* worldMode, WorldChunk* chun
 }
 
 
-inline Vec4 GetWaterColor(TileInfo tile)
+
+
+r32 maxColorDisplacement = 0.35f * WATER_LEVEL;
+r32 maxAlphaDisplacement = 0.2f * WATER_LEVEL;
+
+Vec3 minColorDeep = V3(0.0f, 0.03f, 0.05f);
+Vec3 maxColorDeep = V3(0.0f, 0.08f, 0.4f);
+
+r32 maxAlphaDeep = 1.0f;
+r32 minAlphaDeep = 0.7f;
+
+Vec3 minColorSwallow = V3(0.0f, 0.1f, 0.78f);
+Vec3 maxColorSwallow = V3(0.25f, 0.35f, 1.0f);
+
+r32 maxAlphaSwallow = 1.0f;
+r32 minAlphaSwallow = 0.0f;
+
+inline Vec4 GetWaterColor(WorldTile* tile)
 {
-    r32 maxColorDisplacement = 0.35f * WATER_LEVEL;
-    r32 maxAlphaDisplacement = 0.2f * WATER_LEVEL;
-    
+#if 0
     r32 sineWaterLevel = Clamp01MapToRange(0.9f * WATER_LEVEL, tile.waterLevel, WATER_LEVEL);
 	r32 normalizedWaterLevel = Clamp01MapToRange(0, tile.waterLevel, WATER_LEVEL);
     normalizedWaterLevel = Pow(normalizedWaterLevel, 3.0f);
     
-    
-    Vec3 minColorDeep = V3(0.0f, 0.03f, 0.05f);
-    Vec3 maxColorDeep = V3(0.0f, 0.08f, 0.4f);
-    
-    r32 maxAlphaDeep = 1.0f;
-    r32 minAlphaDeep = 0.7f;
-    
-    Vec3 minColorSwallow = V3(0.0f, 0.1f, 0.78f);
-    Vec3 maxColorSwallow = V3(0.25f, 0.35f, 1.0f);
-    
-    r32 maxAlphaSwallow = 1.0f;
-    r32 minAlphaSwallow = 0.0f;
-    
     Vec3 minColor = Lerp(minColorDeep, normalizedWaterLevel, minColorSwallow);
     Vec3 maxColor = Lerp(maxColorDeep, normalizedWaterLevel, maxColorSwallow);
-    
     
     r32 minAlpha = Lerp(minAlphaDeep, normalizedWaterLevel, minAlphaSwallow);
     r32 maxAlpha = Lerp(maxAlphaDeep, normalizedWaterLevel, maxAlphaSwallow);
     
     
     RandomSequence* seq = &tile.waterSeq;
-    
     NoiseParams waterParams = NoisePar(4.0f, 2, 0.0f, 1.0f);
-    r32 blueNoise = Evaluate(tile.waterNormalizedNoise, 0, waterParams, GetNextUInt32(seq));
-    r32 alphaNoise = Evaluate(tile.waterNormalizedNoise, 0, waterParams, GetNextUInt32(seq));
+    //r32 blueNoise = Evaluate(tile.waterNormalizedNoise, 0, waterParams, GetNextUInt32(seq));
+    //r32 alphaNoise = Evaluate(tile.waterNormalizedNoise, 0, waterParams, GetNextUInt32(seq));
+    
+    r32 blueNoise = 1.0f;
+    r32 alphaNoise = 1.0f;
     
     blueNoise = UnilateralToBilateral(blueNoise);
     alphaNoise = UnilateralToBilateral(alphaNoise);
-    
     
     r32 sine = tile.waterSine;
     r32 blueSine = sine;
@@ -2000,7 +1991,9 @@ inline Vec4 GetWaterColor(TileInfo tile)
     r32 alpha = Lerp(maxAlpha, alphaLerp, minAlpha);
     
     Vec4 waterColor = V4(color, alpha);
-    
+#else
+    Vec4 waterColor = V4(1, 1, 1, 1);
+#endif
     return waterColor;
 }
 
@@ -2064,7 +2057,6 @@ inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, Taxo
     }
 }
 
-inline TileInfo GetTileInfo(GameModeWorld* worldMode, UniversePos baseP, Vec2 P, b32 randomizeColor);
 internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToUpdate, AnimationEntityParams params = StandardEntityParams())
 {
     r32 ratio;
@@ -2105,7 +2097,8 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     AnimationOutput result = {};
     
     ClientEntity* player = GetEntityClient(worldMode, myPlayer->identifier);
-    TileInfo tileInfo = GetTileInfo(worldMode, player->universeP, entityC->P.xy, false);
+    
+    Vec4 lightIndexes = V4(-1, -1, -1, -1);
     TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, entityC->taxonomy);
     
     for(AnimationEffect* effect = entityC->firstActiveEffect; effect; effect = effect->next)
@@ -2139,7 +2132,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         
         bounds = Offset(slot->physicalBounds, entityC->P);
         Assert(slot->plantParams);
-        UpdateAndRenderPlant(worldMode, group, tileInfo, entityC, slot->plantParams, timeToUpdate);
+        UpdateAndRenderPlant(worldMode, group, lightIndexes, entityC, slot->plantParams, timeToUpdate);
     }
     else if(IsRock(worldMode->table, entityC->taxonomy))
     {
@@ -2175,7 +2168,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         onTheFly.faceCount = rock->faceCount;
         onTheFly.faces = rock->faces;
         
-        PushModel(group, &onTheFly, entityC->P, tileInfo.lightIndexes, rock->dim, V4(1, 1, 1, 1), entityC->modulationWithFocusColor);
+        PushModel(group, &onTheFly, entityC->P, lightIndexes, rock->dim, V4(1, 1, 1, 1), entityC->modulationWithFocusColor);
         
         bounds = RectCenterDim(entityC->P, rock->dim);
     }
@@ -2211,7 +2204,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             MarkAllSlotsAsOccupied(entityC->equipment, dragging, ID);
         }
         
-        result = PlayAndDrawEntity(worldMode, group, tileInfo.lightIndexes, entityC, animationScale, params.angle, params.offset, timeToUpdate, bodyColor, params.drawOpened, params.onTop, params.bounds, additionalZbias);
+        result = PlayAndDrawEntity(worldMode, group, lightIndexes, entityC, animationScale, params.angle, params.offset, timeToUpdate, bodyColor, params.drawOpened, params.onTop, params.bounds, additionalZbias);
         
         if(IsValid(dragging))
         {

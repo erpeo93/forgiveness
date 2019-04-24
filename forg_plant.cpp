@@ -566,7 +566,7 @@ internal u32 LooseLeafs( PlantSegment* root, u32 leafCount, u32* indexes, u32* l
 
 
 
-internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group, TileInfo tileInfo,  ClientEntity* entityC, PlantParams* params, r32 timeToUpdate)
+internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes,  ClientEntity* entityC, PlantParams* params, r32 timeToUpdate)
 {
     u64 id = entityC->identifier;
     r32 age = entityC->plantTotalAge;
@@ -706,6 +706,6 @@ internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group,
         r32 offsetX = RandomRangeFloat( &seq, params->minOffset, params->maxOffset );
         r32 offsetY = RandomRangeFloat( &seq, params->minOffset, params->maxOffset );
         Vec3 plantP = entityC->P + V3( offsetX, offsetY, 0 );
-        RenderPlant( group, tileInfo.lightIndexes, params, plant->root, plant->futureRoot, plantP, Identity(), R32_MAX,  &renderingParams, timeToUpdate );
+        RenderPlant( group, lightIndexes, params, plant->root, plant->futureRoot, plantP, Identity(), R32_MAX,  &renderingParams, timeToUpdate );
     }
 }

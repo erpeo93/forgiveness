@@ -794,14 +794,6 @@ internal void SendEntityUpdate(SimRegion* region, SimEntity* entity)
         Assert(!region->updateHash);
         SendUpdateToAdiacentRegions(region, entity->identifier);
     }
-    
-#if FORGIVENESS_INTERNAL
-    if(server->editorMode)
-    {
-        Assert(server->debugPlayer);
-        //SendPartialEntityState( server->debugPlayer, world, entity );
-    }
-#endif
 }
 
 inline void SendDataFileHeader(ServerPlayer* player, char* name, u32 fileSize, u32 chunkSize)

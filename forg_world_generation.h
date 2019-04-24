@@ -154,11 +154,3 @@ struct WorldGenerator
     
     WorldGenerator* nextFree;
 };
-
-struct TileGenerationData
-{
-    r32 height;
-    r32 waterLevel;
-    u32 biomeTaxonomy;
-    r32 layoutNoise;
-};

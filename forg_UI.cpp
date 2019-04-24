@@ -3196,7 +3196,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             UIAddChild(UI->table, params, EditorElement_String, "showBorders", "false");
             UIAddChild(UI->table, params, EditorElement_String, "uniformColors", "false");
             UIAddChild(UI->table, params, EditorElement_String, "viewType", "Voronoi");
-            UIAddChild(UI->table, params, EditorElement_Unsigned, "chunkApron", "1");
+            UIAddChild(UI->table, params, EditorElement_Unsigned, "chunkApron", "2");
             EditorElement* offset = UIAddChild(UI->table, params, EditorElement_Struct, "cameraOffset");
             UIAddChild(UI->table, offset, EditorElement_Real, "x", "0.0");
             UIAddChild(UI->table, offset, EditorElement_Real, "y", "0.0");
@@ -3258,7 +3258,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         
         
         
-        UI->chunkApron = 1;
+        UI->chunkApron = 2;
         UI->activeSkillSlotIndex = -1;
         UI->skillSlotMaxTimeout = 10.0f;
         

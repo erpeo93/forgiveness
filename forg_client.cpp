@@ -255,8 +255,8 @@ inline void ResetLightGrid(GameModeWorld* worldMode)
             {
                 for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
                 {
-                    chunk->lightCount[tileY][tileX] = 0;
-                    chunk->lightIndexes[tileY][tileX] = V4(-1, -1, -1, -1);
+                    chunk->tiles[tileY][tileX].lightCount = 0;
+                    chunk->tiles[tileY][tileX].lightIndexes = V4(-1, -1, -1, -1);
                 }
             }
         }
@@ -280,10 +280,11 @@ inline void AddLightToGrid(GameModeWorld* worldMode, Vec3 P, u32 index)
                 Assert(tileX < CHUNK_DIM);
                 Assert(tileY < CHUNK_DIM);
                 
-                if(query.chunk->lightCount[tileY][tileX] < 4)
+                WorldTile* tile = &query.chunk->tiles[tileY][tileX];
+                if(tile->lightCount < 4)
                 {
                     r32 lightIndexReal = (r32) index;
-                    Vec4* lightIndexes = (Vec4*) query.chunk->lightIndexes + (tileY * CHUNK_DIM + tileX);
+                    Vec4* lightIndexes = (Vec4*) &tile->lightIndexes;
                     
                     
                     if((lightIndexes->x != lightIndexReal) &&
@@ -291,9 +292,7 @@ inline void AddLightToGrid(GameModeWorld* worldMode, Vec3 P, u32 index)
                        (lightIndexes->z != lightIndexReal) &&
                        (lightIndexes->w != lightIndexReal))
                     {
-                        u8 lightIndex = query.chunk->lightCount[tileY][tileX];
-                        query.chunk->lightCount[tileY][tileX] = lightIndex + 1;
-                        
+                        u8 lightIndex = tile->lightCount++;
                         lightIndexes->E[lightIndex] = (r32) index;
                     }
                     
@@ -313,48 +312,29 @@ inline Vec4 GetLightIndexes(GameModeWorld* worldMode, Vec3 P)
     GetUniversePosQuery query = TranslateRelativePos(worldMode, worldMode->player.universeP, P.xy);
     if(query.chunk)
     {
-        result = query.chunk->lightIndexes[query.tileY][query.tileX];
+        result = query.chunk->tiles[query.tileY][query.tileX].lightIndexes;
     }
     
     return result;
 }
 
-inline TileInfo GetTileInfo(GameModeWorld* worldMode, WorldChunk* chunk, u32 tileX, u32 tileY, b32 uniformColor, Vec2 randomOffset)
+inline WorldTile* GetTile(WorldChunk* chunk, u32 tileX, u32 tileY)
 {
-    TileInfo result = {};
+    Assert(tileY < CHUNK_DIM);
+    Assert(tileX < CHUNK_DIM);
     
-    TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
-    result.color = GetTileColor(worldMode->table, chunk, tileX, tileY, uniformColor, randomOffset);
-    result.height = tileData->height;
-    result.waterLevel = tileData->waterLevel;
-    result.lightIndexes = chunk->lightIndexes[tileY][tileX];
-    
-    TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, tileData->biomeTaxonomy);
-    result.borderColor = slot->tileBorderColor;
-    
-    result.chunkynessSame = slot->chunkynessWithSame;
-    result.chunkynessOther = slot->chunkynessWithOther;
-    
-    result.taxonomy = tileData->biomeTaxonomy;
-    
-    result.waterSeq = Seed(chunk->worldX * chunk->worldY + tileX * tileY);
-    result.waterNormalizedNoise = chunk->waterPhase[tileY][tileX];
-    result.waterSine = Sin(DegToRad(chunk->waterSine[tileY][tileX]));
+    WorldTile* result = &chunk->tiles[tileY][tileX];
     
     return result;
 }
 
-inline TileInfo GetTileInfo(GameModeWorld* worldMode, UniversePos baseP, Vec2 P, b32 randomizeColor)
+inline WorldTile* GetTile(GameModeWorld* worldMode, UniversePos baseP, Vec2 P, b32 randomizeColor)
 {
-    TileInfo result = {};
+    WorldTile* result = 0;
     GetUniversePosQuery query = TranslateRelativePos(worldMode, baseP, P);
-    
     if(query.chunk)
     {
-        u8 tileX = SafeTruncateToU8(query.tileX);
-        u8 tileY = SafeTruncateToU8(query.tileY);
-        
-        result = GetTileInfo(worldMode, query.chunk, tileX, tileY, randomizeColor, query.chunkOffset);
+        result = GetTile(query.chunk, query.tileX, query.tileY);
     }
     
     return result;
@@ -656,13 +636,13 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Fo
                             Vec2 destP2D = chunkLowLeftCornerOffset.xy + tileCenter;
                             
                             
-                            TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
+                            WorldTile* tile = &chunk->tiles[tileY][tileX];
                             
-                            TaxonomySlot* tileSlot = GetSlotForTaxonomy(worldMode->table, tileData->biomeTaxonomy);
+                            TaxonomySlot* tileSlot = GetSlotForTaxonomy(worldMode->table, tile->taxonomy);
                             
                             r32 pointMaxOffset = Min(0.5f * voxelSide, tileSlot->groundPointMaxOffset);
                             u32 pointsPerTile = Min(maxPointsPerTile, tileSlot->groundPointPerTile);
-                            r32 tileLayoutNoise = tileData->layoutNoise;
+                            r32 tileLayoutNoise = tile->layoutNoise;
                             
                             switch(tileSlot->tilePointsLayout)
                             {
@@ -1390,15 +1370,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             {
                                 forceVoronoiRegeneration = true;
                                 BuildChunk(worldMode->table, generator, chunk, X, Y, seed);
-                                
-                                for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
-                                {
-                                    for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
-                                    {
-                                        chunk->lightCount[tileY][tileX] = 0;
-                                        chunk->lightIndexes[tileY][tileX] = V4(-1, -1, -1, -1);
-                                    }
-                                }
                             }
                             
                             
@@ -1408,26 +1379,27 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             {
                                 for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
                                 {
-                                    if(chunk->movingNegative[tileY][tileX])
+                                    WorldTile* tile = GetTile(chunk, tileX, tileY);
+                                    if(tile->movingNegative)
                                     {
-                                        chunk->waterPhase[tileY][tileX] -= waterSpeed * input->timeToAdvance;
-                                        if(chunk->waterPhase[tileY][tileX] < 0)
+                                        tile->waterPhase -= waterSpeed * input->timeToAdvance;
+                                        if(tile->waterPhase < 0)
                                         {
-                                            chunk->waterPhase[tileY][tileX] = 0;
-                                            chunk->movingNegative[tileY][tileX] = false;
+                                            tile->waterPhase = 0;
+                                            tile->movingNegative = false;
                                         }
                                     }
                                     else
                                     {
-                                        chunk->waterPhase[tileY][tileX] += waterSpeed * input->timeToAdvance;
-                                        if(chunk->waterPhase[tileY][tileX] > 1.0f)
+                                        tile->waterPhase += waterSpeed * input->timeToAdvance;
+                                        if(tile->waterPhase > 1.0f)
                                         {
-                                            chunk->waterPhase[tileY][tileX] = 1.0f;
-                                            chunk->movingNegative[tileY][tileX] = true;
+                                            tile->waterPhase = 1.0f;
+                                            tile->movingNegative = true;
                                         }
                                     }
                                     
-                                    chunk->waterSine[tileY][tileX] += waterSineSpeed * input->timeToAdvance;
+                                    tile->waterSine += waterSineSpeed * input->timeToAdvance;
                                 }
                             }
                         }
@@ -1503,8 +1475,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                             }
                                             
                                             
-                                            TileGenerationData* tileData = &chunk->tileData[Y][X];
-                                            r32 waterLevel = tileData->waterLevel;
+                                            WorldTile* tile = &chunk->tiles[Y][X];
+                                            r32 waterLevel = tile->waterLevel;
                                             if(waterLevel < WATER_LEVEL)
                                             {
                                                 Vec4 waterColor = V4(0, 0, waterLevel, 1);
@@ -1525,9 +1497,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     ForgVoronoiDiagram* voronoi = worldMode->activeDiagram;
                     if(voronoi)
                     {
-                        BEGIN_BLOCK("voronoi rendering");
-                        jcv_site* sites = jcv_diagram_get_sites(&voronoi->diagram);
+                        BEGIN_BLOCK("voronoi sites");
                         
+#if 0                        
+                        jcv_site* sites = jcv_diagram_get_sites(&voronoi->diagram);
                         for(int i = 0; i < voronoi->diagram.numsites; ++i)
                         {
                             jcv_site* site = sites + i;
@@ -1536,10 +1509,16 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             site->tile = QP;
                             site->walked = false;
                         }
+#endif
                         
+                        END_BLOCK();
+                        
+                        
+                        BEGIN_BLOCK("edge rendering");
                         const jcv_edge* edge = jcv_diagram_get_edges(&voronoi->diagram);
                         while(edge)
                         {
+#if 0
                             jcv_site* site0 = edge->sites[0];
                             Vec2 site0P = V2(site0->p.x, site0->p.y);
                             TileInfo QSite0 = site0->tile;
@@ -1551,7 +1530,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             Vec2 offsetFrom = V2(edge->pos[0].x, edge->pos[0].y);
                             Vec2 offsetTo = V2(edge->pos[1].x, edge->pos[1].y);
                             
-                            
                             if(offsetFrom.y > offsetTo.y)
                             {
                                 Vec2 temp = offsetFrom;
@@ -1560,18 +1538,26 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             }
                             
                             TileInfo QFrom = GetTileInfo(worldMode, voronoi->originP, offsetFrom, UI->uniformGroundColors);
+                            TileInfo QTo = GetTileInfo(worldMode, voronoi->originP, offsetTo, UI->uniformGroundColors);
+#endif
                             
+                            
+#if 0                            
                             r32 chunkyness0 = GetChunkyness(QSite0, QSite1);
                             r32 chunkyness1 = GetChunkyness(QSite1, QSite0);
                             
                             Vec4 CFrom0 = Lerp(QFrom.color, chunkyness0, QSite0.color);
                             Vec4 CFrom1 = Lerp(QFrom.color, chunkyness1, QSite1.color);
                             
-                            TileInfo QTo = GetTileInfo(worldMode, voronoi->originP, offsetTo, UI->uniformGroundColors);
                             Vec4 CTo0 = Lerp(QTo.color, chunkyness0, QSite0.color);
                             Vec4 CTo1 = Lerp(QTo.color, chunkyness1, QSite1.color);
+#endif
                             
                             
+                            
+                            
+                            
+#if 0                            
                             r32 outer0 = Outer(offsetFrom, offsetTo, site0P);
                             r32 probe0 = Outer(offsetFrom, offsetTo, offsetFrom - V2(1, 0));
                             b32 zeroIsOnLeftSide = false;
@@ -1597,6 +1583,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             Vec4 smooth1To = Lerp(offsetToCamera, chunkyness1, site1PCamera);
                             
                             
+                            
                             Vec4 borderColor = Lerp(QSite0.borderColor, 0.5f, QSite1.borderColor);
                             if(!QSite0.borderColor.a)
                             {
@@ -1618,35 +1605,30 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             {
                                 PushLine(group, V4(1, 1, 1, 1), offsetFromCamera.xyz, offsetToCamera.xyz, 0.02f);
                             }
+#endif
                             
                             
                             
+                            
+                            
+                            
+                            
+                            // NOTE(Leonardo): actual ground texture
+#if 0                            
                             TexturedQuadsCommand* entry = GetCurrentTriangles(group, 2, 6, 6);
                             if(entry)
                             {
                                 if(zeroIsOnLeftSide)
                                 {
-                                    PushTriangle(group, group->whiteTexture, QSite0.lightIndexes, 
-                                                 site0PCamera, QSite0.color,
-                                                 smooth0From, QSite0.color,
-                                                 smooth0To, QSite0.color, 0);
+                                    PushTriangle(group, group->whiteTexture, QSite0.lightIndexes,  site0PCamera, QSite0.color, smooth0From, QSite0.color, smooth0To, QSite0.color, 0);
                                     
-                                    PushTriangle(group, group->whiteTexture, QSite1.lightIndexes,
-                                                 site1PCamera, QSite1.color,
-                                                 smooth1To, QSite1.color,
-                                                 smooth1From, QSite1.color, 0);
+                                    PushTriangle(group, group->whiteTexture, QSite1.lightIndexes, site1PCamera, QSite1.color, smooth1To, QSite1.color, smooth1From, QSite1.color, 0);
                                 }
                                 else
                                 {
-                                    PushTriangle(group, group->whiteTexture, QSite0.lightIndexes, 
-                                                 site0PCamera, QSite0.color,
-                                                 smooth0To, QSite0.color,
-                                                 smooth0From, QSite0.color, 0);
+                                    PushTriangle(group, group->whiteTexture, QSite0.lightIndexes, site0PCamera, QSite0.color, smooth0To, QSite0.color, smooth0From, QSite0.color, 0);
                                     
-                                    PushTriangle(group, group->whiteTexture, QSite1.lightIndexes,
-                                                 site1PCamera, QSite1.color,
-                                                 smooth1From, QSite1.color,
-                                                 smooth1To, QSite1.color, 0);
+                                    PushTriangle(group, group->whiteTexture, QSite1.lightIndexes, site1PCamera, QSite1.color, smooth1From, QSite1.color, smooth1To, QSite1.color, 0);
                                 }
                             }
                             
@@ -1655,53 +1637,36 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             {
                                 if(zeroIsOnLeftSide)
                                 {
-                                    PushQuad(group, group->whiteTexture, QSite0.lightIndexes,
-                                             smooth0From, {}, QSite0.color,
-                                             offsetFromCamera, {}, QFrom.color,
-                                             offsetToCamera, {}, QTo.color,
-                                             smooth0To, {}, QSite0.color, 0);
+                                    PushQuad(group, group->whiteTexture, QSite0.lightIndexes, smooth0From, {}, QSite0.color, offsetFromCamera, {}, QFrom.color, offsetToCamera, {}, QTo.color, smooth0To, {}, QSite0.color, 0);
                                     
-                                    PushQuad(group, group->whiteTexture, QSite1.lightIndexes,
-                                             smooth1From, {}, QSite1.color,
-                                             smooth1To, {}, QSite1.color,
-                                             offsetToCamera, {}, QTo.color,
-                                             offsetFromCamera, {}, QFrom.color, 0);
+                                    PushQuad(group, group->whiteTexture, QSite1.lightIndexes, smooth1From, {}, QSite1.color, smooth1To, {}, QSite1.color, offsetToCamera, {}, QTo.color, offsetFromCamera, {}, QFrom.color, 0);
                                     
                                     
                                 }
                                 else
                                 {
-                                    PushQuad(group, group->whiteTexture, QSite0.lightIndexes,
-                                             smooth0To, {}, QSite0.color,
-                                             offsetToCamera, {}, QTo.color,
-                                             offsetFromCamera, {}, QFrom.color,
-                                             smooth0From, {}, QSite0.color, 0);
+                                    PushQuad(group, group->whiteTexture, QSite0.lightIndexes, smooth0To, {}, QSite0.color, offsetToCamera, {}, QTo.color, offsetFromCamera, {}, QFrom.color,smooth0From, {}, QSite0.color, 0);
                                     
-                                    PushQuad(group, group->whiteTexture, QSite1.lightIndexes,
-                                             smooth1To, {}, QSite1.color,
-                                             smooth1From, {}, QSite1.color,
-                                             offsetFromCamera, {}, QFrom.color,
-                                             offsetToCamera, {}, QTo.color, 0);
+                                    PushQuad(group, group->whiteTexture, QSite1.lightIndexes, smooth1To, {}, QSite1.color, smooth1From, {}, QSite1.color, offsetFromCamera, {}, QFrom.color, offsetToCamera, {}, QTo.color, 0);
                                 }
                             }
+#endif
                             
                             
+                            
+                            
+                            
+                            
+                            
+                            // NOTE(Leonardo): Water Rendering and particles
+#if 0
                             r32 rippleThreesold = 0.78f;
                             r32 waterRandomPercentage = 0.002f;
                             r32 ripplesLifetime = 3.0f;
                             
                             if(!site0->walked)
                             {
-                                
-                                for(u32 decorationIndex = 0; decorationIndex < 0; ++decorationIndex)
-                                {
-                                    Vec4 P = site0PCamera;
-                                    Vec2 dim = V2(0.1f, 0.1f);
-                                    Vec4 color = V4(1, 1, 1, 1);
-                                    PushRect(group, FlatTransform(QSite0.height + 0.01f), P.xyz, dim, color, QSite0.lightIndexes);
-                                }
                                 site0->walked = true;
-                                
                                 if(QSite0.waterLevel < rippleThreesold * WATER_LEVEL && RandomUni(&worldMode->waterRipplesSequence) < waterRandomPercentage)
                                 {
                                     SpawnWaterRipples(particleCache, site0PCamera.xyz, V3(0, 0, 0), ripplesLifetime);
@@ -1710,33 +1675,20 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             
                             if(!site1->walked)
                             {
-                                for(u32 decorationIndex = 0; decorationIndex < 0; ++decorationIndex)
-                                {
-                                    Vec4 P = site1PCamera;
-                                    Vec2 dim = V2(0.1f, 0.1f);
-                                    Vec4 color = V4(1, 1, 1, 1);
-                                    PushRect(group, FlatTransform(QSite1.height + 0.01f), P.xyz, dim, color, QSite0.lightIndexes);
-                                }
-                                
                                 site1->walked = true;
-                                
                                 if(QSite1.waterLevel < rippleThreesold * WATER_LEVEL && RandomUni(&worldMode->waterRipplesSequence) < waterRandomPercentage)
                                 {
                                     SpawnWaterRipples(particleCache, site1PCamera.xyz, V3(0, 0, 0), ripplesLifetime);
                                 }
                             }
                             
+                            
                             Vec4 waterColor0 = GetWaterColor(QSite0);
-                            
                             Vec4 waterColor1 = GetWaterColor(QSite1);
-                            
                             Vec4 waterColorFrom = GetWaterColor(QFrom);
                             Vec4 waterColorTo = GetWaterColor(QTo);
                             
                             Vec4 waterOffset = V4(0, 0, 0.01f, 0);
-                            
-                            
-                            b32 spawnWaterRipples = false;
                             
                             if(QSite0.waterLevel < WATER_LEVEL)
                             {
@@ -1746,17 +1698,11 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 {
                                     if(zeroIsOnLeftSide)
                                     {
-                                        PushTriangle(group, group->whiteTexture, QSite0.lightIndexes, 
-                                                     site0PCamera + waterOffset, waterColor0,
-                                                     offsetFromCamera + waterOffset, waterColorFrom,
-                                                     offsetToCamera + waterOffset, waterColorTo, 0);
+                                        PushTriangle(group, group->whiteTexture, QSite0.lightIndexes, site0PCamera + waterOffset, waterColor0, offsetFromCamera + waterOffset, waterColorFrom, offsetToCamera + waterOffset, waterColorTo, 0);
                                     }
                                     else
                                     {
-                                        PushTriangle(group, group->whiteTexture, QSite0.lightIndexes, 
-                                                     site0PCamera + waterOffset, waterColor0,
-                                                     offsetToCamera + waterOffset, waterColorTo,
-                                                     offsetFromCamera + waterOffset, waterColorFrom, 0);
+                                        PushTriangle(group, group->whiteTexture, QSite0.lightIndexes,  site0PCamera + waterOffset, waterColor0, offsetToCamera + waterOffset, waterColorTo, offsetFromCamera + waterOffset, waterColorFrom, 0);
                                     }
                                 }
                                 
@@ -1771,25 +1717,21 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 {
                                     if(zeroIsOnLeftSide)
                                     {
-                                        PushTriangle(group, group->whiteTexture, QSite1.lightIndexes, 
-                                                     site1PCamera + waterOffset, waterColor1,
-                                                     offsetToCamera + waterOffset, waterColorTo,
-                                                     offsetFromCamera + waterOffset, waterColorFrom, 0);
+                                        PushTriangle(group, group->whiteTexture, QSite1.lightIndexes, site1PCamera + waterOffset, waterColor1, offsetToCamera + waterOffset, waterColorTo, offsetFromCamera + waterOffset, waterColorFrom, 0);
                                     }
                                     else
                                     {
-                                        PushTriangle(group, group->whiteTexture, QSite1.lightIndexes, 
-                                                     site1PCamera + waterOffset, waterColor1,
-                                                     offsetFromCamera + waterOffset, waterColorFrom,
-                                                     offsetToCamera + waterOffset, waterColorTo, 0);
+                                        PushTriangle(group, group->whiteTexture, QSite1.lightIndexes, site1PCamera + waterOffset, waterColor1, offsetFromCamera + waterOffset, waterColorFrom, offsetToCamera + waterOffset, waterColorTo, 0);
                                     }
                                 }
                             }
+#endif
                             
                             
                             
                             edge = edge->next;
                         }
+                        
                         END_BLOCK();
                     }
                 }

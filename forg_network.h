@@ -224,9 +224,6 @@ enum Packet_Type
     Type_EditorP,
     
 #if FORGIVENESS_INTERNAL
-    Type_debugSpawnEntity,
-    Type_debugDeleteEntity,
-    Type_debugAIInfo,
     Type_debugEvent,
     Type_memoryStats,
     Type_InputRecording,

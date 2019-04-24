@@ -80,13 +80,11 @@ internal void SendEditingEvent( DebugEvent* event )
     Assert( event->pointer );
     if( myPlayer )
     {
-        unsigned char buff_[2048];
-        unsigned char* buff = ForgPackHeader(buff_, Type_debugEvent);
+        StartPacket(debugEvent);
         
-        buff += pack(buff, "QQLHCQQ", event->clock, event->pointer, event->threadID, event->coreIndex, event->type, event->overNetwork[0], event->overNetwork[1]);
+        Pack("QQLHCQQ", event->clock, event->pointer, event->threadID, event->coreIndex, event->type, event->overNetwork[0], event->overNetwork[1]);
         
-        u16 totalSize = ForgEndPacket(buff_, buff);
-        SendReliableData( buff_, totalSize);
+        CloseAndSendReliablePacket();
     }
 }
 
@@ -94,13 +92,11 @@ internal void SendInputRecordingMessage( b32 recording, b32 startAutomatically )
 {
     if( myPlayer )
     {
-        unsigned char buff_[2048];
-        unsigned char* buff = ForgPackHeader( buff_, Type_InputRecording, RELIABLE);
+        StartPacket(InputRecording);
         
-        buff += pack(buff, "ll", recording, startAutomatically);
+        Pack("ll", recording, startAutomatically);
         
-        u16 totalSize = ForgEndPacket( buff_, buff );
-        SendReliableData( buff_, totalSize );
+        CloseAndSendReliablePacket();
     }
 }
 #endif

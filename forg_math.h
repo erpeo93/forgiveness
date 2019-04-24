@@ -277,14 +277,14 @@ inline r32 BiLerp( r32 a, r32 b, r32 c, r32 d, r32 lerpX, r32 lerpY )
 }
 
 
-inline r32 Clamp01MapToRange( r32 min, r32 t, r32 max )
+inline r32 Clamp01MapToRange(r32 min, r32 t, r32 max)
 {
     r32 result = min;
     
     r32 range = max - min;
-    if( range != 0.0f )
+    if(range != 0.0f)
     {
-        result = Clamp01( ( t - min ) / range );
+        result = Clamp01((t - min ) / range);
     }
     
     return result;

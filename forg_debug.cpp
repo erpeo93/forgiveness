@@ -832,7 +832,7 @@ internal void DebugDrawElement( Layout* layout, DebugTree* tree, DebugElement* i
             Bitmap* bitmap = 0;
             if( event )
             {
-                bitmap = GetBitmap( renderGroup->assets, event->Value_BitmapId, renderGroup->generationID );
+                bitmap = GetBitmap(renderGroup->assets, event->Value_BitmapId);
                 if( bitmap )
                 {
                     BitmapDim dim = GetBitmapDim( bitmap, V3( 0, 0, 0 ), V3( 1, 0, 0 ), V3( 0, 1, 0 ), view->block.dim.y );
@@ -1882,7 +1882,7 @@ internal DebugState* DebugInit( GameRenderCommands* commands )
     return debugState;
 }
 
-internal void DEBUGReset( Assets* assets, GameRenderCommands* commands, u32 mainGenerationID )
+internal void DEBUGReset( Assets* assets, GameRenderCommands* commands)
 {
     if( !debugGlobalMemory->debugState )
     {
@@ -1890,7 +1890,7 @@ internal void DEBUGReset( Assets* assets, GameRenderCommands* commands, u32 main
     }
     
     DebugState* debugState = debugGlobalMemory->debugState;
-    debugState->renderGroup = BeginRenderGroup( assets, commands, mainGenerationID );
+    debugState->renderGroup = BeginRenderGroup( assets, commands);
     
     r32 width = (r32) commands->settings.width;
     r32 height = (r32) commands->settings.height;
@@ -1923,7 +1923,7 @@ extern "C" GAME_FRAME_END( GameDEBUGFrameEnd )
     u32 eventCount = arrayIndex_eventIndex & 0xffffffff;
     
     Assets* assets = DEBUGGetGameAssets( memory );
-    DEBUGReset( assets, commands, DEBUGGetMainGenerationID( memory ) );
+    DEBUGReset( assets, commands);
     
     DebugState* debugState = debugGlobalMemory->debugState;
     

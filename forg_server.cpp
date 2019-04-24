@@ -110,27 +110,11 @@ inline UniversePos GetUniverseP(SimRegion* region, Vec3 p)
 #if FORGIVENESS_INTERNAL
 DebugTable* globalDebugTable;
 
-internal void DebugSpawnEntity( ServerState* server, ServerPlayer* player, DebugSpawnRequest request )
-{
-    //Assert( request.taxonomy );
-    SimRegion* region = GetServerRegion( server, 0, 0 );
-    Vec3 P = V3( 0.5f, 10.0f, 0 );
-    AddEntity( region, P, request.taxonomy );
-}
-
-
 internal void HandleDebugMessage( PlatformServerMemory* memory, ServerPlayer* player, u32 packetType, unsigned char* packetPtr )
 {
     ServerState* server = ( ServerState* ) memory->server;
     switch( packetType )
     {
-        case Type_debugSpawnEntity:
-        {
-            DebugSpawnRequest req;
-            unpack( packetPtr, "Lv", &req.taxonomy, &req.offsetFromPlayer );
-            DebugSpawnEntity( server, player, req );
-        } break;
-        
         case Type_InputRecording:
         {
             b32 recording;
@@ -1296,12 +1280,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     ServerState* server = memory->server;
 #if FORGIVENESS_INTERNAL
     globalDebugTable = memory->debugTable;
-    {
-        DEBUG_DATA_BLOCK( Server_Test );
-        DEBUG_DATA_BLOCK( variables );
-        DEBUG_B32( server->testing );
-        DEBUG_VALUE( server->testing2 );
-    }
     
     {
         DEBUG_DATA_BLOCK(ServerProfile);
