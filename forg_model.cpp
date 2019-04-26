@@ -128,7 +128,7 @@ inline void CreateVertex(ColoredVertex* vertexes, u32 vertexIndex, ColoredVertex
 
 
 // NOTE(Leonardo): API
-internal void GenerateRock(ClientRock* dest, VertexModel* model, u32 iterationCount, MemoryPool* tempPool, RandomSequence* seq, Vec4 color)
+internal void GenerateRock(ClientRock* dest, VertexModel* model, u32 iterationCount, MemoryPool* tempPool, RandomSequence* seq, RockDefinition* rockDefinition)
 {
     u32 finalFaceCount = model->faceCount;
     for(u32 iterationIndex = 0; iterationIndex < iterationCount; ++iterationIndex)
@@ -158,7 +158,7 @@ internal void GenerateRock(ClientRock* dest, VertexModel* model, u32 iterationCo
         *vertex = model->vertexes[startVertexIndex];
         vertex->P.y *= RandomRangeFloat(seq, 0.33f, 0.66f);
         vertex->P.z *= RandomRangeFloat(seq, 0.5f, 1.0f);
-        vertex->color = color;
+        vertex->color = rockDefinition->color;
         
         r32 offset = RandomBil(seq) * 0.05f;
         vertex->color.r += offset;

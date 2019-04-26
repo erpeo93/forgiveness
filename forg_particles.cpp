@@ -547,59 +547,54 @@ internal void UpdateAndRenderSystem( GameModeWorld* worldMode, ParticleSystem* s
             color.a = 0.9f * Clamp01MapToRange( 1.0f, color.a, 0.9f );
         }
 #endif
-        TexturedQuadsCommand* entry = GetCurrentQuads(renderGroup, 4);
-        if(entry)
+        
+        for( u32 subIndex = 0; subIndex < 4; ++subIndex )
         {
-            TexturedVertex* vertBatch = commands->vertexArray + commands->vertexCount;
-            commands->vertexCount += (particle4xTriangleCount * 3);
+            Vec3 P = 
+            { 
+                M(A->P.x, subIndex),
+                M(A->P.y, subIndex),
+                M(A->P.z, subIndex)
+            };
+            Vec4 lightIndexes = GetLightIndexes(worldMode, P);
             
-            for( u32 subIndex = 0; subIndex < 4; ++subIndex )
+            Vec4 color = 
             {
-                Vec3 P = 
-                { 
-                    M(A->P.x, subIndex),
-                    M(A->P.y, subIndex),
-                    M(A->P.z, subIndex)
-                };
-                Vec4 lightIndexes = GetLightIndexes(worldMode, P);
+                M(A->C.r, subIndex),
+                M(A->C.g, subIndex),
+                M(A->C.b, subIndex),
+                M(A->C.a, subIndex)
+            };
+            
+            r32 angle = M(A->angle4x, subIndex);
+            r32 height = M(A->height4x, subIndex);
+            
+            if(system->bitmapID.value)
+            {
+                ObjectTransform transform = UprightTransform();
+                transform.angle = angle;
+                PushBitmap(renderGroup, transform, system->bitmapID, P, height, V2(1.0f, 1.0f),  color, lightIndexes);
+            }
+            else
+            {
+                u32 C = StoreColor(color);
                 
-                Vec4 color = 
-                {
-                    M(A->C.r, subIndex),
-                    M(A->C.g, subIndex),
-                    M(A->C.b, subIndex),
-                    M(A->C.a, subIndex)
-                };
+                r32 cos = Cos(angle);
+                r32 sin = Sin(angle);
+                Vec3 XAxisHalf = height * 0.5f * (cos * renderGroup->gameCamera.X + sin * renderGroup->gameCamera.Y);
+                Vec3 YAxisHalf = height * 0.5f * (-sin * renderGroup->gameCamera.X + cos * renderGroup->gameCamera.Y);
                 
-                r32 angle = M(A->angle4x, subIndex);
-                r32 height = M(A->height4x, subIndex);
+                Vec4 P0 = V4(P - XAxisHalf - YAxisHalf, 0);
+                Vec4 P1 = V4(P + XAxisHalf - YAxisHalf, 0);
+                Vec4 P2 = V4(P + XAxisHalf + YAxisHalf, 0);
+                Vec4 P3 = V4(P - XAxisHalf + YAxisHalf, 0);
                 
-				if(system->bitmapID.value)
-				{
-					ObjectTransform transform = UprightTransform();
-					transform.angle = angle;
-					PushBitmap(renderGroup, transform, system->bitmapID, P, height, V2(1.0f, 1.0f),  color, lightIndexes);
-				}
-				else
-				{
-					u32 C = StoreColor(color);
-                    
-					r32 cos = Cos(angle);
-					r32 sin = Sin(angle);
-					Vec3 XAxisHalf = height * 0.5f * (cos * renderGroup->gameCamera.X + sin * renderGroup->gameCamera.Y);
-					Vec3 YAxisHalf = height * 0.5f * (-sin * renderGroup->gameCamera.X + cos * renderGroup->gameCamera.Y);
-                    
-					Vec4 P0 = V4(P - XAxisHalf - YAxisHalf, 0);
-					Vec4 P1 = V4(P + XAxisHalf - YAxisHalf, 0);
-					Vec4 P2 = V4(P + XAxisHalf + YAxisHalf, 0);
-					Vec4 P3 = V4(P - XAxisHalf + YAxisHalf, 0);
-                    
-				    PushQuad(renderGroup, renderGroup->whiteTexture, lightIndexes,
-                             P0, UV, C,
-                             P1, UV, C,
-                             P2, UV, C,
-                             P3, UV, C, 0);
-				}
+                ReservedVertexes vertexes = ReserveQuads(renderGroup, 1);
+                PushQuad(renderGroup, renderGroup->whiteTexture, lightIndexes, &vertexes,
+                         P0, UV, C,
+                         P1, UV, C,
+                         P2, UV, C,
+                         P3, UV, C, 0);
             }
         }
     }
@@ -632,58 +627,52 @@ internal void UpdateAndRenderSineSystem(GameModeWorld* worldMode, ParticleSystem
         
         V3_4x P4x = A->startP + A->lerp4x * A->unitDP + sin4x * A->UpVector;
         
-        TexturedQuadsCommand* entry = GetCurrentQuads(renderGroup, 4);
-        if(entry)
+        for( u32 subIndex = 0; subIndex < 4; ++subIndex )
         {
-            TexturedVertex* vertBatch = commands->vertexArray + commands->vertexCount;
-            commands->vertexCount += (particle4xTriangleCount * 3);
+            Vec3 P = 
+            { 
+                M(P4x.x, subIndex),
+                M(P4x.y, subIndex),
+                M(P4x.z, subIndex)
+            };
+            Vec4 lightIndexes = GetLightIndexes(worldMode, P);
             
-            for( u32 subIndex = 0; subIndex < 4; ++subIndex )
+            Vec4 color = 
             {
-                Vec3 P = 
-                { 
-                    M(P4x.x, subIndex),
-                    M(P4x.y, subIndex),
-                    M(P4x.z, subIndex)
-                };
-                Vec4 lightIndexes = GetLightIndexes(worldMode, P);
-                
-                Vec4 color = 
-                {
-                    M(A->startC.r, subIndex),
-                    M(A->startC.g, subIndex),
-                    M(A->startC.b, subIndex),
-                    M(A->startC.a, subIndex)
-                };
-                
-                r32 alpha = Sin(M(A->lerpColorAlpha, subIndex));
-                color.a = alpha;
-                
-                u32 C = StoreColor(color);
-                
-                r32 angle = M(A->angle4x, subIndex);
-                
-                r32 cos = Cos(angle);
-                r32 sin = Sin(angle);
-                r32 height = M(A->height4x, subIndex);
-                
-                
-                
-                Vec3 XAxisHalf = height * 0.5f * (cos * renderGroup->gameCamera.X + sin * renderGroup->gameCamera.Y);
-                Vec3 YAxisHalf = height * 0.5f * (-sin * renderGroup->gameCamera.X + cos * renderGroup->gameCamera.Y);
-                
-                Vec4 P0 = V4(P - XAxisHalf - YAxisHalf, 0);
-                Vec4 P1 = V4(P + XAxisHalf - YAxisHalf, 0);
-                Vec4 P2 = V4(P + XAxisHalf + YAxisHalf, 0);
-                Vec4 P3 = V4(P - XAxisHalf + YAxisHalf, 0);
-                
-                
-                PushQuad(renderGroup, renderGroup->whiteTexture, lightIndexes,
-                         P0, UV, C,
-                         P1, UV, C,
-                         P2, UV, C,
-                         P3, UV, C, 0);
-            }
+                M(A->startC.r, subIndex),
+                M(A->startC.g, subIndex),
+                M(A->startC.b, subIndex),
+                M(A->startC.a, subIndex)
+            };
+            
+            r32 alpha = Sin(M(A->lerpColorAlpha, subIndex));
+            color.a = alpha;
+            
+            u32 C = StoreColor(color);
+            
+            r32 angle = M(A->angle4x, subIndex);
+            
+            r32 cos = Cos(angle);
+            r32 sin = Sin(angle);
+            r32 height = M(A->height4x, subIndex);
+            
+            
+            
+            Vec3 XAxisHalf = height * 0.5f * (cos * renderGroup->gameCamera.X + sin * renderGroup->gameCamera.Y);
+            Vec3 YAxisHalf = height * 0.5f * (-sin * renderGroup->gameCamera.X + cos * renderGroup->gameCamera.Y);
+            
+            Vec4 P0 = V4(P - XAxisHalf - YAxisHalf, 0);
+            Vec4 P1 = V4(P + XAxisHalf - YAxisHalf, 0);
+            Vec4 P2 = V4(P + XAxisHalf + YAxisHalf, 0);
+            Vec4 P3 = V4(P - XAxisHalf + YAxisHalf, 0);
+            
+            
+            ReservedVertexes vertexes = ReserveQuads(renderGroup, 1);
+            PushQuad(renderGroup, renderGroup->whiteTexture, lightIndexes, &vertexes,
+                     P0, UV, C,
+                     P1, UV, C,
+                     P2, UV, C,
+                     P3, UV, C, 0);
         }
     }
 }

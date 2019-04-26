@@ -19,9 +19,9 @@ struct WorldTile
     r32 height;
     r32 waterLevel;
     u32 taxonomy;
-    r32 layoutNoise;
     
 #ifndef FORG_SERVER
+    r32 layoutNoise;
     u8 lightCount;
     Vec4 lightIndexes;
     
@@ -29,14 +29,15 @@ struct WorldTile
     r32 waterSine;
     b32 movingNegative;
     RandomSequence waterSeq;
+    r32 blueNoise;
+    r32 alphaNoise;
     
     r32 chunkynessSame;
     r32 chunkynessOther;
     Vec4 baseColor;
     Vec4 colorDelta;
+    r32 colorRandomness;
     Vec4 borderColor;
-    
-    r32 waterNormalizedNoise;
 #endif
 };
 
@@ -54,6 +55,16 @@ struct WorldChunk
     EntityBlock* entities;
     WorldChunk* next;
 };
+
+inline WorldTile* GetTile(WorldChunk* chunk, u32 tileX, u32 tileY)
+{
+    Assert(tileY < CHUNK_DIM);
+    Assert(tileX < CHUNK_DIM);
+    
+    WorldTile* result = &chunk->tiles[tileY][tileX];
+    
+    return result;
+}
 
 struct AddEntityAdditionalParams
 {

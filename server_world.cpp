@@ -382,7 +382,7 @@ inline u64 AddRandomEntity(SimRegion* region, RandomSequence* sequence, Vec3 P, 
 internal void BuildSimpleTestWorld(ServerState* server)
 {
 #define GENERATE_ENEMIES 1
-#define GENERATE_ENVIRONMENT 0
+#define GENERATE_ENVIRONMENT 1
 #define GENERATE_OBJECTS 1
     
     
@@ -434,8 +434,8 @@ internal void BuildSimpleTestWorld(ServerState* server)
             u32 grassCount = 2;
             u32 rockCount = 2;
 #else
-            u32 treeCount = 200;
-            u32 grassCount = 200;
+            u32 treeCount = 400;
+            u32 grassCount = 800;
             u32 rockCount = 200;
 #endif
             
@@ -456,7 +456,7 @@ internal void BuildSimpleTestWorld(ServerState* server)
             for(u32 campFireIndex = 0; campFireIndex < 3; ++campFireIndex)
             {
                 Vec3 campFireP = fireP + V3(2.0f * campFireIndex, 0, 0);
-                AddRandomEntity(region, &region->server->randomSequence, campFireP, testSlot->taxonomy, FluidDirection(Identity(), 1, 0, 2, 0));
+                AddRandomEntity(region, &region->server->randomSequence, campFireP, testSlot->taxonomy);
             }
             
             testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "testGrass");

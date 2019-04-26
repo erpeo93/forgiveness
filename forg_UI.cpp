@@ -1794,7 +1794,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     UI->groundViewMode = (GroundViewMode) GetValuePreprocessor(GroundViewMode, GetValue(paramsElement, "viewType"));
                     UI->chunkApron = ToU32(GetValue(paramsElement, "chunkApron"));
 
-                    if(UI->chunkApron >= 3)
+                    if(UI->chunkApron >= 4)
                     {
                         UI->groundViewMode = Max(UI->groundViewMode, GroundView_Tile);
                     }

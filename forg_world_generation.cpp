@@ -242,26 +242,25 @@ inline WorldTile GenerateTile(TaxonomyTable* table, WorldGenerator* generator, r
     result.taxonomy = biome;
     Assert(result.taxonomy);
     
+    
+#ifndef FORG_SERVER
     TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, biome);
     result.layoutNoise = Evaluate(tileNormX, tileNormY, tileSlot->tileNoise, seed);
     
-#if 0    
-    TileGenerationData* tileData = &chunk->tileData[tileY][tileX];
-    TileInfo* info = GetTileInfo();
-    TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, tileData->biomeTaxonomy);
+    result.baseColor = tileSlot->tileColor; 
+    result.colorDelta = tileSlot->colorDelta;
+    result.borderColor = tileSlot->tileBorderColor;
+    result.chunkynessSame = tileSlot->chunkynessWithSame;
+    result.chunkynessOther = tileSlot->chunkynessWithOther;
+    result.colorRandomness = tileSlot->colorRandomness;
     
-    result.baseColor = slot->color; 
-    result.deltaColor = slot->colorDelta;
-    result.borderColor = slot->tileBorderColor;
-    result.chunkynessSame = slot->chunkynessWithSame;
-    result.chunkynessOther = slot->chunkynessWithOther;
+    result.waterPhase = 0;
+    result.movingNegative = false;
+    result.waterSine = 0;
     
     
-    result.waterSeq = Seed(chunk->worldX * chunk->worldY + tileX * tileY);
-    result.waterNormalizedNoise = chunk->waterPhase[tileY][tileX];
-    result.waterSine = Sin(DegToRad(chunk->waterSine[tileY][tileX]));
+    result.waterSeq = Seed((i32) (tileNormX * 1000.24f) + (i32)(tileNormY * 1223424.0f));
 #endif
-    
     
     return result;
 }

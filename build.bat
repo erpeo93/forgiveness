@@ -1,3 +1,3 @@
 @echo off
 
-call buildrelease.bat
+call builddebug.bat

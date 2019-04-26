@@ -1863,15 +1863,9 @@ inline r32 GetChunkyness(WorldTile* t0, WorldTile* t1)
     return result;
 }
 
-inline Vec3 GetTileColorDelta(TaxonomyTable* table, WorldChunk* chunk, u32 tileX, u32 tileY, RandomSequence* seq)
+inline Vec3 GetTileColorDelta(WorldTile* tile, RandomSequence* seq)
 {
-    Assert(tileX < CHUNK_DIM);
-    Assert(tileY < CHUNK_DIM);
-    WorldTile* tile = &chunk->tiles[tileY][tileX];
-    
-    TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, tile->taxonomy);
-    Vec4 delta = tileSlot->colorDelta;
-    
+    Vec4 delta = tile->colorDelta;
     r32 noiseBilateral = (tile->layoutNoise - 0.5f) * 2.0f;
     
     Vec3 noisy;
@@ -1886,21 +1880,17 @@ inline Vec3 GetTileColorDelta(TaxonomyTable* table, WorldChunk* chunk, u32 tileX
     random.b = delta.b * RandomBil(seq);
     
     
-    Vec3 result = Lerp(noisy, tileSlot->colorRandomness, random);
+    Vec3 result = Lerp(noisy, tile->colorRandomness, random);
     
     return result;
 }
 
-inline Vec4 GetTileColor(TaxonomyTable* table, WorldChunk* chunk, u32 tileX, u32 tileY, b32 uniformColor, Vec2 randomOffset)
+inline Vec4 GetTileColor(WorldTile* tile, b32 uniformColor, RandomSequence* seq)
 {
-    WorldTile* tile = &chunk->tiles[tileY][tileX];
     Vec4 color = tile->baseColor;
-    
     if(!uniformColor)
     {
-        RandomSequence seq = Seed((chunk->worldX + 12 * (i32)(randomOffset.x * 20088.0f)) * (chunk->worldY + 12 * (i32) (randomOffset.y * 23400.0f)));
-        
-        color.rgb += GetTileColorDelta(table, chunk, tileX, tileY, &seq);
+        color.rgb += GetTileColorDelta(tile, seq);
     }
     
     color = Clamp01(color);
@@ -1908,7 +1898,7 @@ inline Vec4 GetTileColor(TaxonomyTable* table, WorldChunk* chunk, u32 tileX, u32
     return color;
 }
 
-inline Vec4 ComputeWeightedChunkColor(GameModeWorld* worldMode, WorldChunk* chunk)
+inline Vec4 ComputeWeightedChunkColor(WorldChunk* chunk)
 {
     Vec4 result = {};
     
@@ -1916,7 +1906,8 @@ inline Vec4 ComputeWeightedChunkColor(GameModeWorld* worldMode, WorldChunk* chun
     {
         for(u8 X = 0; X < CHUNK_DIM; ++X)
         {
-            result += GetTileColor(worldMode->table, chunk, X, Y, false, V2(0, 0));
+            WorldTile* tile = GetTile(chunk, X, Y);
+            result += GetTileColor(tile, false, 0);
         }
     }
     
@@ -1927,73 +1918,65 @@ inline Vec4 ComputeWeightedChunkColor(GameModeWorld* worldMode, WorldChunk* chun
 
 
 
-r32 maxColorDisplacement = 0.35f * WATER_LEVEL;
-r32 maxAlphaDisplacement = 0.2f * WATER_LEVEL;
-
-Vec3 minColorDeep = V3(0.0f, 0.03f, 0.05f);
-Vec3 maxColorDeep = V3(0.0f, 0.08f, 0.4f);
-
-r32 maxAlphaDeep = 1.0f;
-r32 minAlphaDeep = 0.7f;
-
-Vec3 minColorSwallow = V3(0.0f, 0.1f, 0.78f);
-Vec3 maxColorSwallow = V3(0.25f, 0.35f, 1.0f);
-
-r32 maxAlphaSwallow = 1.0f;
-r32 minAlphaSwallow = 0.0f;
-
 inline Vec4 GetWaterColor(WorldTile* tile)
 {
-#if 0
-    r32 sineWaterLevel = Clamp01MapToRange(0.9f * WATER_LEVEL, tile.waterLevel, WATER_LEVEL);
-	r32 normalizedWaterLevel = Clamp01MapToRange(0, tile.waterLevel, WATER_LEVEL);
-    normalizedWaterLevel = Pow(normalizedWaterLevel, 3.0f);
+    Vec4 waterColor = {};
+    if(tile->waterLevel < WATER_LEVEL)
+    {
+        r32 maxColorDisplacement = 0.4f * WATER_LEVEL;
+        r32 maxAlphaDisplacement = 0.3f * WATER_LEVEL;
+        
+        Vec3 minColorDeep = V3(0.0f, 0.03f, 0.05f);
+        Vec3 maxColorDeep = V3(0.0f, 0.08f, 0.4f);
+        
+        r32 maxAlphaDeep = 1.0f;
+        r32 minAlphaDeep = 0.7f;
+        
+        Vec3 minColorSwallow = V3(0.0f, 0.1f, 0.78f);
+        Vec3 maxColorSwallow = V3(0.65f, 0.75f, 1.0f);
+        
+        r32 maxAlphaSwallow = 1.0f;
+        r32 minAlphaSwallow = 0.0f;
+        
+        r32 sineWaterLevel = Clamp01MapToRange(0.85f * WATER_LEVEL, tile->waterLevel, WATER_LEVEL);
+        r32 normalizedWaterLevel = Clamp01MapToRange(0, tile->waterLevel, 0.95f * WATER_LEVEL);
+        normalizedWaterLevel = Pow(normalizedWaterLevel, 15.0f);
+        
+        Vec3 minColor = Lerp(minColorDeep, normalizedWaterLevel, minColorSwallow);
+        Vec3 maxColor = Lerp(maxColorDeep, normalizedWaterLevel, maxColorSwallow);
+        
+        r32 minAlpha = Lerp(minAlphaDeep, normalizedWaterLevel, minAlphaSwallow);
+        r32 maxAlpha = Lerp(maxAlphaDeep, normalizedWaterLevel, maxAlphaSwallow);
+        
+        r32 blueNoise = tile->blueNoise;
+        r32 alphaNoise = tile->alphaNoise;
+        
+        r32 sine = Sin(DegToRad(tile->waterSine));
+        r32 blueSine = sine;
+        r32 alphaSine = sine;
+        
+        
+        r32 blueNoiseSine = Lerp(blueNoise, sineWaterLevel, blueSine);
+        r32 alphaNoiseSine = Lerp(alphaNoise, sineWaterLevel, alphaSine);
+        
+        
+        r32 blueDisplacement = blueNoiseSine * maxColorDisplacement;
+        r32 alphaDisplacement = alphaNoiseSine * maxAlphaDisplacement;
+        
+        
+        r32 blueLerp = Clamp01MapToRange(0, tile->waterLevel + blueDisplacement, WATER_LEVEL);
+        
+        r32 alphaLevel = tile->waterLevel + alphaDisplacement;
+        
+        r32 alphaLerp = Clamp01MapToRange(0, alphaLevel, WATER_LEVEL);
+        alphaLerp = Pow(alphaLerp, 2.2f);
+        
+        Vec3 color = Lerp(minColor, blueLerp, maxColor);
+        r32 alpha = Lerp(maxAlpha, alphaLerp, minAlpha);
+        
+        waterColor = V4(color, alpha);
+    }
     
-    Vec3 minColor = Lerp(minColorDeep, normalizedWaterLevel, minColorSwallow);
-    Vec3 maxColor = Lerp(maxColorDeep, normalizedWaterLevel, maxColorSwallow);
-    
-    r32 minAlpha = Lerp(minAlphaDeep, normalizedWaterLevel, minAlphaSwallow);
-    r32 maxAlpha = Lerp(maxAlphaDeep, normalizedWaterLevel, maxAlphaSwallow);
-    
-    
-    RandomSequence* seq = &tile.waterSeq;
-    NoiseParams waterParams = NoisePar(4.0f, 2, 0.0f, 1.0f);
-    //r32 blueNoise = Evaluate(tile.waterNormalizedNoise, 0, waterParams, GetNextUInt32(seq));
-    //r32 alphaNoise = Evaluate(tile.waterNormalizedNoise, 0, waterParams, GetNextUInt32(seq));
-    
-    r32 blueNoise = 1.0f;
-    r32 alphaNoise = 1.0f;
-    
-    blueNoise = UnilateralToBilateral(blueNoise);
-    alphaNoise = UnilateralToBilateral(alphaNoise);
-    
-    r32 sine = tile.waterSine;
-    r32 blueSine = sine;
-    r32 alphaSine = sine;
-    
-    
-    r32 blueNoiseSine = Lerp(blueNoise, sineWaterLevel, blueSine);
-    r32 alphaNoiseSine = Lerp(alphaNoise, sineWaterLevel, alphaSine);
-    
-    
-    r32 blueDisplacement = blueNoiseSine * maxColorDisplacement;
-    r32 alphaDisplacement = alphaNoiseSine * maxAlphaDisplacement;
-    
-    
-    r32 blueLerp = Clamp01MapToRange(0, tile.waterLevel + blueDisplacement, WATER_LEVEL);
-    
-    r32 alphaLevel = tile.waterLevel + alphaDisplacement;
-    
-    r32 alphaLerp = Clamp01MapToRange(0, alphaLevel, WATER_LEVEL);
-    alphaLerp = Pow(alphaLerp, 2.2f);
-    
-    Vec3 color = Lerp(minColor, blueLerp, maxColor);
-    r32 alpha = Lerp(maxAlpha, alphaLerp, minAlpha);
-    
-    Vec4 waterColor = V4(color, alpha);
-#else
-    Vec4 waterColor = V4(1, 1, 1, 1);
-#endif
     return waterColor;
 }
 
@@ -2149,12 +2132,17 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             }
             entityC->rock = newRock;
             
+            TaxonomySlot* rockSlot = GetSlotForTaxonomy(worldMode->table, entityC->taxonomy);
+            RockDefinition* rockDefinition = rockSlot->rock;
+            
             RandomSequence rockSeq = Seed((u32)entityC->identifier);
-            newRock->dim = V3(RandomUni(&rockSeq), RandomUni(&rockSeq), RandomUni(&rockSeq));
+            
+            
+            newRock->dim = GetRockDim(rockDefinition, &rockSeq); 
             
             MemoryPool tempPool = {};
             TempMemory rockMemory = BeginTemporaryMemory(&tempPool);
-            GenerateRock(newRock, &worldMode->tetraModel, 2, &tempPool, &rockSeq, V4(0.02f, 0.02f, 0.02f, 1.0f));
+            GenerateRock(newRock, &worldMode->tetraModel, 2, &tempPool, &rockSeq, rockDefinition);
             EndTemporaryMemory(rockMemory);
             
         }

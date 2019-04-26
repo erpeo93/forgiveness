@@ -395,20 +395,26 @@ inline TaxonomyNode* FindInTaxonomyTree(TaxonomyTable* table, TaxonomyNode* tree
     return result;
 }
 
+inline Vec3 GetRockDim(RockDefinition* rock, RandomSequence* sequence)
+{
+    Vec3 result = rock->scale + Hadamart(rock->scaleDelta, RandomBilV3(sequence));
+    return result;
+}
 
 inline void GetPhysicalProperties(TaxonomyTable* taxTable, u32 taxonomy, u64 identifier, ForgBoundType* type, Rect3* bounds)
 {
+    TaxonomySlot* boundSlot = GetSlotForTaxonomy(taxTable, taxonomy);
     if(IsRock(taxTable, taxonomy))
     {
         RandomSequence rockSeq = Seed((u32) identifier);
-        Vec3 rockDim = V3(RandomUni(&rockSeq), RandomUni(&rockSeq), RandomUni(&rockSeq));
         
         *type = ForgBound_Standard;
+        
+        Vec3 rockDim = GetRockDim(boundSlot->rock, &rockSeq);
         *bounds = RectCenterDim(V3(0, 0, 0), rockDim);
     }
     else
     {
-        TaxonomySlot* boundSlot = GetSlotForTaxonomy(taxTable, taxonomy);
         while(boundSlot->taxonomy)
         {
             if(boundSlot->boundType)

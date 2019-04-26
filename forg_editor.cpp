@@ -3584,6 +3584,21 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         }
     }
 #endif
+    else if(StrEqual(name, "rockDefinition"))
+    {
+        if(currentSlot_->rock)
+        {
+            FREELIST_DEALLOC(currentSlot_->rock, taxTable_->firstFreeRockDefinition);
+            currentSlot_->rock = 0;
+        }
+        
+        TAXTABLE_ALLOC(currentSlot_->rock, RockDefinition);
+        RockDefinition* definition = currentSlot_->rock;
+        
+        definition->color = ToV4Color(GetStruct(root, "color"));
+        definition->scale = ToV3(GetStruct(root, "scale"));
+        definition->scaleDelta = ToV3(GetStruct(root, "scaleDelta"));
+    }
     else if(StrEqual(name, "generatorParams"))
     {
         if(currentSlot_->generator)

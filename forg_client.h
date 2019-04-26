@@ -17,6 +17,7 @@
 #include "forg_render_tier.h"
 #include "forg_render.h"
 #include "forg_rule.h"
+#include "forg_model.h"
 #include "forg_plant.h"
 #include "forg_crafting.h"
 #include "forg_inventory.h"
@@ -359,7 +360,7 @@ struct GameModeWorld
     b32 generatingVoronoi;
     ForgVoronoiDiagram voronoiPingPong[2];
     ForgVoronoiDiagram* activeDiagram;
-    
+    WorldTile nullTile;
     
     b32 useDebugCamera;
     

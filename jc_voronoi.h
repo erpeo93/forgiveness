@@ -199,6 +199,7 @@ extern "C" {
         jcv_point		p;
         int				index;	// Index into the original list of points
         jcv_graphedge* 	edges;	// The half edges owned by the cell
+        WorldTile* tile;
     } jcv_site;
     
     typedef struct _jcv_edge
@@ -206,6 +207,7 @@ extern "C" {
         struct _jcv_edge*	next;
         jcv_site* 			sites[2];
         jcv_point			pos[2];
+        WorldTile* tile[2];
         jcv_real			a;
         jcv_real			b;
         jcv_real			c;
@@ -255,7 +257,7 @@ extern "C" {
     
     /** Returns a linked list of all the voronoi edges
      */
-    extern const jcv_edge* jcv_diagram_get_edges( const jcv_diagram* diagram );
+    extern jcv_edge* jcv_diagram_get_edges( const jcv_diagram* diagram );
     
     
 #ifdef __cplusplus
@@ -407,7 +409,7 @@ jcv_site* jcv_diagram_get_sites( jcv_diagram* diagram )
     return diagram->internal->sites;
 }
 
-const jcv_edge* jcv_diagram_get_edges( const jcv_diagram* diagram )
+jcv_edge* jcv_diagram_get_edges( const jcv_diagram* diagram )
 {
     return diagram->internal->edges;
 }
@@ -490,6 +492,9 @@ static void jcv_edge_create(jcv_edge* e, jcv_site* s1, jcv_site* s2)
     e->pos[0].y = JCV_INVALID_VALUE;
     e->pos[1].x = JCV_INVALID_VALUE;
     e->pos[1].y = JCV_INVALID_VALUE;
+    
+	e->tile[0] = 0;
+	e->tile[1] = 0;
     
     // Create line equation between S1 and S2:
     // jcv_real a = -1 * (s2->p.y - s1->p.y);

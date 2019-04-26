@@ -311,6 +311,20 @@ struct TaxonomyAssAlterations
 };
 #endif
 
+struct RockDefinition
+{
+    Vec4 color;
+    
+    Vec3 scale;
+    Vec3 scaleDelta;
+    
+    union
+    {
+        RockDefinition* nextFree;
+        RockDefinition* next;
+    };
+};
+
 struct NoiseParams
 {
     r32 frequency;
@@ -356,7 +370,7 @@ struct TaxonomySlot
     Rect3 physicalBounds;
     
     PlantPhysicalParams plantBaseParams;
-    
+    RockDefinition* rock;
     
     
 #ifndef FORG_SERVER
@@ -522,6 +536,7 @@ struct TaxonomyTable
     CraftingEffectLink* firstFreeCraftingEffectLink;
     TaxonomyEffect* firstFreeTaxonomyEffect;
     struct WorldGenerator* firstFreeWorldGenerator;
+    RockDefinition* firstFreeRockDefinition;
     
 #ifndef FORG_SERVER
     PlantParams* firstFreePlantParams;
