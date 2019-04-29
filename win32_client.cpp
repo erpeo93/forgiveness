@@ -926,8 +926,8 @@ internal void Win32UpdateWindow( PlatformWorkQueue* renderQueue, GameRenderComma
     {
         OpenGLRenderCommands( commands, drawRegion, windowWidth, windowHeight );
         
-        BEGIN_BLOCK( "swap buffer" );
-        SwapBuffers( deviceContext );
+        BEGIN_BLOCK("swap buffer");
+        SwapBuffers(deviceContext);
         END_BLOCK();
     }
     else
@@ -1254,7 +1254,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             u16 maxTextureCount = MAX_TEXTURE_COUNT;
             HGLRC openGLRC = Win32InitOpenGL(openGLDC, maxTextureCount);
             
-            //Win32ToggleFullScreen( window );
+            Win32ToggleFullScreen( window );
             
             Win32ThreadStartup highPriorityStartups[6] = {};
             PlatformWorkQueue highQueue = {};

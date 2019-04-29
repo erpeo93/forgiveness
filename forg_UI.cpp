@@ -1641,7 +1641,6 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     
                     for(u32 rectIndex = 0; rectIndex < ArrayCount(colors); ++rectIndex)
                     {
-
                         Rect24C* rect = colors + rectIndex;
                         
                         r32 nextRunningWidth = runningWidth + colorWidth;
@@ -1688,7 +1687,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                    
                     
                     
-                    Vec4 pickColor = baseColor;
+                    Vec3 pickColor = baseColor.rgb;
 					if(PointInRect(pickColorRect, UI->relativeScreenMouse))
 					{
                         UIInteraction pickInteraction = {};
@@ -1704,66 +1703,65 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                    
                     
                     
-                    Vec4 black = V4(0, 0, 0, 1);
-                    Vec4 white = V4(1, 1, 1, 1);
-                    Vec4 halfColor = Lerp(white, 0.5f, pickColor);
+                    Vec3 black = V3(0, 0, 0);
+                    Vec3 white = V3(1, 1, 1);
                     
-                    Vec2 min = pickColorRect.min;
-                    Vec2 halfDim = Hadamart(V2(0.5f, 1.0f), GetDim(pickColorRect));
-                    Rect2 pickRectLeft = RectMinDim(min, halfDim);
+                    Vec2 triangleCenter = GetCenter(pickColorRect);
+                    r32 triangleSide = GetDim(pickColorRect).y;
+                    r32 triangleHeight = triangleSide * SquareRoot(3.0f) / 2.0f;
                     
-                    Vec2 minRight = min + V2(halfDim.x, 0);
-                    Rect2 pickRectRight = RectMinDim(minRight, halfDim);
+                    Vec2 colorOffset = V2(0, 0.5f * triangleHeight);
+                    Vec2 blackOffset = V2(-0.5f * triangleSide, -0.5f * triangleHeight);
+                    Vec2 whiteOffset = V2(0.5f * triangleSide, -0.5f * triangleHeight);
                     
-                    ObjectTransform pickTransform = FlatTransform(layout->additionalZBias);
-                    PushRect4Colors(UI->group, pickTransform, pickRectLeft, black, black, halfColor, white);
-                    PushRect4Colors(UI->group, pickTransform, pickRectRight, black, black, pickColor, halfColor);
+                    Vec2 up = triangleCenter + colorOffset;
+                    Vec2 left = triangleCenter + blackOffset;
+                    Vec2 right = triangleCenter + whiteOffset;
+                    
+
+                    ReservedVertexes triangleVertex = ReserveTriangles(UI->group, 1);
+                    r32 triangleZ = layout->additionalZBias;
+                    PushTriangle(UI->group, UI->group->whiteTexture, V4(-1, -1, -1, -1), &triangleVertex, V4(up, triangleZ, 0), V4(pickColor, 1.0f), V4(left, triangleZ, 0), V4(black, 1.0f), V4(right, triangleZ, 0), V4(white, 1.0f), 0);
+                    
                     
                     if(root->scrolling2)
                     {
-                        root->biLerp.x = (r32) (root->relativeMouseP.x - pickColorRect.min.x) / pickColorWidth;
-                        root->biLerp.y = (r32) (root->relativeMouseP.y - pickColorRect.min.y) / pickColorHeight;
-                       
+                        root->distanceColor = Clamp01(Length(root->relativeMouseP - up) / triangleSide);
+                                                      root->distanceBlack = Clamp01(Length(root->relativeMouseP - left) / triangleSide);
+                                                      root->distanceWhite = Clamp01(Length(root->relativeMouseP - right) / triangleSide);
                     }
-                        root->biLerp.x = Clamp01(root->biLerp.x);
-                        root->biLerp.y = Clamp01(root->biLerp.y);
+                              
+                              
+                              
+                    r32 weightColor = 1.0f - root->distanceColor;
+                    r32 weightBlack = 1.0f - root->distanceBlack;
+                    r32 weightWhite = 1.0f - root->distanceWhite;
+                                                      
+                                          
+                    Vec3 finalColorRGB = weightColor * pickColor + weightBlack * black + weightWhite * white * (1.0f / (weightColor + weightBlack + weightWhite));
                     
-                    Vec2 biLerp = root->biLerp;
-                    Vec4 finalColor = BiLerp(black, black, white, pickColor, biLerp.x, biLerp.y);
-                    
-                    
-                    Vec2 biLerpP = pickColorRect.min + Hadamart(biLerp, GetDim(pickColorRect));
-                    
-                    r32 biLerpDim = 18.0f * layout->fontScale;
+                    Vec4 finalColor = V4(finalColorRGB, 1.0f);
+                                                     
+                    Vec2 lerpedP = triangleCenter + weightColor * colorOffset + weightBlack * blackOffset + weightWhite * whiteOffset;
+                    r32 lerpedDim = 30.0f * layout->fontScale;
                     if(root->zooming)
                     {
-                        biLerpDim *= 5.0f;
+                        lerpedDim *= 5.0f;
                     }
                     
-                    Rect2 pickMarkRect = RectCenterDim(biLerpP, V2(biLerpDim, biLerpDim));
-                    
+                    Rect2 pickMarkRect = RectCenterDim(lerpedP, V2(lerpedDim, lerpedDim));
                     if(PointInRect(pickMarkRect, UI->relativeScreenMouse))
                     {
                         UIInteraction zoomInteraction = {};
                         
                         UIAddSetValueAction(UI, &zoomInteraction, UI_Trigger, &root->zooming, true);
                         UIAddSetValueAction(UI, &zoomInteraction, UI_Release, &root->zooming, false);
-                                              
+                                             
                         UIAddInteraction(UI, input, mouseRight, zoomInteraction);
                     }
                     
                     PushRect(UI->group, FlatTransform(layout->additionalZBias + 0.1f), pickMarkRect, finalColor);
                     PushRectOutline(UI->group, FlatTransform(layout->additionalZBias + 0.1f), pickMarkRect, V4(1, 1, 1, 1), 1 * layout->fontScale);
-                    
-                    
-
-#if 0
-                    Vec2 finalColorP = GetCenter(pickColorRect) + V2(1.0f * GetDim(pickColorRect).x, 0);
-                    Vec2 finalColorDim = 0.4f * GetDim(pickColorRect);
-                    Rect2 finalColorRect = RectCenterDim(finalColorP, finalColorDim);
-                    PushRect(UI->group, FlatTransform(layout->additionalZBias), finalColorRect, finalColor);
-                    PushRectOutline(UI->group, FlatTransform(layout->additionalZBias), finalColorRect, V4(1, 1, 1, 1), 1 * layout->fontScale);
-                    #endif
 
                     
                     
@@ -2344,6 +2342,8 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     {
                     } break;
                     
+                    
+                    
                     case EditorWidget_GeneralButtons:
                     {
                         Vec2 reloadP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
@@ -2416,6 +2416,11 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                         UIButton saveButton = UIBtn(UI, saveP, layout, V4(1, 0, 0, 1.0f), " SAVE ", saveActive, saveInteraction);
                         
                         UIDrawButton(UI, input, &saveButton);
+                    } break;
+                    
+                    case EditorWidget_Misc:
+                    {
+                        UI->plantGrowingCoeff = ToR32(GetValue(widget->root, "plantGrowingCoeff"));
                     } break;
                 }
             }
@@ -3102,6 +3107,8 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
     if(!UI->initialized)
     {
         UI->initialized = true;
+        
+        UI->plantGrowingCoeff = 1.0f;
         if(worldMode->editingEnabled)
         {
             UI->uneditableTabRoot.type = EditorElement_String;
@@ -3226,6 +3233,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             UIAddChild(UI->table, misc->root, EditorElement_String, "recipeTaxonomy", "objects");
             UIAddChild(UI->table, misc->root, EditorElement_Unsigned, "recipeIndex", "0");
             UIAddChild(UI->table, misc->root, EditorElement_Unsigned, "worldSeed", "0");
+            UIAddChild(UI->table, misc->root, EditorElement_Real, "plantGrowingCoeff", "1");
             
             
             
@@ -3316,6 +3324,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTable(UI, ObjectState, "objectState");
         UIAddAutocompleteFromTable(UI, GroundViewMode, "viewType");
         UIAddAutocompleteFromTable(UI, TilePointsLayout, "tileLayout");
+        UIAddAutocompleteFromTable(UI, PlantShape, "shape");
         
         UIAddAutocomplete(UI, "layoutName");
 		UIAddAutocomplete(UI, "pieceName");

@@ -648,6 +648,7 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_Edit:
         {
+            UI->widgets[EditorWidget_EditingTaxonomyTabs].permanent.expanded = true;
             if(request->taxonomy != UI->editingTaxonomy)
             {
                 UIAddUndoRedoCommand(UI, UndoRedoEditTaxonomy(UI->editingTaxonomy, UI->editingTabIndex, request->taxonomy));

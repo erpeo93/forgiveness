@@ -594,6 +594,19 @@ inline Vec3 RandomUniV3(RandomSequence* sequence)
     return result;
 }
 
+
+inline Vec4 RandomBilV4(RandomSequence* sequence)
+{
+    Vec4 result = V4(RandomBil(sequence), RandomBil(sequence), RandomBil(sequence), RandomBil(sequence));
+    return result;
+}
+
+inline Vec4 RandomUniV4(RandomSequence* sequence)
+{
+    Vec4 result = V4(RandomUni(sequence), RandomUni(sequence), RandomUni(sequence), RandomUni(sequence));
+    return result;
+}
+
 inline r32 RandomRangeFloat( RandomSequence* sequence, r32 min, r32 max )
 {
     r32 value = RandomUni( sequence );

@@ -1708,6 +1708,9 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
     }
     else
     {
+        
+        AssetTypeId fallbackID = Asset_rig;
+        
         result.assetID = GetAssetIDForEntity(assets, taxTable, taxonomy, action);
         Assert(result.assetID);
         
@@ -1720,6 +1723,12 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
             TagVector match = {};
             TagVector weight = {};
             result.AID = GetMatchingAnimation(assets, result.assetID, result.skeletonHashID, &match, &weight);
+            
+            if(!IsValid(result.AID))
+            {
+                result.AID = GetMatchingAnimation(assets, fallbackID, result.skeletonHashID, &match, &weight);
+            }
+            
         }
     }
     
@@ -2110,15 +2119,31 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     
     if(IsPlant(worldMode->table, entityC->taxonomy))
     {
-        r32 totalHeight = slot->plantBaseParams.maxZeroLevelSegmentNumber * slot->plantBaseParams.maxRootSegmentLength;
-        r32 radious = slot->plantBaseParams.maxRootSegmentRadious;
-        
         bounds = Offset(slot->physicalBounds, entityC->P);
-        Assert(slot->plantParams);
-        UpdateAndRenderPlant(worldMode, group, lightIndexes, entityC, slot->plantParams, timeToUpdate);
+        Assert(slot->plant);
+        if(!entityC->plant)
+        {
+            ClientPlant* newPlant = worldMode->firstFreePlant;
+            if(!newPlant)
+            {
+                newPlant = PushStruct(&worldMode->entityPool, ClientPlant);
+            }
+            else
+            {
+                worldMode->firstFreePlant = newPlant->nextFree;
+            }
+            entityC->plant = newPlant;
+            
+            ClientPlant* plant = entityC->plant;
+            *plant = {};
+        }
+        UpdateAndRenderPlant(worldMode, group, lightIndexes, slot->plant, entityC->plant, entityC->P, timeToUpdate);
     }
     else if(IsRock(worldMode->table, entityC->taxonomy))
     {
+        TaxonomySlot* rockSlot = GetSlotForTaxonomy(worldMode->table, entityC->taxonomy);
+        RockDefinition* rockDefinition = rockSlot->rock;
+        
         if(!entityC->rock)
         {
             ClientRock* newRock = worldMode->firstFreeRock;
@@ -2132,17 +2157,13 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             }
             entityC->rock = newRock;
             
-            TaxonomySlot* rockSlot = GetSlotForTaxonomy(worldMode->table, entityC->taxonomy);
-            RockDefinition* rockDefinition = rockSlot->rock;
             
             RandomSequence rockSeq = Seed((u32)entityC->identifier);
-            
-            
             newRock->dim = GetRockDim(rockDefinition, &rockSeq); 
             
             MemoryPool tempPool = {};
             TempMemory rockMemory = BeginTemporaryMemory(&tempPool);
-            GenerateRock(newRock, &worldMode->tetraModel, 2, &tempPool, &rockSeq, rockDefinition);
+            GenerateRock(newRock, &worldMode->tetraModel, &tempPool, &rockSeq, rockDefinition);
             EndTemporaryMemory(rockMemory);
             
         }
@@ -2156,7 +2177,16 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         onTheFly.faceCount = rock->faceCount;
         onTheFly.faces = rock->faces;
         
-        PushModel(group, &onTheFly, entityC->P, lightIndexes, rock->dim, V4(1, 1, 1, 1), entityC->modulationWithFocusColor);
+        RandomSequence rockRenderSeq = Seed((u32)entityC->identifier);
+        u32 rockCount = Max(1, rockDefinition->renderingRocksCount + RandomChoice(&rockRenderSeq, rockDefinition->renderingRocksDelta));
+        for(u32 rockIndex = 0; rockIndex < rockCount; ++rockIndex)
+        {
+            Vec3 finalP =entityC->P +Hadamart(RandomBilV3(&rockRenderSeq), rockDefinition->renderingRocksRandomOffset);
+            m4x4 rotation = ZRotation(RandomUni(&rockRenderSeq) * TAU32);
+            Vec3 finalScale = rock->dim + rockDefinition->scaleRandomness *Hadamart(RandomBilV3(&rockRenderSeq), rock->dim);
+            
+            PushModel(group, &onTheFly, rotation, finalP, lightIndexes, finalScale, V4(1, 1, 1, 1), entityC->modulationWithFocusColor);
+        }
         
         bounds = RectCenterDim(entityC->P, rock->dim);
     }

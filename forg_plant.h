@@ -1,170 +1,113 @@
 #pragma once
 
-printTable(noPrefix) enum PlantLifeStatus
-{
-    PlantLife_NewBranches,
-    PlantLife_NewLeafs,
-    PlantLife_LooseLeafs,
-    PlantLife_Quiescent,
-    
-    
-#if 0
-    PlantLife_Flowers,
-    PlantLife_Fruits,
-    PlantLife_LooseFlowers,
-    PlantLife_LooseFruits,
-#endif
-    
-    PlantLife_Count,
-};
-
-enum PlantSegmentType
-{
-    PlantSegment_Invalid,
-    
-    PlantSegment_Meristem,
-    PlantSegment_Branch,
-};
-
-enum PlantChildPosition
-{
-    PlantChild_Top,
-    PlantChild_Left,
-    PlantChild_Right,
-    
-    PlantChild_Up,
-    PlantChild_Down,
-    
-    PlantChild_Count,
-};
-
-struct PlantAnglePhase
-{
-    b32 arrivedAtMaxAngle;
-    r32 phase;
-};
-
-struct Leaf
-{
-    b32 present;
-    PlantAnglePhase phase;
-};
-
-struct PlantAngle
-{
-    b32 negative;
-    r32 absValue;
-    PlantAnglePhase phase;
-};
-
 struct PlantSegment
 {
-    PlantSegmentType type;
+    r32 radiousCoeff;
+    r32 lengthCoeff;
     
-    u8 segmentIndex;
-    u8 parentSegmentIndex;
-    u8 level;
-    PlantSegment* childs[PlantChild_Count];
+    r32 angleY;
     
-    PlantAngle angleX;
-    PlantAngle angleY;
-    r32 centerDelta;
-    
-    r32 radious;
-    r32 length;
-    
-    u32 leafsSeed;
-    u32 leafCount;
-    Leaf leafs[8];
-    
-    PlantSegment* nextFree;
-};
-
-
-struct NewSegment
-{
-    PlantSegmentType type;
-    RangeDistribution angleXDistr;
-    RangeDistribution angleYDistr;
-    u8 levelDelta;
-    u8 leafCount;
-};
-
-struct SpecialRuleRequirement
-{
-    u8 level;
-    u8 minSegmentIndex;
-};
-
-struct PlantRule
-{
-    u32 specialRequirementCount;
-    SpecialRuleRequirement specialRequirement[8];
-    
-    PlantSegmentType requestedType;
-    PlantSegmentType newType;
-    
-    u8 leafCountDelta;
-    
-    NewSegment newSegments[PlantChild_Count];
-    
-    r32 radiousIncrement;
-};
-
-struct PlantPhysicalParams
-{
-    u8 maxZeroLevelSegmentNumber;
-    r32 maxRootSegmentRadious;
-    r32 maxRootSegmentLength;
-};
-
-#define MAX_LEVELS 8
-struct PlantParams
-{
-    u8 maxLevels;
-    
-    r32 oneOverMaxRadious;
-    
-    u8 maxSegmentNumber[MAX_LEVELS];
-    r32 maxRadious[MAX_LEVELS];
-    r32 segmentLengths[MAX_LEVELS];
-    r32 leafSize[MAX_LEVELS];
-    r32 plantStrength[MAX_LEVELS];
-    
-    r32 segmentBySegmentRadiousCoeff[MAX_LEVELS];
-    r32 segmentBySegmentLengthCoeff[MAX_LEVELS];
-    r32 segmentBySegmentBranchLengthCoeff[MAX_LEVELS];
-    r32 segmentBySegmentStrengthCoeff[MAX_LEVELS];
-    
-    u32 ruleCount;
-    PlantRule rules[8];
-    
-    r32 maxCenterDelta;
-    
-    r32 leafMinAngle;
-    r32 leafMaxAngle;
-    
-    Vec4 leafColorAlive;
-    Vec4 leafColorDead;
-    Vec3 leafColorRandomization;
-    
-    Vec4 branchColorAlive;
-    Vec4 branchColorDead;
-    
-    r32 leafRadious;
-    r32 leafLength;
-    
-    
-    u8 plantCount;
-    r32 minOffset;
-    r32 maxOffset;
-    
-    b32 isHerbaceous;
-    
+    struct PlantStem* clones;
+    struct PlantStem* childs;
     
     union
     {
-        PlantParams* next;
-        PlantParams* nextFree;
+        PlantSegment* next;
+        PlantSegment* nextFree;
+    };
+};
+
+struct PlantStem
+{
+    PlantSegment* root;
+    
+    u8 segmentCount;
+    
+    m4x4 orientation;
+    
+    r32 parentStemZ;
+    
+    r32 totalLength;
+    r32 baseRadious;
+    
+    u32 numberOfChilds;
+    r32 childsCurrentAngle;
+    
+    r32 additionalCurveBackAngle;
+    
+    union
+    {
+        PlantStem* next;
+        PlantStem* nextFree;
+    };
+};
+
+struct PlantLevelParams
+{
+    u8 curveRes;
+    r32 curveBack;
+    r32 curve;
+    r32 curveV;
+    
+    r32 segSplits;
+    r32 baseSplits;
+    
+    r32 splitAngle;
+    r32 splitAngleV;
+    
+    r32 branches;
+    r32 branchesV;
+    r32 downAngle;
+    r32 downAngleV;
+    r32 rotate;
+    r32 rotateV;
+    
+    r32 length;
+    r32 lengthV;
+    
+    r32 taper;
+    
+    r32 lengthIncreaseSpeed;
+    r32 radiousIncreaseSpeed;
+    
+    r32 createClonesLengthNorm;
+    r32 createChildsLengthNorm;
+};
+
+printTable(noPrefix) enum PlantShape
+{
+    PlantShape_Conical,
+    PlantShape_Spherical,
+    PlantShape_Hemispherical,
+    PlantShape_Cylindrical,
+    PlantShape_TaperedCylindrical,
+    PlantShape_Flame,
+    PlantShape_InverseConical,
+    PlantShape_TendFlame
+};
+
+struct PlantDefinition
+{
+    PlantShape shape;
+    r32 baseSize;
+    
+    r32 scale;
+    r32 scaleV;
+    
+    r32 scale_0;
+    r32 scaleV_0;
+    
+    r32 ratio;
+    r32 ratioPower;
+    
+    r32 flare;
+    
+    u8 maxLevels;
+    PlantLevelParams levelParams[4];
+    
+    union
+    {
+        PlantDefinition* next;
+        PlantDefinition* nextFree;
     };
 };

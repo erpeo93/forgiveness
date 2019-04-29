@@ -52,8 +52,6 @@ struct EffectComponent
 struct PlantComponent
 {
 	r32 plantTotalAge;
-    r32 plantStatusPercentage;
-    PlantLifeStatus plantStatus;
     
     u32 nextFree;
 };

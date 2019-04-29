@@ -680,10 +680,10 @@ internal void UpdateAndRenderSineSystem(GameModeWorld* worldMode, ParticleSystem
 internal void InitParticleCache( ParticleCache* particleCache, Assets* assets )
 {
     particleCache->particleEntropy = Seed( 1234 );
+    particleCache->deltaParticleP = {};
     
-	particleCache->waterRippleSystem.transform = UprightTransform();
-    particleCache->waterRippleSystem.bitmapID = GetFirstBitmap(assets, Asset_waterRipple);
-    //particleCache->waterRippleSystem.bitmapID = {};
+    particleCache->waterRippleSystem.transform = UprightTransform();
+    particleCache->waterRippleSystem.bitmapID = {};;
     particleCache->waterRippleSystem.nextParticle4 = 0;
     
     particleCache->ashSystem.transform = UprightTransform();
@@ -705,8 +705,11 @@ internal void InitParticleCache( ParticleCache* particleCache, Assets* assets )
     particleCache->steamSystem.transform = UprightTransform();
     particleCache->steamSystem.bitmapID = {};
     particleCache->steamSystem.nextParticle4 = 0;
-    
-    particleCache->deltaParticleP = {};
+}
+
+internal void SetParticleCacheBitmaps(ParticleCache* particleCache, Assets* assets)
+{
+    particleCache->waterRippleSystem.bitmapID = GetFirstBitmap(assets, Asset_waterRipple);
 }
 
 internal void UpdateAndRenderParticleSystems(GameModeWorld* worldMode, ParticleCache* particleCache, r32 dt, RenderGroup* group)

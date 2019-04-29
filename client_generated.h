@@ -103,19 +103,16 @@ MetaFlag MetaFlags_EffectFlags[] =
 {"SendToClientOnDelete",
 (1 << 4)},
 };
-char* MetaTable_PlantLifeStatus[] = 
+char* MetaTable_PlantShape[] = 
  {
-"NewBranches",
-"NewLeafs",
-"LooseLeafs",
-"Quiescent",
-"if",
-"Flowers",
-"Fruits",
-"LooseFlowers",
-"LooseFruits",
-"endif",
-"Count",
+"Conical",
+"Spherical",
+"Hemispherical",
+"Cylindrical",
+"TaperedCylindrical",
+"Flame",
+"InverseConical",
+"TendFlame",
 };
 char* MetaTable_SlotName[] = 
  {

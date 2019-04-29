@@ -719,8 +719,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 {
                     PlayerRequest* request = player->requests + player->requestCount++;
                     Assert(dataSize < ArrayCount(request->data));
-                    
-                    Copy(dataSize, request->data, packetPtr);
+                    Copy(dataSize, request->data, original);
                 }
             }
         } break;

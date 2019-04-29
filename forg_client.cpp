@@ -75,19 +75,33 @@ inline ClientEntity* GetEntityClient(GameModeWorld* worldMode, u64 identifier, b
     return result;
 }
 
-internal void FreePlant(GameModeWorld* worldMode, PlantSegment* root)
+internal void FreeStem(GameModeWorld* worldMode, PlantStem* stem)
 {
-    for(u32 childIndex = 0; childIndex < PlantChild_Count; ++childIndex)
+    for(PlantSegment* segment = stem->root; segment;)
     {
-        if(root->childs[childIndex])
+        PlantSegment* nextToFree = segment->next;
+        
+        for(PlantStem* clone = segment->clones; clone;)
         {
-            FreePlant(worldMode, root->childs[childIndex]);
-            root->childs[childIndex] = 0;
+            PlantStem* next = clone->next;
+            FreeStem(worldMode, clone);
+            FREELIST_DEALLOC(clone, worldMode->firstFreePlantStem);
+            
+            clone = next;
         }
+        
+        for(PlantStem* child = segment->childs; child;)
+        {
+            PlantStem* next = child->next;
+            FreeStem(worldMode, child);
+            FREELIST_DEALLOC(child, worldMode->firstFreePlantStem);
+            
+            child = next;
+        }
+        
+        FREELIST_DEALLOC(segment, worldMode->firstFreePlantSegment);
+        segment = nextToFree;
     }
-    
-    root->nextFree = worldMode->firstFreePlantSegment;
-    worldMode->firstFreePlantSegment = root;
 }
 
 inline void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
@@ -99,8 +113,7 @@ inline void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
         ClientRock* toFree = entity->rock;
         if(toFree)
         {
-            toFree->nextFree = worldMode->firstFreeRock;
-            worldMode->firstFreeRock = toFree;
+            FREELIST_DEALLOC(toFree, worldMode->firstFreeRock);
             entity->rock = 0;
         }
     }
@@ -109,12 +122,10 @@ inline void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
         ClientPlant* toFree = entity->plant;
         if(toFree)
         {
-            Assert(toFree->futureRoot);
-            FreePlant(worldMode, toFree->root);
-            FreePlant(worldMode, toFree->futureRoot);
+            FreeStem(worldMode, &toFree->trunk);
+            *toFree = {};
             
-            toFree->nextFree = worldMode->firstFreePlant;
-            worldMode->firstFreePlant = toFree;
+            FREELIST_DEALLOC(toFree, worldMode->firstFreePlant);
             entity->plant = 0;
         }
         
@@ -417,6 +428,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
         {0, 3, 2},
         {0, 1, 3}
     };
+    
     
     result->tetraModel = CreateModel(&gameState->modePool, vertexes, ArrayCount(vertexes), faces, ArrayCount(faces));
     
@@ -1069,7 +1081,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     
                     ImportAllFiles(filePath, worldMode->editorRoles, false);
                     ImportAllAssetFiles(worldMode, filePath, &worldMode->filePool);
-                    ReadPlantChart();
                     
                     platformAPI.DEBUGWriteFile("editorErrors", worldMode->table->errors, sizeof(worldMode->table->errors[0]) * worldMode->table->errorCount);
                     
@@ -1763,6 +1774,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 
                 BEGIN_BLOCK("particles");
+                SetParticleCacheBitmaps(particleCache, group->assets);
                 UpdateAndRenderParticleSystems(worldMode, particleCache, input->timeToAdvance, group);
                 END_BLOCK();
                 

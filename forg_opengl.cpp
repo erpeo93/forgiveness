@@ -1072,7 +1072,7 @@ internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
     u32 flags = (OpenGLFramebuffer_hasColor | OpenGLFramebuffer_hasDepth);
     for(u32 depthPeelIndex = 0; depthPeelIndex < opengl.depthPeelCount; ++depthPeelIndex)
     {
-        opengl.depthPeelBuffer[depthPeelIndex] = OpenGLCreateFramebuffer( flags, renderWidth, renderHeight );
+        opengl.depthPeelBuffer[depthPeelIndex] = OpenGLCreateFramebuffer(flags, renderWidth, renderHeight);
     }
 }
 

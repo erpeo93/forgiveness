@@ -311,12 +311,52 @@ struct TaxonomyAssAlterations
 };
 #endif
 
+struct RockMineral
+{
+    r32 lerp;
+    r32 lerpDelta;
+    
+    Vec4 color;
+    
+    union
+    {
+        RockMineral* next;
+        RockMineral* nextFree;
+    };
+};
+
 struct RockDefinition
 {
+    b32 collides;
+    
     Vec4 color;
+    Vec4 startingColorDelta;
+    
+    Vec4 perVertexColorDelta;
     
     Vec3 scale;
     Vec3 scaleDelta;
+    
+    r32 smoothness;
+    r32 smoothnessDelta;
+    u32 iterationCount;
+    
+    
+    r32 minDisplacementY;
+    r32 maxDisplacementY;
+    
+    r32 minDisplacementZ;
+    r32 maxDisplacementZ;
+    
+    
+    r32 percentageOfMineralVertexes;
+    u32 mineralCount;
+    RockMineral* firstPossibleMineral;
+    
+    u32 renderingRocksCount;
+    u32 renderingRocksDelta;
+    Vec3 renderingRocksRandomOffset;
+    r32 scaleRandomness;
     
     union
     {
@@ -369,12 +409,11 @@ struct TaxonomySlot
     ForgBoundType boundType;
     Rect3 physicalBounds;
     
-    PlantPhysicalParams plantBaseParams;
     RockDefinition* rock;
+    PlantDefinition* plant;
     
     
 #ifndef FORG_SERVER
-    PlantParams* plantParams;
     VisualLabel* firstVisualLabel;
     AnimationEffect* firstAnimationEffect;
     TaxonomySound* firstSound;
@@ -398,9 +437,6 @@ struct TaxonomySlot
     u8 gridDimX;
     u8 gridDimY;
     
-    
-    r32 plantStatusDuration[PlantLife_Count];
-    PlantLifeStatus nextStatus[PlantLife_Count];
     
     AttributeSlot attributeHashmap[16];
     
@@ -537,9 +573,10 @@ struct TaxonomyTable
     TaxonomyEffect* firstFreeTaxonomyEffect;
     struct WorldGenerator* firstFreeWorldGenerator;
     RockDefinition* firstFreeRockDefinition;
+    PlantDefinition* firstFreePlantDefinition;
+    RockMineral* firstFreeRockMineral;
     
 #ifndef FORG_SERVER
-    PlantParams* firstFreePlantParams;
     VisualLabel* firstFreeVisualLabel;
     AnimationEffect* firstFreeAnimationEffect;
     TaxonomySound* firstFreeTaxonomySound;

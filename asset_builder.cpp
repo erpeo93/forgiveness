@@ -2377,6 +2377,7 @@ internal void WriteAnimations(char* folder, char* name)
     AddEveryAnimationThatStartsWith(completePath, hashID, "rig");
     EndAssetType();
     
+    
     BeginAssetType(assets, Asset_standing);
     AddEveryAnimationThatStartsWith(completePath, hashID, "idle");
     EndAssetType();

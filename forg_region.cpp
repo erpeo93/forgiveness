@@ -1441,20 +1441,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
 internal void UpdatePlant(SimRegion* region, SimEntity* entity)
 {
     PlantComponent* plant = Plant(region, entity);
-    
-    TaxonomySlot* slot = GetSlotForTaxonomy( region->taxTable, entity->taxonomy );
-    
-    plant->plantStatusPercentage += ( region->timeToUpdate / slot->plantStatusDuration[plant->plantStatus] );
-    if(plant->plantStatusPercentage >= 1.0f )
-    {
-        plant->plantStatusPercentage = 0;
-        plant->plantStatus = slot->nextStatus[plant->plantStatus];
-    }
-    
-    if( plant->plantStatus == PlantLife_NewBranches )
-    {
-        plant->plantTotalAge += region->timeToUpdate;
-    }
+    plant->plantTotalAge += region->timeToUpdate;
 }
 
 internal void UpdateEssence(SimRegion* region, SimEntity* entity)

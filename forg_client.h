@@ -1,5 +1,4 @@
 #pragma once
-#define CLIENT_ENTITY_COUNT 512
 
 #include "forg_basic_types.h"
 #include "net.h"
@@ -129,20 +128,12 @@ struct ClientPlayer
 struct ClientPlant
 {
     RandomSequence sequence;
-    PlantSegment* root;
-    u32 leafCount;
     
-    RandomSequence futureSequence;
-    PlantSegment* futureRoot;
-    u32 futureLeafCount;
+    r32 scale;
+    r32 lengthBase;
     
-    u32 stepDone;
-    
-    PlantLifeStatus oldStatus;
-    r32 oldStatusPercentage;
-    
-    r32 defaultLeafSize;
-    r32 loosedLeafPercentage;
+    PlantStem trunk;
+    r32 elapsedFromLastUpdate;
     
     ClientPlant* nextFree;
 };
@@ -152,10 +143,10 @@ struct ClientRock
     Vec3 dim;
     
     u32 vertexCount;
-    ColoredVertex vertexes[128];
+    ColoredVertex vertexes[512];
     
     u32 faceCount;
-    ModelFace faces[64];
+    ModelFace faces[512];
     
     
     ClientRock* nextFree;
@@ -224,12 +215,6 @@ struct ClientEntity
     r32 actionTime;
     u64 targetID;
     
-    
-    // TODO(Leonardo): send these only when sending a plant
-    // TODO(Leonardo): encode these in 4 bytes total
-    r32 plantTotalAge;// TODO(Leonardo): 16 bits
-    r32 plantStatusPercentage;// TODO(Leonardo): 13 bits
-    PlantLifeStatus plantStatus; // TODO(Leonardo): 3 bits?
     
     // TODO(Leonardo): send these only when sending a recipe entity
     u32 recipeTaxonomy;
@@ -313,6 +298,7 @@ struct GameModeWorld
     
     ClientEntity* entities[1024];
     PlantSegment* firstFreePlantSegment;
+    PlantStem* firstFreePlantStem;
     ClientPlant* firstFreePlant;
     ClientRock* firstFreeRock;
     AnimationEffect* firstFreeEffect;

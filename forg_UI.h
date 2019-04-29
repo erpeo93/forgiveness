@@ -891,7 +891,7 @@ struct UIState
     
     r32 backspacePressedTime;
     
-    
+    r32 plantGrowingCoeff;
     
     
     b32 showGroundOutline;

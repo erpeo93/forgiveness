@@ -622,7 +622,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 EntityAction oldAction = e->action;
                 u32 oldTaxonomy = e->taxonomy;
                 
-                Unpack("llVLLQCddCLddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->plantTotalAge, &e->plantStatusPercentage, &e->plantStatus, &e->recipeTaxonomy, &e->lifePoints, &e->maxLifePoints, &e->status);
+                Unpack("llVLLQCLddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->recipeTaxonomy, &e->lifePoints, &e->maxLifePoints, &e->status);
                 
                 if(e->action != oldAction)
                 {

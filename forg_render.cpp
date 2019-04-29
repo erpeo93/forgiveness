@@ -653,7 +653,6 @@ inline void PushTrunkatedPyramid(RenderGroup* group, Vec3 P, u32 subdivisions, V
         ReservedVertexes vertexes = ReserveTriangles(group, 4);
         PushTriangle(group, texture, lightIndexes, &vertexes, basePBottom, cToUse, rotatedPBottom, cToUse, rotatedPTop, cToUse, modulationPercentage);
         PushTriangle(group, texture, lightIndexes, &vertexes, basePBottom, cToUse, rotatedPTop, cToUse, basePTop, cToUse, modulationPercentage);
-        
         PushTriangle(group, texture, lightIndexes, &vertexes, rotatedPBottom, cToUse, basePBottom, cToUse, PBottom, cToUse, modulationPercentage);
         PushTriangle(group, texture, lightIndexes, &vertexes, PTop, cToUse, basePTop, cToUse, rotatedPTop, cToUse, modulationPercentage);
         
@@ -664,7 +663,7 @@ inline void PushTrunkatedPyramid(RenderGroup* group, Vec3 P, u32 subdivisions, V
     }
 }
 
-inline void PushModel(RenderGroup* group, VertexModel* model, Vec3 P, Vec4 lightIndexes,  Vec3 scale = V3(1, 1, 1), Vec4 color = V4(1, 1, 1, 1), r32 modulationPercentage = 0.0f)
+inline void PushModel(RenderGroup* group, VertexModel* model, m4x4 rotation, Vec3 P, Vec4 lightIndexes,  Vec3 scale = V3(1, 1, 1), Vec4 color = V4(1, 1, 1, 1), r32 modulationPercentage = 0.0f)
 {
     GameRenderCommands* commands = group->commands;
     ReservedVertexes vertexes = ReserveVertexes(group, model->faceCount, model->vertexCount);
@@ -689,9 +688,11 @@ inline void PushModel(RenderGroup* group, VertexModel* model, Vec3 P, Vec4 light
         for(u32 vertexIndex = 0; vertexIndex < model->vertexCount; ++vertexIndex)
         {
             ColoredVertex* vert = model->vertexes + vertexIndex;
-            Vec3 vertP = P + Hadamart(vert->P, scale);
             
-            PushVertex(vertexPtr + vertexIndex, V4(vertP, 0), V3(0, 0, 0), V2(0, 0), RGBAPack8x4(Hadamart(vert->color, color) * 255.0f), lightIndexes, modulationPercentage, 0);
+            Vec4 vertFinalP = rotation * V4(Hadamart(vert->P, scale), 0);
+            Vec4 finalP = V4(P, 0) + vertFinalP;
+            
+            PushVertex(vertexPtr + vertexIndex, finalP, V3(0, 0, 0), V2(0, 0), RGBAPack8x4(Hadamart(vert->color, color) * 255.0f), lightIndexes, modulationPercentage, 0);
         }
     }
     else

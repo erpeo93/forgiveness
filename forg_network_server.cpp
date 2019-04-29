@@ -360,16 +360,8 @@ internal u16 PrepareEntityUpdate(SimRegion* region, SimEntity* entity, unsigned 
         action = SafeTruncateToU8(entity->action);
     }
     
-    if(entity->IDs[Component_Plant])
-    {
-        PlantComponent* plant = Plant(region, entity);
-        plantTotalAge = plant->plantTotalAge;
-        plantStatusPercentage = plant->plantStatusPercentage;
-        plantStatus = SafeTruncateToU8(plant->plantStatus);
-    }
-    
     unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
-    Pack("llVLLQCddCLddd", P.chunkX, P.chunkY, P.chunkOffset, entity->flags, entity->taxonomy, entity->gen.generic, SafeTruncateToU8(action), plantTotalAge, plantStatusPercentage, plantStatus, entity->recipeTaxonomy, lifePoints, maxLifePoints, entity->status);
+    Pack("llVLLQCLddd", P.chunkX, P.chunkY, P.chunkOffset, entity->flags, entity->taxonomy, entity->gen.generic, SafeTruncateToU8(action), entity->recipeTaxonomy, lifePoints, maxLifePoints, entity->status);
     u16 totalSize = ForgEndPacket_( buff_, buff );
     return totalSize;
 }

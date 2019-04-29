@@ -408,7 +408,14 @@ inline void GetPhysicalProperties(TaxonomyTable* taxTable, u32 taxonomy, u64 ide
     {
         RandomSequence rockSeq = Seed((u32) identifier);
         
-        *type = ForgBound_Standard;
+        if(boundSlot->rock->collides)
+        {
+            *type = ForgBound_Standard;
+        }
+        else
+        {
+            *type = ForgBound_None;
+        }
         
         Vec3 rockDim = GetRockDim(boundSlot->rock, &rockSeq);
         *bounds = RectCenterDim(V3(0, 0, 0), rockDim);

@@ -72,9 +72,11 @@ struct EditorElement
             r32 relativeMouseX;
             r32 norm;
             
-            r32 scrolling2;
+            b32 scrolling2;
             Vec2 relativeMouseP;
-            Vec2 biLerp;
+            r32 distanceBlack;
+            r32 distanceWhite;
+            r32 distanceColor;
             
             b32 zooming;
         };

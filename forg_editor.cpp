@@ -525,6 +525,8 @@ inline void EditorErrorLogClient(char* functionName, char* wasSearching)
 
 
 #define TAXTABLE_ALLOC(ptr, type) FREELIST_ALLOC(ptr, taxTable_->firstFree##type, PushStruct(taxPool_, type, NoClear())) ZeroStruct(*(ptr));
+
+#define TAXTABLE_DEALLOC(ptr, type) FREELIST_DEALLOC(ptr, taxTable_->firstFree##type)
 inline TaxonomyNode* AddToTaxonomyTree(TaxonomyTree* tree, TaxonomySlot* slot)
 {
     if(!tree->root)
@@ -690,20 +692,12 @@ inline void CanConsume(char* action, char* name)
 
 
 
-inline void DefinePlantBounds(char* maxRootSegmentNumber_, char* maxRootRadious_,
-                              char* maxRootLength_)
+inline void DefinePlantBounds(u8 resolution_0, r32 maxRadious_0, r32 maxLength_0)
 {
-    u8 maxRootSegmentNumber = ToU8(maxRootSegmentNumber_);
-    r32 maxRootRadious = ToR32(maxRootRadious_);
-    r32 maxRootLength = ToR32(maxRootLength_);
-    
     TaxonomySlot* slot = currentSlot_;
-    slot->plantBaseParams.maxZeroLevelSegmentNumber = maxRootSegmentNumber;
-    slot->plantBaseParams.maxRootSegmentRadious = maxRootRadious;
-    slot->plantBaseParams.maxRootSegmentLength = maxRootLength;
     
-    Vec3 min = V3(-maxRootRadious, -maxRootRadious, 0);
-    Vec3 max = V3(maxRootRadious, maxRootRadious, maxRootSegmentNumber * maxRootLength);
+    Vec3 min = V3(-maxRadious_0, -maxRadious_0, 0);
+    Vec3 max = V3(maxRadious_0, maxRadious_0, maxLength_0);
     
     slot->boundType = ForgBound_Standard;
     slot->physicalBounds = RectMinMax(min, max);
@@ -962,18 +956,6 @@ inline void ReadCraftingEffects()
 
 
 
-
-
-
-inline void PlantStatus(char* s, r32 duration, char* d)
-{
-    Assert(IsPlant(taxTable_, currentSlot_->taxonomy));
-    
-    u32 source = GetValuePreprocessor(PlantLifeStatus, s);
-    u32 dest = GetValuePreprocessor(PlantLifeStatus, d);
-    currentSlot_->plantStatusDuration[source] = duration;
-    currentSlot_->nextStatus[source] = (PlantLifeStatus) dest;
-}
 
 
 inline void SaveCreatureAttribute(char* attributeName, r32 value)
@@ -1360,283 +1342,6 @@ inline SoundEvent* GetSoundEvent(TaxonomyTable* table, u64 eventHash)
     }
     
     return result;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-global_variable PlantParams* currentPlantParams_;
-global_variable PlantRule* currentPlantRule_;
-global_variable NewSegment* currentNewSegment_;
-
-inline void BeginParams(char* name)
-{
-    TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName( taxTable_, name );
-    
-    if(slot)
-    {
-        FREELIST_FREE(slot->plantParams, PlantParams, taxTable_->firstFreePlantParams);
-        currentSlot_ = slot;
-        TAXTABLE_ALLOC(slot->plantParams, PlantParams);
-        currentPlantParams_ = slot->plantParams;
-        currentPlantParams_->plantCount = 1;
-        currentPlantParams_->leafSize[0] = 1.0f;
-    }
-    else
-    {
-        currentPlantParams_ = 0;
-        EditorErrorLog(name);
-    }
-}
-
-inline void RenderingGeneralParams(u8 plantCount, r32 minOffset, r32 maxOffset)
-{
-    if(currentPlantParams_)
-    {
-        currentPlantParams_->plantCount = plantCount;
-        currentPlantParams_->minOffset = minOffset;
-        currentPlantParams_->maxOffset = maxOffset;
-    }
-}
-
-inline void GeneralParams(u8 maxLevels, r32 rootStrength, Vec4 branchColorAlive, Vec4 branchColorDead)
-{
-    if(currentPlantParams_)
-    {
-        Assert(Normalized( rootStrength));
-        Assert(maxLevels <= MAX_LEVELS);
-        
-        u8 maxZeroLevelSegmentNumber = currentSlot_->plantBaseParams.maxZeroLevelSegmentNumber;
-        r32 maxRootSegmentLength = currentSlot_->plantBaseParams.maxRootSegmentLength;
-        r32 maxRootSegmentRadious = currentSlot_->plantBaseParams.maxRootSegmentRadious;
-        
-        currentPlantParams_->maxSegmentNumber[0] = maxZeroLevelSegmentNumber;
-        currentPlantParams_->maxRadious[0] = maxRootSegmentRadious;
-        currentPlantParams_->segmentLengths[0] = maxRootSegmentLength;
-        
-        currentPlantParams_->maxLevels = maxLevels;
-        currentPlantParams_->plantStrength[0] = rootStrength;
-        
-        currentPlantParams_->oneOverMaxRadious = 1.0f / maxRootSegmentLength;
-        
-        currentPlantParams_->branchColorAlive = branchColorAlive;
-        currentPlantParams_->branchColorDead = branchColorDead;
-    }
-}
-
-inline void DeltaCoeffBetweenLevels( r32 maxRadiousCoeff, r32 maxLengthCoeff, r32 maxSegmentCoeff, r32 leafSizeCoeff, r32 strengthCoeff )
-{
-    if(currentPlantParams_)
-    {
-        Assert( currentPlantParams_->maxLevels && currentPlantParams_->maxLevels <= MAX_LEVELS );
-        
-        u8* maxSegm = currentPlantParams_->maxSegmentNumber;
-        r32* maxR = currentPlantParams_->maxRadious;
-        r32* maxL = currentPlantParams_->segmentLengths;
-        r32* maxLS = currentPlantParams_->leafSize;
-        r32* maxS = currentPlantParams_->plantStrength;
-        
-        Assert( maxSegm[0] );
-        Assert( maxR[0] != 0.0f );
-        Assert( maxL[0] != 0.0f );
-        Assert( maxLS[0] != 0.0f );
-        Assert( maxS[0] != 0.0f );
-        
-        for( u8 levelIndex = 1; levelIndex < currentPlantParams_->maxLevels; ++levelIndex )
-        {
-            maxSegm[levelIndex] = ( u8 ) ( ( r32 ) maxSegm[levelIndex - 1] * maxSegmentCoeff );
-            maxR[levelIndex] = maxR[levelIndex - 1] * maxRadiousCoeff;
-            maxL[levelIndex] = maxL[levelIndex - 1] * maxLengthCoeff;
-            maxLS[levelIndex] = maxLS[levelIndex - 1] * leafSizeCoeff;
-            maxS[levelIndex] = maxS[levelIndex - 1] * strengthCoeff;
-        }
-    }
-}
-
-inline void DeltaCoeffBetweenLevelSegment( r32 radiousCoeff, r32 lengthCoeff, r32 branchLengthCoeff, r32 strengthCoeff )
-{
-    if(currentPlantParams_)
-    {
-        for( u32 levelIndex = 0; levelIndex < ArrayCount( currentPlantParams_->segmentBySegmentRadiousCoeff ); ++levelIndex )
-        {
-            currentPlantParams_->segmentBySegmentRadiousCoeff[levelIndex] = radiousCoeff;
-        }
-        
-        for( u32 levelIndex = 0; levelIndex < ArrayCount( currentPlantParams_->segmentBySegmentLengthCoeff ); ++levelIndex )
-        {
-            currentPlantParams_->segmentBySegmentLengthCoeff[levelIndex] = lengthCoeff;
-        }
-        
-        for( u32 levelIndex = 0; levelIndex < ArrayCount( currentPlantParams_->segmentBySegmentBranchLengthCoeff ); ++levelIndex )
-        {
-            currentPlantParams_->segmentBySegmentBranchLengthCoeff[levelIndex] = branchLengthCoeff;
-        }
-        
-        for( u32 levelIndex = 0; levelIndex < ArrayCount( currentPlantParams_->segmentBySegmentStrengthCoeff ); ++levelIndex )
-        {
-            currentPlantParams_->segmentBySegmentStrengthCoeff[levelIndex] = strengthCoeff;
-        }
-    }
-}
-
-#define AddRule( type, ... ) AddRule_( PlantSegment_##type, __VA_ARGS__ )
-inline void AddRule_( PlantSegmentType type, b32 allowsleafGrowth = true )
-{
-    Assert( currentPlantParams_->ruleCount < ArrayCount( currentPlantParams_->rules ) );
-    currentPlantRule_ = currentPlantParams_->rules + currentPlantParams_->ruleCount++;
-    currentPlantRule_->requestedType = type;
-    currentPlantRule_->newType = type;
-}
-
-#define Becomes( type, leafCount ) Becomes_( PlantSegment_##type, leafCount )
-inline void Becomes_( PlantSegmentType type, u8 leafCount )
-{
-    currentPlantRule_->newType = type;
-    currentPlantRule_->leafCountDelta = leafCount;
-}
-
-#define GenNewSegment( pos, type ) GenNewSegment_( PlantChild_##pos, PlantSegment_##type )
-inline void GenNewSegment_( PlantChildPosition position, PlantSegmentType type )
-{
-    currentNewSegment_ = currentPlantRule_->newSegments + position;
-    currentNewSegment_->type = type;
-    
-    u8 levelDelta = 1;
-    if( position == PlantChild_Top )
-    {
-        levelDelta = 0;
-    }
-    currentNewSegment_->levelDelta = levelDelta;
-}
-
-inline void NewSegmentAngleX( r32 angleMin, r32 angleMax, i8 magnitude, i8 repeat, i8 offset = 0 )
-{
-    Assert( angleMin <= angleMax );
-    currentNewSegment_->angleXDistr = RangeDistr( DegToRad( angleMin ), DegToRad( angleMax ), magnitude, repeat, offset );
-}
-
-inline void NewSegmentAngleY( r32 angleMin, r32 angleMax, i8 magnitude, i8 repeat, i8 offset = 0 )
-{
-    Assert( angleMin <= angleMax );
-    currentNewSegment_->angleYDistr = RangeDistr( DegToRad( angleMin ), DegToRad( angleMax ), magnitude, repeat, offset );
-}
-
-inline void MaxCenterDelta(r32 maxDelta)
-{
-    currentPlantParams_->maxCenterDelta = maxDelta;
-}
-inline void GrowthParams( r32 radious )
-{
-    currentPlantRule_->radiousIncrement = radious;
-}
-
-inline void SpecialRequirement( u8 level, u8 minSegmentIndex )
-{
-    Assert( currentPlantRule_->specialRequirementCount < ArrayCount( currentPlantRule_->specialRequirement ) );
-    SpecialRuleRequirement* req = currentPlantRule_->specialRequirement + currentPlantRule_->specialRequirementCount++;
-    req->level = level;
-    req->minSegmentIndex = minSegmentIndex;
-}
-
-inline void LeafParams(r32 leafRadious, r32 leafLength, r32 leafMinAngle, r32 leafMaxAngle, Vec4 leafColorAlive, Vec4 leafColorDead, Vec3 leafColorRandomization)
-{
-    currentPlantParams_->leafRadious = leafRadious;
-    currentPlantParams_->leafLength = leafLength;
-    currentPlantParams_->leafMinAngle = DegToRad( leafMinAngle );
-    currentPlantParams_->leafMaxAngle = DegToRad( leafMaxAngle );
-    currentPlantParams_->leafColorAlive = leafColorAlive;
-    currentPlantParams_->leafColorDead = leafColorDead;
-    currentPlantParams_->leafColorRandomization = leafColorRandomization;
-}
-
-inline void IsHerbaceous()
-{
-    currentPlantParams_->isHerbaceous = true;
-}
-
-
-internal void ReadPlantChart()
-{
-    BeginParams( "pine" );
-    
-    LeafParams( 0.14f, 0.13f, -30.0f, 30.0f, SRGBLinearize(V4( 0.06f, 0.1f, 0.02f, 1.0f)), SRGBLinearize(V4(0.35f, 0.12f, 0.14f, 1.0f)), V3(0.002f, 0.03f, 0.001f));
-    
-    GeneralParams( 2, 0.9f, SRGBLinearize(0.15f,0.08f,0.08f, 1.0f), SRGBLinearize( V4( 0.2f, 0.08f, 0.05f, 1.0f ) ) );
-    MaxCenterDelta(0.1f);
-    DeltaCoeffBetweenLevels( 0.6f, 0.6f, 0.5f, 0.8f, 0.9f );
-    DeltaCoeffBetweenLevelSegment( 0.84f, 0.95f, 0.9f, 0.9f );
-    
-    AddRule( Meristem );
-    Becomes(Branch, 0);
-    
-    GenNewSegment( Top, Meristem );
-    NewSegmentAngleX( -10.0f, 10.0f, 1, 10 );
-    NewSegmentAngleY( -1.0f, 1.0f, 3, 6 );
-    
-    
-    AddRule( Meristem );
-    Becomes(Branch, 4);
-    
-    GenNewSegment( Top, Meristem );
-    NewSegmentAngleX( -10.0f, 10.0f, 1, 10 );
-    NewSegmentAngleY( -1.0f, 1.0f, 3, 6 );
-    
-    GenNewSegment( Up, Meristem );
-    NewSegmentAngleX( -30.0f, 30.0f, 3, 6 );
-    NewSegmentAngleY( -30.0f, 30.0f, 3, 6 );
-    
-    GenNewSegment( Down, Meristem );
-    NewSegmentAngleX( -30.0f, 30.0f, 3, 6 );
-    NewSegmentAngleY( -30.0f, 30.0f, 3, 6 );
-    
-    
-    GenNewSegment( Right, Meristem );
-    NewSegmentAngleX( -30.0f, 30.0f, 3, 6 );
-    NewSegmentAngleY( -30.0f, 30.0f, 3, 6 );
-    
-    GenNewSegment( Left, Meristem );
-    NewSegmentAngleX( -30.0f, 30.0f, 3, 6 );
-    NewSegmentAngleY( -30.0f, 30.0f, 3, 6 );
-    
-    SpecialRequirement( 0, 2 );
-    
-    AddRule(Branch);
-    GrowthParams(0.03f);
-    
-    BeginParams( "testGrass" );
-    IsHerbaceous();
-    RenderingGeneralParams(5, -0.4f, 0.4f);
-    LeafParams(0.2f, 0.3f, -60.0f, 60.0f, SRGBLinearize(V4(0.05f,0.14f, 0.05f, 1.0f)), V4( 0.06f, 0.13f, 0.02f, 1.0f ), V3(0.002f, 0.03f, 0.001f));
 }
 
 
@@ -3082,6 +2787,41 @@ inline void AddTileBucket(Selector* band, char* tileName, r32 temperature)
     }
 }
 
+inline void ParsePlantLevelParams(PlantLevelParams* destParams, EditorElement* levelParams)
+{
+    if(levelParams)
+    {
+        destParams->curveRes = ToU8(GetValue(levelParams, "curveRes"));
+        destParams->curveBack = ToR32(GetValue(levelParams, "curveBack"));
+        destParams->curve = ToR32(GetValue(levelParams, "curve"));
+        destParams->curveV = ToR32(GetValue(levelParams, "curveV"));
+        
+        destParams->segSplits = ToR32(GetValue(levelParams, "segSplits"));
+        destParams->baseSplits = ToR32(GetValue(levelParams, "baseSplits"));
+        
+        destParams->splitAngle = ToR32(GetValue(levelParams, "splitAngle"));
+        destParams->splitAngleV = ToR32(GetValue(levelParams, "splitAngleV"));
+        
+        destParams->branches = ToR32(GetValue(levelParams, "branches"));
+        destParams->branchesV = ToR32(GetValue(levelParams, "branchesV"));
+        destParams->downAngle = ToR32(GetValue(levelParams, "downAngle"));destParams->downAngleV = ToR32(GetValue(levelParams, "downAngleV"));
+        destParams->rotate = ToR32(GetValue(levelParams, "rotate"));destParams->rotateV = ToR32(GetValue(levelParams, "rotateV"));
+        destParams->length = ToR32(GetValue(levelParams, "length"));
+        destParams->lengthV = ToR32(GetValue(levelParams, "lengthV"));
+        destParams->taper = ToR32(GetValue(levelParams, "taper"));
+        
+        destParams->radiousIncreaseSpeed = ToR32(GetValue(levelParams, "radiousIncreaseSpeed"));
+        destParams->lengthIncreaseSpeed = ToR32(GetValue(levelParams, "lengthIncreaseSpeed"));
+        
+        destParams->createClonesLengthNorm = Clamp01(ToR32(GetValue(levelParams, "createClonesLengthNorm")));
+        destParams->createChildsLengthNorm = Clamp01(ToR32(GetValue(levelParams, "createChildsLengthNorm")));
+    }
+    else
+    {
+        *destParams = {};
+    }
+}
+
 internal void Import(TaxonomySlot* slot, EditorElement* root)
 {
     currentSlot_ = slot;
@@ -3104,14 +2844,6 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             DefineNullBounds(height, radious);
         }
     }
-    else if(StrEqual(name, "plantBounds"))
-    {
-        char* segmentNumber = GetValue(root, "segmentNumber");
-        char* radious = GetValue(root, "radious");
-        char* length = GetValue(root, "length");
-        DefinePlantBounds(segmentNumber, radious, length);
-    }
-    
     
     
     else if(StrEqual(name, "equipmentMappings"))
@@ -3341,21 +3073,6 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             attributes = attributes->next;
         }
     }
-    
-    else if(StrEqual(name, "plantPhases"))
-    {
-        EditorElement* status = root->firstInList;
-        while(status)
-        {
-            char* statusName = GetValue(status, "name");
-            r32 time = ToR32(GetValue(status, "time"));
-            char* newStatus = GetValue(status, "newStatus");
-            
-            PlantStatus(statusName, time, newStatus);
-            status = status->next;
-        }
-    }
-    
     
     else if(StrEqual(name, "playerActions"))
     {
@@ -3588,6 +3305,11 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     {
         if(currentSlot_->rock)
         {
+            if(currentSlot_->rock->firstPossibleMineral)
+            {
+                FREELIST_FREE(currentSlot_->rock->firstPossibleMineral, RockMineral,  taxTable_->firstFreeRockMineral);
+            }
+            
             FREELIST_DEALLOC(currentSlot_->rock, taxTable_->firstFreeRockDefinition);
             currentSlot_->rock = 0;
         }
@@ -3596,8 +3318,67 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         RockDefinition* definition = currentSlot_->rock;
         
         definition->color = ToV4Color(GetStruct(root, "color"));
+        definition->startingColorDelta = ToV4Color(GetStruct(root, "startingColorDelta"));
+        definition->perVertexColorDelta = ToV4Color(GetStruct(root, "perVertexColorDelta"));
+        definition->iterationCount = ToU32(GetValue(root, "iterations"));
+        definition->minDisplacementY = ToR32(GetValue(root, "minDisplacementY"));
+        definition->maxDisplacementY = ToR32(GetValue(root, "maxDisplacementY"));
+        definition->minDisplacementZ = ToR32(GetValue(root, "minDisplacementZ"));
+        definition->maxDisplacementZ = ToR32(GetValue(root, "maxDisplacementZ"));
+        definition->smoothness = ToR32(GetValue(root, "smoothness"));
+        definition->smoothnessDelta = ToR32(GetValue(root, "smoothnessDelta"));
         definition->scale = ToV3(GetStruct(root, "scale"));
         definition->scaleDelta = ToV3(GetStruct(root, "scaleDelta"));
+        
+        definition->percentageOfMineralVertexes = ToR32(GetValue(root, "percentageOfMineralVertexes"));
+        definition->mineralCount = 0;
+        EditorElement* minerals = GetList(root, "minerals");
+        while(minerals)
+        {
+            RockMineral* mineral;
+            TAXTABLE_ALLOC(mineral, RockMineral);
+            
+            mineral->lerp = ToR32(GetValue(minerals, "lerp"));
+            mineral->lerpDelta = ToR32(GetValue(minerals, "lerpDelta"));
+            mineral->color = ToV4Color(GetStruct(minerals, "color"));
+            
+            FREELIST_INSERT(mineral, definition->firstPossibleMineral);
+            ++definition->mineralCount;
+            
+            minerals = minerals->next;
+        }
+        
+        definition->renderingRocksCount = ToU32(GetValue(root, "renderingRocksCount"));
+        definition->renderingRocksDelta = ToU32(GetValue(root, "renderingRocksDelta"));
+        definition->renderingRocksRandomOffset = ToV3(GetStruct(root, "renderingRocksOffset"));
+        definition->scaleRandomness = ToR32(GetValue(root, "scaleRandomness"));
+        
+    }
+    else if(StrEqual(name, "plantDefinition"))
+    {
+        if(currentSlot_->plant)
+        {
+            TAXTABLE_DEALLOC(currentSlot_->plant, PlantDefinition);
+        }
+        TAXTABLE_ALLOC(currentSlot_->plant, PlantDefinition);
+        PlantDefinition* plant = currentSlot_->plant;
+        
+        plant->shape = (PlantShape) GetValuePreprocessor(PlantShape, GetValue(root, "shape"));
+        plant->baseSize = ToR32(GetValue(root, "baseSize"));
+        plant->scale = ToR32(GetValue(root, "scale"));
+        plant->scaleV = ToR32(GetValue(root, "scaleV"));
+        plant->scale_0 = ToR32(GetValue(root, "scale_0"));
+        plant->scaleV_0 = ToR32(GetValue(root, "scaleV_0"));
+        plant->ratio = ToR32(GetValue(root, "ratio"));
+        plant->ratioPower = ToR32(GetValue(root, "ratioPower"));
+        plant->flare = ToR32(GetValue(root, "flare"));
+        
+        ParsePlantLevelParams(plant->levelParams + 0, GetStruct(root, "level0"));
+        ParsePlantLevelParams(plant->levelParams + 1, GetStruct(root, "level1"));
+        ParsePlantLevelParams(plant->levelParams + 2, GetStruct(root, "level2"));
+        ParsePlantLevelParams(plant->levelParams + 3, GetStruct(root, "level3"));
+        
+        //DefinePlantBounds(resolution_0, maxRadious_0, maxLength_0);
     }
     else if(StrEqual(name, "generatorParams"))
     {
