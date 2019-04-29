@@ -401,9 +401,13 @@ inline u32 GetFlagPreprocessor_(MetaFlag* values, u32 count, char* test)
 }
 
 
-inline u8 ToU8(char* string)
+inline u8 ToU8(char* string, u8 default = 0)
 {
-    u8 result = SafeTruncateToU8(atoi(string));
+    u8 result = default;
+    if(string)
+    {
+        result = SafeTruncateToU8(atoi(string));
+    }
     return result;
 }
 
@@ -3364,6 +3368,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         PlantDefinition* plant = currentSlot_->plant;
         
         plant->shape = (PlantShape) GetValuePreprocessor(PlantShape, GetValue(root, "shape"));
+        plant->maxLevels = Min(4, ToU8(GetValue(root, "levels"), 1));
         plant->baseSize = ToR32(GetValue(root, "baseSize"));
         plant->scale = ToR32(GetValue(root, "scale"));
         plant->scaleV = ToR32(GetValue(root, "scaleV"));

@@ -26,6 +26,7 @@ struct PlantStem
     m4x4 orientation;
     
     r32 parentStemZ;
+    r32 parentSegmentZ;
     
     r32 totalLength;
     r32 baseRadious;
