@@ -624,7 +624,7 @@ inline void PushCube(RenderGroup* group, Vec3 P, r32 height, r32 width, Vec4 col
     PushCube_(group, P, height, width, group->whiteTexture, color, lightIndexes);
 }
 
-inline void PushTrunkatedPyramid(RenderGroup* group, Vec3 P, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxis, Vec3 XAxisTop, Vec3 YAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 color, Vec4 lightIndexes, r32 modulationPercentage)
+inline void PushTrunkatedPyramid(RenderGroup* group, Vec3 P, Vec3 topP, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxisBottom, Vec3 XAxisTop, Vec3 YAxisTop, Vec3 ZAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 color, Vec4 lightIndexes, r32 modulationPercentage)
 {
     RenderTexture texture = group->whiteTexture;
     r32 anglePerSubdivision = TAU32 / subdivisions;
@@ -633,7 +633,7 @@ inline void PushTrunkatedPyramid(RenderGroup* group, Vec3 P, u32 subdivisions, V
     u32 CD = StoreColor(darkColor);
     
     Vec4 PBottom = V4(P, 0);
-    Vec4 PTop = PBottom + V4(height * ZAxis, 0);
+    Vec4 PTop = V4(topP, 0);
     
     Vec4 basePBottom = PBottom + V4(XAxisBottom * radiousBottom, 0);
     Vec4 basePTop = PTop + V4(XAxisTop * radiousTop, 0);
@@ -642,8 +642,8 @@ inline void PushTrunkatedPyramid(RenderGroup* group, Vec3 P, u32 subdivisions, V
     
     for(u32 subIndex = 0; subIndex < subdivisions; ++subIndex)
     {
-        Vec3 rotatedAxisBottom = RotateVectorAroundAxis(XAxisBottom, ZAxis, angle);
-        Vec3 rotatedAxisTop = RotateVectorAroundAxis(XAxisTop, ZAxis, angle);
+        Vec3 rotatedAxisBottom = RotateVectorAroundAxis(XAxisBottom, ZAxisBottom, angle);
+        Vec3 rotatedAxisTop = RotateVectorAroundAxis(XAxisTop, ZAxisTop, angle);
         
         Vec4 rotatedPBottom = PBottom + V4(rotatedAxisBottom * radiousBottom, 0);
         Vec4 rotatedPTop = PTop + V4(rotatedAxisTop * radiousTop, 0);

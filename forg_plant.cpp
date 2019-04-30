@@ -14,7 +14,7 @@ inline PlantStem* GetFreePlantStem(GameModeWorld* worldMode)
 
 inline r32 ShapeRatio(PlantShape shape, r32 ratio)
 {
-    Assert(Normalized(ratio));
+    ratio = Clamp01(ratio);
     r32 result;
     
     switch(shape)
@@ -186,7 +186,7 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
         
         if(!spawnedClones && (segment->lengthCoeff >= levelParams->createClonesLengthNorm))
         {
-            u32 numberOfClones = 1;
+            u32 numberOfClones = 3;
 #if 0            
             segment->index == 0 ? levelParams->baseSplits : levelParams->segSplits;
             u32 numberOfClones = Compute(numberOfClonesReal);
@@ -237,7 +237,6 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                     }
                     newSegment->angleY += stem->additionalCurveBackAngle / actualCurveRes;
                     
-                    
                     segment->next = newSegment;
                     ++stem->segmentCount;
                 }
@@ -272,10 +271,12 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                         clonedStem->segmentCount = stem->segmentCount + 1;
                         
                         r32 angleY = (levelParams->splitAngle + RandomBil(&plant->sequence) * levelParams->splitAngleV) - declination;
-                        stem->orientation =  YRotation(angleY) * segmentOrientation * ZRotation(runningAngle);
+                        clonedStem->orientation =  YRotation(angleY) * segmentOrientation;
+                        angleY = Max(angleY, 0);
+                        //* ZRotation(runningAngle);
                         
                         clonedStem->parentStemZ = stem->parentStemZ;
-                        clonedStem->parentSegmentZ = stem->parentSegmentZ;
+                        clonedStem->parentSegmentZ = 1.0f;
                         
                         clonedStem->totalLength = stem->totalLength;
                         clonedStem->baseRadious = stem->baseRadious;
@@ -285,7 +286,7 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                         
                         clonedStem->additionalCurveBackAngle = -angleY;
                         
-                        FREELIST_INSERT(stem, segment->clones);
+                        FREELIST_INSERT(clonedStem, segment->clones);
                         
                         runningAngle += rotatingAngle;
                     }
@@ -297,7 +298,7 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
         {
             Assert(!segment->childs);
             
-            u32 numberOfChilds = 1;
+            u32 numberOfChilds = 0;
 #if 0            
             r32 numberOfChildsReal = parentStem->numberOfChilds / levelParams->curveRes;
             u32 numberOfChilds = Compute(numberOfChildsReal);
@@ -307,6 +308,7 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
             {
                 r32 parentSegmentZ = RandomUni(&plant->sequence);
                 r32 parentStemZ = segmentBaseZ + parentSegmentZ * segmentUnitZ;
+                Assert(parentStemZ <= 1.0f);
                 
                 r32 offsetChild = parentStemZ * stem->totalLength;
                 
@@ -338,6 +340,7 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                 
                 
                 PlantStem* childStem = GetFreePlantStem(worldMode);
+                *childStem = {};
                 
                 childStem->root = GetFreePlantSegment(worldMode);
                 *childStem->root = {};
@@ -385,7 +388,7 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                 childStem->childsCurrentAngle = 0;
                 childStem->additionalCurveBackAngle = 0;
                 
-                FREELIST_INSERT(stem, segment->clones);
+                FREELIST_INSERT(childStem, segment->childs);
             }
         }
         
@@ -409,7 +412,7 @@ inline void UpdatePlant(GameModeWorld* worldMode, PlantDefinition* definition, C
         trunk->root = GetFreePlantSegment(worldMode);
         *trunk->root = {};
         
-        trunk->segmentCount = 0;
+        trunk->segmentCount = 1;
         
         trunk->orientation = Identity();
         
@@ -429,9 +432,13 @@ inline void UpdatePlant(GameModeWorld* worldMode, PlantDefinition* definition, C
 }
 
 
-internal void RenderStem(RenderGroup* group, Vec4 lightIndexes, PlantDefinition* definition, PlantStem* stem, Vec3 stemP, u8 recursiveLevel)
+internal void RenderStem(RenderGroup* group, Vec4 lightIndexes, PlantDefinition* definition, PlantStem* stem, Vec3 stemP, u8 recursiveLevel, m4x4 originOrientation)
 {
-    m4x4 segmentOrientation = stem->orientation;
+    m4x4 baseOrientation = baseOrientation;
+    m4x4 topOrientation = stem->orientation;
+    
+    Assert(stem->root);
+    Assert(stem->root->angleY == 0);
     
     Vec3 segmentBaseP = stemP;
     
@@ -449,31 +456,33 @@ internal void RenderStem(RenderGroup* group, Vec4 lightIndexes, PlantDefinition*
         r32 length = segmentLength * segment->lengthCoeff;
         Vec4 color = GetSegmentColor();
         
-        Vec3 bottomXAxis = GetColumn(segmentOrientation, 0);
-        Vec3 bottomYAxis = GetColumn(segmentOrientation, 1);
-        Vec3 bottomZAxis = GetColumn(segmentOrientation, 2);
+        Vec3 bottomXAxis = GetColumn(baseOrientation, 0);
+        Vec3 bottomYAxis = GetColumn(baseOrientation, 1);
+        Vec3 bottomZAxis = GetColumn(baseOrientation, 2);
         
-        m4x4 topOrientation = YRotation(segment->angleY) * segmentOrientation;
+        r32 rotationAngle = segment->next ? segment->next->angleY : 0;
+        topOrientation = YRotation(DegToRad(rotationAngle)) * topOrientation;
         Vec3 topXAxis = GetColumn(topOrientation, 0);
         Vec3 topYAxis = GetColumn(topOrientation, 1);
         Vec3 topZAxis = GetColumn(topOrientation, 2);
         
-        PushTrunkatedPyramid(group, segmentBaseP, 4, bottomXAxis, bottomYAxis, topZAxis, topXAxis, topYAxis, baseRadious, topRadious, length, color, lightIndexes, 0);
+        Vec3 topP = segmentBaseP + length * bottomZAxis;
+        PushTrunkatedPyramid(group, segmentBaseP, topP, 4, bottomXAxis, bottomYAxis, bottomZAxis, topXAxis, topYAxis, topZAxis, baseRadious, topRadious, length, color, lightIndexes, 0);
         
         for(PlantStem* child = segment->childs; child; child = child->next)
         {
-            Vec3 childP = segmentBaseP + child->parentSegmentZ * bottomZAxis;
-            RenderStem(group, lightIndexes, definition, child, childP, recursiveLevel + 1);
+            Vec3 childP = segmentBaseP + child->parentSegmentZ * length * bottomZAxis;
+            RenderStem(group, lightIndexes, definition, child, childP, recursiveLevel + 1, ?);
         }
         
         for(PlantStem* clone = segment->clones; clone; clone = clone->next)
         {
-            Vec3 cloneP = segmentBaseP + clone->parentSegmentZ * bottomZAxis;
-            RenderStem(group, lightIndexes, definition, clone, cloneP, recursiveLevel);
+            Vec3 cloneP = segmentBaseP + clone->parentSegmentZ * length * bottomZAxis;
+            RenderStem(group, lightIndexes, definition, clone, cloneP, recursiveLevel, topOrientation);
         }
         
-        segmentBaseP = segmentBaseP + length * bottomZAxis;
-        segmentOrientation = topOrientation;
+        segmentBaseP = topP;
+        baseOrientation = topOrientation;
         
         baseZ = topZ;
         topZ += segmentUnitZ;
@@ -503,5 +512,5 @@ internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group,
     }
 #endif
     
-    RenderStem(group, lightIndexes, definition, &plant->trunk, plantP, 0);
+    RenderStem(group, lightIndexes, definition, &plant->trunk, plantP, 0, Identity());
 }
