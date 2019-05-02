@@ -1838,7 +1838,8 @@ inline b32 ChangesMustBeSaved(u32 widgetIndex)
        widgetIndex == EditorWidget_SoundDatabase ||
        widgetIndex == EditorWidget_GeneralButtons || 
        widgetIndex == EditorWidget_ColorPicker ||
-       widgetIndex == EditorWidget_GroundParams)
+       widgetIndex == EditorWidget_GroundParams ||
+       widgetIndex == EditorWidget_Misc)
     {
         result = false;
     }
@@ -3652,7 +3653,9 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
             }
             else
             {
-                UIResetListIndex(UI, possibleOverlappingActions);
+                if(!input->altDown)
+                {
+                                    UIResetListIndex(UI, possibleOverlappingActions);
                 UIInteraction mouseMovement = {};
                 UIAddStandardAction(UI, &mouseMovement, UI_Click, Vec3, ColdPointer(&UI->deltaMouseP), ColdPointer(&UI->worldMouseP));
                 UIAddStandardAction(UI, &mouseMovement, UI_Idle, u32, ColdPointer(&UI->mouseMovement), Fixed(UIMouseMovement_MouseDir));
@@ -3666,6 +3669,8 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                 }
                 
                 UIAddInteraction(UI, input, mouseLeft, mouseMovement);
+                }
+
             }
             
 #if 0            

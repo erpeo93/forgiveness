@@ -624,13 +624,17 @@ inline void PushCube(RenderGroup* group, Vec3 P, r32 height, r32 width, Vec4 col
     PushCube_(group, P, height, width, group->whiteTexture, color, lightIndexes);
 }
 
-inline void PushTrunkatedPyramid(RenderGroup* group, Vec3 P, Vec3 topP, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxisBottom, Vec3 XAxisTop, Vec3 YAxisTop, Vec3 ZAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 color, Vec4 lightIndexes, r32 modulationPercentage)
+inline void PushTrunkatedPyramid(RenderGroup* group, RenderTexture texture, Vec3 P, Vec3 topP, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxisBottom, Vec3 XAxisTop, Vec3 YAxisTop, Vec3 ZAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 baseColor, Vec4 topColor, Vec4 lightIndexes, r32 modulationPercentage)
 {
-    RenderTexture texture = group->whiteTexture;
     r32 anglePerSubdivision = TAU32 / subdivisions;
-    Vec4 darkColor = V4(color.rgb * 0.65f, color.a); 
-    u32 C = StoreColor(color);
-    u32 CD = StoreColor(darkColor);
+    Vec4 darkColorBase = V4(baseColor.rgb * 0.65f, baseColor.a); 
+    Vec4 darkColorTop = V4(topColor.rgb * 0.65f, topColor.a); 
+    
+    u32 CBase = StoreColor(baseColor);
+    u32 CTop = StoreColor(topColor);
+    
+    u32 CDBase = StoreColor(darkColorBase);
+    u32 CDTop = StoreColor(darkColorTop);
     
     Vec4 PBottom = V4(P, 0);
     Vec4 PTop = V4(topP, 0);
@@ -648,18 +652,46 @@ inline void PushTrunkatedPyramid(RenderGroup* group, Vec3 P, Vec3 topP, u32 subd
         Vec4 rotatedPBottom = PBottom + V4(rotatedAxisBottom * radiousBottom, 0);
         Vec4 rotatedPTop = PTop + V4(rotatedAxisTop * radiousTop, 0);
         
-        u32 cToUse = (subIndex % 2 == 0) ? CD : C;
         
-        ReservedVertexes vertexes = ReserveTriangles(group, 4);
-        PushTriangle(group, texture, lightIndexes, &vertexes, basePBottom, cToUse, rotatedPBottom, cToUse, rotatedPTop, cToUse, modulationPercentage);
-        PushTriangle(group, texture, lightIndexes, &vertexes, basePBottom, cToUse, rotatedPTop, cToUse, basePTop, cToUse, modulationPercentage);
-        PushTriangle(group, texture, lightIndexes, &vertexes, rotatedPBottom, cToUse, basePBottom, cToUse, PBottom, cToUse, modulationPercentage);
-        PushTriangle(group, texture, lightIndexes, &vertexes, PTop, cToUse, basePTop, cToUse, rotatedPTop, cToUse, modulationPercentage);
+        u32 cBaseToUse = (subIndex % 2 == 0) ? CDBase : CBase;
+        u32 cTopToUse = (subIndex % 2 == 0) ? CDTop : CTop;
+        
+        ReservedVertexes vertexes = ReserveTriangles(group, 2);
+        
+        PushTriangle(group, texture, lightIndexes, &vertexes, rotatedPBottom, cBaseToUse, basePBottom, cBaseToUse, PBottom, cBaseToUse, modulationPercentage);
+        PushTriangle(group, texture, lightIndexes, &vertexes, PTop, cTopToUse, basePTop, cTopToUse, rotatedPTop, cTopToUse, modulationPercentage);
+        
+        ReservedVertexes quad = ReserveQuads(group, 1);
+        
+        
+        PushQuad(group, texture, lightIndexes, &quad, 
+                 basePBottom, V2(0, 0), cBaseToUse, 
+                 rotatedPBottom, V2(1, 0), cBaseToUse,
+                 rotatedPTop, V2(1, 1), cTopToUse,
+                 basePTop, V2(0, 1), cTopToUse, modulationPercentage);
         
         basePBottom = rotatedPBottom;
         basePTop = rotatedPTop;
         
         angle += anglePerSubdivision;
+    }
+    
+    //PushLineSegment(group, group->whiteTexture, V4(1, 1, 1, 1), P, topP, 0.1f);
+}
+
+inline void PushTrunkatedPyramid(RenderGroup* group, BitmapId BID, Vec3 P, Vec3 topP, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxisBottom, Vec3 XAxisTop, Vec3 YAxisTop, Vec3 ZAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 baseColor, Vec4 topColor, Vec4 lightIndexes, r32 modulationPercentage)
+{
+    Bitmap* bitmap = GetBitmap(group->assets, BID);
+    if(bitmap)
+    {
+        baseColor = Hadamart(baseColor, BID.coloration);
+        topColor = Hadamart(topColor, BID.coloration);
+        PushTrunkatedPyramid(group, bitmap->textureHandle, P, topP, subdivisions, XAxisBottom, YAxisBottom, ZAxisBottom, XAxisTop, YAxisTop, ZAxisTop, radiousBottom, radiousTop, height, baseColor, topColor, lightIndexes,modulationPercentage);
+    }
+    else
+    {
+        ++group->countMissing;
+        LoadBitmap(group->assets, BID, false);
     }
 }
 

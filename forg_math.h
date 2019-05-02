@@ -743,7 +743,7 @@ inline Vec4 Lerp( Vec4 a, r32 t, Vec4 b )
     return result;
 }
 
-inline Vec4 BiLerp( Vec4 a, Vec4 b, Vec4 c, Vec4 d, r32 lerpX, r32 lerpY )
+inline Vec4 BiLerp(Vec4 a, Vec4 b, Vec4 c, Vec4 d, r32 lerpX, r32 lerpY)
 {
     Vec4 result = Lerp( Lerp( a, lerpX, b ), 
                        lerpY, 

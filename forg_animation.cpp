@@ -2136,7 +2136,11 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             
             ClientPlant* plant = entityC->plant;
             *plant = {};
+            plant->sequence = Seed((u32)entityC->identifier);
         }
+        
+        entityC->plant->leafBitmap = GetFirstBitmap(group->assets, Asset_leaf);
+        entityC->plant->trunkBitmap = GetFirstBitmap(group->assets, Asset_trunk);
         UpdateAndRenderPlant(worldMode, group, lightIndexes, slot->plant, entityC->plant, entityC->P, timeToUpdate);
     }
     else if(IsRock(worldMode->table, entityC->taxonomy))

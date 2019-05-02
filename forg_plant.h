@@ -17,24 +17,43 @@ struct PlantSegment
     };
 };
 
+struct Leaf
+{
+    r32 dimCoeff;
+    r32 offsetCoeff;
+    
+    r32 renderingRandomization;
+};
+
+#define MAX_LEAFS_PER_STEM 16
 struct PlantStem
 {
     PlantSegment* root;
     
     u8 segmentCount;
     
-    m4x4 orientation;
+    r32 probabliltyToClone;
     
+    r32 parentAngleY;
+    r32 parentAngleZ;
     r32 parentStemZ;
     r32 parentSegmentZ;
     
+    r32 lengthNormZ;
     r32 totalLength;
     r32 baseRadious;
     
+    
+    r32 trunkNoise;
+    
+    r32 nextChildZ;
     u32 numberOfChilds;
     r32 childsCurrentAngle;
     
     r32 additionalCurveBackAngle;
+    
+    u32 leafCount;
+    Leaf leafs[MAX_LEAFS_PER_STEM];
     
     union
     {
@@ -63,16 +82,25 @@ struct PlantLevelParams
     r32 rotate;
     r32 rotateV;
     
-    r32 length;
-    r32 lengthV;
+    r32 lengthCoeff;
+    r32 lengthCoeffV;
     
     r32 taper;
+    
+    r32 clonePercRatio;
+    r32 clonePercRatioV;
+    
+    Vec4 baseYoungColor;
+    Vec4 topYoungColor;
+    
+    Vec4 baseOldColor;
+    Vec4 topOldColor;
     
     r32 lengthIncreaseSpeed;
     r32 radiousIncreaseSpeed;
     
-    r32 createClonesLengthNorm;
-    r32 createChildsLengthNorm;
+    u8 leafCount;
+    r32 allLeafsAtStemLength;
 };
 
 printTable(noPrefix) enum PlantShape
@@ -87,9 +115,11 @@ printTable(noPrefix) enum PlantShape
     PlantShape_TendFlame
 };
 
+#define MAX_LEVELS 4
 struct PlantDefinition
 {
     PlantShape shape;
+    
     r32 baseSize;
     
     r32 scale;
@@ -104,7 +134,22 @@ struct PlantDefinition
     r32 flare;
     
     u8 maxLevels;
-    PlantLevelParams levelParams[4];
+    PlantLevelParams levelParams[MAX_LEVELS];
+    
+    Vec4 leafColor;
+    Vec4 leafColorV;
+    
+    r32 leafDimSpeed;
+    r32 leafOffsetSpeed;
+    
+    Vec2 leafScale;
+    Vec2 leafScaleV;
+    
+    Vec3 leafOffsetV;
+    r32 leafAngleV;
+    
+    Vec4 trunkColorV;
+    r32 lobes;
     
     union
     {

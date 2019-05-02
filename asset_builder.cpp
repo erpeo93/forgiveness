@@ -2649,6 +2649,21 @@ internal void WriteLeafs()
     WritePak(assets, "forgleafs.pak" );
 }
 
+internal void WriteTrunks()
+{
+    char* trunkPath = "definition/trunks";
+    
+    Assets assets_;
+    Assets* assets = &assets_;
+    InitializeAssets(assets);
+    
+    BeginAssetType(assets, Asset_trunk);
+    AddBitmapAsset(trunkPath, "trunk.png", 0, 0.5f, 0.5f);
+    EndAssetType();
+    
+    WritePak(assets, "forgtrunks.pak" );
+}
+
 internal void WriteMisc()
 {
     char* miscPath = "definition/misc";
@@ -2776,6 +2791,7 @@ internal void WriteBitmapsAndAnimations()
 {
     WriteComponents();
     WriteLeafs();
+    WriteTrunks();
     WriteMisc();
     WriteUI();
     

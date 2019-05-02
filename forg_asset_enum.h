@@ -73,6 +73,7 @@ printTable(noPrefix) enum AssetTypeId
     Asset_equipmentRig,
     
     Asset_leaf,
+    Asset_trunk,
     Asset_waterRipple,
     Asset_emptySpace,
     Asset_scrollUI,

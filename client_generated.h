@@ -187,6 +187,7 @@ char* MetaTable_AssetTypeId[] =
 "casting",
 "equipmentRig",
 "leaf",
+"trunk",
 "waterRipple",
 "emptySpace",
 "scrollUI",

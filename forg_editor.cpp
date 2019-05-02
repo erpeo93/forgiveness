@@ -2810,15 +2810,22 @@ inline void ParsePlantLevelParams(PlantLevelParams* destParams, EditorElement* l
         destParams->branchesV = ToR32(GetValue(levelParams, "branchesV"));
         destParams->downAngle = ToR32(GetValue(levelParams, "downAngle"));destParams->downAngleV = ToR32(GetValue(levelParams, "downAngleV"));
         destParams->rotate = ToR32(GetValue(levelParams, "rotate"));destParams->rotateV = ToR32(GetValue(levelParams, "rotateV"));
-        destParams->length = ToR32(GetValue(levelParams, "length"));
-        destParams->lengthV = ToR32(GetValue(levelParams, "lengthV"));
+        destParams->lengthCoeff = ToR32(GetValue(levelParams, "lengthCoeff"));
+        destParams->lengthCoeffV = ToR32(GetValue(levelParams, "lengthCoeffV"));
         destParams->taper = ToR32(GetValue(levelParams, "taper"));
+        destParams->clonePercRatio = ToR32(GetValue(levelParams, "clonePercRatio"), 0.5f);
+        destParams->clonePercRatioV = ToR32(GetValue(levelParams, "clonePercRatioV"), 0.0f);
+        
+        destParams->baseYoungColor = ToV4Color(GetStruct(levelParams, "baseYoungColor"));
+        destParams->topYoungColor = ToV4Color(GetStruct(levelParams, "topYoungColor"));
+        destParams->baseOldColor = ToV4Color(GetStruct(levelParams, "baseOldColor"));
+        destParams->topOldColor = ToV4Color(GetStruct(levelParams, "topOldColor"));
         
         destParams->radiousIncreaseSpeed = ToR32(GetValue(levelParams, "radiousIncreaseSpeed"));
         destParams->lengthIncreaseSpeed = ToR32(GetValue(levelParams, "lengthIncreaseSpeed"));
         
-        destParams->createClonesLengthNorm = Clamp01(ToR32(GetValue(levelParams, "createClonesLengthNorm")));
-        destParams->createChildsLengthNorm = Clamp01(ToR32(GetValue(levelParams, "createChildsLengthNorm")));
+        destParams->leafCount = Min(MAX_LEAFS_PER_STEM, ToU8(GetValue(levelParams, "leafCount")));
+        destParams->allLeafsAtStemLength = ToR32(GetValue(levelParams, "allLeafsAtStemLength"), 0.5f);
     }
     else
     {
@@ -3383,6 +3390,20 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         ParsePlantLevelParams(plant->levelParams + 2, GetStruct(root, "level2"));
         ParsePlantLevelParams(plant->levelParams + 3, GetStruct(root, "level3"));
         
+        plant->leafColor = ToV4Color(GetStruct(root, "leafColor"));
+        plant->leafColorV = ToV4Color(GetStruct(root, "leafColorV"));
+        
+        plant->leafDimSpeed = ToR32(GetValue(root, "leafDimSpeed"));
+        plant->leafOffsetSpeed = ToR32(GetValue(root, "leafOffsetSpeed"));
+        
+        plant->leafScale = ToV2(GetStruct(root, "leafScale"));
+        plant->leafScaleV = ToV2(GetStruct(root, "leafScaleV"));
+        
+        plant->leafOffsetV = ToV3(GetStruct(root, "leafOffsetV"));
+        plant->leafAngleV = ToR32(GetValue(root, "leafAngleV"));
+        
+        plant->trunkColorV = ToV4Color(GetStruct(root, "trunkColorV"));
+        plant->lobes = ToR32(GetValue(root, "lobes"));
         //DefinePlantBounds(resolution_0, maxRadious_0, maxLength_0);
     }
     else if(StrEqual(name, "generatorParams"))

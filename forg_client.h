@@ -129,11 +129,18 @@ struct ClientPlant
 {
     RandomSequence sequence;
     
+    r32 cloneAccumulatedError[MAX_LEVELS];
+    
     r32 scale;
     r32 lengthBase;
     
     PlantStem trunk;
-    r32 elapsedFromLastUpdate;
+    
+    r32 age;
+    r32 serverAge;
+    
+    BitmapId leafBitmap;
+    BitmapId trunkBitmap;
     
     ClientPlant* nextFree;
 };

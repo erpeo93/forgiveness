@@ -1370,7 +1370,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         {
                             entity->P = Subtract(entity->universeP, player->universeP);
                             entity->timeFromLastUpdate += input->timeToAdvance;
-                            if(entity->timeFromLastUpdate >= 8.0f)
+                            if(entity->timeFromLastUpdate >= 800000.0f)
                             {
                                 AddFlags(entity, Flag_deleted);
                                 DeleteEntityClient(worldMode, entity);
