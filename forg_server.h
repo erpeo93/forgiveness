@@ -179,12 +179,25 @@ struct NewEntity
     u64 identifier;
     GenerationData gen;
     AddEntityAdditionalParams params;
+    
+	union
+	{
+		NewEntity* next;
+		NewEntity* nextFree;
+	};
 };
 
 struct DeletedEntity
 {
     u32 entityID;
     u32 IDs[Component_Count];
+    
+    
+	union
+	{
+		DeletedEntity* next;
+		DeletedEntity* nextFree;
+	};
 };
 
 struct ReceiveNetworkPacketWork
@@ -262,16 +275,19 @@ struct ServerState
     TaxonomyTable* activeTable;
     TaxonomyTable* oldTable;
     
-    volatile u32 newEntityCount;
-    NewEntity newEntities[1024];
+	TicketMutex newDeletedMutex;
     
-    volatile u32 deletedEntityCount;
-    DeletedEntity deletedEntities[1024];
+    NewEntity* firstNewEntity;
+	DeletedEntity* firstDeletedEntity;
+    
+	NewEntity* firstFreeNewEntity;
+	DeletedEntity* firstFreeDeletedEntity;
     
     u8 chunkDim;
     r32 chunkSide;
     r32 oneOverChunkSide;
     i32 lateralChunkSpan;
+    r32 regionSpan;
     WorldChunk* chunks[4096];
     SimRegion regions[SERVER_REGION_SPAN + 2][SERVER_REGION_SPAN + 2];
     

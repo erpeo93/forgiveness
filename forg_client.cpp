@@ -581,10 +581,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     ReceiveNetworkPackets(worldMode);
     
 #if FORGIVENESS_INTERNAL
-    myPlayer->networkTimeElapsed += input->timeToAdvance;
-    r32 receivingBytesPerSec = myPlayer->network->totalBytesReceived / myPlayer->networkTimeElapsed;
-    DEBUG_VALUE(receivingBytesPerSec);
-    DEBUG_VALUE(gameState->timeCoeff);
     input->timeToAdvance = input->timeToAdvance * (gameState->timeCoeff / 100.0f);
 #endif
     
@@ -761,7 +757,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     TaxonomySlot* rootSlot = &worldMode->table->root;
                     UI->editorTaxonomyTree = BuildEditorTaxonomyTree(worldMode->editorRoles, worldMode->table, rootSlot);
                     
-                    
                     reloadTaxonomyAutocompletes = true;
                 }
                 worldMode->allDataFilesArrived = false;
@@ -794,18 +789,17 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
 #endif
                 
                 reloadAssetAutocompletes = true;
-                
             }
+            
+            player->identifier = myPlayer->identifier;
+            player->targetID = myPlayer->targetIdentifier;
+            player->P = V3(0, 0, 0);
+            
+            ResetUI(UI, worldMode, group, player, input, worldMode->cameraWorldOffset.z / worldMode->defaultCameraZ, reloadTaxonomyAutocompletes, reloadAssetAutocompletes);
             
             b32 canRender = (worldMode->patchSectionArrived >= 2);
             if(canRender)
             {
-                player->identifier = myPlayer->identifier;
-                player->targetID = myPlayer->targetIdentifier;
-                player->P = V3(0, 0, 0);
-                
-                ResetUI(UI, worldMode, group, player, input, worldMode->cameraWorldOffset.z / worldMode->defaultCameraZ, reloadTaxonomyAutocompletes, reloadAssetAutocompletes);
-                
                 
                 ClientEntity* nearestEntities[8] = {};
                 r32 nearestCameraZ[ArrayCount(nearestEntities)];

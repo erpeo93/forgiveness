@@ -1316,9 +1316,9 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     
     if(canAdvance)
     {
-        for(u32 deletedEntityIndex = 0; deletedEntityIndex < server->deletedEntityCount; ++deletedEntityIndex)
+        for(DeletedEntity* deleted = server->firstDeletedEntity; deleted;)
         {
-            DeletedEntity* deleted = server->deletedEntities + deletedEntityIndex;
+            DeletedEntity* next = deleted->next;
             
             if(deleted->entityID)
             {
@@ -1337,15 +1337,22 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
                     FreeComponent(server->components, (EntityComponentType) componentIndex, ID);
                 }
             }
+
+			FREELIST_DEALLOC(deleted, server->firstFreeDeletedEntity);
+			deleted = next;
         }
-        server->deletedEntityCount = 0;
+        server->firstDeletedEntity = 0;
         
-        for(u32 newEntityIndex = 0; newEntityIndex < server->newEntityCount; ++newEntityIndex)
+        for(NewEntity* newEntity = server->firstNewEntity; newEntity; )
         {
-            NewEntity* newEntity = server->newEntities + newEntityIndex;
+			NewEntity* next = newEntity->next;
             AddEntitySingleThread(newEntity->region, newEntity->taxonomy, newEntity->P, newEntity->identifier, newEntity->gen, newEntity->params);
+
+			FREELIST_DEALLOC(newEntity, server->firstFreeNewEntity);
+			newEntity = next;
         }
-        server->newEntityCount = 0;
+
+		server->firstNewEntity = 0;
         
         // NOTE(Leonardo): we first simulate all the mirror region, so that we dispatch all the update first, and then we update all the other regions
         u32 realServerRegionSpan = SERVER_REGION_SPAN + 2;

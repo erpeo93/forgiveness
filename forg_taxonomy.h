@@ -26,7 +26,6 @@ struct TaxonomyNode
         TaxonomyNode* nextFree;
     };
     
-    
     TaxonomyNodeData data;
 };
 
@@ -594,6 +593,9 @@ struct TaxonomyTable
     TaxonomyBehavior* firstFreeTaxonomyBehavior;
     TaxonomyMemBehavior* firstFreeTaxonomyMemBehavior;
     NakedHandReq* firstFreeNakedHandReq;
+    
+    struct TaxonomyAssociation* firstFreeTaxonomyAssociation;
+    struct TaxonomyTileAssociations* firstFreeTaxonomyTileAssociations;
     
     RandomSequence eventSequence;
     RandomSequence translateSequence;

@@ -248,6 +248,11 @@ inline void UIAddTaxonomyToAutocomplete(UIState* UI, UIAutocomplete* autocomplet
 
 inline void UIAddAutocompleteFromTaxonomy(UIState* UI, char* name, char* autocompleteName = 0)
 {
+    if(!autocompleteName)
+    {
+        autocompleteName = name;
+    }
+    
     UIAutocomplete* autocomplete = UIFindAutocomplete(UI, autocompleteName);
     if(autocomplete)
     {
@@ -258,10 +263,6 @@ inline void UIAddAutocompleteFromTaxonomy(UIState* UI, char* name, char* autocom
         autocomplete = UIAddAutocomplete(UI, autocompleteName);
     }
     
-    if(!autocompleteName)
-    {
-        autocompleteName = name;
-    }
    
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(UI->table, name);
     
@@ -2385,7 +2386,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                         b32 checkActive = (!UI->reloadingAssets && !UI->patchingLocalServer && !UIChildModified(UI->table, &UI->table->root));
                         UIInteraction checkInteraction = SendRequestInteraction(UI, UI_Trigger, PatchCheckRequest());
                         Vec2 patchCheckP = UIFollowingP(&reloadButton, 20);
-                        UIButton patchCheckButton = UIBtn(UI, patchCheckP, layout, V4(1, 0, 0, 1), " PATCH CHECK ");
+                        UIButton patchCheckButton = UIBtn(UI, patchCheckP, layout, V4(1, 0, 0, 1), " PATCH CHECK ", checkActive, checkInteraction);
                         
                         UIDrawButton(UI, input, &patchCheckButton);
                         
@@ -3373,6 +3374,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTaxonomy(UI, "root", "ingredient");
         UIAddAutocompleteFromTaxonomy(UI, "objects", "recipeTaxonomy");
         UIAddAutocompleteFromTaxonomy(UI, "tiles", "tileType");
+        UIAddAutocompleteFromTaxonomy(UI, "root", "taxonomyName");
     }
     
     if(loadAssetAutocompletes)

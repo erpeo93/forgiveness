@@ -71,9 +71,6 @@ inline u32 AddEntity(SimRegion* region, MemoryPool* pool, SimEntity* source, u32
                 newBlock->entityCount = 0;
                 newBlock->next = 0;
                 block->next = newBlock;
-                
-                block = newBlock;
-                blockIndex = 0;
             }
             
             block->IDs[blockIndex] = ID;

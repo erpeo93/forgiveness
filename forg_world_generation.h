@@ -51,7 +51,7 @@ inline r32 noise(r32 x, r32 y, r32 z, u32 seed)
     r32 u = fade(x),                                // COMPUTE FADE CURVES
     v = fade(y),                                // FOR EACH OF X,Y,Z.
     w = fade(z);
-
+    
     int A = perlin_[X  ]+Y, 
     AA = perlin_[A]+Z, 
     AB = perlin_[A+1]+Z,      // HASH COORDINATES OF
@@ -134,6 +134,31 @@ inline GenerationMinMax MinMax(r32 min, r32 max)
     return result;
 }
 
+struct TaxonomyAssociation
+{
+    u32 taxonomy;
+    
+    union
+    {
+        TaxonomyAssociation* next;
+        TaxonomyAssociation* nextFree;
+    };
+};
+
+struct TaxonomyTileAssociations
+{
+    u32 taxonomy;
+    
+    u32 associationCount;
+    TaxonomyAssociation* firstAssociation;
+    
+    union
+    {
+        TaxonomyTileAssociations* next;
+        TaxonomyTileAssociations* nextFree;
+    };
+};
+
 struct WorldGenerator
 {
     NoiseParams landscapeNoise;
@@ -151,6 +176,8 @@ struct WorldGenerator
     u32 beachTaxonomy;
     
     BiomePyramid biomePyramid;
+    
+    TaxonomyTileAssociations* firstAssociation;
     
     WorldGenerator* nextFree;
 };

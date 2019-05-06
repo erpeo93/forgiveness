@@ -33,7 +33,6 @@ inline RandomSequence GetChunkSeed(i32 worldX, i32 worldY, i32 universeX, i32 un
 
 inline r32 NormalizedNoise(r32 dx, r32 dy, r32 frequency, u32 seed)
 {
-    seed = Min(seed, 50);
     r32 noiseValue  = noise(dx * frequency, dy * frequency, 0.0f, seed);
     r32 result = (noiseValue + 1.0f) * 0.5f;
     return result;

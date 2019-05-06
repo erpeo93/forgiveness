@@ -31,6 +31,24 @@ internal void PackEntityIntoChunk(SimRegion* region, SimEntity* entity, u32 ID)
     block->entityIDs[block->countEntity++] = ID;
 }
 
+inline u32 GetTileTaxonomyFromRegionP(ServerState* server, SimRegion* region, Vec3 P)
+{
+    u32 result = 0;
+    
+    UniversePos uP = GetUniverseP(region, P);
+    
+    WorldChunk* chunk = GetChunk(server->chunks, ArrayCount(server->chunks), uP.chunkX, uP.chunkY, 0);
+    Assert(chunk);
+    
+    u32 tileX = TruncateReal32ToU32(uP.chunkOffset.x / VOXEL_SIZE);
+    u32 tileY = TruncateReal32ToU32(uP.chunkOffset.y / VOXEL_SIZE);
+    
+    WorldTile* tile = GetTile(chunk, tileX, tileY);
+    result = tile->taxonomy;
+    
+    return result;
+}
+
 inline void NORUNTIMEAddSkill(SimRegion* region, SimEntity* entity, char* skillName, u32 level, r32 power)
 {
     CreatureComponent* creature = Creature(region, entity);
@@ -354,11 +372,14 @@ inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, GenerationData gen
 	if(region->border != Border_Mirror)
 	{
 		ServerState* server = region->server;
-		Assert(server->newEntityCount < ArrayCount(server->newEntities));
-		u32 index = AtomicIncrementU32(&server->newEntityCount, 1);
-		Assert(index < ArrayCount(server->newEntities));
+        NewEntity* newEntity;
         
-		NewEntity* newEntity = server->newEntities + index;
+        BeginTicketMutex(&server->newDeletedMutex);
+        
+        FREELIST_ALLOC(newEntity, server->firstFreeNewEntity, PushStruct(&server->worldPool, NewEntity));
+        FREELIST_INSERT(newEntity, server->firstNewEntity);
+        EndTicketMutex(&server->newDeletedMutex);
+        
 		newEntity->region = region;
 		newEntity->taxonomy = taxonomy;
 		newEntity->P = P;
@@ -366,7 +387,8 @@ inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, GenerationData gen
         newEntity->gen = gen;
 		newEntity->params = params;
         
-		result = newEntity->identifier;
+		
+        result = newEntity->identifier;
 	}
     
 	return result;
@@ -375,11 +397,15 @@ inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, GenerationData gen
 inline void DeleteEntityComponents(SimRegion* region, SimEntity* entity, u32 ID)
 {
     ServerState* server = region->server;
-    Assert(server->deletedEntityCount < ArrayCount(server->deletedEntities));
-    u32 index = AtomicIncrementU32(&server->deletedEntityCount, 1);
-    Assert(index < ArrayCount(server->deletedEntities));
     
-    DeletedEntity* deletedEntity = server->deletedEntities + index;
+    DeletedEntity* deletedEntity;
+    
+    BeginTicketMutex(&server->newDeletedMutex);
+    
+    FREELIST_ALLOC(deletedEntity, server->firstFreeDeletedEntity, PushStruct(&server->worldPool, DeletedEntity));
+    FREELIST_INSERT(deletedEntity, server->firstDeletedEntity);
+    
+    EndTicketMutex(&server->newDeletedMutex);
     
     deletedEntity->entityID = ID;
     for(u32 componentIndex = 0; componentIndex < Component_Count; ++componentIndex)
@@ -410,14 +436,13 @@ inline u64 AddRandomEntity(SimRegion* region, RandomSequence* sequence, Vec3 P, 
 
 internal void BuildSimpleTestWorld(ServerState* server)
 {
-#define GENERATE_ENEMIES 1
-#define GENERATE_ENVIRONMENT 0
-#define GENERATE_OBJECTS 0
-    
-    
     RegionWorkContext* context = server->threadContext + 0;
     context->immediateSpawn = true;
     
+#if 0
+#define GENERATE_ENEMIES 1
+#define GENERATE_ENVIRONMENT 0
+#define GENERATE_OBJECTS 0
     for(u32 regionY = 0; regionY < SERVER_REGION_SPAN; ++regionY)
     {
         for(u32 regionX = 0; regionX < SERVER_REGION_SPAN; ++regionX)
@@ -430,8 +455,7 @@ internal void BuildSimpleTestWorld(ServerState* server)
             
             TaxonomySlot* testSlot = 0;
             
-            r32 regionSpan = VOXEL_SIZE * CHUNK_DIM * SIM_REGION_CHUNK_SPAN;
-            r32 hrs = 0.45f * regionSpan;
+            r32 hrs = 0.45f * server->regionSpan;
             RandomSequence grassSeq = Seed(regionX * regionY + (1 << regionX));
             
 #if GENERATE_ENEMIES
@@ -563,7 +587,52 @@ internal void BuildSimpleTestWorld(ServerState* server)
         }
         
     }
+#else
     
+    WorldGenerator* generator = NORUNTIMEGetTaxonomySlotByName(server->activeTable, "testGenerator")->generator;
+    
+    u32 entityPerRegion = 1000;
+    for(u32 regionY = 0; regionY < SERVER_REGION_SPAN; ++regionY)
+    {
+        for(u32 regionX = 0; regionX < SERVER_REGION_SPAN; ++regionX)
+        {
+            SimRegion* region = GetServerRegion(server, regionX, regionY);
+            region->context = context;
+            
+            TaxonomyTable* taxTable = server->activeTable;
+            RandomSequence* seq = &server->randomSequence;
+            
+            
+            for(u32 entityIndex = 0; entityIndex < entityPerRegion; ++entityIndex)
+            {
+                Vec3 P = V3(Hadamart(RandomBilV2(seq), V2(server->regionSpan, server->regionSpan)), 0);
+                
+                u32 tileTaxonomy = GetTileTaxonomyFromRegionP(server, region, P);
+                for(TaxonomyTileAssociations* tileAss = generator->firstAssociation; tileAss; tileAss = tileAss->next)
+                {
+                    if(tileAss->taxonomy == tileTaxonomy && tileAss->associationCount > 0)
+                    {
+                        u32 associationIndex = RandomChoice(seq, tileAss->associationCount);
+                        
+                        u32 runningIndex = 0;
+                        for(TaxonomyAssociation* ass = tileAss->firstAssociation; ass; ass = ass->next)
+                        {
+                            if(runningIndex++ == associationIndex)
+                            {
+                                AddRandomEntity(region, seq, P, ass->taxonomy);
+                                break;
+                            }
+                        }
+                        
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    
+#endif
     context->immediateSpawn = false;
 }
 
@@ -598,6 +667,8 @@ internal void BuildWorld(ServerState * server)
     server->chunkSide = server->chunkDim * VOXEL_SIZE;
     server->oneOverChunkSide = 1.0f / server->chunkSide;
     server->lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
+    server->regionSpan = SIM_REGION_CHUNK_SPAN * server->chunkSide;
+    
     Assert(SIM_REGION_CHUNK_SPAN % 2 == 0);
     i32 realServerRegionSpan = SERVER_REGION_SPAN + 2;
     

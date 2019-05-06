@@ -3413,6 +3413,25 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     {
         if(currentSlot_->generator)
         {
+            
+            for(TaxonomyTileAssociations* toFree = currentSlot_->generator->firstAssociation; toFree;)
+            {
+                TaxonomyTileAssociations* next = toFree->next;
+                
+                
+                for(TaxonomyAssociation* assToFree = toFree->firstAssociation; assToFree;)
+                {
+                    TaxonomyAssociation* assNext = assToFree->next;
+                    TAXTABLE_DEALLOC(assToFree, TaxonomyAssociation);
+                    assToFree = assNext;
+                }
+                
+                TAXTABLE_DEALLOC(toFree, TaxonomyTileAssociations);
+                
+                toFree = next;
+            }
+            
+            
             FREELIST_DEALLOC(currentSlot_->generator, taxTable_->firstFreeWorldGenerator);
             currentSlot_->generator = 0;
         }
@@ -3475,6 +3494,61 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             }
             
             precipitationBand = precipitationBand->next;
+        }
+        
+        
+        EditorElement* tileAssociations = GetList(root, "tileAssociations");
+        while(tileAssociations)
+        {
+            char* tileName = GetValue(tileAssociations, "tileType");
+            TaxonomySlot* tileSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, tileName);
+            
+            if(tileSlot)
+            {
+                TaxonomyTileAssociations* tileAssoc;
+                TAXTABLE_ALLOC(tileAssoc, TaxonomyTileAssociations);
+                
+                tileAssoc->taxonomy = tileSlot->taxonomy;
+                tileAssoc->associationCount = 0;
+                tileAssoc->firstAssociation = 0;
+                
+                
+                EditorElement* taxonomyAssociations = GetList(tileAssociations, "taxonomies");
+                while(taxonomyAssociations)
+                {
+                    char* taxonomyName = GetValue(taxonomyAssociations, "taxonomyName");
+                    
+                    TaxonomySlot* taxonomySlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName);
+                    
+                    if(taxonomySlot)
+                    {
+                        TaxonomyAssociation* ass;
+                        TAXTABLE_ALLOC(ass, TaxonomyAssociation);
+                        
+                        ass->taxonomy = taxonomySlot->taxonomy;
+                        
+                        ++tileAssoc->associationCount;
+                        FREELIST_INSERT(ass, tileAssoc->firstAssociation);
+                        
+                    }
+                    else
+                    {
+                        EditorErrorLog(tileName);
+                    }
+                    
+                    taxonomyAssociations = taxonomyAssociations->next;
+                }
+                
+                
+                FREELIST_INSERT(tileAssoc, currentSlot_->generator->firstAssociation);
+                
+            }
+            else
+            {
+                EditorErrorLog(tileName);
+            }
+            
+            tileAssociations = tileAssociations->next;
         }
     }
     else if(StrEqual(name, "layouts"))
