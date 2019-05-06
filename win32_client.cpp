@@ -805,6 +805,12 @@ internal void Win32ProcessKeyboardMessage( HWND window, PlatformInput* input, MS
             } break;		
 #endif
             
+            case VK_F3:
+            {
+                Win32ProcessButton(&input->exitButton, isDown);
+            } break;
+            
+            
             case VK_F4:
             {
                 if(altKeyDown)
@@ -827,7 +833,7 @@ internal void Win32ProcessKeyboardMessage( HWND window, PlatformInput* input, MS
             {
                 if( isDown && altKeyDown )
                 {
-                    Win32ToggleFullScreen( window );
+                    Win32ToggleFullScreen(window);
                 }
             } break;
             

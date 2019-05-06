@@ -27,11 +27,10 @@ MemberDefinition memberDefinitionOfCreatureComponent[] =
 #ifdef INTROSPECTION
 MemberDefinition memberDefinitionOfSimEntity[] = 
  {
-{ MetaType_TaxonomySlot, "slot", (u32) ( &(( SimEntity* )0)->slot ) }, 
 { MetaType_u32, "taxonomy", (u32) ( &(( SimEntity* )0)->taxonomy ) }, 
+{ MetaType_u32, "flags", (u32) ( &(( SimEntity* )0)->flags ) }, 
 { MetaType_u64, "identifier", (u32) ( &(( SimEntity* )0)->identifier ) }, 
 { MetaType_u32, "playerID", (u32) ( &(( SimEntity* )0)->playerID ) }, 
-{ MetaType_u32, "flags", (u32) ( &(( SimEntity* )0)->flags ) }, 
 { MetaType_Vec3, "P", (u32) ( &(( SimEntity* )0)->P ) }, 
 { MetaType_Vec3, "velocity", (u32) ( &(( SimEntity* )0)->velocity ) }, 
 { MetaType_Vec3, "acceleration", (u32) ( &(( SimEntity* )0)->acceleration ) }, 
@@ -203,8 +202,18 @@ MetaFlag MetaFlags_EditorRole[] =
  {
 {"SoundDesigner",
 (1 << 1)},
-{"GameDesigner",
+{"Composer",
 (1 << 2)},
+{"GameDesigner",
+(1 << 3)},
+{"Writer",
+(1 << 4)},
+{"Animator",
+(1 << 5)},
+{"Artist",
+(1 << 6)},
+{"WebDeveloper",
+(1 << 7)},
 };
 char* MetaTable_GroundViewMode[] = 
  {

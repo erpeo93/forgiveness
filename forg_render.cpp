@@ -624,7 +624,7 @@ inline void PushCube(RenderGroup* group, Vec3 P, r32 height, r32 width, Vec4 col
     PushCube_(group, P, height, width, group->whiteTexture, color, lightIndexes);
 }
 
-inline void PushTrunkatedPyramid(RenderGroup* group, RenderTexture texture, Vec3 P, Vec3 topP, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxisBottom, Vec3 XAxisTop, Vec3 YAxisTop, Vec3 ZAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 baseColor, Vec4 topColor, Vec4 lightIndexes, r32 modulationPercentage)
+inline void PushTrunkatedPyramid(RenderGroup* group, RenderTexture texture, Vec3 P, Vec3 topP, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxisBottom, Vec3 XAxisTop, Vec3 YAxisTop, Vec3 ZAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 baseColor, Vec4 topColor, Vec4 lightIndexes, r32 modulationPercentage, b32 drawBase = true, b32 drawTop = true)
 {
     r32 anglePerSubdivision = TAU32 / subdivisions;
     Vec4 darkColorBase = V4(baseColor.rgb * 0.65f, baseColor.a); 
@@ -656,13 +656,21 @@ inline void PushTrunkatedPyramid(RenderGroup* group, RenderTexture texture, Vec3
         u32 cBaseToUse = (subIndex % 2 == 0) ? CDBase : CBase;
         u32 cTopToUse = (subIndex % 2 == 0) ? CDTop : CTop;
         
-        ReservedVertexes vertexes = ReserveTriangles(group, 2);
         
-        PushTriangle(group, texture, lightIndexes, &vertexes, rotatedPBottom, cBaseToUse, basePBottom, cBaseToUse, PBottom, cBaseToUse, modulationPercentage);
-        PushTriangle(group, texture, lightIndexes, &vertexes, PTop, cTopToUse, basePTop, cTopToUse, rotatedPTop, cTopToUse, modulationPercentage);
+        if(drawBase)
+        {
+            ReservedVertexes vertexes = ReserveTriangles(group, 1);
+            PushTriangle(group, texture, lightIndexes, &vertexes, rotatedPBottom, cBaseToUse, basePBottom, cBaseToUse, PBottom, cBaseToUse, modulationPercentage);
+        }
+        
+        if(drawTop)
+        {
+            ReservedVertexes vertexes = ReserveTriangles(group, 1);
+            PushTriangle(group, texture, lightIndexes, &vertexes, PTop, cTopToUse, basePTop, cTopToUse, rotatedPTop, cTopToUse, modulationPercentage);
+        }
+        
         
         ReservedVertexes quad = ReserveQuads(group, 1);
-        
         
         PushQuad(group, texture, lightIndexes, &quad, 
                  basePBottom, V2(0, 0), cBaseToUse, 
@@ -679,14 +687,14 @@ inline void PushTrunkatedPyramid(RenderGroup* group, RenderTexture texture, Vec3
     //PushLineSegment(group, group->whiteTexture, V4(1, 1, 1, 1), P, topP, 0.1f);
 }
 
-inline void PushTrunkatedPyramid(RenderGroup* group, BitmapId BID, Vec3 P, Vec3 topP, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxisBottom, Vec3 XAxisTop, Vec3 YAxisTop, Vec3 ZAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 baseColor, Vec4 topColor, Vec4 lightIndexes, r32 modulationPercentage)
+inline void PushTrunkatedPyramid(RenderGroup* group, BitmapId BID, Vec3 P, Vec3 topP, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxisBottom, Vec3 XAxisTop, Vec3 YAxisTop, Vec3 ZAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 baseColor, Vec4 topColor, Vec4 lightIndexes, r32 modulationPercentage, b32 drawBase = true, b32 drawTop = true)
 {
     Bitmap* bitmap = GetBitmap(group->assets, BID);
     if(bitmap)
     {
         baseColor = Hadamart(baseColor, BID.coloration);
         topColor = Hadamart(topColor, BID.coloration);
-        PushTrunkatedPyramid(group, bitmap->textureHandle, P, topP, subdivisions, XAxisBottom, YAxisBottom, ZAxisBottom, XAxisTop, YAxisTop, ZAxisTop, radiousBottom, radiousTop, height, baseColor, topColor, lightIndexes,modulationPercentage);
+        PushTrunkatedPyramid(group, bitmap->textureHandle, P, topP, subdivisions, XAxisBottom, YAxisBottom, ZAxisBottom, XAxisTop, YAxisTop, ZAxisTop, radiousBottom, radiousTop, height, baseColor, topColor, lightIndexes,modulationPercentage, drawBase, drawTop);
     }
     else
     {

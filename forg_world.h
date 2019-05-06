@@ -2,9 +2,7 @@
 struct EntityBlock
 {
     u32 countEntity;
-    
-    u32 usedData;
-    u8 data[KiloBytes(64)];
+    u32 entityIDs[512];
     
     union
     {

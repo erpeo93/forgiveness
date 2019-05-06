@@ -4,7 +4,7 @@ inline u64 GetIdentifier(ServerState* server)
     return result;
 }
 
-internal void PackEntityIntoChunk(SimRegion* region, SimEntity* entity)
+internal void PackEntityIntoChunk(SimRegion* region, SimEntity* entity, u32 ID)
 {
     UniversePos newP = GetUniverseP(region, entity->P);
     
@@ -21,19 +21,14 @@ internal void PackEntityIntoChunk(SimRegion* region, SimEntity* entity)
     EntityBlock* block = chunk->entities;
     
     u32 desiredSize = sizeof(SimEntity);
-    if(!block || (block->usedData + desiredSize > ArrayCount(block->data)))
+    if(!block || (block->countEntity == ArrayCount(block->entityIDs)))
     {
         FREELIST_ALLOC(block, region->context->firstFreeBlock, PushStruct(&region->context->pool, EntityBlock));
         FREELIST_INSERT(block, chunk->entities);
         block->countEntity = 0;
     }
     
-    Assert(desiredSize <= ArrayCount(block->data));
-    SimEntity* blockEntity = (SimEntity*) (block->data + block->usedData);
-    *blockEntity = *entity;
-    
-    block->usedData += desiredSize;
-    ++block->countEntity;
+    block->entityIDs[block->countEntity++] = ID;
 }
 
 inline void NORUNTIMEAddSkill(SimRegion* region, SimEntity* entity, char* skillName, u32 level, r32 power)
@@ -119,6 +114,36 @@ inline void InitPlayerEntity(SimRegion* region, ServerPlayer* player, SimEntity*
     creature->activeSkillIndex = -1;
 }
 
+inline SimEntity* GetFreeEntity(ServerState* server, u32* ID)
+{
+    SimEntity* result = 0;
+    if(server->firstFreeEntity)
+    {
+        FreeEntity* free = server->firstFreeEntity;
+        Assert(free->ID);
+        *ID = free->ID;
+        result = server->entities + free->ID;
+        
+        FREELIST_DEALLOC(free, server->firstFreeFreeEntity);
+    }
+    else
+    {
+        Assert(server->entityCount < ArrayCount(server->entities));
+        *ID = server->entityCount;
+        result = server->entities + server->entityCount++;
+    }
+    
+    return result;
+}
+
+inline SimEntity* GetEntity(ServerState* server, u32 ID)
+{
+    Assert(ID && ID < server->entityCount);
+    SimEntity* result = server->entities + ID;
+    
+    return result;
+}
+
 internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64 identifier, GenerationData gen, AddEntityAdditionalParams params)
 {
     ServerState* server = region->server;
@@ -127,55 +152,57 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
     {
         TaxonomyTable* taxTable = region->taxTable;
         RegionWorkContext* context = region->context;
-        SimEntity entity = {};
         
-        entity.P = P;
-        entity.identifier = identifier;
-        entity.playerID = params.playerID;
-        entity.quantity = params.quantity;
-        entity.status = params.status;
+        u32 ID;
+        SimEntity* entity = GetFreeEntity(server, &ID);
         
-        entity.IDs[Component_Effect] = GetFreeComponent(server->components, Component_Effect);
+        entity->P = P;
+        entity->identifier = identifier;
+        entity->playerID = params.playerID;
+        entity->quantity = params.quantity;
+        entity->status = params.status;
+        
+        entity->IDs[Component_Effect] = GetFreeComponent(server->components, Component_Effect);
         
         if(IsPlant(taxTable, taxonomy))
         {
-            entity.IDs[Component_Plant] = GetFreeComponent(server->components, Component_Plant);
+            entity->IDs[Component_Plant] = GetFreeComponent(server->components, Component_Plant);
         }
         else if(IsObject(taxTable, taxonomy))
         {
-            entity.IDs[Component_Object] = GetFreeComponent(server->components, Component_Object);
+            entity->IDs[Component_Object] = GetFreeComponent(server->components, Component_Object);
         }
         else if(IsFluid(taxTable, taxonomy))
         {
-            entity.IDs[Component_Fluid] = GetFreeComponent(server->components, Component_Fluid);
+            entity->IDs[Component_Fluid] = GetFreeComponent(server->components, Component_Fluid);
         }
         else if(IsCreature(taxTable, taxonomy))
         {
-            entity.IDs[Component_Creature] = GetFreeComponent(server->components, Component_Creature);
+            entity->IDs[Component_Creature] = GetFreeComponent(server->components, Component_Creature);
         }
         
         if(params.dropped)
         {
-            entity.velocity = DroppingVelocity(&region->entropy);
+            entity->velocity = DroppingVelocity(&region->entropy);
         }
         
-        if(entity.playerID)
+        if(entity->playerID)
         {
             ServerPlayer* player = region->server->players + params.playerID;
-            InitPlayerEntity(region, player, &entity);
+            InitPlayerEntity(region, player, entity);
         }
         
         if(params.recipeTaxonomy)
         {
-            entity.recipeTaxonomy = params.recipeTaxonomy;
+            entity->recipeTaxonomy = params.recipeTaxonomy;
         }
         
         
         TaxonomySlot* slot_ = GetSlotForTaxonomy(taxTable, taxonomy);
         Assert(!slot_->subTaxonomiesCount);
         
-        entity.taxonomy = taxonomy;
-        entity.gen = gen;
+        entity->taxonomy = taxonomy;
+        entity->gen = gen;
         
         u32 currentTaxonomy = 0;
         
@@ -184,7 +211,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         
         if(maxObjectCount)
         {
-            ObjectComponent* object = Object(region, &entity);
+            ObjectComponent* object = Object(region, entity);
             object->objects.maxObjectCount = maxObjectCount;
         }
         
@@ -199,9 +226,9 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
                 running = false;
             }
             
-            if(IsCreature(taxTable, entity.taxonomy))
+            if(IsCreature(taxTable, entity->taxonomy))
             {
-                CreatureComponent* creature = Creature(region, &entity);
+                CreatureComponent* creature = Creature(region, entity);
                 for(u32 attributeIndex = 0; attributeIndex < ArrayCount(attributeSlot->attributeHashmap); ++attributeIndex)
                 {
                     AttributeSlot* attr = attributeSlot->attributeHashmap + attributeIndex;
@@ -213,7 +240,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
             }
             
             
-            EffectComponent* effects = Effects(region, &entity);
+            EffectComponent* effects = Effects(region, entity);
             for(TaxonomyEffect* effectSlot = slot_->firstEffect; effectSlot; effectSlot = effectSlot->next)
             {
                 Effect* effect = &effectSlot->effect;
@@ -241,7 +268,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         
         if(params.objectCount)
         {
-            ObjectComponent* object = Object(region, &entity);
+            ObjectComponent* object = Object(region, entity);
             ContainedObjects* objects = &object->objects;
             Assert(params.objectCount <= objects->maxObjectCount);
             objects->objectCount = params.objectCount;
@@ -256,19 +283,19 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         
         if(params.ownerID)
         {
-            entity.ownerID = params.ownerID;
+            entity->ownerID = params.ownerID;
             if(params.equipped)
             {
-                AddFlags(&entity, Flag_Equipped);
+                AddFlags(entity, Flag_Equipped);
             }
         }
         
         
         
 #if 0    
-        if(entity.fluid->fluid.type)
+        if(entity->fluid->fluid.type)
         {
-            Fluid* fluid = &entity.fluid->fluid;
+            Fluid* fluid = &entity->fluid->fluid;
             fluid->direction = params.rotation;
             fluid->source1 = params.fluidId1;
             fluid->sourceSegmentIndex1 = params.segmentIndex1;
@@ -288,7 +315,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
             TaxonomySlot* behaviorSlot = GetSlotForTaxonomy(taxTable, startingBehaviorTaxonomy);
             if(behaviorSlot->startingBehavior)
             {
-                CreatureComponent* creature = Creature(region, &entity);
+                CreatureComponent* creature = Creature(region, entity);
                 TaxonomyBehavior* defaultBehavior = behaviorSlot->startingBehavior;
                 PushAIBehavior(taxTable, &creature->brain, defaultBehavior->specificTaxonomy);
                 creature->brain.valid = true;
@@ -305,19 +332,19 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         }
         
         
-        GetPhysicalProperties(taxTable, slot_->taxonomy, entity.identifier, &entity.boundType, &entity.bounds);
+        GetPhysicalProperties(taxTable, slot_->taxonomy, entity->identifier, &entity->boundType, &entity->bounds);
         
-        if(entity.IDs[Component_Creature])
+        if(entity->IDs[Component_Creature])
         {
-            CreatureComponent* creature = Creature(region, &entity);
+            CreatureComponent* creature = Creature(region, entity);
             creature->lifePoints = creature->maxLifePoints;
         }
         
         if(slot_->firstLayout)
         {
-            Craft(region, &entity, entity.taxonomy, entity.gen);
+            Craft(region, entity, entity->taxonomy, entity->gen);
         }
-        PackEntityIntoChunk(region, &entity);
+        PackEntityIntoChunk(region, entity, ID);
     }
 }
 
@@ -345,7 +372,7 @@ inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, GenerationData gen
 	return result;
 }
 
-inline void DeleteEntityComponents(SimRegion* region, SimEntity* entity)
+inline void DeleteEntityComponents(SimRegion* region, SimEntity* entity, u32 ID)
 {
     ServerState* server = region->server;
     Assert(server->deletedEntityCount < ArrayCount(server->deletedEntities));
@@ -353,6 +380,8 @@ inline void DeleteEntityComponents(SimRegion* region, SimEntity* entity)
     Assert(index < ArrayCount(server->deletedEntities));
     
     DeletedEntity* deletedEntity = server->deletedEntities + index;
+    
+    deletedEntity->entityID = ID;
     for(u32 componentIndex = 0; componentIndex < Component_Count; ++componentIndex)
     {
         deletedEntity->IDs[componentIndex] = entity->IDs[componentIndex];
@@ -383,7 +412,7 @@ internal void BuildSimpleTestWorld(ServerState* server)
 {
 #define GENERATE_ENEMIES 1
 #define GENERATE_ENVIRONMENT 0
-#define GENERATE_OBJECTS 1
+#define GENERATE_OBJECTS 0
     
     
     RegionWorkContext* context = server->threadContext + 0;
@@ -538,9 +567,9 @@ internal void BuildSimpleTestWorld(ServerState* server)
     context->immediateSpawn = false;
 }
 
-internal void BuildServerChunks(ServerState* server, u32 worldSeed)
+internal void BuildServerChunks(ServerState* server)
 {
-    
+    u32 worldSeed = server->worldSeed;
     WorldGenerator* generator = NORUNTIMEGetTaxonomySlotByName(server->activeTable, "testGenerator")->generator;
     
     i32 offset = SIM_REGION_CHUNK_SPAN;
@@ -550,6 +579,12 @@ internal void BuildServerChunks(ServerState* server, u32 worldSeed)
         {
             Assert(ChunkValid(server->lateralChunkSpan, X, Y));
             WorldChunk * chunk = GetChunk(server->chunks, ArrayCount(server->chunks), X, Y, &server->worldPool);
+            
+            if(chunk->entities)
+            {
+                int a = 5;
+            }
+            FREELIST_FREE(chunk->entities, EntityBlock, server->threadContext[0].firstFreeBlock);
             BuildChunk(server->activeTable, generator, chunk, X, Y, worldSeed);
         }
     }
@@ -557,6 +592,8 @@ internal void BuildServerChunks(ServerState* server, u32 worldSeed)
 
 internal void BuildWorld(ServerState * server)
 {
+    u32 worldSeed = server->worldSeed;
+    
     server->chunkDim = CHUNK_DIM;
     server->chunkSide = server->chunkDim * VOXEL_SIZE;
     server->oneOverChunkSide = 1.0f / server->chunkSide;
@@ -625,10 +662,9 @@ internal void BuildWorld(ServerState * server)
         }
     }
     
-    u32 worldSeed = 0;
     server->randomSequence = Seed((i32) worldSeed);
     server->objectSequence = Seed((i32) worldSeed + 1);
     
-    BuildServerChunks(server, worldSeed);
+    BuildServerChunks(server);
     BuildSimpleTestWorld(server);
 }

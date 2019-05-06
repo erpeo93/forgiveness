@@ -408,7 +408,6 @@ internal LoadedBitmap LoadGlyph( LoadedFont* font, u32 codePoint, PakAsset* asse
             font->horizontalAdvancement[otherGlyphIndex * font->maximumGlyphsCount + glyphIndex] += kerningChange;
         }
     }
-    
 #else
     EntireFile fontFile = ReadFile( filename );
     
@@ -423,8 +422,8 @@ internal LoadedBitmap LoadGlyph( LoadedFont* font, u32 codePoint, PakAsset* asse
     
     result.bitmap.pixels = malloc( sizeof( u32 ) * width * height );
     result.free = result.bitmap.pixels;
-    result.bitmap.width = ( i16 ) width;
-    result.bitmap.height = ( i16 ) height;
+    result.bitmap.width = (i16) width;
+    result.bitmap.height = (i16) height;
     
     Assert(width < 128 && height < 128);
     result.bitmap.widthOverHeight = (r32 ) result.bitmap.width / (r32 ) result.bitmap.height;
@@ -1520,7 +1519,7 @@ internal AddedAsset AddAsset(Assets* assets)
 internal BitmapId AddBitmapAsset(char* path, char* filename, u64 stringHash = 0, r32 alignX = 0.5f, r32 alignY = 0.5f)
 {
     Assets* assets = currentAssets_;
-    AddedAsset asset = AddAsset(assets );
+    AddedAsset asset = AddAsset(assets);
     asset.source->type = Pak_bitmap;
     StrCpy(filename, StrLen(filename ), asset.source->bitmap.filename, ArrayCount(asset.source->bitmap.filename ) );
     StrCpy(path, StrLen(path), asset.source->bitmap.path, ArrayCount(asset.source->bitmap.path ) );

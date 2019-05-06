@@ -51,7 +51,10 @@ struct EffectComponent
 
 struct PlantComponent
 {
-	r32 plantTotalAge;
+	r32 age;
+    r32 life;
+    r32 leafDensity;
+    r32 leafDimension;
     
     u32 nextFree;
 };
@@ -122,12 +125,10 @@ enum EntityComponentType
 
 introspection() struct SimEntity
 {
-    TaxonomySlot* slot;
-    
     u32 taxonomy;
+    u32 flags;
     u64 identifier;
     u32 playerID;
-    u32 flags;
     Vec3 P;
     Vec3 velocity;
     Vec3 acceleration;
@@ -135,10 +136,8 @@ introspection() struct SimEntity
     r32 actionTime;
     u64 targetID;
     r32 distanceToTravel;
-    
     ForgBoundType boundType;
     Rect3 bounds;
-    
     r32 quantity;
     r32 status;
 	u32 recipeTaxonomy;
@@ -148,12 +147,15 @@ introspection() struct SimEntity
     u32 IDs[Component_Count];
 };
 
+
+#define Entity_(comp, ID) (EntityComponent*) GetComponent_(comp, Component_Entity, ID)
 #define Effects_(comp, ID) (EffectComponent*) GetComponent_(comp, Component_Effect, ID)
 #define Plant_(comp, ID) (PlantComponent*) GetComponent_(comp, Component_Plant, ID)
 #define Object_(comp, ID) (ObjectComponent*) GetComponent_(comp, Component_Object, ID)
 #define Fluid_(comp, ID) (FluidComponent*) GetComponent_(comp, Component_Fluid, ID)
 #define Creature_(comp, ID) (CreatureComponent*) GetComponent_(comp, Component_Creature, ID)
 
+#define Entity(region, entity) Entity_(region->components, (entity)->IDs[Component_Entity])
 #define Effects(region, entity) Effects_(region->components, (entity)->IDs[Component_Effect])
 #define Plant(region, entity) Plant_(region->components, (entity)->IDs[Component_Plant])
 #define Object(region, entity) Object_(region->components, (entity)->IDs[Component_Object])
@@ -257,7 +259,9 @@ struct SpacePartition
 struct SimEntityBlock
 {
     u32 entityCount;
-    SimEntity entities[256];
+    
+    u32 IDs[256];
+    SimEntity* entities[256];
     SimEntityBlock* next;
 };
 
@@ -383,7 +387,7 @@ inline SimEntity* GetRegionEntity(SimRegion* region, u32 index)
     {
         if(index < ArrayCount(block->entities))
         {
-            result = block->entities + index;
+            result = block->entities[index];
             break;
         }
         

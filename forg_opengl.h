@@ -75,6 +75,13 @@ enum OpenGLFramebufferFlags
     OpenGLFramebuffer_hasDepth = (1 << 4 )
 };
 
+enum OpenGLSpecialTextures
+{
+    OpenGLSpecial_GroundTexture,
+    
+    OpenGLSpecial_Count,
+};
+
 struct Opengl
 {
     GameRenderSettings settings;
@@ -83,6 +90,8 @@ struct Opengl
     
     OpenGLFramebuffer depthPeelBuffer[16];
     OpenGLFramebuffer resolveFramebuffer;
+    
+    OpenGLFramebuffer specialTextures[OpenGLSpecial_Count];
     
     
     b32 shaderSimTexLoadSRGB;

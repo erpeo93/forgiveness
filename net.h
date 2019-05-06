@@ -599,6 +599,7 @@ struct PacketHeader
     u16 dataSize;
     i32 magicNumber;
     u16 connectionSlot;
+    u16 salt;
     u8 flags;
     u16 progressiveIndex;
     
@@ -707,11 +708,11 @@ inline u32 GetBitCount(u8 flags)
     return result;
 }
 
-inline unsigned char* PackHeader_(unsigned char* buff, i32 magicNumber, u16 connectionSlot, u8 flags, u16 progressiveIndex, u16 acked, AckedBits ackedBits)
+inline unsigned char* PackHeader_(unsigned char* buff, i32 magicNumber, u16 connectionSlot, u16 salt, u8 flags, u16 progressiveIndex, u16 acked, AckedBits ackedBits)
 {
     u16 dataSize = 0;
     unsigned char* result = buff;
-    result += pack(result, "HlHCHH", dataSize, (i32) magicNumber, connectionSlot, flags, progressiveIndex, acked);
+    result += pack(result, "HlHHCHH", dataSize, (i32) magicNumber, connectionSlot, salt, flags, progressiveIndex, acked);
     
     
     u32 bitCount = GetBitCount(flags);
@@ -725,7 +726,7 @@ inline unsigned char* PackHeader_(unsigned char* buff, i32 magicNumber, u16 conn
 
 inline unsigned char* UnpackHeader_(unsigned char* buff, PacketHeader* header)
 {
-    buff = unpack(buff, "HlHCHH", &header->dataSize, &header->magicNumber, &header->connectionSlot, &header->flags, &header->progressiveIndex, &header->acked);
+    buff = unpack(buff, "HlHHCHH", &header->dataSize, &header->magicNumber, &header->connectionSlot, &header->salt, &header->flags, &header->progressiveIndex, &header->acked);
     
     
     u32 bitCount = GetBitCount(header->flags);
@@ -806,7 +807,7 @@ struct PacketData
 
 struct NetworkConnection
 {
-    u32 salt;
+    u16 salt;
     
     u16 counterpartConnectionSlot;
     u8 counterpartAddress[64];

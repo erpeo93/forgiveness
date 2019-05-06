@@ -92,7 +92,7 @@ inline u32 GetEssenceQuantity(UIState* UI, u32 essenceTaxonomy)
     u32 result = 0;
     for(u32 essenceIndex = 0; essenceIndex < MAX_DIFFERENT_ESSENCES; ++essenceIndex)
     {
-        EssenceSlot* slot = myPlayer->essences + essenceIndex;
+        EssenceSlot* slot = UI->myPlayer->essences + essenceIndex;
         if(slot->taxonomy == essenceTaxonomy)
         {
             result = slot->quantity;
@@ -215,7 +215,7 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
             owned = 0;
             for(u32 essenceIndex = 0; essenceIndex < MAX_DIFFERENT_ESSENCES; ++essenceIndex)
             {
-                EssenceSlot* essence = myPlayer->essences + essenceIndex;
+                EssenceSlot* essence = UI->myPlayer->essences + essenceIndex;
                 if(essence->taxonomy == ingredientTaxonomy)
                 {
                     owned = SafeTruncateToU8(essence->quantity);
@@ -376,7 +376,7 @@ internal b32 UIDrawSkillElement(UIState* UI, BookElement* element, Vec2 elementC
     Vec4 elementColor = V4(1, 1, 1, 0.5f);
     if(activeElement)
     {
-        if(HasEssences(myPlayer->essences, skillSlot->essences))
+        if(HasEssences(UI->myPlayer->essences, skillSlot->essences))
         {
             PushUITooltip(UI, "level up", V4(1, 0, 0, 1));
             elementColor = V4(1, 1, 1, 1.0f);
@@ -486,7 +486,7 @@ internal b32 UIDrawSkillCategoryElement(UIState* UI, BookElement* element, Vec2 
         }
         else
         {
-            if(HasEssences(myPlayer->essences, categorySlot->essences))
+            if(HasEssences(UI->myPlayer->essences, categorySlot->essences))
             {
                 PushUITooltip(UI, "unlock", V4(1, 0, 0, 1));
                 if(Pressed(&input->mouseLeft))

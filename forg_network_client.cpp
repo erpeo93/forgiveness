@@ -1,19 +1,19 @@
 internal void SendUnreliableData(void* data, u16 size)
 {
     NetworkSendParams params = {};
-    platformAPI.net.QueuePacket(myPlayer->network, 0, params, data, size);
+    platformAPI.net.QueuePacket(clientNetwork->network, 0, params, data, size);
 }
 
 internal void SendReliableData(void* data, u16 size)
 {
     NetworkSendParams params = {};
     params.guaranteedDelivery = GuaranteedDelivery_HalfASecond;
-    platformAPI.net.QueuePacket(myPlayer->network, 0, params, data, size);
+    platformAPI.net.QueuePacket(clientNetwork->network, 0, params, data, size);
 }
 
 inline void FlushAllQueuedPackets(r32 timeToAdvance)
 {
-    platformAPI.net.FlushSendQueue(myPlayer->network, 0, timeToAdvance);
+    platformAPI.net.FlushSendQueue(clientNetwork->network, 0, timeToAdvance);
 }
 
 
@@ -23,13 +23,13 @@ inline void CloseAndSend(unsigned char* buff_, unsigned char* buff, b32 reliable
     
     if(reliable)
     {
-        data = myPlayer->nextSendReliableApplicationData;
-        myPlayer->nextSendReliableApplicationData.index++;
+        data = clientNetwork->nextSendReliableApplicationData;
+        clientNetwork->nextSendReliableApplicationData.index++;
     }
     else
     {
-        data = myPlayer->nextSendUnreliableApplicationData;
-        myPlayer->nextSendUnreliableApplicationData.index++;
+        data = clientNetwork->nextSendUnreliableApplicationData;
+        clientNetwork->nextSendUnreliableApplicationData.index++;
     }
     
     data.flags = reliable ? ForgNetworkFlag_Ordered : 0;
@@ -65,12 +65,10 @@ internal void LoginRequest(i32 password)
     CloseAndSendReliablePacket();
 }
 
-internal void GameAccessRequest(u32 challenge)
+internal void GameAccessRequest(u32 challenge, b32 requestDataFiles)
 {
     StartPacket(gameAccess);
-    
-    Pack("L", challenge);
-    
+    Pack("Ll", challenge, requestDataFiles);
     CloseAndSendReliablePacket();
 }
 
@@ -78,7 +76,7 @@ internal void GameAccessRequest(u32 challenge)
 internal void SendEditingEvent( DebugEvent* event )
 {
     Assert( event->pointer );
-    if( myPlayer )
+    if( clientNetwork )
     {
         StartPacket(debugEvent);
         
@@ -90,12 +88,10 @@ internal void SendEditingEvent( DebugEvent* event )
 
 internal void SendInputRecordingMessage( b32 recording, b32 startAutomatically )
 {
-    if( myPlayer )
+    if( clientNetwork )
     {
         StartPacket(InputRecording);
-        
         Pack("ll", recording, startAutomatically);
-        
         CloseAndSendReliablePacket();
     }
 }
@@ -583,24 +579,24 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 Unpack("HLl", &login.port, &login.challenge, &login.editingEnabled);
                 worldMode->editingEnabled = login.editingEnabled;
                 
-                platformAPI.net.CloseConnection(myPlayer->network, 0);
-                platformAPI.net.OpenConnection(myPlayer->network, server, login.port);
-                ResetReceiver(&myPlayer->receiver);
-                myPlayer->nextSendUnreliableApplicationData = {};
-                myPlayer->nextSendReliableApplicationData = {};
-                GameAccessRequest(login.challenge);
+                platformAPI.net.CloseConnection(clientNetwork->network, 0);
+                platformAPI.net.OpenConnection(clientNetwork->network, server, login.port);
+                ResetReceiver(&clientNetwork->receiver);
+                clientNetwork->nextSendUnreliableApplicationData = {};
+                clientNetwork->nextSendReliableApplicationData = {};
+                
+                clientNetwork->serverChallenge = login.challenge;
+                GameAccessRequest(clientNetwork->serverChallenge, true);
             } break;
             
             case Type_gameAccess:
             {
-                u64 openedContainerID;
                 u8 serverMS5x;
                 
-                Unpack("LQQC", &worldMode->worldSeed, &myPlayer->identifier, &openedContainerID, &serverMS5x);
+                Unpack("LQQC", &worldMode->worldSeed, &worldMode->player.identifier, &worldMode->player.openedContainerID, &serverMS5x);
                 
                 r32 lastFrameFPS = 1000.0f / (serverMS5x * 5.0f);
-                myPlayer->serverFPS = Lerp(myPlayer->serverFPS, 0.8f, lastFrameFPS);
-                myPlayer->openedContainerID = openedContainerID;
+                clientNetwork->serverFPS = Lerp(clientNetwork->serverFPS, 0.8f, lastFrameFPS);
             } break;
             
             case Type_entityHeader:
@@ -641,25 +637,25 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 
                 
                 i32 lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
-                if(e->identifier == myPlayer->identifier && ChunkOutsideWorld(lateralChunkSpan, P.chunkX, P.chunkY))
+                if(e->identifier == worldMode->player.identifier && ChunkOutsideWorld(lateralChunkSpan, P.chunkX, P.chunkY))
                 {
-                    myPlayer->changedWorld = true;
+                    worldMode->player.changedWorld = true;
                     if(P.chunkX < 0)
                     {
-                        myPlayer->changedWorldDeltaX += lateralChunkSpan;
+                        worldMode->player.changedWorldDeltaX += lateralChunkSpan;
                     }
                     else if(P.chunkX >= lateralChunkSpan)
                     {
-                        myPlayer->changedWorldDeltaX -= lateralChunkSpan;
+                        worldMode->player.changedWorldDeltaX -= lateralChunkSpan;
                     }
                     
                     if(P.chunkY < 0)
                     {
-                        myPlayer->changedWorldDeltaY += lateralChunkSpan;
+                        worldMode->player.changedWorldDeltaY += lateralChunkSpan;
                     }
                     else if(P.chunkY >= lateralChunkSpan)
                     {
-                        myPlayer->changedWorldDeltaY -= lateralChunkSpan;
+                        worldMode->player.changedWorldDeltaY -= lateralChunkSpan;
                     }
                 }
                 
@@ -674,11 +670,29 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 }
                 else
                 {
-                    e->velocity = deltaP * myPlayer->serverFPS;
-                    if(e->identifier == myPlayer->identifier)
+                    e->velocity = deltaP * clientNetwork->serverFPS;
+                    if(e->identifier == worldMode->player.identifier)
                     {
-                        myPlayer->distanceCoeffFromServerP = deltaLength / maxDistancePrediction;
+                        worldMode->player.distanceCoeffFromServerP = deltaLength / maxDistancePrediction;
                     }
+                }
+            } break;
+            
+            case Type_plantUpdate:
+            {
+                r32 age;
+                r32 life;
+                r32 leafDensity;
+                r32 leafDimension;
+                
+                Unpack("dddd", &age, &life, &leafDensity, &leafDimension);
+                ClientPlant* plant = currentEntity->plant;
+                if(plant)
+                {
+                    plant->serverAge = age;
+                    plant->life = life;
+                    plant->leafDensity = leafDensity;
+                    plant->leafDimension = leafDimension;
                 }
             } break;
             
@@ -738,11 +752,11 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                     entityC->timeFromLastUpdate = R32_MAX;
                 }
                 
-                if(deletedID == myPlayer->targetIdentifier)
+                if(deletedID == worldMode->player.targetIdentifier)
                 {
                     for(u32 actionIndex = 0; actionIndex < Action_Count; ++actionIndex)
                     {
-                        myPlayer->targetPossibleActions[actionIndex] = false;
+                        worldMode->player.targetPossibleActions[actionIndex] = false;
                     }
                 }
             } break;
@@ -757,7 +771,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 b32 found = false;
                 for(u32 essenceIndex = 0; essenceIndex < MAX_DIFFERENT_ESSENCES; ++essenceIndex)
                 {
-                    EssenceSlot* essence = myPlayer->essences + essenceIndex;
+                    EssenceSlot* essence = worldMode->player.essences + essenceIndex;
                     if(essence->taxonomy == essenceTaxonomy)
                     {
                         u32 diff = delta < 0 ? (u32) -delta : (u32) delta;
@@ -779,10 +793,10 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 
                 if(!found)
                 {
-                    Assert(myPlayer->essenceCount < MAX_DIFFERENT_ESSENCES);
+                    Assert(worldMode->player.essenceCount < MAX_DIFFERENT_ESSENCES);
                     Assert(delta > 0);
                     
-                    EssenceSlot* newEssence = myPlayer->essences + myPlayer->essenceCount++;
+                    EssenceSlot* newEssence = worldMode->player.essences + worldMode->player.essenceCount++;
                     newEssence->taxonomy = essenceTaxonomy;
                     newEssence->quantity = delta;
                 }
@@ -810,11 +824,14 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                             if(effect->triggerEffectTaxonomy == effectTaxonomy)
                             {
                                 AnimationEffect* newEffect;
+                                
+                                BeginTicketMutex(&worldMode->animationEffectMutex);
                                 FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, AnimationEffect, NoClear()));
                                 
                                 *newEffect = *effect;
                                 newEffect->targetID = targetID;
                                 FREELIST_INSERT(newEffect, actor->firstActiveEffect);
+                                EndTicketMutex(&worldMode->animationEffectMutex);
                                 found = true;
                                 break;
                             }
@@ -834,13 +851,13 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 b32 idMatch = true;
                 if(u.overlapping)
                 {
-                    myPlayer->overlappingIdentifier = u.identifier;
-                    possibleActions = myPlayer->overlappingPossibleActions;
+                    worldMode->player.overlappingIdentifier = u.identifier;
+                    possibleActions = worldMode->player.overlappingPossibleActions;
                 }
                 else
                 {
-                    idMatch = (myPlayer->targetIdentifier == u.identifier);
-                    possibleActions = myPlayer->targetPossibleActions;
+                    idMatch = (worldMode->player.targetIdentifier == u.identifier);
+                    possibleActions = worldMode->player.targetPossibleActions;
                 }
                 
                 if(idMatch)
@@ -1009,7 +1026,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                     }
                 }
 #if 0                    
-                else if(action == Action_Craft && currentEntity->identifier == myPlayer->identifier)
+                else if(action == Action_Craft && currentEntity->identifier == worldMode->player.identifier)
                 {
                     UI->player->prediction.type = Prediction_None;
                     UI->nextMode = UI->previousMode;
@@ -1139,7 +1156,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode)
     NetworkPacketReceived packet;
     while(true)
     {
-        packet = platformAPI.net.GetPacketOnSlot(myPlayer->network, 0);
+        packet = platformAPI.net.GetPacketOnSlot(clientNetwork->network, 0);
         if(!packet.dataSize)
         {
             break;
@@ -1152,7 +1169,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode)
         packetPtr = ForgUnpackApplicationData(packetPtr, &applicationData);
         
         
-        ForgNetworkReceiver* receiver = &myPlayer->receiver;
+        ForgNetworkReceiver* receiver = &clientNetwork->receiver;
         if(applicationData.flags & ForgNetworkFlag_Ordered)
         {
             u32 delta = ApplicationDelta(applicationData, receiver->orderedBiggestReceived);

@@ -183,6 +183,7 @@ struct NewEntity
 
 struct DeletedEntity
 {
+    u32 entityID;
     u32 IDs[Component_Count];
 };
 
@@ -190,6 +191,17 @@ struct ReceiveNetworkPacketWork
 {
     NetworkInterface* network;
     network_platform_receive_data* ReceiveData;
+};
+
+struct FreeEntity
+{
+    u32 ID;
+    
+    union
+    {
+        FreeEntity* nextFree;
+        FreeEntity* next;
+    };
 };
 
 struct AIOperationNode;
@@ -200,6 +212,7 @@ struct ServerState
     EditorTabStack editorStack;
     b32 editor;
     b32 gamePaused;
+    b32 rebuildWorld;
     
     r32 elapsedTime;
     u8 elapsedMS5x;
@@ -226,7 +239,12 @@ struct ServerState
     
     EntityComponentArray components[Component_Count];
     
-    MemoryPool testPool;
+    u32 entityCount;
+    SimEntity entities[0xffff];
+    
+    FreeEntity* firstFreeEntity;
+    FreeEntity* firstFreeFreeEntity;
+    
     MemoryPool worldPool;
     MemoryPool networkPool;
     

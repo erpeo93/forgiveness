@@ -33,6 +33,7 @@ inline RandomSequence GetChunkSeed(i32 worldX, i32 worldY, i32 universeX, i32 un
 
 inline r32 NormalizedNoise(r32 dx, r32 dy, r32 frequency, u32 seed)
 {
+    seed = Min(seed, 50);
     r32 noiseValue  = noise(dx * frequency, dy * frequency, 0.0f, seed);
     r32 result = (noiseValue + 1.0f) * 0.5f;
     return result;
@@ -266,22 +267,62 @@ inline WorldTile GenerateTile(TaxonomyTable* table, WorldGenerator* generator, r
 }
 
 
+inline WorldTile OceanTile(TaxonomyTable* table, WorldGenerator* generator, r32 tileNormX, r32 tileNormY, u32 seed)
+{
+    WorldTile result = {};
+    
+    r32 finalHeight = 0;
+    u32 biome = GetSlotForTaxonomy(table, generator->beachTaxonomy)->taxonomy;
+    
+    result.height = finalHeight;
+    result.waterLevel = 0;
+    result.taxonomy = biome;
+    Assert(result.taxonomy);
+    
+    
+#ifndef FORG_SERVER
+    TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, biome);
+    result.layoutNoise = Evaluate(tileNormX, tileNormY, tileSlot->tileNoise, seed);
+    
+    result.baseColor = tileSlot->tileColor; 
+    result.colorDelta = tileSlot->colorDelta;
+    result.borderColor = tileSlot->tileBorderColor;
+    result.chunkynessSame = tileSlot->chunkynessWithSame;
+    result.chunkynessOther = tileSlot->chunkynessWithOther;
+    result.colorRandomness = tileSlot->colorRandomness;
+    
+    result.waterPhase = 0;
+    result.movingNegative = false;
+    result.waterSine = 0;
+    
+    
+    result.waterSeq = Seed((i32) (tileNormX * 1000.24f) + (i32)(tileNormY * 1223424.0f));
+#endif
+    
+    return result;
+}
+
+
 internal void BuildChunk(TaxonomyTable* table, WorldGenerator* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY, u32 seed)
 {
+    
     Assert(CHUNK_DIM % 4 == 0);
     
     chunk->initialized = true;
     chunk->worldX = chunkX;
     chunk->worldY = chunkY;
     
-    i32 universeX = 0;
-    i32 universeY = 0;
     i32 lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
-    chunkX = Wrap(0, chunkX, lateralChunkSpan, &universeX);
-    chunkY = Wrap(0, chunkY, lateralChunkSpan, &universeY);
+    
+    i32 ign;
+    chunkX = Wrap(0, chunkX, lateralChunkSpan, &ign);
+    chunkY = Wrap(0, chunkY, lateralChunkSpan, &ign);
     
     u32 baseTileX = chunkX * CHUNK_DIM;
     u32 baseTileY = chunkY * CHUNK_DIM;
+    
+    b32 chunkOutsideWorld = ChunkOutsideWorld(lateralChunkSpan, chunkX, chunkY);
+    
     
     for(u8 tileY = 0; tileY < CHUNK_DIM; ++tileY)
     {
@@ -297,7 +338,14 @@ internal void BuildChunk(TaxonomyTable* table, WorldGenerator* generator, WorldC
             Assert(Normalized(tileNormX));
             Assert(Normalized(tileNormY));
             
-            chunk->tiles[tileY][tileX] = GenerateTile(table, generator, tileNormX, tileNormY, seed);
+            if(chunkOutsideWorld)
+            {
+                chunk->tiles[tileY][tileX] = OceanTile(table, generator, tileNormX, tileNormY, seed);
+            }
+            else
+            {
+                chunk->tiles[tileY][tileX] = GenerateTile(table, generator, tileNormX, tileNormY, seed);
+            }
         }
     }
 }

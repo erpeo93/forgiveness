@@ -262,6 +262,12 @@ inline r32 UnilateralToBilateral(r32 value)
     return result;
 }
 
+inline r32 BilateralToUnilateral(r32 value)
+{
+    r32 result = (value / 2.0f) + 0.5f;
+    return result;
+}
+
 inline r32 Lerp( r32 value1, r32 lerp, r32 value2 )
 {
     r32 result = ( 1.0f - lerp ) * value1 + lerp * value2;

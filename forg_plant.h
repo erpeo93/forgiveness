@@ -34,8 +34,7 @@ struct PlantStem
     
     r32 probabliltyToClone;
     
-    r32 parentAngleY;
-    r32 parentAngleZ;
+    m4x4 orientation;
     r32 parentStemZ;
     r32 parentSegmentZ;
     
@@ -62,6 +61,18 @@ struct PlantStem
     };
 };
 
+#define MAX_PLANT_COUNT 8
+struct PlantInstance
+{
+    u32 plantCount;
+    
+    Vec2 offsets[MAX_PLANT_COUNT];
+    r32 angleZ[MAX_PLANT_COUNT];
+    
+    u32 trunkCount;
+    PlantStem* firstTrunk;
+};
+
 struct PlantLevelParams
 {
     u8 curveRes;
@@ -86,6 +97,8 @@ struct PlantLevelParams
     r32 lengthCoeffV;
     
     r32 taper;
+    
+    r32 radiousMod;
     
     r32 clonePercRatio;
     r32 clonePercRatioV;
@@ -120,6 +133,16 @@ struct PlantDefinition
 {
     PlantShape shape;
     
+    r32 growingCoeff;
+    
+    u32 plantCount;
+    r32 plantCountV;
+    
+    Vec2 plantOffsetV;
+    r32 plantAngleZV;
+    
+    r32 attractionUp;
+    
     r32 baseSize;
     
     r32 scale;
@@ -149,7 +172,12 @@ struct PlantDefinition
     r32 leafAngleV;
     
     Vec4 trunkColorV;
+    
+    r32 lobeDepth;
     r32 lobes;
+    
+    u64 leafStringHash;
+    u64 trunkStringHash;
     
     union
     {
@@ -157,3 +185,18 @@ struct PlantDefinition
         PlantDefinition* nextFree;
     };
 };
+
+
+inline r32 GetPlantStandardTrunkLength(PlantDefinition* definition)
+{
+    r32 result =  definition->scale * definition->levelParams[0].lengthCoeff;
+    return result;
+}
+
+inline r32 GetPlantStandardTrunkRadious(PlantDefinition* definition)
+{
+    r32 trunkLength = GetPlantStandardTrunkLength(definition);
+    r32 result = trunkLength * definition->ratio * definition->scale_0;
+    
+    return result;
+}

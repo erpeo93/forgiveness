@@ -54,7 +54,7 @@ internal b32 AllNeighBorsFinished(ServerState* server, SimRegion* region)
     return allNeighBorsFinished;
 }
 
-inline u32 AddEntity(SimRegion* region, MemoryPool* pool)
+inline u32 AddEntity(SimRegion* region, MemoryPool* pool, SimEntity* source, u32 ID)
 {
     u32 result = 0;
     
@@ -63,14 +63,22 @@ inline u32 AddEntity(SimRegion* region, MemoryPool* pool)
     {
         if(block->entityCount < ArrayCount(block->entities))
         {
-            result += block->entityCount++;
+            u32 blockIndex = block->entityCount++;
+            result += blockIndex;
             if(block->entityCount == ArrayCount(block->entities))
             {
                 SimEntityBlock* newBlock = PushStruct(pool, SimEntityBlock, NoClear());
                 newBlock->entityCount = 0;
                 newBlock->next = 0;
                 block->next = newBlock;
+                
+                block = newBlock;
+                blockIndex = 0;
             }
+            
+            block->IDs[blockIndex] = ID;
+            block->entities[blockIndex] = source;
+            
             break;
         }
         
@@ -185,14 +193,12 @@ internal void BeginSim(SimRegion* region, MemoryPool* tempPool)
                 while(block)
                 {
                     EntityBlock* nextBlock = block->next;
-                    u8* entityRaw = block->data;
                     for(u32 entityIndex = 0; entityIndex < block->countEntity; ++entityIndex)
                     {
-                        SimEntity* source = (SimEntity*) entityRaw;
-                        entityRaw += sizeof(SimEntity);
+                        u32 ID = block->entityIDs[entityIndex];
+                        SimEntity* source = GetEntity(server, ID);
                         
                         source->P += chunkOffset;
-                        
                         Assert(source->P.x > -region->halfGridDim);
                         Assert(source->P.y > -region->halfGridDim);
                         Assert(source->P.x < region->halfGridDim);
@@ -207,11 +213,10 @@ internal void BeginSim(SimRegion* region, MemoryPool* tempPool)
                         Assert(source->taxonomy);
                         Assert(source->identifier);
                         
-                        u32 index = AddEntity(region, tempPool);
+                        u32 index = AddEntity(region, tempPool, source, ID);
                         AddToIDHash(region, tempPool, source->identifier, index);
                         
                         SimEntity* dest = GetRegionEntity(region, index);
-						*dest = *source;
                         
                         if(PointInRect(region->updateBounds, dest->P.xy))
                         {
@@ -225,13 +230,6 @@ internal void BeginSim(SimRegion* region, MemoryPool* tempPool)
                             }
                         }
                         
-#if 0                        
-                        if(dest->fluid.type)
-                        {
-                            RegionTile* tile = GetRegionTile(region, dest->P.xy);
-                            AddToFluidHash( region, tempPool, dest->fluid.source1, dest->fluid.sourceSegmentIndex1, dest->fluid.source2, dest->fluid.sourceSegmentIndex2, index, tile, ( i32 ) dest->P.z );
-                        }
-#endif
                         Rect3 bounds = dest->bounds;
                         Vec3 maxDelta = GetMaxDelta(region);
                         bounds = AddRadius(bounds, maxDelta);
@@ -244,7 +242,6 @@ internal void BeginSim(SimRegion* region, MemoryPool* tempPool)
                         AddToSpacePartition(region, &region->collisionPartition, tempPool, dest->P, bounds, collider);
                     }
                     block->countEntity = 0;
-                    block->usedData = 0;
                     
                     FREELIST_DEALLOC( block, region->context->firstFreeBlock );
                     block = nextBlock;
@@ -261,37 +258,6 @@ internal void EndSim(SimRegion* region)
     
     region->playerCount = 0;
     ServerState* server = region->server;
-    
-#if 0    
-    for(u32 tileY = 0; tileY < region->gridSide; ++tileY )
-    {
-        for( u32 tileX = 0; tileX < region->gridSide; ++tileX )
-        {
-            RegionTile* tile = region->tiles + ( tileY * region->gridSide ) + tileX;
-            if( tile->dirty )
-            {
-                u32 tX = tile->X % CHUNK_DIM;
-                u32 tY = tile->Y % CHUNK_DIM;
-                
-                UniversePos tileP = GetUniverseP( region, tile->P );
-                
-                for(u32 blockIndex = 0; blockIndex < region->entityCount; ++blockIndex )
-                {
-                    SimEntity* entity = region->entities + blockIndex;
-                    if( entity->playerID )
-                    {
-                        ServerPlayer* player = region->server->players + entity->playerID;
-                        //SendTileUpdate( player, tileP.chunkX, tileP.chunkY, tX, tY, tile->waterAmount );
-                    }
-                }
-                
-                Assert( ChunkValid( server->lateralChunkSpan, tileP.chunkX, tileP.chunkY ) );
-                WorldChunk* chunk = GetChunk( server->chunks, ArrayCount( server->chunks ), tileP.chunkX, tileP.chunkY, 0 );
-                chunk->waterAmount[tY][tX] = tile->waterAmount;
-            }
-        }
-    }
-#endif
     
     for(u32 effectTriggerIndex = 0; effectTriggerIndex < region->effectTriggeredCount; ++effectTriggerIndex)
     {
@@ -320,7 +286,9 @@ internal void EndSim(SimRegion* region)
         for(u32 blockIndex = 0; blockIndex < entityBlock->entityCount; blockIndex++)
         {
             b32 deleted = false;
-            SimEntity* entity = entityBlock->entities + blockIndex;
+            SimEntity* entity = entityBlock->entities[blockIndex];
+            u32 entityID = entityBlock->IDs[blockIndex];
+            
             if(!IsSet(entity, Flag_deleted))
             {
                 if(region->border != Border_Mirror &&
@@ -396,13 +364,13 @@ internal void EndSim(SimRegion* region)
                         }
                     }
                     
-                    DeleteEntityComponents(region, entity);
+                    DeleteEntityComponents(region, entity, entityID);
                     SendUpdateToAdiacentRegions(region, entity->identifier);
                 }
             }
             else
             {
-                PackEntityIntoChunk(region, entity);
+                PackEntityIntoChunk(region, entity, entityID);
             }
         }
     }
@@ -432,6 +400,8 @@ inline void DispatchMirrorUpdate(SimRegion* region, SimEntity* entity, HashEntit
 
 internal void DispatchRegionUpdate(SimRegion* region, MemoryPool* pool)
 {
+    InvalidCodePath;
+#if 0    
     TIMED_FUNCTION();
     Assert(region->updateHash);
     
@@ -439,7 +409,7 @@ internal void DispatchRegionUpdate(SimRegion* region, MemoryPool* pool)
     {
         for(u32 blockIndex = 0; blockIndex < entityBlock->entityCount; ++blockIndex)
         {
-            SimEntity* entity = entityBlock->entities + blockIndex;
+            SimEntity* entity = entityBlock->entities[blockIndex];
             HashEntityUpdate* update = GetHashUpdate(region, entity->identifier);
             if(update->valid)
             {
@@ -456,55 +426,6 @@ internal void DispatchRegionUpdate(SimRegion* region, MemoryPool* pool)
             u32 index = AddEntity(region, pool);
             SimEntity* entity = GetRegionEntity(region, index);
             DispatchMirrorUpdate(region, entity, update);
-        }
-    }
-}
-
-
-enum Season
-{
-    Season_Winter,
-    Season_Spring,
-    Season_Summer,
-    Season_Autumn,
-};
-
-internal void UpdateRegionTiles( SimRegion* region )
-{
-    
-#if 0    
-    for( i32 tileY = 0; tileY < ( i32 ) region->gridSide; ++tileY )
-    {
-        for( i32 tileX = 0; tileX < ( i32 ) region->gridSide; ++tileX )
-        {
-            RegionTile* tile = region->tiles + ( tileY * region->gridSide ) + tileX;
-            if( tile->waterAmount )
-            {
-                r32 myHeight = tile->P.z + tile->waterAmount;
-                
-                for( i32 testY = tileY - 1; testY <= tileY + 1; ++testY )
-                {
-                    for( i32 testX = tileX - 1; testX <= tileX + 1; ++testX )
-                    {
-                        if( testY > 0 && testY < ( i32 ) region->gridSide &&
-                           testX > 0 && testX < ( i32 ) region->gridSide )
-                        {
-                            RegionTile* test = region->tiles + ( testY * region->gridSide ) + testX;
-                            r32 hisHeight = test->P.z + test->waterAmount;
-                            
-                            if( hisHeight < myHeight )
-                            {
-                                r32 delta = myHeight - hisHeight;
-                                
-                                r32 waterMovement = delta / 0.5f * region->timeToUpdate;
-                                test->waterAmount += waterMovement;
-                                tile->waterAmount -= waterMovement;
-                                test->dirty = true;
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 #endif
@@ -686,7 +607,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 InvalidCodePath;
             }
             
-            DeleteEntityComponents(region, dragging);
+            DeleteEntityComponents(region, dragging, 0);
         } break;
         
         case Type_DisequipRequest:
@@ -1438,10 +1359,17 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
     }
 }
 
-internal void UpdatePlant(SimRegion* region, SimEntity* entity)
+#define PLANT_MAX_AGE 3153600000.0f //100 years
+internal void UpdatePlant(SimRegion* region, SimEntity* entity, r32 growingCoeff)
 {
     PlantComponent* plant = Plant(region, entity);
-    plant->plantTotalAge += region->timeToUpdate;
+    
+    plant->age += region->timeToUpdate * growingCoeff;
+    plant->age = Min(plant->age, PLANT_MAX_AGE);
+    
+    plant->leafDensity = 1;
+    plant->leafDimension = 1;
+    plant->life = 1;
 }
 
 internal void UpdateEssence(SimRegion* region, SimEntity* entity)
@@ -1555,10 +1483,12 @@ internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)
     {
         for( u32 blockIndex = 0; blockIndex < entityBlock->entityCount; blockIndex++ )
         {
-            SimEntity* entity = entityBlock->entities + blockIndex;
+            SimEntity* entity = entityBlock->entities[blockIndex];
             if(!IsSet(entity, Flag_deleted) && !IsSet(entity, Flag_Equipped))
             {
                 b32 died = false;
+                Vec3 oldP = entity->P;
+                
                 if(IsSet(entity, Flag_insideRegion))
                 {
                     if(region->border != Border_Mirror)
@@ -1584,7 +1514,8 @@ internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)
                         
                         if(IsPlant(region->taxTable, entityTaxonomy))
                         {
-                            UpdatePlant(region, entity);
+                            TaxonomySlot* slot = GetSlotForTaxonomy(region->taxTable, entityTaxonomy);
+                            UpdatePlant(region, entity, slot->plant->growingCoeff);
                         }
                         
                         if(IsEssence(region->taxTable, entityTaxonomy))
@@ -1601,11 +1532,21 @@ internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)
                         {
                             MoveEntity(region, entity);
                         }
+                        
+                        //if(entity->fluid)
+                        {
+                            //HandleFluid(region, entity);
+                        }
                     }
                 }
                 
                 UniversePos P = GetUniverseP(region, entity->P);
                 b32 entityOutsideWorld = !PositionInsideWorld(region->server->lateralChunkSpan, &P);
+                
+                if(entityOutsideWorld)
+                {
+                    entity->P = oldP;
+                }
                 
 				b32 handleEntityAction = ((region->border != Border_Mirror && IsSet(entity, Flag_insideRegion)) || (region->border == Border_Mirror && entityOutsideWorld));
                 if(handleEntityAction)
@@ -1626,11 +1567,6 @@ internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)
                         AddFlags(entity, Flag_deleted);
                     }
                 }
-                
-                //if(entity->fluid)
-                {
-                    //HandleFluid(region, entity);
-                }
             }
         }
     }
@@ -1641,7 +1577,7 @@ internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)
     {
         for( u32 entityBlockIndex = 0; entityBlockIndex < entityBlock->entityCount; entityBlockIndex++ )
         {
-            SimEntity* entity = entityBlock->entities + entityBlockIndex;
+            SimEntity* entity = entityBlock->entities[entityBlockIndex];
             if(!IsSet(entity, Flag_deleted) && IsSet(entity, Flag_Equipped))
             {
                 Assert(entity->ownerID);
@@ -1677,7 +1613,7 @@ internal void SimulateRegionServer(SimRegion* region, MemoryPool* pool)
     BeginSim(region, pool);
     if(region->border == Border_Mirror)
     {
-        DispatchRegionUpdate(region, pool);
+        //DispatchRegionUpdate(region, pool);
     }
     else
     {

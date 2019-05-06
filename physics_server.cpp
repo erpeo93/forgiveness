@@ -1,4 +1,4 @@
-internal void HandleCollision( SimEntity* entity, SimEntity* entityToCheck )
+internal void HandleCollision(SimEntity* entity, SimEntity* entityToCheck)
 {
     
 #if 0    

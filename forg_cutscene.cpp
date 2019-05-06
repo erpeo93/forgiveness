@@ -172,7 +172,7 @@ internal b32 CheckForMetaInput(GameState* gameState, PlatformInput* input)
 internal void PlayIntroCutscene( GameState* gameState)
 {
     SetGameMode( gameState, GameMode_Cutscene );
-    GameModeScene* result = PushStruct( &gameState->modePool, GameModeScene );
+    GameModeScene* result = PushStruct(&gameState->modePool, GameModeScene);
     
     result->t = 0;
     result->ID = CutsceneID_Intro;

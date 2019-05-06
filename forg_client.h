@@ -85,18 +85,21 @@ struct ReceiveNetworkPacketWork
 
 global_variable PlatformAPI platformAPI;
 
-struct ClientPlayer
+struct ClientNetworkInterface
 {
-    b32 spawnAsh;
-    
+    u32 serverChallenge;
     ForgNetworkReceiver receiver;
-    
     ForgNetworkApplicationData nextSendUnreliableApplicationData;
     ForgNetworkApplicationData nextSendReliableApplicationData;
     
     r32 serverFPS;
     r32 networkTimeElapsed;
     NetworkInterface* network;
+};
+
+struct ClientPlayer
+{
+    b32 spawnAsh;
     
     b32 changedWorld;
     i32 changedWorldDeltaX;
@@ -134,10 +137,14 @@ struct ClientPlant
     r32 scale;
     r32 lengthBase;
     
-    PlantStem trunk;
+    PlantInstance plant;
     
     r32 age;
     r32 serverAge;
+    
+    r32 life;
+    r32 leafDensity;
+    r32 leafDimension;
     
     BitmapId leafBitmap;
     BitmapId trunkBitmap;
@@ -267,6 +274,9 @@ struct ForgVoronoiDiagram
 #define ALPHABET_LETTER_COUNT 24
 struct GameModeWorld
 {
+    r32 windTime;
+    r32 windSpeed;
+    
     u32 worldSeed;
     
     b32 editingEnabled;
@@ -292,6 +302,7 @@ struct GameModeWorld
     DayPhase dayPhases[DayPhase_Count];
     
     
+    b32 forceVoronoiRegeneration;
     u8 chunkDim;
     r32 voxelSide;
     r32 oneOverVoxelSide;
@@ -303,25 +314,55 @@ struct GameModeWorld
     
     MemoryPool* temporaryPool;
     
+    TicketMutex entityMutex;
     ClientEntity* entities[1024];
-    PlantSegment* firstFreePlantSegment;
-    PlantStem* firstFreePlantStem;
-    ClientPlant* firstFreePlant;
-    ClientRock* firstFreeRock;
-    AnimationEffect* firstFreeEffect;
     
     
     WorldChunk* chunks[1024];
     
     
+    PlantSegment* firstFreePlantSegment;
+    PlantStem* firstFreePlantStem;
+    ClientPlant* firstFreePlant;
+    ClientRock* firstFreeRock;
+    
+    TicketMutex animationEffectMutex;
+    AnimationEffect* firstFreeEffect;
+    
+    
     RandomSequence waterRipplesSequence;
     ParticleCache* particleCache;
-    
     
     TaxonomyTable* table;
     TaxonomyTable* oldTable;
     UIState* UI;
     ClientPlayer player;
+    
+    r32 modulationWithFocusColor;
+    
+    VertexModel tetraModel;
+    
+#if FORGIVENESS_INTERNAL
+    b32 replayingInput;
+    b32 fixedTimestep;
+    b32 canAdvance;
+#endif
+    
+    Vec2 lastMouseP;
+    Vec3 worldMouseP;
+    
+    
+    
+    
+    b32 voronoiValid;
+    b32 generatingVoronoi;
+    
+    ForgVoronoiDiagram voronoiPingPong[2];
+    ForgVoronoiDiagram* activeDiagram;
+    WorldTile nullTile;
+    
+    
+    
     
     Vec3 cameraWorldOffset;
     Vec3 destCameraWorldOffset;
@@ -330,30 +371,6 @@ struct GameModeWorld
     
     r32 defaultCameraZ;
     u64 cameraFocusID;
-    
-    
-    r32 modulationWithFocusColor;
-    
-    
-    VertexModel tetraModel;
-    
-    
-#if FORGIVENESS_INTERNAL
-    
-    b32 replayingInput;
-    b32 fixedTimestep;
-    b32 canAdvance;
-    b32 editorMode;
-#endif
-    
-    Vec2 lastMouseP;
-    Vec3 worldMouseP;
-    
-    
-    b32 generatingVoronoi;
-    ForgVoronoiDiagram voronoiPingPong[2];
-    ForgVoronoiDiagram* activeDiagram;
-    WorldTile nullTile;
     
     b32 useDebugCamera;
     
@@ -364,6 +381,8 @@ struct GameModeWorld
     r32 cameraOrbit;
     r32 cameraPitch;
     r32 cameraDolly;
+    
+    
     
     SoundState* soundState;
     
@@ -382,9 +401,9 @@ struct GameState
     MemoryPool totalPool;
     MemoryPool modePool;
     MemoryPool audioPool;
+    MemoryPool networkPool;
     MemoryPool framePool;
     
-    PlayingSound* music;
     GameMode mode;
     union
     {
@@ -402,13 +421,18 @@ struct GameState
     Assets* assets;
     MemoryPool assetPool;
     
-    ReceiveNetworkPacketWork receivePacketWork;
+    
+    ReceiveNetworkPacketWork receiveNetworkPackets;
+    ClientNetworkInterface networkInterface;
+    
+    
     PlatformWorkQueue* renderQueue;
     PlatformWorkQueue* slowQueue;
     PlatformTextureOpQueue* textureQueue;
     
     TaskWithMemory tasks[6];
     
+    PlayingSound* music;
     SoundState soundState;
 };
 

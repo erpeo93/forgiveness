@@ -166,14 +166,11 @@ inline void TranslateServerChunks(ServerState* server)
             EntityBlock* block = chunk->entities;
             while(block)
             {
-                u8* entityRaw = block->data;
                 for(u32 entityIndex = 0; entityIndex < block->countEntity; ++entityIndex)
                 {
-                    SimEntity* source = (SimEntity*) entityRaw;
+                    u32 ID = block->entityIDs[entityIndex];
+                    SimEntity* source = GetEntity(server, ID);
                     TranslateSimEntity(server, source);
-                    
-                    entityRaw += sizeof(SimEntity);
-                    
                 }
                 
                 block = block->next;
@@ -341,12 +338,15 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
         case Type_gameAccess:
         {
             GameAccessRequest clientReq;
-            unpack(packetPtr, "L", &clientReq.challenge ); 
+            unpack(packetPtr, "Ll", &clientReq.challenge, &clientReq.sendDataFiles); 
             if(challenge == clientReq.challenge)
             {
-                SendDataFiles(server->editor, player, true, true);
-                player->allDataFileSent = true;
-                //EntitySQL ep = SQLRetriveHero( server->conn, newPlayer->username, newPlayer->heroSlot );
+                if(clientReq.sendDataFiles)
+                {
+                    SendDataFiles(server->editor, player, true, true);
+                    player->allDataFileSent = true;
+                }
+                
                 SimRegion* region = GetServerRegion( server, 0, 0 );
                 Vec3 P = V3( 0.5f, 10.0f, 0 );
                 
@@ -354,7 +354,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 u64 identifier = AddEntity(region, P, slot->taxonomy, NullGenerationData(), PlayerAddEntityParams(player->playerID));
                 
                 
-#if 1                             
+#if 0                             
                 TaxonomySlot* testSlot = NORUNTIMEGetTaxonomySlotByName(region->taxTable, "strength");
                 AddEntity(region, P + V3( 5.0f, 0.0f, 0.0f ), testSlot->taxonomy, NullGenerationData(), EntityFromObject(identifier, 0, 0));
 #endif
@@ -579,7 +579,10 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
             {
                 u32 worldSeed;
                 packetPtr = unpack(packetPtr, "L", &worldSeed);
-                BuildServerChunks(server, worldSeed);
+                server->worldSeed = worldSeed;
+                
+                CompletePastWritesBeforeFutureWrites;
+                server->rebuildWorld = true;
             }
         } break;
         
@@ -1094,6 +1097,7 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     
     // TODO(Leonardo): get this from main server or from file
     server->currentIdentifier = 1;
+    server->entityCount = 1;
     
     server->activeTable = PushStruct(pool, TaxonomyTable);
     server->oldTable = PushStruct(pool, TaxonomyTable);
@@ -1183,7 +1187,7 @@ extern "C" SERVER_INITIALIZE(InitializeServer)
         ReadTaxonomiesFromFile();
     }
     
-    server->worldSeed = 1;
+    server->worldSeed = (u32) time(0);
     FillGenerationData(server);
     BuildWorld(server);
 }
@@ -1304,11 +1308,27 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     server->simulationStepDone = canAdvance;
 #endif
     
+    if(server->rebuildWorld)
+    {
+        server->rebuildWorld = false;
+        BuildWorld(server);
+    }
+    
     if(canAdvance)
     {
         for(u32 deletedEntityIndex = 0; deletedEntityIndex < server->deletedEntityCount; ++deletedEntityIndex)
         {
             DeletedEntity* deleted = server->deletedEntities + deletedEntityIndex;
+            
+            if(deleted->entityID)
+            {
+                FreeEntity* freeEntity;
+                FREELIST_ALLOC(freeEntity, server->firstFreeFreeEntity, PushStruct(&server->worldPool, FreeEntity));
+                freeEntity->ID = deleted->entityID;
+                
+                FREELIST_INSERT(freeEntity, server->firstFreeEntity);
+            }
+            
             for(u32 componentIndex = 0; componentIndex < Component_Count; ++componentIndex)
             {
                 u32 ID = deleted->IDs[componentIndex];
@@ -1326,7 +1346,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             AddEntitySingleThread(newEntity->region, newEntity->taxonomy, newEntity->P, newEntity->identifier, newEntity->gen, newEntity->params);
         }
         server->newEntityCount = 0;
-        
         
         // NOTE(Leonardo): we first simulate all the mirror region, so that we dispatch all the update first, and then we update all the other regions
         u32 realServerRegionSpan = SERVER_REGION_SPAN + 2;

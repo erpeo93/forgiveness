@@ -487,7 +487,7 @@ internal void HandleFluid( SimRegion* region, SimEntity* entity )
         {
             for(u32 entityIndex = 0; entityIndex < entityBlock->entityCount; ++entityIndex)
             {
-                SimEntity* testEntity = entityBlock->entities + entityIndex;
+                SimEntity* testEntity = entityBlock->entities[entityIndex];
                 if(testEntity->IDs[Component_Fluid])
                 {
                     FluidComponent* testFluid = Fluid(region, testEntity);

@@ -407,7 +407,6 @@ inline void GetPhysicalProperties(TaxonomyTable* taxTable, u32 taxonomy, u64 ide
     if(IsRock(taxTable, taxonomy))
     {
         RandomSequence rockSeq = Seed((u32) identifier);
-        
         if(boundSlot->rock->collides)
         {
             *type = ForgBound_Standard;
@@ -419,6 +418,18 @@ inline void GetPhysicalProperties(TaxonomyTable* taxTable, u32 taxonomy, u64 ide
         
         Vec3 rockDim = GetRockDim(boundSlot->rock, &rockSeq);
         *bounds = RectCenterDim(V3(0, 0, 0), rockDim);
+    }
+    else if(IsPlant(taxTable, taxonomy))
+    {
+        *type = ForgBound_Standard;
+        
+        r32 trunkRadious = Max(0.2f, GetPlantStandardTrunkRadious(boundSlot->plant));
+        r32 trunkLength = GetPlantStandardTrunkLength(boundSlot->plant);
+        
+        Vec3 min = V3(-trunkRadious, -trunkRadious, 0);
+        Vec3 max = V3(trunkRadious, trunkRadious, trunkLength);
+        
+        *bounds = RectMinMax(min, max);
     }
     else
     {
@@ -654,8 +665,6 @@ inline void TranslateSimEntity(ServerState* server, SimEntity* entity)
     TaxonomyTable* oldTable = server->oldTable;
     
     entity->taxonomy = TranslateTaxonomy(oldTable, newTable, entity->taxonomy);
-    
-    entity->slot = GetSlotForTaxonomy(newTable, entity->taxonomy);
     entity->recipeTaxonomy = TranslateTaxonomy(oldTable, newTable, entity->recipeTaxonomy);
     
     EntityComponentArray* components = server->components;

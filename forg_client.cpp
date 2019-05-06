@@ -1,5 +1,5 @@
 #include "forg_client.h"
-global_variable ClientPlayer* myPlayer; 
+global_variable ClientNetworkInterface* clientNetwork; 
 #include "client_generated.h"
 #include "forg_sort.cpp"
 #include "forg_token.cpp"
@@ -35,6 +35,9 @@ inline ClientEntity* GetEntityClient(GameModeWorld* worldMode, u64 identifier, b
     if(identifier)
     {
         u32 index = identifier & (ArrayCount(worldMode->entities) - 1);
+        
+        BeginTicketMutex(&worldMode->entityMutex);
+        
         ClientEntity* entity = worldMode->entities[index];
         ClientEntity* firstFree = 0;
         
@@ -70,6 +73,8 @@ inline ClientEntity* GetEntityClient(GameModeWorld* worldMode, u64 identifier, b
                 worldMode->entities[index] = result;
             }
         }
+        
+        EndTicketMutex(&worldMode->entityMutex);
     }
     
     return result;
@@ -104,8 +109,11 @@ internal void FreeStem(GameModeWorld* worldMode, PlantStem* stem)
     }
 }
 
-inline void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
+internal void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
 {
+    AddFlags(entity, Flag_deleted);
+    
+    
     u32 taxonomy = entity->taxonomy;
     Assert(taxonomy);
     if(IsRock(worldMode->table, taxonomy))
@@ -122,7 +130,11 @@ inline void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
         ClientPlant* toFree = entity->plant;
         if(toFree)
         {
-            FreeStem(worldMode, &toFree->trunk);
+            for(PlantStem* stem = toFree->plant.firstTrunk; stem; stem = stem->next)
+            {
+                FreeStem(worldMode, stem);
+            }
+            FREELIST_FREE(toFree->plant.firstTrunk, PlantStem, worldMode->firstFreePlantStem);
             *toFree = {};
             
             FREELIST_DEALLOC(toFree, worldMode->firstFreePlant);
@@ -130,8 +142,6 @@ inline void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
         }
         
     }
-    
-    AddFlags(entity, Flag_deleted);
     
     entity->effectCount = 0;
     entity->objects.maxObjectCount = 0;
@@ -153,7 +163,10 @@ inline void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
     {
         AnimationEffect* effect = *effectPtr;
         *effectPtr = effect->next;
+        
+        BeginTicketMutex(&worldMode->animationEffectMutex);
         FREELIST_DEALLOC(effect, worldMode->firstFreeEffect);
+        EndTicketMutex(&worldMode->animationEffectMutex);
     }
     
     entity->prediction.type = Prediction_None;
@@ -209,7 +222,7 @@ inline void UpdateCamera(GameModeWorld* worldMode, r32 timeToUpdate)
 #include "forg_animation.cpp"
 #include "forg_UI.cpp"
 #include "forg_cutscene.cpp"
-
+#include "forg_ground.cpp"
 
 struct GetUniversePosQuery
 {
@@ -358,30 +371,19 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     GameModeWorld* result = PushStruct(&gameState->modePool, GameModeWorld);
     
     result->editorRoles = gameState->editorRoles;
-    myPlayer = &result->player;
     
-    u32 sendBufferSize = KiloBytes(4);
-    u32 recvBufferSize = MegaBytes(16);
-    
-    myPlayer->network = input->network;
 #if 0
     char* loginServer = "forgiveness.hopto.org";
 #else
     char* loginServer = "127.0.0.1";
 #endif
     
-    platformAPI.net.OpenConnection(myPlayer->network, loginServer, LOGIN_PORT);
-    myPlayer->nextSendUnreliableApplicationData = {};
-    myPlayer->nextSendReliableApplicationData = {};
-    ResetReceiver(&myPlayer->receiver);
+    clientNetwork->nextSendUnreliableApplicationData = {};
+    clientNetwork->nextSendReliableApplicationData = {};
+    ResetReceiver(&clientNetwork->receiver);
+    platformAPI.net.OpenConnection(clientNetwork->network, loginServer, LOGIN_PORT);
     
     LoginRequest(4444);
-    
-    
-    gameState->receivePacketWork.network = &myPlayer->network;
-    gameState->receivePacketWork.ReceiveData = platformAPI.net.ReceiveData;
-    
-    platformAPI.PushWork(gameState->slowQueue, ReceiveNetworkPackets, &gameState->receivePacketWork);
     
     
     u32 entityCount = ArrayCount(result->entities);
@@ -555,352 +557,6 @@ internal Vec3 MoveEntityClient(GameModeWorld* worldMode, ClientEntity* entity, r
     return result;
 }
 
-struct GenerateVoronoiWork
-{
-    TaskWithMemory* task;
-    u32 pointCount;
-    jcv_point* points;
-    jcv_rect rect;
-    ForgVoronoiDiagram* diagram;
-    ForgVoronoiDiagram** activeDiagramPtr;
-    GameModeWorld* worldMode;
-};
-
-
-PLATFORM_WORK_CALLBACK(GenerateVoronoiPoints)
-{
-    GenerateVoronoiWork* work = (GenerateVoronoiWork*) param;
-    
-    jcv_diagram_generate(work->pointCount, work->points, &work->rect, &work->diagram->diagram);
-    
-    CompletePastWritesBeforeFutureWrites;
-    *work->activeDiagramPtr = work->diagram;
-    CompletePastWritesBeforeFutureWrites;
-    work->worldMode->generatingVoronoi = false;
-    
-    EndTaskWithMemory(work->task);
-}
-
-internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, ForgVoronoiDiagram* diagram, UniversePos originP, i32 originChunkX, i32 originChunkY, i32 chunkApron, i32 lateralChunkSpan)
-{
-    diagram->deltaP = {};
-    diagram->originP = originP;
-    
-    r32 voxelSide = worldMode->voxelSide;
-    r32 chunkSide = worldMode->chunkSide;
-    u8 chunkDim = worldMode->chunkDim;
-    
-    jcv_rect rect;
-    r32 dim = (chunkApron + 4.0f) * chunkSide;
-    rect.min.x = -dim;
-    rect.min.y = -dim;
-    rect.max.x = dim;
-    rect.max.y = dim;
-    
-    u32 maxPointsPerTile = 16;
-    u32 maxPointCount = Squarei(worldMode->chunkDim) * Squarei(2 * chunkApron + 1) * maxPointsPerTile;
-    
-    TaskWithMemory* task = BeginTaskWithMemory(gameState->tasks, ArrayCount(gameState->tasks), false);
-    if(task)
-    {
-        jcv_point* points = PushArray(&task->pool, jcv_point, maxPointCount, NoClear());
-        u32 pointCount = 0;
-        for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
-        {
-            for(i32 X = originChunkX - chunkApron; X <= originChunkX + chunkApron; X++)
-            {
-                Vec3 chunkLowLeftCornerOffset = V3(V2i(X - originChunkX, Y - originChunkY), 0.0f) * chunkSide - originP.chunkOffset;
-                Rect2 chunkRect = RectMinDim(chunkLowLeftCornerOffset.xy, V2(chunkSide, chunkSide));
-                
-                i32 chunkX = Wrap(0, X, lateralChunkSpan);
-                i32 chunkY = Wrap(0, Y, lateralChunkSpan);
-                
-                if(ChunkValid(lateralChunkSpan, X, Y))
-                {	
-                    RandomSequence seq = Seed((chunkX + 10) * (chunkY + 10));
-                    WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, &worldMode->chunkPool);
-                    
-                    if(!chunk->initialized)
-                    {
-                        InvalidCodePath;
-                    }
-                    
-                    Assert(X == chunk->worldX);
-                    Assert(Y == chunk->worldY);
-                    
-                    for(u8 tileY = 0; tileY < worldMode->chunkDim; tileY++)
-                    {
-                        for(u8 tileX = 0; tileX < worldMode->chunkDim; tileX++)
-                        {
-                            Vec2 tileCenter = worldMode->voxelSide * V2(tileX + 0.5f, tileY + 0.5f);
-                            Vec2 destP2D = chunkLowLeftCornerOffset.xy + tileCenter;
-                            
-                            
-                            WorldTile* tile = &chunk->tiles[tileY][tileX];
-                            
-                            TaxonomySlot* tileSlot = GetSlotForTaxonomy(worldMode->table, tile->taxonomy);
-                            
-                            r32 pointMaxOffset = Min(0.5f * voxelSide, tileSlot->groundPointMaxOffset);
-                            u32 pointsPerTile = Min(maxPointsPerTile, tileSlot->groundPointPerTile);
-                            r32 tileLayoutNoise = tile->layoutNoise;
-                            
-                            switch(tileSlot->tilePointsLayout)
-                            {
-                                case TilePoints_StraightLine:
-                                {
-                                    Vec2 arm = Arm2(DegToRad(tileLayoutNoise * 360.0f));
-                                    r32 voxelUsableDim = 0.9f * voxelSide;
-                                    Vec2 startingOffset = arm * voxelUsableDim;
-                                    Vec2 totalDelta = 2.0f * startingOffset;
-                                    
-                                    Vec2 pointSeparationVector = totalDelta *= (1.0f / pointsPerTile);
-                                    
-                                    destP2D += startingOffset;
-                                    
-                                    for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
-                                    {
-                                        points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
-                                        points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
-                                        
-                                        ++pointCount;
-                                        
-                                        destP2D -= pointSeparationVector;
-                                    }
-                                } break;
-                                
-                                case TilePoints_Random:
-                                {
-                                    for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
-                                    {
-                                        points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
-                                        points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
-                                        
-                                        ++pointCount;
-                                    }
-                                } break;
-                                
-                                case TilePoints_Pound:
-                                {
-                                    for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
-                                    {
-                                        points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
-                                        points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
-                                        
-                                        ++pointCount;
-                                    }
-                                } break;
-                            }
-                        }
-                    }                         
-                }
-            }
-        }
-        
-        
-        
-        if(diagram == worldMode->activeDiagram)
-        {
-            jcv_diagram_free(&diagram->diagram);
-            memset(&diagram->diagram, 0, sizeof(jcv_diagram));
-        }
-        
-        GenerateVoronoiWork* work = PushStruct(&task->pool, GenerateVoronoiWork);
-        work->task = task;
-        work->pointCount = pointCount;
-        work->points = points;
-        work->rect = rect;
-        work->diagram = diagram;
-        work->activeDiagramPtr = &worldMode->activeDiagram;
-        work->worldMode = worldMode;
-        platformAPI.PushWork(gameState->slowQueue, GenerateVoronoiPoints, work);
-    }
-    else
-    {
-        InvalidCodePath;
-    }
-}
-
-
-struct RenderVoronoiWork
-{
-    RenderGroup* group;
-    ForgVoronoiDiagram* voronoi;
-    jcv_edge* edges;
-    u32 edgeCount;
-    
-    ReservedVertexes triangleVertexes;
-    ReservedVertexes quadVertexes;
-};
-
-PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
-{
-    RenderVoronoiWork* work = (RenderVoronoiWork*) param;
-    
-    RenderGroup* group = work->group;
-    ForgVoronoiDiagram* voronoi = work->voronoi;
-    
-    u32 counter = 0;
-    jcv_edge* edge = work->edges;
-    
-    
-    ReservedVertexes* triangleVertexes = &work->triangleVertexes;
-    ReservedVertexes* quadVertexes = &work->quadVertexes;
-    while(counter < work->edgeCount)
-    {
-        jcv_site* site0 = edge->sites[0];
-        jcv_site* site1 = edge->sites[1];
-        
-        Vec2 site0P = V2(site0->p.x, site0->p.y);
-        Vec2 site1P = V2(site1->p.x, site1->p.y);
-        
-        WorldTile* QSite0 = site0->tile;
-        WorldTile* QSite1 = site1->tile;
-        
-        WorldTile* QFrom = edge->tile[0];
-        WorldTile* QTo = edge->tile[1];
-        
-        Vec2 offsetFrom = V2(edge->pos[0].x, edge->pos[0].y);
-        Vec2 offsetTo = V2(edge->pos[1].x, edge->pos[1].y);
-        
-        if(offsetFrom.y > offsetTo.y)
-        {
-            Vec2 temp = offsetFrom;
-            offsetFrom = offsetTo;
-            offsetTo = temp;
-            
-            WorldTile* tempTile = QFrom;
-            QFrom = QTo;
-            QTo = tempTile;
-        }
-        
-        
-        
-        Vec2 site0TileOffset = {};
-        Vec2 site1TileOffset = {};
-        
-        
-        Vec2 fromTileOffset = offsetFrom;
-        Vec2 toTileOffset = offsetTo;
-        
-        
-        r32 chunkyness0 = GetChunkyness(QSite0, QSite1);
-        r32 chunkyness1 = GetChunkyness(QSite1, QSite0);
-        
-        r32 outer0 = Outer(offsetFrom, offsetTo, site0P);
-        r32 probe0 = Outer(offsetFrom, offsetTo, offsetFrom - V2(1, 0));
-        b32 zeroIsOnLeftSide = ((probe0 < 0 && outer0 < 0) || 
-                                (probe0 > 0 && outer0 > 0));
-        
-        Vec4 site0PCamera = V4(site0P + voronoi->deltaP.xy, QSite0->height, 0);
-        Vec4 site1PCamera = V4(site1P + voronoi->deltaP.xy, QSite1->height, 0);
-        
-        Vec4 offsetFromCamera = V4(offsetFrom + voronoi->deltaP.xy, QFrom->height, 0);
-        Vec4 offsetToCamera = V4(offsetTo + voronoi->deltaP.xy, QTo->height, 0);
-        
-        Vec4 smooth0From = Lerp(offsetFromCamera, chunkyness0, site0PCamera);
-        Vec4 smooth1From = Lerp(offsetFromCamera, chunkyness1, site1PCamera);
-        
-        Vec4 smooth0To = Lerp(offsetToCamera, chunkyness0, site0PCamera);
-        Vec4 smooth1To = Lerp(offsetToCamera, chunkyness1, site1PCamera);
-        
-        
-        RandomSequence seq = Seed((i32) (LengthSq(offsetTo - offsetFrom) * 1000.0f));
-        
-        
-        Vec4 color0 = GetTileColor(QSite0, false, &seq);
-        Vec4 color1 = GetTileColor(QSite1, false, &seq);
-        
-        Vec4 colorFrom = GetTileColor(QFrom, false, &seq);
-        Vec4 colorTo = GetTileColor(QTo, false, &seq);
-        
-        
-        Vec4 borderColor = Lerp(QSite0->borderColor, 0.5f, QSite1->borderColor);
-        if(!QSite0->borderColor.a)
-        {
-            borderColor = QSite1->borderColor;
-        }
-        else if(!QSite1->borderColor.a)
-        {
-            borderColor = QSite0->borderColor;
-        }
-        
-        
-        if(borderColor.a)
-        {
-            PushLine(group, borderColor, offsetFromCamera.xyz, offsetToCamera.xyz, 0.02f);
-        }
-        
-        // NOTE(Leonardo): actual ground texture
-        
-        if(zeroIsOnLeftSide)
-        {
-            PushTriangle(group, group->whiteTexture, QSite0->lightIndexes, triangleVertexes,  site0PCamera, color0, smooth0From, color0, smooth0To, color0, 0);
-            
-            PushTriangle(group, group->whiteTexture, QSite1->lightIndexes, triangleVertexes, site1PCamera, color1, smooth1To, color1, smooth1From, color1, 0);
-        }
-        else
-        {
-            PushTriangle(group, group->whiteTexture, QSite0->lightIndexes, triangleVertexes, site0PCamera, color0, smooth0To, color0, smooth0From, color0, 0);
-            
-            PushTriangle(group, group->whiteTexture, QSite1->lightIndexes, triangleVertexes, site1PCamera, color1, smooth1From, color1, smooth1To, color1, 0);
-        }
-        
-        if(zeroIsOnLeftSide)
-        {
-            PushQuad(group, group->whiteTexture, QSite0->lightIndexes, quadVertexes, smooth0From, {}, color0, offsetFromCamera, {}, colorFrom, offsetToCamera, {}, colorTo, smooth0To, {}, color0, 0);
-            
-            PushQuad(group, group->whiteTexture, QSite1->lightIndexes, quadVertexes, smooth1From, {}, color1, smooth1To, {}, color1, offsetToCamera, {}, colorTo, offsetFromCamera, {}, colorFrom, 0);
-            
-            
-        }
-        else
-        {
-            PushQuad(group, group->whiteTexture, QSite0->lightIndexes, quadVertexes, smooth0To, {}, color0, offsetToCamera, {}, colorTo, offsetFromCamera, {}, colorFrom, smooth0From, {}, color0, 0);
-            
-            PushQuad(group, group->whiteTexture, QSite1->lightIndexes, quadVertexes, smooth1To, {}, color1, smooth1From, {}, color1, offsetFromCamera, {}, colorFrom, offsetToCamera, {}, colorTo, 0);
-        }
-        
-        
-        
-        
-        Vec4 waterColor0 = GetWaterColor(QSite0);
-        Vec4 waterColor1 = GetWaterColor(QSite1);
-        Vec4 waterColorFrom = GetWaterColor(QFrom);
-        Vec4 waterColorTo = GetWaterColor(QTo);
-        
-        // NOTE(Leonardo): Water Rendering and particles
-        Vec4 waterOffset = V4(0, 0, 0.01f, 0);
-        
-        if(QSite0->waterLevel < WATER_LEVEL)
-        {
-            if(zeroIsOnLeftSide)
-            {
-                PushTriangle(group, group->whiteTexture, QSite0->lightIndexes, triangleVertexes, site0PCamera + waterOffset, waterColor0, offsetFromCamera + waterOffset, waterColorFrom, offsetToCamera + waterOffset, waterColorTo, 0);
-            }
-            else
-            {
-                PushTriangle(group, group->whiteTexture, QSite0->lightIndexes, triangleVertexes, site0PCamera + waterOffset, waterColor0, offsetToCamera + waterOffset, waterColorTo, offsetFromCamera + waterOffset, waterColorFrom, 0);
-            }
-        }
-        
-        if(QSite1->waterLevel < WATER_LEVEL)
-        {
-            if(zeroIsOnLeftSide)
-            {
-                PushTriangle(group, group->whiteTexture, QSite1->lightIndexes, triangleVertexes, site1PCamera + waterOffset, waterColor1, offsetToCamera + waterOffset, waterColorTo, offsetFromCamera + waterOffset, waterColorFrom, 0);
-            }
-            else
-            {
-                PushTriangle(group, group->whiteTexture, QSite1->lightIndexes, triangleVertexes, site1PCamera + waterOffset, waterColor1, offsetFromCamera + waterOffset, waterColorFrom, offsetToCamera + waterOffset, waterColorTo, 0);
-            }
-        }
-        
-        edge = edge->next;
-        ++counter;
-    }
-}
-
-
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
     
@@ -920,7 +576,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     }
 #endif
     
-    myPlayer = &worldMode->player;
+    ClientPlayer* myPlayer = &worldMode->player;
     UIState* UI = worldMode->UI;
     ReceiveNetworkPackets(worldMode);
     
@@ -944,6 +600,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         input->timeToAdvance = 0;
     }
     
+    worldMode->windSpeed = 10.0f;
+    worldMode->windTime += worldMode->windSpeed * input->timeToAdvance;
     
     ParticleCache* particleCache = worldMode->particleCache;
     
@@ -1164,15 +822,12 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 BeginDepthPeel(group);
                 
                 ResetLightGrid(worldMode);
-                
                 Vec3 ambientLightColor = {};
-                
                 worldMode->currentPhaseTimer += input->timeToAdvance;
                 DayPhase* currentPhase = worldMode->dayPhases + worldMode->currentPhase;
                 DayPhase* nextPhase = worldMode->dayPhases + currentPhase->next;
                 
                 r32 maxLerpDuration = 1.0f;
-                
                 if(worldMode->currentPhaseTimer >= currentPhase->duration)
                 {
                     worldMode->currentPhaseTimer = 0;
@@ -1193,6 +848,12 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 
                 
+                
+                
+                
+                
+                
+                
                 r32 maxOverallDistanceSq = 4.0f;
                 u64 overallNearestID = 0;
                 r32 overallMinCameraZ = R32_MAX;
@@ -1206,6 +867,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     ClientEntity* entity = worldMode->entities[entityIndex];
                     while(entity)
                     {
+                        ClientEntity* next = entity->next;
                         if(entity->identifier)
                         {   
                             entity->actionTime += input->timeToAdvance;
@@ -1366,75 +1028,17 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     ClientEntity* entity = worldMode->entities[entityIndex];
                     while(entity)
                     {
+                        ClientEntity* next = entity->next;
                         if(entity->identifier && !IsSet(entity, Flag_deleted | Flag_Equipped))
                         {
                             entity->P = Subtract(entity->universeP, player->universeP);
                             entity->timeFromLastUpdate += input->timeToAdvance;
-                            if(entity->timeFromLastUpdate >= 800000.0f)
+                            if(entity->timeFromLastUpdate >= 3.0f)
                             {
-                                AddFlags(entity, Flag_deleted);
                                 DeleteEntityClient(worldMode, entity);
                             }
                             else
                             {
-#if 0                    
-                                if(DEBUG_UI_ENABLED)
-                                {
-                                    SimEntity* hotEntity = GetEntityClient(worldMode, entity->globalID, entity->worldID);
-                                    DebugID entityDebugID =  DEBUG_POINTER_ID(hotEntity);
-                                    if(entity->body->solid)
-                                    {
-                                        CollVolume* volume = &entity->body->volume;
-                                        Rect2 groundRect = RectCenterDim(finalP.xy + volume->offset.xy, volume->dim.xy);
-                                        
-                                        if(PointInRect(groundRect, worldMouseP))
-                                        {
-                                            DEBUG_HIT(entityDebugID);
-                                        }
-                                        
-                                        Vec4 outlineColor = V4(1.0f, 0.0f, 1.0f, 1.0f);
-                                        if(DEBUG_HIGHLIGHTED(entityDebugID, &outlineColor))
-                                        {
-                                            PushRectOutline(group, DefaultFlatTransform(), finalP, volume->dim.xy, outlineColor, 0.05f);
-                                        }
-                                        
-                                    }
-                                    
-                                    if(DEBUG_REQUESTED(entityDebugID))
-                                    {
-                                        DEBUG_DATA_BLOCK("simulation/Entity");
-                                        
-                                        
-                                        //DebugAskForAllAttributes(hotEntity);
-                                    }
-                                    
-                                    if(DEBUG_EDITING(entityDebugID))
-                                    {
-                                        //SetHover(hotEntity);
-                                        //DebugAskForAIInfo(hotEntity);
-                                        
-                                        if(Pressed(&input->debugCancButton))
-                                        {
-                                            //DebugDeleteEntity(hotEntity);
-                                            SetHover(0);
-                                            DEBUG_RESET_EDITING();
-                                        }
-                                        else
-                                        {
-                                            //DebugAskForAllAttributes(hotEntity);
-                                        }
-                                    }
-                                    
-                                    Vec2 screenP = entity->regionPosition.xy + V3(0.0f, 2.0f, 0.0f).xy;
-                                    if(entity->action)
-                                    {
-                                        DEBUG_TEXT(MetaTable_EntityAction[entity->action], screenP, V4(1.0f, 1.0f, 1.0f, 1.0f));
-                                    }
-                                }
-#endif
-                                
-                                //UIHighlighted(group, DefaultUprightTransform(), UI, entity, finalP, destEntity, targetEnemy);
-                                
                                 AnimationEntityParams params = StandardEntityParams();
                                 if(UI->mode != UIMode_None && entity->identifier == myPlayer->openedContainerID)
                                 {
@@ -1472,9 +1076,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             }
                         }
                         
-                        entity = entity->next;
+                        entity = next;
                     }
                 }
+                
                 
                 b32 forceVoronoiRegeneration = myPlayer->changedWorld || output.forceVoronoiRegeneration;
                 if(myPlayer->changedWorld)
@@ -1694,7 +1299,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             if(tile->waterLevel < rippleThreesold * WATER_LEVEL && RandomUni(&worldMode->waterRipplesSequence) < waterRandomPercentage)
                             {
                                 Vec3 ripplesP = V3(siteP + voronoi->deltaP.xy, tile->height);
-                                SpawnWaterRipples(particleCache, ripplesP, V3(0, 0, 0), ripplesLifetime);
+                                //SpawnWaterRipples(particleCache, ripplesP, V3(0, 0, 0), ripplesLifetime);
                             }
                         }
                         
@@ -1744,6 +1349,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             edge = edge->next;
                             if(++counter == 512 || !edge)
                             {
+                                
+#if 1         
                                 RenderVoronoiWork* work = PushStruct(worldMode->temporaryPool, RenderVoronoiWork);
                                 work->group = group;
                                 work->voronoi = voronoi;
@@ -1759,6 +1366,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
 #else
                                 RenderVoronoiEdges(work);
 #endif
+#endif
                                 
                                 toRender = edge;
                                 counter = 0;
@@ -1771,7 +1379,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         END_BLOCK();
                     }
                 }
-                
                 
                 BEGIN_BLOCK("particles");
                 SetParticleCacheBitmaps(particleCache, group->assets);
@@ -2033,7 +1640,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
         gameState = BootstrapPushStruct(GameState, totalPool);
         memory->gameState = gameState;
-        
 #if FORGIVENESS_INTERNAL
         gameState->timeCoeff = 100.0f;
 #endif
@@ -2053,6 +1659,18 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         gameState->assets = InitAssets(gameState, gameState->textureQueue, MegaBytes(32));
         
         InitializeSoundState(&gameState->soundState, &gameState->audioPool);
+        
+        gameState->networkInterface.network = input->network;
+        clientNetwork = &gameState->networkInterface;
+        
+        gameState->receiveNetworkPackets.network = &clientNetwork->network;
+        gameState->receiveNetworkPackets.ReceiveData = platformAPI.net.ReceiveData;
+        
+        clientNetwork->nextSendUnreliableApplicationData = {};
+        clientNetwork->nextSendReliableApplicationData = {};
+        
+        platformAPI.PushWork(gameState->slowQueue, ReceiveNetworkPackets, &gameState->receiveNetworkPackets);
+        
     }
     
     
@@ -2060,7 +1678,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     RenderGroup group = BeginRenderGroup(gameState->assets, commands);
     
     b32 rerun = false;
-    
     input->allowedToQuit = true;
     do
     {
@@ -2084,12 +1701,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             case GameMode_Playing:
             {
                 rerun = UpdateAndRenderGame(gameState, gameState->world, &group, input);
-                if(input->allowedToQuit && input->ctrlDown && Pressed(&input->escButton))
+                if(input->allowedToQuit && input->altDown && Pressed(&input->exitButton))
                 {
-                    InvalidCodePath;
-                    //gameState->mode = GameMode_Launcher;
+                    platformAPI.net.CloseConnection(input->network, 0);
+                    SetGameMode(gameState, GameMode_Launcher);
                 }
-                
             } break;
             
             InvalidDefaultCase;
@@ -2098,10 +1714,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     }
     while(rerun);
     
-    if(myPlayer)
-    {
-        FlushAllQueuedPackets(timeToAdvance);
-    }
+    FlushAllQueuedPackets(timeToAdvance);
     
     EndRenderGroup(&group);
     EndTemporaryMemory(renderMemory);

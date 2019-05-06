@@ -142,11 +142,20 @@ internal ServerPlayer* FirstFreePlayer(ServerState* server)
         result->reliablePacketQueue = {};
     }
     
+    result->standardPacketQueue.nextSendApplicationData = {};
+    result->reliablePacketQueue.nextSendApplicationData = {};
+    
+    Assert(!result->standardPacketQueue.firstPacket);
+    Assert(!result->standardPacketQueue.lastPacket);
+    
+    Assert(!result->reliablePacketQueue.firstPacket);
+    Assert(!result->reliablePacketQueue.lastPacket);
+    
     result->connectionClosed = false;
     result->overlappingEntityID = 0;
     result->requestCount = 0;
     result->ignoredActionCount = 0;
-    result->draggingEntity.taxonomy = 0;
+    result->draggingEntity = {};
     result->unlockedCategoryCount = 0;
     result->recipeCount = 0;
     result->allDataFileSent = false;
@@ -580,7 +589,7 @@ internal void SendDeleteMessage(SimRegion* region, SimEntity* entity)
         {
             CollisionData* collider = playerSurfaceBlock->colliders + playerIndex;
             SimEntity* entityToSend = GetRegionEntity(region, collider->entityIndex);
-            if(region->border != Border_Mirror || !IsSet( entityToSend, Flag_insideRegion))
+            if(region->border != Border_Mirror || !IsSet(entityToSend, Flag_insideRegion))
             {
                 if(entityToSend->playerID)
                 {
@@ -613,6 +622,13 @@ inline void SendEntityHeaderReliably(ServerPlayer* player, u64 ID)
     StartPacket(player, entityHeader);
     Pack("Q", ID);
     CloseAndStoreReliablePacket(player);
+}
+
+inline void SendPlantUpdate(ServerPlayer* player, u64 entityID, PlantComponent* plant)
+{
+    StartPacket(player, plantUpdate);
+    Pack("dddd", plant->age, plant->life, plant->leafDensity, plant->leafDimension);
+    CloseAndStoreStandardPacket(player, entityID);
 }
 
 inline void SendEquipmentID(ServerPlayer* player, u64 entityID, u8 slotIndex, u64 ID)
@@ -720,6 +736,7 @@ internal void SendEntityUpdate(SimRegion* region, SimEntity* entity)
         {
             CollisionData* collider = playerSurfaceBlock->colliders + playerIndex;
             SimEntity* entityToSend = GetRegionEntity(region, collider->entityIndex);
+            
             Assert(entityToSend->playerID);
             ServerPlayer* player = server->players + entityToSend->playerID;
             
@@ -745,6 +762,12 @@ internal void SendEntityUpdate(SimRegion* region, SimEntity* entity)
                             SendEquipmentID(player, entity->identifier, slotIndex, equipmentID);
                         }
                     }
+                }
+                
+                if(entity->IDs[Component_Plant])
+                {
+                    PlantComponent* plant = Plant(region, entity);
+                    SendPlantUpdate(player, entity->identifier, plant);
                 }
             }
             
@@ -784,7 +807,7 @@ internal void SendEntityUpdate(SimRegion* region, SimEntity* entity)
     if(IsSet(entity, Flag_insideRegion) && region->border > Border_Mirror)
     {
         Assert(!region->updateHash);
-        SendUpdateToAdiacentRegions(region, entity->identifier);
+        //SendUpdateToAdiacentRegions(region, entity->identifier);
     }
 }
 

@@ -224,6 +224,7 @@ inline void RemoveFromContainer(SimRegion* region, u64 ownerID, SimEntity* entit
 inline void AddToContainer(SimRegion* region, u64 ownerID, SimEntity* entity, u8 objectIndex, Object object)
 {
     ObjectComponent* objectComponent = Object(region, entity);
+    
     ContainedObjects* objects = &objectComponent->objects;
     Assert(object.taxonomy);
     Assert(objects->objectCount < objects->maxObjectCount);

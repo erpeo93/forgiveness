@@ -694,19 +694,6 @@ inline void CanConsume(char* action, char* name)
 
 
 
-
-
-inline void DefinePlantBounds(u8 resolution_0, r32 maxRadious_0, r32 maxLength_0)
-{
-    TaxonomySlot* slot = currentSlot_;
-    
-    Vec3 min = V3(-maxRadious_0, -maxRadious_0, 0);
-    Vec3 max = V3(maxRadious_0, maxRadious_0, maxLength_0);
-    
-    slot->boundType = ForgBound_Standard;
-    slot->physicalBounds = RectMinMax(min, max);
-}
-
 inline void DefineBounds_(char* boundsHeight_, char* boundsRadious_, ForgBoundType type)
 {
     TaxonomySlot* slot = currentSlot_;
@@ -2813,6 +2800,7 @@ inline void ParsePlantLevelParams(PlantLevelParams* destParams, EditorElement* l
         destParams->lengthCoeff = ToR32(GetValue(levelParams, "lengthCoeff"));
         destParams->lengthCoeffV = ToR32(GetValue(levelParams, "lengthCoeffV"));
         destParams->taper = ToR32(GetValue(levelParams, "taper"));
+        destParams->radiousMod = ToR32(GetValue(levelParams, "radiousMod"), 1.0f);
         destParams->clonePercRatio = ToR32(GetValue(levelParams, "clonePercRatio"), 0.5f);
         destParams->clonePercRatioV = ToR32(GetValue(levelParams, "clonePercRatioV"), 0.0f);
         
@@ -3328,6 +3316,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         TAXTABLE_ALLOC(currentSlot_->rock, RockDefinition);
         RockDefinition* definition = currentSlot_->rock;
         
+        definition->collides = ToB32(GetValue(root, "collides"));
         definition->color = ToV4Color(GetStruct(root, "color"));
         definition->startingColorDelta = ToV4Color(GetStruct(root, "startingColorDelta"));
         definition->perVertexColorDelta = ToV4Color(GetStruct(root, "perVertexColorDelta"));
@@ -3375,6 +3364,17 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         PlantDefinition* plant = currentSlot_->plant;
         
         plant->shape = (PlantShape) GetValuePreprocessor(PlantShape, GetValue(root, "shape"));
+        
+        plant->growingCoeff = ToR32(GetValue(root, "growingCoeff"), 1.0f);
+        
+        plant->plantCount = ToU32(GetValue(root, "plantCount"));
+        plant->plantCountV = ToR32(GetValue(root, "plantCountV"));
+        
+        plant->plantOffsetV = ToV2(GetStruct(root, "plantOffsetV"));
+        plant->plantAngleZV = ToR32(GetValue(root, "plantAngleZV"));
+        
+        plant->attractionUp = ToR32(GetValue(root, "attractionUp"));
+        
         plant->maxLevels = Min(4, ToU8(GetValue(root, "levels"), 1));
         plant->baseSize = ToR32(GetValue(root, "baseSize"));
         plant->scale = ToR32(GetValue(root, "scale"));
@@ -3403,8 +3403,11 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         plant->leafAngleV = ToR32(GetValue(root, "leafAngleV"));
         
         plant->trunkColorV = ToV4Color(GetStruct(root, "trunkColorV"));
+        plant->lobeDepth = ToR32(GetValue(root, "lobeDepth"));
         plant->lobes = ToR32(GetValue(root, "lobes"));
-        //DefinePlantBounds(resolution_0, maxRadious_0, maxLength_0);
+        
+        plant->leafStringHash = StringHash(GetValue(root, "leafName"));
+        plant->trunkStringHash = StringHash(GetValue(root, "trunkName"));
     }
     else if(StrEqual(name, "generatorParams"))
     {

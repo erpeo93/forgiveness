@@ -878,13 +878,11 @@ inline SoundId FindSoundByName(Assets* assets, u64 typeHashID, u64 nameHashID)
     return result;
 }
 
-inline BitmapId FindBitmapByName(Assets* assets, u64 typeHashID, u64 nameHashID, u16 colorationIndex)
+inline BitmapId FindBitmapByName(Assets* assets, u32 assetType, u64 typeHashID, u64 nameHashID, u16 colorationIndex)
 {
     BitmapId result = {};
     
-    u32 assetID = Asset_count + (typeHashID & (HASHED_ASSET_SLOTS - 1));
-    AssetType* type = assets->types + assetID;
-    
+    AssetType* type = assets->types + assetType;
     for(u32 assetIndex = type->firstAssetIndex; 
         assetIndex < type->onePastLastAssetIndex;
         assetIndex++)
@@ -905,6 +903,23 @@ inline BitmapId FindBitmapByName(Assets* assets, u64 typeHashID, u64 nameHashID,
         }
 	}
     
+    
+    return result;
+}
+
+inline BitmapId FindBitmapByName(Assets* assets, u32 assetID, u64 nameHashID)
+{
+    BitmapId result = {};
+    result = FindBitmapByName(assets, assetID, 0, nameHashID, 0);
+    return result;
+}
+
+inline BitmapId FindBitmapByName(Assets* assets, u64 typeHashID, u64 nameHashID, u16 colorationIndex)
+{
+    BitmapId result = {};
+    
+    u32 assetID = Asset_count + (typeHashID & (HASHED_ASSET_SLOTS - 1));
+    result = FindBitmapByName(assets, assetID, typeHashID, nameHashID, colorationIndex);
     return result;
 }
 

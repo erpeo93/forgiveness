@@ -2085,10 +2085,9 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     
     
     
-    Rect3 bounds = InvertedInfinityRect3();
     AnimationOutput result = {};
     
-    ClientEntity* player = GetEntityClient(worldMode, myPlayer->identifier);
+    ClientEntity* player = GetEntityClient(worldMode, worldMode->player.identifier);
     
     Vec4 lightIndexes = V4(-1, -1, -1, -1);
     TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, entityC->taxonomy);
@@ -2119,7 +2118,6 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     
     if(IsPlant(worldMode->table, entityC->taxonomy))
     {
-        bounds = Offset(slot->physicalBounds, entityC->P);
         Assert(slot->plant);
         if(!entityC->plant)
         {
@@ -2139,9 +2137,15 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             plant->sequence = Seed((u32)entityC->identifier);
         }
         
-        entityC->plant->leafBitmap = GetFirstBitmap(group->assets, Asset_leaf);
-        entityC->plant->trunkBitmap = GetFirstBitmap(group->assets, Asset_trunk);
-        UpdateAndRenderPlant(worldMode, group, lightIndexes, slot->plant, entityC->plant, entityC->P, timeToUpdate);
+        entityC->plant->leafBitmap = FindBitmapByName(group->assets, Asset_leaf, slot->plant->leafStringHash);
+        entityC->plant->trunkBitmap = FindBitmapByName(group->assets, Asset_trunk, slot->plant->trunkStringHash);
+        
+        
+        PlantRenderingParams renderingParams = {};
+        renderingParams.lightIndexes = lightIndexes;
+        renderingParams.modulationWithFocusColor = entityC->modulationWithFocusColor;
+        
+        UpdateAndRenderPlant(worldMode, group, renderingParams, slot->plant, entityC->plant, entityC->P);
     }
     else if(IsRock(worldMode->table, entityC->taxonomy))
     {
@@ -2191,23 +2195,9 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             
             PushModel(group, &onTheFly, rotation, finalP, lightIndexes, finalScale, V4(1, 1, 1, 1), entityC->modulationWithFocusColor);
         }
-        
-        bounds = RectCenterDim(entityC->P, rock->dim);
     }
     else
     {
-        u32 boundTaxonomy = slot->taxonomy;
-        while(boundTaxonomy)
-        {
-            TaxonomySlot* boundSlot = GetSlotForTaxonomy(worldMode->table, boundTaxonomy);
-            if(boundSlot->boundType)
-            {
-                bounds = Offset(boundSlot->physicalBounds, entityC->P);
-                break;
-            }
-            boundTaxonomy = GetParentTaxonomy(worldMode->table, boundTaxonomy);
-        }
-        
         Vec2 animationScale = params.scale * V2(0.33f, 0.33f);
         r32 additionalZbias = params.additionalZbias;
         if(params.onTop)
@@ -2238,9 +2228,9 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     }
     
     
-    Rect3 ignored;
-    GetPhysicalProperties(worldMode->table, entityC->taxonomy, entityC->identifier, &entityC->boundType, &ignored);
-    entityC->bounds = bounds;
+    Rect3 bounds = InvertedInfinityRect3();
+    GetPhysicalProperties(worldMode->table, entityC->taxonomy, entityC->identifier, &entityC->boundType, &bounds);
+    entityC->bounds = Offset(bounds, entityC->P);
     //PushCubeOutline(group, bounds, V4(1, 1, 1, 1), 0.05f);
     
     PlaySoundForAnimation(worldMode, group->assets, slot, result.playedAnimationNameHash, oldSoundTime, soundTime);

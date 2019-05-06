@@ -737,8 +737,10 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_RegenerateWorldChunks:
         {
+            GameModeWorld* worldMode = UI->worldMode;
             u32 newSeed = request->seed;
             UI->worldMode->worldSeed = newSeed;
+            
             for(u32 chunkIndex = 0; chunkIndex < ArrayCount(UI->worldMode->chunks); ++chunkIndex)
             {
                 WorldChunk* chunk = UI->worldMode->chunks[chunkIndex];
@@ -748,7 +750,20 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
                     chunk = chunk->next;
                 }
             }
+            
+            
+            for(u32 entityIndex = 0; entityIndex < ArrayCount(worldMode->entities); ++entityIndex)
+            {
+                ClientEntity* entity = worldMode->entities[entityIndex];
+                while(entity)
+                {
+                    entity->timeFromLastUpdate = R32_MAX;
+                    entity = entity->next;
+                }
+            }
+            
             SendRegenerateWorldChunksRequest(newSeed);
+            GameAccessRequest(clientNetwork->serverChallenge, false);
         } break;
         
         case UIRequest_SaveTaxonomyTab:
@@ -1181,8 +1196,8 @@ inline void UIAddScrollableTargetInteraction(UIState* UI, UIInteraction* interac
     UIAddStandardAction(UI, interaction, UI_Trigger, u64, UIDataPointer(identifier), ScrollableList(list, request.identifier));
     UIAddStandardAction(UI, interaction, UI_Idle | UI_Retroactive, u64, ColdPointer(&output->targetEntityID), UIDataPointer(identifier)); 
     
-    UIAddStandardAction_(UI, interaction, UI_Trigger, sizeof(myPlayer->targetPossibleActions[0]) * Action_Count, ColdPointer(myPlayer->targetPossibleActions), ColdPointer(myPlayer->overlappingPossibleActions));     
-    UIAddStandardAction(UI, interaction, UI_Trigger, u64, ColdPointer(&myPlayer->targetIdentifier), ColdPointer(&myPlayer->overlappingIdentifier));     
+    UIAddStandardAction_(UI, interaction, UI_Trigger, sizeof(UI->myPlayer->targetPossibleActions[0]) * Action_Count, ColdPointer(UI->myPlayer->targetPossibleActions), ColdPointer(UI->myPlayer->overlappingPossibleActions));     
+    UIAddStandardAction(UI, interaction, UI_Trigger, u64, ColdPointer(&UI->myPlayer->targetIdentifier), ColdPointer(&UI->myPlayer->overlappingIdentifier));     
 }
 
 inline void UIAddStandardTargetInteraction(UIState* UI, UIInteraction* interaction, UIOutput* out, u32 actionIndex, u64 identifier)
@@ -1193,8 +1208,8 @@ inline void UIAddStandardTargetInteraction(UIState* UI, UIInteraction* interacti
     UIAddStandardAction(UI, interaction, UI_Trigger, u64, UIDataPointer(identifier), Fixed(identifier));
     UIAddStandardAction(UI, interaction, UI_Trigger | UI_Retroactive, u64, ColdPointer(&out->targetEntityID), UIDataPointer(identifier)); 
     
-    UIAddStandardAction_(UI, interaction, UI_Trigger, sizeof(myPlayer->targetPossibleActions[0]) * Action_Count, ColdPointer(myPlayer->targetPossibleActions), ColdPointer(myPlayer->overlappingPossibleActions));     
-    UIAddStandardAction(UI, interaction, UI_Trigger, u64, ColdPointer(&myPlayer->targetIdentifier), ColdPointer(&myPlayer->overlappingIdentifier));     
+    UIAddStandardAction_(UI, interaction, UI_Trigger, sizeof(UI->myPlayer->targetPossibleActions[0]) * Action_Count, ColdPointer(UI->myPlayer->targetPossibleActions), ColdPointer(UI->myPlayer->overlappingPossibleActions));     
+    UIAddStandardAction(UI, interaction, UI_Trigger, u64, ColdPointer(&UI->myPlayer->targetIdentifier), ColdPointer(&UI->myPlayer->overlappingIdentifier));     
 }
 
 #define UIAddInvalidCondition(interaction, type, ref1, ref2, ...) UIAddInvalidCondition_(interaction, sizeof(type), ref1, ref2, __VA_ARGS__)

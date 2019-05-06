@@ -431,6 +431,19 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
     return result;
 }
 
+inline b32 SpecialHandling(char* name)
+{
+    b32 result = false;
+    
+    if(StrEqual(name, "leafName") ||
+       StrEqual(name, "trunkName"))
+    {
+        result = true;
+    }
+    
+    return result;
+}
+
 inline void AddConfirmActions(UIState* UI, EditorWidget* widget, UIInteraction* interaction, char* dest, u32 destSize)
 {
 	UIAddUndoRedoAction(UI, interaction, UI_Trigger, UndoRedoString(widget, dest, destSize, dest, UI->keyboardBuffer));            
@@ -511,10 +524,17 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                         else
                         {
                             
-                            UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parents, root->name);
-                            if(autocomplete)
+                            if(SpecialHandling(root->name))
+                               {
+                                canEdit = true;   
+                               }
+                            else
                             {
-                                canEdit = true;
+                                UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parents, root->name);
+                                if(autocomplete)
+                                {
+                                    canEdit = true;
+                                }   
                             }
                         }
                     }
@@ -1453,6 +1473,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                             UIAddClearAction(UI, &mouseInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
                             UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
                                 nameColor = parentSquareColor;
+                                nameColor = V4(1, 1, 0, 1);
                         }   
                         }
                         else
@@ -2113,6 +2134,10 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             
             case EditorElement_String:
             {
+                if(SpecialHandling(UI->active->name))
+                {
+                   UI->bufferValid = true;
+                }
                 UIAutocomplete* options = UIFindAutocomplete(UI, UI->activeParents, UI->active->name);
                 if(options)
                 {
@@ -2421,7 +2446,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     
                     case EditorWidget_Misc:
                     {
-                        UI->plantGrowingCoeff = ToR32(GetValue(widget->root, "plantGrowingCoeff"));
+                        //UI->plantGrowingCoeff = ToR32(GetValue(widget->root, "plantGrowingCoeff"));
                     } break;
                 }
             }
@@ -2456,9 +2481,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             Rect2 clipRectReal = RectMinMax(V2((r32) clipRect.minX - 0.5f * width, (r32) clipRect.minY - 0.5f * height), V2((r32) clipRect.maxX - 0.5f * width, (r32) clipRect.maxY - 0.5f * height));
             
             
-            PushClipRect(group, clipRect);
-            
-            widget->dataOffsetY = Min(widget->dataOffsetY, clipRect.maxY - 20 * layout->fontScale);
+            PushClipRect(group, clipRect);            
             layout->P.y += widget->dataOffsetY;
             
             widget->maxDataY = (i32) (layout->P.y + 0.5f * height);
@@ -2535,7 +2558,8 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     }
                 }
             }
-        
+                boundsAlpha = 1.0f;
+                
             ObjectTransform widgetBoundsTransform = FlatTransform();
             widgetBoundsTransform.additionalZBias = widgetZ - 0.001f;
             PushRect(UI->group, widgetBoundsTransform, clipRectReal, V4(0, 0, 0, boundsAlpha));
@@ -3109,7 +3133,6 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
     {
         UI->initialized = true;
         
-        UI->plantGrowingCoeff = 1.0f;
         if(worldMode->editingEnabled)
         {
             UI->uneditableTabRoot.type = EditorElement_String;
@@ -3287,6 +3310,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         
         UI->group = group;
         UI->worldMode = worldMode;
+        UI->myPlayer = &worldMode->player;
         
         TagVector matchVector = {};
         TagVector weightVector = {};
@@ -3393,9 +3417,9 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
     UI->additionalCameraOffset = {};
     UI->zoomLevel = 1.0f;
     
-    if(myPlayer->openedContainerID != UI->openedContainerID)
+    if(UI->myPlayer->openedContainerID != UI->openedContainerID)
     {
-        UI->openedContainerID = myPlayer->openedContainerID;
+        UI->openedContainerID = UI->myPlayer->openedContainerID;
         if(UI->openedContainerID)
         {
             UI->nextMode = UIMode_Loot;
@@ -3474,7 +3498,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
 
 inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, PlatformInput* input, ClientEntity* overlapping)
 {
-    if(UI->mode == UIMode_Equipment && overlapping->identifier == myPlayer->openedContainerID)
+    if(UI->mode == UIMode_Equipment && overlapping->identifier == UI->myPlayer->openedContainerID)
     {
         UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_Loot));
     }
@@ -3486,26 +3510,27 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
         UIMarkListToUpdateAndRender(UI, possibleOverlappingActions);
         if(UI->worldMode->editingEnabled && input->altDown)
         {
+            UIRequest editRequest = EditRequest(overlapping->taxonomy);
+            UIAddPossibility(&UI->possibleOverlappingActions, "edit", entityName, editRequest);
+            
+            UIRequest deleteRequest = DeleteRequest(overlapping->identifier);
+            UIAddPossibility(&UI->possibleOverlappingActions, "delete", entityName, deleteRequest);
+            
             if(!IsPlant(UI->table, overlapping->taxonomy))
-            {
-                UIRequest editRequest = EditRequest(overlapping->taxonomy);
-                UIAddPossibility(&UI->possibleOverlappingActions, "edit", entityName, editRequest);
-                
-                UIRequest deleteRequest = DeleteRequest(overlapping->identifier);
-                UIAddPossibility(&UI->possibleOverlappingActions, "delete", entityName, deleteRequest);
-                
+            {                
                 UIRequest impersonateRequest = ImpersonateRequest(overlapping->identifier);
                 UIAddPossibility(&UI->possibleOverlappingActions, "impersonate", entityName, impersonateRequest);
                 
-                UIInteraction mouseInteraction = ScrollableListRequestInteraction(UI, UI_Click, &UI->possibleOverlappingActions);
-                UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
             }
+            
+            UIInteraction mouseInteraction = ScrollableListRequestInteraction(UI, UI_Click, &UI->possibleOverlappingActions);
+            UIAddInteraction(UI, input, mouseLeft, mouseInteraction);
         }
         else
         {
             for(u32 actionIndex = Action_Attack; actionIndex < Action_Count; ++actionIndex)
             {
-                if(myPlayer->overlappingPossibleActions[actionIndex])
+                if(UI->myPlayer->overlappingPossibleActions[actionIndex])
                 {
                     UIRequest actionRequest = StandardActionRequest(actionIndex, overlapping->identifier);
                     UIAddPossibility(&UI->possibleOverlappingActions, MetaTable_EntityAction[actionIndex], entityName, actionRequest);
@@ -3515,17 +3540,17 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
             UIInteraction actionListInteraction = {};
             actionListInteraction.flags |= UI_MaintainWhenModeChanges;
             UIAddScrollableTargetInteraction(UI, &actionListInteraction, &UI->possibleOverlappingActions, output);
-            UIAddInvalidCondition(&actionListInteraction, u32,ColdPointerDataOffset(myPlayer->targetPossibleActions, OffsetOf(UIInteractionData, actionIndex)), Fixed((b32)false), 0);                      
+            UIAddInvalidCondition(&actionListInteraction, u32,ColdPointerDataOffset(UI->myPlayer->targetPossibleActions, OffsetOf(UIInteractionData, actionIndex)), Fixed((b32)false), 0);                      
             UIAddInvalidCondition(&actionListInteraction, u32,ColdPointer(&output->desiredAction), Fixed((u32)Action_Attack), UI_Ended);
             UIAddInvalidCondition(&actionListInteraction, b32,ColdPointer(&UI->movingWithKeyboard), Fixed((b32)true), 0);
             
             UIAddInteraction(UI, input, mouseLeft, actionListInteraction);
             
-            if(myPlayer->overlappingPossibleActions[Action_Cast])
+            if(UI->myPlayer->overlappingPossibleActions[Action_Cast])
             {
                 UIInteraction castInteraction = {};
                 UIAddStandardTargetInteraction(UI, &castInteraction, output, Action_Cast, overlapping->identifier);
-                UIAddInvalidCondition(&castInteraction, u32,ColdPointer(myPlayer->targetPossibleActions + Action_Cast), Fixed(false));
+                UIAddInvalidCondition(&castInteraction, u32,ColdPointer(UI->myPlayer->targetPossibleActions + Action_Cast), Fixed(false));
                 UIAddInteraction(UI, input, mouseCenter, castInteraction);
             }
         }
@@ -3641,7 +3666,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                     }
                     
                     UIResetListPossibility(UI, possibleOverlappingActions);
-                    if(overlapping->identifier == myPlayer->overlappingIdentifier || (UI->worldMode->editingEnabled && input->altDown))
+                    if(overlapping->identifier == UI->myPlayer->overlappingIdentifier || (UI->worldMode->editingEnabled && input->altDown))
                     {
                         HandleOverlappingInteraction(UI, &output, input, overlapping);
                     }
@@ -3961,8 +3986,8 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                 {
                     ClientEntity* overlap = overlappingEntities[overlappingIndex];
                     if(overlap && 
-                       overlap->identifier != myPlayer->identifier &&
-                       (!onlyOpenedContainerAllowed || overlap->identifier == myPlayer->openedContainerID))
+                       overlap->identifier != UI->myPlayer->identifier &&
+                       (!onlyOpenedContainerAllowed || overlap->identifier == UI->myPlayer->openedContainerID))
                     {
                         UIAddPossibility(&UI->possibleTargets, overlappingEntities[overlappingIndex]);
                     }
@@ -3987,7 +4012,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                         }        
                         
                         UIResetListPossibility(UI, possibleOverlappingActions);
-                        if(overlapping->identifier == myPlayer->overlappingIdentifier || (UI->worldMode->editingEnabled && input->altDown))
+                        if(overlapping->identifier == UI->myPlayer->overlappingIdentifier || (UI->worldMode->editingEnabled && input->altDown))
                         {
                             HandleOverlappingInteraction(UI, &output, input, overlapping);
                         }
@@ -4114,7 +4139,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
         alpha = Clamp01MapToRange(0, UI->skillSlotTimeout, targetSkillSlotTime);
     }
     
-    UIOverdrawSkillSlots(UI, alpha, input);
+    //UIOverdrawSkillSlots(UI, alpha, input);
     
     
     WrapScrollableList(&UI->possibleTargets);

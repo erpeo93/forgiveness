@@ -82,7 +82,7 @@ inline r32 ShapeRatio(PlantShape shape, r32 ratio)
     return result;
 }
 
-inline r32 GetRadiousAtZ(r32 taper, r32 flare, r32 stemLength, r32 stemRadious, r32 Z)
+inline r32 GetRadiousAtZ(r32 taper, r32 flare, r32 lobeDepth, r32 lobes, r32 stemLength, r32 stemRadious, r32 Z)
 {
     r32 result;
     r32 unitTaper;
@@ -136,8 +136,15 @@ inline r32 GetRadiousAtZ(r32 taper, r32 flare, r32 stemLength, r32 stemRadious, 
     if(flare)
     {
         r32 flareExp = Max(0.0f, 1.0f - 8.0f * Z);
-        r32 flareZ = flare * (Pow(100.0f, flareExp) - 1.0f) / 101.0f;
+        r32 flareZ = flare * (Pow(100.0f, flareExp) - 1.0f) / 100.0f + 1.0f;
         result *= flareZ;
+    }
+    
+    
+    if(lobeDepth)
+    {
+        r32 lobeZ = 1.0f + lobeDepth * Sin(lobes * Z * TAU32);
+        result *= lobeZ;
     }
     
     return result;
@@ -156,7 +163,56 @@ inline Vec4 GetColorAtZ(PlantDefinition* definition, PlantLevelParams* params, r
     return result;
 }
 
-inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantDefinition* definition, PlantStem* stem, u8 recursiveLevel, m4x4 originOrientation, r32 startingZ, r32 timeToUpdate)
+inline void GetWindAnglesAtZ(r32 time, r32 curveRes, r32 stemBaseRadious, r32 stemLength, r32 radiousZ, r32 Z, r32* angleX, r32* angleY)
+{
+    r32 windSpeed = 10.0f;
+    r32 windGust = 5.0f;
+    
+    r32 swayOffsetX = 10.0f;
+    r32 swayOffsetY = 10.0f;
+    
+    r32 a0 = 4.0f * stemLength * (1.0f - Z) / radiousZ;
+    r32 a1 = windSpeed / 50.0f * a0;
+    r32 a2 = windGust / 50.0f * a0 + a1 / 2.0f;
+    
+    r32 bx = swayOffsetX + stemBaseRadious / stemLength * time / 15.0f;
+    r32 by = swayOffsetY + stemBaseRadious / stemLength * time / 15.0f;
+    
+    *angleX = (a1 * Sin(bx) + a2 * Sin(0.7f * bx)) / curveRes;
+    *angleY = (a1 * Sin(by) + a2 * Sin(0.7f * by)) / curveRes;
+}
+
+
+inline r32 GetStemMinUpdateTime(PlantDefinition* definition, PlantStem* stem, u8 recursiveLevel)
+{
+    r32 result = R32_MAX;
+    
+    PlantLevelParams* levelParams = definition->levelParams + recursiveLevel;
+    for(PlantSegment* segment = stem->root; segment; segment = segment->next)
+    {
+        if(segment->lengthCoeff < 1.0f)
+        {
+            r32 remainingDelta = 1.0f - segment->lengthCoeff;
+            r32 timeToArriveAt1 = remainingDelta / levelParams->lengthIncreaseSpeed;
+            result = Min(result, timeToArriveAt1);
+        }
+        
+        for(PlantStem* child = segment->childs; child; child = child->next)
+        {
+            result = Min(result, GetStemMinUpdateTime(definition, child, recursiveLevel + 1));
+        }
+        
+        for(PlantStem* clone = segment->clones; clone; clone = clone->next)
+        {
+            result = Min(result, GetStemMinUpdateTime(definition, clone, recursiveLevel));
+        }
+    }
+    
+    return result;
+}
+
+
+inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantDefinition* definition, PlantStem* trunk, PlantStem* stem, u8 recursiveLevel, m4x4 originOrientation, r32 startingZ, r32 timeToUpdate)
 {
     PlantLevelParams* levelParams = definition->levelParams + recursiveLevel;
     PlantLevelParams* nextLevelParams = levelParams;
@@ -165,7 +221,7 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
         nextLevelParams = definition->levelParams + (recursiveLevel + 1);
     }
     
-    m4x4 segmentOrientation = originOrientation * ZRotation(DegToRad(stem->parentAngleZ)) * YRotation(DegToRad(stem->parentAngleY)) ;
+    m4x4 segmentOrientation = originOrientation * stem->orientation;
     
     
     r32 segmentLength = stem->totalLength / levelParams->curveRes;
@@ -182,12 +238,12 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
         
         for(PlantStem* child = segment->childs; child; child = child->next)
         {
-            UpdatePlantStem(worldMode, plant, definition, child, recursiveLevel + 1, topOrientation, 0, timeToUpdate);
+            UpdatePlantStem(worldMode, plant, definition, trunk, child, recursiveLevel + 1, topOrientation, 0, timeToUpdate);
         }
         
         for(PlantStem* clone = segment->clones; clone; clone = clone->next)
         {
-            UpdatePlantStem(worldMode, plant, definition, clone, recursiveLevel, topOrientation, segmentTopZ, timeToUpdate);
+            UpdatePlantStem(worldMode, plant, definition, trunk, clone, recursiveLevel, topOrientation, segmentTopZ, timeToUpdate);
         }
         
 		r32 oldZ = segmentBaseZ + segment->lengthCoeff * segmentUnitZ;
@@ -216,7 +272,7 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                     Assert(parentStemZ <= 1.0f);
                     
                     r32 offsetChild = parentStemZ * stem->totalLength;
-                    r32 trunkLength = plant->trunk.totalLength;
+                    r32 trunkLength = trunk->totalLength;
                     
                     
                     r32 angleY;
@@ -252,8 +308,8 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                     childStem->segmentCount = 1;
                     
                     childStem->probabliltyToClone = 1.0f;
-                    childStem->parentAngleY = angleY;
-                    childStem->parentAngleZ = angleZ;
+                    
+                    childStem->orientation = ZRotation(DegToRad(angleZ)) * YRotation(DegToRad(angleY));
                     childStem->parentSegmentZ = parentSegmentZ;
                     childStem->parentStemZ = parentStemZ;
                     
@@ -275,7 +331,8 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                     
                     childStem->baseRadious = stem->baseRadious * Pow(childStem->totalLength / stem->totalLength, definition->ratioPower);
                     
-                    r32 radiousAtOriginatingPoint = GetRadiousAtZ(levelParams->taper, definition->flare, stem->totalLength, stem->baseRadious, childStem->parentStemZ);
+                    r32 radiousAtOriginatingPoint = GetRadiousAtZ(levelParams->taper, definition->flare, definition->lobeDepth, definition->lobes, stem->totalLength, stem->baseRadious, childStem->parentStemZ);
+                    radiousAtOriginatingPoint *= levelParams->radiousMod;
                     childStem->baseRadious = Min(childStem->baseRadious, radiousAtOriginatingPoint);
                     
                     
@@ -322,9 +379,11 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                     
                     
                     numberOfClones = RoundReal32ToU32(splitCountReal + errorUse);
+                    Assert(numberOfClones < 0xff);
                     
                     plant->cloneAccumulatedError[recursiveLevel] -= errorUse;
                     plant->cloneAccumulatedError[recursiveLevel] += (levelParams->segSplits - (r32) numberOfClones);
+                    plant->cloneAccumulatedError[recursiveLevel] = Max(0, plant->cloneAccumulatedError[recursiveLevel]);
                     
                     numberOfClones += 1;
                 }
@@ -369,6 +428,12 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                     {
                         InvalidCodePath;
                     }
+                    
+                    r32 declination = ArcCos((segmentOrientation * V3(0, 0, 1)).z);
+                    r32 orientation = ArcCos((segmentOrientation * V3(0, 1, 0)).z);
+                    r32 curveupsegment = RadToDeg(definition->attractionUp * declination * Cos(orientation) / actualCurveRes);
+                    
+                    
                     newSegment->angleY += stem->additionalCurveBackAngle / actualCurveRes;
                     
                     segment->next = newSegment;
@@ -412,8 +477,8 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                         clonedStem->segmentCount = stem->segmentCount + 1;
                         
                         clonedStem->probabliltyToClone = stem->probabliltyToClone * (levelParams->clonePercRatio + RandomBil(&plant->sequence) * levelParams->clonePercRatioV);
-                        clonedStem->parentAngleY = angleY;
-                        clonedStem->parentAngleZ = runningAngle;
+                        
+                        clonedStem->orientation = ZRotation(DegToRad(runningAngle)) * YRotation(DegToRad(angleY));
                         clonedStem->parentStemZ = stem->parentStemZ;
                         clonedStem->parentSegmentZ = 1.0f;
                         
@@ -468,45 +533,21 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
 
 inline void UpdatePlant(GameModeWorld* worldMode, PlantDefinition* definition, ClientPlant* plant, r32 timeToUpdate)
 {
-    PlantStem* trunk = &plant->trunk;
-    if(!trunk->root)
+    for(PlantStem* trunk = plant->plant.firstTrunk; trunk; trunk = trunk->next)
     {
-        plant->scale = definition->scale + RandomBil(&plant->sequence) * definition->scaleV;
-        plant->lengthBase = definition->baseSize * plant->scale;
-        
-        PlantLevelParams* levelParams = definition->levelParams + 0;
-        
-        trunk->root = GetFreePlantSegment(worldMode);
-        *trunk->root = {};
-        
-        trunk->segmentCount = 1;
-        
-        trunk->probabliltyToClone = 1.0f;
-		trunk->parentAngleY = 0;
-        trunk->parentAngleZ = 0;
-        trunk->parentStemZ = 0;
-        trunk->parentSegmentZ = 0;
-        
-        trunk->totalLength =  plant->scale * (definition->levelParams->lengthCoeff + RandomBil(&plant->sequence) * levelParams->lengthCoeffV);
-        trunk->baseRadious = trunk->totalLength * definition->ratio * (definition->scale_0 + RandomBil(&plant->sequence) * definition->scaleV_0);
-        
-        trunk->numberOfChilds = RoundReal32ToU32(levelParams->branches);
-        
-        trunk->trunkNoise = RandomBil(&plant->sequence);
-        r32 childUnitZ = 1.0f /trunk->numberOfChilds;
-        trunk->nextChildZ = RandomRangeFloat(&plant->sequence, 0.5f * childUnitZ, childUnitZ - 0.01f);
-        trunk->childsCurrentAngle = 0;
-        
-        trunk->additionalCurveBackAngle = 0;
+        UpdatePlantStem(worldMode, plant, definition, trunk, trunk, 0, Identity(), 0, timeToUpdate);
     }
-    
-    UpdatePlantStem(worldMode, plant, definition, trunk, 0, Identity(), 0, timeToUpdate);
 }
 
-
-internal void RenderStem(RenderGroup* group, Vec4 lightIndexes, ClientPlant* plant, PlantDefinition* definition, PlantStem* stem, Vec3 stemP, u8 recursiveLevel, m4x4 originOrientation, r32 startingZ)
+struct PlantRenderingParams
 {
-    m4x4 baseOrientation = originOrientation * ZRotation(DegToRad(stem->parentAngleZ)) * YRotation(DegToRad(stem->parentAngleY));
+    Vec4 lightIndexes;
+    r32 modulationWithFocusColor;
+};
+
+internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParams, r32 windTime, ClientPlant* plant, PlantDefinition* definition, PlantStem* stem, Vec3 stemP, u8 recursiveLevel, m4x4 originOrientation, r32 startingZ)
+{
+    m4x4 baseOrientation = originOrientation * stem->orientation;
     
     Vec3 segmentBaseP = stemP;
     
@@ -521,10 +562,19 @@ internal void RenderStem(RenderGroup* group, Vec4 lightIndexes, ClientPlant* pla
     Vec3 topP = stemP;
     
     r32 stemLifeNorm = stem->lengthNormZ;
+    
+    b32 drawBase = false;
+    b32 drawTop = false;
+    
     for(PlantSegment* segment = stem->root; segment; segment = segment->next)
     {
-        r32 baseRadious = GetRadiousAtZ(levelParams->taper, definition->flare, stem->totalLength, stem->baseRadious, baseZ) * segment->radiousCoeff;
-        r32 topRadious = GetRadiousAtZ(levelParams->taper, definition->flare, stem->totalLength, stem->baseRadious, topZ) * segment->radiousCoeff;
+        if(!segment->next)
+        {
+            drawTop = true;
+        }
+        
+        r32 baseRadious = GetRadiousAtZ(levelParams->taper, definition->flare, definition->lobeDepth, definition->lobes, stem->totalLength, stem->baseRadious, baseZ) * segment->radiousCoeff;
+        r32 topRadious = GetRadiousAtZ(levelParams->taper, definition->flare, definition->lobeDepth, definition->lobes, stem->totalLength, stem->baseRadious, topZ) * segment->radiousCoeff;
         r32 length = segmentLength * segment->lengthCoeff;
         Vec4 baseColor = GetColorAtZ(definition, levelParams, stemLifeNorm, stem->trunkNoise, baseZ);
         Vec4 topColor = GetColorAtZ(definition, levelParams, stemLifeNorm, stem->trunkNoise, topZ);
@@ -533,24 +583,33 @@ internal void RenderStem(RenderGroup* group, Vec4 lightIndexes, ClientPlant* pla
         Vec3 bottomYAxis = GetColumn(baseOrientation, 1);
         Vec3 bottomZAxis = GetColumn(baseOrientation, 2);
         
-        m4x4 topOrientation = baseOrientation * YRotation(DegToRad(segment->angleY));
+        r32 windAngleX = 0;
+        r32 windAngleY = 0;
+        //GetWindAnglesAtZ(windTime, levelParams->curveRes, stem->baseRadious, stem->totalLength, topRadious, topZ, &windAngleX, &windAngleY);
+        
+        m4x4 topOrientation = baseOrientation * XRotation(DegToRad(windAngleX)) * YRotation(DegToRad(segment->angleY + windAngleY));
+        
         Vec3 topXAxis = GetColumn(topOrientation, 0);
         Vec3 topYAxis = GetColumn(topOrientation, 1);
         Vec3 topZAxis = GetColumn(topOrientation, 2);
         
         topP = segmentBaseP + length * topZAxis;
-        PushTrunkatedPyramid(group, plant->trunkBitmap, segmentBaseP, topP, 4, bottomXAxis, bottomYAxis, bottomZAxis, topXAxis, topYAxis, topZAxis, baseRadious, topRadious, length, baseColor, topColor, lightIndexes, 0);
+        
+        if(IsValid(plant->trunkBitmap))
+        {
+            PushTrunkatedPyramid(group, plant->trunkBitmap, segmentBaseP, topP, 4, bottomXAxis, bottomYAxis, bottomZAxis, topXAxis, topYAxis, topZAxis, baseRadious, topRadious, length, baseColor, topColor, renderingParams.lightIndexes, renderingParams.modulationWithFocusColor, drawBase, drawTop);
+        }
         
         for(PlantStem* child = segment->childs; child; child = child->next)
         {
             Vec3 childP = segmentBaseP + child->parentSegmentZ * segmentLength * topZAxis;
-            RenderStem(group, lightIndexes, plant, definition, child, childP, recursiveLevel + 1, topOrientation, 0);
+            RenderStem(group, renderingParams, windTime, plant, definition, child, childP, recursiveLevel + 1, topOrientation, 0);
         }
         
         for(PlantStem* clone = segment->clones; clone; clone = clone->next)
         {
-			Vec3 cloneP = topP;
-            RenderStem(group, lightIndexes, plant, definition, clone, cloneP, recursiveLevel, topOrientation, topZ);
+            Vec3 cloneP = topP;
+            RenderStem(group, renderingParams, windTime, plant, definition, clone, cloneP, recursiveLevel, topOrientation, topZ);
         }
         
         segmentBaseP = topP;
@@ -563,43 +622,167 @@ internal void RenderStem(RenderGroup* group, Vec4 lightIndexes, ClientPlant* pla
     for(u32 leafIndex = 0; leafIndex < levelParams->leafCount; ++leafIndex)
     {
         Leaf* leaf = stem->leafs + leafIndex;
-        
-        Vec2 leafScale = definition->leafScale + leaf->renderingRandomization * definition->leafScaleV;
-        Vec2 scale = leaf->dimCoeff * leafScale;
-        
-        Vec3 leafP = topP + V3(0, 0, 0.1f * leafIndex) + leaf->offsetCoeff * leaf->renderingRandomization * definition->leafOffsetV;
-        Vec4 leafColor = definition->leafColor + leaf->renderingRandomization * definition->leafColorV;
-        leafColor = Clamp01(leafColor);
-        
-        
-        ObjectTransform leafTransform = UprightTransform();
-        leafTransform.angle = leaf->renderingRandomization * definition->leafAngleV;
-        
-        PushBitmap(group, leafTransform, plant->leafBitmap, leafP, 0, scale, leafColor, lightIndexes);
+        r32 leafTargetDensity = BilateralToUnilateral(leaf->renderingRandomization);
+        if(plant->leafDensity > leafTargetDensity)
+        {
+            Vec2 leafScale = plant->leafDimension * definition->leafScale + leaf->renderingRandomization * definition->leafScaleV;
+            Vec2 scale = leaf->dimCoeff * leafScale;
+            
+            Vec3 leafP = topP + V3(0, 0, 0.1f * leafIndex) + leaf->offsetCoeff * leaf->renderingRandomization * definition->leafOffsetV;
+            
+            
+            Vec4 aliveColor = definition->leafColor;
+            Vec4 deadColor = definition->leafColor;
+            deadColor.g = 0.05f;
+            
+            Vec4 referenceColor = Lerp(definition->leafColor, plant->life, deadColor);
+            Vec4 leafColor = referenceColor + leaf->renderingRandomization * definition->leafColorV;
+            leafColor = Clamp01(leafColor);
+            
+            
+            ObjectTransform leafTransform = UprightTransform();
+            
+            r32 leafAngleVariation = 7.0f;
+            r32 leafAngle = leaf->renderingRandomization * Abs(definition->leafAngleV);
+            
+            if(definition->leafAngleV < 0 && Cos(DegToRad(leafAngle)) < 0)
+            {
+                leafTransform.flipOnYAxis = true;
+            }
+            
+            
+            leafAngle += Sin(windTime + TAU32 * leaf->renderingRandomization) * leafAngleVariation;
+            
+            leafTransform.angle = leafAngle;
+            leafTransform.modulationPercentage = renderingParams.modulationWithFocusColor;
+            
+            if(IsValid(plant->leafBitmap))
+            {
+                PushBitmap(group, leafTransform, plant->leafBitmap, leafP, 0, scale, leafColor, renderingParams.lightIndexes);
+            }
+        }
     }
 }
 
 
 
 
-internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, PlantDefinition* definition, ClientPlant* plant, Vec3 plantP, r32 timeToUpdate)
+internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group, PlantRenderingParams renderingParams, PlantDefinition* definition, ClientPlant* plant, Vec3 plantP)
 {
-    timeToUpdate *= worldMode->UI->plantGrowingCoeff;
+    if(!plant->plant.trunkCount)
+    {
+        for(u32 levelIndex = 0; levelIndex < MAX_LEVELS; ++levelIndex)
+        {
+            plant->cloneAccumulatedError[levelIndex] = RandomUni(&plant->sequence);
+        }
+        
+        plant->plant.plantCount = Max(1, definition->plantCount + RoundReal32ToU32(RandomBil(&plant->sequence) *definition->plantCountV));
+        
+        for(u32 plantIndex = 0; plantIndex < plant->plant.plantCount; ++plantIndex)
+        {
+            plant->plant.offsets[plantIndex] = Hadamart(RandomBilV2(&plant->sequence), definition->plantOffsetV);
+            plant->plant.angleZ[plantIndex] = RandomBil(&plant->sequence) * definition->plantAngleZV;
+        }
+        
+        
+        plant->scale = definition->scale + RandomBil(&plant->sequence) * definition->scaleV;
+        plant->lengthBase = definition->baseSize * plant->scale;
+        
+        PlantLevelParams* levelParams = definition->levelParams + 0;
+        
+        
+        plant->plant.trunkCount = 1;
+        for(u32 trunkIndex = 0; trunkIndex < plant->plant.trunkCount; ++trunkIndex)
+        {
+            PlantStem* trunk = GetFreePlantStem(worldMode);
+            
+            trunk->root = GetFreePlantSegment(worldMode);
+            *trunk->root = {};
+            
+            trunk->segmentCount = 1;
+            
+            trunk->probabliltyToClone = 1.0f;
+            trunk->orientation = Identity();
+            trunk->parentStemZ = 0;
+            trunk->parentSegmentZ = 0;
+            
+            trunk->totalLength =  plant->scale * (definition->levelParams->lengthCoeff + RandomBil(&plant->sequence) * levelParams->lengthCoeffV);
+            trunk->baseRadious = trunk->totalLength * definition->ratio * (definition->scale_0 + RandomBil(&plant->sequence) * definition->scaleV_0);
+            
+            trunk->numberOfChilds = RoundReal32ToU32(levelParams->branches);
+            
+            trunk->trunkNoise = RandomBil(&plant->sequence);
+            r32 childUnitZ = 1.0f /trunk->numberOfChilds;
+            trunk->nextChildZ = RandomRangeFloat(&plant->sequence, 0.5f * childUnitZ, childUnitZ - 0.01f);
+            trunk->childsCurrentAngle = RandomUni(&plant->sequence) * 360.0f;
+            
+            trunk->additionalCurveBackAngle = 0;
+            
+            FREELIST_INSERT(trunk, plant->plant.firstTrunk);
+        }
+    }
+    
+    
+    
+    
     r32 targetUpdateTime = 1.0f;
+    r32 longUpdateTime = 10.0f;
+    b32 granularUpdate = true;
     
-    while((plant->serverAge - plant->age) >= targetUpdateTime)
+    while(true)
     {
-        UpdatePlant(worldMode, definition, plant, targetUpdateTime);
-        plant->age += targetUpdateTime;
+        r32 delta = plant->serverAge - plant->age;
+        if(delta >= longUpdateTime)
+        {
+            r32 plantTimer = R32_MAX;
+            for(PlantStem* trunk = plant->plant.firstTrunk; trunk; trunk = trunk->next)
+            {
+                plantTimer = Min(plantTimer, GetStemMinUpdateTime(definition, trunk, 0));
+            }
+            
+            if(plantTimer < R32_MAX)
+            {
+                plantTimer = Min(plantTimer, delta);
+                UpdatePlant(worldMode, definition, plant, plantTimer);
+                plant->age += plantTimer;
+            }
+            else
+            {
+                granularUpdate = false;
+                break;
+            }
+        }
+        else
+        {
+            break;
+        }
+        
+        
     }
-#if 0
-    for( u32 plantIndex = 0; plantIndex < params->plantCount; ++plantIndex )
-    {
-        r32 offsetX = RandomRangeFloat( &seq, params->minOffset, params->maxOffset );
-        r32 offsetY = RandomRangeFloat( &seq, params->minOffset, params->maxOffset );
-        Vec3 plantP = entityC->P + V3( offsetX, offsetY, 0 );
-    }
-#endif
     
-    RenderStem(group, lightIndexes, plant, definition, &plant->trunk, plantP, 0, Identity(), 0);
+    if(granularUpdate)
+    {
+        while((plant->serverAge - plant->age) >= targetUpdateTime)
+        {
+            UpdatePlant(worldMode, definition, plant, targetUpdateTime);
+            plant->age += targetUpdateTime;
+        }
+    }
+    
+    
+    PlantInstance* instance = &plant->plant;
+    for( u32 plantIndex = 0; plantIndex < instance->plantCount; ++plantIndex)
+    {
+        Vec2 offset = instance->offsets[plantIndex];
+        r32 angleZ = instance->angleZ[plantIndex];
+        
+        Vec3 finalPlantP = plantP + V3(offset, 0);
+        m4x4 rotation = ZRotation(DegToRad(angleZ));
+        
+        
+        for(PlantStem* trunk = plant->plant.firstTrunk; trunk; trunk = trunk->next)
+        {
+            RenderStem(group, renderingParams, worldMode->windTime, plant, definition, trunk, finalPlantP, 0, rotation, 0);
+        }
+    }
 }

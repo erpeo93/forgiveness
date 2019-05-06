@@ -181,6 +181,7 @@ enum Packet_Type
     
     Type_entityHeader,
     Type_entityBasics,
+    Type_plantUpdate,
     Type_equipmentSlot,
     Type_deletedEntity,
     Type_essenceDelta,
@@ -383,6 +384,13 @@ struct EntityUpdate
     u64 recipeRecipeIndex;
 };
 
+struct PlantUpdate
+{
+    r32 age;
+    r32 life;
+    r32 leafDensity;
+};
+
 #if 0
 enum EntityUpdateType
 {
@@ -502,8 +510,8 @@ struct LoginRequest
 
 struct GameAccessRequest
 {
-    u32 loggingIndex;
     u32 challenge;
+    b32 sendDataFiles;
 };
 
 struct UpdateAck

@@ -42,20 +42,20 @@ inline r32 lerp(r32 t, r32 a, r32 b) { return a + t * (b - a); }
 
 inline r32 noise(r32 x, r32 y, r32 z, u32 seed)
 {
-    seed = seed & 255;
-    int X = (int)floor(x) & 255,                  // FIND UNIT CUBE THAT
-    Y = (int)floor(y) & 255,                  // CONTAINS POINT.
-    Z = (int)floor(z) & 255;
+    int X = ((int)floor(x) + seed) & 255,                  // FIND UNIT CUBE THAT
+    Y = ((int)floor(y) + seed) & 255,                  // CONTAINS POINT.
+    Z = ((int)floor(z) + seed) & 255;
     x -= floorf(x);                                // FIND RELATIVE X,Y,Z
     y -= floorf(y);                                // OF POINT IN CUBE.
     z -= floorf(z);
     r32 u = fade(x),                                // COMPUTE FADE CURVES
     v = fade(y),                                // FOR EACH OF X,Y,Z.
     w = fade(z);
-    int A = perlin_[X  ]+Y + seed, 
+
+    int A = perlin_[X  ]+Y, 
     AA = perlin_[A]+Z, 
     AB = perlin_[A+1]+Z,      // HASH COORDINATES OF
-    B = perlin_[X+1]+Y + seed, 
+    B = perlin_[X+1]+Y, 
     BA = perlin_[B]+Z, 
     BB = perlin_[B+1]+Z;      // THE 8 CUBE CORNERS,
     

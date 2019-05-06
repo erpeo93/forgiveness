@@ -738,6 +738,7 @@ struct UIState
     TaxonomyTable* table;
     struct ClientEntity* player;
     struct GameModeWorld* worldMode;
+    struct ClientPlayer* myPlayer;
     
     UIMode nextMode;
     UIMode mode;
@@ -890,9 +891,6 @@ struct UIState
     ClientEntity fakeEquipment[Slot_Count];
     
     r32 backspacePressedTime;
-    
-    r32 plantGrowingCoeff;
-    
     
     b32 showGroundOutline;
     b32 uniformGroundColors;
