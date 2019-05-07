@@ -438,6 +438,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->firstFreePlantSegment = 0;
     
     
+#if 0    
     result->dayPhases[DayPhase_Day].duration = 6000.0f;
     result->dayPhases[DayPhase_Day].ambientLightColor = V3(0.9f, 0.88f, 1.0f);
     result->dayPhases[DayPhase_Day].next = DayPhase_Sunset;
@@ -449,6 +450,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->dayPhases[DayPhase_Night].duration = 40.0f;
     result->dayPhases[DayPhase_Night].ambientLightColor = V3(0.0f, 0.01f, 0.15f);
     result->dayPhases[DayPhase_Night].next = DayPhase_Day;
+#endif
     
     result->currentPhase = DayPhase_Day;
     
@@ -649,20 +651,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     UpdateCamera(worldMode, input->timeToAdvance);
     
 #if FORGIVENESS_INTERNAL
-    
-#if 0    
-    if(Pressed(&input->actionDown))
-    {
-        b32 fixedTimestep = worldMode->fixedTimestep;
-        if(input->altDown)
-        {
-            fixedTimestep = !fixedTimestep;
-        }
-        //DebugFixedTimestep(fixedTimestep, true);
-        gameState->editorMode = !gameState->editorMode;
-    }
-#endif
-    
     if(Pressed(&input->debugButton1))
     {
         SendInputRecordingMessage(true, true);
@@ -817,6 +805,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 ResetLightGrid(worldMode);
                 Vec3 ambientLightColor = {};
+                
+                
+                
+#if 0                
                 worldMode->currentPhaseTimer += input->timeToAdvance;
                 DayPhase* currentPhase = worldMode->dayPhases + worldMode->currentPhase;
                 DayPhase* nextPhase = worldMode->dayPhases + currentPhase->next;
@@ -839,10 +831,40 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 {
                     ambientLightColor = currentPhase->ambientLightColor;
                 }
+#endif
                 
-                
-                
-                
+                switch(worldMode->currentPhase)
+                {
+                    case DayPhase_Sunrise:
+                    {
+                        ambientLightColor = V3(1, 0.73f, 1);
+                    } break;
+                    
+                    case DayPhase_Morning:
+                    {
+                        ambientLightColor = V3(0.83f, 0.91f, 0.99f);
+                    } break;
+                    
+                    case DayPhase_Day:
+                    {
+                        ambientLightColor = V3(1, 1, 1);
+                    } break;
+                    
+                    case DayPhase_Sunset:
+                    {
+                        ambientLightColor = V3(0.96f, 0.54f, 0.74f);
+                    } break;
+                    
+                    case DayPhase_Dusk:
+                    {
+                        ambientLightColor = V3(0.53f, 0.25f, 0.32f);
+                    } break;
+                    
+                    case DayPhase_Night:
+                    {
+                        ambientLightColor = V3(0.02f, 0.02f, 0.1f);
+                    } break;
+                }
                 
                 
                 
@@ -1115,7 +1137,17 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 i32 originChunkY = voronoiP.chunkY;
                 
                 u32 seed = worldMode->worldSeed;
-                WorldGenerator* generator = NORUNTIMEGetTaxonomySlotByName(worldMode->table, "testGenerator")->generator;
+                
+                
+                WorldGenerator* generator = 0;
+                
+                RandomSequence generatorSeq = Seed(seed);
+                u32 generatorTaxonomy = GetRandomChild(worldMode->table, &generatorSeq, worldMode->table->generatorTaxonomy);
+                
+                if(generatorTaxonomy != worldMode->table->generatorTaxonomy)
+                {
+                    generator = GetSlotForTaxonomy(worldMode->table, generatorTaxonomy)->generator;
+                }
                 
                 for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
                 {

@@ -3151,7 +3151,8 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         currentSlot_->groundPointMaxOffset = ToR32(GetValue(root, "groundPointMaxOffset"));
         currentSlot_->chunkynessWithSame = ToR32(GetValue(root, "chunkynessSame"), 0.5f);
         currentSlot_->chunkynessWithOther = ToR32(GetValue(root, "chunkynessOther"), 0.5f);
-        currentSlot_->groundPointPerTile = ToU32(GetValue(root, "pointsPerTile"));
+        currentSlot_->groundPointPerTile = ToR32(GetValue(root, "pointsPerTile"));
+        currentSlot_->groundPointPerTileV = ToR32(GetValue(root, "pointsPerTileV"));
         currentSlot_->tileColor = ToV4Color(GetElement(root, "color"));
         currentSlot_->colorDelta = ToV4Color(GetElement(root, "colorDelta"), V4(0, 0, 0, 0));
         currentSlot_->tileBorderColor = ToV4Color(GetElement(root, "borderColor"), V4(0, 0, 0, 0));

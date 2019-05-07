@@ -85,7 +85,10 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Fo
                             TaxonomySlot* tileSlot = GetSlotForTaxonomy(worldMode->table, tile->taxonomy);
                             
                             r32 pointMaxOffset = Min(0.5f * voxelSide, tileSlot->groundPointMaxOffset);
-                            u32 pointsPerTile = Min(maxPointsPerTile, tileSlot->groundPointPerTile);
+                            
+                            u32 pointsPerTile = RoundReal32ToU32(tileSlot->groundPointPerTile + RandomBil(&seq) * tileSlot->groundPointPerTileV);
+                            
+                            pointsPerTile = Min(maxPointsPerTile, pointsPerTile);
                             r32 tileLayoutNoise = tile->layoutNoise;
                             
                             switch(tileSlot->tilePointsLayout)

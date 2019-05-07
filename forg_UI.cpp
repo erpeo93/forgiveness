@@ -2447,7 +2447,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     
                     case EditorWidget_Misc:
                     {
-                        //UI->plantGrowingCoeff = ToR32(GetValue(widget->root, "plantGrowingCoeff"));
+                        UI->worldMode->currentPhase = (ForgDayPhase) GetValuePreprocessor(ForgDayPhase, GetValue(widget->root, "dayPhase"));
                     } break;
                 }
             }
@@ -3258,7 +3258,22 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             UIAddChild(UI->table, misc->root, EditorElement_String, "recipeTaxonomy", "objects");
             UIAddChild(UI->table, misc->root, EditorElement_Unsigned, "recipeIndex", "0");
             UIAddChild(UI->table, misc->root, EditorElement_Unsigned, "worldSeed", "0");
-            UIAddChild(UI->table, misc->root, EditorElement_Real, "plantGrowingCoeff", "1");
+            UIAddChild(UI->table, misc->root, EditorElement_String, "dayPhase", "Day");
+            
+            
+            
+            EditorElement* ambientColor;
+            FREELIST_ALLOC(ambientColor, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            ambientColor->type = EditorElement_Struct;
+            FormatString(ambientColor->name, sizeof(ambientColor->name), "ambientColor");
+            
+            UIAddChild(UI->table, ambientColor, EditorElement_Real, "a", "1.0");
+            UIAddChild(UI->table, ambientColor, EditorElement_Real, "b", "0.0");
+            UIAddChild(UI->table, ambientColor, EditorElement_Real, "g", "0.0");
+            UIAddChild(UI->table, ambientColor, EditorElement_Real, "r", "0.0");
+            
+            
+            misc->root->next = ambientColor;
             
             
             
@@ -3351,6 +3366,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTable(UI, GroundViewMode, "viewType");
         UIAddAutocompleteFromTable(UI, TilePointsLayout, "tileLayout");
         UIAddAutocompleteFromTable(UI, PlantShape, "shape");
+        UIAddAutocompleteFromTable(UI, ForgDayPhase, "dayPhase");
         
         UIAddAutocomplete(UI, "layoutName");
 		UIAddAutocomplete(UI, "pieceName");

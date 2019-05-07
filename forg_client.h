@@ -60,13 +60,14 @@ printTable(noPrefix) enum TilePointsLayout
 #include "jc_voronoi.h"
 #define internal static
 
-enum ForgDayPhase
+printTable(noPrefix) enum ForgDayPhase
 {
     DayPhase_Day,
+    DayPhase_Sunrise,
+    DayPhase_Morning,
     DayPhase_Sunset,
+    DayPhase_Dusk,
     DayPhase_Night,
-    
-    DayPhase_Count,
 };
 
 struct DayPhase
@@ -299,7 +300,6 @@ struct GameModeWorld
     
     r32 currentPhaseTimer;
     ForgDayPhase currentPhase;
-    DayPhase dayPhases[DayPhase_Count];
     
     
     b32 forceVoronoiRegeneration;

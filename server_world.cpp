@@ -31,7 +31,7 @@ internal void PackEntityIntoChunk(SimRegion* region, SimEntity* entity, u32 ID)
     block->entityIDs[block->countEntity++] = ID;
 }
 
-inline u32 GetTileTaxonomyFromRegionP(ServerState* server, SimRegion* region, Vec3 P)
+inline u32 GetTileTaxonomyFromRegionP(ServerState* server, SimRegion* region, Vec3 P, r32* elevation)
 {
     u32 result = 0;
     
@@ -45,6 +45,8 @@ inline u32 GetTileTaxonomyFromRegionP(ServerState* server, SimRegion* region, Ve
     
     WorldTile* tile = GetTile(chunk, tileX, tileY);
     result = tile->taxonomy;
+    
+    *elevation = tile->waterLevel;
     
     return result;
 }
@@ -434,7 +436,7 @@ inline u64 AddRandomEntity(SimRegion* region, RandomSequence* sequence, Vec3 P, 
     return result;
 }
 
-internal void BuildSimpleTestWorld(ServerState* server)
+internal void BuildSimpleTestWorld(ServerState* server, WorldGenerator* generator)
 {
     RegionWorkContext* context = server->threadContext + 0;
     context->immediateSpawn = true;
@@ -589,8 +591,6 @@ internal void BuildSimpleTestWorld(ServerState* server)
     }
 #else
     
-    WorldGenerator* generator = NORUNTIMEGetTaxonomySlotByName(server->activeTable, "testGenerator")->generator;
-    
     u32 entityPerRegion = 1000;
     for(u32 regionY = 0; regionY < SERVER_REGION_SPAN; ++regionY)
     {
@@ -607,24 +607,29 @@ internal void BuildSimpleTestWorld(ServerState* server)
             {
                 Vec3 P = V3(Hadamart(RandomBilV2(seq), V2(server->regionSpan, server->regionSpan)), 0);
                 
-                u32 tileTaxonomy = GetTileTaxonomyFromRegionP(server, region, P);
-                for(TaxonomyTileAssociations* tileAss = generator->firstAssociation; tileAss; tileAss = tileAss->next)
+                
+                r32 waterLevel;
+                u32 tileTaxonomy = GetTileTaxonomyFromRegionP(server, region, P, &waterLevel);
+                if(waterLevel > WATER_LEVEL)
                 {
-                    if(tileAss->taxonomy == tileTaxonomy && tileAss->associationCount > 0)
+                    for(TaxonomyTileAssociations* tileAss = generator->firstAssociation; tileAss; tileAss = tileAss->next)
                     {
-                        u32 associationIndex = RandomChoice(seq, tileAss->associationCount);
-                        
-                        u32 runningIndex = 0;
-                        for(TaxonomyAssociation* ass = tileAss->firstAssociation; ass; ass = ass->next)
+                        if(tileAss->taxonomy == tileTaxonomy && tileAss->associationCount > 0)
                         {
-                            if(runningIndex++ == associationIndex)
+                            u32 associationIndex = RandomChoice(seq, tileAss->associationCount);
+                            
+                            u32 runningIndex = 0;
+                            for(TaxonomyAssociation* ass = tileAss->firstAssociation; ass; ass = ass->next)
                             {
-                                AddRandomEntity(region, seq, P, ass->taxonomy);
-                                break;
+                                if(runningIndex++ == associationIndex)
+                                {
+                                    AddRandomEntity(region, seq, P, ass->taxonomy);
+                                    break;
+                                }
                             }
+                            
+                            break;
                         }
-                        
-                        break;
                     }
                 }
             }
@@ -636,11 +641,9 @@ internal void BuildSimpleTestWorld(ServerState* server)
     context->immediateSpawn = false;
 }
 
-internal void BuildServerChunks(ServerState* server)
+internal void BuildServerChunks(ServerState* server, WorldGenerator* generator)
 {
     u32 worldSeed = server->worldSeed;
-    WorldGenerator* generator = NORUNTIMEGetTaxonomySlotByName(server->activeTable, "testGenerator")->generator;
-    
     i32 offset = SIM_REGION_CHUNK_SPAN;
     for(i32 Y = -offset; Y < server->lateralChunkSpan + offset; Y++)
     {
@@ -648,11 +651,6 @@ internal void BuildServerChunks(ServerState* server)
         {
             Assert(ChunkValid(server->lateralChunkSpan, X, Y));
             WorldChunk * chunk = GetChunk(server->chunks, ArrayCount(server->chunks), X, Y, &server->worldPool);
-            
-            if(chunk->entities)
-            {
-                int a = 5;
-            }
             FREELIST_FREE(chunk->entities, EntityBlock, server->threadContext[0].firstFreeBlock);
             BuildChunk(server->activeTable, generator, chunk, X, Y, worldSeed);
         }
@@ -736,6 +734,14 @@ internal void BuildWorld(ServerState * server)
     server->randomSequence = Seed((i32) worldSeed);
     server->objectSequence = Seed((i32) worldSeed + 1);
     
-    BuildServerChunks(server);
-    BuildSimpleTestWorld(server);
+    u32 generatorTaxonomy = GetRandomChild(server->activeTable, &server->randomSequence, server->activeTable->generatorTaxonomy);
+    
+    WorldGenerator* generator = 0;
+    if(generatorTaxonomy != server->activeTable->generatorTaxonomy)
+    {
+        generator = GetSlotForTaxonomy(server->activeTable, generatorTaxonomy)->generator;
+    }
+    
+    BuildServerChunks(server, generator);
+    BuildSimpleTestWorld(server, generator);
 }

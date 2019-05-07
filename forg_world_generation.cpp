@@ -268,6 +268,8 @@ inline WorldTile GenerateTile(TaxonomyTable* table, WorldGenerator* generator, r
 
 inline WorldTile OceanTile(TaxonomyTable* table, WorldGenerator* generator, r32 tileNormX, r32 tileNormY, u32 seed)
 {
+    Assert(generator);
+    
     WorldTile result = {};
     
     r32 finalHeight = 0;
@@ -304,6 +306,7 @@ inline WorldTile OceanTile(TaxonomyTable* table, WorldGenerator* generator, r32 
 
 internal void BuildChunk(TaxonomyTable* table, WorldGenerator* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY, u32 seed)
 {
+    Assert(generator);
     
     Assert(CHUNK_DIM % 4 == 0);
     

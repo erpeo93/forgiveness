@@ -457,7 +457,8 @@ struct TaxonomySlot
     Vec4 tileColor;
     Vec4 colorDelta;
     r32 groundPointMaxOffset;
-    u32 groundPointPerTile;
+    r32 groundPointPerTile;
+    r32 groundPointPerTileV;
     r32 chunkynessWithSame;
     r32 chunkynessWithOther;
     u32 tilePointsLayout;
