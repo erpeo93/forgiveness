@@ -628,7 +628,7 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
             Vec2 leafScale = plant->leafDimension * definition->leafScale + leaf->renderingRandomization * definition->leafScaleV;
             Vec2 scale = leaf->dimCoeff * leafScale;
             
-            Vec3 leafP = topP + V3(0, 0, 0.1f * leafIndex) + leaf->offsetCoeff * leaf->renderingRandomization * definition->leafOffsetV;
+            Vec3 leafP = topP + V3(0, 0, 0.001f * leafIndex) + leaf->offsetCoeff * leaf->renderingRandomization * definition->leafOffsetV;
             
             
             Vec4 aliveColor = definition->leafColor;

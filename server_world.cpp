@@ -614,14 +614,15 @@ internal void BuildSimpleTestWorld(ServerState* server, WorldGenerator* generato
                 {
                     for(TaxonomyTileAssociations* tileAss = generator->firstAssociation; tileAss; tileAss = tileAss->next)
                     {
-                        if(tileAss->taxonomy == tileTaxonomy && tileAss->associationCount > 0)
+                        if(tileAss->taxonomy == tileTaxonomy && tileAss->totalWeight > 0)
                         {
-                            u32 associationIndex = RandomChoice(seq, tileAss->associationCount);
+                            r32 destWeight = RandomUni(seq) * tileAss->totalWeight;
+                            r32 runningWeight = 0;
                             
-                            u32 runningIndex = 0;
                             for(TaxonomyAssociation* ass = tileAss->firstAssociation; ass; ass = ass->next)
                             {
-                                if(runningIndex++ == associationIndex)
+                                runningWeight += ass->weight;
+                                if(destWeight <= runningWeight)
                                 {
                                     AddRandomEntity(region, seq, P, ass->taxonomy);
                                     break;

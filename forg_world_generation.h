@@ -100,7 +100,7 @@ struct Selector
     GenerationBucketType type;
     
     u32 bucketCount;
-    GenerationBucket buckets[4];
+    GenerationBucket buckets[16];
 };
 
 #define WATER_LEVEL 0.2f
@@ -136,6 +136,7 @@ inline GenerationMinMax MinMax(r32 min, r32 max)
 
 struct TaxonomyAssociation
 {
+    r32 weight;
     u32 taxonomy;
     
     union
@@ -149,7 +150,7 @@ struct TaxonomyTileAssociations
 {
     u32 taxonomy;
     
-    u32 associationCount;
+    r32 totalWeight;
     TaxonomyAssociation* firstAssociation;
     
     union

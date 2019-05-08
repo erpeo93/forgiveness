@@ -3510,7 +3510,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 TAXTABLE_ALLOC(tileAssoc, TaxonomyTileAssociations);
                 
                 tileAssoc->taxonomy = tileSlot->taxonomy;
-                tileAssoc->associationCount = 0;
+                tileAssoc->totalWeight = 0;
                 tileAssoc->firstAssociation = 0;
                 
                 
@@ -3518,6 +3518,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 while(taxonomyAssociations)
                 {
                     char* taxonomyName = GetValue(taxonomyAssociations, "taxonomyName");
+                    r32 weight = ToR32(GetValue(taxonomyAssociations, "weight"));
                     
                     TaxonomySlot* taxonomySlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName);
                     
@@ -3527,8 +3528,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                         TAXTABLE_ALLOC(ass, TaxonomyAssociation);
                         
                         ass->taxonomy = taxonomySlot->taxonomy;
+                        ass->weight = weight;
                         
-                        ++tileAssoc->associationCount;
+                        tileAssoc->totalWeight += weight;
                         FREELIST_INSERT(ass, tileAssoc->firstAssociation);
                         
                     }

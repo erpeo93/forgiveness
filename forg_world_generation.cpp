@@ -68,15 +68,18 @@ inline r32 Evaluate(GenerationMinMax minMax, r32 lerping)
 
 inline GenerationBucket* AddEmptyBucket(Selector* selector, GenerationBucketType type, r32 bucketMark)
 {
+    GenerationBucket* result = 0;
     if(!selector->type)
     {
         selector->type = type;
     }
     Assert(selector->type == type);
     
-    Assert(selector->bucketCount < ArrayCount(selector->buckets));
-    GenerationBucket* result = selector->buckets + selector->bucketCount++;
-    result->referencePoint = bucketMark;
+    if(selector->bucketCount < ArrayCount(selector->buckets))
+    {
+        result = selector->buckets + selector->bucketCount++;
+        result->referencePoint = bucketMark;
+    }
     
     return result;
 }
@@ -84,19 +87,28 @@ inline GenerationBucket* AddEmptyBucket(Selector* selector, GenerationBucketType
 inline void AddBucket(Selector* selector, r32 point, NoiseParams params)
 {
     GenerationBucket* bucket = AddEmptyBucket(selector, Bucket_Noise, point);
-    bucket->params = params;
+    if(bucket)
+    {
+        bucket->params = params;
+    }
 }
 
 inline void AddBucket(Selector* selector, r32 point, GenerationMinMax minMax)
 {
     GenerationBucket* bucket = AddEmptyBucket(selector, Bucket_MinMax, point);
-    bucket->minMax = minMax;
+    if(bucket)
+    {
+        bucket->minMax = minMax;
+    }
 }
 
 inline void AddBucket(Selector* selector, r32 point, r32 fixed)
 {
     GenerationBucket* bucket = AddEmptyBucket(selector, Bucket_Fixed, point);
-    bucket->fixed = fixed;
+    if(bucket)
+    {
+        bucket->fixed = fixed;
+    }
 }
 
 inline void AddBucket(Selector* selector, r32 point, u32 taxonomy)

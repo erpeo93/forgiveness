@@ -158,10 +158,10 @@ struct ClientRock
     Vec3 dim;
     
     u32 vertexCount;
-    ColoredVertex vertexes[512];
+    ColoredVertex vertexes[1024];
     
     u32 faceCount;
-    ModelFace faces[512];
+    ModelFace faces[1024];
     
     
     ClientRock* nextFree;

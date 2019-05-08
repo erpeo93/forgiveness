@@ -2645,6 +2645,7 @@ internal void WriteLeafs()
     
     BeginAssetType(assets, Asset_leaf);
     AddBitmapAsset(leafPath, "leaf.png", 0, 0.5f, 0);
+    AddBitmapAsset(leafPath, "leaf2.png", 0, 0.5f, 0);
     EndAssetType();
     
     WritePak(assets, "forgleafs.pak" );
