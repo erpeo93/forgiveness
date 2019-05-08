@@ -1370,6 +1370,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     
                     if(slot->name[0] == '#')
                     {
+                        nameColor = V4(0.2f, 0.2f, 0.2f, 1.0f);
                         nameToShow++;
                     }
                     
@@ -1402,6 +1403,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                                 
                                 if(root->name[0] == '#')
                                 {
+                               
                                     cancText = "revive";
                                     cancReviveInteraction = SendRequestInteraction(UI, UI_Trigger, ReviveTaxonomyRequest(root->taxonomy));
                                 }
@@ -2448,6 +2450,8 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     case EditorWidget_Misc:
                     {
                         UI->worldMode->currentPhase = (ForgDayPhase) GetValuePreprocessor(ForgDayPhase, GetValue(widget->root, "dayPhase"));
+                        
+                        UI->worldMode->windSpeed = ToR32(GetValue(widget->root, "windSpeed"));
                     } break;
                 }
             }
@@ -3259,6 +3263,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             UIAddChild(UI->table, misc->root, EditorElement_Unsigned, "recipeIndex", "0");
             UIAddChild(UI->table, misc->root, EditorElement_Unsigned, "worldSeed", "0");
             UIAddChild(UI->table, misc->root, EditorElement_String, "dayPhase", "Day");
+            UIAddChild(UI->table, misc->root, EditorElement_Real, "windSpeed", "1.0");
             
             
             

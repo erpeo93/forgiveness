@@ -453,6 +453,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
 #endif
     
     result->currentPhase = DayPhase_Day;
+    result->windSpeed = 1.0f;
     
     result->soundState = &gameState->soundState;
     
@@ -598,7 +599,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         input->timeToAdvance = 0;
     }
     
-    worldMode->windSpeed = 10.0f;
     worldMode->windTime += worldMode->windSpeed * input->timeToAdvance;
     
     ParticleCache* particleCache = worldMode->particleCache;
@@ -694,13 +694,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             char* filePath = "assets";
             if(worldMode->allDataFilesArrived)
             {
-                
-#if 0                
                 if(worldMode->loadTaxonomies)
                 {
                     platformAPI.DeleteFileWildcards(filePath, "*.fed");
                 }
-#endif
                 
                 WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstDataFileArrived, false);
                 worldMode->firstDataFileArrived = 0;
@@ -771,9 +768,11 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 worldMode->currentFile = 0;
                 
                 worldMode->UI->font = 0;
+                
+                
 #if 1
                 gameState->music = PlaySound(&gameState->soundState, gameState->assets, GetFirstSound(gameState->assets, Asset_music), 0.0f);
-                ChangeVolume(&gameState->soundState, gameState->music, 1000.0f, V2(1.0f, 1.0f));
+                ChangeVolume(&gameState->soundState, gameState->music, 60.0f, V2(0.0f, 0.0f));
 #endif
                 
                 reloadAssetAutocompletes = true;

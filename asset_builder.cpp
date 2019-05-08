@@ -2904,7 +2904,7 @@ internal void WriteMusic()
     BeginAssetType(assets, Asset_music);
     
     u32 tenSeconds = 10 * 48000;
-    u32 totalSamples = tenSeconds * 10;
+    u32 totalSamples = tenSeconds * 6;
     
     SoundId lastMusic = {};
     for(u32 firstSampleIndex = 0; 
