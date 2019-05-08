@@ -299,6 +299,11 @@ internal void EndSim(SimRegion* region)
                     {
                         deleted = true;
                     }
+                    
+                    server->editorPlayerPermanent.regionX = region->regionX;
+                    server->editorPlayerPermanent.regionY = region->regionY;
+                    server->editorPlayerPermanent.P = entity->P;
+                    
                     SendGameAccessConfirm(player, server->worldSeed, entity->identifier, creature->openedContainerID, server->elapsedMS5x);
                 }
                 
@@ -1408,8 +1413,8 @@ internal b32 UpdateCreature(SimRegion* region, SimEntity* entity)
     Brain* brain = &creature->brain;
     if(brain->valid)
     {
-        MemPerceive(region, entity, &brain->memory);
-        HandleAI(region, entity);
+        //MemPerceive(region, entity, &brain->memory);
+        //HandleAI(region, entity);
     }
     
     if( entity->action != brain->oldAction || entity->targetID != brain->oldTargetID )

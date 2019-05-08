@@ -347,8 +347,9 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                     player->allDataFileSent = true;
                 }
                 
-                SimRegion* region = GetServerRegion( server, 0, 0 );
-                Vec3 P = V3( 0.5f, 10.0f, 0 );
+                PlayerPermanent* permanent = &server->editorPlayerPermanent;
+                SimRegion* region = GetServerRegion( server, permanent->regionX, permanent->regionY);
+                Vec3 P = permanent->P;
                 
                 TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName( region->taxTable, "centaur" );
                 u64 identifier = AddEntity(region, P, slot->taxonomy, NullGenerationData(), PlayerAddEntityParams(player->playerID));
@@ -1337,7 +1338,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
                     FreeComponent(server->components, (EntityComponentType) componentIndex, ID);
                 }
             }
-
+            
 			FREELIST_DEALLOC(deleted, server->firstFreeDeletedEntity);
 			deleted = next;
         }
@@ -1347,11 +1348,11 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         {
 			NewEntity* next = newEntity->next;
             AddEntitySingleThread(newEntity->region, newEntity->taxonomy, newEntity->P, newEntity->identifier, newEntity->gen, newEntity->params);
-
+            
 			FREELIST_DEALLOC(newEntity, server->firstFreeNewEntity);
 			newEntity = next;
         }
-
+        
 		server->firstNewEntity = 0;
         
         // NOTE(Leonardo): we first simulate all the mirror region, so that we dispatch all the update first, and then we update all the other regions

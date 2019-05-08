@@ -559,7 +559,12 @@ inline u32 GetCurrentUInt32( RandomSequence* sequence )
 
 inline i32 RandomChoice(RandomSequence* sequence, u32 maximum)
 {
-    i32 result = GetNextUInt32( sequence ) % maximum;
+    i32 result = 0;
+    
+    if(maximum)
+    {
+        result = GetNextUInt32( sequence ) % maximum;
+    }
     return result;
 }
 

@@ -2383,6 +2383,8 @@ internal void WriteAnimations(char* folder, char* name)
     
     BeginAssetType(assets, Asset_moving);
     AddEveryAnimationThatStartsWith(completePath, hashID, "walk");
+    AddEveryAnimationThatStartsWith(completePath, hashID, "run");
+    AddEveryAnimationThatStartsWith(completePath, hashID, "move");
     EndAssetType();
     
     

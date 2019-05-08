@@ -3160,18 +3160,18 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             
             EditorElement* animationRoot;
-            FREELIST_ALLOC(animationRoot, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            FREELIST_ALLOC(animationRoot, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             animationRoot->type = EditorElement_Animation;
             
             
             EditorElement* animationActionTimer;
-            FREELIST_ALLOC(animationActionTimer, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            FREELIST_ALLOC(animationActionTimer, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             animationActionTimer->type = EditorElement_Struct;
             UIAddChild(UI->table, animationActionTimer, EditorElement_Real, "time", "0.0");
             UIAddChild(UI->table, animationActionTimer, EditorElement_String, "animationName", "rig");
             
             EditorElement* playButton;
-            FREELIST_ALLOC(playButton, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            FREELIST_ALLOC(playButton, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             playButton->type = EditorElement_Struct;
             UIAddChild(UI->table, playButton, EditorElement_String, "autoplay", "false");
             UIAddChild(UI->table, playButton, EditorElement_Real, "speed", "1.0");
@@ -3193,12 +3193,12 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
 
             
             EditorElement* colorPickerRoot;
-            FREELIST_ALLOC(colorPickerRoot, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            FREELIST_ALLOC(colorPickerRoot, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             colorPickerRoot->type = EditorElement_ColorPicker;
             
             
             EditorElement* color;
-            FREELIST_ALLOC(color, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            FREELIST_ALLOC(color, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             color->type = EditorElement_Struct;
             FormatString(color->name, sizeof(color->name), "color");
             
@@ -3216,12 +3216,12 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             
             EditorElement* groundParamsRoot;
-            FREELIST_ALLOC(groundParamsRoot, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            FREELIST_ALLOC(groundParamsRoot, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             groundParamsRoot->type = EditorElement_GroundParams;
             
             
             EditorElement* params;
-            FREELIST_ALLOC(params, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            FREELIST_ALLOC(params, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             params->type = EditorElement_Struct;
             FormatString(params->name, sizeof(params->name), "params");
             
@@ -3252,7 +3252,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             
             EditorWidget* misc = StartWidget(UI, EditorWidget_Misc, V2(200, 100), 0xffffffff, "Miscellaneous");
-            FREELIST_ALLOC(misc->root, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            FREELIST_ALLOC(misc->root, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             misc->root->type = EditorElement_Struct;
             
             UIAddChild(UI->table, misc->root, EditorElement_String, "recipeTaxonomy", "objects");
@@ -3263,7 +3263,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             
             EditorElement* ambientColor;
-            FREELIST_ALLOC(ambientColor, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            FREELIST_ALLOC(ambientColor, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             ambientColor->type = EditorElement_Struct;
             FormatString(ambientColor->name, sizeof(ambientColor->name), "ambientColor");
             

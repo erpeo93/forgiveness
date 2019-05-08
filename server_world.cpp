@@ -734,6 +734,11 @@ internal void BuildWorld(ServerState * server)
     server->randomSequence = Seed((i32) worldSeed);
     server->objectSequence = Seed((i32) worldSeed + 1);
     
+    
+    server->editorPlayerPermanent.regionX = SERVER_REGION_SPAN / 2;
+    server->editorPlayerPermanent.regionY = SERVER_REGION_SPAN / 2;
+    server->editorPlayerPermanent.P = {};
+    
     u32 generatorTaxonomy = GetRandomChild(server->activeTable, &server->randomSequence, server->activeTable->generatorTaxonomy);
     
     WorldGenerator* generator = 0;

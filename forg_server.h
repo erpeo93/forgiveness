@@ -43,6 +43,14 @@ global_variable u16 globalUserPorts[] =
     LOGIN_PORT
 };
 
+
+struct PlayerPermanent
+{
+    u32 regionX;
+    u32 regionY;
+    Vec3 P;
+};
+
 struct PlayerRequest
 {
     u8 data[512];
@@ -293,6 +301,8 @@ struct ServerState
     
     RandomSequence randomSequence;
     RandomSequence objectSequence;
+    
+    PlayerPermanent editorPlayerPermanent;
 };
 
 #define SERVER_NETWORK_STUFF( name ) void name( PlatformServerMemory* memory, r32 secondElapsed )
