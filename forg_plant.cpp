@@ -633,7 +633,6 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
             
             Vec4 aliveColor = definition->leafColor;
             Vec4 deadColor = definition->leafColor;
-            deadColor.g = 0.05f;
             
             Vec4 referenceColor = Lerp(definition->leafColor, plant->life, deadColor);
             Vec4 leafColor = referenceColor + leaf->renderingRandomization * definition->leafColorV;

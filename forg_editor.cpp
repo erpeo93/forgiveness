@@ -3364,6 +3364,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         TAXTABLE_ALLOC(currentSlot_->plant, PlantDefinition);
         PlantDefinition* plant = currentSlot_->plant;
         
+        plant->collides = ToB32(GetValue(root, "collides"));
         plant->shape = (PlantShape) GetValuePreprocessor(PlantShape, GetValue(root, "shape"));
         
         plant->growingCoeff = ToR32(GetValue(root, "growingCoeff"), 1.0f);

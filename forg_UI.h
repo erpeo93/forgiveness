@@ -35,6 +35,7 @@ enum UIRequestType
     UIRequest_DeleteTaxonomy,
     UIRequest_ReviveTaxonomy,
     UIRequest_InstantiateTaxonomy,
+    UIRequest_InstantiateTaxonomyPtr,
     UIRequest_MovePlayerInOtherRegion,
     UIRequest_DeleteEntity,
     UIRequest_ImpersonateEntity,
@@ -121,6 +122,13 @@ struct UIRequest
         {
             u32 taxonomy;
             Vec3 offset;
+        };
+        
+        
+        struct
+        {
+            u32 taxonomy;
+            Vec3* offsetPtr;
         };
         
         u32 seed;

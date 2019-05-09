@@ -131,6 +131,7 @@ printTable(noPrefix) enum PlantShape
 #define MAX_LEVELS 4
 struct PlantDefinition
 {
+    b32 collides;
     PlantShape shape;
     
     r32 growingCoeff;

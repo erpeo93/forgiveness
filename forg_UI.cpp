@@ -1422,6 +1422,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                             
                             UIInteraction instantiateInteraction = SendRequestInteraction(UI, UI_Click, InstantiateTaxonomyRequest(root->taxonomy, V3(1, 0, 0)));
                             UIAddSetValueAction(UI, &instantiateInteraction, UI_Idle, &UI->instantiatingTaxonomy, root->taxonomy);
+                            UIAddRequestAction(UI, &instantiateInteraction, UI_Release, InstantiateTaxonomyRequestPtr(root->taxonomy, &UI->worldMouseP)); 
                             UIAddSetValueAction(UI, &instantiateInteraction, UI_Release, &UI->instantiatingTaxonomy, 0); 
                             
                             b32 active = (root->name[0] != '#' && IsSpawnable(UI->table, root->taxonomy));
@@ -2490,15 +2491,13 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             layout->P.y += widget->dataOffsetY;
             
             widget->maxDataY = (i32) (layout->P.y + 0.5f * height);
-            
             if(widget->permanent.expanded && widget->root)
             {
                 EditorElementParents parents = {};
                 Rect2 widgetBounds = UIRenderEditorTree(UI, widget, layout, parents, 0, false, V4(1, 1, 1, 1), widget->root, input, false).bounds;
                 
                 widget->minDataY = (i32) (widgetBounds.min.y + 0.5f * height);
-                
-                
+               
                 
                 r32 resizeDim = layout->squareDim;
                 Vec4 resizeColor = V4(1, 1, 1, 1);
@@ -2525,6 +2524,12 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                 r32 boundsAlpha = 0.5f;
                 
                 
+                
+                if(widget->minDataY >= clipRectReal.max.y)
+                {
+                    widget->dataOffsetY = 0; 
+                }
+                
             if(PointInRect(clipRectReal, UI->relativeScreenMouse))
             {
                 boundsAlpha = 0.8f;   
@@ -2547,7 +2552,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                             }
                             else
                             {
-                                allowScrolling = (widget->maxDataY >= clipRect.maxY - 20);                                                       
+                                allowScrolling = (widget->maxDataY >= clipRect.maxY);                                                       
                             }
 
                     }

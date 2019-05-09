@@ -421,7 +421,14 @@ inline void GetPhysicalProperties(TaxonomyTable* taxTable, u32 taxonomy, u64 ide
     }
     else if(IsPlant(taxTable, taxonomy))
     {
-        *type = ForgBound_Standard;
+        if(boundSlot->plant->collides)
+        {
+            *type = ForgBound_Standard;
+        }
+        else
+        {
+            *type = ForgBound_None;
+        }
         
         r32 trunkRadious = Max(0.2f, GetPlantStandardTrunkRadious(boundSlot->plant));
         r32 trunkLength = GetPlantStandardTrunkLength(boundSlot->plant);

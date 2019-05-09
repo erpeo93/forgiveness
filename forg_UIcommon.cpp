@@ -452,6 +452,16 @@ inline UIRequest InstantiateTaxonomyRequest(u32 taxonomy, Vec3 offset)
     return result;
 }
 
+inline UIRequest InstantiateTaxonomyRequestPtr(u32 taxonomy, Vec3* offsetPtr)
+{
+    UIRequest result = {};
+    result.requestCode = UIRequest_InstantiateTaxonomyPtr;
+    result.taxonomy = taxonomy;
+    result.offsetPtr = offsetPtr;
+    
+    return result;
+}
+
 inline UIRequest MovePlayerRequest(Vec3 offset)
 {
     UIRequest result = {};
@@ -703,6 +713,23 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
 			else
 			{
 				SendInstantiateTaxonomyRequest(request->taxonomy, request->offset);
+			}
+        } break;
+        
+        case UIRequest_InstantiateTaxonomyPtr:
+        {
+            TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->table->recipeTaxonomy);
+			if(IsSubTaxonomy(request->taxonomy, slot))
+			{
+                EditorWidget* widget = UI->widgets + EditorWidget_Misc;
+                char* taxonomy = GetValue(widget->root, "recipeTaxonomy");
+                u32 recipeTaxonomy = NORUNTIMEGetTaxonomySlotByName(UI->table, taxonomy)->taxonomy;
+                u64 recipeIndex = ToU64(GetValue(widget->root, "recipeIndex"));
+				SendInstantiateRecipeRequest(recipeTaxonomy, recipeIndex, *request->offsetPtr);
+			}
+			else
+			{
+				SendInstantiateTaxonomyRequest(request->taxonomy, *request->offsetPtr);
 			}
         } break;
         

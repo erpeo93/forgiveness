@@ -12,8 +12,8 @@ internal b32 ShouldCollide(u64 id1, ForgBoundType b1, u64 id2, ForgBoundType b2)
 {
     b32 result = false;
     
-    if(id1 != id2 &&
-       b1 && b2)
+    if((id1 != id2) &&
+       (b1 != ForgBound_None) && (b2 != ForgBound_None))
     {
         result = true;
     }
@@ -50,17 +50,6 @@ internal b32 ShouldCollide(u64 id1, ForgBoundType b1, u64 id2, ForgBoundType b2)
     
     return result;
 }
-
-inline b32 ShouldCollide(SimEntity* entity, RegionTile* tile)
-{
-    b32 result = false;
-#if 0
-    r32 maxZDeltaAllowed = 1.0f;
-    b32 result = ( ( tile->P.z - entity->regionPosition.z ) > maxZDeltaAllowed );
-#endif
-    return result;
-}
-
 
 inline Rect3 GetMinkowskiRect(Rect3 bounds, Vec3 hisP, Rect3 hisBounds)
 {
