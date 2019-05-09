@@ -160,6 +160,7 @@ inline Vec4 GetColorAtZ(PlantDefinition* definition, PlantLevelParams* params, r
         result += Sin(definition->lobes * Z * PI32) * definition->trunkColorV;
     }
     
+    result = Clamp01(result);
     return result;
 }
 
@@ -333,7 +334,7 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                     
                     r32 radiousAtOriginatingPoint = GetRadiousAtZ(levelParams->taper, definition->flare, definition->lobeDepth, definition->lobes, stem->totalLength, stem->baseRadious, childStem->parentStemZ);
                     radiousAtOriginatingPoint *= levelParams->radiousMod;
-                    childStem->baseRadious = Min(childStem->baseRadious, radiousAtOriginatingPoint);
+                    childStem->maxRadious = radiousAtOriginatingPoint;
                     
                     
                     
@@ -484,6 +485,7 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                         
                         clonedStem->totalLength = stem->totalLength;
                         clonedStem->baseRadious = stem->baseRadious;
+                        clonedStem->maxRadious = stem->maxRadious;
                         
                         clonedStem->trunkNoise = stem->trunkNoise;
                         clonedStem->nextChildZ = stem->nextChildZ;
@@ -514,15 +516,27 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
     
     u32 leafToUpdate = levelParams->leafCount *  Ceil(Clamp01MapToRange(0, stem->lengthNormZ, levelParams->allLeafsAtStemLength));
     Assert(leafToUpdate < MAX_LEAFS_PER_STEM);
+    
+    r32 segmentWindRandomization = 0;
+    for(u32 leafIndex = 0; leafIndex < levelParams->leafCount; ++leafIndex)
+    {
+        Leaf* leaf = stem->leafs + leafIndex;
+        if(!leaf->dimCoeff)
+        {
+            if(leafIndex == 0)
+            {
+                segmentWindRandomization = RandomBil(&plant->sequence);
+            }
+            leaf->renderingRandomization = RandomBil(&plant->sequence);
+            
+            r32 leafRandomization = RandomBil(&plant->sequence);
+            leaf->windRandomization = Lerp(segmentWindRandomization, definition->leafWindDirectionV, leafRandomization);
+        }
+    }
+    
     for(u32 leafIndex = 0; leafIndex < leafToUpdate; ++leafIndex)
     {
         Leaf* leaf = stem->leafs + leafIndex;
-        
-        if(!leaf->dimCoeff)
-        {
-            leaf->renderingRandomization = RandomBil(&plant->sequence);
-        }
-        
         leaf->dimCoeff += definition->leafDimSpeed * timeToUpdate;
         leaf->offsetCoeff += definition->leafOffsetSpeed * timeToUpdate;
         
@@ -575,6 +589,10 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
         
         r32 baseRadious = GetRadiousAtZ(levelParams->taper, definition->flare, definition->lobeDepth, definition->lobes, stem->totalLength, stem->baseRadious, baseZ) * segment->radiousCoeff;
         r32 topRadious = GetRadiousAtZ(levelParams->taper, definition->flare, definition->lobeDepth, definition->lobes, stem->totalLength, stem->baseRadious, topZ) * segment->radiousCoeff;
+        
+        baseRadious = Min(baseRadious, stem->maxRadious);
+        topRadious = Min(topRadious, stem->maxRadious);
+        
         r32 length = segmentLength * segment->lengthCoeff;
         Vec4 baseColor = GetColorAtZ(definition, levelParams, stemLifeNorm, stem->trunkNoise, baseZ);
         Vec4 topColor = GetColorAtZ(definition, levelParams, stemLifeNorm, stem->trunkNoise, topZ);
@@ -641,7 +659,6 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
             
             ObjectTransform leafTransform = UprightTransform();
             
-            r32 leafAngleVariation = 7.0f;
             r32 leafAngle = leaf->renderingRandomization * Abs(definition->leafAngleV);
             
             if(definition->leafAngleV < 0 && Cos(DegToRad(leafAngle)) < 0)
@@ -650,7 +667,7 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
             }
             
             
-            leafAngle += Sin(windTime + TAU32 * leaf->renderingRandomization) * leafAngleVariation;
+            leafAngle += Sin(windTime + TAU32 * leaf->windRandomization) * definition->leafWindAngleV;
             
             leafTransform.angle = leafAngle;
             leafTransform.modulationPercentage = renderingParams.modulationWithFocusColor;
@@ -676,7 +693,6 @@ internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group,
         }
         
         plant->plant.plantCount = Max(1, definition->plantCount + RoundReal32ToU32(RandomBil(&plant->sequence) *definition->plantCountV));
-        
         for(u32 plantIndex = 0; plantIndex < plant->plant.plantCount; ++plantIndex)
         {
             plant->plant.offsets[plantIndex] = Hadamart(RandomBilV2(&plant->sequence), definition->plantOffsetV);
@@ -707,6 +723,7 @@ internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group,
             
             trunk->totalLength =  plant->scale * (definition->levelParams->lengthCoeff + RandomBil(&plant->sequence) * levelParams->lengthCoeffV);
             trunk->baseRadious = trunk->totalLength * definition->ratio * (definition->scale_0 + RandomBil(&plant->sequence) * definition->scaleV_0);
+            trunk->maxRadious = R32_MAX;
             
             trunk->numberOfChilds = RoundReal32ToU32(levelParams->branches);
             

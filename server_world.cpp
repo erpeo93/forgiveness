@@ -140,6 +140,9 @@ inline SimEntity* GetFreeEntity(ServerState* server, u32* ID)
     if(server->firstFreeEntity)
     {
         FreeEntity* free = server->firstFreeEntity;
+        server->firstFreeEntity = free->nextFree;
+        
+        
         Assert(free->ID);
         *ID = free->ID;
         result = server->entities + free->ID;
@@ -396,10 +399,8 @@ inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, GenerationData gen
 	return result;
 }
 
-inline void DeleteEntityComponents(SimRegion* region, SimEntity* entity, u32 ID)
+inline void DeleteEntityComponents(ServerState* server, SimEntity* entity, u32 ID)
 {
-    ServerState* server = region->server;
-    
     DeletedEntity* deletedEntity;
     
     BeginTicketMutex(&server->newDeletedMutex);
@@ -652,6 +653,17 @@ internal void BuildServerChunks(ServerState* server, WorldGenerator* generator)
         {
             Assert(ChunkValid(server->lateralChunkSpan, X, Y));
             WorldChunk * chunk = GetChunk(server->chunks, ArrayCount(server->chunks), X, Y, &server->worldPool);
+            
+            for(EntityBlock* block = chunk->entities; block; block = block->next)
+            {
+                for(u32 entityIndex = 0; entityIndex < block->countEntity; ++entityIndex)
+                {
+                    u32 entityID = block->entityIDs[entityIndex];
+                    SimEntity* entity = GetEntity(server, entityID);
+                    DeleteEntityComponents(server, entity, entityID);
+                }
+            }
+            
             FREELIST_FREE(chunk->entities, EntityBlock, server->threadContext[0].firstFreeBlock);
             BuildChunk(server->activeTable, generator, chunk, X, Y, worldSeed);
         }

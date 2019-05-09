@@ -23,6 +23,7 @@ struct Leaf
     r32 offsetCoeff;
     
     r32 renderingRandomization;
+    r32 windRandomization;
 };
 
 #define MAX_LEAFS_PER_STEM 16
@@ -41,6 +42,7 @@ struct PlantStem
     r32 lengthNormZ;
     r32 totalLength;
     r32 baseRadious;
+    r32 maxRadious;
     
     
     r32 trunkNoise;
@@ -171,6 +173,9 @@ struct PlantDefinition
     
     Vec3 leafOffsetV;
     r32 leafAngleV;
+    
+    r32 leafWindAngleV;
+    r32 leafWindDirectionV;
     
     Vec4 trunkColorV;
     

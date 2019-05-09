@@ -2116,6 +2116,10 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     r32 oldSoundTime = entityC->actionTime - timeToUpdate;
     r32 soundTime = entityC->actionTime;
     
+    Rect3 bounds = InvertedInfinityRect3();
+    GetPhysicalProperties(worldMode->table, entityC->taxonomy, entityC->identifier, &entityC->boundType, &bounds);
+    entityC->bounds = Offset(bounds, entityC->P);
+    
     if(IsPlant(worldMode->table, entityC->taxonomy))
     {
         Assert(slot->plant);
@@ -2146,6 +2150,14 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         renderingParams.modulationWithFocusColor = entityC->modulationWithFocusColor;
         
         UpdateAndRenderPlant(worldMode, group, renderingParams, slot->plant, entityC->plant, entityC->P);
+        
+        for(u32 plantIndex = 0; plantIndex < entityC->plant->plant.plantCount; ++plantIndex)
+        {
+            Vec3 P = entityC->P + V3(entityC->plant->plant.offsets[plantIndex], 0);
+            
+            Rect3 plantBounds = Offset(bounds, P);
+            entityC->bounds = Union(entityC->bounds, plantBounds);
+        }
     }
     else if(IsRock(worldMode->table, entityC->taxonomy))
     {
@@ -2194,6 +2206,9 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             Vec3 finalScale = rock->dim + rockDefinition->scaleRandomness *Hadamart(RandomBilV3(&rockRenderSeq), rock->dim);
             
             PushModel(group, &onTheFly, rotation, finalP, lightIndexes, finalScale, V4(1, 1, 1, 1), entityC->modulationWithFocusColor);
+            
+            Rect3 rockBounds = Offset(bounds, finalP);
+            entityC->bounds = Union(entityC->bounds, rockBounds);
         }
     }
     else
@@ -2227,10 +2242,6 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         soundTime = entityC->animation.normalizedTime;
     }
     
-    
-    Rect3 bounds = InvertedInfinityRect3();
-    GetPhysicalProperties(worldMode->table, entityC->taxonomy, entityC->identifier, &entityC->boundType, &bounds);
-    entityC->bounds = Offset(bounds, entityC->P);
     //PushCubeOutline(group, bounds, V4(1, 1, 1, 1), 0.05f);
     
     PlaySoundForAnimation(worldMode, group->assets, slot, result.playedAnimationNameHash, oldSoundTime, soundTime);

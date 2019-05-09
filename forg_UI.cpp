@@ -3089,10 +3089,10 @@ internal EditorElement* BuildEditorTaxonomyTree(u32 editorRoles, TaxonomyTable* 
     return result;
 }
 
-inline EditorElement* UIAddChild(TaxonomyTable* table, EditorElement* element, EditorElementType type, char* name, char* value = 0)
+inline EditorElement* UIAddChild(UIState* UI, EditorElement* element, EditorElementType type, char* name, char* value = 0)
 {
     EditorElement* newElement;
-    FREELIST_ALLOC(newElement, table->firstFreeElement, PushStruct(&table->pool, EditorElement));
+    FREELIST_ALLOC(newElement, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
     
     
     newElement->type = type;
@@ -3142,7 +3142,6 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
     if(!UI->initialized)
     {
         UI->initialized = true;
-        
         if(worldMode->editingEnabled)
         {
             UI->uneditableTabRoot.type = EditorElement_String;
@@ -3163,33 +3162,33 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             
             EditorElement* animationStruct;
-            FREELIST_ALLOC(animationStruct, UI->table->firstFreeElement, PushStruct(&UI->table->pool, EditorElement));
+            FREELIST_ALLOC(animationStruct, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             animationStruct->type = EditorElement_Struct;
             
             
             
             EditorElement* animationRoot;
-            FREELIST_ALLOC(animationRoot, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(animationRoot, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             animationRoot->type = EditorElement_Animation;
             
             
             EditorElement* animationActionTimer;
-            FREELIST_ALLOC(animationActionTimer, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(animationActionTimer, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             animationActionTimer->type = EditorElement_Struct;
-            UIAddChild(UI->table, animationActionTimer, EditorElement_Real, "time", "0.0");
-            UIAddChild(UI->table, animationActionTimer, EditorElement_String, "animationName", "rig");
+            UIAddChild(UI, animationActionTimer, EditorElement_Real, "time", "0.0");
+            UIAddChild(UI, animationActionTimer, EditorElement_String, "animationName", "rig");
             
             EditorElement* playButton;
-            FREELIST_ALLOC(playButton, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(playButton, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             playButton->type = EditorElement_Struct;
-            UIAddChild(UI->table, playButton, EditorElement_String, "autoplay", "false");
-            UIAddChild(UI->table, playButton, EditorElement_Real, "speed", "1.0");
-            UIAddChild(UI->table, playButton, EditorElement_Real, "scale", "50.0");
-            UIAddChild(UI->table, playButton, EditorElement_String, "showBones", "false");
-            UIAddChild(UI->table, playButton, EditorElement_String, "showBitmaps", "true");
-            UIAddChild(UI->table, playButton, EditorElement_String, "showPivots", "false");
-            UIAddChild(UI->table, playButton, EditorElement_String, "drawOpened", "false");
-            UIAddChild(UI->table, playButton, EditorElement_Unsigned, "seed", "1");
+            UIAddChild(UI, playButton, EditorElement_String, "autoplay", "false");
+            UIAddChild(UI, playButton, EditorElement_Real, "speed", "1.0");
+            UIAddChild(UI, playButton, EditorElement_Real, "scale", "50.0");
+            UIAddChild(UI, playButton, EditorElement_String, "showBones", "false");
+            UIAddChild(UI, playButton, EditorElement_String, "showBitmaps", "true");
+            UIAddChild(UI, playButton, EditorElement_String, "showPivots", "false");
+            UIAddChild(UI, playButton, EditorElement_String, "drawOpened", "false");
+            UIAddChild(UI, playButton, EditorElement_Unsigned, "seed", "1");
             
             
             playButton->next = animationActionTimer;
@@ -3202,19 +3201,19 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
 
             
             EditorElement* colorPickerRoot;
-            FREELIST_ALLOC(colorPickerRoot, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(colorPickerRoot, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             colorPickerRoot->type = EditorElement_ColorPicker;
             
             
             EditorElement* color;
-            FREELIST_ALLOC(color, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(color, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             color->type = EditorElement_Struct;
             FormatString(color->name, sizeof(color->name), "color");
             
-            UIAddChild(UI->table, color, EditorElement_Real, "a", "1.0");
-            UIAddChild(UI->table, color, EditorElement_Real, "b", "0.0");
-            UIAddChild(UI->table, color, EditorElement_Real, "g", "0.0");
-            UIAddChild(UI->table, color, EditorElement_Real, "r", "0.0");
+            UIAddChild(UI, color, EditorElement_Real, "a", "1.0");
+            UIAddChild(UI, color, EditorElement_Real, "b", "0.0");
+            UIAddChild(UI, color, EditorElement_Real, "g", "0.0");
+            UIAddChild(UI, color, EditorElement_Real, "r", "0.0");
             
             
             colorPickerRoot->next = color;
@@ -3225,23 +3224,23 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             
             EditorElement* groundParamsRoot;
-            FREELIST_ALLOC(groundParamsRoot, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(groundParamsRoot, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             groundParamsRoot->type = EditorElement_GroundParams;
             
             
             EditorElement* params;
-            FREELIST_ALLOC(params, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(params, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             params->type = EditorElement_Struct;
             FormatString(params->name, sizeof(params->name), "params");
             
-            UIAddChild(UI->table, params, EditorElement_String, "showBorders", "false");
-            UIAddChild(UI->table, params, EditorElement_String, "uniformColors", "false");
-            UIAddChild(UI->table, params, EditorElement_String, "viewType", "Voronoi");
-            UIAddChild(UI->table, params, EditorElement_Unsigned, "chunkApron", "2");
-            EditorElement* offset = UIAddChild(UI->table, params, EditorElement_Struct, "cameraOffset");
-            UIAddChild(UI->table, offset, EditorElement_Real, "x", "0.0");
-            UIAddChild(UI->table, offset, EditorElement_Real, "y", "0.0");
-            UIAddChild(UI->table, offset, EditorElement_Real, "z", "0.0");
+            UIAddChild(UI, params, EditorElement_String, "showBorders", "false");
+            UIAddChild(UI, params, EditorElement_String, "uniformColors", "false");
+            UIAddChild(UI, params, EditorElement_String, "viewType", "Voronoi");
+            UIAddChild(UI, params, EditorElement_Unsigned, "chunkApron", "2");
+            EditorElement* offset = UIAddChild(UI, params, EditorElement_Struct, "cameraOffset");
+            UIAddChild(UI, offset, EditorElement_Real, "x", "0.0");
+            UIAddChild(UI, offset, EditorElement_Real, "y", "0.0");
+            UIAddChild(UI, offset, EditorElement_Real, "z", "0.0");
             
             
             groundParamsRoot->next = params;
@@ -3261,26 +3260,26 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             
             EditorWidget* misc = StartWidget(UI, EditorWidget_Misc, V2(200, 100), 0xffffffff, "Miscellaneous");
-            FREELIST_ALLOC(misc->root, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(misc->root, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             misc->root->type = EditorElement_Struct;
             
-            UIAddChild(UI->table, misc->root, EditorElement_String, "recipeTaxonomy", "objects");
-            UIAddChild(UI->table, misc->root, EditorElement_Unsigned, "recipeIndex", "0");
-            UIAddChild(UI->table, misc->root, EditorElement_Unsigned, "worldSeed", "0");
-            UIAddChild(UI->table, misc->root, EditorElement_String, "dayPhase", "Day");
-            UIAddChild(UI->table, misc->root, EditorElement_Real, "windSpeed", "1.0");
+            UIAddChild(UI, misc->root, EditorElement_String, "recipeTaxonomy", "objects");
+            UIAddChild(UI, misc->root, EditorElement_Unsigned, "recipeIndex", "0");
+            UIAddChild(UI, misc->root, EditorElement_Unsigned, "worldSeed", "0");
+            UIAddChild(UI, misc->root, EditorElement_String, "dayPhase", "Day");
+            UIAddChild(UI, misc->root, EditorElement_Real, "windSpeed", "1.0");
             
             
             
             EditorElement* ambientColor;
-            FREELIST_ALLOC(ambientColor, UI->table->firstFreeElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(ambientColor, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
             ambientColor->type = EditorElement_Struct;
             FormatString(ambientColor->name, sizeof(ambientColor->name), "ambientColor");
             
-            UIAddChild(UI->table, ambientColor, EditorElement_Real, "a", "1.0");
-            UIAddChild(UI->table, ambientColor, EditorElement_Real, "b", "0.0");
-            UIAddChild(UI->table, ambientColor, EditorElement_Real, "g", "0.0");
-            UIAddChild(UI->table, ambientColor, EditorElement_Real, "r", "0.0");
+            UIAddChild(UI, ambientColor, EditorElement_Real, "a", "1.0");
+            UIAddChild(UI, ambientColor, EditorElement_Real, "b", "0.0");
+            UIAddChild(UI, ambientColor, EditorElement_Real, "g", "0.0");
+            UIAddChild(UI, ambientColor, EditorElement_Real, "r", "0.0");
             
             
             misc->root->next = ambientColor;

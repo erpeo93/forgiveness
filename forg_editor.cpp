@@ -3404,6 +3404,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         plant->leafOffsetV = ToV3(GetStruct(root, "leafOffsetV"));
         plant->leafAngleV = ToR32(GetValue(root, "leafAngleV"));
         
+        plant->leafWindAngleV = ToR32(GetValue(root, "leafWindAngleV"));
+        plant->leafWindDirectionV = ToR32(GetValue(root, "leafWindDirectionV"));
+        
         plant->trunkColorV = ToV4Color(GetStruct(root, "trunkColorV"));
         plant->lobeDepth = ToR32(GetValue(root, "lobeDepth"));
         plant->lobes = ToR32(GetValue(root, "lobes"));

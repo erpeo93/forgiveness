@@ -1326,7 +1326,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
                 FreeEntity* freeEntity;
                 FREELIST_ALLOC(freeEntity, server->firstFreeFreeEntity, PushStruct(&server->worldPool, FreeEntity));
                 freeEntity->ID = deleted->entityID;
-                
                 FREELIST_INSERT(freeEntity, server->firstFreeEntity);
             }
             
@@ -1342,6 +1341,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 			FREELIST_DEALLOC(deleted, server->firstFreeDeletedEntity);
 			deleted = next;
         }
+        
         server->firstDeletedEntity = 0;
         
         for(NewEntity* newEntity = server->firstNewEntity; newEntity; )

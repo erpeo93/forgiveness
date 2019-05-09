@@ -122,6 +122,7 @@ inline void CreateRockVertex(RockDefinition* rockDefinition, ColoredVertex* vert
     newVertex->P = P01;
     
     r32 smoothness = rockDefinition->smoothness + RandomUni(seq) * rockDefinition->smoothnessDelta;
+    smoothness = Clamp01(smoothness);
     r32 lerpValue = (smoothness * 0.5f);
     
     newVertex->color = Lerp(v0->color, lerpValue, v1->color);
@@ -176,7 +177,8 @@ internal void GenerateRock(ClientRock* dest, VertexModel* model, MemoryPool* tem
     u32 maxVertexCountPossible = finalFaceCount * 3;
     ColoredVertex* tempVertexes = PushArray(tempPool, ColoredVertex, maxVertexCountPossible);
     
-    Vec4 color = rockDefinition->color + RandomBil(seq) * rockDefinition->startingColorDelta;
+    Vec4 startColor = rockDefinition->color + RandomBil(seq) * rockDefinition->startingColorDelta;
+    
     for(u32 startVertexIndex = 0; startVertexIndex < model->vertexCount; ++startVertexIndex)
     {
         ColoredVertex* vertex = tempVertexes + startVertexIndex;
@@ -185,7 +187,7 @@ internal void GenerateRock(ClientRock* dest, VertexModel* model, MemoryPool* tem
         vertex->P.z *= RandomRangeFloat(seq, rockDefinition->minDisplacementZ, rockDefinition->maxDisplacementZ);
         
         vertex->P = rotationMatrix * vertex->P;
-        vertex->color = color + RandomBil(seq) * rockDefinition->perVertexColorDelta;
+        vertex->color = startColor + RandomBil(seq) * rockDefinition->perVertexColorDelta;
         vertex->color = Clamp01(vertex->color);
     }
     

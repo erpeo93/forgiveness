@@ -860,6 +860,7 @@ struct UIState
     EditorWidget* activeWidget;
     
     MemoryPool fixedWidgetsElementPool;
+    EditorElement* emptyFixedElement;
     
     EditorElement* dragging;
     EditorElement* draggingParent;

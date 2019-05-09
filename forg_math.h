@@ -1046,6 +1046,68 @@ inline Rect3 Offset( Rect3 rect, Vec3 offset )
     return result;
 }
 
+
+inline Rect3 Intersect( Rect3 a, Rect3 b )
+{
+    Rect3 result = a;
+    if(a.min.x < b.min.x)
+    { 
+        result.min.x = b.min.x;
+    }
+    if(a.min.y < b.min.y)
+    {
+        result.min.y = b.min.y;
+    }
+    if(a.min.z < b.min.z)
+    {
+        result.min.z = b.min.z;
+    }
+    if(a.max.x > b.max.x ) 
+    {
+        result.max.x = b.max.x;
+    }
+    if(a.max.y > b.max.y)
+    {
+        result.max.y = b.max.y;
+    }
+    if(a.max.z > b.max.z)
+    {
+        result.max.z = b.max.z;
+    }
+    
+    return result;
+}
+
+inline Rect3 Union( Rect3 a, Rect3 b )
+{
+    Rect3 result = a;
+    if(a.min.x > b.min.x)
+    { 
+        result.min.x = b.min.x;
+    }
+    if(a.min.y > b.min.y)
+    {
+        result.min.y = b.min.y;
+    }
+    if(a.min.z > b.min.z)
+    {
+        result.min.z = b.min.z;
+    }
+    if(a.max.x < b.max.x) 
+    {
+        result.max.x = b.max.x;
+    }
+    if(a.max.y < b.max.y)
+    {
+        result.max.y = b.max.y;
+    }
+    if(a.max.z < b.max.z)
+    {
+        result.max.z = b.max.z;
+    }
+    return result;
+}
+
 inline Rect3 AddRadius(Rect3 rect, Vec3 dim)
 {
     Rect3 result = rect;

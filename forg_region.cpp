@@ -366,7 +366,7 @@ internal void EndSim(SimRegion* region)
                         }
                     }
                     
-                    DeleteEntityComponents(region, entity, entityID);
+                    DeleteEntityComponents(region->server, entity, entityID);
                     SendUpdateToAdiacentRegions(region, entity->identifier);
                 }
             }
@@ -609,7 +609,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 InvalidCodePath;
             }
             
-            DeleteEntityComponents(region, dragging, 0);
+            DeleteEntityComponents(region->server, dragging, 0);
         } break;
         
         case Type_DisequipRequest:
