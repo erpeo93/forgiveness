@@ -760,9 +760,20 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 worldMode->firstPakFileArrived = 0;
                 
                 
-                Clear(&gameState->assetPool);
-                gameState->assets = InitAssets(gameState, gameState->textureQueue, MegaBytes(32));
-                group->assets = gameState->assets;
+                u32 destIndex = 0;
+                if(gameState->assetsIndex == 0)
+                {
+                    destIndex = 1;
+                }
+                
+                MemoryPool* toFree = gameState->assetsPool + destIndex;
+                Clear(toFree);
+                gameState->pingPongAssets[destIndex] = InitAssets(gameState, toFree, gameState->textureQueue, MegaBytes(32));
+                
+                gameState->assets = gameState->pingPongAssets[destIndex];
+                gameState->assetsIndex = destIndex;
+                
+                
                 
                 Clear(&worldMode->filePool);
                 worldMode->currentFile = 0;
@@ -772,11 +783,13 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
 #if 1
                 gameState->music = PlaySound(&gameState->soundState, gameState->assets, GetFirstSound(gameState->assets, Asset_music), 0.0f);
-                ChangeVolume(&gameState->soundState, gameState->music, 60.0f, V2(0.0f, 0.0f));
+                //ChangeVolume(&gameState->soundState, gameState->music, 1000.0f, V2(0.0f, 0.0f));
 #endif
                 
                 reloadAssetAutocompletes = true;
             }
+            
+            group->assets = gameState->assets;
             
             player->identifier = myPlayer->identifier;
             player->targetID = myPlayer->targetIdentifier;
@@ -1681,7 +1694,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         gameState->slowQueue = memory->lowPriorityQueue;
         gameState->textureQueue = &memory->textureQueue;
         
-        gameState->assets = InitAssets(gameState, gameState->textureQueue, MegaBytes(32));
+        gameState->assetsIndex = 0;
+        MemoryPool* pool = gameState->assetsPool + 0;
+        gameState->pingPongAssets[0] = InitAssets(gameState, pool, gameState->textureQueue, MegaBytes(32));
+        gameState->assets = gameState->pingPongAssets[0];
+        
         
         InitializeSoundState(&gameState->soundState, &gameState->audioPool);
         

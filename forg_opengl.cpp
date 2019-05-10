@@ -81,12 +81,16 @@
 #define WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB 0x00000002
 #define WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB 0x20A9
 
+#define GL_DEBUG_SEVERITY_NOTIFICATION    0x826B
 //#define GL_DEBUG_CALLBACK(name) void WINAPI name(GLenum source,GLenum type,GLuint id,GLenum severity,GLsizei length,const GLchar *message,const void *userParam)
 GL_DEBUG_CALLBACK(OpenGLDebugCallback)
 {
-    char* errorMessage = (char*) message;
-    InvalidCodePath;
-    Assert(!"openGL error encountered!");
+    if(severity != GL_DEBUG_SEVERITY_NOTIFICATION)
+    {
+        char* errorMessage = (char*) message;
+        InvalidCodePath;
+        Assert(!"openGL error encountered!");
+    }
 }
 
 internal OpenGLInfo OpenGLGetInfo(b32 modernContext)

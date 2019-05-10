@@ -390,7 +390,7 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
         
         char* equipmentName = GetValue(grandGrandParent, "equipment");
         TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(UI->table, equipmentName);
-        
+               
         for(ObjectLayout* layout = slot->firstLayout; layout; layout = layout->next)
         {
             UIAddOption(UI, autocomplete, layout->name);
@@ -437,7 +437,8 @@ inline b32 SpecialHandling(char* name)
     b32 result = false;
     
     if(StrEqual(name, "leafName") ||
-       StrEqual(name, "trunkName"))
+       StrEqual(name, "trunkName") ||
+       StrEqual(name, "skeletonName"))
     {
         result = true;
     }
@@ -3336,15 +3337,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UI->group = group;
         UI->worldMode = worldMode;
         UI->myPlayer = &worldMode->player;
-        
-        TagVector matchVector = {};
-        TagVector weightVector = {};
-        weightVector.E[Tag_fontType] = 1.0f;
-        matchVector.E[Tag_fontType] = ( r32 ) Font_default;
-        UI->fontId = GetMatchingFont(group->assets, Asset_font, &matchVector, &weightVector);
-        
-        UI->scrollIconID = GetMatchingBitmap(group->assets, Asset_scrollUI, &matchVector, &weightVector);
-        
+       
         
         PlatformFile skillsFile = platformAPI.DEBUGReadFile("skills");
         if(skillsFile.content)
@@ -3407,6 +3400,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromFiles(UI);
     }
     
+    
     UI->player = player;
     
     
@@ -3417,21 +3411,30 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
     UI->showCursor = ((triggered % 2) == 0);
     
     
-    if(!UI->font)
-    {
+    
+    TagVector matchVector = {};
+    TagVector weightVector = {};
+    weightVector.E[Tag_fontType] = 1.0f;
+    matchVector.E[Tag_fontType] = ( r32 ) Font_default;
+    UI->fontId = GetMatchingFont(group->assets, Asset_font, &matchVector, &weightVector);
+    
+    UI->scrollIconID = GetMatchingBitmap(group->assets, Asset_scrollUI, &matchVector, &weightVector);
+    
+
+    if(IsValid(UI->fontId))
+       {
         UI->font = PushFont(group, UI->fontId);
         if(UI->font)
         {
-            UI->fontInfo = GetFontInfo(group->assets, UI->fontId);
-            
+            UI->fontInfo = GetFontInfo(group->assets, UI->fontId);        
             for(u8 codepoint = 65; codepoint <= 122; ++codepoint)
             {
                 BitmapId ID = GetBitmapForGlyph(group->assets, UI->font, UI->fontInfo, codepoint);
                 PrefetchBitmap(group->assets, ID);
             }
         }
-    }
-    
+       }
+       
     
     UI->prefix = false;
     UI->suffix = false;

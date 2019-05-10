@@ -284,7 +284,7 @@ inline GameRenderCommands DefaultRenderCommands(u8* pushBuffer, u32 pushBufferSi
     GameRenderCommands result = {};
     result.settings.width = width;
     result.settings.height = height;
-    result.settings.depthPeelCount = 2;
+    result.settings.depthPeelCount = 4;
     result.settings.multisamplingHint = false;
     
     result.clearColor = clearColor;

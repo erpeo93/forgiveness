@@ -419,7 +419,9 @@ struct GameState
     u32 editorRoles;
     
     Assets* assets;
-    MemoryPool assetPool;
+    u32 assetsIndex;
+    Assets* pingPongAssets[2];
+    MemoryPool assetsPool[2];
     
     
     ReceiveNetworkPacketWork receiveNetworkPackets;

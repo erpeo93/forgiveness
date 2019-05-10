@@ -628,9 +628,9 @@ internal void CloseAllHandles(Assets* assets)
     }
 }
 
-internal Assets* InitAssets(GameState* gameState,  PlatformTextureOpQueue* textureQueue, memory_index size)
+internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformTextureOpQueue* textureQueue, memory_index size)
 {
-    Assets* assets = PushStruct(&gameState->assetPool, Assets); 
+    Assets* assets = PushStruct(pool, Assets); 
     assets->gameState = gameState;
     
     
@@ -641,7 +641,7 @@ internal Assets* InitAssets(GameState* gameState,  PlatformTextureOpQueue* textu
     assets->blockSentinel.flags = 0;
     assets->blockSentinel.size = 0;
     
-    InsertBlock(&assets->blockSentinel, size, (AssetMemoryBlock*)PushSize(&gameState->assetPool, size, NoClear()));
+    InsertBlock(&assets->blockSentinel, size, (AssetMemoryBlock*)PushSize(pool, size, NoClear()));
     assets->textureQueue = textureQueue;
     
     assets->whitePixel = 0xFFFFFFFF;
@@ -660,7 +660,7 @@ internal Assets* InitAssets(GameState* gameState,  PlatformTextureOpQueue* textu
     PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, assetPath);
     
     assets->fileCount = fileGroup.fileCount;
-    assets->files = PushArray(&gameState->assetPool, AssetFile, assets->fileCount);
+    assets->files = PushArray(pool, AssetFile, assets->fileCount);
     
     assets->tagCount = 1;
     assets->assetCount = 1;
@@ -677,7 +677,7 @@ internal Assets* InitAssets(GameState* gameState,  PlatformTextureOpQueue* textu
         platformAPI.ReadFromFile(&file->handle, 0, sizeof(file->header), &file->header);
         
         u32 assetTypeArraySize = file->header.assetTypeCount * sizeof(PakAssetType);
-        file->assetTypes = (PakAssetType*) PushSize(&gameState->assetPool, assetTypeArraySize);
+        file->assetTypes = (PakAssetType*) PushSize(pool, assetTypeArraySize);
         
         platformAPI.ReadFromFile(&file->handle, file->header.assetTypeOffset, assetTypeArraySize, file->assetTypes);
         if(file->header.magicValue != PAK_MAGIC_NUMBER)
@@ -705,8 +705,8 @@ internal Assets* InitAssets(GameState* gameState,  PlatformTextureOpQueue* textu
     
     platformAPI.GetAllFilesEnd(&fileGroup);
     
-    assets->tags = PushArray(&gameState->assetPool, PakTag, assets->tagCount);
-    assets->assets = PushArray(&gameState->assetPool, Asset, assets->assetCount);
+    assets->tags = PushArray(pool, PakTag, assets->tagCount);
+    assets->assets = PushArray(pool, Asset, assets->assetCount);
     
     // NOTE(Leonardo): rebase the tags!
     for(u32 fileIndex = 0; fileIndex < assets->fileCount; fileIndex++)
@@ -749,13 +749,13 @@ internal Assets* InitAssets(GameState* gameState,  PlatformTextureOpQueue* textu
                         {
                             file->fontBitmapsOffsetIndex = assetCount - sourceType->firstAssetIndex;
                         }
-                        TempMemory assetMemory = BeginTemporaryMemory(&gameState->assetPool);
+                        TempMemory assetMemory = BeginTemporaryMemory(pool);
                         
                         u32 assetCountForType = sourceType->onePastLastAssetIndex - sourceType->firstAssetIndex;
                         u32 assetArraySize = assetCountForType * sizeof(PakAsset);
                         
                         u64 assetOffset = file->header.assetOffset + sourceType->firstAssetIndex * sizeof(PakAsset);
-                        PakAsset* pakAssetArray = (PakAsset*) PushSize(&gameState->assetPool, assetArraySize, NoClear());
+                        PakAsset* pakAssetArray = (PakAsset*) PushSize(pool, assetArraySize, NoClear());
                         
                         platformAPI.ReadFromFile(&file->handle, assetOffset, assetArraySize, pakAssetArray);
                         

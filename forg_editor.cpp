@@ -3179,7 +3179,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     }
     else if(StrEqual(name, "skeleton"))
     {
-        char* skeleton = GetValue(root, "name");
+        char* skeleton = GetValue(root, "skeletonName");
         Vec4 color = ToV4Color(GetStruct(root, "defaultColoration"));
         Vec2 originOffset = ToV2(GetStruct(root, "originOffset"));
         UsesSkeleton(skeleton, color, originOffset);

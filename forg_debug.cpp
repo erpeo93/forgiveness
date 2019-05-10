@@ -1905,8 +1905,12 @@ internal void DEBUGReset( Assets* assets, GameRenderCommands* commands)
     matchVector.E[Tag_fontType] = ( r32 ) Font_debug;
     
     debugState->fontId = GetMatchingFont( assets, Asset_font, &matchVector, &weightVector );
-    debugState->debugFont = PushFont( &debugState->renderGroup, debugState->fontId );
-    debugState->debugFontInfo = GetFontInfo( debugState->renderGroup.assets, debugState->fontId );
+    
+    if(IsValid(debugState->fontId))
+    {
+        debugState->debugFont = PushFont( &debugState->renderGroup, debugState->fontId );
+        debugState->debugFontInfo = GetFontInfo( debugState->renderGroup.assets, debugState->fontId );
+    }
     
 }
 
@@ -1957,9 +1961,13 @@ extern "C" GAME_FRAME_END( GameDEBUGFrameEnd )
     }
     
     Vec2 mouseP = Unproject( &debugState->renderGroup, &debugState->renderGroup.gameCamera, V2( input->mouseX, input->mouseY ), 0 ).xy;
-    DEBUGOverlay(debugState, serverCollation, input, mouseP); 
-    DEBUGOverlay(debugState, clientCollation, input, mouseP); 
     
+    if(IsValid(debugState->fontId))
+    {
+        DEBUGOverlay(debugState, serverCollation, input, mouseP); 
+        DEBUGOverlay(debugState, clientCollation, input, mouseP); 
+        
+    }
     debugState->lastMouseP = mouseP;
     
     EndRenderGroup( &debugState->renderGroup );

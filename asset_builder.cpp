@@ -625,6 +625,54 @@ inline u32 GetChunkDataSize( RiffIter iter )
     return result;
 }
 
+internal u32 GetSoundSampleCount(char* filename)
+{
+    u32 result = {};
+    u32 channelCount = 0;
+    
+    EntireFile sound = ReadFile(filename);
+    Assert(sound.content);
+    if( sound.content )
+    {
+        WAVEHeader* header = (WAVEHeader*) sound.content;
+        Assert(header->id == WAVE_IDriff);
+        Assert(header->waveID == WAVE_IDwave);
+        
+        void* samplesLeft = 0;
+        void* samplesRight = 0;
+        
+        for(RiffIter iter = ParseChunkAt(header + 1, ( u8* ) ( header + 1) + header->size - 4 ); IsValid( iter ); iter = NextChunk(iter))
+        {
+            switch(GetType(iter))
+            {
+                case WAVE_IDfmt:
+                {
+                    WAVEFormat* format = ( WAVEFormat* ) GetChunkData(iter); 
+                    
+                    Assert(format->format == 1 );
+                    Assert(format->blocksPerSec = 48000);
+                    Assert(format->bitsPerSample == 16 );
+                    Assert(format->channels == 2);
+                    Assert(format->blockSize == format->channels * 2);
+                    
+                    
+                    channelCount = format->channels;
+                } break;
+                
+                case WAVE_IDdata:
+                {
+                    result = GetChunkDataSize(iter) /(channelCount * sizeof(i16));
+                } break;
+            }
+        }
+        
+        free(sound.content);
+    }
+    
+    return result;
+}
+
+
 internal LoadedSound LoadWAV(char* filename, u32 firstSampleIndex, u32 sectionSampleCount)
 {
     LoadedSound result = {};
@@ -634,20 +682,20 @@ internal LoadedSound LoadWAV(char* filename, u32 firstSampleIndex, u32 sectionSa
     if( sound.content )
     {
         result.free = sound.content;
-        WAVEHeader* header = ( WAVEHeader* ) sound.content;
-        Assert( header->id == WAVE_IDriff );
-        Assert( header->waveID == WAVE_IDwave );
+        WAVEHeader* header = (WAVEHeader*) sound.content;
+        Assert(header->id == WAVE_IDriff);
+        Assert(header->waveID == WAVE_IDwave);
         
         void* samplesLeft = 0;
         void* samplesRight = 0;
         
-        for( RiffIter iter = ParseChunkAt( header + 1, ( u8* ) ( header + 1 ) + header->size - 4 ); IsValid( iter ); iter = NextChunk( iter ) )
+        for(RiffIter iter = ParseChunkAt(header + 1, ( u8* ) ( header + 1) + header->size - 4 ); IsValid( iter ); iter = NextChunk(iter))
         {
-            switch( GetType( iter ) )
+            switch(GetType(iter))
             {
                 case WAVE_IDfmt:
                 {
-                    WAVEFormat* format = ( WAVEFormat* ) GetChunkData( iter ); 
+                    WAVEFormat* format = ( WAVEFormat* ) GetChunkData(iter); 
                     
                     Assert(format->format == 1 );
                     Assert(format->blocksPerSec = 48000);
@@ -659,7 +707,7 @@ internal LoadedSound LoadWAV(char* filename, u32 firstSampleIndex, u32 sectionSa
                 
                 case WAVE_IDdata:
                 {
-                    u32 sampleCount = GetChunkDataSize( iter ) /( result.countChannels * sizeof( i16 ) );
+                    u32 sampleCount = GetChunkDataSize(iter) /(result.countChannels * sizeof(i16));
                     
                     if(result.countChannels == 1)
                     {
@@ -721,7 +769,6 @@ internal LoadedSound LoadWAV(char* filename, u32 firstSampleIndex, u32 sectionSa
                             
                         }
                         result.countSamples = sampleCount;
-                        
                         
                     }
                 } break;
@@ -2385,12 +2432,15 @@ internal void WriteAnimations(char* folder, char* name)
     AddEveryAnimationThatStartsWith(completePath, hashID, "walk");
     AddEveryAnimationThatStartsWith(completePath, hashID, "run");
     AddEveryAnimationThatStartsWith(completePath, hashID, "move");
+    AddEveryAnimationThatStartsWith(completePath, hashID, "fly");
     EndAssetType();
     
     
+#if 0    
     BeginAssetType(assets, Asset_attacking);
     AddEveryAnimationThatStartsWith(completePath, hashID, "attack");
     EndAssetType();
+#endif
     
     BeginAssetType(assets, Asset_eating);
     AddEveryAnimationThatStartsWith(completePath, hashID, "eat");
@@ -2644,9 +2694,20 @@ internal void WriteLeafs()
     InitializeAssets(assets);
     
     BeginAssetType(assets, Asset_leaf);
-    AddBitmapAsset(leafPath, "leaf.png", 0, 0.5f, 0);
-    AddBitmapAsset(leafPath, "leaf2.png", 0, 0.5f, 0);
+    PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, leafPath);
+    if(bitmapGroup.fileCount)
+    {
+        for(u32 imageIndex = 0; imageIndex < bitmapGroup.fileCount; ++imageIndex)
+        {
+            PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, leafPath);
+            AddBitmapAsset(leafPath, bitmapHandle.name, 0, 0.5f, 0);
+            Win32CloseHandle(&bitmapHandle);
+        }
+    }
+    Win32GetAllFilesEnd(&bitmapGroup);
     EndAssetType();
+    
+    
     
     WritePak(assets, "forgleafs.pak" );
 }
@@ -2660,8 +2721,19 @@ internal void WriteTrunks()
     InitializeAssets(assets);
     
     BeginAssetType(assets, Asset_trunk);
-    AddBitmapAsset(trunkPath, "trunk.png", 0, 0.5f, 0.5f);
+    PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, trunkPath);
+    if(bitmapGroup.fileCount)
+    {
+        for(u32 imageIndex = 0; imageIndex < bitmapGroup.fileCount; ++imageIndex)
+        {
+            PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, trunkPath);
+            AddBitmapAsset(trunkPath, bitmapHandle.name, 0, 0.5f, 0);
+            Win32CloseHandle(&bitmapHandle);
+        }
+    }
+    Win32GetAllFilesEnd(&bitmapGroup);
     EndAssetType();
+    
     
     WritePak(assets, "forgtrunks.pak" );
 }
@@ -2902,30 +2974,48 @@ internal void WriteMusic()
     Assets* assets = &assets_;
     InitializeAssets(assets );
     
+    u32 oneSecond = 48000;
+    u32 tenSeconds = oneSecond * 10;
+    char* musicPath = "definition/music";
+    
+    
     BeginAssetType(assets, Asset_music);
     
-    u32 tenSeconds = 10 * 48000;
-    u32 totalSamples = tenSeconds * 6;
-    
-    SoundId lastMusic = {};
-    for(u32 firstSampleIndex = 0; 
-        firstSampleIndex < totalSamples; 
-        firstSampleIndex += tenSeconds )
+    PlatformFileGroup soundGroup = Win32GetAllFilesBegin(PlatformFile_sound, musicPath);
+    for(u32 soundIndex = 0; soundIndex < soundGroup.fileCount; ++soundIndex)
     {
-        u32 lastSampleIndex = tenSeconds;
-        u32 remainingSamples = totalSamples - firstSampleIndex;
-        if(remainingSamples < tenSeconds )
+        PlatformFileHandle soundHandle = Win32OpenNextFile(&soundGroup, musicPath);
+        
+        char completeSoundName[256];
+        FormatString(completeSoundName, sizeof(completeSoundName), "%s/%s", musicPath, soundHandle.name);
+        
+        u32 totalSamples = GetSoundSampleCount(completeSoundName);
+        
+        SoundId lastMusic = {};
+        for(u32 firstSampleIndex = 0; 
+            firstSampleIndex < totalSamples; 
+            firstSampleIndex += tenSeconds)
         {
-            lastSampleIndex = remainingSamples;
-        }
-        SoundId thisMusic = AddSoundAsset("definition/music/test.wav", 0, firstSampleIndex, lastSampleIndex);
-        if(lastMusic.value)
-        {
-            assets->assets[lastMusic.value].sound.chain = Chain_next;
+            u32 lastSampleIndex = tenSeconds;
+            u32 remainingSamples = totalSamples - firstSampleIndex;
+            if(remainingSamples < tenSeconds)
+            {
+                lastSampleIndex = remainingSamples;
+            }
+            SoundId thisMusic = AddSoundAsset(completeSoundName, 0, firstSampleIndex, lastSampleIndex);
+            if(lastMusic.value)
+            {
+                assets->assets[lastMusic.value].sound.chain = Chain_next;
+            }
+            
+            lastMusic = thisMusic;
         }
         
-        lastMusic = thisMusic;
+        
+        Win32CloseHandle(&soundHandle);
     }
+    Win32GetAllFilesEnd(&soundGroup);
+    
     
     EndAssetType();
     WritePak(assets, "musicS.pak" );

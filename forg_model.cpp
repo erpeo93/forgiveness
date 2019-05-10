@@ -113,7 +113,7 @@ inline void AddToVertexHash(VertexHash* hash, u16 I0, u16 I1, u16 I01, MemoryPoo
     free->inBetweenIndex = I01;
 }
 
-inline void CreateRockVertex(RockDefinition* rockDefinition, ColoredVertex* vertexes, u32 vertexIndex, ColoredVertex* v0, ColoredVertex* v1, r32 offsetCoeff, RandomSequence* seq)
+inline void CreateRockVertex(RockDefinition* rockDefinition, ColoredVertex* vertexes, u32 vertexIndex, ColoredVertex* v0, ColoredVertex* v1, r32 offsetCoeff, RandomSequence* seq, Vec4 rockStartingColor)
 {
     ColoredVertex* newVertex = vertexes + vertexIndex;
     
@@ -125,7 +125,12 @@ inline void CreateRockVertex(RockDefinition* rockDefinition, ColoredVertex* vert
     smoothness = Clamp01(smoothness);
     r32 lerpValue = (smoothness * 0.5f);
     
-    newVertex->color = Lerp(v0->color, lerpValue, v1->color);
+    Vec4 modifiedColor = Lerp(v0->color, lerpValue, v1->color);
+	Vec4 vanillaColor = rockStartingColor;
+	r32 fallbackToStarting = 0;
+    
+	newVertex->color = Lerp(modifiedColor, fallbackToStarting, vanillaColor);
+    
     
     if(RandomUni(seq) < rockDefinition->percentageOfMineralVertexes)
     {
@@ -138,6 +143,7 @@ inline void CreateRockVertex(RockDefinition* rockDefinition, ColoredVertex* vert
             {
                 r32 lerp = mineral->lerp + RandomBil(seq) * mineral->lerpDelta;
                 newVertex->color = Lerp(newVertex->color, lerp, mineral->color);
+                
                 break;
             }
         }
@@ -218,7 +224,7 @@ internal void GenerateRock(ClientRock* dest, VertexModel* model, MemoryPool* tem
             {
                 I01 = vertexCount++;
                 AddToVertexHash(vertexHash, I0, I1, I01, tempPool);
-                CreateRockVertex(rockDefinition, tempVertexes, I01, v0, v1, offsetCoeff, seq);
+                CreateRockVertex(rockDefinition, tempVertexes, I01, v0, v1, offsetCoeff, seq, startColor);
             }
             
             u16 I12;
@@ -226,7 +232,7 @@ internal void GenerateRock(ClientRock* dest, VertexModel* model, MemoryPool* tem
             {
                 I12 = vertexCount++;
                 AddToVertexHash(vertexHash, I1, I2, I12, tempPool);
-                CreateRockVertex(rockDefinition, tempVertexes, I12, v1, v2, offsetCoeff, seq);
+                CreateRockVertex(rockDefinition, tempVertexes, I12, v1, v2, offsetCoeff, seq, startColor);
             }
             
             
@@ -235,7 +241,7 @@ internal void GenerateRock(ClientRock* dest, VertexModel* model, MemoryPool* tem
             {
                 I20 = vertexCount++;
                 AddToVertexHash(vertexHash, I2, I0, I20, tempPool);
-                CreateRockVertex(rockDefinition, tempVertexes, I20, v2, v0, offsetCoeff, seq);
+                CreateRockVertex(rockDefinition, tempVertexes, I20, v2, v0, offsetCoeff, seq, startColor);
             }
             
             

@@ -950,24 +950,26 @@ NETWORK_RECEIVE_DATA(Win32ReceiveData)
                     {
                         if(!network->nextConnectionIndex || header.connectionSlot < network->nextConnectionIndex)
                         {
-                            NetworkConnection* connection = network->connections + header.connectionSlot;
-                            
-                            SignalReceivedPacket(connection, header.progressiveIndex);
-                            
-                            BeginNetMutex(&connection->mutex);
-                            if(connection->salt == header.salt)
+                            if(header.salt)
                             {
-                                QueueAck(connection, header.acked, header.ackedBits);
-                                NetworkBufferedPacket* recv;
-                                NETFREELIST_ALLOC(recv, connection->firstFreePacket, (NetworkBufferedPacket*) malloc(sizeof(NetworkBufferedPacket)));
-                                recv->flags = header.flags;
-                                recv->progressiveIndex = header.progressiveIndex;
-                                recv->dataSize = header.dataSize;
-                                memcpy(recv->data, start, header.dataSize);
+                                NetworkConnection* connection = network->connections + header.connectionSlot;
+                                SignalReceivedPacket(connection, header.progressiveIndex);
                                 
-                                NETDLLIST_INSERT_AS_LAST(&connection->recvQueueSentinel, recv);
+                                BeginNetMutex(&connection->mutex);
+                                if(connection->salt == header.salt)
+                                {
+                                    QueueAck(connection, header.acked, header.ackedBits);
+                                    NetworkBufferedPacket* recv;
+                                    NETFREELIST_ALLOC(recv, connection->firstFreePacket, (NetworkBufferedPacket*) malloc(sizeof(NetworkBufferedPacket)));
+                                    recv->flags = header.flags;
+                                    recv->progressiveIndex = header.progressiveIndex;
+                                    recv->dataSize = header.dataSize;
+                                    memcpy(recv->data, start, header.dataSize);
+                                    
+                                    NETDLLIST_INSERT_AS_LAST(&connection->recvQueueSentinel, recv);
+                                }
+                                EndNetMutex(&connection->mutex);
                             }
-                            EndNetMutex(&connection->mutex);
                         }
                     }
                     else if(header.magicNumber == DISCONNECTNUMBER)
