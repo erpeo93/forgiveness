@@ -329,7 +329,7 @@ struct GameModeWorld
     TicketMutex animationEffectMutex;
     AnimationEffect* firstFreeEffect;
     
-    
+    RandomSequence leafSequence;
     RandomSequence waterRipplesSequence;
     ParticleCache* particleCache;
     

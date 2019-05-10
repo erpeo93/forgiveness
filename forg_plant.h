@@ -19,10 +19,13 @@ struct PlantSegment
 
 struct Leaf
 {
+    b32 initialized;
+    
     r32 dimCoeff;
     r32 offsetCoeff;
     
     r32 renderingRandomization;
+    r32 colorRandomization;
     r32 windRandomization;
 };
 
@@ -53,7 +56,6 @@ struct PlantStem
     
     r32 additionalCurveBackAngle;
     
-    u32 leafCount;
     Leaf leafs[MAX_LEAFS_PER_STEM];
     
     union

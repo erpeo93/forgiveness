@@ -357,6 +357,11 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                     childStem->childsCurrentAngle = 0;
                     childStem->additionalCurveBackAngle = 0;
                     
+                    for(u32 leafIndex = 0; leafIndex < ArrayCount(childStem->leafs); ++leafIndex)
+                    {
+                        childStem->leafs[leafIndex] = {};
+                    }
+                    
                     FREELIST_INSERT(childStem, segment->childs);
                     
                     
@@ -493,6 +498,11 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                         clonedStem->childsCurrentAngle = stem->childsCurrentAngle;
                         clonedStem->additionalCurveBackAngle = -angleY;
                         
+                        for(u32 leafIndex = 0; leafIndex < ArrayCount(clonedStem->leafs); ++leafIndex)
+                        {
+                            clonedStem->leafs[leafIndex] = {};
+                        }
+                        
                         FREELIST_INSERT(clonedStem, segment->clones);
                         
                         runningAngle += rotatingAngle;
@@ -521,15 +531,18 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
     for(u32 leafIndex = 0; leafIndex < levelParams->leafCount; ++leafIndex)
     {
         Leaf* leaf = stem->leafs + leafIndex;
-        if(!leaf->dimCoeff)
+        if(!leaf->initialized)
         {
+            leaf->initialized = true;
+            
             if(leafIndex == 0)
             {
-                segmentWindRandomization = RandomBil(&plant->sequence);
+                segmentWindRandomization = RandomBil(&worldMode->leafSequence);
             }
-            leaf->renderingRandomization = RandomBil(&plant->sequence);
             
-            r32 leafRandomization = RandomBil(&plant->sequence);
+            leaf->renderingRandomization = RandomBil(&worldMode->leafSequence);
+            leaf->colorRandomization = RandomBil(&worldMode->leafSequence);
+            r32 leafRandomization = RandomBil(&worldMode->leafSequence);
             leaf->windRandomization = Lerp(segmentWindRandomization, definition->leafWindDirectionV, leafRandomization);
         }
     }
@@ -637,43 +650,41 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
         topZ += segmentUnitZ;
     }
     
-    for(u32 leafIndex = 0; leafIndex < levelParams->leafCount; ++leafIndex)
+    if(IsValid(plant->leafBitmap))
     {
-        Leaf* leaf = stem->leafs + leafIndex;
-        r32 leafTargetDensity = BilateralToUnilateral(leaf->renderingRandomization);
-        if(plant->leafDensity > leafTargetDensity)
+        for(u32 leafIndex = 0; leafIndex < levelParams->leafCount; ++leafIndex)
         {
-            Vec2 leafScale = plant->leafDimension * definition->leafScale + leaf->renderingRandomization * definition->leafScaleV;
-            Vec2 scale = leaf->dimCoeff * leafScale;
-            
-            Vec3 leafP = topP + V3(0, 0, 0.001f * leafIndex) + leaf->offsetCoeff * leaf->renderingRandomization * definition->leafOffsetV;
-            
-            
-            Vec4 aliveColor = definition->leafColor;
-            Vec4 deadColor = definition->leafColor;
-            
-            Vec4 referenceColor = Lerp(definition->leafColor, plant->life, deadColor);
-            Vec4 leafColor = referenceColor + leaf->renderingRandomization * definition->leafColorV;
-            leafColor = Clamp01(leafColor);
-            
-            
-            ObjectTransform leafTransform = UprightTransform();
-            
-            r32 leafAngle = leaf->renderingRandomization * Abs(definition->leafAngleV);
-            
-            if(definition->leafAngleV < 0 && Cos(DegToRad(leafAngle)) < 0)
+            Leaf* leaf = stem->leafs + leafIndex;
+            r32 leafTargetDensity = BilateralToUnilateral(leaf->renderingRandomization);
+            if(plant->leafDensity > leafTargetDensity)
             {
-                leafTransform.flipOnYAxis = true;
-            }
-            
-            
-            leafAngle += Sin(windTime + TAU32 * leaf->windRandomization) * definition->leafWindAngleV;
-            
-            leafTransform.angle = leafAngle;
-            leafTransform.modulationPercentage = renderingParams.modulationWithFocusColor;
-            
-            if(IsValid(plant->leafBitmap))
-            {
+                Vec2 leafScale = plant->leafDimension * definition->leafScale + leaf->renderingRandomization * definition->leafScaleV;
+                Vec2 scale = leaf->dimCoeff * leafScale;
+                
+                Vec3 leafP = topP + V3(0, 0, 0.001f * leafIndex) + leaf->offsetCoeff * leaf->renderingRandomization * definition->leafOffsetV;
+                
+                Vec4 aliveColor = definition->leafColor;
+                Vec4 deadColor = definition->leafColor;
+                
+                Vec4 referenceColor = Lerp(deadColor, plant->life, aliveColor);
+                Vec4 leafColor = referenceColor + leaf->colorRandomization * definition->leafColorV;
+                leafColor = Clamp01(leafColor);
+                
+                
+                ObjectTransform leafTransform = UprightTransform();
+                
+                r32 leafAngle = leaf->renderingRandomization * Abs(definition->leafAngleV);
+                if(definition->leafAngleV < 0 && Cos(DegToRad(leafAngle)) < 0)
+                {
+                    leafTransform.flipOnYAxis = true;
+                }
+                
+                
+                leafAngle += Sin(windTime + TAU32 * leaf->windRandomization) * definition->leafWindAngleV;
+                
+                leafTransform.angle = leafAngle;
+                leafTransform.modulationPercentage = renderingParams.modulationWithFocusColor;
+                
                 PushBitmap(group, leafTransform, plant->leafBitmap, leafP, 0, scale, leafColor, renderingParams.lightIndexes);
             }
         }

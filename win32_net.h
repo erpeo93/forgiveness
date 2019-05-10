@@ -375,13 +375,11 @@ inline void DispatchQueuedAcks(NetworkConnection* connection)
 
 inline void QueueAck(NetworkConnection* connection, u16 ackedIndex, AckedBits bits)
 {
-    BeginNetMutex(&connection->mutex);
     NetworkBufferedAck* ack;
     NETFREELIST_ALLOC(ack, connection->firstFreeAck, (NetworkBufferedAck*) malloc(sizeof(NetworkAck)));
     ack->ack.progressiveIndex = ackedIndex;
     ack->ack.bits = bits;
     NETFREELIST_INSERT(ack, connection->firstQueuedAck);
-    EndNetMutex(&connection->mutex);
 }
 
 inline PacketData* GetPacketData(NetworkConnection* connection, u16 packetIndex)
@@ -419,7 +417,6 @@ inline void SignalReceivedPacket(NetworkConnection* connection, u16 packetIndex)
     ++connection->receivedPacketsLastTick;
     
     NetworkAck newAckToInclude = connection->ackToInclude;
-    
     if(packetIndex != newAckToInclude.progressiveIndex)
     {
         u16 bitsToInclude = sizeof(AckedBits) * 8;
@@ -650,7 +647,6 @@ inline void Win32FreeConnection(NetworkInterface* network, NetworkConnection* co
     }
     
     NETFREELIST_FREE(connection->firstQueuedAck, NetworkBufferedAck, connection->firstFreeAck);
-    
     
     Assert(NETDLLIST_ISEMPTY(&connection->sendQueueSentinel));
     Assert(NETDLLIST_ISEMPTY(&connection->recvQueueSentinel));
@@ -956,25 +952,22 @@ NETWORK_RECEIVE_DATA(Win32ReceiveData)
                         {
                             NetworkConnection* connection = network->connections + header.connectionSlot;
                             
+                            SignalReceivedPacket(connection, header.progressiveIndex);
+                            
+                            BeginNetMutex(&connection->mutex);
                             if(connection->salt == header.salt)
                             {
-                                SignalReceivedPacket(connection, header.progressiveIndex);
                                 QueueAck(connection, header.acked, header.ackedBits);
+                                NetworkBufferedPacket* recv;
+                                NETFREELIST_ALLOC(recv, connection->firstFreePacket, (NetworkBufferedPacket*) malloc(sizeof(NetworkBufferedPacket)));
+                                recv->flags = header.flags;
+                                recv->progressiveIndex = header.progressiveIndex;
+                                recv->dataSize = header.dataSize;
+                                memcpy(recv->data, start, header.dataSize);
                                 
-                                BeginNetMutex(&connection->mutex);
-                                if(connection->salt == header.salt)
-                                {
-                                    NetworkBufferedPacket* recv;
-                                    NETFREELIST_ALLOC(recv, connection->firstFreePacket, (NetworkBufferedPacket*) malloc(sizeof(NetworkBufferedPacket)));
-                                    recv->flags = header.flags;
-                                    recv->progressiveIndex = header.progressiveIndex;
-                                    recv->dataSize = header.dataSize;
-                                    memcpy(recv->data, start, header.dataSize);
-                                    
-                                    NETDLLIST_INSERT_AS_LAST(&connection->recvQueueSentinel, recv);
-                                }
-                                EndNetMutex(&connection->mutex);
+                                NETDLLIST_INSERT_AS_LAST(&connection->recvQueueSentinel, recv);
                             }
+                            EndNetMutex(&connection->mutex);
                         }
                     }
                     else if(header.magicNumber == DISCONNECTNUMBER)
