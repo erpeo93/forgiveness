@@ -49,6 +49,7 @@ copy ..\..\code\changelog.txt .
 
 copy %buildpath%\forg_client.dll .
 copy %buildpath%\win32_client.exe .
+rename win32_client.exe forgiveness.exe
 copy %buildpath%\asset_builder.exe .
 copy ..\..\client\assets\forgivenessF.upak assets
 
@@ -73,5 +74,10 @@ copy %buildpath%\forg_client.dll .
 copy %buildpath%\win32_client.exe .
 copy %buildpath%\asset_builder.exe .
 
-copy ..\..\build\*.pdb .
+mkdir code
+cd code
+
+xcopy ..\..\..\code . /E /Y /I /V
+
+copy ..\..\..\build\*.pdb .
 popd
