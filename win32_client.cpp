@@ -216,16 +216,25 @@ global_variable TicketMutex memoryMutex;
 internal Win32GameCode Win32LoadGameCode( char* DLLName, char* tempDLLName, char* lockName )
 {
     Win32GameCode result = {};
-    CopyFile( DLLName, tempDLLName, 0 );
+    
+    char* toLoad = DLLName;
+#if FORGIVENESS_INTERNAL
+    CopyFile(DLLName, tempDLLName, 0);
+    char* toLoad = tempDLLName;
+#endif
+    
+    
     WIN32_FILE_ATTRIBUTE_DATA fileAttributes;
     WIN32_FILE_ATTRIBUTE_DATA ignored;
+    
+    
     if( !GetFileAttributesEx( lockName, GetFileExInfoStandard, &ignored ) )
     {
-        if( GetFileAttributesEx( DLLName, GetFileExInfoStandard, &fileAttributes ) )
+        if( GetFileAttributesEx(DLLName, GetFileExInfoStandard, &fileAttributes))
         {
             result.lastWriteTime = fileAttributes.ftLastWriteTime;
         }
-        result.gameDLL = LoadLibrary(tempDLLName );
+        result.gameDLL = LoadLibrary(toLoad);
         if( result.gameDLL )
         {
             result.UpdateAndRender = ( game_update_and_render* ) GetProcAddress( result.gameDLL, "GameUpdateAndRender" );
@@ -234,6 +243,7 @@ internal Win32GameCode Win32LoadGameCode( char* DLLName, char* tempDLLName, char
             result.isValid = ( result.UpdateAndRender && result.GetSoundOutput && result.DEBUGFrameEnd );
         }
     }
+    
     
     if( !result.isValid )
     {

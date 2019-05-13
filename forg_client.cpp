@@ -368,9 +368,6 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 
 internal void PlayGame(GameState* gameState, PlatformInput* input)
 {
-    Assert(0);
-    
-    
     SetGameMode(gameState, GameMode_Playing);
     GameModeWorld* result = PushStruct(&gameState->modePool, GameModeWorld);
     

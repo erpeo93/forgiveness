@@ -35,11 +35,12 @@ mkdir assets
 mkdir editor
 mkdir editor\assets
 mkdir editor\definition
+mkdir editor\errors
 
 mkdir server
 mkdir server\assets
+mkdir server\errors
 
-copy %buildpath%\asset_builder.exe build
 copy %buildpath%\forg_server.dll build
 copy %buildpath%\win32_server.exe build
 
@@ -67,17 +68,18 @@ cd ..\release
 mkdir %mypdbdir%
 cd %mypdbdir%
 
+mkdir dumps
+
 copy %buildpath%\asset_builder.exe .
 copy %buildpath%\forg_server.dll .
 copy %buildpath%\win32_server.exe .
 copy %buildpath%\forg_client.dll .
 copy %buildpath%\win32_client.exe .
 copy %buildpath%\asset_builder.exe .
+copy %buildpath%\*.pdb .
 
 mkdir code
 cd code
 
 xcopy ..\..\..\code . /E /Y /I /V
-
-copy ..\..\..\build\*.pdb .
 popd

@@ -253,7 +253,14 @@ internal void FreeServerCode( ServerFunctions* functions )
 ServerFunctions LoadServerCode( char* DLLName, char* tempDLLName, char* lockName )
 {
     ServerFunctions result = {};
+    
+    char* toLoad = DLLName;
+    
+#if FORGIVENESS_INTERNAL
     CopyFile( DLLName, tempDLLName, 0 );
+    toLoad = tempDLLName;
+#endif
+    
     WIN32_FILE_ATTRIBUTE_DATA fileAttributes;
     WIN32_FILE_ATTRIBUTE_DATA ignored;
     if(!GetFileAttributesEx( lockName, GetFileExInfoStandard, &ignored))
@@ -262,7 +269,7 @@ ServerFunctions LoadServerCode( char* DLLName, char* tempDLLName, char* lockName
         {
             result.lastWriteTime = fileAttributes.ftLastWriteTime;
         }
-        HMODULE serverDLL = LoadLibrary(tempDLLName);
+        HMODULE serverDLL = LoadLibrary(toLoad);
         if(serverDLL)
         {
             result.serverDLL = serverDLL;
