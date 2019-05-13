@@ -9,6 +9,7 @@
 #include <process.h>
 #include <Tlhelp32.h>
 #include <winbase.h>
+#include <DbgHelp.h>
 
 #include <math.h>
 
@@ -43,6 +44,7 @@ global_variable i16* soundSamples;
 global_variable DWORD lastPlayCursor;
 global_variable DWORD writeCursor;
 global_variable i64 globalFrequency;
+global_variable HWND globalWindow;
 #define IsInLoop() false
 
 
@@ -1200,14 +1202,59 @@ internal r32 Win32GetSecondsElapsed( LARGE_INTEGER lastCounter, LARGE_INTEGER en
 }
 
 
+PLATFORM_ERROR_MESSAGE(Win32ErrorMessage)
+{
+    MessageBox(globalWindow, message, 0, MB_OK);
+    InvalidCodePath;
+}
+
 #if FORGIVENESS_INTERNAL
 global_variable DebugTable globalDebugTable_;
 DebugTable* globalDebugTable = &globalDebugTable_;
 #endif
 
-int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR commandLine, int showCode )
+
+void CreateMiniDump( EXCEPTION_POINTERS* pep ) 
 {
-    DEBUGSetEventRecording( true );
+    // Open the file 
+    
+    char buffer [255];
+    sprintf(buffer,"errors/dump_%d.dmp", (u32) time(0));
+    
+    HANDLE hFile = CreateFile(buffer, GENERIC_READ | GENERIC_WRITE, 
+                              0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL ); 
+    
+    if( ( hFile != NULL ) && ( hFile != INVALID_HANDLE_VALUE ) ) 
+    {
+        // Create the minidump 
+        
+        MINIDUMP_EXCEPTION_INFORMATION mdei; 
+        
+        mdei.ThreadId           = GetCurrentThreadId(); 
+        mdei.ExceptionPointers  = pep; 
+        mdei.ClientPointers     = FALSE; 
+        
+        MINIDUMP_TYPE mdt       = MiniDumpNormal; 
+        
+        BOOL rv = MiniDumpWriteDump( GetCurrentProcess(), GetCurrentProcessId(), 
+                                    hFile, mdt, (pep != 0) ? &mdei : 0, 0, 0 ); 
+        
+        CloseHandle( hFile ); 
+        
+    }
+    else 
+    {
+        //_tprintf("CreateFile failed. Error: %u \n", GetLastError() ); 
+    }
+    
+    abort();
+}
+
+int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR commandLine, int showCode)
+{
+    SetUnhandledExceptionFilter((LPTOP_LEVEL_EXCEPTION_FILTER) CreateMiniDump);
+    
+    DEBUGSetEventRecording(true);
     
     globalMemorySentinel.next = &globalMemorySentinel;
     globalMemorySentinel.prev = &globalMemorySentinel;
@@ -1271,7 +1318,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             Win32MakeQueue( &lowQueue, ArrayCount( lowPriorityStartups ), lowPriorityStartups );
             
             
-            
+            globalWindow = window;
             
             int monitorRefreshRate = 60;
             HDC refreshDC = GetDC( window );
@@ -1355,6 +1402,8 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             gameMemory.api.DEBUGExistsProcessWithName = Win32ExistsProcessWithName;
             gameMemory.api.DEBUGKillProcessByName = Win32KillProcessByName;
             
+            gameMemory.api.ErrorMessage = Win32ErrorMessage;
+            
             
             gameMemory.api.DeleteFileWildcards = Win32DeleteFileWildcards;
             gameMemory.api.MoveFileOrFolder = Win32MoveFileOrFolder;
@@ -1430,6 +1479,13 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         ScreenToClient( window, &mousePos);
                         
                         SlideInput();
+                        
+                        gameInput.serverEXE = commandLine;
+                        
+                        if(StrLen(gameInput.serverEXE) == 0)
+                        {
+                            gameInput.serverEXE = "build/win32_server.exe";
+                        }
                         
                         gameInput.mouseWheelOffset = 0;
                         r32 mouseX = ( r32 ) mousePos.x;

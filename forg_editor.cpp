@@ -3881,7 +3881,7 @@ internal void ImportAllAssetFiles(GameModeWorld* worldMode, char* dataPath, Memo
 #if FORG_SERVER
 inline void LoadAssets()
 {
-    PlatformProcessHandle assetBuilder = platformAPI.DEBUGExecuteSystemCommand(".", "../build/asset_builder.exe", "");
+    PlatformProcessHandle assetBuilder = platformAPI.DEBUGExecuteSystemCommand(".", "../asset_builder.exe", "");
     while(true)
     {
         PlatformProcessState assetBuilderState = platformAPI.DEBUGGetProcessState(assetBuilder);

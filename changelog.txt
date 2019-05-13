@@ -1,0 +1,5 @@
+-----0.0.2-----
+-created link to the executable in the game folder, so that now you don't have to navigate to the client folder to launch the game.
+-changelog.txt and readme.txt are now included at the root of the game folder.
+-corrected a bug with the rock mountain, they are now "real" rocks. (their Z scale was too low).
+-now when the program crashes a pop-up will be shown and the game will produce a dump.

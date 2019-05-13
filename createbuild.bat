@@ -1,6 +1,6 @@
 @echo off
 
-set buildpath = ..\..\build
+set buildpath=..\..\build
 
 set hh=%time:~-11,2%
 set /a hh=%hh%+100
@@ -28,8 +28,9 @@ cd %mydir%
 
 mkdir build
 
-mkdir client
-mkdir client\assets
+mkdir errors
+
+mkdir assets
 
 mkdir editor
 mkdir editor\assets
@@ -46,14 +47,15 @@ copy ..\..\code\readme.txt .
 copy ..\..\code\changelog.txt .
 
 
-copy %buildpath%\forg_client.dll client
-copy %buildpath%\win32_client.exe client
-copy %buildpath%\assets\forgivenessF.upak client\assets
+copy %buildpath%\forg_client.dll .
+copy %buildpath%\win32_client.exe .
+copy %buildpath%\asset_builder.exe .
+copy ..\..\client\assets\forgivenessF.upak assets
 
 
-xcopy ..\..\editor\definition editor\definition /E /Y /I /V
+xcopy ..\..\client\editor\definition editor\definition /E /Y /I /V
 
-xcopy ..\..\editor\assets server\assets /E /Y /I /V
+xcopy ..\..\client\editor\assets server\assets /E /Y /I /V
 
 popd
 
@@ -63,5 +65,13 @@ pushd .
 cd ..\release
 mkdir %mypdbdir%
 cd %mypdbdir%
+
+copy %buildpath%\asset_builder.exe .
+copy %buildpath%\forg_server.dll .
+copy %buildpath%\win32_server.exe .
+copy %buildpath%\forg_client.dll .
+copy %buildpath%\win32_client.exe .
+copy %buildpath%\asset_builder.exe .
+
 copy ..\..\build\*.pdb .
 popd

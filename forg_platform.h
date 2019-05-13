@@ -331,6 +331,8 @@ struct PlatformButton
 
 struct PlatformInput
 {
+    char* serverEXE;
+    
     NetworkInterface* network;
     r32 timeToAdvance;
     
@@ -522,6 +524,9 @@ typedef DEBUG_PLATFORM_EXISTS_PROCESS_WITH_NAME(platform_exists_process_with_nam
 #define DEBUG_PLATFORM_KILL_PROCESS_BY_NAME(name) void name(char* processName)
 typedef DEBUG_PLATFORM_KILL_PROCESS_BY_NAME(platform_kill_process_by_name);
 
+#define PLATFORM_ERROR_MESSAGE(name) void name(char* message)
+typedef PLATFORM_ERROR_MESSAGE(platform_error_message);
+
 
 
 
@@ -692,6 +697,8 @@ struct PlatformAPI
     platform_get_process_state* DEBUGGetProcessState;
     platform_exists_process_with_name* DEBUGExistsProcessWithName;
     platform_kill_process_by_name* DEBUGKillProcessByName;
+    
+    platform_error_message* ErrorMessage;
     
 #if FORGIVENESS_INTERNAL
     

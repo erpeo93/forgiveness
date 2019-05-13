@@ -368,6 +368,9 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 
 internal void PlayGame(GameState* gameState, PlatformInput* input)
 {
+    Assert(0);
+    
+    
     SetGameMode(gameState, GameMode_Playing);
     GameModeWorld* result = PushStruct(&gameState->modePool, GameModeWorld);
     
@@ -1602,7 +1605,7 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
             }
             else
             {
-                platformAPI.DEBUGExecuteSystemCommand("../server", "../build/win32_server.exe", "");
+                platformAPI.DEBUGExecuteSystemCommand("server", input->serverEXE, "");
             }
         }
     }
@@ -1617,7 +1620,7 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
             }
             else
             {
-                platformAPI.DEBUGExecuteSystemCommand("../editor", "../build/win32_server.exe"," editor");
+                platformAPI.DEBUGExecuteSystemCommand("editor", input->serverEXE," editor");
             }
         }
     }
