@@ -123,7 +123,7 @@ internal void BeginSim(SimRegion* region, MemoryPool* tempPool)
     i32 halfChunkSpan = SIM_REGION_CHUNK_SPAN / 2;
     
     
-    i32 safetyChunkMargin = (region->border == Border_Mirror) ? 0 : 2;
+    i32 safetyChunkMargin = (region->border == Border_Mirror) ? 0 : 3;
     i32 totalHalfSpan = halfChunkSpan + safetyChunkMargin;
     Assert( region->origin.chunkOffset.z == 0 );
     
@@ -1460,6 +1460,8 @@ internal void MoveEntity(SimRegion* region, SimEntity* entity)
 {
     MoveSpec moveSpec = DefaultMoveSpec();
     
+    
+#if 0    
     if(entity->IDs[Component_Creature] && entity->action == Action_Move)
     {
         CreatureComponent* creature = Creature(region, entity);
@@ -1473,6 +1475,7 @@ internal void MoveEntity(SimRegion* region, SimEntity* entity)
             moveSpec.stepCount = stepCount;
         }
     }
+#endif
     
     MoveEntityServer(region, entity, moveSpec);
 }

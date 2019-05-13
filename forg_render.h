@@ -170,21 +170,35 @@ inline Rect2 ProjectOnScreenCameraAligned(RenderGroup* group, Vec3 P, Rect2 worl
 
 inline Rect2 ProjectOnScreen(RenderGroup* group, Rect3 rect, r32* cameraZ)
 {
-    Vec3 X = V3(1, 0, 0);
-    Vec3 Y = V3(0, 1, 0);
-    Vec3 Z = V3(0, 0, 1);
-    
     Vec3 min = rect.min;
     Vec3 max = rect.max;
     
-    r32 minZ, maxZ;
+    Vec3 toProject[8];
     
-    Vec2 minScreen = ProjectOnScreen(group, min, &minZ);
-    Vec2 maxScreen = ProjectOnScreen(group, max, &maxZ);
+    Rect2 result = InvertedInfinityRect2();
+    r32 minZ = R32_MAX;
     
-    *cameraZ = Min(minZ, maxZ);
+    toProject[0] = V3(min.x, min.y, min.z);
+    toProject[1] = V3(min.x, min.y, max.z);
+    toProject[2] = V3(min.x, max.y, min.z);
+    toProject[3] = V3(min.x, max.y, max.z);
+    toProject[4] = V3(max.x, min.y, min.z);
+    toProject[5] = V3(max.x, min.y, max.z);
+    toProject[6] = V3(max.x, max.y, min.z);
+    toProject[7] = V3(max.x, max.y, max.z);
     
-    Rect2 result = RectMinMax(minScreen, maxScreen);
+    
+    for(u32 index = 0; index < ArrayCount(toProject); ++index)
+    {
+        r32 projectedZ;
+        Vec2 projected = ProjectOnScreen(group, toProject[index], &projectedZ);
+        minZ = Min(minZ, projectedZ);
+        
+        result = Union(result, projected);
+    }
+    
+    *cameraZ = minZ;
+    
     
     return result;
 }

@@ -945,6 +945,18 @@ inline Rect2 Union( Rect2 a, Rect2 b )
     return result;
 }
 
+inline Rect2 Union(Rect2 rect, Vec2 P)
+{
+    Rect2 result = rect;
+    result.min.x = Min(result.min.x, P.x);
+    result.min.y = Min(result.min.y, P.y);
+    
+    result.max.x = Max(result.max.x, P.x);
+    result.max.y = Max(result.max.y, P.y);
+    
+    return result;
+}
+
 inline r32 GetClampedArea( Rect2 a )
 {
     r32 result = 0;

@@ -65,7 +65,7 @@ struct PlantStem
     };
 };
 
-#define MAX_PLANT_COUNT 8
+#define MAX_PLANT_COUNT 32
 struct PlantInstance
 {
     u32 plantCount;

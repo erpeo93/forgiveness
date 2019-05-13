@@ -16,7 +16,6 @@
 #include "forg_token.cpp"
 #include "miniz.c"
 
-
 #define MAX_IMAGE_DIM 256
 
 #define STB_IMAGE_IMPLEMENTATION 1
@@ -673,10 +672,13 @@ internal u32 GetSoundSampleCount(char* filename)
 }
 
 
-internal LoadedSound LoadWAV(char* filename, u32 firstSampleIndex, u32 sectionSampleCount)
+internal LoadedSound LoadWAV(char* filename)
 {
     LoadedSound result = {};
     
+    
+    
+#if 1    
     EntireFile sound = ReadFile( filename );
     Assert( sound.content );
     if( sound.content )
@@ -707,74 +709,84 @@ internal LoadedSound LoadWAV(char* filename, u32 firstSampleIndex, u32 sectionSa
                 
                 case WAVE_IDdata:
                 {
-                    u32 sampleCount = GetChunkDataSize(iter) /(result.countChannels * sizeof(i16));
+                    u32 sampleDataSize = GetChunkDataSize(iter);
+                    u32 sampleCount = sampleDataSize / (result.countChannels * sizeof(i16));
+                    i16* samples = ( i16*) GetChunkData(iter);
                     
                     if(result.countChannels == 1)
                     {
-                        result.samples[0] = (i16*) GetChunkData(iter);
-                        InvalidCodePath;
+                        result.samples[0] = samples;
+                        result.samples[1] = 0;
                     }
                     else
                     {
                         // TODO( Leonardo ): stereo!
                         Assert(result.countChannels == 2);
                         
-                        i16* leftChannel = ( i16*) GetChunkData(iter);
+                        result.samples[0] = samples;
+                        result.samples[1] = samples + sampleCount;
                         
-                        i16 maxSampleValue = I16_MIN;
-                        for( u32 sampleIndex = 0; sampleIndex < sampleCount / 2; sampleIndex++ )
+                        for(u32 sampleIndex = 0;
+                            sampleIndex < sampleCount;
+                            ++sampleIndex)
                         {
-                            leftChannel[sampleIndex] = leftChannel[2 * sampleIndex];
-                            i16 sampleValue = leftChannel[sampleIndex];
-                            
-                            if(sampleValue > maxSampleValue)
-                            {
-                                maxSampleValue = sampleValue;
-                            }
+                            i16 source = samples[2*sampleIndex];
+                            samples[2*sampleIndex] = samples[sampleIndex];
+                            samples[sampleIndex] = source;
                         }
-                        
-                        result.samples[0] = leftChannel;
-                        result.countChannels = 1;
-                        
-                        Assert(maxSampleValue > 0);
-                        result.maxSampleValue = maxSampleValue;
-                        result.decibelLevel = 20 * Log10((r32) maxSampleValue / (r32) I16_MAX);
-                        
-                        b32 atEnd = true;
-                        if(sectionSampleCount)
-                        {
-                            Assert( firstSampleIndex + sectionSampleCount <= sampleCount );
-                            atEnd = ( firstSampleIndex + sectionSampleCount == sampleCount );
-                            
-                            for(u32 channelIndex = 0; channelIndex < result.countChannels; channelIndex++)
-                            {
-                                result.samples[channelIndex] += firstSampleIndex;
-                            }
-                            sampleCount= sectionSampleCount;
-                        }
-                        else
-                        {
-                            
-                        }
-                        
-                        if( atEnd )
-                        {
-                            for( u32 channelIndex = 0; channelIndex < result.countChannels; channelIndex++ )
-                            {
-                                for( u32 sampleIndex = sampleCount; sampleIndex < sampleCount + 8; sampleIndex++ )
-                                {
-                                    result.samples[channelIndex][sampleIndex] = 0;
-                                }
-                            }
-                            
-                        }
-                        result.countSamples = sampleCount;
-                        
                     }
+                    
+                    i16 maxSampleValue = I16_MIN;
+                    for( u32 sampleIndex = 0; sampleIndex < sampleCount * result.countChannels; sampleIndex++ )
+                    {
+                        i16 sampleValue = samples[sampleIndex];
+                        
+                        if(sampleValue > maxSampleValue)
+                        {
+                            maxSampleValue = sampleValue;
+                        }
+                    }
+                    
+                    result.countChannels = 1;
+                    Assert(maxSampleValue > 0);
+                    result.maxSampleValue = maxSampleValue;
+                    result.decibelLevel = 20 * Log10((r32) maxSampleValue / (r32) I16_MAX);
+                    
+                    
+                    result.countSamples = sampleCount;
                 } break;
             }
         }
     }
+#else
+    cs_loaded_sound_t csSound = cs_load_wav(filename);
+    
+    result.countChannels = 1;
+    result.countSamples = csSound.sample_count;
+    result.samples[0] = (i16*) csSound.channels[0];
+    result.samples[1] = (i16*) csSound.channels[1];
+    
+    
+    Assert(result.countChannels == 1);
+    i16* leftChannel = result.samples[0];
+    i16 maxSampleValue = I16_MIN;
+    for( u32 sampleIndex = 0; sampleIndex < result.countSamples / 2; sampleIndex++ )
+    {
+        leftChannel[sampleIndex] = leftChannel[2 * sampleIndex];
+        i16 sampleValue = leftChannel[sampleIndex];
+        
+        if(sampleValue > maxSampleValue)
+        {
+            maxSampleValue = sampleValue;
+        }
+    }
+    
+    
+    Assert(maxSampleValue > 0);
+    result.maxSampleValue = maxSampleValue;
+    result.decibelLevel = 20 * Log10((r32) maxSampleValue / (r32) I16_MAX);
+#endif
+    
     return result;
 }
 
@@ -1859,7 +1871,7 @@ internal void WritePak(Assets* assets, char* fileName_)
                     
                     case Pak_sound:
                     {
-                        LoadedSound sound = LoadWAV(source->sound.filename, source->sound.firstSampleIndex, dest->sound.sampleCount);
+                        LoadedSound sound = LoadWAV(source->sound.filename);
                         dest->sound.sampleCount = sound.countSamples;
                         dest->sound.channelCount = sound.countChannels;
                         dest->sound.maxSampleValue = sound.maxSampleValue;
@@ -2121,11 +2133,11 @@ inline char* StringPresentInFile(char* file, char* token, b32 limitToSingleList)
 
 internal char* GetAssetFilePtr(PlatformFile* file, char* folderName, char* assetName)
 {
-	char* folder = StringPresentInFile((char*) file->content, folderName, false);
+    char* folder = StringPresentInFile((char*) file->content, folderName, false);
     Assert(folder);
     char* ptr = StringPresentInFile(folder, assetName, true);
     Assert(ptr);
-	return ptr;
+    return ptr;
 }
 
 internal void AddLabelsFromFile(Tokenizer* tokenizer)
@@ -2276,11 +2288,11 @@ internal void WriteBitmaps(char* folder, char* name, PlatformFile* labelsFile)
     FormatString(completePath, sizeof(completePath), "%s/%s", folder, name);
     
     
-	char* hashName = name;
-	if(hashName[0] == '#')
-	{
-		++hashName;
-	}
+    char* hashName = name;
+    if(hashName[0] == '#')
+    {
+        ++hashName;
+    }
     u64 hashID = StringHash(hashName);
     
     
@@ -2297,7 +2309,7 @@ internal void WriteBitmaps(char* folder, char* name, PlatformFile* labelsFile)
             
             if(labelsFile)
             {
-				char* assetPtr = GetAssetFilePtr(labelsFile, name, bitmapHandle.name);
+                char* assetPtr = GetAssetFilePtr(labelsFile, name, bitmapHandle.name);
                 Tokenizer tokenizer = {};
                 tokenizer.at = assetPtr;
                 
@@ -2305,7 +2317,7 @@ internal void WriteBitmaps(char* folder, char* name, PlatformFile* labelsFile)
                 AdvanceToNextToken(&tokenizer, "coloration");
                 u16 colorationIndex = 1;
                 while(true)
-				{
+                {
                     AdvanceToNextToken(&tokenizer, "coloration");
                     
                     Token t = GetToken(&tokenizer);
@@ -2343,7 +2355,7 @@ internal void WriteBitmaps(char* folder, char* name, PlatformFile* labelsFile)
                     {
                         InvalidCodePath;
                     }
-				}
+                }
             }
             
             Win32CloseHandle(&bitmapHandle);
@@ -2514,7 +2526,7 @@ inline void AddAssetToFile(char* addHere, char* fileEnd, char* properties, b32 l
     
     if(labeled)
     {
-		FormatString(toAdd, sizeof(toAdd), "{%s, colorations = (#atLeastOneInList #showBitmap #empty = {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#empty = {name = \"invalid\", value = 0.0})} {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#empty = {name = \"invalid\", value = 0.0})}) },", properties);
+        FormatString(toAdd, sizeof(toAdd), "{%s, colorations = (#atLeastOneInList #showBitmap #empty = {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#empty = {name = \"invalid\", value = 0.0})} {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#empty = {name = \"invalid\", value = 0.0})}) },", properties);
     }
     else
     {
@@ -2599,7 +2611,7 @@ internal void WriteAssetDefinitionFile(char* path, char* filename, char* definit
                 {
                     char completePath[512];
                     FormatString(completePath, sizeof(completePath), "%s/%s", folderPath, soundHandle.name);
-                    LoadedSound sound = LoadWAV(completePath, 0, 0);
+                    LoadedSound sound = LoadWAV(completePath);
                     r32 decibel = sound.decibelLevel;
                     
                     free(sound.free);
@@ -2842,16 +2854,16 @@ internal void WriteAnimationAutocompleteFile(char* path, char* skeletonName)
     
     PlatformFileGroup animationGroup = Win32GetAllFilesBegin(PlatformFile_animation, completePath);
     for(u32 fileIndex = 0; fileIndex < animationGroup.fileCount; ++fileIndex)
-	{
+    {
         PlatformFileHandle fileHandle = Win32OpenNextFile(&animationGroup, completePath);
-		char* fileName = fileHandle.name;
-		u32 animationCount = CountAnimationInFile(completePath, fileName);
-		for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
-		{
-			char animationName[32];
-			GetAnimationName(completePath, fileName, animationIndex, animationName, sizeof(animationName));
-			writeHere += sprintf(writeHere, "\"%s\",", animationName);
-		}
+        char* fileName = fileHandle.name;
+        u32 animationCount = CountAnimationInFile(completePath, fileName);
+        for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
+        {
+            char animationName[32];
+            GetAnimationName(completePath, fileName, animationIndex, animationName, sizeof(animationName));
+            writeHere += sprintf(writeHere, "\"%s\",", animationName);
+        }
         Win32CloseHandle(&fileHandle);
     }
     
@@ -2879,7 +2891,7 @@ internal void WriteBitmapsAndAnimations()
     
     for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
     {
-		char* skeletonName = subdir->subdirs[subdirIndex];
+        char* skeletonName = subdir->subdirs[subdirIndex];
         if(!StrEqual(skeletonName, ".") && !StrEqual(skeletonName, ".."))
         {
             WriteAnimations(animationPath, skeletonName);
@@ -2989,6 +3001,7 @@ internal void WriteMusic()
         char completeSoundName[256];
         FormatString(completeSoundName, sizeof(completeSoundName), "%s/%s", musicPath, soundHandle.name);
         
+#if 0        
         u32 totalSamples = GetSoundSampleCount(completeSoundName);
         
         SoundId lastMusic = {};
@@ -3010,6 +3023,9 @@ internal void WriteMusic()
             
             lastMusic = thisMusic;
         }
+#else
+        AddSoundAsset(completeSoundName, 0);
+#endif
         
         
         Win32CloseHandle(&soundHandle);
@@ -3098,9 +3114,9 @@ int main(int argc, char** argv )
 {
     
 #if 0    
-	DeleteAll("assets", "*.fad");
-	DeleteAll("assets", "*.pak");
-	DeleteAll("assets", "*.autocomplete");
+    DeleteAll("assets", "*.fad");
+    DeleteAll("assets", "*.pak");
+    DeleteAll("assets", "*.autocomplete");
 #endif
     
     WriteMusic();

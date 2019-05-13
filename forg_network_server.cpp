@@ -160,6 +160,9 @@ internal ServerPlayer* FirstFreePlayer(ServerState* server)
     result->recipeCount = 0;
     result->allDataFileSent = false;
     result->allPakFileSent = false;
+    result->pakFileIndex = 0;
+    result->pakFileOffset = 0;
+    
     
     ResetReceiver(&result->receiver);
     

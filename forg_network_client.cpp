@@ -660,7 +660,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 }
                 
                 
-                r32 maxDistancePrediction = 4.0f;
+                r32 maxDistancePrediction = 2.5f;
                 Vec3 deltaP = Subtract(P, e->universeP);
                 r32 deltaLength = Length(deltaP);
                 if(deltaLength >= maxDistancePrediction || (e->flags & Flag_Equipped))

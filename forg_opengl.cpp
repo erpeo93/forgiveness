@@ -660,6 +660,7 @@ in r32 modulationPercentage;
     
    )FOO";
     
+#if 0    
     char* fragmentCode = R"FOO(
         //fragment code
         uniform sampler2DArray textureSampler;
@@ -766,6 +767,66 @@ resultColor.rgb *= ambientLightColor;
 }
 #endif
 
+resultColor.rgb = Clamp01(resultColor.rgb);
+resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.7f, 0.7f, 0.7f));
+#if shaderSimTexWriteSRGB
+         resultColor.rgb = sqrt(resultColor.rgb);
+         #endif
+    }
+    else
+    {
+    discard;
+    }
+         }
+       )FOO";
+#endif
+    
+    
+    char* fragmentCode = R"FOO(
+        //fragment code
+        uniform sampler2DArray textureSampler;
+        #if depthPeeling
+        uniform sampler2D depthSampler;
+        #endif
+        uniform r32 alphaThreesold;
+    out Vec4 resultColor;
+        smooth in Vec2 fragUV;
+        smooth in Vec4 fragColor;
+        smooth in Vec3 worldPos;
+        smooth in Vec3 worldNorm;
+         flat in Vec4 fragLightIndex;
+         flat in int fragTextureIndex;
+         smooth in r32 modulationWithFocusColor;
+        uniform Vec3 ambientLightColor;
+        
+uniform Vec3 pointLightPos[256];
+uniform Vec3 pointLightColors[256];
+uniform r32 pointLightStrength[256];
+
+        void main(void)
+         {
+         
+    #if depthPeeling
+         r32 clipDepth = texelFetch(depthSampler, ivec2(gl_FragCoord.xy), 0).r;
+         r32 fragZ = gl_FragCoord.z;
+         if(fragZ <= clipDepth)
+         {
+         discard;
+    }
+         #endif
+         
+         Vec3 arrayUV = V3(fragUV.x, fragUV.y, fragTextureIndex);
+         Vec4 texSample = texture(textureSampler, arrayUV);
+         #if shaderSimTexLoadSRGB
+    texSample.rgb *= texSample.rgb;
+         #endif
+         
+    resultColor = fragColor * texSample;
+         if(resultColor.a > alphaThreesold)
+         {
+         
+         resultColor.rgb *= ambientLightColor;
+         
 resultColor.rgb = Clamp01(resultColor.rgb);
 resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.7f, 0.7f, 0.7f));
 #if shaderSimTexWriteSRGB

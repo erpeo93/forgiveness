@@ -131,6 +131,8 @@ struct ClientPlayer
 
 struct ClientPlant
 {
+    b32 canRender;
+    
     RandomSequence sequence;
     
     r32 cloneAccumulatedError[MAX_LEVELS];
@@ -272,9 +274,10 @@ struct ForgVoronoiDiagram
 	Vec3 deltaP;
 };
 
-#define ALPHABET_LETTER_COUNT 24
 struct GameModeWorld
 {
+    struct GameState* gameState;
+    
     r32 windTime;
     r32 windSpeed;
     
@@ -321,6 +324,7 @@ struct GameModeWorld
     WorldChunk* chunks[1024];
     
     
+    TicketMutex plantMutex;
     PlantSegment* firstFreePlantSegment;
     PlantStem* firstFreePlantStem;
     ClientPlant* firstFreePlant;

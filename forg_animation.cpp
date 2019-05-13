@@ -2242,7 +2242,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         soundTime = entityC->animation.normalizedTime;
     }
     
-    //PushCubeOutline(group, bounds, V4(1, 1, 1, 1), 0.05f);
+    //PushCubeOutline(group, entityC->bounds, V4(1, 1, 1, 1), 0.05f);
     
     PlaySoundForAnimation(worldMode, group->assets, slot, result.playedAnimationNameHash, oldSoundTime, soundTime);
     

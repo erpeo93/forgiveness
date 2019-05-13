@@ -16,7 +16,7 @@ struct MoveSpec
 
 inline MoveSpec DefaultMoveSpec()
 {
-    MoveSpec moveSpec = {31.0f, -10.0f};
+    MoveSpec moveSpec = {27.0f, -7.8f};
     moveSpec.acceleration *= 1.0f;
     
     return moveSpec;

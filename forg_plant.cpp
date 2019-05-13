@@ -1,14 +1,21 @@
 inline PlantSegment* GetFreePlantSegment(GameModeWorld* worldMode)
 {
     PlantSegment* segment;
+    
+    BeginTicketMutex(&worldMode->plantMutex);
     FREELIST_ALLOC(segment, worldMode->firstFreePlantSegment, PushStruct(&worldMode->entityPool, PlantSegment));
+    
+    EndTicketMutex(&worldMode->plantMutex);
     return segment;
 }
 
 inline PlantStem* GetFreePlantStem(GameModeWorld* worldMode)
 {
     PlantStem* stem;
+    
+    BeginTicketMutex(&worldMode->plantMutex);
     FREELIST_ALLOC(stem, worldMode->firstFreePlantStem, PushStruct(&worldMode->entityPool, PlantStem));
+    EndTicketMutex(&worldMode->plantMutex);
     return stem;
 }
 
@@ -661,7 +668,7 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
                 Vec2 leafScale = plant->leafDimension * definition->leafScale + leaf->renderingRandomization * definition->leafScaleV;
                 Vec2 scale = leaf->dimCoeff * leafScale;
                 
-                Vec3 leafP = topP + V3(0, 0, 0.001f * leafIndex) + leaf->offsetCoeff * leaf->renderingRandomization * definition->leafOffsetV;
+                Vec3 leafP = topP + V3(0, 0, 0.005f * leafIndex) + leaf->offsetCoeff * leaf->renderingRandomization * definition->leafOffsetV;
                 
                 Vec4 aliveColor = definition->leafColor;
                 Vec4 deadColor = definition->leafColor;
@@ -692,66 +699,8 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
 }
 
 
-
-
-internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group, PlantRenderingParams renderingParams, PlantDefinition* definition, ClientPlant* plant, Vec3 plantP)
+internal void SyncPlantWithServer(GameModeWorld* worldMode, PlantDefinition* definition, ClientPlant* plant)
 {
-    if(!plant->plant.trunkCount)
-    {
-        for(u32 levelIndex = 0; levelIndex < MAX_LEVELS; ++levelIndex)
-        {
-            plant->cloneAccumulatedError[levelIndex] = RandomUni(&plant->sequence);
-        }
-        
-        plant->plant.plantCount = Max(1, definition->plantCount + RoundReal32ToU32(RandomBil(&plant->sequence) *definition->plantCountV));
-        for(u32 plantIndex = 0; plantIndex < plant->plant.plantCount; ++plantIndex)
-        {
-            plant->plant.offsets[plantIndex] = Hadamart(RandomBilV2(&plant->sequence), definition->plantOffsetV);
-            plant->plant.angleZ[plantIndex] = RandomBil(&plant->sequence) * definition->plantAngleZV;
-        }
-        
-        
-        plant->scale = definition->scale + RandomBil(&plant->sequence) * definition->scaleV;
-        plant->lengthBase = definition->baseSize * plant->scale;
-        
-        PlantLevelParams* levelParams = definition->levelParams + 0;
-        
-        
-        plant->plant.trunkCount = 1;
-        for(u32 trunkIndex = 0; trunkIndex < plant->plant.trunkCount; ++trunkIndex)
-        {
-            PlantStem* trunk = GetFreePlantStem(worldMode);
-            
-            trunk->root = GetFreePlantSegment(worldMode);
-            *trunk->root = {};
-            
-            trunk->segmentCount = 1;
-            
-            trunk->probabliltyToClone = 1.0f;
-            trunk->orientation = Identity();
-            trunk->parentStemZ = 0;
-            trunk->parentSegmentZ = 0;
-            
-            trunk->totalLength =  plant->scale * (definition->levelParams->lengthCoeff + RandomBil(&plant->sequence) * levelParams->lengthCoeffV);
-            trunk->baseRadious = trunk->totalLength * definition->ratio * (definition->scale_0 + RandomBil(&plant->sequence) * definition->scaleV_0);
-            trunk->maxRadious = R32_MAX;
-            
-            trunk->numberOfChilds = RoundReal32ToU32(levelParams->branches);
-            
-            trunk->trunkNoise = RandomBil(&plant->sequence);
-            r32 childUnitZ = 1.0f /trunk->numberOfChilds;
-            trunk->nextChildZ = RandomRangeFloat(&plant->sequence, 0.5f * childUnitZ, childUnitZ - 0.01f);
-            trunk->childsCurrentAngle = RandomUni(&plant->sequence) * 360.0f;
-            
-            trunk->additionalCurveBackAngle = 0;
-            
-            FREELIST_INSERT(trunk, plant->plant.firstTrunk);
-        }
-    }
-    
-    
-    
-    
     r32 targetUpdateTime = 1.0f;
     r32 longUpdateTime = 10.0f;
     b32 granularUpdate = true;
@@ -795,21 +744,116 @@ internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group,
             plant->age += targetUpdateTime;
         }
     }
+}
+
+struct SyncPlantWork
+{
+    GameModeWorld* worldMode;
+    PlantDefinition* definition;
+    ClientPlant* plant;
+    TaskWithMemory* task;
+};
+
+
+PLATFORM_WORK_CALLBACK(SyncPlantCallback)
+{
+    SyncPlantWork* work = (SyncPlantWork*) param;
     
+    SyncPlantWithServer(work->worldMode, work->definition, work->plant);
     
-    PlantInstance* instance = &plant->plant;
-    for( u32 plantIndex = 0; plantIndex < instance->plantCount; ++plantIndex)
+    CompletePastWritesBeforeFutureWrites;
+    work->plant->canRender = true;
+    EndTaskWithMemory(work->task);
+}
+
+
+internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group, PlantRenderingParams renderingParams, PlantDefinition* definition, ClientPlant* plant, Vec3 plantP)
+{
+    if(!plant->plant.trunkCount)
     {
-        Vec2 offset = instance->offsets[plantIndex];
-        r32 angleZ = instance->angleZ[plantIndex];
-        
-        Vec3 finalPlantP = plantP + V3(offset, 0);
-        m4x4 rotation = ZRotation(DegToRad(angleZ));
-        
-        
-        for(PlantStem* trunk = plant->plant.firstTrunk; trunk; trunk = trunk->next)
+        GameState* gameState = worldMode->gameState;
+        TaskWithMemory* task = BeginTaskWithMemory(gameState->tasks, ArrayCount(gameState->tasks), false);
+        if(task)
         {
-            RenderStem(group, renderingParams, worldMode->windTime, plant, definition, trunk, finalPlantP, 0, rotation, 0);
+            for(u32 levelIndex = 0; levelIndex < MAX_LEVELS; ++levelIndex)
+            {
+                plant->cloneAccumulatedError[levelIndex] = RandomUni(&plant->sequence);
+            }
+            
+            plant->plant.plantCount = Max(1, definition->plantCount + RoundReal32ToU32(RandomBil(&plant->sequence) *definition->plantCountV));
+            for(u32 plantIndex = 0; plantIndex < plant->plant.plantCount; ++plantIndex)
+            {
+                plant->plant.offsets[plantIndex] = Hadamart(RandomBilV2(&plant->sequence), definition->plantOffsetV);
+                plant->plant.angleZ[plantIndex] = RandomBil(&plant->sequence) * definition->plantAngleZV;
+            }
+            
+            
+            plant->scale = definition->scale + RandomBil(&plant->sequence) * definition->scaleV;
+            plant->lengthBase = definition->baseSize * plant->scale;
+            
+            PlantLevelParams* levelParams = definition->levelParams + 0;
+            
+            
+            plant->plant.trunkCount = 1;
+            for(u32 trunkIndex = 0; trunkIndex < plant->plant.trunkCount; ++trunkIndex)
+            {
+                PlantStem* trunk = GetFreePlantStem(worldMode);
+                
+                trunk->root = GetFreePlantSegment(worldMode);
+                *trunk->root = {};
+                
+                trunk->segmentCount = 1;
+                
+                trunk->probabliltyToClone = 1.0f;
+                trunk->orientation = Identity();
+                trunk->parentStemZ = 0;
+                trunk->parentSegmentZ = 0;
+                
+                trunk->totalLength =  plant->scale * (definition->levelParams->lengthCoeff + RandomBil(&plant->sequence) * levelParams->lengthCoeffV);
+                trunk->baseRadious = trunk->totalLength * definition->ratio * (definition->scale_0 + RandomBil(&plant->sequence) * definition->scaleV_0);
+                trunk->maxRadious = R32_MAX;
+                
+                trunk->numberOfChilds = RoundReal32ToU32(levelParams->branches);
+                
+                trunk->trunkNoise = RandomBil(&plant->sequence);
+                r32 childUnitZ = 1.0f /trunk->numberOfChilds;
+                trunk->nextChildZ = RandomRangeFloat(&plant->sequence, 0.5f * childUnitZ, childUnitZ - 0.01f);
+                trunk->childsCurrentAngle = RandomUni(&plant->sequence) * 360.0f;
+                
+                trunk->additionalCurveBackAngle = 0;
+                
+                FREELIST_INSERT(trunk, plant->plant.firstTrunk);
+            }
+            
+            SyncPlantWork* work = PushStruct(&task->pool, SyncPlantWork);
+            work->worldMode = worldMode;
+            work->definition = definition;
+            work->plant = plant;
+            work->task = task;
+            
+            platformAPI.PushWork(gameState->slowQueue, SyncPlantCallback, work);
+        }
+    }
+    
+    
+    if(plant->canRender)
+    {
+        SyncPlantWithServer(worldMode, definition, plant);
+        
+        PlantInstance* instance = &plant->plant;
+        for( u32 plantIndex = 0; plantIndex < instance->plantCount; ++plantIndex)
+        {
+            Vec2 offset = instance->offsets[plantIndex];
+            r32 angleZ = instance->angleZ[plantIndex];
+            
+            Vec3 finalPlantP = plantP + V3(offset, 0);
+            m4x4 rotation = ZRotation(DegToRad(angleZ));
+            
+            
+            for(PlantStem* trunk = plant->plant.firstTrunk; trunk; trunk = trunk->next)
+            {
+                RenderStem(group, renderingParams, worldMode->windTime, plant, definition, trunk, finalPlantP, 0, rotation, 0);
+            }
         }
     }
 }

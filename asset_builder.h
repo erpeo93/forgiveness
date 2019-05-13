@@ -54,7 +54,7 @@ struct LoadedFont
 struct LoadedSound
 {
     u32 countChannels;
-    i32 countSamples;
+    u32 countSamples;
     i16* samples[2];
     
     i16 maxSampleValue;

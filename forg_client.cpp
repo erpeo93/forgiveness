@@ -130,6 +130,7 @@ internal void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
         ClientPlant* toFree = entity->plant;
         if(toFree)
         {
+            Assert(toFree->canRender);
             for(PlantStem* stem = toFree->plant.firstTrunk; stem; stem = stem->next)
             {
                 FreeStem(worldMode, stem);
@@ -370,6 +371,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     SetGameMode(gameState, GameMode_Playing);
     GameModeWorld* result = PushStruct(&gameState->modePool, GameModeWorld);
     
+    result->gameState = gameState;
     result->editorRoles = gameState->editorRoles;
     
 #if 0
@@ -768,7 +770,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 MemoryPool* toFree = gameState->assetsPool + destIndex;
                 Clear(toFree);
-                gameState->pingPongAssets[destIndex] = InitAssets(gameState, toFree, gameState->textureQueue, MegaBytes(32));
+                gameState->pingPongAssets[destIndex] = InitAssets(gameState, toFree, gameState->textureQueue, MegaBytes(256));
                 
                 gameState->assets = gameState->pingPongAssets[destIndex];
                 gameState->assetsIndex = destIndex;
@@ -782,8 +784,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 
 #if 1
-                gameState->music = PlaySound(&gameState->soundState, gameState->assets, GetFirstSound(gameState->assets, Asset_music), 0.0f);
-                //ChangeVolume(&gameState->soundState, gameState->music, 1000.0f, V2(0.0f, 0.0f));
+                RandomSequence seq = Seed(worldMode->worldSeed);
+                gameState->music = PlaySound(&gameState->soundState, gameState->assets, GetRandomSound(gameState->assets, Asset_music, &seq), 0.0f);
 #endif
                 
                 reloadAssetAutocompletes = true;
@@ -1355,6 +1357,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             Vec2 offsetFrom = V2(edge->pos[0].x, edge->pos[0].y);
                             Vec2 offsetTo = V2(edge->pos[1].x, edge->pos[1].y);
                             
+                            if(Length(offsetTo - offsetFrom) > 100.0f)
+                            {
+                                int a = 5;
+                            }
 							if(!edge->tile[0])
 							{
                                 edge->tile[0] = GetTile(worldMode, voronoi->originP, offsetFrom);
@@ -1696,7 +1702,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         
         gameState->assetsIndex = 0;
         MemoryPool* pool = gameState->assetsPool + 0;
-        gameState->pingPongAssets[0] = InitAssets(gameState, pool, gameState->textureQueue, MegaBytes(32));
+        gameState->pingPongAssets[0] = InitAssets(gameState, pool, gameState->textureQueue, MegaBytes(256));
         gameState->assets = gameState->pingPongAssets[0];
         
         
@@ -1745,6 +1751,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 rerun = UpdateAndRenderGame(gameState, gameState->world, &group, input);
                 if(input->allowedToQuit && input->altDown && Pressed(&input->exitButton))
                 {
+                    ChangeVolume(&gameState->soundState, gameState->music, 1.0f, V2(0.0f, 0.0f));
                     platformAPI.net.CloseConnection(input->network, 0);
                     SetGameMode(gameState, GameMode_Launcher);
                 }
