@@ -94,3 +94,41 @@ DEBUG_PLATFORM_KILL_PROCESS_BY_NAME(Win32KillProcessByName)
     }
     CloseHandle(hSnapShot);
 }
+
+
+
+void CreateMiniDump( EXCEPTION_POINTERS* pep ) 
+{
+    // Open the file 
+    
+    char buffer [255];
+    sprintf(buffer,"errors/dump_%d.dmp", (u32) time(0));
+    
+    HANDLE hFile = CreateFile(buffer, GENERIC_READ | GENERIC_WRITE, 
+                              0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL ); 
+    
+    if( ( hFile != NULL ) && ( hFile != INVALID_HANDLE_VALUE ) ) 
+    {
+        // Create the minidump 
+        
+        MINIDUMP_EXCEPTION_INFORMATION mdei; 
+        
+        mdei.ThreadId           = GetCurrentThreadId(); 
+        mdei.ExceptionPointers  = pep; 
+        mdei.ClientPointers     = FALSE; 
+        
+        MINIDUMP_TYPE mdt       = MiniDumpNormal; 
+        
+        BOOL rv = MiniDumpWriteDump( GetCurrentProcess(), GetCurrentProcessId(), 
+                                    hFile, mdt, (pep != 0) ? &mdei : 0, 0, 0 ); 
+        
+        CloseHandle( hFile ); 
+        
+    }
+    else 
+    {
+        //_tprintf("CreateFile failed. Error: %u \n", GetLastError() ); 
+    }
+    
+    abort();
+}

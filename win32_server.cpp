@@ -4,6 +4,7 @@
 #include <process.h>
 #include <Tlhelp32.h>
 #include <winbase.h>
+#include <DbgHelp.h>
 #include <stdio.h>
 #include <time.h>
 #include "sqlite3.h"
@@ -282,6 +283,8 @@ DebugTable* globalDebugTable = &globalDebugTable_;
 
 int main( int argc, char* argv[] )
 {
+    SetUnhandledExceptionFilter((LPTOP_LEVEL_EXCEPTION_FILTER) CreateMiniDump);
+    
     globalMemorySentinel.next = &globalMemorySentinel;
     globalMemorySentinel.prev = &globalMemorySentinel;
     
