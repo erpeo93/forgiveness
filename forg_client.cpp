@@ -366,6 +366,55 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
     }
 }
 
+inline void MarkAllPakFilesAsToDelete(GameModeWorld* worldMode, char* path)
+{
+    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, path);
+    
+    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex)
+    {
+        PlatformFileHandle handle = platformAPI.OpenNextFile(&fileGroup, path);
+        
+        ToDeleteFile* toDelete;
+        FREELIST_ALLOC(toDelete, worldMode->firstFreeFileToDelete, PushStruct(&worldMode->deletedFilesPool, ToDeleteFile));
+        
+        toDelete->toDelete = true;
+        GetNameWithoutPoint(toDelete->filename, sizeof(toDelete->filename), handle.name);
+        
+        FREELIST_INSERT(toDelete, worldMode->firstFileToDelete);
+        
+        platformAPI.CloseHandle(&handle);
+    }
+    
+    platformAPI.GetAllFilesEnd(&fileGroup);
+}
+
+inline void MarkFileAsArrived(GameModeWorld* worldMode, char* filename)
+{
+    for(ToDeleteFile* file = worldMode->firstFileToDelete; file; file = file->next)
+    {
+        if(StrEqual(StrLen(file->filename), file->filename, filename))
+        {
+            file->toDelete = false;
+            break;
+        }
+    }
+}
+
+inline void DeleteAllFilesNotArrived(GameModeWorld* worldMode, char* path)
+{
+    for(ToDeleteFile* file = worldMode->firstFileToDelete; file; file = file->next)
+    {
+        if(file->toDelete)
+        {
+            char toDeleteWildcard[128];
+            FormatString(toDeleteWildcard, sizeof(toDeleteWildcard), "%s.*", file->filename);
+            platformAPI.DeleteFileWildcards(path, toDeleteWildcard);
+        }
+    }
+    
+    FREELIST_FREE(worldMode->firstFileToDelete, ToDeleteFile, worldMode->firstFreeFileToDelete);
+}
+
 internal void PlayGame(GameState* gameState, PlatformInput* input)
 {
     SetGameMode(gameState, GameMode_Playing);
@@ -379,6 +428,8 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
 #else
     char* loginServer = "127.0.0.1";
 #endif
+    
+    //MarkAllPakFilesAsToDelete(result, "assets");
     
     clientNetwork->nextSendUnreliableApplicationData = {};
     clientNetwork->nextSendReliableApplicationData = {};
@@ -757,7 +808,17 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 ++worldMode->patchSectionArrived;
                 CloseAllHandles(gameState->assets);
                 
+                
+#if 0                
+                for(DataFileArrived* file = worldMode->firstPakFileArrived; file; file = file->next)
+                {
+                    MarkFileAsArrived(worldMode, file->name);
+                }
+#endif
+                
+                
                 WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstPakFileArrived, true);
+                //DeleteAllFilesNotArrived(worldMode, "assets");
                 
                 worldMode->firstPakFileArrived = 0;
                 
@@ -779,16 +840,19 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 Clear(&worldMode->filePool);
                 worldMode->currentFile = 0;
-                
                 worldMode->UI->font = 0;
+                
+                reloadAssetAutocompletes = true;
+                //MarkAllPakFilesAsToDelete(worldMode, "assets");
                 
                 
 #if 1
-                RandomSequence seq = Seed(worldMode->worldSeed);
-                gameState->music = PlaySound(&gameState->soundState, gameState->assets, GetRandomSound(gameState->assets, Asset_music, &seq), 0.0f);
+                if(!gameState->music)
+                {
+                    RandomSequence seq = Seed(worldMode->worldSeed);
+                    gameState->music = PlaySound(&gameState->soundState, gameState->assets, GetRandomSound(gameState->assets, Asset_music, &seq), 0.0f);
+                }
 #endif
-                
-                reloadAssetAutocompletes = true;
             }
             
             group->assets = gameState->assets;
@@ -1752,6 +1816,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 if(input->allowedToQuit && input->altDown && Pressed(&input->exitButton))
                 {
                     ChangeVolume(&gameState->soundState, gameState->music, 1.0f, V2(0.0f, 0.0f));
+                    gameState->music = 0;
                     platformAPI.net.CloseConnection(input->network, 0);
                     SetGameMode(gameState, GameMode_Launcher);
                 }

@@ -3252,7 +3252,6 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                     SoundContainer* rootContainer = AddSoundEvent(eventName);
                     
                     AddSoundAndChildContainersRecursively(rootContainer, events);
-                    
                     events = events->next;
                 }
             } break;
@@ -3879,19 +3878,6 @@ internal void ImportAllAssetFiles(GameModeWorld* worldMode, char* dataPath, Memo
 #endif
 
 #if FORG_SERVER
-inline void LoadAssets()
-{
-    PlatformProcessHandle assetBuilder = platformAPI.DEBUGExecuteSystemCommand(".", "../asset_builder.exe", "");
-    while(true)
-    {
-        PlatformProcessState assetBuilderState = platformAPI.DEBUGGetProcessState(assetBuilder);
-        if(!assetBuilderState.isRunning)
-        {
-            break;
-        }
-    }
-}
-
 inline char* WriteElementsToBuffer(char* buffer, EditorElement* root, u32* remaining, u32* writtenTotal)
 {
     char* result = buffer;
@@ -4256,8 +4242,6 @@ inline void CheckForDefinitionsToMerge(ServerState* server)
 
 internal void WriteAllFiles(MemoryPool* tempPool, char* dataPath, DataFileArrived* firstArrived, b32 compressed)
 {
-    
-    
     while(firstArrived)
     {
         TempMemory fileMemory = BeginTemporaryMemory(tempPool);

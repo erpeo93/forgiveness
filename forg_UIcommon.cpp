@@ -805,7 +805,8 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
 }
 
 
-#define UIResetListPossibility(UI, listName) UI->listName.possibilityCount = 0;
+#define UIResetListPossibility(UI, listName) UI->listName.possibilityCount = 0; UI->listName.possibilities[0] = {};
+
 #define UIResetListIndex(UI, listName) UI->listName.currentIndex = 0;
 #define UIMarkListToUpdateAndRender(UI, listName) UIMarkListToUpdate(UI, listName); UIMarkListToRender(UI, listName);
 #define UIMarkListToUpdate(UI, listName) UI->toUpdateList = &UI->listName
@@ -839,8 +840,6 @@ inline void WrapScrollableList(UIScrollableList* list)
     {
         list->currentIndex = 0;
     }
-    
-    Assert(list->currentIndex < 10);
 }
 
 inline void UpdateScrollableList(UIState* UI, UIScrollableList* list, i32 offset)
@@ -849,6 +848,8 @@ inline void UpdateScrollableList(UIState* UI, UIScrollableList* list, i32 offset
     {
         i32 newIndex = (i32) list->currentIndex + offset;
         newIndex = Wrap(0, newIndex, (i32) list->possibilityCount);
+        
+        Assert(newIndex >= 0 && newIndex < 100000);
         list->currentIndex = (u32) newIndex;
     }
 }
@@ -1250,6 +1251,26 @@ inline void UIAddInvalidCondition_(UIInteraction* interaction, u32 size, UIMemor
     pair->source = ref1;
     pair->dest = ref2;
     pair->size = size;
+}
+
+inline void AddConfirmActions(UIState* UI, EditorWidget* widget, UIInteraction* interaction, char* dest, u32 destSize, char* source)
+{
+	UIAddUndoRedoAction(UI, interaction, UI_Trigger, UndoRedoString(widget, dest, destSize, dest, source));            
+	UIAddStandardAction_(UI, interaction, UI_Trigger, destSize, ColdPointer(dest), ColdPointer(UI->keyboardBuffer));
+	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->activeLabel, 0); 
+	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->activeLabelParent, 0); 
+	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->active, 0);    
+    UIAddClearAction(UI, interaction, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));
+	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->activeWidget, 0);    
+    
+    
+	UIAddReloadElementAction(UI, interaction, UI_Trigger, widget->root);
+	if(StrEqual(widget->name, "Editing Tabs"))
+	{
+		UIAddRequestAction(UI, interaction, UI_Trigger, SendDataFileRequest());
+	}        
+	UIAddClearAction(UI, interaction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
+    
 }
 
 
@@ -2034,6 +2055,7 @@ inline b32 ConditionsSatisfied(UIInteraction* interaction)
         UIInteractionCheck* check = interaction->checks + checkIndex;
         if((check->flags & interaction->flags) == check->flags)
         {
+            Assert(interaction->data.actionIndex < 10000);
             UIMemoryPair* checkPair = &check->check;
             void* ref1 = GetValue(checkPair->source, &interaction->data);
             void* ref2 = GetValue(checkPair->dest, &interaction->data);

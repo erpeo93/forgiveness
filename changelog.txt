@@ -1,3 +1,11 @@
+----0.0.3----
+-it's now possible to "select" autocomplete value with both the tab and confirm button
+-corrected bug when clicking with right mouse to drag an editor element
+-corrected bug with scrollable list #0 corruption when switching from "editor" to "standard" overlapping interaction
+-solved network bug that in certain circumstances allowed the client send queue to "get stucked" and don't send anything to the server
+-when you reload the assets the server will send only changed files, this should allows the creative team to iterate much more quickly now.
+
+
 -----0.0.2-----
 -created link to the executable in the game folder, so that now you don't have to navigate to the client folder to launch the game.
 -changelog.txt and readme.txt are now included at the root of the game folder.

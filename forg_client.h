@@ -1,6 +1,8 @@
 #pragma once
 
 #include "forg_basic_types.h"
+#include "meow_intrinsics.h"
+#include "meow_hash.h"
 #include "net.h"
 #include "forg_platform.h"
 #include "forg_shared.h"
@@ -274,6 +276,18 @@ struct ForgVoronoiDiagram
 	Vec3 deltaP;
 };
 
+struct ToDeleteFile
+{
+    char filename[64];
+    b32 toDelete;
+    
+    union
+    {
+        ToDeleteFile* next;
+        ToDeleteFile* nextFree;
+    };
+};
+
 struct GameModeWorld
 {
     struct GameState* gameState;
@@ -293,6 +307,10 @@ struct GameModeWorld
     struct DataFileArrived* firstDataFileArrived;
     struct DataFileArrived* firstPakFileArrived;
     struct DataFileArrived* currentFile;
+    
+    MemoryPool deletedFilesPool;
+    ToDeleteFile* firstFileToDelete;
+    ToDeleteFile* firstFreeFileToDelete;
     
     b32 allDataFilesArrived;
     b32 loadTaxonomies;

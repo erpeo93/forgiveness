@@ -200,9 +200,9 @@ inline PickSoundResult PickSoundFromEvent(Assets* assets, SoundEvent* event, u32
 
 internal PlayingSound* PlaySound(SoundState* soundState, Assets* assets, SoundId ID, r32 distanceFromPlayer, r32 decibelOffset = 0, r32 frequency = 1.0, r32 delay = 0.0f, r32 toleranceDistance = 1.0f,r32 distanceFalloffCoeff = 1.0f)
 {
-    if( !soundState->firstFreeSound )
+    if(!soundState->firstFreeSound)
     {
-        soundState->firstFreeSound = PushStruct( soundState->pool, PlayingSound );
+        soundState->firstFreeSound = PushStruct(soundState->pool, PlayingSound);
         soundState->firstFreeSound;
     }
     PakSound* info = GetSoundInfo(assets, ID);

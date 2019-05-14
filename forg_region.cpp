@@ -469,6 +469,10 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             {
                 player->ignoredActionCount = 0;
                 
+                if(request.desiredAction == Action_Move)
+                {
+                    int a = 5;
+                }
                 if(request.desiredAction < Action_Attack)
                 {
                     valid = true;
@@ -1477,6 +1481,10 @@ internal void MoveEntity(SimRegion* region, SimEntity* entity)
     }
 #endif
     
+    if(entity->acceleration.x > 0)
+    {
+        int a = 5;
+    }
     MoveEntityServer(region, entity, moveSpec);
 }
 

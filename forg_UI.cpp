@@ -90,7 +90,7 @@ inline DrawButtonResult UIDrawButton(UIState* UI, PlatformInput* input, UIButton
 }
 
 
-inline void UIRenderAutocomplete(UIState* UI, PlatformInput* input, UIAutocomplete* autocomplete, EditorLayout* layout, Vec2 P, char* nameIn)
+inline void UIRenderAutocomplete(UIState* UI, EditorWidget* widget, PlatformInput* input, UIAutocomplete* autocomplete, EditorLayout* layout, Vec2 P, char* nameIn)
 {
     UIAutocompleteBlock* block = autocomplete->firstBlock;
     
@@ -120,7 +120,13 @@ inline void UIRenderAutocomplete(UIState* UI, PlatformInput* input, UIAutocomple
                     
                     UIInteraction autoInteraction = {};
                     UIAddStandardAction(UI, &autoInteraction, UI_Trigger, block->names[nameIndex], ColdPointer(UI->keyboardBuffer), ColdPointer(block->names[nameIndex]));
+                    
+                    UIInteraction autoConfirmInteraction = {};
+                    UIAddStandardAction(UI, &autoConfirmInteraction, UI_Trigger, block->names[nameIndex], ColdPointer(UI->keyboardBuffer), ColdPointer(block->names[nameIndex]));
+                    AddConfirmActions(UI, widget, &autoConfirmInteraction, UI->active->value, sizeof(UI->active->value), block->names[nameIndex]);
+                    
                     UIAddInteraction(UI, input, switchButton, autoInteraction);
+                    UIAddInteraction(UI, input, confirmButton, autoConfirmInteraction);
                 }
                 
                 PushUIOrthoText(UI, name, layout->fontScale, P, autocompleteColor, layout->additionalZBias + 1.1f);
@@ -438,34 +444,14 @@ inline b32 SpecialHandling(char* name)
     
     if(StrEqual(name, "leafName") ||
        StrEqual(name, "trunkName") ||
-       StrEqual(name, "skeletonName"))
+       StrEqual(name, "skeletonName") ||
+       StrEqual(name, "name"))
     {
         result = true;
     }
     
     return result;
 }
-
-inline void AddConfirmActions(UIState* UI, EditorWidget* widget, UIInteraction* interaction, char* dest, u32 destSize)
-{
-	UIAddUndoRedoAction(UI, interaction, UI_Trigger, UndoRedoString(widget, dest, destSize, dest, UI->keyboardBuffer));            
-	UIAddStandardAction_(UI, interaction, UI_Trigger, destSize, ColdPointer(dest), ColdPointer(UI->keyboardBuffer));
-	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->activeLabel, 0); 
-	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->activeLabelParent, 0); 
-	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->active, 0);    
-    UIAddClearAction(UI, interaction, UI_Trigger, ColdPointer(&UI->activeParents), sizeof(UI->activeParents));
-	UIAddSetValueAction(UI, interaction, UI_Trigger, &UI->activeWidget, 0);    
-    
-    
-	UIAddReloadElementAction(UI, interaction, UI_Trigger, widget->root);
-	if(StrEqual(widget->name, "Editing Tabs"))
-	{
-		UIAddRequestAction(UI, interaction, UI_Trigger, SendDataFileRequest());
-	}        
-	UIAddClearAction(UI, interaction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
-    
-}
-
 
 struct UIAddTabResult
 {    
@@ -480,7 +466,6 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
     
     if(root != UI->active)
     {
-       
         result.bounds = GetUIOrthoTextBounds(UI, text, layout->fontScale, P);
         result.color = V4(0.7f, 0.7f, 0, 1);
         if(!UI->activeLabel)
@@ -492,7 +477,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                 
 				if(UI->active && UI->bufferValid)
 				{
-					AddConfirmActions(UI, widget, &mouseInteraction, UI->active->value, sizeof(UI->active->value));
+					AddConfirmActions(UI, widget, &mouseInteraction, UI->active->value, sizeof(UI->active->value), UI->keyboardBuffer);
 				}
                 
                 if(StrEqual(text, "true"))
@@ -592,7 +577,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
             result.color = V4(0, 1, 0, 1);
             
             UIInteraction confirmInteraction = {};
-			AddConfirmActions(UI, widget, &confirmInteraction, root->value, sizeof(root->value));
+			AddConfirmActions(UI, widget, &confirmInteraction, root->value, sizeof(root->value), UI->keyboardBuffer);
             UIAddInteraction(UI, input, confirmButton, confirmInteraction);
         }
         
@@ -601,7 +586,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
             UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parents, root->name);
             if(autocomplete)
             {
-                UIRenderAutocomplete(UI, input, autocomplete, layout, P -V2(0, layout->childStandardHeight), UI->keyboardBuffer);
+                UIRenderAutocomplete(UI, widget, input, autocomplete, layout, P -V2(0, layout->childStandardHeight), UI->keyboardBuffer);
             }
         }   
     }
@@ -1104,7 +1089,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                 UIAutocomplete* autocomplete = UIFindAutocomplete(UI, parents, father->labelName);
                 if(autocomplete)
                 {
-                    UIRenderAutocomplete(UI, input, autocomplete, layout, nameP -V2(0, layout->childStandardHeight), UI->keyboardBuffer);
+                    UIRenderAutocomplete(UI, widget, input, autocomplete, layout, nameP -V2(0, layout->childStandardHeight), UI->keyboardBuffer);
                 }
                 
                 
@@ -1112,7 +1097,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                 {
                     nameColor = V4(0, 1, 0, 1);
                     UIInteraction confirmInteraction = {};
-                    AddConfirmActions(UI, widget, &confirmInteraction, root->name, sizeof(root->name));
+                    AddConfirmActions(UI, widget, &confirmInteraction, root->name, sizeof(root->name), UI->keyboardBuffer);
                     UIAddInteraction(UI, input, confirmButton, confirmInteraction);
                 }
                 else
@@ -2006,13 +1991,13 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
 		if(UI->active)
 		{
             UIInteraction clickInteraction = {};
-			AddConfirmActions(UI, UI->activeWidget, &clickInteraction, UI->active->value, sizeof(UI->active->value));
+			AddConfirmActions(UI, UI->activeWidget, &clickInteraction, UI->active->value, sizeof(UI->active->value), UI->keyboardBuffer);
 			UIAddInteraction(UI, input, mouseLeft, clickInteraction);
 		}
 		else if(UI->activeLabel)
 		{
             UIInteraction clickInteraction = {};
-			AddConfirmActions(UI, UI->activeWidget, &clickInteraction, UI->activeLabel->name, sizeof(UI->activeLabel->name));
+			AddConfirmActions(UI, UI->activeWidget, &clickInteraction, UI->activeLabel->name, sizeof(UI->activeLabel->name), UI->keyboardBuffer);
 			UIAddInteraction(UI, input, mouseLeft, clickInteraction);
             
 		}
@@ -4175,7 +4160,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
     WrapScrollableList(&UI->possibleTargets);
     UpdateScrollableList(UI, UI->toUpdateList, scrollOffset);
     UIRenderList(UI, UI->toRenderList);
-    
+        
     if(worldMode->editingEnabled)
     {
         UIRenderEditor(UI, input);
@@ -4227,7 +4212,8 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                 {
                     UIDispatchInteraction(UI, interaction, UI_KeptPressed, input->timeToAdvance, true);
                 }
-                else if(Released(button))
+                
+                if(Released(button))
                 {
                     UIDispatchInteraction(UI, interaction, UI_Release, input->timeToAdvance);
                     interaction->flags |= UI_Ended;

@@ -441,9 +441,8 @@ inline void SignAsParsed( char* filename )
 
 void RecursivelyParseAllFiles( char* filename )
 {
-    char* file = ReadEntireFileAndNullTerminate( filename );
-    
-    if( file )
+    char* file = ReadEntireFileAndNullTerminate(filename);
+    if(file)
     {
         bool parsing = true;
         Tokenizer tokenizer = {};
@@ -460,14 +459,14 @@ void RecursivelyParseAllFiles( char* filename )
                 
                 case Token_Pound:
                 {
-                    Token includeToken = GetToken( &tokenizer );
-                    if( TokenEquals( includeToken, "include" ) )
+                    Token includeToken = GetToken(&tokenizer);
+                    if(TokenEquals(includeToken, "include"))
                     {
-                        Token otherFileName = GetToken( &tokenizer );
-                        if( otherFileName.type == Token_String )
+                        Token otherFileName = GetToken(&tokenizer);
+                        if(otherFileName.type == Token_String)
                         {
                             char newFile[256];
-                            sprintf( newFile, "%.*s", otherFileName.textLength - 1, otherFileName.text + 1 );
+                            sprintf( newFile, "%.*s", otherFileName.textLength - 1, otherFileName.text + 1);
                             newFile[otherFileName.textLength - 1] = 0;
                             
                             if( !AlreadyParsed( newFile ) )
@@ -706,7 +705,5 @@ int main( int argc, char** argv )
         printf( "\n" );
     }
     printf( "\n" );
-    
-    RecursivelyParseAllFiles( "forg_server.cpp" );
 }
 

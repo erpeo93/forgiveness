@@ -4,6 +4,8 @@
 #define INTROSPECTION
 
 #include "forg_basic_types.h"
+#include "meow_intrinsics.h"
+#include "meow_hash.h"
 #include "net.h"
 #include "forg_platform.h"
 #include "forg_shared.h"
@@ -56,6 +58,18 @@ struct PlayerRequest
     u8 data[512];
 };
 
+struct ForgFile
+{
+    char filename[64];
+    u64 hash;
+    
+    union
+    {
+        ForgFile* next;
+        ForgFile* nextFree;
+    };
+};
+
 struct ServerPlayer
 {
     b32 connectionClosed;
@@ -87,6 +101,8 @@ struct ServerPlayer
     
     u32 recipeCount;
     Recipe recipes[256];
+    
+    ForgFile* files;
     
     union
     {
@@ -272,8 +288,6 @@ struct ServerState
     ReceiveNetworkPacketWork receivePacketWork;
     NetworkInterface clientInterface;
     
-    u32 sendPakBufferSize;
-    char* sendPakBuffer;
     u32 currentPlayerIndex;
     ServerPlayer* players;
     ServerPlayer* firstFree;
@@ -303,6 +317,15 @@ struct ServerState
     RandomSequence objectSequence;
     
     PlayerPermanent editorPlayerPermanent;
+    
+    b32 reloadingAssets;
+    PlatformProcessHandle assetBuilder;
+    
+    ForgFile* files;
+    ForgFile* firstFreeFile;
+    
+    MemoryPool filePool;
+    MemoryPool scratchPool;
 };
 
 #define SERVER_NETWORK_STUFF( name ) void name( PlatformServerMemory* memory, r32 secondElapsed )

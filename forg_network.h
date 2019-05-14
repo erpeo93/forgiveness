@@ -198,6 +198,8 @@ enum Packet_Type
     Type_PakFileHeader,
     Type_FileChunk,
     
+    Type_FileHash,
+    
     Type_AllDataFileSent,
     Type_AllPakFileSent,
     

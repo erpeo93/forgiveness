@@ -521,11 +521,7 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
         DispatchQueuedAcks(connection);
         
         u32 dataToSend = GetBandwidth(connection, elapsedTime);
-        b32 sendPackets = false;
-        if(!connection->lastSent || connection->lastSent == &connection->sendQueueSentinel)
-        {
-            sendPackets = true;
-        }
+        b32 sendPackets = (connection->lastSent == &connection->sendQueueSentinel);
         
         r32 newReceivingSpeed = connection->receivedPacketsLastTick / elapsedTime;
         connection->receivingPacketPerSecond = NetLerp(connection->receivingPacketPerSecond, 0.5f, newReceivingSpeed);
@@ -561,6 +557,11 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
             
             if(packetExpired)
             {
+                if(packet == connection->lastSent)
+                {
+                    connection->lastSent = packet->prev;
+                }
+                
                 NETDLLIST_REMOVE(packet);
                 if(guaranteedDelivery && connection->salt)
                 {
@@ -574,12 +575,9 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
                     EndNetMutex(&connection->mutex);
                 }
             }
-            
-            
-            
-            if(dataToSend > 0)
+            else
             {
-                if(sendPackets)
+                if(sendPackets && dataToSend > 0)
                 {
                     BeginNetMutex(&connection->mutex);
                     NetworkAck ackToInclude = connection->ackToInclude;
@@ -605,17 +603,15 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
                     }
                     
                     dataToSend -= (sendCount * totalSize);
-                    
                     connection->lastSent = packet;
                 }
                 
-                
-                if(packet == connection->lastSent)
-                {
-                    sendPackets = true;
-                }
             }
             
+            if(packet == connection->lastSent)
+            {
+                sendPackets = true;
+            }
             packet = next;
         }
         
@@ -716,7 +712,7 @@ NETWORK_OPEN_CONNECTION(Win32OpenConnection)
     network->connections = connection;
     
     connection->nextProgressiveIndex = 0;
-    connection->lastSent = 0;
+    connection->lastSent = &connection->sendQueueSentinel;
     
     BeginNetMutex(&connection->mutex);
     
@@ -910,7 +906,7 @@ NETWORK_RECEIVE_DATA(Win32ReceiveData)
                                 
                                 
                                 connection->nextProgressiveIndex = 0;
-                                connection->lastSent = 0;
+                                connection->lastSent = &connection->sendQueueSentinel;
                                 
                                 NETDLLIST_INIT(&connection->sendQueueSentinel);
                                 NETDLLIST_INIT(&connection->recvQueueSentinel);
