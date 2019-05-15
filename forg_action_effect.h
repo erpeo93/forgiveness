@@ -43,21 +43,6 @@ printTable(noPrefix) enum EntityAction
     Action_Count,
 };
 
-printTable() enum EffectIdentifier
-{
-    invalid_effect,
-    
-    standard_pick,
-    standard_equip,
-    standard_open,
-    generic_spawn,
-    combat_standardDamage,
-    combat_hugeDamage,
-    combat_fireDamage,
-    combat_nakedHandsDamage,
-    consume_restoreLifePoints,
-};
-
 struct NakedHandReq
 {
     u8 slotIndex;
@@ -91,7 +76,7 @@ struct Effect
 {
     EntityAction triggerAction;
     u32 flags;
-    EffectIdentifier ID;
+    u32 taxonomy;
     EffectData data;
     
     r32 timer;

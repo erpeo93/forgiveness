@@ -509,8 +509,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                             canEdit = true;
                         }
                         else
-                        {
-                            
+                        {        
                             if(SpecialHandling(root->name))
                                {
                                 canEdit = true;   
@@ -976,7 +975,8 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     squareLineColor = V4(0.6f * RandomUniV3(&seq), 1);
                     if(root->type < EditorElement_List)
                     {
-                        if(root->type == EditorElement_String)
+                        if(root->type == EditorElement_String ||
+                           root->type == EditorElement_Text)
                         {
                             squareLineColor = V4(0, 0, 0.2f, 1.0f);
                         }
@@ -1069,6 +1069,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     switch(root->type)
                     {
                         case EditorElement_String:
+                        case EditorElement_Text:
                         {
                             FormatString(shadowLabel, sizeof(shadowLabel), "{ } %s", root->name);
                         } break;
@@ -1124,13 +1125,27 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
             switch(root->type)
             {
                 case EditorElement_String:
+                case EditorElement_Text:
                 case EditorElement_Real:
                 case EditorElement_Signed:
                 case EditorElement_Unsigned:
                 {
                     r32 xAdvance = Max(layout->nameValueDistance, GetDim(nameBounds).x + 10.0f);
                     Vec2 valueP = nameP + V2(xAdvance, 0);
-                    char* text = (root == UI->active) ? UI->showBuffer : root->value;
+                    
+                    char* text = 0;
+                    
+                    if(root->type == EditorElement_Text)
+                    {
+                        text = root->text->text;   
+                    }
+                    else
+                    {
+                    text = (root == UI->active) ? UI->showBuffer : root->value;
+                        
+                    }
+                    
+                 
                     
 					if(root == UI->active && UI->keyboardBuffer[0] == 0)
 					{
@@ -2151,6 +2166,11 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                 {
                     //UI->bufferValid = true;
                 }
+            } break;
+            
+            case EditorElement_Text:
+            {
+                InvalidCodePath;
             } break;
             
             case EditorElement_Real:

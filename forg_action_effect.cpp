@@ -96,37 +96,112 @@ inline void EssenceDelta(SimRegion* region, SimEntity* entity, u32 essenceTaxono
     }
 }
 
+#if 0
+inline r32 GetValue()
+{
+    switch(type)
+    {
+        case R32:
+        {
+            
+        } break;
+        
+        case Pointer_R32:
+        {
+            
+        } break;
+    }
+}
+
+inline r32* GetPointerR32(EvaluateASTContext* context)
+{
+    
+}
+
+struct EvaluateASTContext
+{
+    SimRegion* region;
+    SimEntity* actor;
+    SimEntity* target;
+};
+
+inline r32 EvaluateASTOperation(EvaluateASTContext context, ForgASTNode* node)
+{
+    r32 result = 0;
+    
+    switch(node->operation)
+    {
+        case ASTOperation_None:
+        {
+            Assert(node->operandCount == 0);
+            result = GetValue(node->value);
+        } break;
+        
+        case ASTOperation_Sum:
+        {
+            Assert(node->operandCount == 2);
+            result = EvalASTOperation(contexdt, node->operands + 0) + EvalASTOperation(context, node->operands1);
+        } break;
+        
+        case ASTOperation_Mul:
+        {
+            Assert(node->operandCount == 2);
+            result = EvalASTOperation(contexdt, node->operands + 0) * EvalASTOperation(context, node->operands1);
+        } break;
+        
+        case ASTOperation_Sub:
+        {
+            Assert(node->operandCount == 2);
+            result = EvalASTOperation(contexdt, node->operands + 0) - EvalASTOperation(context, node->operands1);
+        } break;
+        
+        case ASTOperation_Div:
+        {
+            Assert(node->operandCount == 2);
+            r32 divisor = EvalASTOperation(context, node->operands1);
+            
+            if(divisor != 0.0f)
+            {
+                result = EvalASTOperation(contexdt, node->operands + 0) / divisor;
+            }
+        } break;
+        
+        case ASTOperation_Assign:
+        {
+            Assert(node->operandCount == 2);
+            
+            r32* dest = GetPointerR32(node->operands[0]);
+            r32 value = EvalASTOperation(context, node->operands + 1);
+            *dest = value;
+        } break;
+    }
+    
+    return result;
+}
+
+inline void EvaluateAST(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, ForgAST* ast)
+{
+    EvalASTResult eval = EvaluateASTNode(context, region, actor, target, ast->root);
+    Assert(eval->type == ASTResult_None);
+}
+#endif
+
+inline void EvaluateAST(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, ForgAST* ast)
+{
+    //EvalASTResult eval = EvaluateASTNode(context, region, actor, target, ast->root);
+    //Assert(eval->type == ASTResult_None);
+}
+
+
 inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, GenerationData gen, AddEntityAdditionalParams params);
 internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, Effect* effect)
 {
     u64 actorID = actor->identifier;
     u64 targetID = target ? target->identifier : 0;
-    
-    CreatureComponent* actorCreature = Creature(region, actor);
-    
+#if 0
     TaxonomySlot* effectSlot = GetNthChildSlot(region->taxTable, region->taxTable->effectTaxonomy, effect->ID);
     switch(effect->ID)
     {
-        case standard_pick:
-        {
-            PickObject(region, actor, target);
-        } break;
-        
-        case standard_equip:
-        {
-            EquipObject(region, actor, target);
-        } break;
-        
-        case standard_open:
-        {
-            if(actor->playerID)
-            {
-                ServerPlayer* player = region->server->players + actor->playerID;
-                SendCompleteContainerInfo(region, player, target);
-            }
-            actorCreature->openedContainerID = target->identifier;
-        } break;
-        
         case generic_spawn:
         {
             Vec3 P = actor->P + V3(1, 0, 0);
@@ -185,7 +260,13 @@ internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region,
             actorCreature->lifePoints += 10.0f * effect->data.power;
         } break;
     }
-    
+#else
+    TaxonomySlot* slot = GetSlotForTaxonomy(region->taxTable, effect->taxonomy);
+    if(slot->ast.root)
+    {
+        EvaluateAST(context, region, actor, target, &slot->ast);
+    }
+#endif
     
     if(effect->flags & Effect_SendToClientOnTrigger)
     {
@@ -194,30 +275,32 @@ internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region,
         effectToSend->P = actor->P;
         effectToSend->actor = actorID;
         effectToSend->target = targetID;
-        effectToSend->effectTaxonomy = effectSlot->taxonomy;
+        effectToSend->effectTaxonomy = slot->taxonomy;
     }
 }
 
-internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, u32 ID, r32 power = 1.0f)
+internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, u32 effectTaxonomy, r32 power = 1.0f)
 {
     Effect effect = {};
-    effect.ID = (EffectIdentifier) ID;
+    effect.taxonomy = effectTaxonomy;
     effect.data.power = power;
     DispatchEffect(context, region, actor, target, &effect);
 }
 
 internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, u32 action)
 {
+    Assert(IsCreature(region->taxTable, actor->taxonomy));
+    CreatureComponent* actorCreature = Creature(region, actor);
     switch(action)
     {
         case Action_Pick:
         {
-            DispatchEffect(context, region, actor, target, standard_pick);
+            PickObject(region, actor, target);
         } break;
         
         case Action_Equip:
         {
-            DispatchEffect(context, region, actor, target, standard_equip);
+            EquipObject(region, actor, target);
         } break;
         
         case Action_Craft:
@@ -225,7 +308,6 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
             Assert(target->status < 0);
             AddFlags(target, Flag_Equipped);
             target->status += region->timeToUpdate;
-            
             if(target->status >= 0)
             {
                 target->status = 0;
@@ -239,13 +321,18 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
         
         case Action_Open:
         {
-            DispatchEffect(context, region, actor, target, standard_open);
+            if(actor->playerID)
+            {
+                ServerPlayer* player = region->server->players + actor->playerID;
+                SendCompleteContainerInfo(region, player, target);
+            }
+            actorCreature->openedContainerID = target->identifier;
+            
             context->followingAction = Action_Examine;
             
             if(actor->playerID)
             {
                 IgnoreAction(region, actor, Action_Open);
-                //IgnoreAction(region, actor, Action_None);
             }
         } break;
         
@@ -256,7 +343,6 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
         
         case Action_Cast:
         {
-            CreatureComponent* actorCreature = Creature(region, actor);
             SkillSlot* skillSlot = actorCreature->skills + actorCreature->activeSkillIndex;
             Assert(skillSlot->taxonomy);
             TaxonomySlot* spellSlot = GetSlotForTaxonomy(region->taxTable, skillSlot->taxonomy);

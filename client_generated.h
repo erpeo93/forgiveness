@@ -78,19 +78,6 @@ char* MetaTable_EntityAction[] =
 "Die",
 "Count",
 };
-char* MetaTable_EffectIdentifier[] = 
- {
-"invalid_effect",
-"standard_pick",
-"standard_equip",
-"standard_open",
-"generic_spawn",
-"combat_standardDamage",
-"combat_hugeDamage",
-"combat_fireDamage",
-"combat_nakedHandsDamage",
-"consume_restoreLifePoints",
-};
 MetaFlag MetaFlags_EffectFlags[] = 
  {
 {"Target",

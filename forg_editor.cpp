@@ -760,17 +760,24 @@ inline void DefineNullBounds(char* boundsHeight, char* boundsRadious)
 #if FORG_SERVER
 global_variable TaxonomyEffect* currentEffect_;
 
-inline void AddEffect(char* action, char* ID)
+inline void AddEffect(char* action, char* effect)
 {
-    TaxonomyEffect* newEffect;
-    TAXTABLE_ALLOC(newEffect, TaxonomyEffect);
-    
-    newEffect->effect.triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
-    newEffect->effect.ID = (EffectIdentifier) GetValuePreprocessor(EffectIdentifier, ID);
-    
-    FREELIST_INSERT(newEffect, currentSlot_->firstEffect);
-    currentEffect_ = newEffect;
-    
+    TaxonomySlot* effectSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, effect);
+    if(effectSlot)
+    {
+        TaxonomyEffect* newEffect;
+        TAXTABLE_ALLOC(newEffect, TaxonomyEffect);
+        
+        newEffect->effect.triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
+        newEffect->effect.taxonomy = effectSlot->taxonomy;
+        
+        FREELIST_INSERT(newEffect, currentSlot_->firstEffect);
+        currentEffect_ = newEffect;
+    }
+    else
+    {
+        EditorErrorLog(effect);
+    }
 }
 
 inline void IsPassive()
@@ -780,8 +787,11 @@ inline void IsPassive()
 
 inline void Power(char* power)
 {
-	currentEffect_->effect.data = {};
-    currentEffect_->effect.data.power = ToR32(power);    
+    if(currentEffect_)
+    {
+        currentEffect_->effect.data = {};
+        currentEffect_->effect.data.power = ToR32(power);    
+    }
 }
 
 inline void Spawn(char* name)
@@ -789,8 +799,11 @@ inline void Spawn(char* name)
     TaxonomySlot* spawnSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
     if(spawnSlot)
     {
-        currentEffect_->effect.data = {};
-        currentEffect_->effect.data.taxonomy = spawnSlot->taxonomy;
+        if(currentEffect_)
+        {
+            currentEffect_->effect.data = {};
+            currentEffect_->effect.data.taxonomy = spawnSlot->taxonomy;
+        }
     }
     else
     {
@@ -800,13 +813,19 @@ inline void Spawn(char* name)
 
 inline void AddFlag(char* flagName)
 {
-	u32 flag = GetFlagPreprocessor(EffectFlags, flagName);
-    currentEffect_->effect.flags |= flag;
+    if(currentEffect_)
+    {
+        u32 flag = GetFlagPreprocessor(EffectFlags, flagName);
+        currentEffect_->effect.flags |= flag;
+    }
 }
 
 inline void Timer(char* timer)
 {
-    currentEffect_->effect.targetTimer = ToR32(timer);
+    if(currentEffect_)
+    {
+        currentEffect_->effect.targetTimer = ToR32(timer);
+    }
 }
 
 inline void AddFreeHandReq(char* slot, char* taxonomy)
@@ -830,24 +849,6 @@ inline void AddFreeHandReq(char* slot, char* taxonomy)
 }
 
 
-internal void CustomEffects()
-{
-#if 0    
-    BeginCustomEffect("combat special damage");
-    AddEffect("combat_standardDamage");
-    AddEffect("combat_fireDamage");
-    
-    DefineUtilities("combat_standardDamage");
-    AddUtility("offensivePower", EffectUtility_Standard);
-    
-    DefineUtilities("combat_fireDamage");
-    AddUtility("offensivePower", EffectUtility_Standard);
-    AddUtility("fireDamage", EffectUtility_Huge);
-#endif
-}
-
-
-
 
 
 
@@ -866,7 +867,7 @@ inline void LinkStandard(char* action, char* effectName, char* target)
         TAXTABLE_ALLOC(link, CraftingEffectLink);
         link->triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
         link->target = target ? ToB32(target) : false;
-        link->ID = effectSlot->effectID;
+        link->effectTaxonomy = effectSlot->taxonomy;
         activeCraftingLink_ = link;
         
         FREELIST_INSERT(link, currentSlot_->links);
@@ -2028,6 +2029,14 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
                 buffer = OutputToBuffer(buffer, bufferSize, "\" ");
 			} break;
             
+            case EditorElement_Text:
+			{
+                buffer = OutputToBuffer(buffer, bufferSize, " \"");
+                buffer = OutputToBuffer(buffer, bufferSize, " $");
+				buffer = OutputToBuffer(buffer, bufferSize, element->text->text);
+                buffer = OutputToBuffer(buffer, bufferSize, "\" ");
+			} break;
+            
             case EditorElement_Real:
 			{
 				b32 encounteredPoint = false;
@@ -2188,11 +2197,6 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
             newElement->versionNumber = atoi(version.text);
         }
         
-        if(TokenEquals(firstToken, "testBand"))
-        {
-            int a = 5;
-        }
-        
 		if(RequireToken(tokenizer, Token_EqualSign))
 		{
 			Token t = GetToken(tokenizer);
@@ -2200,16 +2204,22 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
 			{
 				case Token_String:
 				{
-					newElement->type = EditorElement_String;
-                    Token value = Stringize(t);
-                    StrCpy(value.text, value.textLength, newElement->value, sizeof(newElement->value));
+					Token value = Stringize(t);
                     
-#if 0                    
-                    if(TokenEquals(firstToken, "name"))
+                    if(value.text[0] == '$')
                     {
-                        AddFlags(newElement, EditorElem_AlwaysEditable);
+                        newElement->type = EditorElement_Text;
+                        EditorTextBlock* text;
+                        FREELIST_ALLOC(text, taxTable_->firstFreeEditorText, PushStruct(taxPool_, EditorTextBlock));
+                        StrCpy(value.text + 1, value.textLength - 1, text->text, sizeof(text->text));
+                        
+                        newElement->text = text;
                     }
-#endif
+                    else
+                    {
+                        newElement->type = EditorElement_String;
+                        StrCpy(value.text, value.textLength, newElement->value, sizeof(newElement->value));
+                    }
                     
                 } break;
                 
@@ -2424,6 +2434,12 @@ inline void FreeElement(EditorElement* element, b32 freeNext = true)
             case EditorElement_Signed:
             case EditorElement_Unsigned:
             {
+            } break;
+            
+            
+            case EditorElement_Text:
+            {
+                FREELIST_DEALLOC(element->text, taxTable_->firstFreeEditorText);
             } break;
             
             case EditorElement_List:
@@ -2946,6 +2962,15 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         }
     }
 #if FORG_SERVER
+    else if(StrEqual(name, "effectDefinition"))
+    {
+        FreeAST();
+        currentSlot_->ast = ParseExpression(0, 0);
+        if(!CheckAST(&currentSlot_->ast))
+        {
+            FreeAST();
+        }
+    }
     else if(StrEqual(name, "craftingEssences"))
     {
         FREELIST_FREE(currentSlot_->essences, TaxonomyEssence, taxTable_->firstFreeTaxonomyEssence);
@@ -3719,13 +3744,6 @@ internal void ImportAllFiles(char* dataPath, u32 editorRoles, b32 freeTab)
     
     u32 bufferSize = MegaBytes(16);
     char* buffer = (char*) PushSize(&tempPool, bufferSize, NoClear());
-    
-    for(u32 effectIndex = 0; effectIndex < ArrayCount(MetaTable_EffectIdentifier); ++effectIndex)
-    {
-        TaxonomySlot* effectSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, MetaTable_EffectIdentifier[effectIndex]);
-        effectSlot->effectID = (EffectIdentifier) effectIndex;
-    }
-    
     
     PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_entityDefinition, dataPath);
     for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex)

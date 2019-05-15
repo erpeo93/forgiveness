@@ -196,7 +196,7 @@ struct CraftingEffectLink
     EssenceSlot essences[MAX_ESSENCES_PER_EFFECT];
     EntityAction triggerAction;
     b32 target;
-    EffectIdentifier ID;
+    u32 effectTaxonomy;
     
     union
     {
@@ -429,9 +429,8 @@ struct TaxonomySlot
     
     
     
-    
+    ForgAST ast;
     b32 isPassiveSkill;
-    EffectIdentifier effectID;
     
     u8 gridDimX;
     u8 gridDimY;
@@ -557,6 +556,7 @@ struct TaxonomyTable
     ShortcutSlot* shortcutSlots[4096];
     
     struct EditorElement* firstFreeElement;
+    struct EditorTextBlock* firstFreeEditorText;
     
     
     EquipmentMapping* firstFreeEquipmentMapping;

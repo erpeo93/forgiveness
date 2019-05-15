@@ -13,6 +13,7 @@
 #include "forg_intrinsics.h"
 #include "forg_math.h"
 #include "forg_random.h"
+#include "forg_ast.h"
 #include "forg_asset_enum.h"
 #include "forg_physics.h"
 #include "forg_rule.h"

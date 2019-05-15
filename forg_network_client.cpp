@@ -289,6 +289,10 @@ internal void SendEditorElements(EditorElement* root)
     }
     else
     {
+        if(root->type == EditorElement_Text)
+        {
+            Pack("s", root->text->text);
+        }
         
         if(root->type == EditorElement_List)
         {
@@ -299,7 +303,7 @@ internal void SendEditorElements(EditorElement* root)
     
 	switch(root->type)
 	{
-		case EditorElement_Struct:
+        case EditorElement_Struct:
 		{
             if(root->firstValue)
             {

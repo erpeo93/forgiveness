@@ -93,6 +93,7 @@ inline UniversePos GetUniverseP(SimRegion* region, Vec3 p)
 #include "forg_world_generation.cpp"
 #include "forg_consideration.cpp"
 #include "forg_network_server.cpp"
+#include "forg_ast.cpp"
 #include "forg_editor.cpp"
 #include "forg_inventory.cpp"
 #include "forg_memory.cpp"
@@ -477,7 +478,13 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 else
                 {
                     element->value[0] = 0;
-                    if(element->type == EditorElement_List)
+                    
+                    if(element->type == EditorElement_Text)
+                    {
+                        EditorTextBlock* text;
+                        FREELIST_ALLOC(text, taxTable->firstFreeEditorText, PushStruct(&taxTable->pool, EditorTextBlock));
+                    }
+                    else if(element->type == EditorElement_List)
                     {
                         packetPtr = unpack(packetPtr, "ss", element->elementName, element->labelName);
                     }
@@ -513,6 +520,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                     switch(stack->previousElementType)
                     {
                         case EditorElement_String:
+                        case EditorElement_Text:
                         case EditorElement_Real:
                         case EditorElement_Signed:
                         case EditorElement_Unsigned:

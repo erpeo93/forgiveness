@@ -1322,6 +1322,12 @@ inline EditorElement* CopyEditorElement(TaxonomyTable* table, EditorElement* sou
             
         } break;
         
+        case EditorElement_Text:
+        {
+            FREELIST_ALLOC(result->text, table->firstFreeEditorText, PushStruct(&table->pool, EditorTextBlock));
+            Copy(sizeof(result->text->text), result->text->text, source->text->text);
+        } break;
+        
         case EditorElement_List:
         {
             if(source->emptyElement)

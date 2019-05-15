@@ -12,6 +12,7 @@
 #include "forg_math.h"
 #include "forg_simd.h"
 #include "forg_random.h"
+#include "forg_ast.h"
 #include "forg_asset_enum.h"
 #include "forg_file_formats.h"
 #include "asset_builder.h"

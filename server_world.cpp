@@ -87,7 +87,6 @@ inline void NORUNTIMEAddSkill(SimRegion* region, SimEntity* entity, char* skillN
 internal void SendSkills(SimRegion* region, SimEntity* entity, ServerPlayer* player, TaxonomyTable* table);
 internal void AddPlayersSkills(SimRegion* region, SimEntity* player)
 {
-    NORUNTIMEAddSkill(region, player, "elemental 1", 2, 1.0f);
     NORUNTIMEAddSkill(region, player, "elemental 4", 2, 1.0f);
     NORUNTIMEAddSkill(region, player, "elemental 2", 1, 1.0f);
     NORUNTIMEAddSkill(region, player, "elemental 3", 3, 1.0f);
@@ -272,7 +271,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
                 for(u32 entityEffectIndex = 0; entityEffectIndex < effects->effectCount; ++entityEffectIndex)
                 {
                     Effect* entityEffect = effects->effects + entityEffectIndex;
-                    if(entityEffect->ID == effect->ID)
+                    if(entityEffect->taxonomy == effect->taxonomy)
                     {
                         *entityEffect = *effect;
                         addEffect = false;

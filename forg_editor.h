@@ -8,6 +8,7 @@ enum EditorElementType
 	EditorElement_Real,
 	
     EditorElement_List,
+	EditorElement_Text,
 	EditorElement_Struct,
     EditorElement_Taxonomy,
     EditorElement_EmptyTaxonomy,
@@ -39,6 +40,17 @@ enum EditorElementFlags
     EditorElem_DontRender = (1 << 16),
 };
 
+struct EditorTextBlock
+{
+    char text[KiloBytes(100)];
+    
+    union
+    {
+        EditorTextBlock* next;
+        EditorTextBlock* nextFree;
+    };
+};
+
 struct EditorElement
 {
 	char name[32];
@@ -48,6 +60,7 @@ struct EditorElement
     union
 	{
 		char value[32];
+        EditorTextBlock* text;
         
         struct
         {
