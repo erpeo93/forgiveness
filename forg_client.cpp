@@ -366,55 +366,6 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
     }
 }
 
-inline void MarkAllPakFilesAsToDelete(GameModeWorld* worldMode, char* path)
-{
-    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, path);
-    
-    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex)
-    {
-        PlatformFileHandle handle = platformAPI.OpenNextFile(&fileGroup, path);
-        
-        ToDeleteFile* toDelete;
-        FREELIST_ALLOC(toDelete, worldMode->firstFreeFileToDelete, PushStruct(&worldMode->deletedFilesPool, ToDeleteFile));
-        
-        toDelete->toDelete = true;
-        GetNameWithoutPoint(toDelete->filename, sizeof(toDelete->filename), handle.name);
-        
-        FREELIST_INSERT(toDelete, worldMode->firstFileToDelete);
-        
-        platformAPI.CloseHandle(&handle);
-    }
-    
-    platformAPI.GetAllFilesEnd(&fileGroup);
-}
-
-inline void MarkFileAsArrived(GameModeWorld* worldMode, char* filename)
-{
-    for(ToDeleteFile* file = worldMode->firstFileToDelete; file; file = file->next)
-    {
-        if(StrEqual(StrLen(file->filename), file->filename, filename))
-        {
-            file->toDelete = false;
-            break;
-        }
-    }
-}
-
-inline void DeleteAllFilesNotArrived(GameModeWorld* worldMode, char* path)
-{
-    for(ToDeleteFile* file = worldMode->firstFileToDelete; file; file = file->next)
-    {
-        if(file->toDelete)
-        {
-            char toDeleteWildcard[128];
-            FormatString(toDeleteWildcard, sizeof(toDeleteWildcard), "%s.*", file->filename);
-            platformAPI.DeleteFileWildcards(path, toDeleteWildcard);
-        }
-    }
-    
-    FREELIST_FREE(worldMode->firstFileToDelete, ToDeleteFile, worldMode->firstFreeFileToDelete);
-}
-
 internal void PlayGame(GameState* gameState, PlatformInput* input)
 {
     SetGameMode(gameState, GameMode_Playing);
@@ -429,7 +380,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     char* loginServer = "127.0.0.1";
 #endif
     
-    //MarkAllPakFilesAsToDelete(result, "assets");
+    MarkAllPakFilesAsToDelete(result, "assets");
     
     clientNetwork->nextSendUnreliableApplicationData = {};
     clientNetwork->nextSendReliableApplicationData = {};
@@ -809,16 +760,14 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 CloseAllHandles(gameState->assets);
                 
                 
-#if 0                
                 for(DataFileArrived* file = worldMode->firstPakFileArrived; file; file = file->next)
                 {
                     MarkFileAsArrived(worldMode, file->name);
                 }
-#endif
                 
                 
                 WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstPakFileArrived, true);
-                //DeleteAllFilesNotArrived(worldMode, "assets");
+                DeleteAllFilesNotArrived(worldMode, "assets");
                 
                 worldMode->firstPakFileArrived = 0;
                 
@@ -843,7 +792,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 worldMode->UI->font = 0;
                 
                 reloadAssetAutocompletes = true;
-                //MarkAllPakFilesAsToDelete(worldMode, "assets");
+                MarkAllPakFilesAsToDelete(worldMode, "assets");
                 
                 
 #if 1

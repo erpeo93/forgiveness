@@ -846,6 +846,13 @@ inline void SendFileChunks(ServerPlayer* player, char* source, u32 sizeToSend, u
     }
 }
 
+inline void SendDontDeleteFile(ServerPlayer* player, char* filename)
+{
+    StartPacket(player, DontDeleteFile);
+    Pack("s", filename);
+    CloseAndStoreReliablePacket(player);
+}
+
 internal void SendDataFile(ServerPlayer* player, char* name, char* source, u32 fileSize)
 {
     u32 chunkSize = KiloBytes(1);

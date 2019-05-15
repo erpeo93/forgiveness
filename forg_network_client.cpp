@@ -550,6 +550,56 @@ inline void AddToSkillCategoryBlock(UIState* UI, SkillCategory skillCategory)
     AddToElementBlock(UI, UI->bookModes + UIBook_Skills, element);
 }
 
+
+inline void MarkAllPakFilesAsToDelete(GameModeWorld* worldMode, char* path)
+{
+    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, path);
+    
+    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex)
+    {
+        PlatformFileHandle handle = platformAPI.OpenNextFile(&fileGroup, path);
+        
+        ToDeleteFile* toDelete;
+        FREELIST_ALLOC(toDelete, worldMode->firstFreeFileToDelete, PushStruct(&worldMode->deletedFilesPool, ToDeleteFile));
+        
+        toDelete->toDelete = true;
+        GetNameWithoutPoint(toDelete->filename, sizeof(toDelete->filename), handle.name);
+        
+        FREELIST_INSERT(toDelete, worldMode->firstFileToDelete);
+        
+        platformAPI.CloseHandle(&handle);
+    }
+    
+    platformAPI.GetAllFilesEnd(&fileGroup);
+}
+
+inline void MarkFileAsArrived(GameModeWorld* worldMode, char* filename)
+{
+    for(ToDeleteFile* file = worldMode->firstFileToDelete; file; file = file->next)
+    {
+        if(StrEqual(StrLen(file->filename), file->filename, filename))
+        {
+            file->toDelete = false;
+            break;
+        }
+    }
+}
+
+inline void DeleteAllFilesNotArrived(GameModeWorld* worldMode, char* path)
+{
+    for(ToDeleteFile* file = worldMode->firstFileToDelete; file; file = file->next)
+    {
+        if(file->toDelete)
+        {
+            char toDeleteWildcard[128];
+            FormatString(toDeleteWildcard, sizeof(toDeleteWildcard), "%s.*", file->filename);
+            platformAPI.DeleteFileWildcards(path, toDeleteWildcard);
+        }
+    }
+    
+    FREELIST_FREE(worldMode->firstFileToDelete, ToDeleteFile, worldMode->firstFreeFileToDelete);
+}
+
 internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
     UIState* UI = worldMode->UI;
@@ -1073,6 +1123,13 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 file->runningFileSize += sizeToCopy;
                 
                 Assert(file->runningFileSize <= file->fileSize);
+            } break;
+            
+            case Type_DontDeleteFile:
+            {
+                char filename[64];
+                Unpack("s", filename);
+                MarkFileAsArrived(worldMode, filename);
             } break;
             
             case Type_AllDataFileSent:

@@ -197,6 +197,7 @@ enum Packet_Type
     Type_DataFileHeader,
     Type_PakFileHeader,
     Type_FileChunk,
+    Type_DontDeleteFile,
     
     Type_FileHash,
     

@@ -149,6 +149,7 @@ inline ForgFile* FindFile(ServerState* server, ForgFile** firstFilePtr, char* fi
     {
         FREELIST_ALLOC(result, server->firstFreeFile, PushStruct(&server->filePool, ForgFile));
         StrCpy(fileName, StrLen(fileName), result->filename, sizeof(result->filename));
+        result->hash = 0;
         
         FREELIST_INSERT(result, *firstFilePtr);
     }
@@ -188,7 +189,6 @@ inline void LoadAssetsSync(ServerState* server)
         PlatformProcessState assetBuilderState = platformAPI.DEBUGGetProcessState(assetBuilder);
         if(!assetBuilderState.isRunning)
         {
-            AddAllPakFileHashes(server);
             break;
         }
     }
@@ -940,43 +940,54 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                         ForgFile* serverFile = FindFile(server, &server->files, handle.name);
                         ForgFile* playerFile = FindFile(server, &player->files, handle.name);
                         
-                        if((serverFile->hash != playerFile->hash) && (server->editor || handle.name[0] != '#'))
+                        Assert(serverFile->hash);
+                        if((serverFile->hash != playerFile->hash))
                         {
-                            if(player->pakFileOffset == 0)
+                            if(server->editor || handle.name[0] != '#')
                             {
-                                char nameWithoutPoint[64];
-                                GetNameWithoutPoint(nameWithoutPoint, sizeof(nameWithoutPoint), handle.name);
+                                if(player->pakFileOffset == 0)
+                                {
+                                    char nameWithoutPoint[64];
+                                    GetNameWithoutPoint(nameWithoutPoint, sizeof(nameWithoutPoint), handle.name);
+                                    
+                                    char uncompressedName[64];
+                                    FormatString(uncompressedName, sizeof(uncompressedName), "%s.upak", nameWithoutPoint);
+                                    SendPakFileHeader(player, uncompressedName, handle.fileSize, chunkSize);
+                                }
                                 
-                                char uncompressedName[64];
-                                FormatString(uncompressedName, sizeof(uncompressedName), "%s.upak", nameWithoutPoint);
-                                SendPakFileHeader(player, uncompressedName, handle.fileSize, chunkSize);
+                                u32 sizeToRead = Min(toSendSize, handle.fileSize - player->pakFileOffset);
+                                TempMemory fileMemory = BeginTemporaryMemory(&server->scratchPool);
+                                
+                                char* buffer = (char*) PushSize(&server->scratchPool, sizeToRead);
+                                
+                                platformAPI.ReadFromFile(&handle, player->pakFileOffset, sizeToRead, buffer);
+                                SendFileChunks(player, buffer, sizeToRead, chunkSize);
+                                EndTemporaryMemory(fileMemory);
+                                
+                                
+                                player->pakFileOffset += sizeToRead;
+                                u32 modSizeToRead = sizeToRead;
+                                
+                                if(modSizeToRead % chunkSize)
+                                {
+                                    modSizeToRead += chunkSize - (sizeToRead % chunkSize);
+                                }
+                                Assert(modSizeToRead % chunkSize == 0);
+                                
+                                toSendSize -= modSizeToRead;
                             }
-                            
-                            u32 sizeToRead = Min(toSendSize, handle.fileSize - player->pakFileOffset);
-                            TempMemory fileMemory = BeginTemporaryMemory(&server->scratchPool);
-                            
-                            char* buffer = (char*) PushSize(&server->scratchPool, sizeToRead);
-                            
-                            platformAPI.ReadFromFile(&handle, player->pakFileOffset, sizeToRead, buffer);
-                            SendFileChunks(player, buffer, sizeToRead, chunkSize);
-                            EndTemporaryMemory(fileMemory);
-                            
-                            
-                            player->pakFileOffset += sizeToRead;
-                            u32 modSizeToRead = sizeToRead;
-                            
-                            if(modSizeToRead % chunkSize)
+                            else
                             {
-                                modSizeToRead += chunkSize - (sizeToRead % chunkSize);
+                                player->pakFileOffset = handle.fileSize;
                             }
-                            Assert(modSizeToRead % chunkSize == 0);
-                            
-                            toSendSize -= modSizeToRead;
                         }
                         else
                         {
+                            SendDontDeleteFile(player, handle.name);
                             player->pakFileOffset = handle.fileSize;
                         }
+                        
+                        
                         
                         if(player->pakFileOffset >= handle.fileSize)
                         {
@@ -1285,6 +1296,7 @@ extern "C" SERVER_INITIALIZE(InitializeServer)
     {
         ReadTaxonomiesFromFile();
     }
+    AddAllPakFileHashes(server);
     
     server->worldSeed = (u32) time(0);
     FillGenerationData(server);
