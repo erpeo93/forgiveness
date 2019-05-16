@@ -220,13 +220,11 @@ internal Win32GameCode Win32LoadGameCode( char* DLLName, char* tempDLLName, char
     char* toLoad = DLLName;
 #if FORGIVENESS_INTERNAL
     CopyFile(DLLName, tempDLLName, 0);
-    char* toLoad = tempDLLName;
+    toLoad = tempDLLName;
 #endif
-    
     
     WIN32_FILE_ATTRIBUTE_DATA fileAttributes;
     WIN32_FILE_ATTRIBUTE_DATA ignored;
-    
     
     if( !GetFileAttributesEx( lockName, GetFileExInfoStandard, &ignored ) )
     {
@@ -1218,6 +1216,33 @@ PLATFORM_ERROR_MESSAGE(Win32ErrorMessage)
     InvalidCodePath;
 }
 
+PLATFORM_GET_CLIPBOARD(Win32GetClipboardText)
+{
+    HANDLE h;
+    
+    if (!OpenClipboard(NULL))
+    {
+        InvalidCodePath;
+    }
+    
+    h = GetClipboardData(CF_TEXT);
+    FormatString(buffer, bufferLength, "%s", (char*) h);
+    
+    CloseClipboard();
+}
+
+PLATFORM_SET_CLIPBOARD(Win32SetClipboardText)
+{
+    HGLOBAL hMem =  GlobalAlloc(GMEM_MOVEABLE, textLength);
+    memcpy(GlobalLock(hMem), text, textLength);
+    GlobalUnlock(hMem);
+    
+    OpenClipboard(0);
+    EmptyClipboard();
+    SetClipboardData(CF_TEXT, hMem);
+    CloseClipboard();
+}
+
 #if FORGIVENESS_INTERNAL
 global_variable DebugTable globalDebugTable_;
 DebugTable* globalDebugTable = &globalDebugTable_;
@@ -1361,6 +1386,8 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             
             gameMemory.api.AllocateMemory = Win32AllocateMemory;
             gameMemory.api.DeallocateMemory = Win32DeallocateMemory;
+            gameMemory.api.GetClipboardText = Win32GetClipboardText;
+            gameMemory.api.SetClipboardText = Win32SetClipboardText;
             gameMemory.api.DEBUGMemoryStats = Win32GetMemoryStats;
             
             

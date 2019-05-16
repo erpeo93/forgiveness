@@ -483,6 +483,9 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                     {
                         EditorTextBlock* text;
                         FREELIST_ALLOC(text, taxTable->firstFreeEditorText, PushStruct(&taxTable->pool, EditorTextBlock));
+                        element->text = text;
+                        packetPtr = unpack(packetPtr, "s", text->text);
+                        
                     }
                     else if(element->type == EditorElement_List)
                     {

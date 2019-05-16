@@ -2032,7 +2032,7 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
             case EditorElement_Text:
 			{
                 buffer = OutputToBuffer(buffer, bufferSize, " \"");
-                buffer = OutputToBuffer(buffer, bufferSize, " $");
+                buffer = OutputToBuffer(buffer, bufferSize, "$");
 				buffer = OutputToBuffer(buffer, bufferSize, element->text->text);
                 buffer = OutputToBuffer(buffer, bufferSize, "\" ");
 			} break;

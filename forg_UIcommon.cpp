@@ -1145,6 +1145,36 @@ inline UIInteraction UIRedoInteraction(UIState* UI, u32 flags)
     return result;
 }
 
+
+inline UIInteraction UICopyToClipboardInteraction(UIState* UI, char* buffer, u32 bufferSize, u32 flags)
+{
+    UIInteraction result = NullInteraction();
+    
+    UIInteractionAction* dest = UIGetFreeAction(UI, &result);
+    dest->type = UIInteractionAction_CopyToClipboard;
+    
+    dest->clipboardBuffer = buffer;
+    dest->clipboardSize = bufferSize;
+    dest->flags = flags;
+    
+    return result;
+}
+
+inline UIInteraction UIPasteFromClipboardInteraction(UIState* UI, EditorWidget* widget, char* buffer, u32 bufferSize, u32 flags)
+{
+    UIInteraction result = NullInteraction();
+    
+    UIInteractionAction* dest = UIGetFreeAction(UI, &result);
+    dest->type = UIInteractionAction_PasteFromClipboard;
+    dest->clipboardWidget = widget;
+    dest->clipboardBuffer = buffer;
+    dest->clipboardSize = bufferSize;
+    dest->flags = flags;
+    
+    return result;
+}
+
+
 #define UIAddSetValueActionDefinition(type)\
 inline void UIAddSetValueAction(UIState* UI, UIInteraction* interaction, u32 flags, type* destination, type value)\
 {\
@@ -2044,6 +2074,17 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
                                 UI->current = next;
                             }
                         }
+                    } break;
+                    
+                    case UIInteractionAction_CopyToClipboard:
+                    {
+                        platformAPI.SetClipboardText(action->clipboardBuffer, action->clipboardSize);
+                    } break;
+                    
+                    case UIInteractionAction_PasteFromClipboard:
+                    {
+                        platformAPI.GetClipboardText(action->clipboardBuffer, action->clipboardSize);
+                        UpdateWidgetChangeCount(UI, action->clipboardWidget, 1);
                     } break;
                 }
                 

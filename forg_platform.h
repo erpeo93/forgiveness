@@ -642,6 +642,12 @@ typedef PLATFORM_ALLOCATE_MEMORY( platform_allocate_memory );
 #define PLATFORM_DEALLOCATE_MEMORY( name ) void name( PlatformMemoryBlock* block )
 typedef PLATFORM_DEALLOCATE_MEMORY( platform_deallocate_memory );
 
+#define PLATFORM_GET_CLIPBOARD(name) void name(char* buffer, u32 bufferLength)
+typedef PLATFORM_GET_CLIPBOARD(platform_get_clipboard);
+
+#define PLATFORM_SET_CLIPBOARD(name) void name(char* text, u32 textLength)
+typedef PLATFORM_SET_CLIPBOARD(platform_set_clipboard);
+
 struct DebugPlatformMemoryStats
 {
     u32 blockCount;
@@ -675,6 +681,8 @@ struct PlatformAPI
     
     platform_allocate_memory* AllocateMemory;
     platform_deallocate_memory* DeallocateMemory;
+    platform_get_clipboard* GetClipboardText;
+    platform_set_clipboard* SetClipboardText;
     debug_platform_memory_stats* DEBUGMemoryStats;
     
     platform_push_work* PushWork;

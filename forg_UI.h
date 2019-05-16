@@ -497,7 +497,6 @@ inline UndoRedoCommand UndoRedoString(EditorWidget* widget, char* ptr, u32 ptrSi
     return result;
 }
 
-
 inline UndoRedoCommand UndoRedoDelayedString(EditorWidget* widget, char* ptr, u32 ptrSize, char* oldString, UIMemoryReference newString)
 {
     UndoRedoCommand result = {};
@@ -578,6 +577,8 @@ enum UIInteractionActionType
     UIInteractionAction_UndoRedoCommand,
     UIInteractionAction_Undo,
     UIInteractionAction_Redo,
+    UIInteractionAction_CopyToClipboard,
+    UIInteractionAction_PasteFromClipboard,
 };
 
 struct UIInteractionAction
@@ -639,6 +640,13 @@ struct UIInteractionAction
         {
             UIMemoryReference current;
             EditorElementParents parents;
+        };
+        
+        struct
+        {
+            EditorWidget* clipboardWidget;
+            char* clipboardBuffer;
+            u32 clipboardSize;
         };
         
         UIMemoryReference toReload;

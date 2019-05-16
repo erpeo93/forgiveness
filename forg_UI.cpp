@@ -609,7 +609,7 @@ inline b32 UIChildModified(TaxonomyTable* table, TaxonomySlot* slot)
     return result;
 }
 
-struct StructButtonsResult
+struct UIButtonsResult
 {
     Rect2 completeBounds;
     b32 hot;
@@ -617,7 +617,7 @@ struct StructButtonsResult
 };
 
 
-inline void DrawStructActionButton(UIState* UI, PlatformInput* input, StructButtonsResult* result, UIButton* button)
+inline void DrawUIActionButton(UIState* UI, PlatformInput* input, UIButtonsResult* result, UIButton* button)
 {
     DrawButtonResult btn = UIDrawButton(UI, input, button);
     
@@ -630,9 +630,9 @@ inline void DrawStructActionButton(UIState* UI, PlatformInput* input, StructButt
     }
 }
 
-inline StructButtonsResult DrawStructButtons(UIState* UI, PlatformInput* input, EditorLayout* layout, Rect2 nameBounds, EditorElementParents parents, EditorElement* grandFather, EditorElement* father, EditorElement* root, b32 canDelete)
+inline UIButtonsResult DrawStructButtons(UIState* UI, PlatformInput* input, EditorLayout* layout, Rect2 nameBounds, EditorElementParents parents, EditorElement* grandFather, EditorElement* father, EditorElement* root, b32 canDelete)
 {
-    StructButtonsResult result = {};
+    UIButtonsResult result = {};
     result.completeBounds = nameBounds;
     
     
@@ -646,7 +646,7 @@ inline StructButtonsResult DrawStructButtons(UIState* UI, PlatformInput* input, 
             UIButton deleteButton = UIBtn(UI, buttonP, layout, deleteColor, "delete", true, UISetValueInteraction(UI, UI_Trigger, &root->flags, (root->flags | EditorElem_Deleted)));
             
      
-            DrawStructActionButton(UI, input, &result, &deleteButton);            
+            DrawUIActionButton(UI, input, &result, &deleteButton);            
             buttonP.x = result.completeBounds.max.x + layout->nameValueDistance;
         }
     }
@@ -660,11 +660,10 @@ inline StructButtonsResult DrawStructButtons(UIState* UI, PlatformInput* input, 
             
             UIButton playButton = UIBtn(UI, buttonP, layout, V4(0, 1, 0, 1), "play", true, UIPlaySoundInteraction(UI, UI_Trigger, soundTypeHash, soundNameHash, 0));
             
-            DrawStructActionButton(UI, input, &result, &playButton);
+            DrawUIActionButton(UI, input, &result, &playButton);
         }
         else if(father->flags & EditorElem_PlayEventSoundButton)
         {
-            
             char* soundType = GetValue(root, "soundType");
             char* soundName = GetValue(root, "sound");
             u64 soundTypeHash = StringHash(soundType);
@@ -672,7 +671,7 @@ inline StructButtonsResult DrawStructButtons(UIState* UI, PlatformInput* input, 
             
             UIButton playButton = UIBtn(UI, buttonP, layout, V4(0, 1, 0, 1), "play", true, UIPlaySoundInteraction(UI, UI_Trigger, soundTypeHash, soundNameHash, GetElement(root, "params")));
             
-            DrawStructActionButton(UI, input, &result, &playButton);
+            DrawUIActionButton(UI, input, &result, &playButton);
         }
         else if(father->flags & EditorElem_PlayEventButton)
         {
@@ -681,21 +680,21 @@ inline StructButtonsResult DrawStructButtons(UIState* UI, PlatformInput* input, 
             u64 eventNameHash = StringHash(root->name);
             
             UIButtonInteraction(&playButton, UIPlaySoundEventInteraction(UI, UI_Trigger, eventNameHash));
-            DrawStructActionButton(UI, input, &result, &playButton);
+            DrawUIActionButton(UI, input, &result, &playButton);
         }
         else if(father->flags & EditorElem_PlayContainerButton)
         {
             UIButton playButton = UIBtn(UI, buttonP, layout, V4(0, 1, 0, 1), "play");
             
             UIButtonInteraction(&playButton, UIPlaySoundContainerInteraction(UI, UI_Trigger, root, parents));
-            DrawStructActionButton(UI, input, &result, &playButton);
+            DrawUIActionButton(UI, input, &result, &playButton);
         }
         else if(father->flags & EditorElem_EquipInAnimationButton)
         {
             UIButton equipButton = UIBtn(UI, buttonP, layout, V4(0, 1, 0, 1), "try");
             
             UIButtonInteraction(&equipButton, UIEquipInAnimationWidgetInteraction(UI, UI_Trigger, grandFather, root));
-            DrawStructActionButton(UI, input, &result, &equipButton);
+            DrawUIActionButton(UI, input, &result, &equipButton);
         }
         
         else if(father->flags & EditorElem_ShowLabelBitmapButton)
@@ -710,10 +709,33 @@ inline StructButtonsResult DrawStructButtons(UIState* UI, PlatformInput* input, 
             Vec4 coloration = ToV4Color(GetElement(root, "coloration"));
             UIButtonInteraction(&showButton, UIShowBitmapInteraction(UI, UI_Idle, componentNameHash, bitmapNameHash, coloration));
             
-            DrawStructActionButton(UI, input, &result, &showButton);
+            DrawUIActionButton(UI, input, &result, &showButton);
         }
         
     }
+    
+    return result;
+   
+}
+
+inline UIButtonsResult DrawTextButtons(UIState* UI, PlatformInput* input, EditorLayout* layout, Rect2 nameBounds, EditorWidget* widget, EditorElementParents parents, EditorElement* grandFather, EditorElement* father, EditorElement* root, b32 canDelete)
+{
+    UIButtonsResult result = {};
+    result.completeBounds = nameBounds;
+    
+    
+    Vec2 nameDim = GetDim(nameBounds);
+    Vec2 buttonP = nameBounds.min + V2(nameDim.x + layout->nameValueDistance, 0.3f * nameDim.y);
+    
+    Vec4 copyColor = V4(1, 1, 0, 1);
+    UIButton copyButton = UIBtn(UI, buttonP, layout, copyColor, "copy", true, UICopyToClipboardInteraction(UI, root->text->text, sizeof(root->text->text), UI_Trigger));
+    DrawUIActionButton(UI, input, &result, &copyButton);            
+    buttonP.x = result.completeBounds.max.x + layout->nameValueDistance;
+    
+    Vec4 pasteColor = V4(1, 0, 0, 1);
+    UIButton pasteButton = UIBtn(UI, buttonP, layout, pasteColor, "paste", true, UIPasteFromClipboardInteraction(UI, widget, root->text->text, sizeof(root->text->text), UI_Trigger)); 
+    DrawUIActionButton(UI, input, &result, &pasteButton);            
+    buttonP.x = result.completeBounds.max.x + layout->nameValueDistance;    
     
     return result;
    
@@ -1133,11 +1155,12 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     r32 xAdvance = Max(layout->nameValueDistance, GetDim(nameBounds).x + 10.0f);
                     Vec2 valueP = nameP + V2(xAdvance, 0);
                     
-                    char* text = 0;
-                    
+                    char* text = 0;                    
                     if(root->type == EditorElement_Text)
                     {
                         text = root->text->text;   
+                        valueP.y -= layout->childStandardHeight;
+                        layout->P.y -= layout->childStandardHeight;
                     }
                     else
                     {
@@ -1158,6 +1181,12 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     
                     PushUIOrthoText(UI, text, layout->fontScale, valueP, addTab.color, layout->additionalZBias);
                     result = Union(result, AddRadius(addTab.bounds, V2(layout->padding, layout->padding)));
+                    
+                    if(root->type == EditorElement_Text)
+                    {
+                        UIButtonsResult textButtons = DrawTextButtons(UI, input, layout, nameBounds, widget, parents, grandFather, father, root, canDelete);
+                        result = Union(result, textButtons.completeBounds);
+                    }
                     
                 } break;
                 
@@ -1273,7 +1302,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     
                     if(root != UI->activeLabel)
                     {
-                        StructButtonsResult structButtons = DrawStructButtons(UI, input, layout, nameBounds, parents, grandFather, father, root, canDelete);
+                        UIButtonsResult structButtons = DrawStructButtons(UI, input, layout, nameBounds, parents, grandFather, father, root, canDelete);
                         result = Union(result, structButtons.completeBounds);
                     
                         if(structButtons.hot)
