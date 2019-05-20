@@ -995,13 +995,14 @@ inline void AddEssence(char* name, u32 quantity)
 
 
 
-inline void BeginPlayerAction(char* action)
+inline void BeginPlayerAction(char* action, char* distance)
 {
     PlayerPossibleAction* possibleAction;
     TAXTABLE_ALLOC(possibleAction, PlayerPossibleAction);
     
     u8 actionInt = SafeTruncateToU8(GetValuePreprocessor(EntityAction, action));
     possibleAction->action = (EntityAction) actionInt;
+    possibleAction->distance = ToR32(distance, 1.0f);
     possibleAction->flags = 0;
     
     possibleAction->next = currentSlot_->firstPossibleAction;
@@ -2941,15 +2942,6 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         }
     }
 #if FORG_SERVER
-    else if(StrEqual(name, "effectDefinition"))
-    {
-        FreeAST();
-        currentSlot_->ast = ParseExpression(0, 0);
-        if(!CheckAST(&currentSlot_->ast))
-        {
-            FreeAST();
-        }
-    }
     else if(StrEqual(name, "craftingEssences"))
     {
         FREELIST_FREE(currentSlot_->essences, TaxonomyEssence, taxTable_->firstFreeTaxonomyEssence);
@@ -2965,6 +2957,18 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             essences = essences->next;
         }
     }
+    else if(StrEqual(name, "skill"))
+    {
+        r32 distance = ToR32(GetValue(root, "distance"), 1.0f);
+        currentSlot_->maxDistanceAllowed = distance;
+        char* passive = GetValue(root, "passive");
+        if(passive)
+        {
+            InvalidCodePath;
+            IsPassive();
+        }
+        
+    }
     else if(StrEqual(name, "effects"))
     {
         FREELIST_FREE(currentSlot_->firstEffect, TaxonomyEffect, taxTable_->firstFreeTaxonomyEffect);
@@ -2978,13 +2982,6 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             char* basePower = GetValue(effectList, "power");
             AddEffect(action, effectName, basePower);
             
-            
-            char* passive = GetValue(effectList, "passive");
-            if(passive)
-            {
-                InvalidCodePath;
-                IsPassive();
-            }
             
             char* timer = GetValue(effectList, "timer");
             if(timer)
@@ -3088,8 +3085,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         while(actions)
         {
             char* action = GetValue(actions, "action");
+            char* distance = GetValue(actions, "distance");
             
-            BeginPlayerAction(action);
+            BeginPlayerAction(action, distance);
             
             EditorElement* flags = GetList(actions, "flags");
             while(flags)

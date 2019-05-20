@@ -468,11 +468,6 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             if(!Ignored(player, (EntityAction)request.desiredAction))
             {
                 player->ignoredActionCount = 0;
-                
-                if(request.desiredAction == Action_Move)
-                {
-                    int a = 5;
-                }
                 if(request.desiredAction < Action_Attack)
                 {
                     valid = true;
@@ -509,16 +504,26 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                     SimEntity* destEntity = GetRegionEntityByID(region, request.targetEntityID);
                     if(destEntity && !IsSet(destEntity, Flag_Equipped))
                     {
+                        b32 unableBecauseOfDistance = false;
+                        
                         Vec3 ToP = destEntity->P - entity->P;
-                        if(PlayerCanDoAction(region, entity, destEntity, (EntityAction)request.desiredAction, true))
+                        if(PlayerCanDoAction(region, entity, destEntity, (EntityAction)request.desiredAction, true, &unableBecauseOfDistance))
                         {
                             entity->acceleration = {};
                             entity->action = (EntityAction) request.desiredAction;
                         }
                         else
                         {
-                            entity->acceleration = ToP;
-                            entity->action = Action_Move;
+                            if(unableBecauseOfDistance)
+                            {
+                                entity->acceleration = ToP;
+                                entity->action = Action_Move;
+                            }
+                            else
+                            {
+                                entity->acceleration = {};
+                                entity->action = Action_None;
+                            }
                         }
                     }
                 }

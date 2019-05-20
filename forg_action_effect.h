@@ -1,7 +1,5 @@
 #pragma once
 
-#define MAXIMUM_ACTION_DISTANCE 1.0f
-
 struct MemoryNewNodeParams
 {
     b32 valid;

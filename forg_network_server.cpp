@@ -554,7 +554,7 @@ internal void SendTileUpdate( ServerPlayer* player, i32 chunkX, i32 chunkY, u32 
     
 }
 
-inline b32 PlayerCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* target, EntityAction action, b32 distanceConstrain);
+inline b32 PlayerCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* target, EntityAction action, b32 distanceConstrain, b32* unableBecauseOfDistance);
 internal void SendPossibleActions(SimRegion* region, SimEntity* actor, SimEntity* target, b32 overlapping)
 {
     ServerState* server = region->server;
@@ -569,7 +569,8 @@ internal void SendPossibleActions(SimRegion* region, SimEntity* actor, SimEntity
     u32 actionCount = 0;
     for(u32 actionIndex = 0; actionIndex < Action_Count; ++actionIndex)
     {
-        if(PlayerCanDoAction(region, actor, target, (EntityAction)actionIndex, false))
+        b32 ignored;
+        if(PlayerCanDoAction(region, actor, target, (EntityAction)actionIndex, false, &ignored))
         {
             ++actionCount;
             Pack("L", actionIndex);
@@ -792,7 +793,7 @@ internal void SendEntityUpdate(SimRegion* region, SimEntity* entity)
             
             if(collider->insideRegion)
             {
-                if(entity->targetID == entity->identifier)
+                if(entityToSend->targetID == entity->identifier)
                 {
                     SendPossibleActions(region, entityToSend, entity, false);
                 }

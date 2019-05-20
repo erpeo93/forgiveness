@@ -1261,10 +1261,10 @@ inline void UIAddScrollableTargetInteraction(UIState* UI, UIInteraction* interac
 inline void UIAddStandardTargetInteraction(UIState* UI, UIInteraction* interaction, UIOutput* out, u32 actionIndex, u64 identifier)
 {
     UIAddStandardAction(UI, interaction, UI_Trigger, u32, UIDataPointer(actionIndex), Fixed(actionIndex));
-    UIAddStandardAction(UI, interaction, UI_Trigger | UI_Retroactive, u32, ColdPointer(&out->desiredAction), UIDataPointer(actionIndex));
+    UIAddStandardAction(UI, interaction, UI_Idle | UI_Retroactive, u32, ColdPointer(&out->desiredAction), UIDataPointer(actionIndex));
     
     UIAddStandardAction(UI, interaction, UI_Trigger, u64, UIDataPointer(identifier), Fixed(identifier));
-    UIAddStandardAction(UI, interaction, UI_Trigger | UI_Retroactive, u64, ColdPointer(&out->targetEntityID), UIDataPointer(identifier)); 
+    UIAddStandardAction(UI, interaction, UI_Idle | UI_Retroactive, u64, ColdPointer(&out->targetEntityID), UIDataPointer(identifier)); 
     
     UIAddStandardAction_(UI, interaction, UI_Trigger, sizeof(UI->myPlayer->targetPossibleActions[0]) * Action_Count, ColdPointer(UI->myPlayer->targetPossibleActions), ColdPointer(UI->myPlayer->overlappingPossibleActions));     
     UIAddStandardAction(UI, interaction, UI_Trigger, u64, ColdPointer(&UI->myPlayer->targetIdentifier), ColdPointer(&UI->myPlayer->overlappingIdentifier));     

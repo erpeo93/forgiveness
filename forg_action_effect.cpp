@@ -361,10 +361,15 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
             for(TaxonomyEffect* effectSlot = spellSlot->firstEffect; effectSlot; effectSlot = effectSlot->next)
             {
                 Effect* effect = &effectSlot->effect;
-                Assert(effect->triggerAction == Action_Cast);
+                if(effect->triggerAction == Action_Cast)
+                {
+                    r32 power = skillSlot->power;
+                    power = 1.0f;
+                    DispatchEffect(context, region, actor, target, effect, power);
+                }
                 
-                DispatchEffect(context, region, actor, target, effect, skillSlot->power);
             }
+            actorCreature->skillCooldown = 1.0f;
         } break;
         
         case Action_Eat:
@@ -481,7 +486,7 @@ inline void DispatchPassiveEffects(SimRegion* region, SimEntity* entity)
 }
 
 
-inline b32 PlayerCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* target, EntityAction action, b32 distanceConstrain)
+inline b32 PlayerCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* target, EntityAction action, b32 distanceConstrain, b32* unableBecauseOfDistance)
 {
     ServerPlayer* player = region->server->players + actor->playerID;
     b32 canDoAction = true;
@@ -506,24 +511,30 @@ inline b32 PlayerCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* tar
             test = test->next;
         }
         
-        r32 distanceRequiredSquare = Square(MAXIMUM_ACTION_DISTANCE);
         if(possibleAction)
         {
+            r32 distanceRequiredSquare = Square(possibleAction->distance);
+            if(action == Action_Cast)
+            {
+                CreatureComponent* creature = Creature(region, actor);
+                SkillSlot* skillSlot = creature->skills + creature->activeSkillIndex;
+                Assert(skillSlot->taxonomy);
+                TaxonomySlot* spellSlot = GetSlotForTaxonomy(region->taxTable, skillSlot->taxonomy);
+                distanceRequiredSquare = Square(spellSlot->maxDistanceAllowed);
+                
+                if((creature->skillCooldown > 0) || (creature->activeSkillIndex == -1))
+                {
+                    canDoAction = false;
+                }
+            }
+            
             if(distanceConstrain)
             {
                 r32 distanceSq = LengthSq(target->P - actor->P);
                 if(distanceSq > distanceRequiredSquare)
                 {
                     canDoAction = false;
-                }
-            }
-            
-            if(action == Action_Cast)
-            {
-                CreatureComponent* creature = Creature(region, actor);
-                if((creature->skillCooldown > 0) || (creature->activeSkillIndex == -1))
-                {
-                    canDoAction = false;
+                    *unableBecauseOfDistance = true;
                 }
             }
             

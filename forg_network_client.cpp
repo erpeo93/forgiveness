@@ -220,18 +220,14 @@ internal void SendCraftFromInventoryRequest(u64 containerID, u32 objectIndex)
 internal void SendActiveSkillRequest(u32 taxonomy)
 {
     StartPacket(ActiveSkillRequest);
-    
     Pack("L", taxonomy);
-    
     CloseAndSendReliablePacket();
 }
 
 internal void SendPassiveSkillRequest(u32 taxonomy, b32 deactivate)
 {
     StartPacket(PassiveSkillRequest);
-    
     Pack("Ll", taxonomy, deactivate);
-    
     CloseAndSendReliablePacket();
 }
 

@@ -3632,8 +3632,21 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
             if(UI->myPlayer->overlappingPossibleActions[Action_Cast])
             {
                 UIInteraction castInteraction = {};
+                
                 UIAddStandardTargetInteraction(UI, &castInteraction, output, Action_Cast, overlapping->identifier);
                 UIAddInvalidCondition(&castInteraction, u32,ColdPointer(UI->myPlayer->targetPossibleActions + Action_Cast), Fixed(false));
+                UIAddInvalidCondition(&castInteraction, b32,ColdPointer(&UI->movingWithKeyboard), Fixed((b32)true), 0);
+                
+                if(false)
+                {
+
+                }
+                else
+                {
+                    UIAddInvalidCondition(&castInteraction, u32,ColdPointer(&output->desiredAction), Fixed((u32)Action_Cast), UI_Ended);
+                    
+                }
+                
                 UIAddInteraction(UI, input, mouseCenter, castInteraction);
             }
         }

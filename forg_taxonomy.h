@@ -39,6 +39,7 @@ struct PlayerPossibleAction
     EntityAction action;
     u32 flags;
     TaxonomyTree tree;
+    r32 distance;
     
     union
     {
@@ -218,7 +219,6 @@ struct TaxonomyEssence
 struct TaxonomyEffect
 {
     Effect effect;
-    
     union
     {
         TaxonomyEffect* next;
@@ -430,7 +430,7 @@ struct TaxonomySlot
     
     
     
-    ForgAST ast;
+    r32 maxDistanceAllowed;
     b32 isPassiveSkill;
     
     u8 gridDimX;
