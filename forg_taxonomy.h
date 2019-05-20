@@ -196,7 +196,7 @@ struct CraftingEffectLink
     EssenceSlot essences[MAX_ESSENCES_PER_EFFECT];
     EntityAction triggerAction;
     b32 target;
-    u32 effectTaxonomy;
+    EffectIdentifier effectID;
     
     union
     {
@@ -423,6 +423,7 @@ struct TaxonomySlot
     r32 lightIntensity;
     Vec3 lightColor;
     u64 skeletonHashID;
+    u64 skinHashID;
     Vec4 defaultColoration;
     Vec2 originOffset;
 #endif

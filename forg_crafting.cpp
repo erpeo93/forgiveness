@@ -120,10 +120,10 @@ inline void AddEffectByLink(SimRegion* region, SimEntity* entity, CraftingEffect
     for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
     {
         Effect* effect = effects->effects + effectIndex;
-        if(effect->taxonomy == link->effectTaxonomy)
+        if(effect->ID == link->effectID)
         {
             newEffect = false;
-            effect->data.power += 1.0f;
+            effect->basePower += 1.0f;
         }
     }
     
@@ -132,10 +132,10 @@ inline void AddEffectByLink(SimRegion* region, SimEntity* entity, CraftingEffect
     {
         Assert(effects->effectCount < ArrayCount(effects->effects));
         Effect* effect = effects->effects + effects->effectCount++;
-        effect->data.power = 1.0f;
+        effect->basePower = 1.0f;
         effect->triggerAction = link->triggerAction;
         effect->flags = link->target ? Effect_Target : 0;
-        effect->taxonomy = link->effectTaxonomy;
+        effect->ID = link->effectID;
     }
 }
 

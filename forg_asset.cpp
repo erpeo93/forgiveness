@@ -836,7 +836,7 @@ inline FindAnimationResult FindAnimationByName(Assets* assets, u64 skeletonHashI
 {
     FindAnimationResult result = {};
     
-	for(u32 assetType = Asset_rig; assetType < Asset_equipmentRig && !result.assetType; ++assetType)
+	for(u32 assetType = Asset_rig; assetType < Asset_AnimationLast && !result.assetType; ++assetType)
 	{
         AssetType* type = assets->types + assetType;
 		for(u32 assetIndex = type->firstAssetIndex; 

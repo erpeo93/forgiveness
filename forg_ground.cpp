@@ -25,28 +25,36 @@ PLATFORM_WORK_CALLBACK(GenerateVoronoiPoints)
     EndTaskWithMemory(work->task);
 }
 
-internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, ForgVoronoiDiagram* diagram, UniversePos originP, i32 originChunkX, i32 originChunkY, i32 chunkApron, i32 lateralChunkSpan)
+internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, UniversePos originP, i32 originChunkX, i32 originChunkY, i32 chunkApron, i32 lateralChunkSpan)
 {
-    diagram->deltaP = {};
-    diagram->originP = originP;
-    
-    r32 voxelSide = worldMode->voxelSide;
-    r32 chunkSide = worldMode->chunkSide;
-    u8 chunkDim = worldMode->chunkDim;
-    
-    jcv_rect rect;
-    r32 dim = (chunkApron + 4.0f) * chunkSide;
-    rect.min.x = -dim;
-    rect.min.y = -dim;
-    rect.max.x = dim;
-    rect.max.y = dim;
-    
-    u32 maxPointsPerTile = 16;
-    u32 maxPointCount = Squarei(worldMode->chunkDim) * Squarei(2 * chunkApron + 1) * maxPointsPerTile;
-    
     TaskWithMemory* task = BeginTaskWithMemory(gameState->tasks, ArrayCount(gameState->tasks), false);
     if(task)
     {
+        worldMode->generatingVoronoi = true;
+        ForgVoronoiDiagram* diagram = worldMode->voronoiPingPong + 0;
+        if(diagram == worldMode->activeDiagram)
+        {
+            diagram = worldMode->voronoiPingPong + 1;
+        }
+        
+        diagram->deltaP = {};
+        diagram->originP = originP;
+        
+        r32 voxelSide = worldMode->voxelSide;
+        r32 chunkSide = worldMode->chunkSide;
+        u8 chunkDim = worldMode->chunkDim;
+        
+        jcv_rect rect;
+        r32 dim = (chunkApron + 4.0f) * chunkSide;
+        rect.min.x = -dim;
+        rect.min.y = -dim;
+        rect.max.x = dim;
+        rect.max.y = dim;
+        
+        u32 maxPointsPerTile = 16;
+        u32 maxPointCount = Squarei(worldMode->chunkDim) * Squarei(2 * chunkApron + 1) * maxPointsPerTile;
+        
+        
         jcv_point* points = PushArray(&task->pool, jcv_point, maxPointCount, NoClear());
         u32 pointCount = 0;
         for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
@@ -160,10 +168,6 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Fo
         work->activeDiagramPtr = &worldMode->activeDiagram;
         work->worldMode = worldMode;
         platformAPI.PushWork(gameState->slowQueue, GenerateVoronoiPoints, work);
-    }
-    else
-    {
-        InvalidCodePath;
     }
 }
 

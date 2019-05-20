@@ -720,7 +720,7 @@ inline void SendEssenceDelta(ServerPlayer* player, u32 essenceTaxonomy, i16 delt
 inline void SendEffectTriggered(ServerPlayer* player, EffectTriggeredToSend* toSend)
 {
     StartPacket(player, effectTriggered);
-    Pack("QQL", toSend->actor, toSend->target, toSend->effectTaxonomy);
+    Pack("QQL", toSend->actor, toSend->target, toSend->ID);
     CloseAndStoreReliablePacket(player);
 }
 

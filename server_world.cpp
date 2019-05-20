@@ -178,6 +178,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         u32 ID;
         SimEntity* entity = GetFreeEntity(server, &ID);
         
+        entity->flags = 0;
         entity->P = P;
         entity->identifier = identifier;
         entity->playerID = params.playerID;
@@ -271,7 +272,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
                 for(u32 entityEffectIndex = 0; entityEffectIndex < effects->effectCount; ++entityEffectIndex)
                 {
                     Effect* entityEffect = effects->effects + entityEffectIndex;
-                    if(entityEffect->taxonomy == effect->taxonomy)
+                    if(entityEffect->ID == effect->ID)
                     {
                         *entityEffect = *effect;
                         addEffect = false;
@@ -760,5 +761,5 @@ internal void BuildWorld(ServerState * server)
     }
     
     BuildServerChunks(server, generator);
-    BuildSimpleTestWorld(server, generator);
+    //BuildSimpleTestWorld(server, generator);
 }

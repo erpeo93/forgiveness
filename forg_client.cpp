@@ -1054,8 +1054,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 DEBUG_VALUE(worldMode->modulationWithFocusColor);
                 
-                UIOutput output = {};
-                output = UIHandle(UI, input, screenMouseP, nearestEntities, ArrayCount(nearestEntities));
+                UI->output = {};
+                
+                UIHandle(UI, input, screenMouseP, nearestEntities, ArrayCount(nearestEntities));
+                UIOutput output = UI->output;
                 
                 SetCameraTransform(group, 0, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal + V3(worldMode->cameraWorldOffset.xy, 0), worldMode->cameraEntityOffset);
                 
@@ -1241,13 +1243,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 {
                     if(!worldMode->generatingVoronoi)
                     {
-                        worldMode->generatingVoronoi = true;
-                        ForgVoronoiDiagram* dest = worldMode->voronoiPingPong + 0;
-                        if(dest == worldMode->activeDiagram)
-                        {
-                            dest = worldMode->voronoiPingPong + 1;
-                        }
-                        GenerateVoronoi(gameState,worldMode, dest, voronoiP, originChunkX, originChunkY, chunkApron, lateralChunkSpan);
+                        GenerateVoronoi(gameState,worldMode, voronoiP, originChunkX, originChunkY, chunkApron, lateralChunkSpan);
                     }
                 }
                 
@@ -1485,7 +1481,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 }
                 
                 inputAcc = output.inputAcc;
-                targetEntityID = targetEntityID;
+                targetEntityID = output.targetEntityID;
                 desiredAction = output.desiredAction;
                 overlappingEntityID = output.overlappingEntityID;
                 

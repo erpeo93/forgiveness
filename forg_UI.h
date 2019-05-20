@@ -149,7 +149,7 @@ struct UIScrollableList
 {
     u32 currentIndex;
     u32 possibilityCount;
-    UIScrollableElement possibilities[16];
+    UIScrollableElement possibilities[32];
 };
 
 struct UIOwnedIngredient
@@ -740,6 +740,7 @@ struct UIAutocompleteBlock
 struct UIAutocomplete
 {
     u64 hash;
+    u64 additionalHash;
     UIAutocompleteBlock* firstBlock;
 };
 
@@ -916,4 +917,6 @@ struct UIState
     GroundViewMode groundViewMode;
     Vec3 cameraOffset;
     u32 chunkApron;
+    
+    UIOutput output;
 };

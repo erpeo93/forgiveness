@@ -78,6 +78,21 @@ char* MetaTable_EntityAction[] =
 "Die",
 "Count",
 };
+char* MetaTable_EffectIdentifier[] = 
+ {
+"Damage",
+"FireDamage",
+"NakedHandsDamage",
+"Spawn",
+"RestoreLifePoints",
+};
+char* MetaTable_EffectTargetRangeType[] = 
+ {
+"Target",
+"Actor",
+"AllInActorRange",
+"AllInTargetRange",
+};
 MetaFlag MetaFlags_EffectFlags[] = 
  {
 {"Target",
@@ -147,8 +162,10 @@ char* MetaTable_TagId[] =
  {
 "none",
 "direction",
-"firstHashHalf",
-"secondHashHalf",
+"skeletonFirstHalf",
+"skeletonSecondHalf",
+"skinFirstHalf",
+"skinSecondHalf",
 "codepoint",
 "shotIndex",
 "layerIndex",
@@ -171,7 +188,7 @@ char* MetaTable_AssetTypeId[] =
 "attacking",
 "eating",
 "casting",
-"equipmentRig",
+"AnimationLast",
 "leaf",
 "trunk",
 "waterRipple",

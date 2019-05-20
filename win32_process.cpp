@@ -117,7 +117,7 @@ void CreateMiniDump( EXCEPTION_POINTERS* pep )
         mdei.ExceptionPointers  = pep; 
         mdei.ClientPointers     = FALSE; 
         
-        MINIDUMP_TYPE mdt       = MiniDumpNormal; 
+        MINIDUMP_TYPE mdt       = MiniDumpWithFullMemory; 
         
         BOOL rv = MiniDumpWriteDump( GetCurrentProcess(), GetCurrentProcessId(), 
                                     hFile, mdt, (pep != 0) ? &mdei : 0, 0, 0 ); 

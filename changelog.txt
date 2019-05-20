@@ -1,3 +1,6 @@
+----0.0.4----
+-Solved bug with Voronoi diagram generation that was crashing the client when all threads were busy doing other things.
+
 ----0.0.3----
 -it's now possible to "select" autocomplete value with both the tab and confirm button
 -corrected bug when clicking with right mouse to drag an editor element

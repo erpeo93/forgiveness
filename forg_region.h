@@ -271,7 +271,7 @@ struct EffectTriggeredToSend
     
     u64 actor;
     u64 target;
-    u32 effectTaxonomy;
+    u32 ID;
 };
 
 struct ServerState;

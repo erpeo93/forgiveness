@@ -19,8 +19,11 @@ printTable(noPrefix) enum TagId
     Tag_none,
     
     Tag_direction,
-    Tag_firstHashHalf,
-    Tag_secondHashHalf,
+    Tag_skeletonFirstHalf,
+    Tag_skeletonSecondHalf,
+    
+    Tag_skinFirstHalf,
+    Tag_skinSecondHalf,
     
     Tag_codepoint,
     
@@ -70,7 +73,8 @@ printTable(noPrefix) enum AssetTypeId
     Asset_attacking,
     Asset_eating,
     Asset_casting,
-    Asset_equipmentRig,
+    
+    Asset_AnimationLast,
     
     Asset_leaf,
     Asset_trunk,

@@ -125,7 +125,6 @@ inline RegionPartitionQueryResult QuerySpacePartition(SimRegion* region, SpacePa
     RegionPartitionQueryResult result = {};
     
     u32 surfaces[64];
-    
     u32 overlapping = GetOverlappingSurfaces(region, partition, P, deltaP, bounds, surfaces, ArrayCount(surfaces));
     
     Assert(overlapping <= ArrayCount(result.surfaceIndexes));
@@ -137,6 +136,13 @@ inline RegionPartitionQueryResult QuerySpacePartition(SimRegion* region, SpacePa
     
     return result;
 }
+
+inline RegionPartitionQueryResult QuerySpacePartitionRadious(SimRegion* region, SpacePartition* partition, Vec3 P, Vec3 radious)
+{
+    RegionPartitionQueryResult result = QuerySpacePartition(region, partition, P, V3(0, 0, 0), RectCenterDim(V3(0, 0, 0), radious));
+    return result;
+}
+
 
 inline PartitionSurfaceEntityBlock* QuerySpacePartitionPoint(SimRegion* region, SpacePartition* partition, Vec3 P)
 {

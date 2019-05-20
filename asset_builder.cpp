@@ -2278,7 +2278,7 @@ struct BitmapFileHandle
     u64 ID;
 };
 
-internal void WriteBitmaps(char* folder, char* name, PlatformFile* labelsFile)
+internal void WriteBitmaps(char* folder, char* name, char* firstHashTag, char* secondHashTag, PlatformFile* labelsFile)
 {
     Assets assets_;
     Assets* assets = &assets_;
@@ -2293,10 +2293,11 @@ internal void WriteBitmaps(char* folder, char* name, PlatformFile* labelsFile)
     {
         ++hashName;
     }
-    u64 hashID = StringHash(hashName);
+    
+    u64 assetHashID = StringHash(name);
     
     
-    u32 hashIndex =  hashID & (HASHED_ASSET_SLOTS - 1);
+    u32 hashIndex =  assetHashID & (HASHED_ASSET_SLOTS - 1);
     u32 assetIndex = Asset_count + hashIndex;
     PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, completePath);
     if(bitmapGroup.fileCount)
@@ -2305,7 +2306,7 @@ internal void WriteBitmaps(char* folder, char* name, PlatformFile* labelsFile)
         for(u32 imageIndex = 0; imageIndex < bitmapGroup.fileCount; ++imageIndex)
         {
             PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, completePath);
-            AddBitmapAsset(completePath, bitmapHandle.name, hashID);
+            AddBitmapAsset(completePath, bitmapHandle.name, assetHashID);
             
             if(labelsFile)
             {
@@ -2325,7 +2326,7 @@ internal void WriteBitmaps(char* folder, char* name, PlatformFile* labelsFile)
                     if(t.type == Token_EqualSign)
                     {
                         Vec4 color = ParseV4(&tokenizer);
-                        AddColorationAsset(completePath, bitmapHandle.name, hashID, colorationIndex++, color);
+                        AddColorationAsset(completePath, bitmapHandle.name, assetHashID, colorationIndex++, color);
                         AddLabelsFromFile(&tokenizer);
                     }
                     else
@@ -2402,10 +2403,26 @@ internal void WriteBitmaps(char* folder, char* name, PlatformFile* labelsFile)
                 if(bitmap->assetIndex == additionalAssetIndex)
                 {
                     AddBitmapAsset(subfolderPath, bitmap->name, bitmap->ID);
-                    r32 firstHashHalfValue = (r32) (hashID >> 32);
-                    r32 secondHashHalfValue = (r32) (hashID & 0xFFFFFFFF);
-                    AddTag(Tag_firstHashHalf, firstHashHalfValue);
-                    AddTag(Tag_secondHashHalf, secondHashHalfValue);
+                    
+                    
+                    
+                    if(firstHashTag)
+                    {
+                        u64 firstHashID = StringHash(firstHashTag);
+                        r32 firstHashHalfValue = (r32) (firstHashID >> 32);
+                        r32 secondHashHalfValue = (r32) (firstHashID & 0xFFFFFFFF);
+                        AddTag(Tag_skeletonFirstHalf, firstHashHalfValue);
+                        AddTag(Tag_skeletonSecondHalf, secondHashHalfValue);
+                    }
+                    
+                    if(secondHashTag)
+                    {
+                        u64 secondHashID = StringHash(secondHashTag);
+                        r32 firstHashHalfValue = (r32) (secondHashID >> 32);
+                        r32 secondHashHalfValue = (r32) (secondHashID & 0xFFFFFFFF);
+                        AddTag(Tag_skinFirstHalf, firstHashHalfValue);
+                        AddTag(Tag_skinSecondHalf, secondHashHalfValue);
+                    }
                 }
             }
             EndAssetType();
@@ -2427,7 +2444,7 @@ internal void WriteAnimations(char* folder, char* name)
     
     
     char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s/side", folder, name);
+    FormatString(completePath, sizeof(completePath), "%s/%s/skeleton/side", folder, name);
     
     u64 hashID = StringHash(name);
     
@@ -2448,11 +2465,9 @@ internal void WriteAnimations(char* folder, char* name)
     EndAssetType();
     
     
-#if 0    
     BeginAssetType(assets, Asset_attacking);
     AddEveryAnimationThatStartsWith(completePath, hashID, "attack");
     EndAssetType();
-#endif
     
     BeginAssetType(assets, Asset_eating);
     AddEveryAnimationThatStartsWith(completePath, hashID, "eat");
@@ -2461,11 +2476,6 @@ internal void WriteAnimations(char* folder, char* name)
     
     BeginAssetType(assets, Asset_casting);
     AddEveryAnimationThatStartsWith(completePath, hashID, "cast");
-    EndAssetType();
-    
-    
-    BeginAssetType(assets, Asset_equipmentRig );
-    AddEveryAnimationThatStartsWith(completePath, hashID, "equipmentmap");
     EndAssetType();
     
     
@@ -2674,7 +2684,7 @@ internal void WriteComponents()
         
         if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
         {
-            WriteBitmaps(componentsPath, folderName, &labelsFile);
+            WriteBitmaps(componentsPath, folderName, 0, 0, &labelsFile);
         }
     }
     
@@ -2815,37 +2825,15 @@ internal void WriteUI()
     WritePak(assets, "forgUI.pak");
 }
 
-
-internal void RecursiveWriteBitmaps(char* path)
-{
-    PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
-    Win32GetAllSubdirectoriesName(subdir, path);
-    
-    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
-    {
-        char* folderName = subdir->subdirs[subdirIndex];
-        char nextPath[256];
-        FormatString(nextPath, sizeof(nextPath), "%s/%s", path, folderName);
-        
-        
-        if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
-        {
-            WriteBitmaps(path, folderName, 0);
-            RecursiveWriteBitmaps(nextPath);
-        }
-    }
-    free(subdir);
-}
-
 internal void WriteAnimationAutocompleteFile(char* path, char* skeletonName)
 {
     char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s/side", path, skeletonName);
+    FormatString(completePath, sizeof(completePath), "%s/%s/skeleton/side", path, skeletonName);
     
     char* outputPath = "assets";
     
     char output[128];
-    FormatString(output, sizeof(output), "%s/%s.autocomplete", outputPath, skeletonName);
+    FormatString(output, sizeof(output), "%s/A_%s.autocomplete", outputPath, skeletonName);
     
     
     char* buffer = (char*) malloc(MegaBytes(2));
@@ -2869,8 +2857,57 @@ internal void WriteAnimationAutocompleteFile(char* path, char* skeletonName)
     
     Win32GetAllFilesEnd(&animationGroup);
     
+    
     DEBUGWin32WriteFile(output, buffer, StrLen(buffer));
     free(buffer);
+}
+
+internal void WriteSkinsAutocompleteFile(char* path, char* skeletonName)
+{
+    char completePath[128];
+    FormatString(completePath, sizeof(completePath), "%s/%s", path, skeletonName);
+    
+    char* outputPath = "assets";
+    char* buffer = (char*) malloc(MegaBytes(2));
+    char* writeHere = buffer;
+    
+    char output[128];
+    FormatString(output, sizeof(output), "%s/S_%s.autocomplete", outputPath, skeletonName);
+    
+    
+    PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
+    Win32GetAllSubdirectoriesName(subdir, completePath);
+    
+    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
+    {
+        char* folderName = subdir->subdirs[subdirIndex];
+        
+        if(!StrEqual(folderName, ".") && !StrEqual(folderName, "..") && !StrEqual(folderName, "skeleton"))
+        {
+            writeHere += sprintf(writeHere, "\"%s\",", folderName);
+            DEBUGWin32WriteFile(output, buffer, StrLen(buffer));
+        }
+    }
+    
+    free(buffer);
+    free(subdir);
+}
+
+inline void WriteAnimationSkinsBitmaps(char* skeletonPath, char* skeletonName)
+{
+    PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
+    Win32GetAllSubdirectoriesName(subdir, skeletonPath);
+    
+    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
+    {
+        char* folderName = subdir->subdirs[subdirIndex];
+        
+        if(!StrEqual(folderName, ".") && !StrEqual(folderName, "..") && !StrEqual(folderName, "skeleton"))
+        {
+            WriteBitmaps(skeletonPath, folderName, skeletonName, folderName, 0);
+        }
+    }
+    free(subdir);
 }
 
 internal void WriteBitmapsAndAnimations()
@@ -2880,10 +2917,6 @@ internal void WriteBitmapsAndAnimations()
     WriteTrunks();
     WriteMisc();
     WriteUI();
-    
-    char* bitmapPath = "definition/root";
-    RecursiveWriteBitmaps(bitmapPath);
-    
     
     char* animationPath = "definition/animation";
     PlatformSubdirNames* subdir = (PlatformSubdirNames* ) malloc(sizeof(PlatformSubdirNames ) );
@@ -2896,8 +2929,16 @@ internal void WriteBitmapsAndAnimations()
         {
             WriteAnimations(animationPath, skeletonName);
             WriteAnimationAutocompleteFile(animationPath, skeletonName);
+            WriteSkinsAutocompleteFile(animationPath, skeletonName);
+            
+            char completeBitmapPath[128];
+            sprintf(completeBitmapPath, "%s/%s", animationPath, skeletonName);
+            WriteAnimationSkinsBitmaps(completeBitmapPath, skeletonName);
         }
     }
+    
+    
+    OutputFoldersAutocompleteFile("skeletonName", animationPath);
     free(subdir);
 }
 

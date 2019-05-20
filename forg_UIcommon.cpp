@@ -818,8 +818,10 @@ inline void UIAddPossibility(UIScrollableList* list, char* actionName, char* ent
     FormatString(element.name, sizeof(element.name), "%s %s", actionName, entityName);
     element.request = request;
     
-    Assert(list->possibilityCount < ArrayCount(list->possibilities));
-    list->possibilities[list->possibilityCount++] = element;
+    if(list->possibilityCount < ArrayCount(list->possibilities))
+    {
+        list->possibilities[list->possibilityCount++] = element;
+    }
     
 }
 
@@ -829,8 +831,10 @@ inline void UIAddPossibility(UIScrollableList* list, ClientEntity* entity)
     element.name[0] = 0;
     element.entity = entity;
     
-    Assert(list->possibilityCount < ArrayCount(list->possibilities));
-    list->possibilities[list->possibilityCount++] = element;
+    if(list->possibilityCount < ArrayCount(list->possibilities))
+    {
+        list->possibilities[list->possibilityCount++] = element;
+    }
     
 }
 
@@ -868,11 +872,7 @@ inline void UIRenderList(UIState* UI, UIScrollableList* list)
 {
     if(list && list->possibilityCount)
     {
-        if(list->currentIndex >= list->possibilityCount)
-        {
-            list->currentIndex = 0;
-        }
-        
+        WrapScrollableList(list);
         UIScrollableElement* element = list->possibilities + list->currentIndex;
         
         if(element->name[0])

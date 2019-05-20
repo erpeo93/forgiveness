@@ -360,20 +360,19 @@ internal void ReadTaxonomiesFromFile()
 #define GetValuePreprocessor(table, test) GetValuePreprocessor_(MetaTable_##table, ArrayCount(MetaTable_##table), test) 
 inline u32 GetValuePreprocessor_(char** values, u32 count, char* test)
 {
-    b32 found = false;
-    
     u32 result = 0;
-    
-    for(u32 valueIndex = 0; valueIndex < count; ++valueIndex)
+    if(test)
     {
-        if(StrEqual(test, values[valueIndex]))
+        for(u32 valueIndex = 0; valueIndex < count; ++valueIndex)
         {
-            result = valueIndex;
-            found = true;
-            break;
+            if(StrEqual(test, values[valueIndex]))
+            {
+                result = valueIndex;
+                break;
+            }
         }
+        
     }
-    
     return result;
 }
 
@@ -759,39 +758,28 @@ inline void DefineNullBounds(char* boundsHeight, char* boundsRadious)
 
 #if FORG_SERVER
 global_variable TaxonomyEffect* currentEffect_;
-
-inline void AddEffect(char* action, char* effect)
-{
-    TaxonomySlot* effectSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, effect);
-    if(effectSlot)
-    {
-        TaxonomyEffect* newEffect;
-        TAXTABLE_ALLOC(newEffect, TaxonomyEffect);
-        
-        newEffect->effect.triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
-        newEffect->effect.taxonomy = effectSlot->taxonomy;
-        
-        FREELIST_INSERT(newEffect, currentSlot_->firstEffect);
-        currentEffect_ = newEffect;
-    }
-    else
-    {
-        EditorErrorLog(effect);
-    }
-}
-
 inline void IsPassive()
 {
     currentSlot_->isPassiveSkill = true;
 }
 
-inline void Power(char* power)
+inline void AddEffect(char* action, char* effect, char* power)
 {
-    if(currentEffect_)
-    {
-        currentEffect_->effect.data = {};
-        currentEffect_->effect.data.power = ToR32(power);    
-    }
+    TaxonomyEffect* newEffect;
+    TAXTABLE_ALLOC(newEffect, TaxonomyEffect);
+    
+    newEffect->effect.triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
+    newEffect->effect.ID = (EffectIdentifier) GetValuePreprocessor(EffectIdentifier, effect);
+    newEffect->effect.basePower = ToR32(power, 1.0f);
+    
+    FREELIST_INSERT(newEffect, currentSlot_->firstEffect);
+    currentEffect_ = newEffect;
+}
+
+inline void AddEffectRange(char* rangeType, char* rangeRadious)
+{
+    currentEffect_->effect.range.type = (EffectTargetRangeType) GetValuePreprocessor(EffectTargetRangeType, rangeType);
+    currentEffect_->effect.range.radious = ToR32(rangeRadious, 0.0f);
 }
 
 inline void Spawn(char* name)
@@ -859,24 +847,15 @@ inline void AddFreeHandReq(char* slot, char* taxonomy)
 global_variable CraftingEffectLink* activeCraftingLink_;
 inline void LinkStandard(char* action, char* effectName, char* target)
 {
-    TaxonomySlot* effectSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, effectName);
     
-    if(effectSlot)
-    {
-        CraftingEffectLink* link;
-        TAXTABLE_ALLOC(link, CraftingEffectLink);
-        link->triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
-        link->target = target ? ToB32(target) : false;
-        link->effectTaxonomy = effectSlot->taxonomy;
-        activeCraftingLink_ = link;
-        
-        FREELIST_INSERT(link, currentSlot_->links);
-    }
-    else
-    {
-        activeCraftingLink_ = 0;
-        EditorErrorLog(effectName);
-    }
+    CraftingEffectLink* link;
+    TAXTABLE_ALLOC(link, CraftingEffectLink);
+    link->triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
+    link->target = target ? ToB32(target) : false;
+    link->effectID = (EffectIdentifier) GetValuePreprocessor(EffectIdentifier, effectName);
+    activeCraftingLink_ = link;
+    
+    FREELIST_INSERT(link, currentSlot_->links);
 }
 
 inline void Requires_(char* essenceName)
@@ -1152,9 +1131,10 @@ inline void AddLight(r32 intensity, Vec3 color)
     currentSlot_->lightColor = color;
 }
 
-inline void UsesSkeleton(char* skeletonName, Vec4 defaultColoration, Vec2 originOffset)
+inline void UsesSkeleton(char* skeletonName, char* skinName, Vec4 defaultColoration, Vec2 originOffset)
 {
     currentSlot_->skeletonHashID = StringHash(skeletonName);
+    currentSlot_->skinHashID = StringHash(skinName);
     currentSlot_->defaultColoration = defaultColoration;
     currentSlot_->originOffset = originOffset;
 }
@@ -2561,7 +2541,7 @@ inline EditorElement* GetElement(EditorElement* element, char* name)
 inline char* GetValue(EditorElement* element, char* name)
 {
     char* result = 0;
-    if(element->type == EditorElement_Struct)
+    if(element && element->type == EditorElement_Struct)
     {
         EditorElement* value = element->firstValue;
         while(value)
@@ -2579,7 +2559,6 @@ inline char* GetValue(EditorElement* element, char* name)
     }
     else
     {
-        InvalidCodePath;
     }
     
     return result;
@@ -2995,8 +2974,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         while(effectList)
         {
             char* action = GetValue(effectList, "action");
-            char* effectName = GetValue(effectList, "id");
-            AddEffect(action, effectName);
+            char* effectName = GetValue(effectList, "effectID");
+            char* basePower = GetValue(effectList, "power");
+            AddEffect(action, effectName, basePower);
             
             
             char* passive = GetValue(effectList, "passive");
@@ -3021,21 +3001,18 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 flagList = flagList->next;
             }
             
+            EditorElement* range = GetStruct(effectList, "range");
+            char* rangeType = GetValue(range, "rangeType");
+            char* rangeValue = GetValue(range, "radious");
+            AddEffectRange(rangeType, rangeValue);
+            
+            
             EditorElement* data = GetStruct(effectList, "data");
             char* type = GetValue(data, "type");
-            if(StrEqual(type, "power"))
-            {
-                char* power = GetValue(data, "value");
-                Power(power);
-            }
-            else if(StrEqual(type, "spawn"))
+            if(StrEqual(type, "spawn"))
             {
                 char* taxonomy = GetValue(data, "value");
                 Spawn(taxonomy);
-            }
-            else
-            {
-                InvalidCodePath;
             }
             
             EditorElement* freeHandsReq = GetList(effectList, "freeHandReq");
@@ -3205,9 +3182,10 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     else if(StrEqual(name, "skeleton"))
     {
         char* skeleton = GetValue(root, "skeletonName");
+        char* skin = GetValue(root, "skinName");
         Vec4 color = ToV4Color(GetStruct(root, "defaultColoration"));
         Vec2 originOffset = ToV2(GetStruct(root, "originOffset"));
-        UsesSkeleton(skeleton, color, originOffset);
+        UsesSkeleton(skeleton, skin, color, originOffset);
     }
     else if(StrEqual(name, "light"))
     {

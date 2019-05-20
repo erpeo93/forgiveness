@@ -1,28 +1,10 @@
 #pragma once
 
 #define MAXIMUM_ACTION_DISTANCE 1.0f
-enum StimulusType
-{
-    Stimulus_None,
-    Stimulus_Presence,
-    Stimulus_Ate,
-    
-    Stimulus_Count,
-};
 
 struct MemoryNewNodeParams
 {
     b32 valid;
-};
-
-struct StimulusReaction
-{
-    u32 newState;
-    
-    u32 parameterCount;
-    RuleParameter parameters[4];
-    
-    MemoryNewNodeParams memoryNode;
 };
 
 printTable(noPrefix) enum EntityAction
@@ -43,6 +25,31 @@ printTable(noPrefix) enum EntityAction
     Action_Count,
 };
 
+
+printTable(noPrefix) enum EffectIdentifier
+{
+    Effect_Damage,
+    Effect_FireDamage,
+    Effect_NakedHandsDamage,
+    Effect_Spawn,
+    Effect_RestoreLifePoints,
+};
+
+printTable(noPrefix) enum EffectTargetRangeType
+{
+    EffectTarget_Target,
+    EffectTarget_Actor,
+    EffectTarget_AllInActorRange,
+    EffectTarget_AllInTargetRange,
+};
+
+struct EffectTargetRange
+{
+    EffectTargetRangeType type;
+    r32 radious;
+};
+
+
 struct NakedHandReq
 {
     u8 slotIndex;
@@ -55,13 +62,9 @@ struct NakedHandReq
     };
 };
 
-struct EffectData
+union EffectData
 {
 	u32 taxonomy;
-	union
-	{
-        r32 power;
-    };
 };
 
 printFlags(noPrefix) enum EffectFlags
@@ -76,8 +79,12 @@ struct Effect
 {
     EntityAction triggerAction;
     u32 flags;
-    u32 taxonomy;
+    
+    EffectIdentifier ID;
     EffectData data;
+    EffectTargetRange range;
+    
+    r32 basePower;
     
     r32 timer;
     r32 targetTimer;

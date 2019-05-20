@@ -1464,7 +1464,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         }
         
         server->firstDeletedEntity = 0;
-        
         for(NewEntity* newEntity = server->firstNewEntity; newEntity; )
         {
 			NewEntity* next = newEntity->next;

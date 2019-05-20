@@ -359,6 +359,7 @@ struct GameModeWorld
     TaxonomyTable* table;
     TaxonomyTable* oldTable;
     UIState* UI;
+    
     ClientPlayer player;
     
     r32 modulationWithFocusColor;

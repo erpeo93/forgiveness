@@ -635,17 +635,25 @@ internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* tab
     }
 }
 
-inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 entityHashID, ComponentsProperties* properties)
+inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 skeletonHashID, u64 skinHashID, ComponentsProperties* properties)
 {
     BitmapId result = {};
     
     TagVector match = {};
     TagVector weight = {};
     
-    match.E[Tag_firstHashHalf] = (r32) (entityHashID >> 32);
-    match.E[Tag_secondHashHalf] = (r32) (entityHashID & 0xFFFFFFFF);
-    weight.E[Tag_firstHashHalf] = 10.0f;
-    weight.E[Tag_secondHashHalf] = 10.0f;
+    match.E[Tag_skinFirstHalf] = (r32) (skinHashID >> 32);
+    match.E[Tag_skinSecondHalf] = (r32) (skinHashID & 0xFFFFFFFF);
+    weight.E[Tag_skinFirstHalf] = 10.0f;
+    weight.E[Tag_skinSecondHalf] = 10.0f;
+    
+    
+    match.E[Tag_skeletonFirstHalf] = (r32) (skeletonHashID >> 32);
+    match.E[Tag_skeletonSecondHalf] = (r32) (skeletonHashID & 0xFFFFFFFF);
+    weight.E[Tag_skeletonFirstHalf] = 100.0f;
+    weight.E[Tag_skeletonSecondHalf] = 100.0f;
+    
+    
     u32 assetIndex = Asset_count + (sprite->stringHashID & (HASHED_ASSET_SLOTS - 1));
     
     if(properties && properties->componentCount)
@@ -761,7 +769,7 @@ inline Rect2 GetPiecesBound(RenderGroup* group, BlendResult* blended, AnimationV
         
         if(!(sprite->flags & Sprite_Composed))
         {	        
-            BitmapId BID = GetBitmapID(group, sprite, params->entityHashID, params->properties);
+            BitmapId BID = GetBitmapID(group, sprite, params->skeletonHashID, params->skinHashID, params->properties);
             Vec2 pivot = sprite->pivot;
             
             if(IsValid(BID))
@@ -950,7 +958,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
     
     pieceParams.angle = finalAngle;
     pieceParams.cameraOffset += originOffset;
-    pieceParams.entityHashID = sprite->stringHashID;
+    pieceParams.skinHashID = sprite->stringHashID;
     
     
     u64 emptySpaceHashID = StringHash("emptySpace");
@@ -964,11 +972,11 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
     }
     else
     {
-        BitmapId BID = GetBitmapID(group, sprite, params->entityHashID, params->properties);
+        BitmapId BID = GetBitmapID(group, sprite, params->skeletonHashID, params->skinHashID, params->properties);
         if(sprite->flags & Sprite_Composed)
         {
-            InvalidCodePath;
 #if 0            
+            InvalidCodePath;
             pieceParams.scale = Hadamart(pieceParams.scale, ass->scale);
             pieceParams.color.a *= ass->alpha;
             
@@ -1104,7 +1112,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                                 }
                                 TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, taxonomy);
                                 AnimationVolatileParams objectParams = pieceParams;
-                                objectParams.entityHashID = slot->stringHashID;
+                                objectParams.skinHashID = slot->stringHashID;
                                 
                                 ObjectLayout* layout = GetLayout(input->taxTable, taxonomy);
                                 ObjectState objectState = ObjectState_Default;
@@ -1664,7 +1672,8 @@ inline SkeletonInfo GetSkeletonForTaxonomy(TaxonomyTable* table, TaxonomySlot* s
     {
         if(slot->skeletonHashID)
         {
-            result.hashID = slot->skeletonHashID;
+            result.skeletonHashID = slot->skeletonHashID;
+            result.skinHashID = slot->skinHashID;
             result.coloration = slot->defaultColoration;
             result.originOffset = slot->originOffset;
             break;
@@ -1680,7 +1689,7 @@ struct GetAIDResult
 {
     AssetTypeId assetID;
     AnimationId AID;
-    u64 entityHashID;
+    u64 skinHashID;
     u64 skeletonHashID;
     Vec4 coloration;
     Vec2 originOffset;
@@ -1693,10 +1702,10 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
     
     TaxonomySlot* slot = GetSlotForTaxonomy(taxTable, taxonomy);
     
-    result.entityHashID = slot->stringHashID;
     
     SkeletonInfo skeletonInfo = GetSkeletonForTaxonomy(taxTable, slot);
-    result.skeletonHashID = skeletonInfo.hashID;
+    result.skeletonHashID = skeletonInfo.skeletonHashID;
+    result.skinHashID = skeletonInfo.skinHashID;
     result.coloration = skeletonInfo.coloration;
     result.originOffset = skeletonInfo.originOffset;
     
@@ -1716,7 +1725,7 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
         
         if(!result.skeletonHashID)
         {
-            result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, result.assetID, &result.entityHashID);
+            result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, result.assetID, &result.skinHashID);
         }
         else
         {
@@ -1753,7 +1762,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
     params.flipOnYAxis = animationState->flipOnYAxis;
     params.drawEmptySpaces = true;
     params.recipeIndex = 0;
-    params.entityHashID = 0;
+    params.skinHashID = 0;
     params.additionalZbias = additionalZbias;
     params.modulationWithFocusColor = entityC->modulationWithFocusColor;
     params.cameraOffset = offset;
@@ -1825,7 +1834,8 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
                 
                 r32 quicknessCoeff = 1.0f;
                 timeToAdvance *= quicknessCoeff;
-                params.entityHashID = AID.entityHashID;
+                params.skeletonHashID = AID.skeletonHashID;
+                params.skinHashID = AID.skinHashID;
                 
                 BlendResult blended;
                 AnimationState dummyState = {};

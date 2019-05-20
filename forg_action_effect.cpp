@@ -96,113 +96,19 @@ inline void EssenceDelta(SimRegion* region, SimEntity* entity, u32 essenceTaxono
     }
 }
 
-#if 0
-inline r32 GetValue()
-{
-    switch(type)
-    {
-        case R32:
-        {
-            
-        } break;
-        
-        case Pointer_R32:
-        {
-            
-        } break;
-    }
-}
-
-inline r32* GetPointerR32(EvaluateASTContext* context)
-{
-    
-}
-
-struct EvaluateASTContext
-{
-    SimRegion* region;
-    SimEntity* actor;
-    SimEntity* target;
-};
-
-inline r32 EvaluateASTOperation(EvaluateASTContext context, ForgASTNode* node)
-{
-    r32 result = 0;
-    
-    switch(node->operation)
-    {
-        case ASTOperation_None:
-        {
-            Assert(node->operandCount == 0);
-            result = GetValue(node->value);
-        } break;
-        
-        case ASTOperation_Sum:
-        {
-            Assert(node->operandCount == 2);
-            result = EvalASTOperation(contexdt, node->operands + 0) + EvalASTOperation(context, node->operands1);
-        } break;
-        
-        case ASTOperation_Mul:
-        {
-            Assert(node->operandCount == 2);
-            result = EvalASTOperation(contexdt, node->operands + 0) * EvalASTOperation(context, node->operands1);
-        } break;
-        
-        case ASTOperation_Sub:
-        {
-            Assert(node->operandCount == 2);
-            result = EvalASTOperation(contexdt, node->operands + 0) - EvalASTOperation(context, node->operands1);
-        } break;
-        
-        case ASTOperation_Div:
-        {
-            Assert(node->operandCount == 2);
-            r32 divisor = EvalASTOperation(context, node->operands1);
-            
-            if(divisor != 0.0f)
-            {
-                result = EvalASTOperation(contexdt, node->operands + 0) / divisor;
-            }
-        } break;
-        
-        case ASTOperation_Assign:
-        {
-            Assert(node->operandCount == 2);
-            
-            r32* dest = GetPointerR32(node->operands[0]);
-            r32 value = EvalASTOperation(context, node->operands + 1);
-            *dest = value;
-        } break;
-    }
-    
-    return result;
-}
-
-inline void EvaluateAST(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, ForgAST* ast)
-{
-    EvalASTResult eval = EvaluateASTNode(context, region, actor, target, ast->root);
-    Assert(eval->type == ASTResult_None);
-}
-#endif
-
-inline void EvaluateAST(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, ForgAST* ast)
-{
-    //EvalASTResult eval = EvaluateASTNode(context, region, actor, target, ast->root);
-    //Assert(eval->type == ASTResult_None);
-}
-
 
 inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, GenerationData gen, AddEntityAdditionalParams params);
-internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, Effect* effect)
+internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, Effect* effect, r32 powerMul)
 {
+    r32 power = effect->basePower * powerMul;
+    
     u64 actorID = actor->identifier;
     u64 targetID = target ? target->identifier : 0;
-#if 0
-    TaxonomySlot* effectSlot = GetNthChildSlot(region->taxTable, region->taxTable->effectTaxonomy, effect->ID);
+    
+    CreatureComponent* actorCreature = Creature(region, actor);
     switch(effect->ID)
     {
-        case generic_spawn:
+        case Effect_Spawn:
         {
             Vec3 P = actor->P + V3(1, 0, 0);
             
@@ -210,7 +116,7 @@ internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region,
 			targetID = AddEntity(region, P, effect->data.taxonomy, gen, DefaultAddEntityParams());
         } break;
         
-        case combat_nakedHandsDamage:
+        case Effect_NakedHandsDamage:
         {
             TaxonomySlot* actorSlot = GetSlotForTaxonomy(region->taxTable, actor->taxonomy);
             b32 nakedHands = true;
@@ -232,41 +138,29 @@ internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region,
             
             if(nakedHands)
             {
-                r32 damage = effect->data.power * actorCreature->strength;
+                r32 damage = power * actorCreature->strength;
                 DealDamage(context, region, target, damage);
             }
             
         } break;
         
-        case combat_standardDamage:
+        case Effect_Damage:
         {
-            r32 damage = effect->data.power * actorCreature->strength;
+            r32 damage = power * actorCreature->strength;
             DealDamage(context, region, target, damage);
         } break;
         
-        case combat_hugeDamage:
+        case Effect_FireDamage:
         {
-            r32 damage = 2.8f * effect->data.power;
+            r32 damage = power * actorCreature->strength;
             DealDamage(context, region, target, damage);
         } break;
         
-        case combat_fireDamage:
+        case Effect_RestoreLifePoints:
         {
-            
-        } break;
-        
-        case consume_restoreLifePoints:
-        {
-            actorCreature->lifePoints += 10.0f * effect->data.power;
+            actorCreature->lifePoints += power;
         } break;
     }
-#else
-    TaxonomySlot* slot = GetSlotForTaxonomy(region->taxTable, effect->taxonomy);
-    if(slot->ast.root)
-    {
-        EvaluateAST(context, region, actor, target, &slot->ast);
-    }
-#endif
     
     if(effect->flags & Effect_SendToClientOnTrigger)
     {
@@ -275,16 +169,134 @@ internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region,
         effectToSend->P = actor->P;
         effectToSend->actor = actorID;
         effectToSend->target = targetID;
-        effectToSend->effectTaxonomy = slot->taxonomy;
+        effectToSend->ID = effect->ID;
     }
 }
 
-internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, u32 effectTaxonomy, r32 power = 1.0f)
+inline b32 SatisfiedEffectRangeConditions(SimRegion* region, SimEntity* possibleTarget)
 {
-    Effect effect = {};
-    effect.taxonomy = effectTaxonomy;
-    effect.data.power = power;
-    DispatchEffect(context, region, actor, target, &effect);
+    b32 result = IsCreature(region->taxTable, possibleTarget->taxonomy);
+    return result;
+}
+
+struct EffectTargetList
+{
+    u32 targetCount;
+    SimEntity* targets[32];
+};
+
+inline EffectTargetList GetAllTargets(SimRegion* region, SimEntity* actor, SimEntity* target, Effect* effect, r32 powerMul)
+{
+    EffectTargetList result;
+    result.targetCount = 0;
+    
+    EffectTargetRange range = effect->range;
+    switch(range.type)
+    {
+        case EffectTarget_Actor:
+        {
+            result.targets[result.targetCount++] = actor;
+        } break;
+        
+        case EffectTarget_Target:
+        {
+            result.targets[result.targetCount++] = target;
+        } break;
+        
+        case EffectTarget_AllInActorRange:
+        {
+            r32 radious = range.radious;
+            r32 rangeSq = Square(radious);
+            
+            RegionPartitionQueryResult query = QuerySpacePartitionRadious(region, &region->collisionPartition, actor->P, V3(radious, radious, radious));
+            for(u32 surfaceIndex = 0; surfaceIndex < ArrayCount(query.surfaceIndexes); ++surfaceIndex)
+            {
+                RegionPartitionSurface* surface = region->collisionPartition.partitionSurfaces + query.surfaceIndexes[surfaceIndex];
+                
+                PartitionSurfaceEntityBlock* block = surface->first;
+                while(block)
+                {
+                    for(u32 blockIndex = 0; blockIndex < block->entityCount; ++blockIndex)
+                    {
+                        CollisionData* collider = block->colliders + blockIndex;
+                        SimEntity* entity = GetRegionEntity(region, collider->entityIndex);
+                        if(entity->identifier != actor->identifier)
+                        {
+                            Vec3 distance = entity->P - actor->P;
+                            if(LengthSq(distance) < rangeSq)
+                            {
+                                if(SatisfiedEffectRangeConditions(region, entity))
+                                {
+                                    if(result.targetCount < ArrayCount(result.targets))
+                                    {
+                                        result.targets[result.targetCount++] = entity;
+                                    }
+                                    else
+                                    {
+                                        InvalidCodePath;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    block = block->next;
+                }
+            }
+        } break;
+        
+        
+        case EffectTarget_AllInTargetRange:
+        {
+            r32 radious = range.radious;
+            r32 rangeSq = Square(radious);
+            RegionPartitionQueryResult query = QuerySpacePartitionRadious(region, &region->collisionPartition, target->P, V3(radious, radious, radious));
+            for(u32 surfaceIndex = 0; surfaceIndex < ArrayCount(query.surfaceIndexes); ++surfaceIndex)
+            {
+                RegionPartitionSurface* surface = region->collisionPartition.partitionSurfaces + query.surfaceIndexes[surfaceIndex];
+                
+                PartitionSurfaceEntityBlock* block = surface->first;
+                while(block)
+                {
+                    for(u32 blockIndex = 0; blockIndex < block->entityCount; ++blockIndex)
+                    {
+                        CollisionData* collider = block->colliders + blockIndex;
+                        SimEntity* entity = GetRegionEntity(region, collider->entityIndex);
+                        if(entity->identifier != target->identifier)
+                        {
+                            Vec3 distance = entity->P - actor->P;
+                            if(LengthSq(distance) < rangeSq)
+                            {
+                                if(SatisfiedEffectRangeConditions(region, entity))
+                                {
+                                    if(result.targetCount < ArrayCount(result.targets))
+                                    {
+                                        result.targets[result.targetCount++] = entity;
+                                    }
+                                    else
+                                    {
+                                        InvalidCodePath;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    block = block->next;
+                }
+            }
+        } break;
+    }
+    
+    return result;
+}
+
+internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, Effect* effect, r32 powerMul)
+{
+    EffectTargetList targets = GetAllTargets(region, actor, target, effect, powerMul);
+    for(u32 targetIndex = 0; targetIndex < targets.targetCount; ++targetIndex)
+    {
+        SimEntity* realTarget = targets.targets[targetIndex];
+        DispatchEffect_(context, region, actor, realTarget, effect, powerMul);
+    }
 }
 
 internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, u32 action)
@@ -351,10 +363,7 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
                 Effect* effect = &effectSlot->effect;
                 Assert(effect->triggerAction == Action_Cast);
                 
-                Effect castEffect = *effect;
-                castEffect.data.power *= skillSlot->power;
-                
-                DispatchEffect(context, region, actor, target, &castEffect);
+                DispatchEffect(context, region, actor, target, effect, skillSlot->power);
             }
         } break;
         
@@ -391,8 +400,7 @@ inline void DispatchEffects(DispatchEffectsContext* context, SimRegion* region, 
             
             if(dispatch)
             {
-                DispatchEffect(context, region, actor, target, effect);
-                
+                DispatchEffect(context, region, actor, target, effect, 1.0f);
                 if(effect->targetTimer)
                 {
                     if(effect->flags & Effect_ResetAfterTimer)
@@ -414,6 +422,29 @@ inline void DispatchEffects(DispatchEffectsContext* context, SimRegion* region, 
     }
 }
 
+inline void DispatchCreatureEffects(DispatchEffectsContext* context, SimRegion* region, CreatureComponent* creature, SimEntity* actor, SimEntity* target, EntityAction action)
+{
+    for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
+    {
+        EquipmentSlot* equipment = creature->equipment + slotIndex;
+        if(equipment->ID)
+        {
+            SimEntity* equipmentEntity = GetRegionEntityByID(region, equipment->ID);
+            if(equipmentEntity)
+            {
+                EffectComponent* effects = Effects(region, equipmentEntity);
+                DispatchEffects(context, region, actor, target, effects->effects, effects->effectCount, false, action);
+            }
+        }
+    }
+    
+    for(u32 skillIndex = 0; skillIndex < MAX_PASSIVE_SKILLS_ACTIVE; ++skillIndex)
+    {
+        PassiveSkillEffects* effects = creature->passiveSkillEffects + skillIndex;
+        DispatchEffects(context, region, actor, target, effects->effects, effects->effectCount, false, action);
+    }
+}
+
 internal DispatchEffectsContext DispatchEffects(SimRegion* region, SimEntity* actor, SimEntity* target, EntityAction action)
 {
     DispatchEffectsContext context_ = {};
@@ -427,25 +458,7 @@ internal DispatchEffectsContext DispatchEffects(SimRegion* region, SimEntity* ac
     if(actor->IDs[Component_Creature])
     {
         CreatureComponent* actorCreature = Creature(region, actor);
-        for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
-        {
-            EquipmentSlot* equipment = actorCreature->equipment + slotIndex;
-            if(equipment->ID)
-            {
-                SimEntity* equipmentEntity = GetRegionEntityByID(region, equipment->ID);
-                if(equipmentEntity)
-                {
-                    EffectComponent* effects = Effects(region, equipmentEntity);
-                    DispatchEffects(context, region, actor, target, effects->effects, effects->effectCount, false, action);
-                }
-            }
-        }
-        
-        for(u32 skillIndex = 0; skillIndex < MAX_PASSIVE_SKILLS_ACTIVE; ++skillIndex)
-        {
-            PassiveSkillEffects* effects = actorCreature->passiveSkillEffects + skillIndex;
-            DispatchEffects(context, region, actor, target, effects->effects, effects->effectCount, false, action);
-        }
+        DispatchCreatureEffects(context, region, actorCreature, actor, target, action);
     }
     
     if(target)
@@ -455,25 +468,7 @@ internal DispatchEffectsContext DispatchEffects(SimRegion* region, SimEntity* ac
         if(target->IDs[Component_Creature])
         {
             CreatureComponent* targetCreature = Creature(region, target);
-            for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
-            {
-                EquipmentSlot* equipment = targetCreature->equipment + slotIndex;
-                if(equipment->ID)
-                {
-                    SimEntity* equipmentEntity = GetRegionEntityByID(region, equipment->ID);
-                    if(equipmentEntity)
-                    {
-                        EffectComponent* effects = Effects(region, equipmentEntity);
-                        DispatchEffects(context, region, actor, target, effects->effects, effects->effectCount, true, action);
-                    }
-                }
-            }
-            
-            for(u32 skillIndex = 0; skillIndex < MAX_PASSIVE_SKILLS_ACTIVE; ++skillIndex)
-            {
-                PassiveSkillEffects* effects = targetCreature->passiveSkillEffects + skillIndex;
-                DispatchEffects(context, region, actor, target, effects->effects, effects->effectCount, false, action);
-            }
+            DispatchCreatureEffects(context, region, targetCreature, actor, target, action);
         }
     }
     

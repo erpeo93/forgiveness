@@ -189,6 +189,13 @@ inline UIAutocomplete* UIAddAutocomplete(UIState* UI, char* name)
 {
     Assert(UI->autocompleteCount < ArrayCount(UI->autocompletes));
     UIAutocomplete* result = UI->autocompletes + UI->autocompleteCount++;
+    
+    result->additionalHash = 0;
+    if(StrLen(name) >= 2 && name[1] == '_')
+    {
+        result->additionalHash = StringHash(name, 1);
+        name = name + 2;
+    }
     result->hash = StringHash(name);
     return result;
 }
@@ -198,13 +205,13 @@ inline void UIFreeAutocompleteOptions(UIState* UI, UIAutocomplete* autocomplete)
     FREELIST_FREE(autocomplete->firstBlock, UIAutocompleteBlock, UI->firstFreeAutocompleteBlock);
 }
 
-inline UIAutocomplete* UIFindAutocomplete(UIState* UI, u64 hash)
+inline UIAutocomplete* UIFindAutocomplete(UIState* UI, u64 hash, u64 additionalHash)
 {
     UIAutocomplete* result = 0;
 	for(u32 autoIndex = 0; autoIndex < UI->autocompleteCount; ++autoIndex)
     {
         UIAutocomplete* test = UI->autocompletes + autoIndex;
-        if(hash == test->hash)
+        if(hash == test->hash && additionalHash == test->additionalHash)
         {
             result = test;
             break;
@@ -216,7 +223,7 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, u64 hash)
 
 inline UIAutocomplete* UIFindAutocomplete(UIState* UI, char* name)
 {
-    UIAutocomplete* result = UIFindAutocomplete(UI, StringHash(name));
+    UIAutocomplete* result = UIFindAutocomplete(UI, StringHash(name), 0);
     return result;
 }
 
@@ -366,11 +373,19 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
     EditorElement* grandParent = parents.grandParents[0];
     EditorElement* parent = parents.father;
 	u64 hash = StringHash(name);
+    u64 additionalHash = 0;
 	if(StrEqual(name, "animationName"))
 	{
 		TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
-		hash = GetSkeletonForTaxonomy(UI->table, slot).hashID;
+		hash = GetSkeletonForTaxonomy(UI->table, slot).skeletonHashID;
+        additionalHash = StringHash("A");
 	}
+    else if(StrEqual(name, "skinName"))
+    {
+        TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
+		hash = GetSkeletonForTaxonomy(UI->table, slot).skeletonHashID;
+        additionalHash = StringHash("S");
+    }             
     else if(StrEqual(name, "sound"))
     {
         Assert(parent);
@@ -391,7 +406,7 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
     }
     else if(StrEqual(name, "layoutName"))
     {
-        UIAutocomplete* autocomplete = UIFindAutocomplete(UI, hash);
+        UIAutocomplete* autocomplete = UIFindAutocomplete(UI, hash, 0);
         UIFreeAutocompleteOptions(UI, autocomplete);
         
         char* equipmentName = GetValue(grandGrandParent, "equipment");
@@ -404,7 +419,7 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
     }
 	else if(StrEqual(name, "pieceName"))
 	{
-		UIAutocomplete* autocomplete = UIFindAutocomplete(UI, hash);
+		UIAutocomplete* autocomplete = UIFindAutocomplete(UI, hash, 0);
         UIFreeAutocompleteOptions(UI, autocomplete);
         
 		char* equipmentName = GetValue(grandGrandGrandGrandParent, "equipment");
@@ -433,7 +448,7 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
         UIAddOption(UI, autocomplete, "all");
 	}
     
-	UIAutocomplete* result = UIFindAutocomplete(UI, hash);
+	UIAutocomplete* result = UIFindAutocomplete(UI, hash, additionalHash);
     
     return result;
 }
@@ -444,7 +459,6 @@ inline b32 SpecialHandling(char* name)
     
     if(StrEqual(name, "leafName") ||
        StrEqual(name, "trunkName") ||
-       StrEqual(name, "skeletonName") ||
        StrEqual(name, "name"))
     {
         result = true;
@@ -1184,7 +1198,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     
                     if(root->type == EditorElement_Text)
                     {
-                        UIButtonsResult textButtons = DrawTextButtons(UI, input, layout, nameBounds, widget, parents, grandFather, father, root, canDelete);
+                        UIButtonsResult textButtons = DrawTextButtons(UI, input, layout, nameBounds, widget, parents, grandFather, father, root, false);
                         result = Union(result, textButtons.completeBounds);
                     }
                     
@@ -1294,7 +1308,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
 						Vec2 drawHere = nameP;
                         drawHere.x = nameBounds.max.x;
                         
-                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, canDelete, false, drawHere);
+                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, false, false, drawHere);
                         
                         nameBounds.max.x = childs.bounds.max.x;
                     }
@@ -1378,7 +1392,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         }
                         
                         
-                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, canDelete);
+                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, false);
                                                 
 
                         
@@ -2560,7 +2574,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                 
                 
                 
-                if(widget->minDataY >= clipRectReal.max.y)
+                if(widgetIndex != EditorWidget_Animation && widget->minDataY >= clipRectReal.max.y)
                 {
                     widget->dataOffsetY = 0; 
                 }
@@ -2579,23 +2593,26 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                 else
                 {
                     b32 allowScrolling = false;
-                    if(input->mouseWheelOffset > 0)
-                    {
-                            if(widgetIndex == EditorWidget_Animation)
+                        
+                        if(widgetIndex == EditorWidget_Animation)
+                        {
+                            allowScrolling = true;
+                        }
+                        else
+                        {
+                            if(input->mouseWheelOffset > 0)
                             {
-                                allowScrolling = true;
-                            }
-                            else
-                            {
+                                
                                 allowScrolling = (widget->maxDataY >= clipRect.maxY);                                                       
+                                
                             }
-
-                    }
-                    else if(input->mouseWheelOffset < 0)
-                    {
-                        allowScrolling = (widget->minDataY <= (clipRect.minY + 20));                       
-                    }
-                    
+                            else if(input->mouseWheelOffset < 0)
+                            {
+                                allowScrolling = (widget->minDataY <= (clipRect.minY + 20));                       
+                            }
+                            
+                        }
+                   
                     
                     if(allowScrolling)
                     {
@@ -3403,6 +3420,8 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTable(UI, TilePointsLayout, "tileLayout");
         UIAddAutocompleteFromTable(UI, PlantShape, "shape");
         UIAddAutocompleteFromTable(UI, ForgDayPhase, "dayPhase");
+        UIAddAutocompleteFromTable(UI, EffectIdentifier, "effectID");
+        UIAddAutocompleteFromTable(UI, EffectTargetRangeType, "rangeType");
         
         UIAddAutocomplete(UI, "layoutName");
 		UIAddAutocomplete(UI, "pieceName");
@@ -3627,14 +3646,14 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
     }
 }
 
-internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, ClientEntity** overlappingEntities, u32 maxOverlappingEntities)
-{    
+internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, ClientEntity** overlappingEntities, u32 maxOverlappingEntities)
+{
+    UIOutput* output = &UI->output;
+    
     input->allowedToQuit = true;
     
     i32 scrollOffset = input->mouseWheelOffset;
-    
-    UIOutput output = {};
-    
+        
     TaxonomyTable* table = UI->table;
     ClientEntity* player = UI->player;
     GameModeWorld* worldMode = UI->worldMode;
@@ -3660,10 +3679,10 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
     {
         UI->movingWithKeyboard = true;
     }
-    UIAddInteraction(UI, input, moveLeft, UISetValueInteraction(UI, UI_Idle, &output.inputAcc.x, -1.0f), UIPriority_Standard, &UI->movementGroup);
-    UIAddInteraction(UI, input, moveRight, UISetValueInteraction(UI, UI_Idle, &output.inputAcc.x, 1.0f), UIPriority_Standard, &UI->movementGroup);
-    UIAddInteraction(UI, input, moveDown, UISetValueInteraction(UI, UI_Idle, &output.inputAcc.y, -1.0f), UIPriority_Standard, &UI->movementGroup);
-    UIAddInteraction(UI, input, moveUp, UISetValueInteraction(UI, UI_Idle, &output.inputAcc.y, 1.0f), UIPriority_Standard, &UI->movementGroup);
+    UIAddInteraction(UI, input, moveLeft, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.x, -1.0f), UIPriority_Standard, &UI->movementGroup);
+    UIAddInteraction(UI, input, moveRight, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.x, 1.0f), UIPriority_Standard, &UI->movementGroup);
+    UIAddInteraction(UI, input, moveDown, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.y, -1.0f), UIPriority_Standard, &UI->movementGroup);
+    UIAddInteraction(UI, input, moveUp, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.y, 1.0f), UIPriority_Standard, &UI->movementGroup);
     switch(UI->mode)
     {
         case UIMode_None:
@@ -3721,7 +3740,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                     }
                     else
                     {
-                        output.overlappingEntityID = overlapping->identifier;
+                        output->overlappingEntityID = overlapping->identifier;
                     }
                     
                     if(overlapping->identifier != UI->player->targetID || UI->player->action == Action_None)
@@ -3732,7 +3751,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                     UIResetListPossibility(UI, possibleOverlappingActions);
                     if(overlapping->identifier == UI->myPlayer->overlappingIdentifier || (UI->worldMode->editingEnabled && input->altDown))
                     {
-                        HandleOverlappingInteraction(UI, &output, input, overlapping);
+                        HandleOverlappingInteraction(UI, output, input, overlapping);
                     }
                     else
                     {
@@ -3776,19 +3795,19 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                     if(LengthSq(UI->deltaMouseP) < Square(0.6f))
                     {
                         UI->reachedPosition = true;
-                        output.inputAcc = V3(0, 0, 0);
+                        output->inputAcc = V3(0, 0, 0);
                     }
                     else
                     {
-                        output.inputAcc = UI->deltaMouseP;
+                        output->inputAcc = UI->deltaMouseP;
                     }
                 } break;
                 
                 case UIMouseMovement_MouseDir:
                 {
                     Vec3 dir = UI->worldMouseP - player->P;
-                    output.inputAcc = dir;
-                    output.desiredAction = Action_Move;
+                    output->inputAcc = dir;
+                    output->desiredAction = Action_Move;
                 } break;
             }
             UI->mouseMovement = UIMouseMovement_None;
@@ -4067,7 +4086,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                         UIResetListPossibility(UI, possibleOverlappingActions);
                         if(overlapping->identifier != player->identifier)
                         {
-                            output.overlappingEntityID = overlapping->identifier;
+                            output->overlappingEntityID = overlapping->identifier;
                             if(overlapping->identifier != UI->player->targetID ||  UI->player->action == Action_None)
                             {
                                 overlapping->modulationWithFocusColor = worldMode->modulationWithFocusColor;
@@ -4078,7 +4097,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
                         UIResetListPossibility(UI, possibleOverlappingActions);
                         if(overlapping->identifier == UI->myPlayer->overlappingIdentifier || (UI->worldMode->editingEnabled && input->altDown))
                         {
-                            HandleOverlappingInteraction(UI, &output, input, overlapping);
+                            HandleOverlappingInteraction(UI, output, input, overlapping);
                         }
                         else
                         {
@@ -4188,7 +4207,7 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
         }
     }
     
-    if(LengthSq(output.inputAcc) > 0)
+    if(LengthSq(output->inputAcc) > 0)
     {
         UI->mode = UIMode_None;
         UI->nextMode = UIMode_None;
@@ -4279,6 +4298,4 @@ internal UIOutput UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP,
             }
         }
     }
-        
-    return output;
 }
