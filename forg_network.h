@@ -193,6 +193,7 @@ enum Packet_Type
     Type_SkillLevel,
     Type_CompletedAction,
     Type_StartedAction,
+    Type_SyncAction,
     
     Type_DataFileHeader,
     Type_PakFileHeader,

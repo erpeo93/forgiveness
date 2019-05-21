@@ -261,13 +261,41 @@ inline Vec3 AssOriginOffset(Bone* parentBone, PieceAss* ass, r32 zOffset, Vec2 s
     return originOffset;
 }
 
+inline b32 RequiresSync(EntityAction action)
+{
+    b32 result = (action == Action_Cast);
+    return result;
+}
+
 internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, BlendResult* blended, Animation* animation, AnimationState* state, r32 elapsedTime, AnimationVolatileParams* params)
 {
-    r32 oldAnimationTime = state->totalTime;
-    r32 animationTime = state->totalTime + elapsedTime;
-    u32 timeline = (u32) (animationTime * 1000.0f);
-    
     AnimationHeader* header = animation->header;
+    
+    r32 oldTime = state->totalTime;
+    r32 newTime = oldTime + elapsedTime;
+    
+    if(state->waitingForSync)
+    {
+        u32 oldTimeline = (u32) (oldTime * 1000.0f) % header->durationMS;
+        u32 newTimeline = (u32) (newTime * 1000.0f) & header->durationMS;
+        
+        u32 syncThreesold = 300;
+        if(oldTimeline <= syncThreesold && newTimeline > syncThreesold)
+        {
+            state->waitingForSyncTimer += elapsedTime;
+        }
+        else
+        {
+            state->totalTime = newTime;
+        }
+    }
+    else
+    {
+        state->totalTime = newTime;
+    }
+    
+    
+    u32 timeline = (u32) (state->totalTime * 1000.0f);
     
 	u32 animTimeMod;
 	if(input->debug.ortho)
@@ -281,7 +309,97 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
 	}
     state->normalizedTime = (r32) animTimeMod / (r32) header->durationMS;
     
-    b32 ended = (timeline >= header->durationMS);
+    
+    u32 lowerFrameIndex = 0;
+    for(u32 frameIndex = 0; frameIndex < animation->frameCount; frameIndex++)
+    {
+        FrameData* data = animation->frames + frameIndex;
+        if(animTimeMod >= data->timelineMS)
+        {
+            lowerFrameIndex = frameIndex;
+        }
+        else
+        {
+            break;
+        }
+    }
+    u32 upperFrameIndex = (lowerFrameIndex + 1);
+    if(upperFrameIndex == animation->frameCount)
+    {
+        upperFrameIndex = 0;
+    }
+    
+    
+    
+    BlendFrames_(input->tempPool, animation, blended, lowerFrameIndex, animTimeMod, upperFrameIndex);
+    
+    
+    
+    TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, input->entity->taxonomy);
+    for(TaxonomyBoneAlterations* boneAlt = slot->firstBoneAlteration; boneAlt; boneAlt = boneAlt->next)
+    {
+        if(boneAlt->boneIndex < blended->boneCount)
+        {
+            BlendedBone* bone = blended->bones + boneAlt->boneIndex;
+            bone->alterations = boneAlt->alt;
+        }
+    }
+    
+    for(TaxonomyAssAlterations* assAlt = slot->firstAssAlteration; assAlt; assAlt = assAlt->next)
+    {
+        if(assAlt->assIndex < blended->assCount)
+        {
+            BlendedAss* ass = blended->ass + assAlt->assIndex;
+            ass->alterations = assAlt->alt;
+        }
+    }
+    
+    for(u32 boneIndex = 0; boneIndex < blended->boneCount; boneIndex++)
+    {
+        BlendedBone* blendedBone = blended->bones + boneIndex;
+        
+        Bone* bone = &blendedBone->bone;
+        BoneAlterations* boneAlt = &blendedBone->alterations;
+        
+        if(bone->parentID != -1)
+        {
+            BlendedBone* parentBlended = blended->bones + bone->parentID;
+            Bone* parent = &parentBlended->bone;
+            bone->finalAngle += parent->finalAngle;
+        }
+        else
+        {
+            bone->finalAngle += params->angle;
+        }
+        r32 totalAngleRad = DegToRad(bone->finalAngle);
+        bone->finalOriginOffset = CalculateFinalBoneOffset_(input, blended->bones, blended->boneCount, bone, params);
+        
+        Vec2 scale = V2(1.0f, 1.0f);
+        if(boneAlt->valid)
+        {
+            scale = boneAlt->scale;
+        }
+        bone->mainAxis = Hadamart(scale, V2(Cos(totalAngleRad), Sin(totalAngleRad))); 
+    }
+    
+    
+    
+    r32 waitingForSyncThreesold = 0.8f;
+    
+    if(timeline >= header->durationMS || (state->stopAtNextBarrier && !RequiresSync((EntityAction) state->action)) || state->waitingForSyncTimer >= waitingForSyncThreesold)
+    {
+        state->stopAtNextBarrier = false;
+        state->totalTime = 0;
+        state->waitingForSync = false;
+        state->waitingForSyncTimer = 0;
+        state->action = state->nextAction;
+        state->actionSyncronized = Action_None;
+        
+        if(RequiresSync((EntityAction) state->action))
+        {
+            state->waitingForSync = true;
+        }
+    }
     
 #if 0    
     if(state->stopAtNextBarrier)
@@ -314,88 +432,6 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
         }
     }
 #endif
-    
-    u32 lowerFrameIndex = 0;
-    for(u32 frameIndex = 0; frameIndex < animation->frameCount; frameIndex++)
-    {
-        FrameData* data = animation->frames + frameIndex;
-        if(animTimeMod >= data->timelineMS)
-        {
-            lowerFrameIndex = frameIndex;
-        }
-        else
-        {
-            break;
-        }
-    }
-    u32 upperFrameIndex = (lowerFrameIndex + 1);
-    if(upperFrameIndex == animation->frameCount)
-    {
-        upperFrameIndex = 0;
-    }
-    BlendFrames_(input->tempPool, animation, blended, lowerFrameIndex, animTimeMod, upperFrameIndex);
-    
-    TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, input->entity->taxonomy);
-    for(TaxonomyBoneAlterations* boneAlt = slot->firstBoneAlteration; boneAlt; boneAlt = boneAlt->next)
-    {
-        if(boneAlt->boneIndex < blended->boneCount)
-        {
-            BlendedBone* bone = blended->bones + boneAlt->boneIndex;
-            bone->alterations = boneAlt->alt;
-        }
-    }
-    
-    for(TaxonomyAssAlterations* assAlt = slot->firstAssAlteration; assAlt; assAlt = assAlt->next)
-    {
-        if(assAlt->assIndex < blended->assCount)
-        {
-            BlendedAss* ass = blended->ass + assAlt->assIndex;
-            ass->alterations = assAlt->alt;
-        }
-    }
-    
-    
-    if(ended)
-    {
-        if(state->nextAction == state->action && header->singleCycle)
-        {
-            state->action = Action_None;
-        }
-        else
-        {
-            state->totalTime = 0;
-            state->action = state->nextAction;
-        }
-    }
-    state->totalTime = animationTime;
-    
-    for(u32 boneIndex = 0; boneIndex < blended->boneCount; boneIndex++)
-    {
-        BlendedBone* blendedBone = blended->bones + boneIndex;
-        
-        Bone* bone = &blendedBone->bone;
-        BoneAlterations* boneAlt = &blendedBone->alterations;
-        
-        if(bone->parentID != -1)
-        {
-            BlendedBone* parentBlended = blended->bones + bone->parentID;
-            Bone* parent = &parentBlended->bone;
-            bone->finalAngle += parent->finalAngle;
-        }
-        else
-        {
-            bone->finalAngle += params->angle;
-        }
-        r32 totalAngleRad = DegToRad(bone->finalAngle);
-        bone->finalOriginOffset = CalculateFinalBoneOffset_(input, blended->bones, blended->boneCount, bone, params);
-        
-        Vec2 scale = V2(1.0f, 1.0f);
-        if(boneAlt->valid)
-        {
-            scale = boneAlt->scale;
-        }
-        bone->mainAxis = Hadamart(scale, V2(Cos(totalAngleRad), Sin(totalAngleRad))); 
-    }
 }
 
 inline Vec2 GetBoneAxisOffsetfromXY(Bone* bone, Vec2 alignedOffset)
@@ -581,17 +617,13 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
 }
 
 
-inline b32 PushNewAction(AnimationState* animation, u32 action)
+inline void PushNewAction(AnimationState* animation, u32 action)
 {
-    b32 result = false;
-    if(animation->action != action)
+    if(action != animation->action)
     {
         animation->stopAtNextBarrier = true;
         animation->nextAction = action;
-        result = true;
     }
-    
-    return result;
 }
 
 
@@ -1812,11 +1844,9 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
     }
     else
     {
-        if(PushNewAction(animationState, entityC->action))
-        {
-            GetAIDResult prefetchAID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->nextAction);
-            PrefetchAnimation(group->assets, prefetchAID.AID);
-        }
+        PushNewAction(animationState, entityC->action);
+        GetAIDResult prefetchAID = GetAID(group->assets, taxTable, entityC->taxonomy, entityC->action);
+        PrefetchAnimation(group->assets, prefetchAID.AID);
         
         GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, debugParams.forcedNameHashID);
         

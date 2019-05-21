@@ -125,12 +125,16 @@ struct AnimationState
     AnimationOutput output;
     EquipInfo nearestCompatibleSlotForDragging;
     
+    b32 waitingForSync;
+    r32 waitingForSyncTimer;
+    u32 actionSyncronized;
+    
     u32 action;
     u32 nextAction;
+    
     r32 totalTime;
     r32 normalizedTime;
     
-    b32 preparing;
     b32 stopAtNextBarrier;
     b32 flipOnYAxis;
     

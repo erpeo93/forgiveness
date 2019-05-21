@@ -3579,6 +3579,10 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
     UI->toRenderList = 0;
 }
 
+global_variable u32 requireContinousClickActions[] = {
+ Action_Attack   
+};
+
 inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, PlatformInput* input, ClientEntity* overlapping)
 {
     if(UI->mode == UIMode_Equipment && overlapping->identifier == UI->myPlayer->openedContainerID)
@@ -3623,8 +3627,14 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
             UIInteraction actionListInteraction = {};
             actionListInteraction.flags |= UI_MaintainWhenModeChanges;
             UIAddScrollableTargetInteraction(UI, &actionListInteraction, &UI->possibleOverlappingActions, output);
-            UIAddInvalidCondition(&actionListInteraction, u32,ColdPointerDataOffset(UI->myPlayer->targetPossibleActions, OffsetOf(UIInteractionData, actionIndex)), Fixed((b32)false), 0);                      
-            UIAddInvalidCondition(&actionListInteraction, u32,ColdPointer(&output->desiredAction), Fixed((u32)Action_Attack), UI_Ended);
+            UIAddInvalidCondition(&actionListInteraction, u32,ColdPointerDataOffset(UI->myPlayer->targetPossibleActions, OffsetOf(UIInteractionData, actionIndex)), Fixed((b32)false), 0);
+            
+            
+            for(u32 actionIndex = 0; actionIndex < ArrayCount(requireContinousClickActions); ++actionIndex)
+            {
+                UIAddInvalidCondition(&actionListInteraction, u32,ColdPointer(&output->desiredAction), Fixed(requireContinousClickActions[actionIndex]), UI_Ended);                
+            }
+            
             UIAddInvalidCondition(&actionListInteraction, b32,ColdPointer(&UI->movingWithKeyboard), Fixed((b32)true), 0);
             
             UIAddInteraction(UI, input, mouseLeft, actionListInteraction);
@@ -3636,8 +3646,12 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
                 UIAddStandardTargetInteraction(UI, &castInteraction, output, Action_Cast, overlapping->identifier);
                 UIAddInvalidCondition(&castInteraction, u32,ColdPointer(UI->myPlayer->targetPossibleActions + Action_Cast), Fixed(false));
                 UIAddInvalidCondition(&castInteraction, b32,ColdPointer(&UI->movingWithKeyboard), Fixed((b32)true), 0);
+                UIAddInvalidCondition(&castInteraction, b32,ColdPointer(&UI->player->animation.actionSyncronized), Fixed(Action_Cast));
                 
-                if(false)
+                // TODO(Leonardo): add another invalid condition when the animationstate->waitingForSyncTimer >= threesold
+                
+                b32 skillIsIstantaneous = true;
+                if(skillIsIstantaneous)
                 {
 
                 }

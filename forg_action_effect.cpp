@@ -369,7 +369,17 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
                 }
                 
             }
-            actorCreature->skillCooldown = 1.0f;
+            actorCreature->skillCooldown = 0.0f;
+            
+            
+            if(actor->playerID)
+            {
+                IgnoreAction(region, actor, Action_Cast);
+                
+                ServerPlayer* player = region->server->players + actor->playerID;
+                SendSyncAction(player, SafeTruncateToU8(Action_Cast));
+            }
+            
         } break;
         
         case Action_Eat:

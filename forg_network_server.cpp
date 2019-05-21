@@ -656,6 +656,13 @@ inline void SendCompletedAction(ServerPlayer* player, u64 entityID, u8 actionInd
     CloseAndStoreReliablePacket(player, entityID);
 }
 
+inline void SendSyncAction(ServerPlayer* player, u8 actionIndex)
+{
+    StartPacket(player, SyncAction);
+    Pack("C", actionIndex);
+    CloseAndStoreReliablePacket(player, 0);
+}
+
 inline void SendObjectEntityHeader(ServerPlayer* player, u64 containerID)
 {
     StartPacket(player, containerHeader);

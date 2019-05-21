@@ -119,7 +119,7 @@ internal void TrackUpdate( ClientPlayer* player, Vec3 acceleration, Vec3 velocit
     
 }
 
-internal void SendUpdate( Vec3 acceleration, u64 targetEntityID, u32 desiredAction, u64 overlappingEntityID)
+internal void SendUpdate(Vec3 acceleration, u64 targetEntityID, u32 desiredAction, u64 overlappingEntityID)
 {
     if(LengthSq(acceleration) > 0)
     {
@@ -1083,6 +1083,15 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 }
 #endif
                 
+            } break;
+            
+            case Type_SyncAction:
+            {
+                u8 action;
+                Unpack("C", &action);
+                ClientEntity* player = UI->player;
+                player->animation.waitingForSync = false;
+                player->animation.actionSyncronized = (u32) action;
             } break;
             
             case Type_DataFileHeader:
