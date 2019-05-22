@@ -912,7 +912,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 
                 
-                r32 maxOverallDistanceSq = 4.0f;
+                r32 maxOverallDistanceSq = R32_MAX;
                 u64 overallNearestID = 0;
                 r32 overallMinCameraZ = R32_MAX;
                 
@@ -1046,13 +1046,11 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 }
                                 
                                 r32 distanceSq = LengthSq(screenMouseP - GetCenter(screenBounds));
-                                if(distanceSq < maxOverallDistanceSq)
+                                if(distanceSq < maxOverallDistanceSq) // && cameraZ < overallMinCameraZ
                                 {
-                                    if(cameraZ < overallMinCameraZ)
-                                    {
-                                        overallMinCameraZ = cameraZ;
-                                        overallNearestID = entity->identifier;
-                                    }
+									maxOverallDistanceSq = distanceSq;
+									overallMinCameraZ = cameraZ;
+                                    overallNearestID = entity->identifier;
                                 }
                                 
                                 if(PointInRect(screenBounds, screenMouseP))
@@ -1074,7 +1072,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 UIHandle(UI, input, screenMouseP, nearestEntities, ArrayCount(nearestEntities));
                 UIOutput output = UI->output;
 				myPlayer->acceleration = output.inputAcc;
-                if(TooFarForAction(myPlayer, output.desiredAction, output.targetEntityID))
+                
+                if(player->action < Action_Attack && TooFarForAction(myPlayer, output.desiredAction, output.targetEntityID))
 				{
                     ClientEntity* target = GetEntityClient(worldMode, output.targetEntityID);
                     Assert(target);
@@ -1507,8 +1506,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 overlappingEntityID = output.overlappingEntityID;
                 
                 
-                Rect3 worldCameraBounds = GetScreenBoundsAtTargetDistance(group);
-                Rect2 screenBounds = RectCenterDim(V2(0, 0), V2(worldCameraBounds.max.x - worldCameraBounds.min.x, worldCameraBounds.max.y - worldCameraBounds.min.y));
+                //Rect3 worldCameraBounds = GetScreenBoundsAtTargetDistance(group);
+                //Rect2 screenBounds = RectCenterDim(V2(0, 0), V2(worldCameraBounds.max.x - worldCameraBounds.min.x, worldCameraBounds.max.y - worldCameraBounds.min.y));
                 //PushRectOutline(group, FlatTransform(), screenBounds, V4(1.0f, 0.0f, 0.0f, 1.0f), 0.1f); 
             }
         }

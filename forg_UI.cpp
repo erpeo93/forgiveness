@@ -3641,9 +3641,18 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
             
             if(UI->myPlayer->overlappingPossibleActions[Action_Cast])
             {
-                UIInteraction castInteraction = {};
-                
-                UIAddStandardTargetInteraction(UI, &castInteraction, output, Action_Cast, overlapping->identifier);
+                UIInteraction castInteraction = {};                
+                u64 targetIdentifier = overlapping->identifier;
+                UIAddStandardTargetInteraction(UI, &castInteraction, output, Action_Cast, targetIdentifier);
+               
+
+#if 0                
+                if(skillAlwaysCastable)
+                {
+                    UIAddRequestAction(UI, &castInteraction, UI_Trigger, CustomTargetPRequest(UI->worldMouseP));
+                }
+                #endif
+
                 UIAddInvalidCondition(&castInteraction, u32,ColdPointer(UI->myPlayer->targetPossibleActions + Action_Cast), Fixed(false));
                 UIAddInvalidCondition(&castInteraction, b32,ColdPointer(&UI->movingWithKeyboard), Fixed((b32)true), 0);
                 UIAddInvalidCondition(&castInteraction, b32,ColdPointer(&UI->player->animation.actionSyncronized), Fixed(Action_Cast));

@@ -279,7 +279,7 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
         u32 oldTimeline = (u32) (oldTime * 1000.0f) % header->durationMS;
         u32 newTimeline = (u32) (newTime * 1000.0f) & header->durationMS;
         
-        u32 syncThreesold = 300;
+        u32 syncThreesold = header->syncThreesoldMS;
         if(oldTimeline <= syncThreesold && newTimeline > syncThreesold)
         {
             state->waitingForSyncTimer += elapsedTime;

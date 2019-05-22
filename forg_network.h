@@ -173,6 +173,7 @@ enum Packet_Type
     Type_LearnRequest,
     Type_ConsumeRequest,
     Type_CraftFromInventoryRequest,
+    Type_CustomTargetPRequest,
     
     Type_containerHeader,
     Type_containerInfo,

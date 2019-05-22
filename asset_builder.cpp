@@ -129,16 +129,16 @@ EntireFile ReadFile( char* filename )
 {
     EntireFile result = {};
     
-    FILE* in = fopen( filename, "rb" );
+    FILE* in = fopen(filename, "rb");
     
-    if( in )
+    if(in)
     {
         fseek( in, 0, SEEK_END );
         result.size = ftell( in );
         fseek( in, 0, SEEK_SET );
         result.content = malloc( result.size );
         fread( result.content, result.size, 1, in );
-        fclose( in );
+        fclose(in);
     }
     return result;
 };
@@ -976,6 +976,7 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
     u32 currentIndex = 0;
     LoadedAnimation result = {};
     
+    
     u32 frameCountResult = 64;
     TempFrame* frames = (TempFrame* ) calloc(frameCountResult, sizeof(TempFrame ) );
     
@@ -997,9 +998,10 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
     i32 countPath = StrLen(filename ) - StrLen(onePastLastSlash );
     StrCpy(filename, countPath, filePath, ArrayCount(filePath ) );
     
+    
     char toRead[256];
     sprintf(toRead, "%s/%s", path, filename );
-    EntireFile animation = ReadFile(toRead );
+    EntireFile animation = ReadFile(toRead);
     
     SpriteInfo tempSprites[64];
     i32 currentFolderID = 0;
@@ -1008,7 +1010,7 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
     u32 tempSpriteCount = 0;
     u32 definitiveSpriteCount = 0;
     
-    
+    char animationName[64];
     Assert(animation.content );
     if(animation.content )
     {
@@ -1120,21 +1122,22 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                 {
                     i32 length = 0; 
                     GetXMLValuei(&currentTag, "length", &length );
-                    char* animationName = GetXMLValues(&currentTag, "name" );
-                    Assert(animationName );
+                    char* name = GetXMLValues(&currentTag, "name");
+                    Assert(name);
                     
                     
                     char* looping = GetXMLValues(&currentTag, "looping");
-                    result.singleCycle = StrEqual(looping, "false");
+                    //result.singleCycle = StrEqual(looping, "false");
                     
-                    if(animationIndex == currentIndex++ )
+                    if(animationIndex == currentIndex++)
                     {
+                        FormatString(animationName, sizeof(animationName), "%s", name);
                         loading = true;
                         result.durationMS = SafeTruncateToU16(length);
                         Assert(result.durationMS);
                         
                         u32 animationNameLength = 0;
-                        char* animationNameTest = animationName;
+                        char* animationNameTest = name;
                         while(*animationNameTest)
                         {
                             if(*animationNameTest++ == '_')
@@ -1449,9 +1452,63 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
         }
     }
     
-    free(frames );
-    
+    free(frames);
     Assert(result.durationMS );
+    
+    
+    
+    
+    char prop[256];
+    sprintf(prop, "%s/animations.properties", path);
+    EntireFile properties = ReadFile(prop);
+    
+    if(animationName && properties.content)
+    {
+        Tokenizer tokenizer = {};
+        tokenizer.at = (char*) properties.content;
+        
+        b32 parsingProperties = true;
+        b32 activeProperties = false;
+        
+        while(parsingProperties)
+        {
+            Token t = GetToken(&tokenizer);
+            
+            switch(t.type)
+            {
+                case Token_Identifier:
+                {
+                    if(TokenEquals(t, animationName))
+                    {
+                        activeProperties = true;
+                    }
+                    else if(TokenEquals(t, "syncThreesold"))
+                    {
+                        if(RequireToken(&tokenizer, Token_EqualSign))
+                        {
+                            Token value = GetToken(&tokenizer);
+                            if(activeProperties)
+                            {
+                                result.syncThreesoldMS = (u16) atoi(value.text);
+                            }
+                        }
+                    }
+                } break;
+                
+                case Token_SemiColon:
+                {
+                    activeProperties = false;
+                } break;
+                
+                case Token_EndOfFile:
+                {
+                    parsingProperties = false;
+                } break;
+            }
+        }
+    }
+    
+    
     return result;
 }
 
@@ -1524,7 +1581,7 @@ internal void GetAnimationName(char* path, char* filename, u32 animationIndex, c
             
             if(StrEqual(currentTag.title, "animation" ) )
             {
-                if(currentIndex++ == animationIndex )
+                if(currentIndex++ == animationIndex)
                 {
                     char* name = GetXMLValue(&currentTag, "name" );
                     Assert(StrLen(name ) < outputLength );
@@ -1673,12 +1730,7 @@ internal FontId AddFontAsset(LoadedFont* font )
 }
 
 
-internal AnimationId AddAnimationAsset(char* path, char* filename, u32 animationIndex, u64 stringHashID = 0, u32 loopingType = 0, u16 startingPreparationTimeLine = 0, u16 endingPreparationTimeLine = 0,
-                                       u16 spawningMS = 0,
-                                       u32 waitingLoopingType = 0,
-                                       u16 startingWaitingTimeLine = 0, u16 endingWaitingTimeLine = 0,b32 singleCycle = false, r32 firstBarrier = 0.0f,
-                                       r32 secondBarrier = 0.0f,
-                                       r32 thirdBarrier = 0.0f )
+internal AnimationId AddAnimationAsset(char* path, char* filename, u32 animationIndex, u64 stringHashID = 0)
 {
     Assets* assets = currentAssets_;
     AddedAsset asset = AddAsset(assets );
@@ -1690,17 +1742,6 @@ internal AnimationId AddAnimationAsset(char* path, char* filename, u32 animation
     StrCpy(path, StrLen(path ), asset.source->animation.path, ArrayCount(asset.source->animation.path ) );
     StrCpy(filename, StrLen(filename ), asset.source->animation.filename, ArrayCount(asset.source->animation.filename ) );
     asset.source->animation.animationIndex = animationIndex;
-    asset.source->animation.header.spawningMS = spawningMS;
-    asset.source->animation.header.loopingType = loopingType;
-    asset.source->animation.header.startingPreparationTimeLine = startingPreparationTimeLine;
-    asset.source->animation.header.endingPreparationTimeLine = endingPreparationTimeLine;
-    asset.source->animation.header.waitingLoopingType = waitingLoopingType;
-    asset.source->animation.header.startingWaitingTimeLine = startingWaitingTimeLine;
-    asset.source->animation.header.endingWaitingTimeLine = endingWaitingTimeLine;
-    asset.source->animation.header.singleCycle = singleCycle;
-    asset.source->animation.header.barriers[0] = firstBarrier;
-    asset.source->animation.header.barriers[1] = secondBarrier;
-    asset.source->animation.header.barriers[2] = thirdBarrier;
     
     AnimationId result = { asset.ID };
     return result;
@@ -1714,7 +1755,7 @@ internal void AddEveryAnimationThatStartsWith(char* path, u64 hashID, char* anim
         PlatformFileHandle handle = Win32OpenNextFile(&fileGroup, path);
         char* fileName = handle.name;
         u32 animationCount = CountAnimationInFile(path, fileName);
-        for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex )
+        for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
         {
             char animationName[32];
             GetAnimationName(path, fileName, animationIndex, animationName, sizeof(animationName));
@@ -1901,9 +1942,9 @@ internal void WritePak(Assets* assets, char* fileName_)
                         }
                         
                         source->animation.header.durationMS = animation.durationMS;
+                        source->animation.header.syncThreesoldMS = animation.syncThreesoldMS;
                         source->animation.header.nameHash = animation.stringHashID;
                         dest->nameHashID = animation.stringHashID;
-                        //source->animation.header.singleCycle = animation.singleCycle;
                         if(!dest->typeHashID)
                         {
                             dest->typeHashID = animation.stringHashID;

@@ -89,6 +89,7 @@ introspection() struct CreatureComponent
     r32 maxLifePoints;
     u64 openedContainerID;
     
+    Vec3 customTargetP;
     SimEntity* draggingEntity;
     i32 activeSkillIndex;
     

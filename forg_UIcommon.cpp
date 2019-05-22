@@ -367,6 +367,15 @@ inline UIRequest StandardActionRequest(u32 actionIndex, u64 identifier)
     return result;
 }
 
+inline UIRequest CustomTargetPRequest(Vec3 P)
+{
+    UIRequest result;
+    result.requestCode = UIRequest_CustomTargetP;
+    result.customTargetP = P;
+    
+    return result;
+}
+
 inline UIRequest EditRequest(u32 taxonomy)
 {
     UIRequest result;
@@ -375,6 +384,7 @@ inline UIRequest EditRequest(u32 taxonomy)
     
     return result;
 }
+
 
 inline UIRequest DeleteRequest(u64 identifier)
 {
@@ -655,6 +665,11 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
                 UI->lockedInventoryID2 = 0;
             }
         }break;
+        
+        case UIRequest_CustomTargetP:
+        {
+            SendCustomTargetPRequest(request->customTargetP);
+        } break;
         
         case UIRequest_Edit:
         {

@@ -106,14 +106,36 @@ internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region
     u64 targetID = target ? target->identifier : 0;
     
     CreatureComponent* actorCreature = Creature(region, actor);
+    
+    Vec3 referenceP = actor->P;
+    switch(effect->range.type)
+    {
+        case EffectTarget_Target:
+        case EffectTarget_AllInTargetRange:
+        {
+            referenceP = target->P;
+        } break;
+        
+        case EffectTarget_Actor:
+        case EffectTarget_AllInActorRange:
+        {
+            referenceP = actor->P;
+        } break;
+        
+        InvalidDefaultCase;
+    }
+    
+    
     switch(effect->ID)
     {
         case Effect_Spawn:
         {
-            Vec3 P = actor->P + V3(1, 0, 0);
+            Vec3 P = referenceP + V3(1, 0, 0);
             
             GenerationData gen = NullGenerationData();
-			targetID = AddEntity(region, P, effect->data.taxonomy, gen, DefaultAddEntityParams());
+            
+            TaxonomySlot* test = NORUNTIMEGetTaxonomySlotByName(region->taxTable, "centaur");
+			targetID = AddEntity(region, P, test->taxonomy, gen, DefaultAddEntityParams());
         } break;
         
         case Effect_NakedHandsDamage:

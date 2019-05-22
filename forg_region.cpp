@@ -1292,6 +1292,11 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             }
         } break;
         
+        case Type_CustomTargetPRequest:
+        {
+            unpack(data, "V", &creature->customTargetP);
+        } break;
+        
         case Type_MovePlayerInOtherRegion:
         {
             Vec3 offset;

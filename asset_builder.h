@@ -71,17 +71,7 @@ struct AnimationHeader
     u64 nameHash;
     
     u16 durationMS;
-    u16 spawningMS;
-    
-    u32 loopingType;
-    u16 startingPreparationTimeLine;
-    u16 endingPreparationTimeLine;
-    
-    u32 waitingLoopingType;
-    u16 startingWaitingTimeLine;
-    u16 endingWaitingTimeLine;
-    b32 singleCycle;
-    r32 barriers[3];
+    u16 syncThreesoldMS;
 };
 
 struct Bone
@@ -166,7 +156,7 @@ struct LoadedAnimation
 {
     u64 stringHashID;
     u16 durationMS;
-    b32 singleCycle;
+    u16 syncThreesoldMS;
     
     u32 spriteInfoCount;
     SpriteInfo spriteInfos[64];

@@ -8,6 +8,7 @@ MemberDefinition memberDefinitionOfCreatureComponent[] =
 { MetaType_r32, "lifePoints", (u32) ( &(( CreatureComponent* )0)->lifePoints ) }, 
 { MetaType_r32, "maxLifePoints", (u32) ( &(( CreatureComponent* )0)->maxLifePoints ) }, 
 { MetaType_u64, "openedContainerID", (u32) ( &(( CreatureComponent* )0)->openedContainerID ) }, 
+{ MetaType_Vec3, "customTargetP", (u32) ( &(( CreatureComponent* )0)->customTargetP ) }, 
 { MetaType_SimEntity, "draggingEntity", (u32) ( &(( CreatureComponent* )0)->draggingEntity ) }, 
 { MetaType_i32, "activeSkillIndex", (u32) ( &(( CreatureComponent* )0)->activeSkillIndex ) }, 
 { MetaType_u32, "skillCount", (u32) ( &(( CreatureComponent* )0)->skillCount ) }, 

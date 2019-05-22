@@ -563,6 +563,7 @@ internal void SendPossibleActions(SimRegion* region, SimEntity* actor, SimEntity
     StartPacket(player, possibleActions);
     unsigned char* actionCountDest = buff;
     buff += sizeof(u32);
+    
     Pack("Ql", target->identifier, overlapping);
     
     

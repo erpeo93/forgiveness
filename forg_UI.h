@@ -29,6 +29,7 @@ enum UIRequestType
     UIRequest_Craft,
     UIRequest_Open,
     UIRequest_Close,
+    UIRequest_CustomTargetP,
     UIRequest_Edit,
     UIRequest_EditTab,
     UIRequest_AddTaxonomy,
@@ -129,6 +130,11 @@ struct UIRequest
         {
             u32 taxonomy;
             Vec3* offsetPtr;
+        };
+        
+        struct
+        {
+            Vec3 customTargetP;
         };
         
         u32 seed;

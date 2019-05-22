@@ -216,6 +216,12 @@ internal void SendCraftFromInventoryRequest(u64 containerID, u32 objectIndex)
     CloseAndSendReliablePacket();
 }
 
+inline void SendCustomTargetPRequest(Vec3 P)
+{
+    StartPacket(CustomTargetPRequest);
+    Pack("V", P);
+    CloseAndSendReliablePacket();
+}
 
 internal void SendActiveSkillRequest(u32 taxonomy)
 {
@@ -929,7 +935,6 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                         possibleActions[actionIndex] = (PossibleActionType) possible;
                     }
                 }
-                
             } break;
             
             case Type_AvailableRecipes:
