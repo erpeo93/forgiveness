@@ -690,6 +690,7 @@ struct UIOutput
     r32 facingDirection;
     Vec3 inputAcc;
     
+    b32 actionCanBeDone;
     u32 desiredAction;
     u64 targetEntityID;
     u64 overlappingEntityID;

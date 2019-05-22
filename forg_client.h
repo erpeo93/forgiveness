@@ -119,10 +119,10 @@ struct ClientPlayer
     r32 distanceCoeffFromServerP;
     
     u64 targetIdentifier;
-    b32 targetPossibleActions[Action_Count];
+    PossibleActionType targetPossibleActions[Action_Count];
     
     u64 overlappingIdentifier;
-    b32 overlappingPossibleActions[Action_Count];
+    PossibleActionType overlappingPossibleActions[Action_Count];
     
     u64 openedContainerID;
     

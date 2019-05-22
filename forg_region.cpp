@@ -504,10 +504,8 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                     SimEntity* destEntity = GetRegionEntityByID(region, request.targetEntityID);
                     if(destEntity && !IsSet(destEntity, Flag_Equipped))
                     {
-                        b32 unableBecauseOfDistance = false;
-                        
-                        Vec3 ToP = destEntity->P - entity->P;
-                        if(PlayerCanDoAction(region, entity, destEntity, (EntityAction)request.desiredAction, true, &unableBecauseOfDistance))
+                        b32 unableBecauseOfDistance;
+                        if(EntityCanDoAction(region, entity, destEntity, (EntityAction)request.desiredAction, true, &unableBecauseOfDistance))
                         {
                             entity->acceleration = {};
                             entity->action = (EntityAction) request.desiredAction;
@@ -516,13 +514,9 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                         {
                             if(unableBecauseOfDistance)
                             {
-                                entity->acceleration = ToP;
+                                Vec3 toTarget = destEntity->P - entity->P;
+                                entity->acceleration = toTarget;
                                 entity->action = Action_Move;
-                            }
-                            else
-                            {
-                                entity->acceleration = {};
-                                entity->action = Action_None;
                             }
                         }
                     }

@@ -1890,6 +1890,10 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
                 if(!debugParams.ortho)
                 {
                     animationState->bounds = Offset(animationBounds, AID.originOffset);
+					if(entityC->action == Action_None)
+					{
+						animationState->cameraEntityOffset = GetCenter(animationState->bounds);
+					}
                 }
                 
                 UpdateAndRenderAnimation(&input, group, animation, AID.skeletonHashID, entityC->P, animationState, &params, timeToAdvance);

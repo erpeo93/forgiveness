@@ -3808,13 +3808,6 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
 
             }
             
-#if 0            
-            if(fighting)
-            {
-                AddInteraction(mouseRight, Action_Protect);
-            }
-#endif
-            
             switch(UI->mouseMovement)
             {
                 case UIMouseMovement_ToMouseP:

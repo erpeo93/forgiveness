@@ -7,9 +7,15 @@ printFlags(noPrefix) enum CanDoActionFlags
     CanDoAction_Empty = (1 << 3),
 };
 
+
+struct PossibleActionData
+{
+    r32 requiredTime;
+};
+
 union TaxonomyNodeData
 {
-    b32 possible;
+    PossibleActionData action;
     struct MemSynthOption* firstOption;
     struct EquipmentMapping* equipmentMapping;
 };
@@ -34,7 +40,7 @@ struct TaxonomyTree
     TaxonomyNode* root;
 };
 
-struct PlayerPossibleAction
+struct PossibleAction
 {
     EntityAction action;
     u32 flags;
@@ -43,8 +49,8 @@ struct PlayerPossibleAction
     
     union
     {
-        PlayerPossibleAction* next;
-        PlayerPossibleAction* nextFree;
+        PossibleAction* next;
+        PossibleAction* nextFree;
     };
 };
 
@@ -391,7 +397,7 @@ struct TaxonomySlot
     
     TaxonomyTree equipmentMappings;
     ConsumeMapping* firstConsumeMapping;
-    PlayerPossibleAction* firstPossibleAction;
+    PossibleAction* firstPossibleAction;
     
     u32 layoutCount;
     ObjectLayout* firstLayout;
@@ -430,8 +436,10 @@ struct TaxonomySlot
     
     
     
-    r32 maxDistanceAllowed;
+    r32 skillDistanceAllowed;
+    r32 cooldown;
     b32 isPassiveSkill;
+    
     
     u8 gridDimX;
     u8 gridDimY;
@@ -566,7 +574,7 @@ struct TaxonomyTable
     ConsumeMapping* firstFreeConsumeMapping;
     TaxonomyNode* firstFreeTaxonomyNode;
     MemSynthOption* firstFreeMemSynthOption;
-    PlayerPossibleAction* firstFreePlayerPossibleAction;
+    PossibleAction* firstFreePossibleAction;
     LayoutPiece* firstFreeLayoutPiece;
     ObjectLayout* firstFreeObjectLayout;
     TaxonomyEssence* firstFreeTaxonomyEssence;

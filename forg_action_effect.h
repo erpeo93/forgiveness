@@ -23,6 +23,12 @@ printTable(noPrefix) enum EntityAction
     Action_Count,
 };
 
+enum PossibleActionType
+{
+    PossibleAction_CantBeDone,
+    PossibleAction_TooFar,
+    PossibleAction_CanBeDone,
+};
 
 printTable(noPrefix) enum EffectIdentifier
 {

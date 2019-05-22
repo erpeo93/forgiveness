@@ -995,10 +995,10 @@ inline void AddEssence(char* name, u32 quantity)
 
 
 
-inline void BeginPlayerAction(char* action, char* distance)
+inline void BeginPossibleAction(char* action, char* distance)
 {
-    PlayerPossibleAction* possibleAction;
-    TAXTABLE_ALLOC(possibleAction, PlayerPossibleAction);
+    PossibleAction* possibleAction;
+    TAXTABLE_ALLOC(possibleAction, PossibleAction);
     
     u8 actionInt = SafeTruncateToU8(GetValuePreprocessor(EntityAction, action));
     possibleAction->action = (EntityAction) actionInt;
@@ -1011,20 +1011,20 @@ inline void BeginPlayerAction(char* action, char* distance)
 
 inline void AddActionFlag(char* flagName)
 {
-    PlayerPossibleAction* possibleAction = currentSlot_->firstPossibleAction;
+    PossibleAction* possibleAction = currentSlot_->firstPossibleAction;
     u32 flag = GetFlagPreprocessor(CanDoActionFlags, flagName);
     possibleAction->flags |= flag;
 }
 
 
-inline void AddTarget(char* name)
+inline void AddActor(char* name, char* requiredTime)
 {
     TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
     if(target)
     {
-        PlayerPossibleAction* possibleAction = currentSlot_->firstPossibleAction;
+        PossibleAction* possibleAction = currentSlot_->firstPossibleAction;
         TaxonomyNode* node = AddToTaxonomyTree(&possibleAction->tree, target);
-        node->data.possible = true;
+        node->data.action.requiredTime = ToR32(requiredTime, 1.0f);
     }
     else
     {
@@ -2960,7 +2960,8 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     else if(StrEqual(name, "skill"))
     {
         r32 distance = ToR32(GetValue(root, "distance"), 1.0f);
-        currentSlot_->maxDistanceAllowed = distance;
+        currentSlot_->skillDistanceAllowed = distance;
+        currentSlot_->cooldown = ToR32(GetValue(root, "cooldown"), 0.0f);
         char* passive = GetValue(root, "passive");
         if(passive)
         {
@@ -3072,14 +3073,14 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         }
     }
     
-    else if(StrEqual(name, "playerActions"))
+    else if(StrEqual(name, "possibleActions"))
     {
-        for(PlayerPossibleAction* action = currentSlot_->firstPossibleAction; action; action = action->next)
+        for(PossibleAction* action = currentSlot_->firstPossibleAction; action; action = action->next)
         {
-            FreePlayerActionTree(taxTable_, action->tree.root);
+            FreeActionTree(taxTable_, action->tree.root);
         }
         
-        FREELIST_FREE(currentSlot_->firstPossibleAction, PlayerPossibleAction, taxTable_->firstFreePlayerPossibleAction);
+        FREELIST_FREE(currentSlot_->firstPossibleAction, PossibleAction, taxTable_->firstFreePossibleAction);
         
         EditorElement* actions = root->firstInList;
         while(actions)
@@ -3087,7 +3088,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             char* action = GetValue(actions, "action");
             char* distance = GetValue(actions, "distance");
             
-            BeginPlayerAction(action, distance);
+            BeginPossibleAction(action, distance);
             
             EditorElement* flags = GetList(actions, "flags");
             while(flags)
@@ -3098,13 +3099,14 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 flags = flags->next;
             }
             
-            EditorElement* targets = GetList(actions, "targets");
-            while(targets)
+            EditorElement* actors = GetList(actions, "actors");
+            while(actors)
             {
-                char* targetName = GetValue(targets, "name");
-                AddTarget(targetName);
+                char* actorName = GetValue(actors, "name");
+                char* requiredTime = GetValue(actors, "time");
+                AddActor(actorName, requiredTime);
                 
-                targets = targets->next;
+                actors = actors->next;
             }
             
             actions = actions->next;

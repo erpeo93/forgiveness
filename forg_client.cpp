@@ -195,7 +195,7 @@ inline void MoveTowards_(GameModeWorld* worldMode, u64 id, Vec2 cameraWorldOffse
 inline void MoveTowards(GameModeWorld* worldMode, ClientEntity* entityC, Vec2 cameraWorldOffset = V2(0, 0), Vec2 cameraEntityOffset = V2(0, 0), r32 zoomCoeff = 1.0f)
 {
     cameraWorldOffset += entityC->P.xy;
-    cameraEntityOffset += GetCenter(entityC->animation.bounds);
+    cameraEntityOffset += entityC->animation.cameraEntityOffset;
     MoveTowards_(worldMode, entityC->identifier, cameraWorldOffset, cameraEntityOffset, zoomCoeff);
 }
 
@@ -559,6 +559,21 @@ internal Vec3 MoveEntityClient(GameModeWorld* worldMode, ClientEntity* entity, r
         *velocityToUpdate = *velocityToUpdate - Dot(entity->velocity, wallNormal) * wallNormal;
         deltaP = deltaP - Dot(deltaP, wallNormal) * wallNormal;
         tRemaining -= tStop * tRemaining;
+    }
+    
+    return result;
+}
+
+inline b32 TooFarForAction(ClientPlayer* myPlayer, u32 desiredAction, u64 targetID)
+{
+    b32 result = false;
+    
+    if(desiredAction >= Action_Attack && targetID)
+    {
+        if(targetID == myPlayer->targetIdentifier && myPlayer->targetPossibleActions[desiredAction] == PossibleAction_TooFar)
+        {
+            result = true;
+        }
     }
     
     return result;
@@ -1058,10 +1073,16 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 UIHandle(UI, input, screenMouseP, nearestEntities, ArrayCount(nearestEntities));
                 UIOutput output = UI->output;
+				myPlayer->acceleration = output.inputAcc;
+                if(TooFarForAction(myPlayer, output.desiredAction, output.targetEntityID))
+				{
+                    ClientEntity* target = GetEntityClient(worldMode, output.targetEntityID);
+                    Assert(target);
+                    myPlayer->acceleration = target->P - player->P;
+				}
+                
                 
                 SetCameraTransform(group, 0, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal + V3(worldMode->cameraWorldOffset.xy, 0), worldMode->cameraEntityOffset);
-                
-                myPlayer->acceleration = output.inputAcc;
                 
                 MoveTowards(worldMode, player, UI->additionalCameraOffset, V2(0, 0), UI->zoomLevel);
                 PushAmbientColor(group, ambientLightColor);

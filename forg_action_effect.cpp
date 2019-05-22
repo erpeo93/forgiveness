@@ -369,7 +369,7 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
                 }
                 
             }
-            actorCreature->skillCooldown = 0.0f;
+            actorCreature->skillCooldown = spellSlot->cooldown;
             
             
             if(actor->playerID)
@@ -495,8 +495,24 @@ inline void DispatchPassiveEffects(SimRegion* region, SimEntity* entity)
     DispatchEffects(region, entity, 0, Action_None);
 }
 
+inline PossibleAction* GetPossibleAction(TaxonomySlot* slot, EntityAction action)
+{
+    PossibleAction* result = 0;
+    PossibleAction* test = slot->firstPossibleAction;
+    while(test)
+    {
+        if(test->action == action)
+        {
+            result = test;
+            break;
+        }
+        
+        test = test->next;
+    }
+    return result;
+}
 
-inline b32 PlayerCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* target, EntityAction action, b32 distanceConstrain, b32* unableBecauseOfDistance)
+inline b32 EntityCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* target, EntityAction action, b32 distanceConstrain, b32* unableBecauseOfDistance)
 {
     ServerPlayer* player = region->server->players + actor->playerID;
     b32 canDoAction = true;
@@ -507,20 +523,7 @@ inline b32 PlayerCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* tar
         TaxonomySlot* actorSlot = GetSlotForTaxonomy(taxTable, actor->taxonomy);
         TaxonomySlot* targetSlot = GetSlotForTaxonomy(taxTable, target->taxonomy);
         
-        
-        PlayerPossibleAction* possibleAction = 0;
-        PlayerPossibleAction* test = actorSlot->firstPossibleAction;
-        while(test)
-        {
-            if(test->action == action)
-            {
-                possibleAction = test;
-                break;
-            }
-            
-            test = test->next;
-        }
-        
+        PossibleAction* possibleAction = GetPossibleAction(targetSlot, action);
         if(possibleAction)
         {
             r32 distanceRequiredSquare = Square(possibleAction->distance);
@@ -530,7 +533,7 @@ inline b32 PlayerCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* tar
                 SkillSlot* skillSlot = creature->skills + creature->activeSkillIndex;
                 Assert(skillSlot->taxonomy);
                 TaxonomySlot* spellSlot = GetSlotForTaxonomy(region->taxTable, skillSlot->taxonomy);
-                distanceRequiredSquare = Square(spellSlot->maxDistanceAllowed);
+                distanceRequiredSquare = Square(spellSlot->skillDistanceAllowed);
                 
                 if((creature->skillCooldown > 0) || (creature->activeSkillIndex == -1))
                 {
@@ -538,14 +541,14 @@ inline b32 PlayerCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* tar
                 }
             }
             
-            if(distanceConstrain)
+            r32 distanceSq = LengthSq(target->P - actor->P);
+            if(distanceSq > distanceRequiredSquare)
             {
-                r32 distanceSq = LengthSq(target->P - actor->P);
-                if(distanceSq > distanceRequiredSquare)
+                if(distanceConstrain)
                 {
                     canDoAction = false;
-                    *unableBecauseOfDistance = true;
                 }
+                *unableBecauseOfDistance = true;
             }
             
             if(action == Action_Craft)
@@ -593,13 +596,10 @@ inline b32 PlayerCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* tar
             
             if(canDoAction)
             {
-                TaxonomyNode* node = FindInTaxonomyTree(taxTable, possibleAction->tree.root, targetSlot->taxonomy);
+                TaxonomyNode* node = FindInTaxonomyTree(taxTable, possibleAction->tree.root, actorSlot->taxonomy);
                 if(node)
                 {
-                    if(!node->data.possible)
-                    {
-                        canDoAction = false;
-                    }
+                    canDoAction = true;
                 }
                 else
                 {
@@ -621,6 +621,35 @@ inline b32 AICanDoAction(SimRegion* region, SimEntity* entity, SimEntity* target
     return result;
 }
 
+inline r32 GetActionVelocity(SimRegion* region, SimEntity* entity, EntityAction action)
+{
+	//TODO(leonardo): alter this based on the active effects (the weapon sets a special effect that is like 'ActionVelocity_effect'?)
+	//TODO(leonardo): set this when the action starts!
+	r32 result = 1.0f;
+	return result;
+}
+
+inline r32 GetActionTargetTime(SimRegion* region, SimEntity* actor, SimEntity* target, EntityAction action)
+{
+    r32 result = R32_MAX;
+	//TODO(leonardo): alter this based on the action and the weapon (the weapon sets a special effect that is like 'ActionTime_effect'?)
+	//TODO(leonardo): set this when the action starts!
+    
+    TaxonomySlot* targetSlot = GetSlotForTaxonomy(region->taxTable, target->taxonomy);
+    PossibleAction* possibleAction = GetPossibleAction(targetSlot, action);
+    
+    if(possibleAction)
+    {
+        TaxonomyNode* node = FindInTaxonomyTree(region->taxTable, possibleAction->tree.root, actor->taxonomy);
+        result = node->data.action.requiredTime;
+    }
+    else
+    {
+        InvalidCodePath;
+    }
+	return result;
+}
+
 inline SimEntity* GetRegionEntityByID( SimRegion* region, u64 ID );
 internal void HandleAction(SimRegion* region, SimEntity* entity)
 {
@@ -640,11 +669,11 @@ internal void HandleAction(SimRegion* region, SimEntity* entity)
         
         if(canDo)
         {
-            r32 timeToAdvance = region->timeToUpdate;
-            entity->actionTime += timeToAdvance;
-            r32 actionTime = entity->actionTime * 1.0f;
-            r32 targetTime = 0.3f;
-            if(actionTime > targetTime)
+			r32 actionVelocity = GetActionVelocity(region, entity, consideringAction);
+			r32 targetTime = GetActionTargetTime(region, entity, destEntity, consideringAction);
+            
+            entity->actionTime += region->timeToUpdate * actionVelocity;
+            if(entity->actionTime > targetTime)
             {
                 DispatchEffectsContext dispatch = DispatchEffects(region, entity, destEntity, consideringAction);
                 if(region->border != Border_Mirror && IsSet(entity, Flag_insideRegion))
@@ -654,7 +683,6 @@ internal void HandleAction(SimRegion* region, SimEntity* entity)
 					creature->completedAction = SafeTruncateToU8(consideringAction);
 					creature->completedActionTarget = destEntity->identifier;    
 					entity->actionTime = 0;
-                    
                     entity->action = dispatch.followingAction;
                 }
             }

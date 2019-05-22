@@ -3,16 +3,16 @@
 #include <stdarg.h>
 #include <string.h>
 
-inline void FreePlayerActionTree(TaxonomyTable* table, TaxonomyNode* root)
+inline void FreeActionTree(TaxonomyTable* table, TaxonomyNode* root)
 {    
     if(root->firstChild)
     {
-        FreePlayerActionTree(table, root->firstChild);
+        FreeActionTree(table, root->firstChild);
     }
     
     if(root->next)
     {
-        FreePlayerActionTree(table, root->next);
+        FreeActionTree(table, root->next);
     }
     
     FREELIST_DEALLOC(root, table->firstFreeTaxonomyNode);

@@ -139,6 +139,7 @@ struct AnimationState
     b32 flipOnYAxis;
     
     Rect2 bounds;
+    Vec2 cameraEntityOffset;
     
     u32 lifePointsSeedResetCounter;
     u32 spawnAshParticlesCount;

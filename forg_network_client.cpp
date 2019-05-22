@@ -806,7 +806,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 {
                     for(u32 actionIndex = 0; actionIndex < Action_Count; ++actionIndex)
                     {
-                        worldMode->player.targetPossibleActions[actionIndex] = false;
+                        worldMode->player.targetPossibleActions[actionIndex] = PossibleAction_CantBeDone;
                     }
                 }
             } break;
@@ -897,7 +897,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 EntityPossibleActions u;
                 Unpack("LQl", &u.actionCount, &u.identifier, &u.overlapping);
                 
-                b32* possibleActions;
+                PossibleActionType* possibleActions;
                 b32 idMatch = true;
                 if(u.overlapping)
                 {
@@ -914,7 +914,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 {
                     for(u32 actionIndex = 0; actionIndex < Action_Count; ++actionIndex)
                     {
-                        possibleActions[actionIndex] = false;
+                        possibleActions[actionIndex] = PossibleAction_CantBeDone;
                     }
                 }
                 
@@ -922,10 +922,11 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 for(u32 counter = 0; counter < u.actionCount; ++counter)
                 {
                     u32 actionIndex;
-                    Unpack("L", &actionIndex);
+                    u8 possible;
+                    Unpack("LC", &actionIndex, &possible);
                     if(idMatch)
                     {
-                        possibleActions[actionIndex] = true;
+                        possibleActions[actionIndex] = (PossibleActionType) possible;
                     }
                 }
                 
@@ -1090,8 +1091,12 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 u8 action;
                 Unpack("C", &action);
                 ClientEntity* player = UI->player;
-                player->animation.waitingForSync = false;
-                player->animation.actionSyncronized = (u32) action;
+                
+				if(action == player->animation.action)
+				{
+					player->animation.waitingForSync = false;
+					player->animation.actionSyncronized = (u32) action;
+				}
             } break;
             
             case Type_DataFileHeader:
