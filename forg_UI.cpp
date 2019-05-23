@@ -1425,7 +1425,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                                     EditorElement* discriminator = GetElement(root, unionLayout->discriminatorName);
                                     if(discriminator)
                                     {
-                                        char* toShow = discriminator->name;
+                                        char* toShow = discriminator->value;
                                         for(EditorElement* child = root->firstValue; child; child = child->next)
                                         {
                                             if(!StrEqual(child->name, toShow))
@@ -1433,7 +1433,10 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                                                 child->flags |= EditorElem_DontRender;
                                             }
                                         }   
-                                    }   
+                                    discriminator->flags &= ~EditorElem_DontRender;
+                                    }
+                                    
+          
                                 }
                             }
                             
