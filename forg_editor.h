@@ -38,6 +38,13 @@ enum EditorElementFlags
     EditorElem_PlayContainerButton = (1 << 14),
     EditorElem_RecursiveEmpty = (1 << 15),
     EditorElem_DontRender = (1 << 16),
+    EditorElem_Union = (1 << 17),
+};
+
+struct EditorUnionLayout
+{
+    char unionName[32];
+    char discriminatorName[32];
 };
 
 struct EditorTextBlock

@@ -885,7 +885,6 @@ struct UIState
     r32 autosaveWidgetTimer;
     EditorWidget widgets[EditorWidget_Count];
     
-    
     EditorElement* copying;
     
     r32 pastedTimeLeft;
@@ -905,9 +904,14 @@ struct UIState
     i32 currentAutocompleteSelectedIndex;
     u32 autocompleteCount;
     UIAutocomplete autocompletes[64];
-    
     MemoryPool autocompletePool;
     UIAutocompleteBlock* firstFreeAutocompleteBlock;
+    
+    
+    u32 editorUnionLayoutCount;
+    EditorUnionLayout unionLayouts[64];
+    
+    
     
     MemoryPool undoRedoPool;
     UndoRedoCommand* firstFreeUndoRedoCommand;

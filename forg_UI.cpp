@@ -184,7 +184,6 @@ inline void UIRenderAutocomplete(UIState* UI, EditorWidget* widget, PlatformInpu
     }
 }
 
-
 inline UIAutocomplete* UIAddAutocomplete(UIState* UI, char* name)
 {
     Assert(UI->autocompleteCount < ArrayCount(UI->autocompletes));
@@ -464,6 +463,31 @@ inline b32 SpecialHandling(char* name)
         result = true;
     }
     
+    return result;
+}
+
+inline void UIAddEditorUnionLayout(UIState* UI, char* unionName, char* discriminatorName)
+{
+    Assert(UI->editorUnionLayoutCount < ArrayCount(UI->unionLayouts));
+    EditorUnionLayout* layout = UI->unionLayouts + UI->editorUnionLayoutCount++;
+    
+    FormatString(layout->unionName, sizeof(layout->unionName), "%s", unionName);
+    FormatString(layout->discriminatorName, sizeof(layout->discriminatorName), "%s", discriminatorName);    
+}
+
+inline EditorUnionLayout* GetEditorUnionLayout(UIState* UI, char* name)
+{
+    EditorUnionLayout* result = 0;
+    
+    for(u32 layoutIndex = 0; layoutIndex < UI->editorUnionLayoutCount; ++layoutIndex)
+    {
+        EditorUnionLayout* test = UI->unionLayouts + layoutIndex;
+        if(StrEqual(test->unionName, name))
+        {
+            result = test;
+            break;
+        }
+    }
     return result;
 }
 
@@ -1276,6 +1300,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                             canDeleteElements = !IsSet(root, EditorElem_CantBeDeleted);
                         }
                         
+                        
                         UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstInList, input, canDeleteElements);
                         
                         result = Union(result, childs.bounds);
@@ -1391,7 +1416,28 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                             }
                         }
                         
-                        
+                    
+                            if(root->flags & EditorElem_Union)
+                            {
+                                EditorUnionLayout* unionLayout = GetEditorUnionLayout(UI, father->name);
+                                if(unionLayout)
+                                {
+                                    EditorElement* discriminator = GetElement(root, unionLayout->discriminatorName);
+                                    if(discriminator)
+                                    {
+                                        char* toShow = discriminator->name;
+                                        for(EditorElement* child = root->firstValue; child; child = child->next)
+                                        {
+                                            if(!StrEqual(child->name, toShow))
+                                            {
+                                                child->flags |= EditorElem_DontRender;
+                                            }
+                                        }   
+                                    }   
+                                }
+                            }
+                            
+                            
                         UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, false);
                                                 
 
@@ -3434,8 +3480,15 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddOption(UI, autocomplete, "distanceFalloffCoeff");
         
         
+        UIAutocomplete* effectAutocomplete = UIAddAutocomplete(UI, "effectParamName");
+        UIAddOption(UI, effectAutocomplete, "velocity");
+        UIAddOption(UI, effectAutocomplete, "offset");        
+        UIAddOption(UI, effectAutocomplete, "taxonomyName");        
+        
         FormatString(UI->trueString, sizeof(UI->trueString), "true");
         FormatString(UI->falseString, sizeof(UI->falseString), "false");
+        
+        UIAddEditorUnionLayout(UI, "effectParams", "effectParamName");
     }
     
     

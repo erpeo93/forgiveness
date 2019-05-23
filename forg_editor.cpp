@@ -2130,6 +2130,11 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
             
 			case EditorElement_Struct:
 			{
+                if(element->flags & EditorElem_Union)
+                {
+                    buffer = OutputToBuffer(buffer, bufferSize, "#union ");
+                }
+                
 				buffer = OutputToBuffer(buffer, bufferSize, " {");
 				buffer = WriteElements(buffer, bufferSize, element->firstValue);
 				buffer = OutputToBuffer(buffer, bufferSize, "} ");
@@ -2144,6 +2149,33 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
 	}
     
     return buffer;
+}
+
+inline void AddStructParams(Tokenizer* tokenizer, EditorElement* element)
+{
+    
+    b32 parsingParams = true;
+    while(parsingParams)
+    {
+        if(NextTokenIs(tokenizer, Token_Pound))
+        {
+            Token pound = GetToken(tokenizer);
+            Token paramName = GetToken(tokenizer);
+            
+            if(TokenEquals(paramName, "union"))
+            {
+                element->flags |= EditorElem_Union;
+            }
+            else
+            {
+                InvalidCodePath;
+            }
+        }
+        else
+        {
+            parsingParams = false;
+        }
+    }
 }
 
 enum LoadElementsMode
@@ -2295,6 +2327,10 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
 							{
 								newElement->flags |= EditorElem_ShowLabelBitmapButton;
 							}
+                            else if(TokenEquals(paramName, "union"))
+                            {
+                                newElement->flags |= EditorElem_Union;
+                            }
 							else if(TokenEquals(paramName, "elementName"))
 							{
 								if(RequireToken(tokenizer, Token_EqualSign))
@@ -2347,6 +2383,8 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
                 {
                     newElement->type = EditorElement_Struct;
                     
+                    AddStructParams(tokenizer, newElement);
+                    
                     if(NextTokenIs(tokenizer, Token_CloseBraces))
                     {
                         newElement->firstValue = 0;
@@ -2375,8 +2413,10 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
         if(firstToken.type == Token_OpenBraces)
         {
             newElement->type = EditorElement_Struct;
-            newElement->firstValue = LoadElementsInMemory(mode, tokenizer, end);
             
+            AddStructParams(tokenizer, newElement);
+            
+            newElement->firstValue = LoadElementsInMemory(mode, tokenizer, end);
             if(!RequireToken(tokenizer, Token_CloseBraces))
             {
                 InvalidCodePath;
