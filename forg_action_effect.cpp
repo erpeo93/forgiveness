@@ -119,7 +119,8 @@ internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region
         case EffectTarget_Actor:
         case EffectTarget_AllInActorRange:
         {
-            referenceP = actor->P;
+            Vec3 actorOffsetSpec = V3(0, 0, 0);
+            referenceP = actor->P + actorOffsetSpec;
         } break;
         
         InvalidDefaultCase;
@@ -130,12 +131,22 @@ internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region
     {
         case Effect_Spawn:
         {
-            Vec3 P = referenceP + V3(1, 0, 0);
+            EffectData* data = &effect->data;
+            u32 counter = 1;
             
-            GenerationData gen = NullGenerationData();
+            if(data->spawnCount)
+            {
+                counter = data->spawnCount;
+            }
             
-            TaxonomySlot* test = NORUNTIMEGetTaxonomySlotByName(region->taxTable, "centaur");
-			targetID = AddEntity(region, P, test->taxonomy, gen, DefaultAddEntityParams());
+            for(u32 index = 0; index < counter; ++index)
+            {
+                Vec3 P = referenceP + effect->data.offset + 0.0f * effect->data.offsetV;
+                GenerationData gen = NullGenerationData();
+                AddEntityAdditionalParams params = DefaultAddEntityParams();
+                params.speed = effect->data.speed;
+                targetID = AddEntity(region, P, effect->data.taxonomy, gen, params);
+            }
         } break;
         
         case Effect_NakedHandsDamage:

@@ -3487,6 +3487,9 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddOption(UI, effectAutocomplete, "velocity");
         UIAddOption(UI, effectAutocomplete, "offset");        
         UIAddOption(UI, effectAutocomplete, "taxonomyName");        
+        UIAddOption(UI, effectAutocomplete, "timeToLive");        
+        UIAddOption(UI, effectAutocomplete, "offsetV");        
+        UIAddOption(UI, effectAutocomplete, "spawnCount");        
         
         FormatString(UI->trueString, sizeof(UI->trueString), "true");
         FormatString(UI->falseString, sizeof(UI->falseString), "false");

@@ -66,9 +66,14 @@ struct NakedHandReq
     };
 };
 
-union EffectData
+struct EffectData
 {
 	u32 taxonomy;
+    u32 spawnCount;
+    r32 timeToLive;
+    Vec3 offset;
+    Vec3 offsetV;
+    Vec3 speed;
 };
 
 printFlags(noPrefix) enum EffectFlags

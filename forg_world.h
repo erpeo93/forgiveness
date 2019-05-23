@@ -73,6 +73,9 @@ struct AddEntityAdditionalParams
     u16 quantity;
     i16 status;
     
+    Vec3 speed;
+    r32 timeToLive;
+    
     union
     {
         struct

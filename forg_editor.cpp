@@ -3044,14 +3044,40 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             char* rangeValue = GetValue(range, "radious");
             AddEffectRange(rangeType, rangeValue);
             
-            
-            EditorElement* data = GetStruct(effectList, "data");
-            char* type = GetValue(data, "type");
-            if(StrEqual(type, "spawn"))
+            EditorElement* params = GetList(effectList, "effectParams");
+            while(params)
             {
-                char* taxonomy = GetValue(data, "value");
-                Spawn(taxonomy);
+                char* paramName = GetValue(params, "effectParamName");
+                if(StrEqual(paramName, "velocity"))
+                {
+                    currentEffect_->effect.data.speed = ToV3(GetElement(params, "velocity"));
+                }
+                else if(StrEqual(paramName, "offset"))
+                {
+                    currentEffect_->effect.data.offset = ToV3(GetElement(params, "offset"));
+                }
+                else if(StrEqual(paramName, "offsetV"))
+                {
+                    currentEffect_->effect.data.offsetV = ToV3(GetElement(params, "offsetV"));
+                }
+                else if(StrEqual(paramName, "taxonomyName"))
+                {
+                    char* taxonomy = GetValue(params, "taxonomyName");
+                    Spawn(taxonomy);
+                }
+                else if(StrEqual(paramName, "timeToLive"))
+                {
+                    currentEffect_->effect.data.timeToLive = ToR32(GetValue(params, "timeToLive"));
+                }
+                else if(StrEqual(paramName, "spawnCount"))
+                {
+                    currentEffect_->effect.data.spawnCount = ToU32(GetValue(params, "spawnCount"));
+                }
+                
+               
+                params = params->next;
             }
+            
             
             EditorElement* freeHandsReq = GetList(effectList, "freeHandReq");
             while(freeHandsReq)

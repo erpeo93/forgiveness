@@ -1467,8 +1467,6 @@ inline void UpdateStatus(SimRegion* region, SimEntity* entity)
 internal void MoveEntity(SimRegion* region, SimEntity* entity)
 {
     MoveSpec moveSpec = DefaultMoveSpec();
-    
-    
 #if 0    
     if(entity->IDs[Component_Creature] && entity->action == Action_Move)
     {
@@ -1485,10 +1483,6 @@ internal void MoveEntity(SimRegion* region, SimEntity* entity)
     }
 #endif
     
-    if(entity->acceleration.x > 0)
-    {
-        int a = 5;
-    }
     MoveEntityServer(region, entity, moveSpec);
 }
 
@@ -1545,7 +1539,7 @@ internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)
                             died = UpdateCreature(region, entity);
                         }
                         
-                        if(IsCreature(region->taxTable, entityTaxonomy) || IsEssence(region->taxTable, entityTaxonomy))
+                        if(LengthSq(entity->acceleration) > 0 || LengthSq(entity->velocity) > 0)
                         {
                             MoveEntity(region, entity);
                         }

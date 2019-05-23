@@ -183,6 +183,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         
         entity->flags = 0;
         entity->P = P;
+        entity->velocity = params.speed;
         entity->identifier = identifier;
         entity->playerID = params.playerID;
         entity->quantity = params.quantity;
