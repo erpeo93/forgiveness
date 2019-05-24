@@ -789,7 +789,6 @@ inline void Spawn(char* name)
     {
         if(currentEffect_)
         {
-            currentEffect_->effect.data = {};
             currentEffect_->effect.data.taxonomy = spawnSlot->taxonomy;
         }
     }
@@ -2130,12 +2129,14 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
             
 			case EditorElement_Struct:
 			{
+                
+				buffer = OutputToBuffer(buffer, bufferSize, " {");
+                
                 if(element->flags & EditorElem_Union)
                 {
                     buffer = OutputToBuffer(buffer, bufferSize, "#union ");
                 }
                 
-				buffer = OutputToBuffer(buffer, bufferSize, " {");
 				buffer = WriteElements(buffer, bufferSize, element->firstValue);
 				buffer = OutputToBuffer(buffer, bufferSize, "} ");
 			} break;
@@ -3044,6 +3045,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             char* rangeValue = GetValue(range, "radious");
             AddEffectRange(rangeType, rangeValue);
             
+            currentEffect_->effect.data = {};
             EditorElement* params = GetList(effectList, "effectParams");
             while(params)
             {
@@ -3244,6 +3246,10 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             AddLabel(ID, val);
             labels = labels->next;
         }
+    }
+    else if(StrEqual(name, "animationGeneralParams"))
+    {
+        currentSlot_->animationIn3d = ToB32(GetValue(root, "animationIn3d"));
     }
     else if(StrEqual(name, "skeleton"))
     {

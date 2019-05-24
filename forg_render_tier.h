@@ -2,28 +2,6 @@
 #define TEXTURE_ARRAY_DIM 256
 #define MAX_TEXTURE_COUNT 256
 
-struct ColoredVertex
-{
-    Vec3 P;
-    Vec4 color;
-};
-
-struct ModelFace
-{
-    u16 i0;
-    u16 i1;
-    u16 i2;
-};
-
-struct VertexModel
-{
-    u32 vertexCount;
-    ColoredVertex* vertexes;
-    
-    u32 faceCount;
-    ModelFace* faces;
-};
-
 struct RenderTexture
 {
     u32 index;

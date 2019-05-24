@@ -29,10 +29,13 @@ MemberDefinition memberDefinitionOfCreatureComponent[] =
 MemberDefinition memberDefinitionOfSimEntity[] = 
  {
 { MetaType_u32, "taxonomy", (u32) ( &(( SimEntity* )0)->taxonomy ) }, 
+{ MetaType_r32, "generationIntensity", (u32) ( &(( SimEntity* )0)->generationIntensity ) }, 
 { MetaType_u32, "flags", (u32) ( &(( SimEntity* )0)->flags ) }, 
 { MetaType_u64, "identifier", (u32) ( &(( SimEntity* )0)->identifier ) }, 
 { MetaType_u32, "playerID", (u32) ( &(( SimEntity* )0)->playerID ) }, 
 { MetaType_Vec3, "P", (u32) ( &(( SimEntity* )0)->P ) }, 
+{ MetaType_b32, "flipOnYAxis", (u32) ( &(( SimEntity* )0)->flipOnYAxis ) }, 
+{ MetaType_r32, "facingDirection", (u32) ( &(( SimEntity* )0)->facingDirection ) }, 
 { MetaType_Vec3, "velocity", (u32) ( &(( SimEntity* )0)->velocity ) }, 
 { MetaType_Vec3, "acceleration", (u32) ( &(( SimEntity* )0)->acceleration ) }, 
 { MetaType_EntityAction, "action", (u32) ( &(( SimEntity* )0)->action ) }, 
@@ -201,6 +204,7 @@ char* MetaTable_AssetTypeId[] =
 "BookElement",
 "Bookmark",
 "Icon",
+"RockModels",
 "count",
 };
 MetaFlag MetaFlags_EditorRole[] = 

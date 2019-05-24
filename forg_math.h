@@ -1128,6 +1128,12 @@ inline Rect3 AddRadius(Rect3 rect, Vec3 dim)
     return result;
 }
 
+inline Rect3 Scale(Rect3 rect, r32 coeff)
+{
+    Rect3 result = RectCenterDim(GetCenter(rect), coeff * GetDim(rect));
+    return result;
+}
+
 inline b32 PointInRect(Rect3 rect, Vec3 p)
 {
     b32 result = false;

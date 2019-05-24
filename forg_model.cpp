@@ -1,26 +1,3 @@
-inline VertexModel CreateModel(MemoryPool* pool, ColoredVertex* vertexes, u32 vertexCount, ModelFace* faces, u32 faceCount)
-{
-    VertexModel result;
-    result.vertexCount = vertexCount;
-    result.vertexes = PushArray(pool, ColoredVertex, vertexCount);
-    
-    result.faceCount = faceCount;
-    result.faces = PushArray(pool, ModelFace, faceCount);
-    
-    for(u32 vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex)
-    {
-        result.vertexes[vertexIndex] = vertexes[vertexIndex];
-    }
-    
-    for(u32 faceIndex = 0; faceIndex < faceCount; ++faceIndex)
-    {
-        result.faces[faceIndex] = faces[faceIndex];
-    }
-    
-    return result;
-}
-
-
 struct VertexHashSlot
 {
     b32 valid;

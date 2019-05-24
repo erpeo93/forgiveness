@@ -107,6 +107,16 @@ struct PakAnimation
     */
 };
 
+struct PakModel
+{
+    u32 vertexCount;
+    u32 faceCount;
+    Vec3 dim;
+    
+    // NOTE(Leonardo): data is:
+    //ColoredVertex* vertexes;
+    //ModelFace* faces;
+};
 
 struct PakColoration
 {
@@ -132,6 +142,7 @@ struct PakAsset
         PakAnimation animation;
         PakFont font;
         PakColoration coloration;
+        PakModel model;
     };
 };
 

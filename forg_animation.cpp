@@ -1805,7 +1805,23 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
     params.zOffset = 0;
     params.properties = 0;
     
-    if(IsObject(worldMode->table, entityC->taxonomy))
+    TaxonomySlot* entitySlot = GetSlotForTaxonomy(worldMode->table, entityC->taxonomy);
+    
+    if(entitySlot->animationIn3d)
+    {
+        ModelId MID = GetFirstModel(group->assets, Asset_RockModels);
+        
+        PakModel* modelInfo = GetModelInfo(group->assets, MID);
+        Vec3 standardDim = modelInfo->dim;
+        Vec3 desiredDim = GetDim(entityC->bounds);
+        
+        r32 scaleX = desiredDim.x / standardDim.x;
+        r32 scaleY = desiredDim.y / standardDim.y;
+        r32 scaleZ = desiredDim.z / standardDim.z;
+        
+        PushModel(group, MID, Identity(), entityC->P + V3(0, 0, 0), lightIndexes, V3(scaleX, scaleY, scaleZ), V4(1, 1, 1, 1), entityC->modulationWithFocusColor);
+    }
+    else if(IsObject(worldMode->table, entityC->taxonomy))
     {
         ObjectState state = drawOpened ? ObjectState_GroundOpen : ObjectState_Ground;
         input.defaultColoration = V4(1, 1, 1, 1);
@@ -2161,7 +2177,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     r32 soundTime = entityC->actionTime;
     
     Rect3 bounds = InvertedInfinityRect3();
-    GetPhysicalProperties(worldMode->table, entityC->taxonomy, entityC->identifier, &entityC->boundType, &bounds);
+    GetPhysicalProperties(worldMode->table, entityC->taxonomy, entityC->identifier, &entityC->boundType, &bounds, entityC->generationIntensity);
     entityC->bounds = Offset(bounds, entityC->P);
     
     if(IsPlant(worldMode->table, entityC->taxonomy))
@@ -2210,53 +2226,65 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         
         if(!entityC->rock)
         {
-            ClientRock* newRock = worldMode->firstFreeRock;
-            if(!newRock)
+            ModelId ID = GetFirstModel(group->assets, Asset_RockModels);
+            VertexModel* tetraModel = GetModel(group->assets, ID);
+            if(tetraModel)
             {
-                newRock = PushStruct(&worldMode->entityPool, ClientRock);
+                ClientRock* newRock = worldMode->firstFreeRock;
+                if(!newRock)
+                {
+                    newRock = PushStruct(&worldMode->entityPool, ClientRock);
+                }
+                else
+                {
+                    worldMode->firstFreeRock = newRock->nextFree;
+                }
+                entityC->rock = newRock;
+                
+                
+                RandomSequence rockSeq = Seed((u32)entityC->identifier);
+                newRock->dim = GetRockDim(rockDefinition, &rockSeq); 
+                
+                MemoryPool tempPool = {};
+                TempMemory rockMemory = BeginTemporaryMemory(&tempPool);
+                GenerateRock(newRock, tetraModel, &tempPool, &rockSeq, rockDefinition);
+                EndTemporaryMemory(rockMemory);
             }
             else
             {
-                worldMode->firstFreeRock = newRock->nextFree;
+                LoadModel(group->assets, ID);
             }
-            entityC->rock = newRock;
-            
-            
-            RandomSequence rockSeq = Seed((u32)entityC->identifier);
-            newRock->dim = GetRockDim(rockDefinition, &rockSeq); 
-            
-            MemoryPool tempPool = {};
-            TempMemory rockMemory = BeginTemporaryMemory(&tempPool);
-            GenerateRock(newRock, &worldMode->tetraModel, &tempPool, &rockSeq, rockDefinition);
-            EndTemporaryMemory(rockMemory);
-            
         }
         
         ClientRock* rock = entityC->rock;
-        VertexModel onTheFly;
-        
-        onTheFly.vertexCount = rock->vertexCount;
-        onTheFly.vertexes = rock->vertexes;
-        
-        onTheFly.faceCount = rock->faceCount;
-        onTheFly.faces = rock->faces;
-        
-        RandomSequence rockRenderSeq = Seed((u32)entityC->identifier);
-        u32 rockCount = Max(1, rockDefinition->renderingRocksCount + RandomChoice(&rockRenderSeq, rockDefinition->renderingRocksDelta));
-        for(u32 rockIndex = 0; rockIndex < rockCount; ++rockIndex)
+        if(rock)
         {
-            Vec3 finalP =entityC->P +Hadamart(RandomBilV3(&rockRenderSeq), rockDefinition->renderingRocksRandomOffset);
-            m4x4 rotation = ZRotation(RandomUni(&rockRenderSeq) * TAU32);
-            Vec3 finalScale = rock->dim + rockDefinition->scaleRandomness *Hadamart(RandomBilV3(&rockRenderSeq), rock->dim);
+            VertexModel onTheFly;
             
-            PushModel(group, &onTheFly, rotation, finalP, lightIndexes, finalScale, V4(1, 1, 1, 1), entityC->modulationWithFocusColor);
+            onTheFly.vertexCount = rock->vertexCount;
+            onTheFly.vertexes = rock->vertexes;
             
-            Rect3 rockBounds = Offset(bounds, finalP);
-            entityC->bounds = Union(entityC->bounds, rockBounds);
+            onTheFly.faceCount = rock->faceCount;
+            onTheFly.faces = rock->faces;
+            
+            RandomSequence rockRenderSeq = Seed((u32)entityC->identifier);
+            u32 rockCount = Max(1, rockDefinition->renderingRocksCount + RandomChoice(&rockRenderSeq, rockDefinition->renderingRocksDelta));
+            for(u32 rockIndex = 0; rockIndex < rockCount; ++rockIndex)
+            {
+                Vec3 finalP =entityC->P +Hadamart(RandomBilV3(&rockRenderSeq), rockDefinition->renderingRocksRandomOffset);
+                m4x4 rotation = ZRotation(RandomUni(&rockRenderSeq) * TAU32);
+                Vec3 finalScale = rock->dim + rockDefinition->scaleRandomness *Hadamart(RandomBilV3(&rockRenderSeq), rock->dim);
+                
+                PushModel(group, &onTheFly, rotation, finalP, lightIndexes, finalScale, V4(1, 1, 1, 1), entityC->modulationWithFocusColor);
+                
+                Rect3 rockBounds = Offset(bounds, finalP);
+                entityC->bounds = Union(entityC->bounds, rockBounds);
+            }
         }
     }
     else
     {
+        oldSoundTime = entityC->animation.normalizedTime;
         Vec2 animationScale = params.scale * V2(0.33f, 0.33f);
         r32 additionalZbias = params.additionalZbias;
         if(params.onTop)
@@ -2265,8 +2293,6 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         }
         
         additionalZbias += 0.4f * GetDim(entityC->animation.bounds).y;
-        
-        oldSoundTime = entityC->animation.normalizedTime;
         
         EquipInfo dragging = entityC->animation.nearestCompatibleSlotForDragging;
         if(IsValid(dragging))

@@ -101,7 +101,6 @@ introspection() struct CreatureComponent
     
     SkillSlot passiveSkills[MAX_PASSIVE_SKILLS_ACTIVE];
     PassiveSkillEffects passiveSkillEffects[MAX_PASSIVE_SKILLS_ACTIVE];
-    
 	EssenceSlot essences[MAX_DIFFERENT_ESSENCES];
     
     u8 startedAction;
@@ -127,10 +126,13 @@ enum EntityComponentType
 introspection() struct SimEntity
 {
     u32 taxonomy;
+    r32 generationIntensity;
     u32 flags;
     u64 identifier;
     u32 playerID;
     Vec3 P;
+    b32 flipOnYAxis;
+    r32 facingDirection;
     Vec3 velocity;
     Vec3 acceleration;
     EntityAction action;

@@ -741,6 +741,21 @@ inline void PushModel(RenderGroup* group, VertexModel* model, m4x4 rotation, Vec
     }
 }
 
+
+inline void PushModel(RenderGroup* group, ModelId ID, m4x4 rotation, Vec3 P, Vec4 lightIndexes,  Vec3 scale = V3(1, 1, 1), Vec4 color = V4(1, 1, 1, 1), r32 modulationPercentage = 0.0f)
+{
+    VertexModel* model = GetModel(group->assets, ID);
+    
+    if(model)
+    {
+        PushModel(group, model, rotation, P, lightIndexes, scale, color, modulationPercentage);
+    }
+    else
+    {
+        LoadModel(group->assets, ID);
+    }
+}
+
 inline Font* PushFont(RenderGroup* renderGroup, FontId ID)
 {
     Font* font = GetFont(renderGroup->assets, ID);

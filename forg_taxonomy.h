@@ -394,6 +394,8 @@ struct TaxonomySlot
     TaxonomySlot* nextInHash;
     
     
+    Vec3 spawnOffsetAttack;
+    Vec3 spawnOffsetCast;
     
     TaxonomyTree equipmentMappings;
     ConsumeMapping* firstConsumeMapping;
@@ -411,6 +413,8 @@ struct TaxonomySlot
     u32 neededToolTaxonomies[4];
     
     
+    b32 scaleDimBasedOnIntensity;
+    r32 scaleDimCoeffV;
     ForgBoundType boundType;
     Rect3 physicalBounds;
     
@@ -426,6 +430,7 @@ struct TaxonomySlot
     TaxonomyBoneAlterations* firstBoneAlteration;
     TaxonomyAssAlterations* firstAssAlteration;
     
+    b32 animationIn3d;
     r32 lightIntensity;
     Vec3 lightColor;
     u64 skeletonHashID;

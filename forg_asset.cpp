@@ -582,10 +582,60 @@ void LoadAnimation(Assets* assets, AnimationId ID)
                 work->task = task;
                 
                 
-                LoadAssetThreaded(work);
+                platformAPI.PushWork(assets->gameState->slowQueue, LoadAssetThreaded, work);
+            }
+            else
+            {
+                EndTaskWithMemory(task);
+            }
+        }
+    }
+}
+
+
+void LoadModel(Assets* assets, ModelId ID)
+{
+    if(ID.value)
+    {
+        Asset* asset = assets->assets + ID.value;
+        TaskWithMemory* task = BeginTaskWithMemory(assets->gameState->tasks, ArrayCount(assets->gameState->tasks), false);
+        if(task)
+        {
+            if(AtomicCompareExchangeUint32((u32*) &asset->state, Asset_queued, 
+                                           Asset_unloaded) == Asset_unloaded)
+            {
+                PakModel* info = &asset->paka.model;
                 
+                u32 vertexCount = info->vertexCount;
+                u32 faceCount = info->faceCount;
                 
-                //platformAPI.PushWork(assets->tranState->assetQueue, LoadAssetThreaded, work);
+                AssetMemorySize size = {};
+                size.data = vertexCount * sizeof(ColoredVertex) + faceCount * sizeof(ModelFace);
+                size.total = size.data + sizeof(AssetMemoryHeader);
+                
+                asset->header = AcquireAssetMemory(assets, size.total, ID.value, AssetType_None);
+                void* memory = asset->header + 1;
+                u8* base = (u8*) memory;
+                
+                VertexModel* model = &asset->header->model;
+                
+                model->vertexCount = vertexCount;
+                model->faceCount = faceCount;
+                
+                model->vertexes = (ColoredVertex*) base;
+                model->faces = (ModelFace*) (base + vertexCount * sizeof(ColoredVertex));
+                
+                LoadAssetWork* work = PushStruct(&task->pool, LoadAssetWork);
+                
+                work->handle = GetHandleFor(assets, asset->fileIndex);
+                work->dest = memory;
+                work->memorySize = size.data;
+                work->dataOffset = asset->paka.dataOffset;
+                work->asset = asset;
+                work->finalState = Asset_loaded;
+                work->task = task;
+                
+                platformAPI.PushWork(assets->gameState->slowQueue, LoadAssetThreaded, work);
             }
             else
             {
@@ -614,6 +664,12 @@ inline b32 IsValid(SoundId ID)
 }
 
 inline b32 IsValid(AnimationId ID)
+{
+    b32 result = (ID.value != 0);
+    return result;
+}
+
+inline b32 IsValid(ModelId ID)
 {
     b32 result = (ID.value != 0);
     return result;
@@ -1089,6 +1145,20 @@ inline Animation* GetAnimation(Assets* assets, AnimationId ID)
     return result;
 }
 
+inline VertexModel* GetModel(Assets* assets, ModelId ID)
+{
+    Assert(IsValid(ID));
+    
+    AssetMemoryHeader* header = GetAsset(assets, ID.value);
+    VertexModel* result = 0;
+    
+    if(header)
+    {
+        result = &header->model;
+    }
+    
+    return result;
+}
 
 inline PakBitmap* GetBitmapInfo(Assets* assets, BitmapId ID)
 {
@@ -1115,6 +1185,13 @@ inline PakAnimation* GetAnimationInfo(Assets* assets, AnimationId ID)
 {
     Assert(IsValid(ID));
     PakAnimation* result = &assets->assets[ID.value].paka.animation;
+    return result;
+}
+
+inline PakModel* GetModelInfo(Assets* assets, ModelId ID)
+{
+    Assert(IsValid(ID));
+    PakModel* result = &assets->assets[ID.value].paka.model;
     return result;
 }
 

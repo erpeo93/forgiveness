@@ -213,9 +213,10 @@ struct ClientEntity
     
     TaxonomySlot* slot;
     
-    u32 flags; // TODO(Leonardo): we only need: deleted, equipped and if to draw it flipped
+    u32 flags;
     u32 taxonomy; // NOTE(Leonardo): 4 bytes
     GenerationData gen; // NOTE(Leonardo): 8 bytes
+    r32 generationIntensity;
     
     r32 status;
     r32 lifePoints;
@@ -364,7 +365,6 @@ struct GameModeWorld
     
     r32 modulationWithFocusColor;
     
-    VertexModel tetraModel;
     
 #if FORGIVENESS_INTERNAL
     b32 replayingInput;

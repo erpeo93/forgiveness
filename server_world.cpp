@@ -359,7 +359,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         }
         
         
-        GetPhysicalProperties(taxTable, slot_->taxonomy, entity->identifier, &entity->boundType, &entity->bounds);
+        GetPhysicalProperties(taxTable, slot_->taxonomy, entity->identifier, &entity->boundType, &entity->bounds, entity->generationIntensity);
         
         if(entity->IDs[Component_Creature])
         {

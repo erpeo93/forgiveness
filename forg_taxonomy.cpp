@@ -401,7 +401,7 @@ inline Vec3 GetRockDim(RockDefinition* rock, RandomSequence* sequence)
     return result;
 }
 
-inline void GetPhysicalProperties(TaxonomyTable* taxTable, u32 taxonomy, u64 identifier, ForgBoundType* type, Rect3* bounds)
+inline void GetPhysicalProperties(TaxonomyTable* taxTable, u32 taxonomy, u64 identifier, ForgBoundType* type, Rect3* bounds, r32 generationIntensity)
 {
     TaxonomySlot* boundSlot = GetSlotForTaxonomy(taxTable, taxonomy);
     if(IsRock(taxTable, taxonomy))
@@ -445,7 +445,17 @@ inline void GetPhysicalProperties(TaxonomyTable* taxTable, u32 taxonomy, u64 ide
             if(boundSlot->boundType)
             {
                 *type = boundSlot->boundType;
-                *bounds = boundSlot->physicalBounds;
+                
+                Rect3 slotBound = boundSlot->physicalBounds;
+                
+                if(boundSlot->scaleDimBasedOnIntensity)
+                {
+                    Assert(Normalized(generationIntensity));
+                    r32 coeff = UnilateralToBilateral(generationIntensity) * boundSlot->scaleDimCoeffV;
+                    slotBound = Scale(slotBound, coeff);
+                }
+                
+                *bounds = slotBound;
                 break;
             }
             

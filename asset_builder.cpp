@@ -1594,9 +1594,92 @@ internal void GetAnimationName(char* path, char* filename, u32 animationIndex, c
     free(animation.content );
 }
 
+internal LoadedModel LoadModel(char* path, char* filename)
+{
+    LoadedModel result = {};
+    
+    u32 maxVertexCount = U16_MAX;
+    u32 maxFaceCount = U16_MAX;
+    
+    result.vertexes = (ColoredVertex*) malloc(maxVertexCount * sizeof(ColoredVertex));
+    result.faces = (ModelFace*) malloc(maxFaceCount * sizeof(ModelFace));
+    
+    
+    char completeName[256];
+    sprintf(completeName, "%s/%s", path, filename);
+    EntireFile model = ReadFile(completeName);
+    if(model.content)
+    {
+        Tokenizer tokenizer = {};
+        tokenizer.at = (char*) model.content;
+        
+        b32 parsing = true;
+        
+        while(parsing)
+        {
+            Token t = GetToken(&tokenizer);
+            switch(t.type)
+            {
+                case Token_Identifier:
+                {
+                    if(TokenEquals(t, "v"))
+                    {
+                        Assert(result.vertexCount < maxVertexCount);
+                        ColoredVertex* dest = result.vertexes + result.vertexCount++;
+                        
+                        Token x = GetToken(&tokenizer);
+                        Token y = GetToken(&tokenizer);
+                        Token z = GetToken(&tokenizer);
+                        
+                        if(x.type == Token_Number && y.type == Token_Number && z.type == Token_Number)
+                        {
+                            dest->P.x = (r32) atof(x.text);
+                            dest->P.y = (r32) atof(y.text);
+                            dest->P.z = (r32) atof(z.text);
+                        }
+                        else
+                        {
+                            InvalidCodePath;
+                        }
+                        
+                        dest->color = V4(1, 1, 1, 1);
+                    }
+                    else if(TokenEquals(t, "f"))
+                    {
+                        Assert(result.faceCount < maxFaceCount);
+                        ModelFace* dest = result.faces + result.faceCount++;
+                        
+                        Token i0 = GetToken(&tokenizer);
+                        Token i1 = GetToken(&tokenizer);
+                        Token i2 = GetToken(&tokenizer);
+                        
+                        if(i0.type == Token_Number && i1.type == Token_Number && i2.type == Token_Number)
+                        {
+                            dest->i0 = (u16) atoi(i0.text) - 1;
+                            dest->i1 = (u16) atoi(i1.text) - 1;
+                            dest->i2 = (u16) atoi(i2.text) - 1;
+                        }
+                        else
+                        {
+                            InvalidCodePath;
+                        }
+                        
+                    }
+                } break;
+                
+                case Token_EndOfFile:
+                {
+                    parsing = false;
+                } break;
+            }
+        }
+    }
+    
+    
+    return result;
+}
+
 FILE* out;
-
-
 internal void BeginAssetType(Assets* assets, u32 type )
 {
     Assert(assets->DEBUGAssetType == 0 );
@@ -1791,6 +1874,23 @@ internal SoundId AddSoundAsset(char* filename, u64 stringHash, i32 firstSampleIn
 }
 
 
+internal ModelId AddModelAsset(char* path, char* filename)
+{
+    Assets* assets = currentAssets_;
+    AddedAsset asset = AddAsset(assets);
+    
+    asset.source->type = Pak_model;
+    asset.dest->typeHashID = 0;
+    asset.dest->nameHashID = 0;
+    asset.dest->offsetFromOriginalOffset = 0;
+    
+    StrCpy(filename, StrLen(filename ), asset.source->model.filename, ArrayCount(asset.source->model.filename ) );
+    StrCpy(path, StrLen(path), asset.source->model.path, ArrayCount(asset.source->model.path ) );
+    
+    ModelId result = {asset.ID};
+    return result;
+}
+
 inline void EndAssetType()
 {
     Assets* assets = currentAssets_;
@@ -1968,6 +2068,19 @@ internal void WritePak(Assets* assets, char* fileName_)
                         free(animation.free);
                     } break;
                     
+                    case Pak_model:
+                    {
+                        LoadedModel model = LoadModel(source->model.path, source->model.filename);
+                        
+                        dest->model.vertexCount = model.vertexCount;
+                        dest->model.faceCount = model.faceCount;
+                        
+                        fwrite(model.vertexes, sizeof(ColoredVertex) * model.vertexCount, 1, out);
+                        fwrite(model.faces, sizeof(ModelFace) * model.faceCount, 1, out);
+                        
+                        free(model.vertexes);
+                        free(model.faces);
+                    } break;
                     InvalidDefaultCase;
                 }
             }
@@ -3191,6 +3304,18 @@ internal void WriteFonts()
 }
 
 
+internal void WriteModels()
+{
+    Assets assets_;
+    Assets* assets = &assets_;
+    InitializeAssets(assets );
+    
+    BeginAssetType(assets, Asset_RockModels);
+    AddModelAsset("definition/models", "pyramid.obj");
+    EndAssetType();
+    
+    WritePak(assets, "forgivenessModels.pak");
+}
 
 int main(int argc, char** argv )
 {
@@ -3205,6 +3330,7 @@ int main(int argc, char** argv )
     WriteSounds();
     WriteFonts();
     WriteBitmapsAndAnimations();
+    WriteModels();
 }
 
 

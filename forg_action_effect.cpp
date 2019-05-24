@@ -98,7 +98,7 @@ inline void EssenceDelta(SimRegion* region, SimEntity* entity, u32 essenceTaxono
 
 
 inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, GenerationData gen, AddEntityAdditionalParams params);
-internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, Effect* effect, r32 powerMul)
+internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, u32 action, Effect* effect, r32 powerMul)
 {
     r32 power = effect->basePower * powerMul;
     
@@ -119,8 +119,27 @@ internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region
         case EffectTarget_Actor:
         case EffectTarget_AllInActorRange:
         {
-            Vec3 actorOffsetSpec = V3(0, 0, 0);
-            referenceP = actor->P + actorOffsetSpec;
+            referenceP = actor->P;
+            if(effect->ID == Effect_Spawn)
+            {
+                TaxonomySlot* actorSlot = GetSlotForTaxonomy(region->taxTable, actor->taxonomy);
+                
+                Vec3 additionalOffset;
+                if(action == Action_Attack)
+                {
+                    additionalOffset = actorSlot->spawnOffsetAttack;
+                }
+                else
+                {
+                    additionalOffset = actorSlot->spawnOffsetCast;
+                }
+                
+                if(actor->flipOnYAxis)
+                {
+                    additionalOffset.x = -additionalOffset.x;
+                }
+                referenceP += additionalOffset;
+            }
         } break;
         
         InvalidDefaultCase;
@@ -132,20 +151,25 @@ internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region
         case Effect_Spawn:
         {
             EffectData* data = &effect->data;
-            u32 counter = 1;
             
-            if(data->spawnCount)
+            if(data->taxonomy)
             {
-                counter = data->spawnCount;
-            }
-            
-            for(u32 index = 0; index < counter; ++index)
-            {
-                Vec3 P = referenceP + effect->data.offset + 0.0f * effect->data.offsetV;
-                GenerationData gen = NullGenerationData();
-                AddEntityAdditionalParams params = DefaultAddEntityParams();
-                params.speed = effect->data.speed;
-                targetID = AddEntity(region, P, effect->data.taxonomy, gen, params);
+                u32 counter = 1;
+                
+                if(data->spawnCount)
+                {
+                    counter = data->spawnCount;
+                }
+                
+                for(u32 index = 0; index < counter; ++index)
+                {
+                    Vec3 P = referenceP + data->offset + Hadamart(RandomBilV3(&region->entropy), data->offsetV);
+                    GenerationData gen = NullGenerationData();
+                    AddEntityAdditionalParams params = DefaultAddEntityParams();
+                    params.speed = data->speed;
+                    u32 taxonomy =GetRandomChild(region->taxTable, &region->entropy, data->taxonomy);
+                    targetID = AddEntity(region, P, taxonomy, gen, params);
+                }
             }
         } break;
         
@@ -322,13 +346,13 @@ inline EffectTargetList GetAllTargets(SimRegion* region, SimEntity* actor, SimEn
     return result;
 }
 
-internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, Effect* effect, r32 powerMul)
+internal void DispatchEffect(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, u32 action, Effect* effect, r32 powerMul)
 {
     EffectTargetList targets = GetAllTargets(region, actor, target, effect, powerMul);
     for(u32 targetIndex = 0; targetIndex < targets.targetCount; ++targetIndex)
     {
         SimEntity* realTarget = targets.targets[targetIndex];
-        DispatchEffect_(context, region, actor, realTarget, effect, powerMul);
+        DispatchEffect_(context, region, actor, realTarget, action, effect, powerMul);
     }
 }
 
@@ -398,7 +422,7 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
                 {
                     r32 power = skillSlot->power;
                     power = 1.0f;
-                    DispatchEffect(context, region, actor, target, effect, power);
+                    DispatchEffect(context, region, actor, target, action, effect, power);
                 }
                 
             }
@@ -448,7 +472,7 @@ inline void DispatchEffects(DispatchEffectsContext* context, SimRegion* region, 
             
             if(dispatch)
             {
-                DispatchEffect(context, region, actor, target, effect, 1.0f);
+                DispatchEffect(context, region, actor, target, action, effect, 1.0f);
                 if(effect->targetTimer)
                 {
                     if(effect->flags & Effect_ResetAfterTimer)

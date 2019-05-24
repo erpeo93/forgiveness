@@ -418,26 +418,6 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->cameraFocusID = 0;
     result->modulationWithFocusColor = 0.15f;
     
-    
-    ColoredVertex vertexes[] = 
-    {
-        {V3(0.5773502692f, 0.5773502692f, 0.5773502692f), V4(1, 0, 0, 1)},
-        {V3(-0.5773502692f, 0.5773502692f, -0.5773502692f), V4(0, 1, 1, 1)},
-        {V3(0.5773502692f, -0.5773502692f, -0.5773502692f), V4(1, 1, 0, 1)},
-        {V3(-0.5773502692f, -0.5773502692f, 0.5773502692f), V4(1, 1, 1, 1)},
-    };
-    
-    ModelFace faces[] =
-    {
-        {0, 2, 1},
-        {1, 2, 3},
-        {0, 3, 2},
-        {0, 1, 3}
-    };
-    
-    
-    result->tetraModel = CreateModel(&gameState->modePool, vertexes, ArrayCount(vertexes), faces, ArrayCount(faces));
-    
     result->firstFreeRock = 0;
     result->firstFreePlantSegment = 0;
     

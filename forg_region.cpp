@@ -1484,6 +1484,15 @@ internal void MoveEntity(SimRegion* region, SimEntity* entity)
 #endif
     
     MoveEntityServer(region, entity, moveSpec);
+    
+    if(entity->velocity.x < 0)
+    {
+        entity->flipOnYAxis = true;
+    }
+    else
+    {
+        entity->flipOnYAxis = false;
+    }
 }
 
 internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)

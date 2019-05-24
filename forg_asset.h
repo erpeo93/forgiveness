@@ -76,6 +76,7 @@ struct AssetMemoryHeader
         Font font;
         Animation animation;
         Sound sound;
+        VertexModel model;
     };
     
 };
@@ -178,7 +179,12 @@ inline SoundId GetFirstSound( Assets* assets, u32 assetID )
     return result;
 }
 
-
+inline ModelId GetFirstModel(Assets* assets, u32 assetID)
+{
+    ModelId result = {GetFirstAsset_(assets, assetID)};
+    
+    return result;
+}
 struct MatchingAssetResult
 {
 	u32 assetIndex;

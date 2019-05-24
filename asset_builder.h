@@ -9,6 +9,7 @@ enum Asset_Type
     Pak_animation,
     Pak_font,
     Pak_fontGlyph,
+    Pak_model,
 };
 
 struct LoadedBitmap
@@ -170,6 +171,38 @@ struct LoadedAnimation
     void* free;
 };
 
+
+struct ColoredVertex
+{
+    Vec3 P;
+    Vec4 color;
+};
+
+struct ModelFace
+{
+    u16 i0;
+    u16 i1;
+    u16 i2;
+};
+
+struct LoadedModel
+{
+    u32 vertexCount;
+    u32 faceCount;
+    
+    ColoredVertex* vertexes;
+    ModelFace* faces;
+};
+
+struct VertexModel
+{
+    u32 vertexCount;
+    u32 faceCount;
+    
+    ColoredVertex* vertexes;
+    ModelFace* faces;
+};
+
 struct AssetBitmapSource
 {
     char filename[64];
@@ -202,6 +235,12 @@ struct AssetGlyphSource
     u32 codePoint;
 };
 
+struct AssetModelSource
+{
+    char filename[64];
+    char path[256];
+};
+
 struct AssetSource
 {
     
@@ -213,5 +252,6 @@ struct AssetSource
         AssetAnimationSource animation;
         AssetFontSource font;
         AssetGlyphSource glyph;
+        AssetModelSource model;
     };
 };

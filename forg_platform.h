@@ -104,6 +104,12 @@ struct SoundId
 {
     u32 value;
 };
+
+struct ModelId
+{
+    u32 value;
+};
+
 #pragma pack( pop )
 
 introspection("hello param") struct Rect2
