@@ -2884,8 +2884,7 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
     RenderGroup* group = UI->group;
     u32 slotCount = MAXIMUM_SKILL_SLOTS;
 
-    r32 additionalZBias = 10.0f;
-    
+    r32 additionalZBias = 10.0f;    
     r32 minYRotation = 0;
     r32 yIncrement = 0;
     r32 yRotation = 0;
@@ -2898,7 +2897,7 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
         
         totalOffset = V3(6.0f, 0, 0);
         deltaOffset = totalOffset * (1.0f / (r32) slotCount);
-        runningOffset = V3(-0.5f * totalOffset.x, -5.0f, 0.0f);
+        runningOffset = V3(-0.5f * totalOffset.x, -6.0f, 0.0f);
     }
     else
     {
@@ -2911,6 +2910,7 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
     {
        yRotation += 0.5f * yIncrement;
     }
+    
     for(u32 slotIndex = 0; slotIndex < slotCount; ++slotIndex)
     {
         UISkill* skill = UI->skills + slotIndex;
@@ -2920,16 +2920,18 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
         {
          TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, skillTaxonomy);
         
-        
-        Vec4 color = V4(1, 0, 0, 1);
-        u64 modelTypeID = StringHash("rock");
-        u64 modelNameID = StringHash("pyramid.obj");
-        Vec3 scale = V3(0.3f, 0.3f, 0.3f);
+            Vec4 standardColor = slot->iconColor;
+            Vec4 activeColor = slot->iconActiveColor;
+            Vec4 hooverColor = slot->iconHoverColor;
+            u64 modelTypeID = slot->iconModelTypeID;
+            u64 modelNameID = slot->iconModelNameID;
+            Vec3 scale = slot->iconScale;
+            
+        Vec4 color = standardColor;
         if((i32) slotIndex == UI->activeSkillSlotIndex)
         {
-            color = V4(0, 0, 0, 1);
+            color = activeColor;
         }
-        color.a *= modulationAlpha;
         
         
         m4x4 rotation = YRotation(DegToRad(yRotation));
@@ -2941,64 +2943,96 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
             }
                
         ModelId MID = FindModelByName(UI->group->assets, modelTypeID, modelNameID);
-        PushModel(UI->group, MID, Identity(), P, V4(-1, -1, -1, -1), scale, color, 0, additionalZBias);
-        
-        Rect2 skillRect = InvertedInfinityRect2();
+            
+            if(IsValid(MID))
+            {
+                        PakModel* modelInfo = GetModelInfo(group->assets, MID);
+
+            
+            r32 ignoredCameraZ;
+            
+            Vec3 finalModelDim = Hadamart(scale, modelInfo->dim);
+            Rect2 skillRect = ProjectOnScreen(group, RectCenterDim(P, finalModelDim), &ignoredCameraZ);
         if(skillTaxonomy && PointInRect(skillRect, UI->screenMouseP))
         {
             PushUITooltip(UI, slot->name, V4(1, 1, 1, 1));
-            
-            if(Pressed(&input->mouseLeft))
-            {
-                if(slot->isPassiveSkill)
+                
+                if((i32) slotIndex != UI->activeSkillSlotIndex)
                 {
-                    b32 active = skill->active;
-                    b32 activate = !active;
+                    color = hooverColor;
                     
-                    SendPassiveSkillRequest(skill->taxonomy, activate);
-                    skill->active = !skill->active;
+                    if(Pressed(&input->mouseLeft))
+                    {
+                        if(slot->isPassiveSkill)
+                        {
+                            b32 active = skill->active;
+                            b32 activate = !active;
+                            
+                            SendPassiveSkillRequest(skill->taxonomy, activate);
+                            skill->active = !skill->active;
+                        }
+                        else
+                        {
+                            Assert(skill->active);
+                            SendActiveSkillRequest(skill->taxonomy);
+                            UI->activeSkillSlotIndex = slotIndex;
+                        }
+                        
+                        platformAPI.DEBUGWriteFile("skills", UI->skills, sizeof(UI->skills));
+                    }   
                 }
-                else
-                {
-                    Assert(skill->active);
-                    SendActiveSkillRequest(skill->taxonomy);
-                    UI->activeSkillSlotIndex = slotIndex;
-                }
-                
-                platformAPI.DEBUGWriteFile("skills", UI->skills, sizeof(UI->skills));
-            }
         }
+         
+            color.a *= modulationAlpha;
+            PushModel(UI->group, MID, Identity(), P, V4(-1, -1, -1, -1), scale, color, 0, additionalZBias);
                 
+            }
+
+            
         }
         yRotation += yIncrement;   
         runningOffset += deltaOffset;
     }
 }
 
-inline void RenderEssence(UIState* UI, RenderGroup* group, TaxonomySlot* slot, Vec2 P, Vec2 quantityOffset, r32 iconDim, r32 additionalZBias)
+inline void RenderEssence(UIState* UI, RenderGroup* group, TaxonomySlot* slot, Vec2 P, r32 iconDim, r32 additionalZBias)
 {
-    BitmapId sphereID = GetFirstBitmap(group->assets, Asset_UISphere);
-    BitmapId sphereBoundsID = GetFirstBitmap(group->assets, Asset_UISphereBounds);
-    BitmapId iconID = GetRecursiveIconId(UI->table, group->assets, slot->taxonomy);
+    u64 modelTypeID = StringHash("rock");
+    u64 modelNameID = StringHash("pyramid.obj");
+    Vec4 standardColor = V4(1, 1, 1, 1);
+    Vec4 hoverColor = V4(1, 0, 0, 1);
     
+    ModelId MID = FindModelByName(group->assets, modelTypeID, modelNameID);
     
-    r32 sphereDim = iconDim * 2.0f;
-    PushUIBitmap(group, sphereID, P, sphereDim, 0, additionalZBias, V2(1.0f, 1.0f), V4(0, 0, 0, 0.7f));
-    if(UIElementActive(UI, group, P, V2(iconDim, iconDim)))
+    if(IsValid(MID))
     {
-        PushUIBitmap(group, sphereBoundsID, P, sphereDim, 0, additionalZBias, V2(1.0f, 1.0f), V4(1, 1, 1, 1));
-        PushUITooltip(UI, slot->name, V4(1, 1, 1, 1));
+         PakModel* modelInfo = GetModelInfo(group->assets, MID);
+    Vec3 standardDim = modelInfo->dim;
+    Vec3 desiredDim = V3(iconDim, iconDim, iconDim);
+    
+    r32 scaleX = desiredDim.x / standardDim.x;
+    r32 scaleY = desiredDim.y / standardDim.y;
+    r32 scaleZ = desiredDim.z / standardDim.z;
+    
+    Vec4 color = standardColor;
+    Vec3 scale = V3(scaleX, scaleY, scaleZ);
+    
+   
+    Vec3 finalModelDim = scale;
+    r32 ignoredCameraZ;
+    Rect2 essenceRect = ProjectOnScreen(group, RectCenterDim(V3(P, 0), finalModelDim), &ignoredCameraZ);
+    if(PointInRect(essenceRect, UI->screenMouseP))
+    {        
+        color = hoverColor;
+        u32 quantity = GetEssenceQuantity(UI, slot->taxonomy);
+        char essenceString[64];
+        FormatString(essenceString, sizeof(essenceString), "%s: %d", slot->name, quantity); 
+        PushUITooltip(UI, essenceString, V4(1, 1, 1, 1));
     }
     
-    PushUIBitmap(group, iconID, P, iconDim, 0, additionalZBias, V2(1.0f, 1.0f), V4(1, 1, 1, 1));
-    
-    r32 quantityDim = 0.18f;
-    u32 quantity = GetEssenceQuantity(UI, slot->taxonomy);
-    char quantityStr[4];
-    FormatString(quantityStr, sizeof(quantityStr), "%d", quantity);
-    
-    Vec2 textP = P + quantityOffset;
-    PushUITextWithDimension(UI, quantityStr, textP, V2(quantityDim, quantityDim), V4(1, 1, 1, 1));
+    PushModel(group, MID, Identity(), V3(P, 0), V4(-1, -1, -1, -1), scale, color, 0, additionalZBias);
+       
+    }
 }
 
 inline void UIOverdrawEssences(UIState* UI)
@@ -3008,15 +3042,16 @@ inline void UIOverdrawEssences(UIState* UI)
     
     r32 additionalZBias = 12.2f;
     
-    r32 iconDim = 0.4f;
     Vec2 iconPLeft = V2(-9.2f, 0.0f);
     Vec2 iconPRight = V2(9.2f, 0.0f);
-    r32 quantityOffset = 1.0f * iconDim + 0.1f;
     
     u32 half = essencesSlot->subTaxonomiesCount / 2;
     
-    r32 slotDim = 2.0f * iconDim;
-    r32 halfOffset = (half / 2) * slotDim;
+    r32 essenceDim = 0.5f;
+    r32 totalEssenceYSpace = 8.0f;
+    r32 essenceSpace = totalEssenceYSpace / half;
+    
+    r32 halfOffset = (r32) half * -essenceSpace;
     iconPLeft.y -= halfOffset;
     iconPRight.y -= halfOffset;
     
@@ -3024,15 +3059,15 @@ inline void UIOverdrawEssences(UIState* UI)
     for(u32 essenceIndex = 0; essenceIndex < half; ++essenceIndex)
     {
         TaxonomySlot* slot = GetNthChildSlot(UI->table, essencesSlot, essenceIndex);
-        RenderEssence(UI, group, slot, iconPLeft, V2(quantityOffset, -0.0f), iconDim, additionalZBias);
-        iconPLeft.y += slotDim;
+        RenderEssence(UI, group, slot, iconPLeft, essenceDim, additionalZBias);
+        iconPLeft.y += essenceSpace;
     }
     
     for(u32 essenceIndex = half; essenceIndex < essencesSlot->subTaxonomiesCount; ++essenceIndex)
     {
         TaxonomySlot* slot = GetNthChildSlot(UI->table, essencesSlot, essenceIndex);
-        RenderEssence(UI, group, slot, iconPRight, V2(-quantityOffset, -0.0f), iconDim, additionalZBias);
-        iconPRight.y += slotDim;
+        RenderEssence(UI, group, slot, iconPRight, essenceDim, additionalZBias);
+        iconPRight.y += essenceSpace;
     }
 }
 
@@ -3420,7 +3455,8 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         
         UI->chunkApron = 2;
         UI->activeSkillSlotIndex = -1;
-        UI->skillSlotMaxTimeout = 10.0f;
+        UI->skillSlotMaxTimeout = 5.0f;
+        UI->skillFadeInSlotTimeout = UI->skillSlotMaxTimeout + 0.5f;
         
         UIBookmarkCondition condition = BookModeCondition(UIBook_Recipes);
         UIBookmark* startingBookmark = UIAddBookmark(UI, UIBookmark_RightSide, condition);
@@ -4247,7 +4283,15 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
     
     if(offset)
     {
-        UI->skillSlotTimeout = UI->skillSlotMaxTimeout;
+        if(UI->skillSlotTimeout <= 0.0f)
+        {
+            UI->skillSlotTimeout = UI->skillFadeInSlotTimeout;
+            offset = 0;
+        }
+        else
+        {
+            UI->skillSlotTimeout = UI->skillSlotMaxTimeout;
+        }
     }
     else
     {
@@ -4276,7 +4320,6 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             {
                 if(++wrappedCount == targetWrapCount)
                 {
-                    UI->activeSkillSlotIndex = -1;
                     break;
                 }
             }
@@ -4286,7 +4329,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             TaxonomySlot* taxSlot = GetSlotForTaxonomy(UI->table, taxonomy);
             
             
-            if(!taxonomy || !taxSlot->isPassiveSkill)
+            if(taxonomy && !taxSlot->isPassiveSkill)
             {
                 UI->activeSkillSlotIndex = (u32) startIndex;
                 SendActiveSkillRequest(taxonomy);
@@ -4309,6 +4352,10 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
     if(UI->skillSlotTimeout < targetSkillSlotTime)
     {
         alpha = Clamp01MapToRange(0, UI->skillSlotTimeout, targetSkillSlotTime);
+    }
+    else if(UI->skillSlotTimeout > UI->skillSlotMaxTimeout)
+    {
+        alpha = 1.0f - Clamp01MapToRange(UI->skillSlotMaxTimeout, UI->skillSlotTimeout, UI->skillFadeInSlotTimeout);
     }
     
     UIOverdrawSkillSlots(UI, alpha, input);

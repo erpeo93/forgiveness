@@ -450,6 +450,14 @@ struct TaxonomySlot
     u64 skinHashID;
     Vec4 defaultColoration;
     Vec2 originOffset;
+    
+    
+    Vec4 iconColor;
+    Vec4 iconActiveColor;
+    Vec4 iconHoverColor;
+    u64 iconModelTypeID;
+    u64 iconModelNameID;
+    Vec3 iconScale;
 #endif
     
     

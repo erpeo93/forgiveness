@@ -91,7 +91,7 @@ internal void AddPlayersSkills(SimRegion* region, SimEntity* player)
     NORUNTIMEAddSkill(region, player, "elemental 3", 3);
     
     CreatureComponent* creature = Creature(region, player);
-    creature->activeSkillIndex = 0;
+    creature->activeSkillIndex = -1;
 }
 
 
@@ -132,7 +132,7 @@ inline void InitPlayerEntity(SimRegion* region, ServerPlayer* player, SimEntity*
     SendSkills(region, entity, player, taxTable);
     SendAvailableRecipes(player, taxTable);
     CreatureComponent* creature = Creature(region, entity);
-    creature->activeSkillIndex = 0;
+    creature->activeSkillIndex = -1;
 }
 
 inline SimEntity* GetFreeEntity(ServerState* server, u32* ID)

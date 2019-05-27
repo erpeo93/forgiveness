@@ -615,14 +615,21 @@ inline b32 EntityCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* tar
             if(action == Action_Cast)
             {
                 CreatureComponent* creature = Creature(region, actor);
-                SkillSlot* skillSlot = creature->skills + creature->activeSkillIndex;
-                Assert(skillSlot->taxonomy);
-                TaxonomySlot* spellSlot = GetSlotForTaxonomy(region->taxTable, skillSlot->taxonomy);
-                distanceRequiredSquare = Square(spellSlot->skillDistanceAllowed);
-                
-                if((creature->skillCooldown > 0) || (creature->activeSkillIndex == -1))
+                if(creature->activeSkillIndex == -1)
                 {
                     canDoAction = false;
+                }
+                else
+                {
+                    SkillSlot* skillSlot = creature->skills + creature->activeSkillIndex;
+                    Assert(skillSlot->taxonomy);
+                    TaxonomySlot* spellSlot = GetSlotForTaxonomy(region->taxTable, skillSlot->taxonomy);
+                    distanceRequiredSquare = Square(spellSlot->skillDistanceAllowed);
+                    
+                    if(creature->skillCooldown > 0)
+                    {
+                        canDoAction = false;
+                    }
                 }
             }
             

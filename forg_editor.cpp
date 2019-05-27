@@ -3392,6 +3392,16 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             alterations = alterations->next;
         }
     }
+    else if(StrEqual(name, "icon"))
+    {
+        currentSlot_->iconColor = ToV4Color(GetStruct(root, "standardColor"));
+        currentSlot_->iconActiveColor = ToV4Color(GetStruct(root, "activeColor"));
+        currentSlot_->iconHoverColor = ToV4Color(GetStruct(root, "hoverColor"));
+        
+        currentSlot_->iconModelTypeID = StringHash(GetValue(root, "modelType"));
+        currentSlot_->iconModelNameID = StringHash(GetValue(root, "modelName"));
+        currentSlot_->iconScale = ToV3(GetStruct(root, "modelScale"));
+    }
 #endif
     else if(StrEqual(name, "rockDefinition"))
     {

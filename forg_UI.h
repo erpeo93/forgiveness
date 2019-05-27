@@ -822,6 +822,7 @@ struct UIState
     
     r32 skillSlotTimeout;
     r32 skillSlotMaxTimeout;
+    r32 skillFadeInSlotTimeout;
     
     i32 activeSkillSlotIndex;
     UISkill skills[MAXIMUM_SKILL_SLOTS];
