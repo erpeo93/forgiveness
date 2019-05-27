@@ -1292,7 +1292,7 @@ inline BitmapId GetBitmapForGlyph(Assets* assets, Font* font, PakFont* info, u32
     
 }
 
-inline AssetTypeId GetAssetIDForEntity(Assets* assets, TaxonomyTable* table, u32 taxonomy, u32 action)
+inline AssetTypeId GetAssetIDForEntity(Assets* assets, TaxonomyTable* table, u32 taxonomy, u32 action, r32 tileHeight)
 {
     u32 currentTaxonomy = taxonomy;
     
@@ -1326,6 +1326,16 @@ inline AssetTypeId GetAssetIDForEntity(Assets* assets, TaxonomyTable* table, u32
                 result = Asset_attacking;
             } break;
             
+            case Action_Rolling:
+            {
+                result = Asset_rolling;
+            } break;
+            
+            case Action_Protecting:
+            {
+                result = Asset_protecting;
+            } break;
+            
             default:
             {
                 result = Asset_standing;
@@ -1335,6 +1345,11 @@ inline AssetTypeId GetAssetIDForEntity(Assets* assets, TaxonomyTable* table, u32
     else
     {
         InvalidCodePath;
+    }
+    
+    if(tileHeight < SWALLOW_WATER_LEVEL)
+    {
+        result = Asset_swimming;
     }
     
     return result;

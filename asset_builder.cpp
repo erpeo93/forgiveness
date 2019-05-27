@@ -2661,6 +2661,20 @@ internal void WriteAnimations(char* folder, char* name)
     AddEveryAnimationThatStartsWith(completePath, hashID, "cast");
     EndAssetType();
     
+    BeginAssetType(assets, Asset_swimming);
+    AddEveryAnimationThatStartsWith(completePath, hashID, "swim");
+    EndAssetType();
+    
+    BeginAssetType(assets, Asset_rolling);
+    AddEveryAnimationThatStartsWith(completePath, hashID, "roll");
+    EndAssetType();
+    
+    BeginAssetType(assets, Asset_protecting);
+    AddEveryAnimationThatStartsWith(completePath, hashID, "defend");
+    EndAssetType();
+    
+    
+    
     
     char pakName[128];
     FormatString(pakName, sizeof(pakName), "%sA.pak", name);
@@ -2996,16 +3010,8 @@ internal void WriteUI()
     AddBitmapAsset(UIPath, "scrollicon.png", 0, 0.5f, 0.5f);
     EndAssetType();
     
-    BeginAssetType(assets, Asset_UISphere);
-    AddBitmapAsset(UIPath, "UISphere.png", 0, 0.5f, 0.5f);
-    EndAssetType();
-    
-    BeginAssetType(assets, Asset_UISphereBounds);
-    AddBitmapAsset(UIPath, "UISpherebounds.png", 0, 0.5f, 0.5f);
-    EndAssetType();
-    
     BeginAssetType(assets, Asset_BookPage);
-    AddBitmapAsset(UIPath, "bookpage.png");
+    AddBitmapAsset(UIPath, "bookpage.png", 0, 0.5f, 0.5f);
     EndAssetType();
     
     BeginAssetType(assets, Asset_BookElement);

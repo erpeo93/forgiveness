@@ -338,10 +338,17 @@ inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, 
     PushRect4Colors(renderGroup, objectTransform, P, dim, color, color, color, color, lightIndexes);
 }
 
+inline void PushUIRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 color, Vec4 lightIndexes = V4(-1, -1, -1, -1))
+{
+    objectTransform.cameraOffset += V3(renderGroup->gameCamera.screenCameraOffset, 0);
+    PushRect4Colors(renderGroup, objectTransform, P, dim, color, color, color, color, lightIndexes);
+}
+
 inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Rect2 rect, Vec4 color, Vec4 lightIndexes = V4(-1, -1, -1, -1))
 {
     PushRect(renderGroup, objectTransform, V3(GetCenter(rect), 0.0f), GetDim(rect), color, lightIndexes);
 }
+
 
 inline void PushRectOutline(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, 
                             Vec2 dim, Vec4 color, r32 thickness)

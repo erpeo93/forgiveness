@@ -73,6 +73,9 @@ printTable(noPrefix) enum AssetTypeId
     Asset_attacking,
     Asset_eating,
     Asset_casting,
+    Asset_swimming,
+    Asset_rolling,
+    Asset_protecting,
     
     Asset_AnimationLast,
     
@@ -81,8 +84,6 @@ printTable(noPrefix) enum AssetTypeId
     Asset_waterRipple,
     Asset_emptySpace,
     Asset_scrollUI,
-    Asset_UISphere,
-    Asset_UISphereBounds,
     Asset_BookPage,
     Asset_BookElement,
     Asset_Bookmark,

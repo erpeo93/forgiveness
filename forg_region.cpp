@@ -468,21 +468,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             if(!Ignored(player, (EntityAction)request.desiredAction))
             {
                 player->ignoredActionCount = 0;
-                if(request.desiredAction < Action_Attack)
-                {
-                    valid = true;
-                }
-                else if(request.desiredAction == Action_Attack)
-                {
-                    if(request.acceleration == V3(0, 0, 0))
-                    {
-                        valid = true;
-                    }
-                }
-                else
-                {
-                    valid = true;
-                }
+                valid = true;
             }
             
             player->overlappingEntityID = request.overlappingEntityID;
@@ -514,8 +500,6 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                         {
                             if(unableBecauseOfDistance)
                             {
-                                Vec3 toTarget = destEntity->P - entity->P;
-                                entity->acceleration = toTarget;
                                 entity->action = Action_Move;
                             }
                         }

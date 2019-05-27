@@ -3268,6 +3268,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         currentSlot_->modelNameID = StringHash(GetValue(root, "modelName"));
         currentSlot_->modelOffset = ToV3(GetStruct(root, "offset"));
         currentSlot_->modelColoration = ToV4Color(GetStruct(root, "coloration"));
+        currentSlot_->modelScale = ToV3(GetStruct(root, "scale"), V3(1, 1, 1));
     }
     else if(StrEqual(name, "skeleton"))
     {

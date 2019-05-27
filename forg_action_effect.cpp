@@ -52,7 +52,6 @@ inline void DealDamage(DispatchEffectsContext* context, SimRegion* region, SimEn
 inline void EssenceDelta(SimRegion* region, SimEntity* entity, u32 essenceTaxonomy, i16 delta)
 {
     CreatureComponent* creature = Creature(region, entity);
-    
     EssenceSlot* firstFree = 0;
     b32 present = false;
     for(u32 testIndex = 0; testIndex < MAX_DIFFERENT_ESSENCES; ++testIndex)

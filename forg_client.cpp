@@ -212,18 +212,6 @@ inline void UpdateCamera(GameModeWorld* worldMode, r32 timeToUpdate)
     }
 }
 
-#include "forg_network_client.cpp"
-#include "forg_asset.cpp"
-#include "forg_render.cpp"
-#include "forg_plant.cpp"
-#include "forg_model.cpp"
-#include "forg_crafting.cpp"
-#include "forg_particles.cpp"
-#include "forg_audio.cpp"
-#include "forg_animation.cpp"
-#include "forg_UI.cpp"
-#include "forg_cutscene.cpp"
-#include "forg_ground.cpp"
 
 struct GetUniversePosQuery
 {
@@ -352,6 +340,19 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
     }
     return result;
 }
+
+#include "forg_network_client.cpp"
+#include "forg_asset.cpp"
+#include "forg_render.cpp"
+#include "forg_plant.cpp"
+#include "forg_model.cpp"
+#include "forg_crafting.cpp"
+#include "forg_particles.cpp"
+#include "forg_audio.cpp"
+#include "forg_animation.cpp"
+#include "forg_UI.cpp"
+#include "forg_cutscene.cpp"
+#include "forg_ground.cpp"
 
 PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 {
@@ -1052,14 +1053,14 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 UIHandle(UI, input, screenMouseP, nearestEntities, ArrayCount(nearestEntities));
                 UIOutput output = UI->output;
-				myPlayer->acceleration = output.inputAcc;
                 
-                if(player->action < Action_Attack && TooFarForAction(myPlayer, output.desiredAction, output.targetEntityID))
+                if(TooFarForAction(myPlayer, output.desiredAction, output.targetEntityID))
 				{
                     ClientEntity* target = GetEntityClient(worldMode, output.targetEntityID);
                     Assert(target);
-                    myPlayer->acceleration = target->P - player->P;
+                    output.inputAcc = target->P - player->P;
 				}
+                myPlayer->acceleration = output.inputAcc;
                 
                 
                 SetCameraTransform(group, 0, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal + V3(worldMode->cameraWorldOffset.xy, 0), worldMode->cameraEntityOffset);

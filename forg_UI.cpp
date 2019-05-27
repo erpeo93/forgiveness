@@ -1655,7 +1655,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         Vec3 animationBase = P;
                         animationBase.xy += Hadamart(info.originOffset, animationScale);
                                                 
-                        AnimationOutput output =  PlayAndDrawEntity(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), drawOpened, 0, InvertedInfinityRect2(), 1, {true, showBones, !showBitmaps, showPivots, timer, nameHashID, UI->fakeEquipment});
+                        AnimationOutput output =  PlayAndDrawEntity(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, test.P, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), drawOpened, 0, InvertedInfinityRect2(), 1, {true, showBones, !showBitmaps, showPivots, timer, nameHashID, UI->fakeEquipment});
                         
                         if(output.hotBoneIndex >= 0)
                         {
@@ -2897,11 +2897,11 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
         
         totalOffset = V3(6.0f, 0, 0);
         deltaOffset = totalOffset * (1.0f / (r32) slotCount);
-        runningOffset = V3(-0.5f * totalOffset.x, -6.0f, 0.0f);
+        runningOffset = V3(-0.5f * totalOffset.x, -5.8f, 0.0f);
     }
     else
     {
-        minYRotation = -60.0f;
+        minYRotation = -35.0f;
         yIncrement = (2.0f * Abs(minYRotation)) / (r32) slotCount;
         yRotation = minYRotation;   
     }
@@ -2928,6 +2928,7 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
             Vec3 scale = slot->iconScale;
             
         Vec4 color = standardColor;
+            color.a = 0.2f * color.a;
         if((i32) slotIndex == UI->activeSkillSlotIndex)
         {
             color = activeColor;
@@ -2939,7 +2940,7 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
             
             if(UI->mode != UIMode_Book)
             {
-                P += GetColumn(rotation, 2) * 3.0f;
+                P += GetColumn(rotation, 2) * 2.8f;
             }
                
         ModelId MID = FindModelByName(UI->group->assets, modelTypeID, modelNameID);

@@ -439,6 +439,7 @@ struct TaxonomySlot
     b32 animationFollowsVelocity;
     Vec3 modelOffset;
     Vec4 modelColoration;
+    Vec3 modelScale;
     u64 modelTypeID;
     u64 modelNameID;
     

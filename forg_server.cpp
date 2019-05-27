@@ -423,10 +423,8 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 u64 identifier = AddEntity(region, P, slot->taxonomy, NullGenerationData(), PlayerAddEntityParams(player->playerID));
                 
                 
-#if 0                             
                 TaxonomySlot* testSlot = NORUNTIMEGetTaxonomySlotByName(region->taxTable, "strength");
-                AddEntity(region, P + V3( 5.0f, 0.0f, 0.0f ), testSlot->taxonomy, NullGenerationData(), EntityFromObject(identifier, 0, 0));
-#endif
+                AddEntity(region, P + V3( 10.0f, 0.0f, 0.0f ), testSlot->taxonomy, NullGenerationData(), EntityFromObject(identifier, 0, 0));
                 
                 
                 SendGameAccessConfirm(player, server->worldSeed, identifier, 0, server->elapsedMS5x);

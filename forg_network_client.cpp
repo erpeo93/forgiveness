@@ -249,9 +249,7 @@ internal void SendUnlockSkillCategoryRequest(u32 taxonomy)
 internal void SendSkillLevelUpRequest(u32 taxonomy)
 {
     StartPacket(SkillLevelUpRequest);
-    
     Pack("L", taxonomy);
-    
     CloseAndSendReliablePacket();
 }
 

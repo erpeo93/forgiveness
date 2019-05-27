@@ -104,6 +104,8 @@ struct Selector
 };
 
 #define WATER_LEVEL 0.2f
+#define SWALLOW_WATER_LEVEL WATER_LEVEL - 0.03f
+
 struct BiomePyramid
 {
     // NOTE(Leonardo): vertical!

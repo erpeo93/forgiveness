@@ -1727,7 +1727,7 @@ struct GetAIDResult
     Vec2 originOffset;
 };
 
-inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy, u32 action,u64 forcedNameHashID = 0)
+inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy, u32 action,r32 tileHeight, u64 forcedNameHashID = 0)
 {
     GetAIDResult result = {};
     result.coloration = V4(1, 1, 1, 1);
@@ -1752,7 +1752,7 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
         
         AssetTypeId fallbackID = Asset_rig;
         
-        result.assetID = GetAssetIDForEntity(assets, taxTable, taxonomy, action);
+        result.assetID = GetAssetIDForEntity(assets, taxTable, taxonomy, action, tileHeight);
         Assert(result.assetID);
         
         if(!result.skeletonHashID)
@@ -1776,7 +1776,7 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
     return result;
 }
 
-internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, ClientEntity* entityC, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, AnimationDebugParams debugParams = {})
+internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, ClientEntity* entityC, Vec3 P, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, AnimationDebugParams debugParams = {})
 {
     AnimationOutput result = {};
     TaxonomyTable* taxTable = worldMode->table;
@@ -1812,14 +1812,19 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
         ModelId MID = FindModelByName(group->assets, entitySlot->modelTypeID, entitySlot->modelNameID);
         
         PakModel* modelInfo = GetModelInfo(group->assets, MID);
-        Vec3 standardDim = modelInfo->dim;
-        Vec3 desiredDim = GetDim(entityC->bounds);
+        Vec3 modelScale = Hadamart(modelInfo->dim, entitySlot->modelScale);
         
-        r32 scaleX = desiredDim.x / standardDim.x;
-        r32 scaleY = desiredDim.y / standardDim.y;
-        r32 scaleZ = desiredDim.z / standardDim.z;
+        if(entityC->boundType)
+        {
+            Vec3 desiredDim = GetDim(entityC->bounds);
+            
+            modelScale.x = desiredDim.x / modelScale.x;
+            modelScale.y = desiredDim.y / modelScale.y;
+            modelScale.z = desiredDim.z / modelScale.z;
+            
+        }
         
-        PushModel(group, MID, Identity(), entityC->P + entitySlot->modelOffset, lightIndexes, V3(scaleX, scaleY, scaleZ), entitySlot->modelColoration, entityC->modulationWithFocusColor);
+        PushModel(group, MID, Identity(), P + entitySlot->modelOffset, lightIndexes, modelScale, entitySlot->modelColoration, entityC->modulationWithFocusColor);
     }
     else if(IsObject(worldMode->table, entityC->taxonomy))
     {
@@ -1855,16 +1860,19 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
                 animationState->bounds = animationBounds;
             }
             
-            RenderObjectLayout(&input, group, layout, entityC->P, &params, state);
+            RenderObjectLayout(&input, group, layout, P, &params, state);
         }
     }
     else
     {
         PushNewAction(animationState, entityC->action);
-        GetAIDResult prefetchAID = GetAID(group->assets, taxTable, entityC->taxonomy, entityC->action);
+        
+        WorldTile* tile = GetTile(worldMode, worldMode->player.universeP, P.xy);
+        r32 tileHeight = tile->waterLevel;
+        GetAIDResult prefetchAID = GetAID(group->assets, taxTable, entityC->taxonomy, entityC->action, tileHeight);
         PrefetchAnimation(group->assets, prefetchAID.AID);
         
-        GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, debugParams.forcedNameHashID);
+        GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, tileHeight,  debugParams.forcedNameHashID);
         
         input.defaultColoration = AID.coloration;
         input.combatAnimation = (AID.assetID == Asset_attacking);
@@ -1912,7 +1920,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
 					}
                 }
                 
-                UpdateAndRenderAnimation(&input, group, animation, AID.skeletonHashID, entityC->P, animationState, &params, timeToAdvance);
+                UpdateAndRenderAnimation(&input, group, animation, AID.skeletonHashID, P, animationState, &params, timeToAdvance);
             }
             else
             {
@@ -2111,6 +2119,18 @@ inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, Taxo
 
 internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToUpdate, AnimationEntityParams params = StandardEntityParams())
 {
+    Vec3 animationP = entityC->P;
+    WorldTile* tile = GetTile(worldMode, worldMode->player.universeP, entityC->P.xy);
+    if(tile->waterLevel <= WATER_LEVEL)
+    {
+        r32 z = 0.5f * Clamp01MapToRange(WATER_LEVEL, tile->waterLevel, SWALLOW_WATER_LEVEL);
+        if(tile->waterLevel < SWALLOW_WATER_LEVEL)
+        {
+            z = 0.3f;
+        }
+        animationP.z -= z;
+    }
+    
     r32 ratio;
     if(entityC->maxLifePoints > 0)
     {
@@ -2157,7 +2177,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         if(!effect->stringHashID)
         {
             Vec4 ignored;
-            DispatchAnimationEffect(worldMode, effect, entityC, entityC->P, &ignored, timeToUpdate);
+            DispatchAnimationEffect(worldMode, effect, entityC, animationP, &ignored, timeToUpdate);
         }
     }
     
@@ -2178,7 +2198,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     
     Rect3 bounds = InvertedInfinityRect3();
     GetPhysicalProperties(worldMode->table, entityC->taxonomy, entityC->identifier, &entityC->boundType, &bounds, entityC->generationIntensity);
-    entityC->bounds = Offset(bounds, entityC->P);
+    entityC->bounds = Offset(bounds, animationP);
     
     if(IsPlant(worldMode->table, entityC->taxonomy))
     {
@@ -2209,11 +2229,11 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         renderingParams.lightIndexes = lightIndexes;
         renderingParams.modulationWithFocusColor = entityC->modulationWithFocusColor;
         
-        UpdateAndRenderPlant(worldMode, group, renderingParams, slot->plant, entityC->plant, entityC->P);
+        UpdateAndRenderPlant(worldMode, group, renderingParams, slot->plant, entityC->plant, animationP);
         
         for(u32 plantIndex = 0; plantIndex < entityC->plant->plant.plantCount; ++plantIndex)
         {
-            Vec3 P = entityC->P + V3(entityC->plant->plant.offsets[plantIndex], 0);
+            Vec3 P = animationP + V3(entityC->plant->plant.offsets[plantIndex], 0);
             
             Rect3 plantBounds = Offset(bounds, P);
             entityC->bounds = Union(entityC->bounds, plantBounds);
@@ -2271,7 +2291,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             u32 rockCount = Max(1, rockDefinition->renderingRocksCount + RandomChoice(&rockRenderSeq, rockDefinition->renderingRocksDelta));
             for(u32 rockIndex = 0; rockIndex < rockCount; ++rockIndex)
             {
-                Vec3 finalP =entityC->P +Hadamart(RandomBilV3(&rockRenderSeq), rockDefinition->renderingRocksRandomOffset);
+                Vec3 finalP =animationP +Hadamart(RandomBilV3(&rockRenderSeq), rockDefinition->renderingRocksRandomOffset);
                 m4x4 rotation = ZRotation(RandomUni(&rockRenderSeq) * TAU32);
                 Vec3 finalScale = rock->dim + rockDefinition->scaleRandomness *Hadamart(RandomBilV3(&rockRenderSeq), rock->dim);
                 
@@ -2306,7 +2326,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             r32 velocityAngle = AArm2(entityC->velocity.xy);
             params.angle += RadToDeg(velocityAngle);
         }
-        result = PlayAndDrawEntity(worldMode, group, lightIndexes, entityC, animationScale, params.angle, params.offset, timeToUpdate, bodyColor, params.drawOpened, params.onTop, params.bounds, additionalZbias);
+        result = PlayAndDrawEntity(worldMode, group, lightIndexes, entityC, animationP, animationScale, params.angle, params.offset, timeToUpdate, bodyColor, params.drawOpened, params.onTop, params.bounds, additionalZbias);
         
         if(IsValid(dragging))
         {

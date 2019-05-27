@@ -19,6 +19,8 @@ printTable(noPrefix) enum EntityAction
     Action_Open,
     Action_Craft,
     Action_Die,
+    Action_Rolling,
+    Action_Protecting,
     
     Action_Count,
 };

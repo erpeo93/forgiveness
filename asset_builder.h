@@ -163,7 +163,7 @@ struct LoadedAnimation
     SpriteInfo spriteInfos[64];
     
     u32 frameCount;
-    FrameData frames[16];
+    FrameData frames[64];
     
     Bone* bones;
     PieceAss* ass;

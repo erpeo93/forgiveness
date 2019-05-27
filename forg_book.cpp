@@ -358,7 +358,7 @@ internal b32 UIDrawSkillElement(UIState* UI, BookElement* element, Vec2 elementC
     Vec2 skillTextP = elementCenterP + V2(-0.1f * elementDim.x, 0.25f * elementDim.y);
     PushUITextWithDimension(UI, skillSlot->name, skillTextP, V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
     
-    char stringLevel[8];
+    char stringLevel[16];
     FormatString(stringLevel, sizeof(stringLevel), "level: %d", level);
     PushUITextWithDimension(UI, stringLevel, skillTextP + V2(0, -0.5f), V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
     
@@ -576,6 +576,7 @@ internal b32 UIDrawPage(UIState* UI, Vec2 pageP, Vec2 pageDim, u32 startingEleme
     
     Vec2 elementDim = V2(pageDim.x, pageDim.y / (r32) elementCount);
     Vec2 elementOffset = V2(0, 0.5f * pageDim.y) - V2(0, 0.5f * elementDim.y);
+    elementOffset = {};
     
     Vec3 P = GetWorldP(group, pageP);
     Rect2 pageRect = RectCenterDim(V2(0, 0), elementDim);
@@ -614,8 +615,7 @@ internal b32 UIDrawPage(UIState* UI, Vec2 pageP, Vec2 pageDim, u32 startingEleme
             Vec2 elementCenterP = pageP + elementOffset;
             if(toDraw->hot)
             {
-                
-#if 0                
+                Vec3 elementCenterP3d = V3(elementCenterP, 0.0f);
                 r32 destTimer = 2.0f;
                 r32 securityTimerQuarter = destTimer * 0.25f;
                 r32 oneOverSecurityTimerQuarter = 1.0f / securityTimerQuarter;
@@ -629,33 +629,31 @@ internal b32 UIDrawPage(UIState* UI, Vec2 pageP, Vec2 pageDim, u32 startingEleme
                 
                 r32 barDim = 0.05f;
                 
-                r32 maxElementWidth = 0.75f;
-                r32 maxElementHeight = 0.85f;
+                r32 maxElementWidth = 1.0f;
+                r32 maxElementHeight = 1.0f;
                 
                 // NOTE(Leonardo): low
                 r32 barWidth = lowBarPercentage * maxElementWidth * elementDim.x;
-                barTransform.offset = V3(-0.5f * maxElementWidth * elementDim.x, -0.5f * maxElementHeight * elementDim.y, 0) + V3(0.5f * barWidth, 0.5f * barDim, 0);
-                PushRect(UI->group, barTransform, elementCenterP, V2(barWidth, barDim), V4(1, 0, 0, 1));
+                barTransform.cameraOffset = V3(-0.5f * maxElementWidth * elementDim.x, -0.5f * maxElementHeight * elementDim.y, 0) + V3(0.5f * barWidth, 0.5f * barDim, 0);
+                PushUIRect(UI->group, barTransform, elementCenterP3d, V2(barWidth, barDim), V4(1, 0, 0, 1));
                 
                 
                 // NOTE(Leonardo): right
                 r32 barHeight = rightBarPercentage * maxElementHeight * elementDim.y;
-                barTransform.offset = V3(0.5f * maxElementWidth * elementDim.x, -0.5f * maxElementHeight * elementDim.y, 0) + V3(-0.5f * barDim, 0.5f * barHeight, 0);
-                PushRect(UI->group, barTransform, elementCenterP, V2(barDim, barHeight), V4(1, 0, 0, 1));
+                barTransform.cameraOffset = V3(0.5f * maxElementWidth * elementDim.x, -0.5f * maxElementHeight * elementDim.y, 0) + V3(-0.5f * barDim, 0.5f * barHeight, 0);
+                PushUIRect(UI->group, barTransform, elementCenterP3d, V2(barDim, barHeight), V4(1, 0, 0, 1));
                 
                 
                 // NOTE(Leonardo): up
                 barWidth = highBarPercentage * maxElementWidth * elementDim.x;
-                barTransform.offset = V3(0.5f * maxElementWidth * elementDim.x, 0.5f * maxElementHeight * elementDim.y, 0) + V3(-0.5f * barWidth, -0.5f * barDim, 0);
-                PushRect(UI->group, barTransform, elementCenterP, V2(barWidth, barDim), V4(1, 0, 0, 1));
+                barTransform.cameraOffset = V3(0.5f * maxElementWidth * elementDim.x, 0.5f * maxElementHeight * elementDim.y, 0) + V3(-0.5f * barWidth, -0.5f * barDim, 0);
+                PushUIRect(UI->group, barTransform, elementCenterP3d, V2(barWidth, barDim), V4(1, 0, 0, 1));
                 
                 
                 // NOTE(Leonardo): left
                 barHeight = leftBarPercentage * maxElementHeight * elementDim.y;
-                barTransform.offset = V3(-0.5f * maxElementWidth * elementDim.x, 0.5f * maxElementHeight * elementDim.y, 0) + V3(0.5f * barDim, -0.5f * barHeight, 0);
-                PushRect(UI->group, barTransform, elementCenterP, V2(barDim, barHeight), V4(1, 0, 0, 1));
-#endif
-                
+                barTransform.cameraOffset = V3(-0.5f * maxElementWidth * elementDim.x, 0.5f * maxElementHeight * elementDim.y, 0) + V3(0.5f * barDim, -0.5f * barHeight, 0);
+                PushUIRect(UI->group, barTransform, elementCenterP3d, V2(barDim, barHeight), V4(1, 0, 0, 1));
             }
             
             switch(toDraw->type)
