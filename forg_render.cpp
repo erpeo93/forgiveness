@@ -703,7 +703,7 @@ inline void PushTrunkatedPyramid(RenderGroup* group, BitmapId BID, Vec3 P, Vec3 
     }
 }
 
-inline void PushModel(RenderGroup* group, VertexModel* model, m4x4 rotation, Vec3 P, Vec4 lightIndexes,  Vec3 scale = V3(1, 1, 1), Vec4 color = V4(1, 1, 1, 1), r32 modulationPercentage = 0.0f)
+inline void PushModel(RenderGroup* group, VertexModel* model, m4x4 rotation, Vec3 P, Vec4 lightIndexes,  Vec3 scale = V3(1, 1, 1), Vec4 color = V4(1, 1, 1, 1), r32 modulationPercentage = 0.0f, r32 additionalZBias = 0.0f)
 {
     GameRenderCommands* commands = group->commands;
     ReservedVertexes vertexes = ReserveVertexes(group, model->faceCount, model->vertexCount);
@@ -730,9 +730,10 @@ inline void PushModel(RenderGroup* group, VertexModel* model, m4x4 rotation, Vec
             ColoredVertex* vert = model->vertexes + vertexIndex;
             
             Vec4 vertFinalP = rotation * V4(Hadamart(vert->P, scale), 0);
-            Vec4 finalP = V4(P, 0) + vertFinalP;
+            Vec4 finalP = V4(P, additionalZBias) + vertFinalP;
+            Vec4 vertColor = Hadamart(vert->color, color);
             
-            PushVertex(vertexPtr + vertexIndex, finalP, V3(0, 0, 0), V2(0, 0), RGBAPack8x4(Hadamart(vert->color, color) * 255.0f), lightIndexes, modulationPercentage, 0);
+            PushVertex(vertexPtr + vertexIndex, finalP, V3(0, 0, 0), V2(0, 0), RGBAPack8x4(vertColor * 255.0f), lightIndexes, modulationPercentage, 0);
         }
     }
     else
@@ -742,13 +743,13 @@ inline void PushModel(RenderGroup* group, VertexModel* model, m4x4 rotation, Vec
 }
 
 
-inline void PushModel(RenderGroup* group, ModelId ID, m4x4 rotation, Vec3 P, Vec4 lightIndexes,  Vec3 scale = V3(1, 1, 1), Vec4 color = V4(1, 1, 1, 1), r32 modulationPercentage = 0.0f)
+inline void PushModel(RenderGroup* group, ModelId ID, m4x4 rotation, Vec3 P, Vec4 lightIndexes,  Vec3 scale = V3(1, 1, 1), Vec4 color = V4(1, 1, 1, 1), r32 modulationPercentage = 0.0f, r32 additionalZBias = 0.0f)
 {
     VertexModel* model = GetModel(group->assets, ID);
     
     if(model)
     {
-        PushModel(group, model, rotation, P, lightIndexes, scale, color, modulationPercentage);
+        PushModel(group, model, rotation, P, lightIndexes, scale, color, modulationPercentage, additionalZBias);
     }
     else
     {

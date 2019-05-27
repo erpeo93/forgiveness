@@ -93,7 +93,8 @@ struct Effect
     EffectData data;
     EffectTargetRange range;
     
-    r32 basePower;
+    r32 minIntensity;
+    r32 maxIntensity;
     
     r32 timer;
     r32 targetTimer;

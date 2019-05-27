@@ -96,11 +96,39 @@ inline void EssenceDelta(SimRegion* region, SimEntity* entity, u32 essenceTaxono
     }
 }
 
+inline r32 ComputeSkillPower(TaxonomySlot* skillSlot, u32 level)
+{
+    r32 result;
+    
+    u32 turn = skillSlot->turningPointLevel;
+    u32 max = Max(skillSlot->maxLevel, 1);
+    
+    r32 rE = skillSlot->radixExponent;
+    r32 eE = skillSlot->exponentiationExponent;
+    
+    r32 rA = skillSlot->radixLerping;
+    r32 eA = skillSlot->exponentiationLerping;
+    
+    level = Min(level, max);
+    
+    r32 coeff = (r32) level / (r32) max;
+    if(level < turn)
+    {
+        result = rA * coeff + (1.0f - rA) * Root(coeff, rE);
+    }
+    else
+    {
+        result = eA * (coeff) + (1.0f - eA) * Pow(coeff, eE);
+    }
+    
+    return result;
+}
 
 inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, GenerationData gen, AddEntityAdditionalParams params);
 internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, u32 action, Effect* effect, r32 powerMul)
 {
-    r32 power = effect->basePower * powerMul;
+    Assert(Normalized(powerMul));
+    r32 power = Clamp01MapToRange(effect->minIntensity, powerMul, effect->maxIntensity);
     
     u64 actorID = actor->identifier;
     u64 targetID = target ? target->identifier : 0;
@@ -167,6 +195,7 @@ internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region
                     GenerationData gen = NullGenerationData();
                     AddEntityAdditionalParams params = DefaultAddEntityParams();
                     params.speed = data->speed;
+                    params.generationIntensity = power;
                     u32 taxonomy =GetRandomChild(region->taxTable, &region->entropy, data->taxonomy);
                     targetID = AddEntity(region, P, taxonomy, gen, params);
                 }
@@ -414,15 +443,13 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
         {
             SkillSlot* skillSlot = actorCreature->skills + actorCreature->activeSkillIndex;
             Assert(skillSlot->taxonomy);
-            TaxonomySlot* spellSlot = GetSlotForTaxonomy(region->taxTable, skillSlot->taxonomy);
+            TaxonomySlot* spellSlot = GetSlotForTaxonomy(region->taxTable, skillSlot->taxonomy);r32 skillPower = ComputeSkillPower(spellSlot, skillSlot->level);
             for(TaxonomyEffect* effectSlot = spellSlot->firstEffect; effectSlot; effectSlot = effectSlot->next)
             {
                 Effect* effect = &effectSlot->effect;
                 if(effect->triggerAction == Action_Cast)
                 {
-                    r32 power = skillSlot->power;
-                    power = 1.0f;
-                    DispatchEffect(context, region, actor, target, action, effect, power);
+                    DispatchEffect(context, region, actor, target, action, effect, skillPower);
                 }
                 
             }
@@ -472,7 +499,8 @@ inline void DispatchEffects(DispatchEffectsContext* context, SimRegion* region, 
             
             if(dispatch)
             {
-                DispatchEffect(context, region, actor, target, action, effect, 1.0f);
+                r32 powerMul = 1.0f;
+                DispatchEffect(context, region, actor, target, action, effect, powerMul);
                 if(effect->targetTimer)
                 {
                     if(effect->flags & Effect_ResetAfterTimer)

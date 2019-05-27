@@ -51,14 +51,13 @@ inline u32 GetTileTaxonomyFromRegionP(ServerState* server, SimRegion* region, Ve
     return result;
 }
 
-inline void NORUNTIMEAddSkill(SimRegion* region, SimEntity* entity, char* skillName, u32 level, r32 power)
+inline void NORUNTIMEAddSkill(SimRegion* region, SimEntity* entity, char* skillName, u32 level)
 {
     CreatureComponent* creature = Creature(region, entity);
     Assert(creature->skillCount < ArrayCount(creature->skills));
     SkillSlot* slot = creature->skills + creature->skillCount++;
     slot->taxonomy = NORUNTIMEGetTaxonomySlotByName(region->taxTable, skillName)->taxonomy;
     slot->level = level;
-    slot->power = power;
     
     
     ServerPlayer* player = region->server->players + entity->playerID;
@@ -87,9 +86,9 @@ inline void NORUNTIMEAddSkill(SimRegion* region, SimEntity* entity, char* skillN
 internal void SendSkills(SimRegion* region, SimEntity* entity, ServerPlayer* player, TaxonomyTable* table);
 internal void AddPlayersSkills(SimRegion* region, SimEntity* player)
 {
-    NORUNTIMEAddSkill(region, player, "elemental 4", 2, 1.0f);
-    NORUNTIMEAddSkill(region, player, "elemental 2", 1, 1.0f);
-    NORUNTIMEAddSkill(region, player, "elemental 3", 3, 1.0f);
+    NORUNTIMEAddSkill(region, player, "elemental 4", 2);
+    NORUNTIMEAddSkill(region, player, "elemental 2", 1);
+    NORUNTIMEAddSkill(region, player, "elemental 3", 3);
     
     CreatureComponent* creature = Creature(region, player);
     creature->activeSkillIndex = 0;
@@ -188,6 +187,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         entity->playerID = params.playerID;
         entity->quantity = params.quantity;
         entity->status = params.status;
+        entity->generationIntensity = params.generationIntensity;
         
         entity->IDs[Component_Effect] = GetFreeComponent(server->components, Component_Effect);
         

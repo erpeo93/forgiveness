@@ -1003,7 +1003,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 r32 cameraZ = 0.0f;
                                 
                                 Rect2 screenBounds = InvertedInfinityRect2();
-                                if(IsRock(worldMode->table, entity->taxonomy) || IsPlant(worldMode->table, entity->taxonomy))
+                                if(IsRock(worldMode->table, entity->taxonomy) || IsPlant(worldMode->table, entity->taxonomy) ||
+                                   AnimatedIn3d(worldMode->table, entity->taxonomy))
                                 {
                                     screenBounds = ProjectOnScreen(group, entity->bounds, &cameraZ);
                                 }

@@ -270,16 +270,16 @@ internal void SendAvailableRecipes(ServerPlayer* player, TaxonomyTable* table)
 
 
 
-internal void SendSkillLevel(ServerPlayer* player, u32 taxonomy, u32 level, b32 isPassiveSkill, r32 power, b32 levelUp)
+internal void SendSkillLevel(ServerPlayer* player, u32 taxonomy, u32 level, b32 isPassiveSkill, b32 levelUp)
 {
     StartPacket(player, SkillLevel);
-    Pack("lLLld", levelUp, taxonomy, level, isPassiveSkill, power);
+    Pack("lLLl", levelUp, taxonomy, level, isPassiveSkill);
     CloseAndStoreReliablePacket(player);
 }
 
 inline void SendSkillLevelUp(ServerPlayer* player, SkillSlot* skill, b32 passive)
 {
-    SendSkillLevel(player, skill->taxonomy, skill->level, passive, skill->power, true);
+    SendSkillLevel(player, skill->taxonomy, skill->level, passive, true);
 }
 
 internal void SendAllSkills(SimRegion* region, SimEntity* entity, ServerPlayer* player, TaxonomyTable* table, TaxonomySlot* slot)
@@ -294,17 +294,15 @@ internal void SendAllSkills(SimRegion* region, SimEntity* entity, ServerPlayer* 
         {
             b32 isPassive = childSlot->isPassiveSkill;
             u32 skillLevel = 0;
-            r32 skillPower = 0;
             for(u32 skillIndex = 0; skillIndex < creature->skillCount; ++skillIndex)
             {
                 SkillSlot* skillSlot = creature->skills + skillIndex;
                 if(skillSlot->taxonomy == taxonomy)
                 {
                     skillLevel = skillSlot->level;
-                    skillPower = skillSlot->power;
                 }
             }
-            SendSkillLevel(player, taxonomy, skillLevel, isPassive, skillPower, false);
+            SendSkillLevel(player, taxonomy, skillLevel, isPassive, false);
         }
         else
         {
@@ -373,7 +371,7 @@ internal u16 PrepareEntityUpdate(SimRegion* region, SimEntity* entity, unsigned 
     }
     
     unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
-    Pack("llVLLQCLddd", P.chunkX, P.chunkY, P.chunkOffset, entity->flags, entity->taxonomy, entity->gen.generic, SafeTruncateToU8(action), entity->recipeTaxonomy, lifePoints, maxLifePoints, entity->status);
+    Pack("llVLLQCLdddd", P.chunkX, P.chunkY, P.chunkOffset, entity->flags, entity->taxonomy, entity->gen.generic, SafeTruncateToU8(action), entity->recipeTaxonomy, lifePoints, maxLifePoints, entity->status, entity->generationIntensity);
     u16 totalSize = ForgEndPacket_( buff_, buff );
     return totalSize;
 }

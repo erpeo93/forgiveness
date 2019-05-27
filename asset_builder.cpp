@@ -1604,6 +1604,8 @@ internal LoadedModel LoadModel(char* path, char* filename)
     result.vertexes = (ColoredVertex*) malloc(maxVertexCount * sizeof(ColoredVertex));
     result.faces = (ModelFace*) malloc(maxFaceCount * sizeof(ModelFace));
     
+    Vec3 min = V3(R32_MAX, R32_MAX, R32_MAX);
+    Vec3 max = V3(R32_MIN, R32_MIN, R32_MIN);
     
     char completeName[256];
     sprintf(completeName, "%s/%s", path, filename);
@@ -1636,6 +1638,33 @@ internal LoadedModel LoadModel(char* path, char* filename)
                             dest->P.x = (r32) atof(x.text);
                             dest->P.y = (r32) atof(y.text);
                             dest->P.z = (r32) atof(z.text);
+                            
+                            if(dest->P.x > max.x)
+                            {
+                                max.x = dest->P.x;
+                            }
+                            else if(dest->P.x < min.x)
+                            {
+                                min.x = dest->P.x;
+                            }
+                            
+                            if(dest->P.y > max.y)
+                            {
+                                max.y = dest->P.y;
+                            }
+                            else if(dest->P.y < min.y)
+                            {
+                                min.y = dest->P.y;
+                            }
+                            
+                            if(dest->P.z > max.z)
+                            {
+                                max.z = dest->P.z;
+                            }
+                            else if(dest->P.z < min.z)
+                            {
+                                min.z = dest->P.z;
+                            }
                         }
                         else
                         {
@@ -1675,7 +1704,7 @@ internal LoadedModel LoadModel(char* path, char* filename)
         }
     }
     
-    
+    result.dim = max - min;
     return result;
 }
 
@@ -1874,14 +1903,14 @@ internal SoundId AddSoundAsset(char* filename, u64 stringHash, i32 firstSampleIn
 }
 
 
-internal ModelId AddModelAsset(char* path, char* filename)
+internal ModelId AddModelAsset(char* path, char* filename, u64 typeHashID)
 {
     Assets* assets = currentAssets_;
     AddedAsset asset = AddAsset(assets);
     
     asset.source->type = Pak_model;
-    asset.dest->typeHashID = 0;
-    asset.dest->nameHashID = 0;
+    asset.dest->typeHashID = typeHashID;
+    asset.dest->nameHashID = StringHash(filename);
     asset.dest->offsetFromOriginalOffset = 0;
     
     StrCpy(filename, StrLen(filename ), asset.source->model.filename, ArrayCount(asset.source->model.filename ) );
@@ -2074,7 +2103,7 @@ internal void WritePak(Assets* assets, char* fileName_)
                         
                         dest->model.vertexCount = model.vertexCount;
                         dest->model.faceCount = model.faceCount;
-                        
+                        dest->model.dim = model.dim;
                         fwrite(model.vertexes, sizeof(ColoredVertex) * model.vertexCount, 1, out);
                         fwrite(model.faces, sizeof(ModelFace) * model.faceCount, 1, out);
                         
@@ -2639,14 +2668,15 @@ internal void WriteAnimations(char* folder, char* name)
 }
 
 
-internal void OutputFoldersAutocompleteFile(char* filename, char* path)
+internal void OutputFoldersAutocompleteFile(char* autocompleteName, char* path)
 {
     char* outputPath = "assets";
     char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s.autocomplete", outputPath, filename);
+    FormatString(completePath, sizeof(completePath), "%s/%s.autocomplete", outputPath, autocompleteName);
     
     
     char* buffer = (char*) malloc(MegaBytes(2));
+    buffer[0] = 0;
     char* writeHere = buffer;
     
     PlatformSubdirNames* subdir = (PlatformSubdirNames* ) malloc(sizeof(PlatformSubdirNames));
@@ -2663,6 +2693,30 @@ internal void OutputFoldersAutocompleteFile(char* filename, char* path)
     
     DEBUGWin32WriteFile(completePath, buffer, StrLen(buffer));
     
+    free(buffer);
+}
+
+internal void OutputFolderFilesAutocompleteFile(char* autocompleteName, char* path, PlatformFileType type)
+{
+    char* outputPath = "assets";
+    char completePath[128];
+    FormatString(completePath, sizeof(completePath), "%s/%s.autocomplete", outputPath, autocompleteName);
+    
+    
+    char* buffer = (char*) malloc(MegaBytes(2));
+    buffer[0] = 0;
+    char* writeHere = buffer;
+    
+    PlatformFileGroup fileGroup = Win32GetAllFilesBegin(type, path);
+    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex)
+    {
+        PlatformFileHandle fileHandle = Win32OpenNextFile(&fileGroup, path);
+        writeHere += sprintf(writeHere, "\"%s\",", fileHandle.name);
+        Win32CloseHandle(&fileHandle);
+    }
+    Win32GetAllFilesEnd(&fileGroup);
+    
+    DEBUGWin32WriteFile(completePath, buffer, StrLen(buffer));
     free(buffer);
 }
 
@@ -3303,23 +3357,96 @@ internal void WriteFonts()
     WritePak(assets, "forgivenessF.pak" );
 }
 
-
-internal void WriteModels()
+internal void WriteModels(char* folder, char* name, PlatformFile* labelsFile)
 {
     Assets assets_;
     Assets* assets = &assets_;
-    InitializeAssets(assets );
+    InitializeAssets(assets);
     
-    BeginAssetType(assets, Asset_RockModels);
-    AddModelAsset("definition/models", "pyramid.obj");
-    EndAssetType();
+    char completePath[128];
+    FormatString(completePath, sizeof(completePath), "%s/%s", folder, name);
     
-    WritePak(assets, "forgivenessModels.pak");
+    
+    char* hashName = name;
+    if(hashName[0] == '#')
+    {
+        ++hashName;
+    }
+    
+    u64 assetHashID = StringHash(name);
+    
+    
+    u32 hashIndex =  assetHashID & (HASHED_ASSET_SLOTS - 1);
+    u32 assetIndex = Asset_count + hashIndex;
+    PlatformFileGroup modelsGroup = Win32GetAllFilesBegin(PlatformFile_model, completePath);
+    if(modelsGroup.fileCount)
+    {
+        BeginAssetType(assets, assetIndex);
+        for(u32 modelIndex = 0; modelIndex < modelsGroup.fileCount; ++modelIndex)
+        {
+            PlatformFileHandle modelHandle = Win32OpenNextFile(&modelsGroup, completePath);
+            AddModelAsset(completePath, modelHandle.name, assetHashID);
+            
+            if(labelsFile)
+            {
+                char* assetPtr = GetAssetFilePtr(labelsFile, name, modelHandle.name);
+                Tokenizer tokenizer = {};
+                tokenizer.at = assetPtr;
+                AddLabelsFromFile(&tokenizer);
+            }
+            
+            Win32CloseHandle(&modelHandle);
+        }
+        EndAssetType();
+    }
+    
+    Win32GetAllFilesEnd(&modelsGroup);
+    
+    
+    char pakName[128];
+    FormatString(pakName, sizeof(pakName), "%sM.pak", name);
+    WritePak(assets, pakName);
+}
+
+internal void WriteModels()
+{
+    char* modelsPath = "definition/models";
+    char* assetFile = "models.fad";
+    char* assetOldFile = "modelsvanilla.fad";
+    char* definitionParams = "#cantBeDeleted";
+    
+    WriteAssetDefinitionFile(modelsPath, assetFile, definitionParams, true);
+    WriteAssetDefinitionFile(modelsPath, assetOldFile, 0, false);
+    OutputFoldersAutocompleteFile("modelType", modelsPath);
+    
+    PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
+    Win32GetAllSubdirectoriesName(subdir, modelsPath);
+    
+    char labelsPath[64];
+    FormatString(labelsPath, sizeof(labelsPath), "assets/%s", assetFile);
+    PlatformFile labelsFile = DEBUGWin32ReadFile(labelsPath);
+    Assert(labelsFile.content);
+    
+    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
+    {
+        char* folderName = subdir->subdirs[subdirIndex];
+        
+        if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
+        {
+            WriteModels(modelsPath, folderName, 0);
+            
+            char completePath[128];
+            sprintf(completePath, "%s/%s", modelsPath, folderName);
+            OutputFolderFilesAutocompleteFile(folderName, completePath, PlatformFile_model);
+        }
+    }
+    
+    DEBUGWin32FreeFile(&labelsFile);
+    free(subdir);
 }
 
 int main(int argc, char** argv )
 {
-    
 #if 0    
     DeleteAll("assets", "*.fad");
     DeleteAll("assets", "*.pak");
@@ -3329,8 +3456,8 @@ int main(int argc, char** argv )
     WriteMusic();
     WriteSounds();
     WriteFonts();
-    WriteBitmapsAndAnimations();
     WriteModels();
+    WriteBitmapsAndAnimations();
 }
 
 

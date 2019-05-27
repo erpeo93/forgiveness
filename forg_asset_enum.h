@@ -88,7 +88,5 @@ printTable(noPrefix) enum AssetTypeId
     Asset_Bookmark,
     Asset_Icon,
     
-    Asset_RockModels,
-    
     Asset_count,
 };

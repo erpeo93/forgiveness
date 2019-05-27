@@ -413,7 +413,7 @@ inline void GetPhysicalProperties(TaxonomyTable* taxTable, u32 taxonomy, u64 ide
         }
         else
         {
-            *type = ForgBound_None;
+            *type = ForgBound_NonPhysical;
         }
         
         Vec3 rockDim = GetRockDim(boundSlot->rock, &rockSeq);
@@ -427,7 +427,7 @@ inline void GetPhysicalProperties(TaxonomyTable* taxTable, u32 taxonomy, u64 ide
         }
         else
         {
-            *type = ForgBound_None;
+            *type = ForgBound_NonPhysical;
         }
         
         r32 trunkRadious = Max(0.2f, GetPlantStandardTrunkRadious(boundSlot->plant));
@@ -445,14 +445,12 @@ inline void GetPhysicalProperties(TaxonomyTable* taxTable, u32 taxonomy, u64 ide
             if(boundSlot->boundType)
             {
                 *type = boundSlot->boundType;
-                
                 Rect3 slotBound = boundSlot->physicalBounds;
-                
                 if(boundSlot->scaleDimBasedOnIntensity)
                 {
                     Assert(Normalized(generationIntensity));
-                    r32 coeff = UnilateralToBilateral(generationIntensity) * boundSlot->scaleDimCoeffV;
-                    slotBound = Scale(slotBound, coeff);
+                    r32 coeff = UnilateralToBilateral(generationIntensity) * boundSlot->scaleDimGenCoeffV;
+                    slotBound = Scale(slotBound, 1.0f + coeff);
                 }
                 
                 *bounds = slotBound;

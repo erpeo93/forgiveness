@@ -1307,7 +1307,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
         case Type_InstantiateTaxonomy:
         {
             InstantiateRequest request;
-            unpack(data, "LV", &request.taxonomy, &request.offset);
+            unpack(data, "LVd", &request.taxonomy, &request.offset, &request.generationIntensity);
             RandomSequence* seq = &server->instantiateSequence;
             
             AddEntityAdditionalParams params = DefaultAddEntityParams();
@@ -1320,6 +1320,8 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 gen = RecipeIndexGenerationData(GetNextUInt32(&server->instantiateSequence));
                 params = Crafting();
             }
+            
+            params.generationIntensity = request.generationIntensity;
             AddRandomEntity(region, seq, entity->P + request.offset, request.taxonomy, gen, params);
         } break;
         

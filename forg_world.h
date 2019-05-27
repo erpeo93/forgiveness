@@ -74,6 +74,7 @@ struct AddEntityAdditionalParams
     i16 status;
     
     Vec3 speed;
+    r32 generationIntensity;
     r32 timeToLive;
     
     union

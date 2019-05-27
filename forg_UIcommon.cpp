@@ -716,6 +716,9 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_InstantiateTaxonomy:
         {
+            EditorWidget* misc = UI->widgets + EditorWidget_Misc;
+            r32 generationIntensity = ToR32(GetValue(misc->root, "generationIntensity"), 1.0f);
+            
             TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->table->recipeTaxonomy);
 			if(IsSubTaxonomy(request->taxonomy, slot))
 			{
@@ -727,12 +730,15 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
 			}
 			else
 			{
-				SendInstantiateTaxonomyRequest(request->taxonomy, request->offset);
+				SendInstantiateTaxonomyRequest(request->taxonomy, request->offset, generationIntensity);
 			}
         } break;
         
         case UIRequest_InstantiateTaxonomyPtr:
         {
+            EditorWidget* misc = UI->widgets + EditorWidget_Misc;
+            r32 generationIntensity = ToR32(GetValue(misc->root, "generationIntensity"), 1.0f);
+            
             TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, UI->table->recipeTaxonomy);
 			if(IsSubTaxonomy(request->taxonomy, slot))
 			{
@@ -744,7 +750,7 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
 			}
 			else
 			{
-				SendInstantiateTaxonomyRequest(request->taxonomy, *request->offsetPtr);
+				SendInstantiateTaxonomyRequest(request->taxonomy, *request->offsetPtr,generationIntensity);
 			}
         } break;
         

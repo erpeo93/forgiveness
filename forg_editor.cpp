@@ -714,7 +714,7 @@ inline void DefineBounds(char* boundsHeight, char* boundsRadious)
 
 inline void DefineNullBounds(char* boundsHeight, char* boundsRadious)
 {
-    DefineBounds_(boundsHeight, boundsRadious, ForgBound_None);
+    DefineBounds_(boundsHeight, boundsRadious, ForgBound_NonPhysical);
 }
 
 
@@ -763,14 +763,15 @@ inline void IsPassive()
     currentSlot_->isPassiveSkill = true;
 }
 
-inline void AddEffect(char* action, char* effect, char* power)
+inline void AddEffect(char* action, char* effect, char* minIntensity, char* maxIntensity)
 {
     TaxonomyEffect* newEffect;
     TAXTABLE_ALLOC(newEffect, TaxonomyEffect);
     
     newEffect->effect.triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
     newEffect->effect.ID = (EffectIdentifier) GetValuePreprocessor(EffectIdentifier, effect);
-    newEffect->effect.basePower = ToR32(power, 1.0f);
+    newEffect->effect.minIntensity = ToR32(minIntensity, 1.0f);
+    newEffect->effect.maxIntensity = ToR32(maxIntensity, 1.0f);
     
     FREELIST_INSERT(newEffect, currentSlot_->firstEffect);
     currentEffect_ = newEffect;
@@ -2868,7 +2869,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         char* exists = GetValue(root, "physical");
         b32 physical = ToB32(exists);
         
-        char* height = GetValue(root, "width");
+        char* height = GetValue(root, "height");
         char* radious = GetValue(root, "radious");
         
         if(physical)
@@ -2879,9 +2880,11 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         {
             DefineNullBounds(height, radious);
         }
+        
+        
+        slot->scaleDimBasedOnIntensity = ToB32(GetValue(root, "scaleDimBasedOnGenIntensity"));
+        slot->scaleDimGenCoeffV = ToR32(GetValue(root, "scaleDimGenCoeff"));
     }
-    
-    
     else if(StrEqual(name, "equipmentMappings"))
     {
         FreeEquipmentTreeNodeRecursive(currentSlot_->equipmentMappings.root);
@@ -3003,6 +3006,15 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         r32 distance = ToR32(GetValue(root, "distance"), 1.0f);
         currentSlot_->skillDistanceAllowed = distance;
         currentSlot_->cooldown = ToR32(GetValue(root, "cooldown"), 0.0f);
+        
+        currentSlot_->turningPointLevel = ToU32(GetValue(root, "turningPointLevel"), 0);
+        currentSlot_->maxLevel = ToU32(GetValue(root, "maxLevel"), 100);
+        
+        currentSlot_->radixExponent = ToR32(GetValue(root, "radixExponent"), 2.0f);
+        currentSlot_->exponentiationExponent = Max(ToR32(GetValue(root, "exponentiationExponent"), 2.0f), 0.0f);
+        currentSlot_->radixLerping = ToR32(GetValue(root, "radixLerping"), 0.5f);
+        currentSlot_->exponentiationLerping = Max(ToR32(GetValue(root, "exponentiationLerping"), 0.5f), 0.0f);
+        
         char* passive = GetValue(root, "passive");
         if(passive)
         {
@@ -3021,8 +3033,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         {
             char* action = GetValue(effectList, "action");
             char* effectName = GetValue(effectList, "effectID");
-            char* basePower = GetValue(effectList, "power");
-            AddEffect(action, effectName, basePower);
+            char* minIntensity = GetValue(effectList, "minIntensity");
+            char* maxIntensity = GetValue(effectList, "maxIntensity");
+            AddEffect(action, effectName, minIntensity, maxIntensity);
             
             
             char* timer = GetValue(effectList, "timer");
@@ -3249,7 +3262,12 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     }
     else if(StrEqual(name, "animationGeneralParams"))
     {
-        currentSlot_->animationIn3d = ToB32(GetValue(root, "animationIn3d"));
+        currentSlot_->animationIn3d = ToB32(GetValue(root, "animationIn3d"));        
+        currentSlot_->animationFollowsVelocity = ToB32(GetValue(root, "animationFollowsVelocity"));        
+        currentSlot_->modelTypeID = StringHash(GetValue(root, "modelType"));
+        currentSlot_->modelNameID = StringHash(GetValue(root, "modelName"));
+        currentSlot_->modelOffset = ToV3(GetStruct(root, "offset"));
+        currentSlot_->modelColoration = ToV4Color(GetStruct(root, "coloration"));
     }
     else if(StrEqual(name, "skeleton"))
     {
@@ -3392,6 +3410,8 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         RockDefinition* definition = currentSlot_->rock;
         
         definition->collides = ToB32(GetValue(root, "collides"));
+        definition->modelTypeHash = StringHash(GetValue(root, "modelType"));
+        definition->modelNameHash = StringHash(GetValue(root, "modelName"));
         definition->color = ToV4Color(GetStruct(root, "color"));
         definition->startingColorDelta = ToV4Color(GetStruct(root, "startingColorDelta"));
         definition->perVertexColorDelta = ToV4Color(GetStruct(root, "perVertexColorDelta"));

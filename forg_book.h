@@ -63,7 +63,6 @@ struct BookElement
         struct
         {
             u32 skillLevel;
-            r32 skillPower;
         };
         
         b32 unlocked;

@@ -388,7 +388,6 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
     else if(StrEqual(name, "sound"))
     {
         Assert(parent);
-        
         char* soundType = GetValue(parent, "soundType");
         hash = StringHash(soundType);
     }
@@ -446,6 +445,12 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, EditorElementParents pare
         
         UIAddOption(UI, autocomplete, "all");
 	}
+    else if(StrEqual(name, "modelName"))
+    {
+        Assert(parent);
+        char* modelType = GetValue(parent, "modelType");
+        hash = StringHash(modelType);
+    }
     
 	UIAutocomplete* result = UIFindAutocomplete(UI, hash, additionalHash);
     
@@ -1512,6 +1517,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                                 
                                 instantiateP = UIFollowingP(&deleteButton, buttonSeparator);
                             }
+                           
                             
                             UIInteraction instantiateInteraction = SendRequestInteraction(UI, UI_Click, InstantiateTaxonomyRequest(root->taxonomy, V3(1, 0, 0)));
                             UIAddSetValueAction(UI, &instantiateInteraction, UI_Idle, &UI->instantiatingTaxonomy, root->taxonomy);
@@ -2873,78 +2879,71 @@ inline void UIOverdrawInventoryView(UIState* UI)
     }
 }
 
-#define ICON_DIM 0.4f;
 inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput* input)
 {
-    
     RenderGroup* group = UI->group;
+    u32 slotCount = MAXIMUM_SKILL_SLOTS;
+
+    r32 additionalZBias = 10.0f;
     
-    r32 additionalZBias = 12.1f;
+    r32 minYRotation = 0;
+    r32 yIncrement = 0;
+    r32 yRotation = 0;
+    Vec3 totalOffset = {};
+    Vec3 runningOffset = {};
+    Vec3 deltaOffset = {};
     
-    BitmapId sphereID = GetFirstBitmap(group->assets, Asset_UISphere);
-    BitmapId sphereBoundsID = GetFirstBitmap(group->assets, Asset_UISphereBounds);
+    if(UI->mode == UIMode_Book)
+    {
+        
+        totalOffset = V3(6.0f, 0, 0);
+        deltaOffset = totalOffset * (1.0f / (r32) slotCount);
+        runningOffset = V3(-0.5f * totalOffset.x, -5.0f, 0.0f);
+    }
+    else
+    {
+        minYRotation = -60.0f;
+        yIncrement = (2.0f * Abs(minYRotation)) / (r32) slotCount;
+        yRotation = minYRotation;   
+    }
     
-    r32 iconDim = ICON_DIM;
-    r32 sphereDim = iconDim * 2.0f;
-    r32 slotDim = sphereDim * 1.0f;
-    
-    i32 slotCount = MAXIMUM_SKILL_SLOTS;
-    Assert((slotCount % 2) == 0);
-    Vec2 slotP = V2(-(slotCount / 2 * slotDim) + 0.5f * slotDim, -5.0f);
-    
-    for(i32 slotIndex = 0; slotIndex < slotCount; ++slotIndex)
+    if(slotCount % 2 == 0)
+    {
+       yRotation += 0.5f * yIncrement;
+    }
+    for(u32 slotIndex = 0; slotIndex < slotCount; ++slotIndex)
     {
         UISkill* skill = UI->skills + slotIndex;
         u32 skillTaxonomy = skill->taxonomy;
-        TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, skillTaxonomy);
-        
-        b32 drawBounds = false;
-        Vec4 color = V4(0, 0, 0, 0.2f);
-        if(slotIndex == UI->activeSkillSlotIndex)
-        {
-            drawBounds = true;
-            color.a = 0.5f;
-        }
-        
-        if(slot->isPassiveSkill)
-        {
-            drawBounds = true;
-            if(skill->active)
-            {
-                color.a = 0.5f;
-            }
-        }
-        
-        color.a *= modulationAlpha;
-        PushUIBitmap(group, sphereID, slotP, sphereDim, 0, additionalZBias, V2(1.0f, 1.0f), color);
-        
         
         if(skillTaxonomy)
         {
-            BitmapId iconID = GetRecursiveIconId(UI->table, group->assets, skillTaxonomy);
-            PushUIBitmap(group, iconID, slotP, iconDim, 0, additionalZBias, V2(1.0f, 1.0f), V4(1, 1, 1, color.a));
-        }
+         TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, skillTaxonomy);
         
-        if(drawBounds)
+        
+        Vec4 color = V4(1, 0, 0, 1);
+        u64 modelTypeID = StringHash("rock");
+        u64 modelNameID = StringHash("pyramid.obj");
+        Vec3 scale = V3(0.3f, 0.3f, 0.3f);
+        if((i32) slotIndex == UI->activeSkillSlotIndex)
         {
-            Vec4 boundsColor = V4(1, 1, 1, modulationAlpha);
-            if(slot->isPassiveSkill)
-            {
-                boundsColor = V4(1, 0, 0, modulationAlpha);
-                if(!skill->active)
-                {
-                    boundsColor = V4(0.2f, 0, 0, modulationAlpha);
-                }
-            }
-            
-            
-            PushUIBitmap(group, sphereBoundsID, slotP, sphereDim, 0, additionalZBias, V2(1.0f, 1.0f), boundsColor);
+            color = V4(0, 0, 0, 1);
         }
+        color.a *= modulationAlpha;
         
         
-        Vec3 skillP = GetWorldP(group, slotP);
-        Rect2 worldRect = RectCenterDim(V2(0, 0), V2(iconDim, iconDim));
-        Rect2 skillRect = ProjectOnScreenCameraAligned(group, skillP, worldRect);
+        m4x4 rotation = YRotation(DegToRad(yRotation));
+            Vec3 P = runningOffset;
+            
+            if(UI->mode != UIMode_Book)
+            {
+                P += GetColumn(rotation, 2) * 3.0f;
+            }
+               
+        ModelId MID = FindModelByName(UI->group->assets, modelTypeID, modelNameID);
+        PushModel(UI->group, MID, Identity(), P, V4(-1, -1, -1, -1), scale, color, 0, additionalZBias);
+        
+        Rect2 skillRect = InvertedInfinityRect2();
         if(skillTaxonomy && PointInRect(skillRect, UI->screenMouseP))
         {
             PushUITooltip(UI, slot->name, V4(1, 1, 1, 1));
@@ -2969,8 +2968,10 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
                 platformAPI.DEBUGWriteFile("skills", UI->skills, sizeof(UI->skills));
             }
         }
-        
-        slotP.x += slotDim;
+                
+        }
+        yRotation += yIncrement;   
+        runningOffset += deltaOffset;
     }
 }
 
@@ -3007,7 +3008,7 @@ inline void UIOverdrawEssences(UIState* UI)
     
     r32 additionalZBias = 12.2f;
     
-    r32 iconDim = ICON_DIM;
+    r32 iconDim = 0.4f;
     Vec2 iconPLeft = V2(-9.2f, 0.0f);
     Vec2 iconPRight = V2(9.2f, 0.0f);
     r32 quantityOffset = 1.0f * iconDim + 0.1f;
@@ -3366,6 +3367,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             UIAddChild(UI, misc->root, EditorElement_String, "recipeTaxonomy", "objects");
             UIAddChild(UI, misc->root, EditorElement_Unsigned, "recipeIndex", "0");
+            UIAddChild(UI, misc->root, EditorElement_Real, "generationIntensity", "1.0");
             UIAddChild(UI, misc->root, EditorElement_Unsigned, "worldSeed", "0");
             UIAddChild(UI, misc->root, EditorElement_String, "dayPhase", "Day");
             UIAddChild(UI, misc->root, EditorElement_Real, "windSpeed", "1.0");
@@ -4201,7 +4203,6 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
         case UIMode_Book:
         {
             b32 bookOnFocus = UpdateAndRenderBook(UI, input);
-            
             if(!bookOnFocus)
             {
                 UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_None));
@@ -4310,7 +4311,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
         alpha = Clamp01MapToRange(0, UI->skillSlotTimeout, targetSkillSlotTime);
     }
     
-    //UIOverdrawSkillSlots(UI, alpha, input);
+    UIOverdrawSkillSlots(UI, alpha, input);
     
     
     WrapScrollableList(&UI->possibleTargets);

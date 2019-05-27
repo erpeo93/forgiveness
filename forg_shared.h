@@ -2,15 +2,17 @@
 inline u64 StringHash( char* string, u32 length = U32_MAX )
 {
     u64 result = 0;
-    for( char* scan = string; *scan; ++scan )
+    if(string)
     {
-        if( length-- == 0 )
+        for( char* scan = string; *scan; ++scan )
         {
-            break;
+            if( length-- == 0 )
+            {
+                break;
+            }
+            result = 65599 * result + *scan;
         }
-        result = 65599 * result + *scan;
     }
-    
     return result;
 }
 

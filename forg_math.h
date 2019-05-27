@@ -428,12 +428,6 @@ inline Vec2 Hadamart( Vec2 a, Vec2 b )
     return result;
 }
 
-inline r32 Rad(Vec2 v)
-{
-    Vec2 norm = Normalize( v );
-    r32 result = ATan2(v.y, v.x);
-    return result;
-}
 //
 //
 //Vec3
@@ -1287,6 +1281,13 @@ inline Rect2i InvertedInfinityRect2i()
 inline Vec2 Arm2(r32 radiants)
 {
     Vec2 result = V2(Cos(radiants), Sin(radiants));
+    return result;
+}
+
+inline r32 AArm2(Vec2 v)
+{
+    Vec2 norm = Normalize(v);
+    r32 result = ATan2(v.y, v.x);
     return result;
 }
 

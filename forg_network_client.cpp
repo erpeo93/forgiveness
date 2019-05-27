@@ -431,10 +431,11 @@ inline void SendInstantiateRecipeRequest(u32 taxonomy, u64 recipeIndex, Vec3 off
 }
 
 
-inline void SendInstantiateTaxonomyRequest(u32 taxonomy, Vec3 offset)
+inline void SendInstantiateTaxonomyRequest(u32 taxonomy, Vec3 offset, r32 generationIntensity)
 {
+    generationIntensity = Clamp01(generationIntensity);
     StartPacket(InstantiateTaxonomy);
-    Pack("LV", taxonomy, offset);
+    Pack("LVd", taxonomy, offset, generationIntensity);
     CloseAndSendReliablePacket();
 }
 
@@ -539,7 +540,6 @@ inline void AddToSkillBlock(UIState* UI, SkillSlot skill)
     BookElement element;
     element.type = Book_Skill;
     element.taxonomy = skill.taxonomy;
-    element.skillPower = skill.power;
     element.skillLevel = skill.level;
     
     AddToElementBlock(UI, UI->bookModes + UIBook_Skills, element);
@@ -674,7 +674,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 EntityAction oldAction = e->action;
                 u32 oldTaxonomy = e->taxonomy;
                 
-                Unpack("llVLLQCLddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->recipeTaxonomy, &e->lifePoints, &e->maxLifePoints, &e->status);
+                Unpack("llVLLQCLdddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->recipeTaxonomy, &e->lifePoints, &e->maxLifePoints, &e->status, &e->generationIntensity);
                 
                 if(e->action != oldAction)
                 {
@@ -1023,7 +1023,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 b32 isPassive;
                 b32 levelUp;
                 
-                Unpack("lLLld", &levelUp, &skill.taxonomy, &skill.level, &isPassive, &skill.power);
+                Unpack("lLLl", &levelUp, &skill.taxonomy, &skill.level, &isPassive);
                 
                 if(levelUp)
                 {

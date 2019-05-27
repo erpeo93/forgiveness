@@ -149,11 +149,23 @@ Token GetToken( Tokenizer* tokenizer )
                 }
                 
                 bool pointParsed = false;
-                while((IsNumeric(tokenizer->at[0] ) || ( tokenizer->at[0] == '.' && !pointParsed ) ) && tokenizer->at[0] != '\0')
+                bool EParsed = false;
+                
+                while((IsNumeric(tokenizer->at[0] ) || ( tokenizer->at[0] == '.' && !pointParsed ) || (( tokenizer->at[0] == 'E' && !EParsed )) ) && tokenizer->at[0] != '\0')
                 {
                     if(tokenizer->at[0] == '.')
                     {
                         pointParsed = true;
+                    }
+                    
+                    if(tokenizer->at[0] == 'E')
+                    {
+                        if(tokenizer->at[1] == '+')
+                        {
+                            ++tokenizer->at;
+                            ++result.textLength;
+                            EParsed = true;
+                        }
                     }
                     ++tokenizer->at;
                     ++result.textLength;

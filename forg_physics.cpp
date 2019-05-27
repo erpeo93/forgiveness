@@ -13,7 +13,7 @@ internal b32 ShouldCollide(u64 id1, ForgBoundType b1, u64 id2, ForgBoundType b2)
     b32 result = false;
     
     if((id1 != id2) &&
-       (b1 != ForgBound_None) && (b2 != ForgBound_None))
+       (b1 > ForgBound_NonPhysical) && (b2 > ForgBound_NonPhysical))
     {
         result = true;
     }

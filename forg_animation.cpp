@@ -1809,7 +1809,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
     
     if(entitySlot->animationIn3d)
     {
-        ModelId MID = GetFirstModel(group->assets, Asset_RockModels);
+        ModelId MID = FindModelByName(group->assets, entitySlot->modelTypeID, entitySlot->modelNameID);
         
         PakModel* modelInfo = GetModelInfo(group->assets, MID);
         Vec3 standardDim = modelInfo->dim;
@@ -1819,7 +1819,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
         r32 scaleY = desiredDim.y / standardDim.y;
         r32 scaleZ = desiredDim.z / standardDim.z;
         
-        PushModel(group, MID, Identity(), entityC->P + V3(0, 0, 0), lightIndexes, V3(scaleX, scaleY, scaleZ), V4(1, 1, 1, 1), entityC->modulationWithFocusColor);
+        PushModel(group, MID, Identity(), entityC->P + entitySlot->modelOffset, lightIndexes, V3(scaleX, scaleY, scaleZ), entitySlot->modelColoration, entityC->modulationWithFocusColor);
     }
     else if(IsObject(worldMode->table, entityC->taxonomy))
     {
@@ -2226,7 +2226,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         
         if(!entityC->rock)
         {
-            ModelId ID = GetFirstModel(group->assets, Asset_RockModels);
+            ModelId ID = FindModelByName(group->assets, rockDefinition->modelTypeHash, rockDefinition->modelNameHash);
             VertexModel* tetraModel = GetModel(group->assets, ID);
             if(tetraModel)
             {
@@ -2301,6 +2301,11 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             MarkAllSlotsAsOccupied(entityC->equipment, dragging, ID);
         }
         
+        if(slot->animationFollowsVelocity)
+        {
+            r32 velocityAngle = AArm2(entityC->velocity.xy);
+            params.angle += RadToDeg(velocityAngle);
+        }
         result = PlayAndDrawEntity(worldMode, group, lightIndexes, entityC, animationScale, params.angle, params.offset, timeToUpdate, bodyColor, params.drawOpened, params.onTop, params.bounds, additionalZbias);
         
         if(IsValid(dragging))
@@ -2355,4 +2360,11 @@ internal Rect2 RenderObject(RenderGroup* group, GameModeWorld* worldMode, Object
     return result;
 }
 
+inline b32 AnimatedIn3d(TaxonomyTable* table, u32 taxonomy)
+{
+    TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
+    
+    b32 result = slot->animationIn3d;
+    return result;
+}
 

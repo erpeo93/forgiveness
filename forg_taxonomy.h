@@ -258,6 +258,7 @@ struct TaxonomyMemBehavior
 enum ForgBoundType
 {
     ForgBound_None,
+    ForgBound_NonPhysical,
     ForgBound_Standard,
 };
 
@@ -333,6 +334,9 @@ struct RockMineral
 struct RockDefinition
 {
     b32 collides;
+    
+    u64 modelTypeHash;
+    u64 modelNameHash;
     
     Vec4 color;
     Vec4 startingColorDelta;
@@ -414,7 +418,7 @@ struct TaxonomySlot
     
     
     b32 scaleDimBasedOnIntensity;
-    r32 scaleDimCoeffV;
+    r32 scaleDimGenCoeffV;
     ForgBoundType boundType;
     Rect3 physicalBounds;
     
@@ -430,7 +434,16 @@ struct TaxonomySlot
     TaxonomyBoneAlterations* firstBoneAlteration;
     TaxonomyAssAlterations* firstAssAlteration;
     
+    
     b32 animationIn3d;
+    b32 animationFollowsVelocity;
+    Vec3 modelOffset;
+    Vec4 modelColoration;
+    u64 modelTypeID;
+    u64 modelNameID;
+    
+    
+    
     r32 lightIntensity;
     Vec3 lightColor;
     u64 skeletonHashID;
@@ -444,6 +457,12 @@ struct TaxonomySlot
     r32 skillDistanceAllowed;
     r32 cooldown;
     b32 isPassiveSkill;
+    u32 turningPointLevel;
+    u32 maxLevel;
+    r32 radixExponent;
+    r32 exponentiationExponent;
+    r32 radixLerping;
+    r32 exponentiationLerping;
     
     
     u8 gridDimX;

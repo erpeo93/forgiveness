@@ -544,6 +544,7 @@ typedef enum PlatformFileType
     PlatformFile_image,
     PlatformFile_animation,
     PlatformFile_sound,
+    PlatformFile_model,
     PlatformFile_entityDefinition,
     PlatformFile_assetDefinition,
     PlatformFile_autocomplete,

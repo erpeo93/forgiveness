@@ -22,7 +22,7 @@ inline u32 RoundReal32ToU32( r32 value )
     return result;
 }
 
-inline r32 SquareRoot( r32 value )
+inline r32 SquareRoot(r32 value)
 {
     r32 result = _mm_cvtss_f32( _mm_sqrt_ss( _mm_set_ss( value ) ) );
     
@@ -165,3 +165,8 @@ inline r32 Pow(r32 value, r32 exp)
     return result;
 }
 
+inline r32 Root(r32 value, r32 exp)
+{
+    r32 result = (r32) pow(value, 1.0f / exp);
+    return result;
+}

@@ -622,6 +622,8 @@ void LoadModel(Assets* assets, ModelId ID)
                 model->vertexCount = vertexCount;
                 model->faceCount = faceCount;
                 
+                model->dim = info->dim;
+                
                 model->vertexes = (ColoredVertex*) base;
                 model->faces = (ModelFace*) (base + vertexCount * sizeof(ColoredVertex));
                 
@@ -888,6 +890,28 @@ struct FindAnimationResult
     AssetTypeId assetType;
 };
 
+inline ModelId FindModelByName(Assets* assets, u64 typeHashID, u64 nameHashID)
+{
+    ModelId result = {};
+    
+    u32 assetID = Asset_count + (typeHashID & (HASHED_ASSET_SLOTS - 1));
+    AssetType* type = assets->types + assetID;
+    for(u32 assetIndex = type->firstAssetIndex; 
+        assetIndex < type->onePastLastAssetIndex;
+        assetIndex++)
+    {
+        Asset* asset = assets->assets + assetIndex;
+        if(asset->paka.typeHashID == typeHashID && asset->paka.nameHashID == nameHashID)
+        {
+            result.value = assetIndex;
+            break;
+        }
+	}
+    
+    
+    return result;
+}
+
 inline FindAnimationResult FindAnimationByName(Assets* assets, u64 skeletonHashID, u64 animationNameHashID)
 {
     FindAnimationResult result = {};
@@ -962,6 +986,7 @@ inline BitmapId FindBitmapByName(Assets* assets, u32 assetType, u64 typeHashID, 
     
     return result;
 }
+
 
 inline BitmapId FindBitmapByName(Assets* assets, u32 assetID, u64 nameHashID)
 {

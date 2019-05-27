@@ -190,6 +190,8 @@ struct LoadedModel
     u32 vertexCount;
     u32 faceCount;
     
+    Vec3 dim;
+    
     ColoredVertex* vertexes;
     ModelFace* faces;
 };
@@ -198,6 +200,8 @@ struct VertexModel
 {
     u32 vertexCount;
     u32 faceCount;
+    
+    Vec3 dim;
     
     ColoredVertex* vertexes;
     ModelFace* faces;

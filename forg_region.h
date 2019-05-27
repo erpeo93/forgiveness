@@ -33,7 +33,6 @@ enum Entity_flags
 struct SkillSlot
 {
     u32 taxonomy;
-    r32 power;
     u32 level;
 };
 

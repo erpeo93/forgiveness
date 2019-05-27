@@ -123,7 +123,8 @@ inline void AddEffectByLink(SimRegion* region, SimEntity* entity, CraftingEffect
         if(effect->ID == link->effectID)
         {
             newEffect = false;
-            effect->basePower += 1.0f;
+            effect->minIntensity += 1.0f;
+            effect->maxIntensity += 1.0f;
         }
     }
     
@@ -132,7 +133,8 @@ inline void AddEffectByLink(SimRegion* region, SimEntity* entity, CraftingEffect
     {
         Assert(effects->effectCount < ArrayCount(effects->effects));
         Effect* effect = effects->effects + effects->effectCount++;
-        effect->basePower = 1.0f;
+        effect->minIntensity = 1.0f;
+        effect->maxIntensity = 1.0f;
         effect->triggerAction = link->triggerAction;
         effect->flags = link->target ? Effect_Target : 0;
         effect->ID = link->effectID;

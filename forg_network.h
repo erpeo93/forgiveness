@@ -345,6 +345,7 @@ struct InstantiateRequest
 {
     u32 taxonomy;
     Vec3 offset;
+    r32 generationIntensity;
 };
 
 struct InstantiateRecipeRequest
