@@ -192,7 +192,6 @@ enum Packet_Type
     Type_NewRecipe,
     Type_SkillCategories,
     Type_SkillLevel,
-    Type_CompletedAction,
     Type_StartedAction,
     Type_SyncAction,
     

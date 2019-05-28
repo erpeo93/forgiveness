@@ -1398,7 +1398,6 @@ internal b32 UpdateCreature(SimRegion* region, SimEntity* entity)
     
     result = (creature->lifePoints <= 0);
     creature->startedAction = 0;
-    creature->completedAction = 0;
     
     creature->skillCooldown -= region->timeToUpdate;
     creature->skillCooldown = Max(0, creature->skillCooldown);

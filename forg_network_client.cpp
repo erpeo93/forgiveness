@@ -1065,40 +1065,15 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 }
             } break;
             
-            case Type_CompletedAction:
-            {
-                u64 target;
-                u8 action;
-                Unpack("CQ", &action, &target);
-                
-                if(action == Action_Attack)
-                {
-                    ClientEntity* t = GetEntityClient(worldMode, target);
-                    if(t)
-                    {
-                        t->animation.spawnAshParticlesCount = 3;
-                    }
-                }
-#if 0                    
-                else if(action == Action_Craft && currentEntity->identifier == worldMode->player.identifier)
-                {
-                    UI->player->prediction.type = Prediction_None;
-                    UI->nextMode = UI->previousMode;
-                }
-#endif
-                
-            } break;
-            
             case Type_SyncAction:
             {
                 u8 action;
-                Unpack("C", &action);
-                ClientEntity* player = UI->player;
+                Unpack("CQ", &action);
                 
-				if(action == player->animation.action)
+				if(action == currentEntity->animation.action)
 				{
-					player->animation.waitingForSync = false;
-					player->animation.actionSyncronized = (u32) action;
+					currentEntity->animation.waitingForSync = false;
+					currentEntity->animation.actionSyncronized = (u32) action;
 				}
             } break;
             

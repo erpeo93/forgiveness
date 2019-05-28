@@ -458,11 +458,20 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
             if(actor->playerID)
             {
                 IgnoreAction(region, actor, Action_Cast);
-                
-                ServerPlayer* player = region->server->players + actor->playerID;
-                SendSyncAction(player, SafeTruncateToU8(Action_Cast));
             }
             
+            PartitionSurfaceEntityBlock* playerSurfaceBlock = QuerySpacePartitionPoint(region, &region->playerPartition, actor->P);
+            while(playerSurfaceBlock)
+            {
+                for( u32 playerIndex = 0; playerIndex < playerSurfaceBlock->entityCount; ++playerIndex )
+                {
+                    CollisionData* collider = playerSurfaceBlock->colliders + playerIndex;
+                    SimEntity* entityToSend = GetRegionEntity(region, collider->entityIndex);
+                    Assert(entityToSend->playerID);
+                    ServerPlayer* player = region->server->players + entityToSend->playerID;
+                    SendSyncAction(player, actor->identifier, SafeTruncateToU8(Action_Cast));
+                }
+            }
         } break;
         
         case Action_Eat:
@@ -771,8 +780,6 @@ internal void HandleAction(SimRegion* region, SimEntity* entity)
                 {
 					
 					CreatureComponent* creature = Creature(region, entity);
-					creature->completedAction = SafeTruncateToU8(consideringAction);
-					creature->completedActionTarget = destEntity->identifier;    
 					entity->actionTime = 0;
                     entity->action = dispatch.followingAction;
                 }
