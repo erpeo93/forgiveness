@@ -72,6 +72,7 @@ struct AnimationHeader
     u64 nameHash;
     
     u16 durationMS;
+    u16 preparationThreesoldMS;
     u16 syncThreesoldMS;
 };
 
@@ -158,6 +159,7 @@ struct LoadedAnimation
     u64 stringHashID;
     u16 durationMS;
     u16 syncThreesoldMS;
+    u16 preparationThreesoldMS;
     
     u32 spriteInfoCount;
     SpriteInfo spriteInfos[64];

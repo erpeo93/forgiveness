@@ -560,6 +560,20 @@ inline b32 TooFarForAction(ClientPlayer* myPlayer, u32 desiredAction, u64 target
     return result;
 }
 
+inline b32 NearEnoughForAction(ClientPlayer* myPlayer, u32 desiredAction, u64 targetID)
+{
+    b32 result = false;
+    if(desiredAction >= Action_Attack && targetID)
+    {
+        if(targetID == myPlayer->targetIdentifier && myPlayer->targetPossibleActions[desiredAction] == PossibleAction_CanBeDone)
+        {
+            result = true;
+        }
+    }
+    
+    return result;
+}
+
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
     
@@ -1059,7 +1073,16 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     ClientEntity* target = GetEntityClient(worldMode, output.targetEntityID);
                     Assert(target);
                     output.inputAcc = target->P - player->P;
+					//ApplyCollisionAvoidance();
 				}
+                else
+                {
+                    if(NearEnoughForAction(myPlayer, output.desiredAction, output.targetEntityID))
+                    {
+                        player->action = (EntityAction) output.desiredAction;
+                    }
+                }
+                
                 myPlayer->acceleration = output.inputAcc;
                 
                 

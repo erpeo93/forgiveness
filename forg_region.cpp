@@ -1398,6 +1398,7 @@ internal b32 UpdateCreature(SimRegion* region, SimEntity* entity)
     
     result = (creature->lifePoints <= 0);
     creature->startedAction = 0;
+    creature->completedAction = 0;
     
     creature->skillCooldown -= region->timeToUpdate;
     creature->skillCooldown = Max(0, creature->skillCooldown);
@@ -1596,7 +1597,7 @@ internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)
                 collider.entityIndex = entityIndex;
                 collider.insideRegion = IsSet(entity, Flag_insideRegion);
                 
-                Rect3 updateBounds = RectCenterDim(V3(0, 0, 0), V3(30.0f, 30.0f, 10.0f));
+                Rect3 updateBounds = RectCenterDim(V3(0, 0, 0), V3(40.0f, 40.0f, 10.0f));
                 AddToSpacePartition(region, &region->playerPartition, tempPool, 
                                     entity->P, updateBounds, collider);
             }

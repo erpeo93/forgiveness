@@ -604,6 +604,7 @@ inline void DeleteAllFilesNotArrived(GameModeWorld* worldMode, char* path)
     FREELIST_FREE(worldMode->firstFileToDelete, ToDeleteFile, worldMode->firstFreeFileToDelete);
 }
 
+inline void SignalAnimationSyncCompleted(AnimationState* animation, u32 action, AnimationSyncState state);
 internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
     UIState* UI = worldMode->UI;
@@ -1057,24 +1058,30 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 u8 action;
                 Unpack("CQ", &action, &target);
                 
+                SignalAnimationSyncCompleted(&currentEntity->animation, action, AnimationSync_Preparing);
+                
                 ClientEntity* targetEntity = GetEntityClient(worldMode, target);
                 if(targetEntity)
                 {
                     Vec3 relative = targetEntity->P - currentEntity->P;
                     currentEntity->animation.flipOnYAxis = (relative.x < 0);
                 }
+                
+                if((target == worldMode->player.identifier && action == Action_Attack) ||
+                   (currentEntity->identifier == worldMode->player.identifier && action == Action_Attack))
+                {
+                    worldMode->UI->nextMode = UIMode_Combat;
+                    worldMode->UI->modeTimer = 10.0f;
+                }
             } break;
             
-            case Type_SyncAction:
+            case Type_CompletedAction:
             {
+                u64 target;
                 u8 action;
-                Unpack("CQ", &action);
+                Unpack("CQ", &action, &target);
                 
-				if(action == currentEntity->animation.action)
-				{
-					currentEntity->animation.waitingForSync = false;
-					currentEntity->animation.actionSyncronized = (u32) action;
-				}
+                SignalAnimationSyncCompleted(&currentEntity->animation, action, AnimationSync_WaitingForCompletion);
             } break;
             
             case Type_DataFileHeader:

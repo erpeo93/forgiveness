@@ -10,6 +10,7 @@ printTable(noPrefix) enum EntityAction
     Action_None,
     Action_Move,
     Action_Examine,
+    Action_Protecting,
     Action_Attack,
     Action_Cast,
     Action_Eat,
@@ -20,7 +21,6 @@ printTable(noPrefix) enum EntityAction
     Action_Craft,
     Action_Die,
     Action_Rolling,
-    Action_Protecting,
     
     Action_Count,
 };

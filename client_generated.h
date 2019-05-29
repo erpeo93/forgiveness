@@ -20,6 +20,8 @@ MemberDefinition memberDefinitionOfCreatureComponent[] =
 { MetaType_EssenceSlot, "essences", (u32) ( &(( CreatureComponent* )0)->essences ) }, 
 { MetaType_u8, "startedAction", (u32) ( &(( CreatureComponent* )0)->startedAction ) }, 
 { MetaType_u64, "startedActionTarget", (u32) ( &(( CreatureComponent* )0)->startedActionTarget ) }, 
+{ MetaType_u8, "completedAction", (u32) ( &(( CreatureComponent* )0)->completedAction ) }, 
+{ MetaType_u64, "completedActionTarget", (u32) ( &(( CreatureComponent* )0)->completedActionTarget ) }, 
 { MetaType_u32, "nextFree", (u32) ( &(( CreatureComponent* )0)->nextFree ) }, 
 };
 #endif
@@ -69,6 +71,7 @@ char* MetaTable_EntityAction[] =
 "None",
 "Move",
 "Examine",
+"Protecting",
 "Attack",
 "Cast",
 "Eat",
@@ -79,7 +82,6 @@ char* MetaTable_EntityAction[] =
 "Craft",
 "Die",
 "Rolling",
-"Protecting",
 "Count",
 };
 char* MetaTable_EffectIdentifier[] = 

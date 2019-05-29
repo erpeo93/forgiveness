@@ -12,6 +12,7 @@ enum UIMode
     UIMode_Loot,
     UIMode_Equipment,
     UIMode_Book,
+    UIMode_Combat,
 };
 
 enum UIRequestType
@@ -764,6 +765,7 @@ struct UIState
     struct GameModeWorld* worldMode;
     struct ClientPlayer* myPlayer;
     
+    r32 modeTimer;
     UIMode nextMode;
     UIMode mode;
     UIMode previousMode;

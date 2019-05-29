@@ -3614,7 +3614,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         }
     }
     
-    if(UI->mode == UIMode_None)
+    if(UI->mode == UIMode_None || UI->mode == UIMode_Combat)
     {
         if(UI->draggingEntity.taxonomy)
         {
@@ -3713,7 +3713,13 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
         }
         else
         {
-            for(u32 actionIndex = Action_Attack; actionIndex < Action_Count; ++actionIndex)
+            u32 destAction = Action_Count;
+            if(UI->mode == UIMode_Combat)
+            {
+                destAction = Action_Attack + 1;
+            }
+            
+            for(u32 actionIndex = Action_Attack; actionIndex < destAction; ++actionIndex)
             {
                 if(UI->myPlayer->overlappingPossibleActions[actionIndex])
                 {
@@ -3753,7 +3759,7 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
 
                 UIAddInvalidCondition(&castInteraction, u32,ColdPointer(UI->myPlayer->targetPossibleActions + Action_Cast), Fixed(false));
                 UIAddInvalidCondition(&castInteraction, b32,ColdPointer(&UI->movingWithKeyboard), Fixed((b32)true), 0);
-                UIAddInvalidCondition(&castInteraction, b32,ColdPointer(&UI->player->animation.actionSyncronized), Fixed(Action_Cast));
+                UIAddInvalidCondition(&castInteraction, b32,ColdPointer(&UI->player->animation.lastSyncronizedAction), Fixed(Action_Cast));
                 
                 // TODO(Leonardo): add another invalid condition when the animationstate->waitingForSyncTimer >= threesold
                 
@@ -3824,7 +3830,6 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             UI->lockedInventoryID1 = 0;
             UI->lockedInventoryID2 = 0;
             UIResetListPossibility(UI, possibleTargets);
-            
             for(u32 overlappingIndex = 0; overlappingIndex < maxOverlappingEntities; ++overlappingIndex)
             {
                 if(overlappingEntities[overlappingIndex])
@@ -3844,7 +3849,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             }
             
             
-            
+            b32 addProtectInteraction = true;
             UIScrollableElement* activeElement = GetActiveElement(&UI->possibleTargets);
             if(activeElement)
             {
@@ -3853,6 +3858,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                 {
                     if(overlapping->identifier == player->identifier)
                     {
+                        addProtectInteraction = false;
                         if(UI->worldMode->editingEnabled && input->altDown)
                         {
                             TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, overlapping->taxonomy);
@@ -3874,13 +3880,11 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                     }
                     else
                     {
+                        
                         output->overlappingEntityID = overlapping->identifier;
                     }
                     
-                    if(overlapping->identifier != UI->player->targetID || UI->player->action == Action_None)
-                    {
                         overlapping->modulationWithFocusColor = worldMode->modulationWithFocusColor;
-                    }
                     
                     UIResetListPossibility(UI, possibleOverlappingActions);
                     if(overlapping->identifier == UI->myPlayer->overlappingIdentifier || (UI->worldMode->editingEnabled && input->altDown))
@@ -3915,6 +3919,19 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
 
             }
             
+            
+            if(addProtectInteraction)
+            {
+                
+                UIInteraction protectInteraction = {};
+                UIAddStandardAction(UI, &protectInteraction, UI_Idle, u32, ColdPointer(&output->desiredAction), Fixed(Action_Protecting));
+                UIAddStandardAction(UI, &protectInteraction, UI_Idle, u32, ColdPointer(&output->targetEntityID), Fixed(0));
+                UIAddClearAction(UI, &protectInteraction, UI_Idle, ColdPointer(&output->inputAcc), sizeof(output->inputAcc));
+                UIAddInteraction(UI, input, mouseRight, protectInteraction);
+                
+                
+            }
+            
             switch(UI->mouseMovement)
             {
                 case UIMouseMovement_ToMouseP:
@@ -3927,6 +3944,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                     else
                     {
                         output->inputAcc = UI->deltaMouseP;
+						//ApplyCollisionAvoidance();
                     }
                 } break;
                 
@@ -3938,6 +3956,8 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                 } break;
             }
             UI->mouseMovement = UIMouseMovement_None;
+            
+           
         } break;
         
         case UIMode_Loot:
@@ -4214,10 +4234,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                         if(overlapping->identifier != player->identifier)
                         {
                             output->overlappingEntityID = overlapping->identifier;
-                            if(overlapping->identifier != UI->player->targetID ||  UI->player->action == Action_None)
-                            {
                                 overlapping->modulationWithFocusColor = worldMode->modulationWithFocusColor;
-                            }
                             
                         }        
                         
@@ -4248,6 +4265,128 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             {
                 UI->skillSlotTimeout = UI->skillSlotMaxTimeout;
                 UIOverdrawEssences(UI);
+            }
+        } break;
+        
+        case UIMode_Combat:
+        {
+            UI->lockedInventoryID1 = 0;
+            UI->lockedInventoryID2 = 0;
+            UIResetListPossibility(UI, possibleTargets);
+            for(u32 overlappingIndex = 0; overlappingIndex < maxOverlappingEntities; ++overlappingIndex)
+            {
+                if(overlappingEntities[overlappingIndex] && overlappingEntities[overlappingIndex]->identifier != player->identifier)
+                {
+                    UIAddPossibility(&UI->possibleTargets, overlappingEntities[overlappingIndex]);
+                }
+            }
+            
+            if(UI->possibleOverlappingActions.currentIndex == (UI->possibleOverlappingActions.possibilityCount - 1))
+            {
+                if(scrollOffset > 0)
+                {
+                    ++UI->possibleTargets.currentIndex;
+                    WrapScrollableList(&UI->possibleTargets);
+                    scrollOffset = 0;
+                }
+            }
+            
+            
+            
+            b32 addProtectInteraction = true;
+            UIScrollableElement* activeElement = GetActiveElement(&UI->possibleTargets);
+            if(activeElement)
+            {
+                ClientEntity* overlapping = activeElement->entity;
+                if(overlapping)
+                {
+                    if(overlapping->identifier == player->identifier)
+                    {
+                        InvalidCodePath;
+                    }
+                    else
+                    {
+                        output->overlappingEntityID = overlapping->identifier;
+                    }
+                    
+                   
+                    overlapping->modulationWithFocusColor = worldMode->modulationWithFocusColor;
+                    
+                    UIResetListPossibility(UI, possibleOverlappingActions);
+                    if(overlapping->identifier == UI->myPlayer->overlappingIdentifier || (UI->worldMode->editingEnabled && input->altDown))
+                    {
+                        HandleOverlappingInteraction(UI, output, input, overlapping);
+                    }
+                    else
+                    {
+                        UIResetListIndex(UI, possibleOverlappingActions);
+                    }
+                }
+            }
+            else
+            {
+                if(!input->altDown)
+                {
+                                    UIResetListIndex(UI, possibleOverlappingActions);
+                UIInteraction mouseMovement = {};
+                UIAddStandardAction(UI, &mouseMovement, UI_Click, Vec3, ColdPointer(&UI->deltaMouseP), ColdPointer(&UI->worldMouseP));
+                UIAddStandardAction(UI, &mouseMovement, UI_Idle, u32, ColdPointer(&UI->mouseMovement), Fixed(UIMouseMovement_MouseDir));
+                UIAddInvalidCondition(&mouseMovement, b32, ColdPointer(&UI->movingWithKeyboard), Fixed(true), UI_Ended);
+                
+                if(false)
+                {
+                    UIAddStandardAction(UI, &mouseMovement, UI_Click, b32, ColdPointer(&UI->reachedPosition), Fixed(false));
+                    UIAddStandardAction(UI, &mouseMovement, UI_Click | UI_Retroactive, u32, ColdPointer(&UI->mouseMovement), Fixed(UIMouseMovement_ToMouseP));
+                    UIAddInvalidCondition(&mouseMovement, b32, ColdPointer(&UI->reachedPosition), Fixed(true), UI_Ended);
+                }
+                
+                UIAddInteraction(UI, input, mouseLeft, mouseMovement);
+                }
+
+            }
+            
+            
+            if(addProtectInteraction)
+            {
+                
+                UIInteraction protectInteraction = {};
+                UIAddStandardAction(UI, &protectInteraction, UI_Idle, u32, ColdPointer(&output->desiredAction), Fixed(Action_Protecting));
+                UIAddStandardAction(UI, &protectInteraction, UI_Idle, u32, ColdPointer(&output->targetEntityID), Fixed(0));
+                UIAddClearAction(UI, &protectInteraction, UI_Idle, ColdPointer(&output->inputAcc), sizeof(output->inputAcc));
+                UIAddInteraction(UI, input, mouseRight, protectInteraction);
+            }
+            
+            switch(UI->mouseMovement)
+            {
+                case UIMouseMovement_ToMouseP:
+                {
+                    if(LengthSq(UI->deltaMouseP) < Square(0.6f))
+                    {
+                        UI->reachedPosition = true;
+                        output->inputAcc = V3(0, 0, 0);
+                    }
+                    else
+                    {
+                        output->inputAcc = UI->deltaMouseP;
+						//ApplyCollisionAvoidance();
+                    }
+                } break;
+                
+                case UIMouseMovement_MouseDir:
+                {
+                    Vec3 dir = UI->worldMouseP - player->P;
+                    output->inputAcc = dir;
+                    output->desiredAction = Action_Move;
+                } break;
+            }
+            UI->mouseMovement = UIMouseMovement_None;
+            
+            
+          
+            UI->modeTimer -= input->timeToAdvance;
+            if(UI->modeTimer <= 0.0f)
+            {
+                UI->nextMode = UI->previousMode;
             }
         } break;
     }
@@ -4339,13 +4478,13 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             startIndex += offset;
         }
     }
-    
-    if(LengthSq(output->inputAcc) > 0)
+
+    if(UI->mode != UIMode_Combat && LengthSq(output->inputAcc) > 0)
     {
         UI->mode = UIMode_None;
         UI->nextMode = UIMode_None;
     }
-    
+
     r32 targetSkillSlotTime = 2.0f;
     UI->skillSlotTimeout -= input->timeToAdvance;
     

@@ -650,11 +650,11 @@ inline void SendStartedAction(ServerPlayer* player, u64 entityID, u8 actionIndex
     CloseAndStoreStandardPacket(player, entityID);
 }
 
-inline void SendSyncAction(ServerPlayer* player, u64 entityID, u8 actionIndex)
+inline void SendCompletedAction(ServerPlayer* player, u64 entityID, u8 actionIndex, u64 targetID)
 {
-    StartPacket(player, SyncAction);
-    Pack("C", actionIndex);
-    CloseAndStoreReliablePacket(player, entityID);
+    StartPacket(player, CompletedAction);
+    Pack("CQ", actionIndex, targetID);
+    CloseAndStoreStandardPacket(player, entityID);
 }
 
 inline void SendObjectEntityHeader(ServerPlayer* player, u64 containerID)
@@ -783,6 +783,11 @@ internal void SendEntityUpdate(SimRegion* region, SimEntity* entity)
                 if(creature->startedAction)
                 {
                     SendStartedAction(player, entity->identifier, creature->startedAction, creature->startedActionTarget);
+                }
+                
+                if(creature->completedAction)
+                {
+                    SendCompletedAction(player, entity->identifier, creature->completedAction, creature->completedActionTarget);
                 }
             }
             

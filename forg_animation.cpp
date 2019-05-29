@@ -267,6 +267,30 @@ inline b32 RequiresSync(EntityAction action)
     return result;
 }
 
+inline void StartNextAction(AnimationState* state)
+{
+    state->stopAtNextBarrier = false;
+    state->totalTime = 0;
+    state->syncState = AnimationSync_None;
+    state->waitingForSyncTimer = 0;
+    state->action = state->nextAction;
+    state->lastSyncronizedAction = Action_None;
+    
+    if(RequiresSync((EntityAction) state->action))
+    {
+        state->syncState = AnimationSync_Preparing;
+    }
+}
+
+inline void PushNewAction(AnimationState* animation, u32 action)
+{
+    if(action != animation->action)
+    {
+        animation->stopAtNextBarrier = true;
+        animation->nextAction = action;
+    }
+}
+
 internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, BlendResult* blended, Animation* animation, AnimationState* state, r32 elapsedTime, AnimationVolatileParams* params)
 {
     AnimationHeader* header = animation->header;
@@ -274,24 +298,44 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
     r32 oldTime = state->totalTime;
     r32 newTime = oldTime + elapsedTime;
     
-    if(state->waitingForSync)
+    switch(state->syncState)
     {
-        u32 oldTimeline = (u32) (oldTime * 1000.0f) % header->durationMS;
-        u32 newTimeline = (u32) (newTime * 1000.0f) & header->durationMS;
-        
-        u32 syncThreesold = header->syncThreesoldMS;
-        if(oldTimeline <= syncThreesold && newTimeline > syncThreesold)
-        {
-            state->waitingForSyncTimer += elapsedTime;
-        }
-        else
+        case AnimationSync_None:
         {
             state->totalTime = newTime;
-        }
-    }
-    else
-    {
-        state->totalTime = newTime;
+        } break;
+        
+        case AnimationSync_Preparing:
+        {
+            u32 oldTimeline = (u32) (oldTime * 1000.0f) % header->durationMS;
+            u32 newTimeline = (u32) (newTime * 1000.0f) & header->durationMS;
+            
+            u32 preparationThreesold = header->preparationThreesoldMS;
+            if(oldTimeline <= preparationThreesold && newTimeline > preparationThreesold)
+            {
+                state->waitingForSyncTimer += elapsedTime;
+            }
+            else
+            {
+                state->totalTime = newTime;
+            }
+        } break;
+        
+        case AnimationSync_WaitingForCompletion:
+        {
+            u32 oldTimeline = (u32) (oldTime * 1000.0f) % header->durationMS;
+            u32 newTimeline = (u32) (newTime * 1000.0f) & header->durationMS;
+            
+            u32 syncThreesold = header->syncThreesoldMS;
+            if(oldTimeline <= syncThreesold && newTimeline > syncThreesold)
+            {
+                state->waitingForSyncTimer += elapsedTime;
+            }
+            else
+            {
+                state->totalTime = newTime;
+            }
+        } break;
     }
     
     
@@ -388,17 +432,7 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
     
     if(timeline >= header->durationMS || (state->stopAtNextBarrier && !RequiresSync((EntityAction) state->action)) || state->waitingForSyncTimer >= waitingForSyncThreesold)
     {
-        state->stopAtNextBarrier = false;
-        state->totalTime = 0;
-        state->waitingForSync = false;
-        state->waitingForSyncTimer = 0;
-        state->action = state->nextAction;
-        state->actionSyncronized = Action_None;
-        
-        if(RequiresSync((EntityAction) state->action))
-        {
-            state->waitingForSync = true;
-        }
+        StartNextAction(state);
     }
     
 #if 0    
@@ -617,12 +651,33 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
 }
 
 
-inline void PushNewAction(AnimationState* animation, u32 action)
+
+inline void SignalAnimationSyncCompleted(AnimationState* animation, u32 action, AnimationSyncState state)
 {
     if(action != animation->action)
     {
-        animation->stopAtNextBarrier = true;
-        animation->nextAction = action;
+        PushNewAction(animation, action);
+        StartNextAction(animation);
+    }
+    
+    switch(state)
+    {
+        case AnimationSync_None:
+        {
+        } break;
+        
+        case AnimationSync_Preparing:
+        {
+            animation->syncState = AnimationSync_WaitingForCompletion;
+            animation->waitingForSyncTimer = 0;
+        } break;
+        
+        case AnimationSync_WaitingForCompletion:
+        {
+            animation->syncState = AnimationSync_None;
+            animation->waitingForSyncTimer = 0;
+            animation->lastSyncronizedAction = action;
+        } break;
     }
 }
 
@@ -642,7 +697,7 @@ internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* tab
             VisualComponent* visualComponent = dest->components + dest->componentCount++;
             
             visualComponent->stringHashID = piece->componentHashID;
-			visualComponent->index = piece->index;
+            visualComponent->index = piece->index;
             visualComponent->labelCount = 0;
             
             LayoutPiece* visualPiece = piece;
@@ -975,7 +1030,7 @@ struct RenderAssResult
 {
     b32 onFocus;
     b32 screenInRect;
-	r32 distanceFromAssCenter;
+    r32 distanceFromAssCenter;
 };
 
 inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender, b32 isEquipmentAss, Vec4 proceduralColor = V4(1, 1, 1, 1))
@@ -1220,18 +1275,18 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     Vec2 pivot = sprite->pivot;
                     BitmapDim dim = PushBitmapWithPivot(group, objectTransform, BID, P, pivot, 0, finalScale, color, pieceParams.lightIndexes);
                     
-					if(input->debug.ortho)
-					{
+                    if(input->debug.ortho)
+                    {
                         Vec2 XAxis = dim.XAxis.xy * dim.size.x;
                         Vec2 YAxis = dim.YAxis.xy * dim.size.y;
                         Vec2 startP = dim.P.xy;
-						if(PointInUnalignedRect(startP, XAxis, YAxis, input->relativeScreenMouseP))
-						{
-							Vec2 centerP = startP + 0.5f * XAxis + 0.5f * YAxis;
-							result.distanceFromAssCenter = Length(centerP - input->relativeScreenMouseP);
-							result.screenInRect = true;
-						}
-					}
+                        if(PointInUnalignedRect(startP, XAxis, YAxis, input->relativeScreenMouseP))
+                        {
+                            Vec2 centerP = startP + 0.5f * XAxis + 0.5f * YAxis;
+                            result.distanceFromAssCenter = Length(centerP - input->relativeScreenMouseP);
+                            result.screenInRect = true;
+                        }
+                    }
                     
                     Vec3 particleP = P + pieceParams.cameraOffset.x * group->gameCamera.X + pieceParams.cameraOffset.y * group->gameCamera.Y + pieceParams.cameraOffset.z * group->gameCamera.Z;
                     Vec3 velocity = V3(0, 0, 0.14f);
@@ -1370,7 +1425,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                                             input->lifePointsSeedResetCounter, input->lifePointFadeDuration, input->lifePointThreesold, input->lifePointRatio, input->cameInTime, input->entity->status);
                 proceduralColor.a *= alpha;
                 
-				RenderAssResult render = RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, true,  proceduralColor);
+                RenderAssResult render = RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, true,  proceduralColor);
                 
                 if(render.onFocus)
                 {
@@ -1914,10 +1969,10 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
                 if(!debugParams.ortho)
                 {
                     animationState->bounds = Offset(animationBounds, AID.originOffset);
-					if(entityC->action == Action_None)
-					{
-						animationState->cameraEntityOffset = GetCenter(animationState->bounds);
-					}
+                    if(entityC->action == Action_None)
+                    {
+                        animationState->cameraEntityOffset = GetCenter(animationState->bounds);
+                    }
                 }
                 
                 UpdateAndRenderAnimation(&input, group, animation, AID.skeletonHashID, P, animationState, &params, timeToAdvance);

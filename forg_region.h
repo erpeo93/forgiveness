@@ -105,6 +105,9 @@ introspection() struct CreatureComponent
     u8 startedAction;
     u64 startedActionTarget;
     
+    u8 completedAction;
+    u64 completedActionTarget;
+    
     u32 nextFree;
 };
 

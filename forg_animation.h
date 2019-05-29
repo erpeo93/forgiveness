@@ -120,14 +120,21 @@ struct AnimationOutput
     i16 hotAssIndex;
 };
 
+enum AnimationSyncState
+{
+    AnimationSync_None,
+    AnimationSync_Preparing,
+    AnimationSync_WaitingForCompletion,
+};
+
 struct AnimationState
 {
     AnimationOutput output;
     EquipInfo nearestCompatibleSlotForDragging;
     
-    b32 waitingForSync;
+    AnimationSyncState syncState;
     r32 waitingForSyncTimer;
-    u32 actionSyncronized;
+    u32 lastSyncronizedAction;
     
     u32 action;
     u32 nextAction;

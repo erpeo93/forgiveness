@@ -1493,6 +1493,17 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                             }
                         }
                     }
+                    else if(TokenEquals(t, "preparationThreesold"))
+                    {
+                        if(RequireToken(&tokenizer, Token_EqualSign))
+                        {
+                            Token value = GetToken(&tokenizer);
+                            if(activeProperties)
+                            {
+                                result.preparationThreesoldMS = (u16) atoi(value.text);
+                            }
+                        }
+                    }
                 } break;
                 
                 case Token_SemiColon:
@@ -2072,6 +2083,7 @@ internal void WritePak(Assets* assets, char* fileName_)
                         
                         source->animation.header.durationMS = animation.durationMS;
                         source->animation.header.syncThreesoldMS = animation.syncThreesoldMS;
+                        source->animation.header.preparationThreesoldMS = animation.preparationThreesoldMS;
                         source->animation.header.nameHash = animation.stringHashID;
                         dest->nameHashID = animation.stringHashID;
                         if(!dest->typeHashID)
