@@ -2996,7 +2996,7 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
     }
 }
 
-inline void RenderEssence(UIState* UI, RenderGroup* group, TaxonomySlot* slot, Vec2 P, r32 iconDim, r32 additionalZBias)
+inline void RenderEssence(UIState* UI, RenderGroup* group, TaxonomySlot* slot, Vec3 P, r32 iconDim, r32 additionalZBias)
 {
     u64 modelTypeID = StringHash("rock");
     u64 modelNameID = StringHash("pyramid.obj");
@@ -3021,7 +3021,7 @@ inline void RenderEssence(UIState* UI, RenderGroup* group, TaxonomySlot* slot, V
    
     Vec3 finalModelDim = scale;
     r32 ignoredCameraZ;
-    Rect2 essenceRect = ProjectOnScreen(group, RectCenterDim(V3(P, 0), finalModelDim), &ignoredCameraZ);
+    Rect2 essenceRect = ProjectOnScreen(group, RectCenterDim(P, finalModelDim), &ignoredCameraZ);
     if(PointInRect(essenceRect, UI->screenMouseP))
     {        
         color = hoverColor;
@@ -3031,7 +3031,7 @@ inline void RenderEssence(UIState* UI, RenderGroup* group, TaxonomySlot* slot, V
         PushUITooltip(UI, essenceString, V4(1, 1, 1, 1));
     }
     
-    PushModel(group, MID, Identity(), V3(P, 0), V4(-1, -1, -1, -1), scale, color, 0, additionalZBias);
+    PushModel(group, MID, Identity(), P, V4(-1, -1, -1, -1), scale, color, 0, additionalZBias);
        
     }
 }
@@ -3041,34 +3041,29 @@ inline void UIOverdrawEssences(UIState* UI)
     RenderGroup* group = UI->group;
     TaxonomySlot* essencesSlot = NORUNTIMEGetTaxonomySlotByName(UI->table, "essences");
     
-    r32 additionalZBias = 12.2f;
+    r32 additionalZBias = 20.2f;
     
-    Vec2 iconPLeft = V2(-9.2f, 0.0f);
-    Vec2 iconPRight = V2(9.2f, 0.0f);
+    Vec3 iconPLeft = V3(-8.5f, 0.0f, 0.0f);
+    Vec3 iconPRight = V3(8.5f, 0.0f, 0.0f);
     
     u32 half = essencesSlot->subTaxonomiesCount / 2;
     
     r32 essenceDim = 0.5f;
-    r32 totalEssenceYSpace = 8.0f;
+    r32 totalEssenceYSpace = 3.0f;
     r32 essenceSpace = totalEssenceYSpace / half;
-    
-    r32 halfOffset = (r32) half * -essenceSpace;
-    iconPLeft.y -= halfOffset;
-    iconPRight.y -= halfOffset;
-    
-    
+        
     for(u32 essenceIndex = 0; essenceIndex < half; ++essenceIndex)
     {
         TaxonomySlot* slot = GetNthChildSlot(UI->table, essencesSlot, essenceIndex);
         RenderEssence(UI, group, slot, iconPLeft, essenceDim, additionalZBias);
-        iconPLeft.y += essenceSpace;
+        iconPLeft += essenceSpace * group->gameCamera.Y;
     }
     
     for(u32 essenceIndex = half; essenceIndex < essencesSlot->subTaxonomiesCount; ++essenceIndex)
     {
         TaxonomySlot* slot = GetNthChildSlot(UI->table, essencesSlot, essenceIndex);
         RenderEssence(UI, group, slot, iconPRight, essenceDim, additionalZBias);
-        iconPRight.y += essenceSpace;
+        iconPRight += essenceSpace * group->gameCamera.Y;
     }
 }
 

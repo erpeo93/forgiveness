@@ -179,6 +179,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         
         u32 ID;
         SimEntity* entity = GetFreeEntity(server, &ID);
+        *entity = {};
         
         entity->flags = 0;
         entity->P = P;

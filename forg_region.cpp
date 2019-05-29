@@ -1297,7 +1297,6 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             AddEntityAdditionalParams params = DefaultAddEntityParams();
             
             TaxonomySlot* slot = GetSlotForTaxonomy(server->activeTable, request.taxonomy);
-            
             GenerationData gen = NullGenerationData();
             if(slot->firstLayout)
             {
