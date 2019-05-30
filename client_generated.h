@@ -72,6 +72,7 @@ char* MetaTable_EntityAction[] =
 "Move",
 "Examine",
 "Protecting",
+"Rolling",
 "Attack",
 "Cast",
 "Eat",
@@ -81,7 +82,6 @@ char* MetaTable_EntityAction[] =
 "Open",
 "Craft",
 "Die",
-"Rolling",
 "Count",
 };
 char* MetaTable_EffectIdentifier[] = 

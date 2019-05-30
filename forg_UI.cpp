@@ -2986,7 +2986,6 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
          
             color.a *= modulationAlpha;
             PushModel(UI->group, MID, Identity(), P, V4(-1, -1, -1, -1), scale, color, 0, additionalZBias);
-                
             }
 
             
@@ -3271,6 +3270,7 @@ inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, Vec2 P, u
 
 inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, ClientEntity* player, PlatformInput* input, r32 fontCoeff, b32 loadTaxonomyAutocompletes, b32 loadAssetAutocompletes)
 {
+    UI->output = {};
     UI->table = worldMode->table;
     if(!UI->initialized)
     {
@@ -3917,11 +3917,20 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             
             if(addProtectInteraction)
             {
-                
+
                 UIInteraction protectInteraction = {};
+                protectInteraction.idleFrameOfDelay = 10;
+
                 UIAddStandardAction(UI, &protectInteraction, UI_Idle, u32, ColdPointer(&output->desiredAction), Fixed(Action_Protecting));
                 UIAddStandardAction(UI, &protectInteraction, UI_Idle, u32, ColdPointer(&output->targetEntityID), Fixed(0));
                 UIAddClearAction(UI, &protectInteraction, UI_Idle, ColdPointer(&output->inputAcc), sizeof(output->inputAcc));
+
+                UIAddStandardAction(UI, &protectInteraction, UI_DoubleClick | UI_Retroactive, u32, ColdPointer(&output->desiredAction), Fixed(Action_Rolling));
+                UIAddStandardAction(UI, &protectInteraction, UI_DoubleClick | UI_Retroactive, u32, ColdPointer(&output->targetEntityID), Fixed(0));
+                //UIAddInvalidCondition(&protectInteraction, u32,ColdPointer(UI->myPlayer->canRoll), Fixed(false));
+                UIAddInvalidCondition(&protectInteraction, b32,ColdPointer(&UI->player->animation.lastSyncronizedAction), Fixed(Action_Rolling));
+                
+                
                 UIAddInteraction(UI, input, mouseRight, protectInteraction);
                 
                 
@@ -3952,7 +3961,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             }
             UI->mouseMovement = UIMouseMovement_None;
             
-           
+            
         } break;
         
         case UIMode_Loot:
@@ -4229,7 +4238,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                         if(overlapping->identifier != player->identifier)
                         {
                             output->overlappingEntityID = overlapping->identifier;
-                                overlapping->modulationWithFocusColor = worldMode->modulationWithFocusColor;
+                            overlapping->modulationWithFocusColor = worldMode->modulationWithFocusColor;
                             
                         }        
                         
@@ -4304,7 +4313,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                         output->overlappingEntityID = overlapping->identifier;
                     }
                     
-                   
+                    
                     overlapping->modulationWithFocusColor = worldMode->modulationWithFocusColor;
                     
                     UIResetListPossibility(UI, possibleOverlappingActions);
@@ -4322,22 +4331,22 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             {
                 if(!input->altDown)
                 {
-                                    UIResetListIndex(UI, possibleOverlappingActions);
-                UIInteraction mouseMovement = {};
-                UIAddStandardAction(UI, &mouseMovement, UI_Click, Vec3, ColdPointer(&UI->deltaMouseP), ColdPointer(&UI->worldMouseP));
-                UIAddStandardAction(UI, &mouseMovement, UI_Idle, u32, ColdPointer(&UI->mouseMovement), Fixed(UIMouseMovement_MouseDir));
-                UIAddInvalidCondition(&mouseMovement, b32, ColdPointer(&UI->movingWithKeyboard), Fixed(true), UI_Ended);
-                
-                if(false)
-                {
-                    UIAddStandardAction(UI, &mouseMovement, UI_Click, b32, ColdPointer(&UI->reachedPosition), Fixed(false));
-                    UIAddStandardAction(UI, &mouseMovement, UI_Click | UI_Retroactive, u32, ColdPointer(&UI->mouseMovement), Fixed(UIMouseMovement_ToMouseP));
-                    UIAddInvalidCondition(&mouseMovement, b32, ColdPointer(&UI->reachedPosition), Fixed(true), UI_Ended);
+                    UIResetListIndex(UI, possibleOverlappingActions);
+                    UIInteraction mouseMovement = {};
+                    UIAddStandardAction(UI, &mouseMovement, UI_Click, Vec3, ColdPointer(&UI->deltaMouseP), ColdPointer(&UI->worldMouseP));
+                    UIAddStandardAction(UI, &mouseMovement, UI_Idle, u32, ColdPointer(&UI->mouseMovement), Fixed(UIMouseMovement_MouseDir));
+                    UIAddInvalidCondition(&mouseMovement, b32, ColdPointer(&UI->movingWithKeyboard), Fixed(true), UI_Ended);
+                    
+                    if(false)
+                    {
+                        UIAddStandardAction(UI, &mouseMovement, UI_Click, b32, ColdPointer(&UI->reachedPosition), Fixed(false));
+                        UIAddStandardAction(UI, &mouseMovement, UI_Click | UI_Retroactive, u32, ColdPointer(&UI->mouseMovement), Fixed(UIMouseMovement_ToMouseP));
+                        UIAddInvalidCondition(&mouseMovement, b32, ColdPointer(&UI->reachedPosition), Fixed(true), UI_Ended);
+                    }
+                    
+                    UIAddInteraction(UI, input, mouseLeft, mouseMovement);
                 }
                 
-                UIAddInteraction(UI, input, mouseLeft, mouseMovement);
-                }
-
             }
             
             
@@ -4377,7 +4386,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             UI->mouseMovement = UIMouseMovement_None;
             
             
-          
+            
             UI->modeTimer -= input->timeToAdvance;
             if(UI->modeTimer <= 0.0f)
             {
@@ -4473,13 +4482,13 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             startIndex += offset;
         }
     }
-
+    
     if(UI->mode != UIMode_Combat && LengthSq(output->inputAcc) > 0)
     {
         UI->mode = UIMode_None;
         UI->nextMode = UIMode_None;
     }
-
+    
     r32 targetSkillSlotTime = 2.0f;
     UI->skillSlotTimeout -= input->timeToAdvance;
     
@@ -4499,7 +4508,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
     WrapScrollableList(&UI->possibleTargets);
     UpdateScrollableList(UI, UI->toUpdateList, scrollOffset);
     UIRenderList(UI, UI->toRenderList);
-        
+    
     if(worldMode->editingEnabled)
     {
         UIRenderEditor(UI, input);
@@ -4522,7 +4531,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                 UIResetActiveInteractions(UI, buttonIndex, interaction->excludeFromReset);
                 UIDispatchInteraction(UI, interaction, UI_Trigger, input->timeToAdvance);
                 
-               
+                
                 UI->activeInteractions[buttonIndex] = *interaction;
                 
                 interaction->firstAction = 0;
@@ -4541,21 +4550,38 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             PlatformButton* button = input->buttons + buttonIndex;
             if(!(interaction->flags & UI_Ended))
             {
-                UIDispatchInteraction(UI, interaction, UI_Idle, input->timeToAdvance);
-                if(Clicked(button, 10))
+                if(interaction->idleAllowed)
                 {
-                    UIDispatchInteraction(UI, interaction, UI_Click, input->timeToAdvance);
-                    interaction->flags |= UI_Ended;
+                    UIDispatchInteraction(UI, interaction, UI_Idle, input->timeToAdvance);
+                }
+                if(DoubleClicked(button, 22))
+                {
+                    if(UIDispatchInteraction(UI, interaction, UI_DoubleClick, input->timeToAdvance))
+                    {
+                        interaction->flags |= UI_Ended;
+                    }
+                }
+                else if(Clicked(button, 10))
+                {
+                    if(UIDispatchInteraction(UI, interaction, UI_Click, input->timeToAdvance))
+                    {
+                        interaction->flags |= UI_Ended;
+                    }
                 }
                 else if(KeptDown(button, 12))
                 {
                     UIDispatchInteraction(UI, interaction, UI_KeptPressed, input->timeToAdvance, true);
                 }
                 
+                if(KeptDown(button, interaction->idleFrameOfDelay))
+                {
+                    interaction->idleAllowed  = true;
+                }
+                
                 if(Released(button))
                 {
                     UIDispatchInteraction(UI, interaction, UI_Release, input->timeToAdvance);
-                    interaction->flags |= UI_Ended;
+                        interaction->flags |= UI_Ended;
                 }
             }
             else

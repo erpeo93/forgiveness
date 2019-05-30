@@ -188,9 +188,10 @@ enum UIMemoryPairFlags
     UI_Release = (1 << 3),
     UI_KeptPressed = (1 << 4),
     UI_Click = (1 << 5),
-    UI_Retroactive = (1 << 6),
-    UI_Activated = (1 << 7),
-    UI_HasTimer = (1 << 8),
+    UI_DoubleClick = (1 << 6),
+    UI_Retroactive = (1 << 7),
+    UI_Activated = (1 << 8),
+    UI_HasTimer = (1 << 9),
 };
 
 enum UIInteractionFlags
@@ -687,6 +688,9 @@ struct UIInteraction
     
     u32 checkCount;
     UIInteractionCheck checks[4];
+    
+    u32 idleFrameOfDelay;
+    b32 idleAllowed;
     
     UIInteractionData data;
 };

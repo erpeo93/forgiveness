@@ -720,18 +720,24 @@ inline r32 GetActionTargetTime(SimRegion* region, SimEntity* actor, SimEntity* t
     r32 result = R32_MAX;
 	//TODO(leonardo): alter this based on the action and the weapon (the weapon sets a special effect that is like 'ActionTime_effect'?)
 	//TODO(leonardo): set this when the action starts!
-    
-    TaxonomySlot* targetSlot = GetSlotForTaxonomy(region->taxTable, target->taxonomy);
-    PossibleAction* possibleAction = GetPossibleAction(targetSlot, action);
-    
-    if(possibleAction)
+    if(action == Action_Rolling)
     {
-        TaxonomyNode* node = FindInTaxonomyTree(region->taxTable, possibleAction->tree.root, actor->taxonomy);
-        result = node->data.action.requiredTime;
+        result = 0.3f;
     }
-    else
+    if(target)
     {
-        InvalidCodePath;
+        TaxonomySlot* targetSlot = GetSlotForTaxonomy(region->taxTable, target->taxonomy);
+        PossibleAction* possibleAction = GetPossibleAction(targetSlot, action);
+        
+        if(possibleAction)
+        {
+            TaxonomyNode* node = FindInTaxonomyTree(region->taxTable, possibleAction->tree.root, actor->taxonomy);
+            result = node->data.action.requiredTime;
+        }
+        else
+        {
+            InvalidCodePath;
+        }
     }
 	return result;
 }
@@ -741,36 +747,32 @@ internal void HandleAction(SimRegion* region, SimEntity* entity)
 {
     ServerState* server = region->server;
     EntityAction consideringAction = entity->action;
-    SimEntity* destEntity = GetRegionEntityByID( region, entity->targetID );
-    if(destEntity)
+    SimEntity* destEntity = GetRegionEntityByID(region, entity->targetID);
+    b32 canDo = true;
+    if(RequiresOwnership(consideringAction))
     {
-        b32 canDo = true;
-        if(RequiresOwnership(consideringAction))
+        if(!Owned(destEntity, entity->identifier))
         {
-            if(!Owned(destEntity, entity->identifier))
-            {
-                canDo = false;
-            }
+            canDo = false;
         }
+    }
+    
+    if(canDo)
+    {
+        r32 actionVelocity = GetActionVelocity(region, entity, consideringAction);
+        r32 targetTime = GetActionTargetTime(region, entity, destEntity, consideringAction);
         
-        if(canDo)
+        entity->actionTime += region->timeToUpdate * actionVelocity;
+        if(entity->actionTime > targetTime)
         {
-			r32 actionVelocity = GetActionVelocity(region, entity, consideringAction);
-			r32 targetTime = GetActionTargetTime(region, entity, destEntity, consideringAction);
-            
-            entity->actionTime += region->timeToUpdate * actionVelocity;
-            if(entity->actionTime > targetTime)
+            DispatchEffectsContext dispatch = DispatchEffects(region, entity, destEntity, consideringAction);
+            if(region->border != Border_Mirror && IsSet(entity, Flag_insideRegion))
             {
-                DispatchEffectsContext dispatch = DispatchEffects(region, entity, destEntity, consideringAction);
-                if(region->border != Border_Mirror && IsSet(entity, Flag_insideRegion))
-                {
-					
-					CreatureComponent* creature = Creature(region, entity);
-                    creature->completedAction = SafeTruncateToU8(consideringAction);
-					creature->completedActionTarget = destEntity->identifier;    
-					entity->actionTime = 0;
-                    entity->action = dispatch.followingAction;
-                }
+                CreatureComponent* creature = Creature(region, entity);
+                creature->completedAction = SafeTruncateToU8(consideringAction);
+                creature->completedActionTarget = entity->targetID;    
+                entity->actionTime = 0;
+                entity->action = dispatch.followingAction;
             }
         }
     }

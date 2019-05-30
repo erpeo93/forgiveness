@@ -1556,16 +1556,7 @@ internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)
 				b32 handleEntityAction = ((region->border != Border_Mirror && IsSet(entity, Flag_insideRegion)) || (region->border == Border_Mirror && entityOutsideWorld));
                 if(handleEntityAction)
                 {
-                    if(entity->action > Action_Move)
-                    {
-                        HandleAction(region, entity);
-                    }
-                    else
-                    {
-                        entity->actionTime = 0;
-                    }
-                    
-                    
+                    HandleAction(region, entity);
                     if(died)
                     {
                         DispatchEffects(region, entity, 0, Action_Die);

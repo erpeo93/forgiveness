@@ -263,7 +263,8 @@ inline Vec3 AssOriginOffset(Bone* parentBone, PieceAss* ass, r32 zOffset, Vec2 s
 
 inline b32 RequiresSync(EntityAction action)
 {
-    b32 result = (action == Action_Cast);
+    b32 result = (action == Action_Cast ||
+                  action == Action_Rolling);
     return result;
 }
 
@@ -660,24 +661,27 @@ inline void SignalAnimationSyncCompleted(AnimationState* animation, u32 action, 
         StartNextAction(animation);
     }
     
-    switch(state)
+    if(RequiresSync((EntityAction) action))
     {
-        case AnimationSync_None:
+        switch(state)
         {
-        } break;
-        
-        case AnimationSync_Preparing:
-        {
-            animation->syncState = AnimationSync_WaitingForCompletion;
-            animation->waitingForSyncTimer = 0;
-        } break;
-        
-        case AnimationSync_WaitingForCompletion:
-        {
-            animation->syncState = AnimationSync_None;
-            animation->waitingForSyncTimer = 0;
-            animation->lastSyncronizedAction = action;
-        } break;
+            case AnimationSync_None:
+            {
+            } break;
+            
+            case AnimationSync_Preparing:
+            {
+                animation->syncState = AnimationSync_WaitingForCompletion;
+                animation->waitingForSyncTimer = 0;
+            } break;
+            
+            case AnimationSync_WaitingForCompletion:
+            {
+                animation->syncState = AnimationSync_None;
+                animation->waitingForSyncTimer = 0;
+                animation->lastSyncronizedAction = action;
+            } break;
+        }
     }
 }
 
@@ -1806,7 +1810,6 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
     {
         
         AssetTypeId fallbackID = Asset_rig;
-        
         result.assetID = GetAssetIDForEntity(assets, taxTable, taxonomy, action, tileHeight);
         Assert(result.assetID);
         
@@ -1823,6 +1826,7 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
             if(!IsValid(result.AID))
             {
                 result.AID = GetMatchingAnimation(assets, fallbackID, result.skeletonHashID, &match, &weight);
+                result.coloration = V4(0, 0, 0, 1);
             }
             
         }

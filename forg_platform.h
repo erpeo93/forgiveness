@@ -328,8 +328,8 @@ struct PlatformSoundBuffer
 
 struct PlatformButton
 {
-    b32 changedState[16];
-    b32 endedDown[16];
+    b32 changedState[32];
+    b32 endedDown[32];
 };
 
 
@@ -443,9 +443,31 @@ inline b32 Clicked(PlatformButton* button, u32 framesToLookBack)
     return result;
 }
 
+inline b32 DoubleClicked(PlatformButton* button, u32 framesToLookBack)
+{
+    Assert(framesToLookBack < ArrayCount(button->endedDown) - 1);
+    b32 result = false;
+    if(Released(button, 0))
+    {
+        u32 clickCount = 0;
+        for(u32 frameIndex = 1; frameIndex < framesToLookBack; ++frameIndex)
+        {
+            if(Pressed(button, frameIndex))
+            {
+                if(++clickCount == 2)
+                {
+                    result = true;
+                    break;
+                }
+            }
+        }
+    }
+    return result;
+}
+
 inline b32 KeptDown(PlatformButton* button, u32 frameCount)
 {
-    frameCount = Max(frameCount, ArrayCount(button->endedDown));
+    frameCount = Min(frameCount, ArrayCount(button->endedDown));
     b32 result = true;
     for(u32 frameIndex = 0; frameIndex < frameCount; ++frameIndex)
     {

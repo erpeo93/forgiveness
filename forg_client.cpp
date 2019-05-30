@@ -570,6 +570,11 @@ inline b32 NearEnoughForAction(ClientPlayer* myPlayer, u32 desiredAction, u64 ta
             result = true;
         }
     }
+    else if(desiredAction == Action_Protecting ||
+            desiredAction == Action_Rolling)
+    {
+        result = true;
+    }
     
     return result;
 }
@@ -820,11 +825,12 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             player->targetID = myPlayer->targetIdentifier;
             player->P = V3(0, 0, 0);
             
-            ResetUI(UI, worldMode, group, player, input, worldMode->cameraWorldOffset.z / worldMode->defaultCameraZ, reloadTaxonomyAutocompletes, reloadAssetAutocompletes);
-            
+            UI->output = {};
             b32 canRender = (worldMode->patchSectionArrived >= 2);
             if(canRender)
             {
+                
+                ResetUI(UI, worldMode, group, player, input, worldMode->cameraWorldOffset.z / worldMode->defaultCameraZ, reloadTaxonomyAutocompletes, reloadAssetAutocompletes);
                 
                 ClientEntity* nearestEntities[8] = {};
                 r32 nearestCameraZ[ArrayCount(nearestEntities)];
@@ -1059,11 +1065,11 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         
                         entity = entity->next;
                     }
+                    
                 }
                 
                 DEBUG_VALUE(worldMode->modulationWithFocusColor);
                 
-                UI->output = {};
                 
                 UIHandle(UI, input, screenMouseP, nearestEntities, ArrayCount(nearestEntities));
                 UIOutput output = UI->output;
@@ -1080,6 +1086,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     if(NearEnoughForAction(myPlayer, output.desiredAction, output.targetEntityID))
                     {
                         player->action = (EntityAction) output.desiredAction;
+                        output.inputAcc = {};
                     }
                 }
                 

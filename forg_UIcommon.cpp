@@ -1483,14 +1483,16 @@ inline u16 SLOWGetChildIndexInList(EditorElement* list, EditorElement* child)
     return result;
 }
 
-inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 flag, r32 timeToAdvance, b32 onlyNotActivated = false)
+inline b32 UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 flag, r32 timeToAdvance, b32 onlyNotActivated = false)
 {
+    b32 result = false;
     for(UIInteractionAction* action = interaction->firstAction; action; action = action->next)
     {
         if(!onlyNotActivated || !(action->flags & UI_Activated))
         {
             if((action->flags & flag) == flag)
             {
+                result = true;
                 switch(action->type)
                 {
                     case UIInteractionAction_Copy:
@@ -2113,6 +2115,8 @@ inline void UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 f
             }
         }
     }
+    
+    return result;
 }
 
 inline b32 ConditionsSatisfied(UIInteraction* interaction)
