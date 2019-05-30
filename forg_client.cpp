@@ -563,15 +563,17 @@ inline b32 TooFarForAction(ClientPlayer* myPlayer, u32 desiredAction, u64 target
 inline b32 NearEnoughForAction(ClientPlayer* myPlayer, u32 desiredAction, u64 targetID)
 {
     b32 result = false;
-    if(desiredAction >= Action_Attack && targetID)
+    if(desiredAction >= Action_Attack)
     {
-        if(targetID == myPlayer->targetIdentifier && myPlayer->targetPossibleActions[desiredAction] == PossibleAction_CanBeDone)
+        if(targetID)
         {
-            result = true;
+            if(targetID == myPlayer->targetIdentifier && myPlayer->targetPossibleActions[desiredAction] == PossibleAction_CanBeDone)
+            {
+                result = true;
+            }
         }
     }
-    else if(desiredAction == Action_Protecting ||
-            desiredAction == Action_Rolling)
+    else
     {
         result = true;
     }

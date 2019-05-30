@@ -720,25 +720,42 @@ inline r32 GetActionTargetTime(SimRegion* region, SimEntity* actor, SimEntity* t
     r32 result = R32_MAX;
 	//TODO(leonardo): alter this based on the action and the weapon (the weapon sets a special effect that is like 'ActionTime_effect'?)
 	//TODO(leonardo): set this when the action starts!
-    if(action == Action_Rolling)
+    
+    switch(action)
     {
-        result = 0.3f;
-    }
-    if(target)
-    {
-        TaxonomySlot* targetSlot = GetSlotForTaxonomy(region->taxTable, target->taxonomy);
-        PossibleAction* possibleAction = GetPossibleAction(targetSlot, action);
+        case Action_None:
+        case Action_Move:
+        case Action_Protecting:
+        case Action_Examine:
+        {
+            
+        } break;
         
-        if(possibleAction)
+        case Action_Rolling:
         {
-            TaxonomyNode* node = FindInTaxonomyTree(region->taxTable, possibleAction->tree.root, actor->taxonomy);
-            result = node->data.action.requiredTime;
-        }
-        else
+            result = 0.3f;
+        } break;
+        
+        default:
         {
-            InvalidCodePath;
-        }
+            if(target)
+            {
+                TaxonomySlot* targetSlot = GetSlotForTaxonomy(region->taxTable, target->taxonomy);
+                PossibleAction* possibleAction = GetPossibleAction(targetSlot, action);
+                
+                if(possibleAction)
+                {
+                    TaxonomyNode* node = FindInTaxonomyTree(region->taxTable, possibleAction->tree.root, actor->taxonomy);
+                    result = node->data.action.requiredTime;
+                }
+                else
+                {
+                    InvalidCodePath;
+                }
+            }
+        } break;
     }
+    
 	return result;
 }
 
