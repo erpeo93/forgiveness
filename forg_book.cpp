@@ -208,9 +208,11 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
             ClientEntity* player = UI->player;
             
             TaxonomySlot* essenceSlot = GetSlotForTaxonomy(UI->table, ingredientTaxonomy);
-            BitmapId iconID = GetRecursiveIconId(UI->table, group->assets, essenceSlot->taxonomy);
             
+#if 0            
+            BitmapId iconID = GetRecursiveIconId(UI->table, group->assets, essenceSlot->taxonomy);
             PushUIBitmap(group, iconID, ingredientP, ingredientDim.y, 0, 20.2f, V2(1, 1), V4(1, 1, 1, 1));
+#endif
             
             owned = 0;
             for(u32 essenceIndex = 0; essenceIndex < MAX_DIFFERENT_ESSENCES; ++essenceIndex)
@@ -368,9 +370,12 @@ internal b32 UIDrawSkillElement(UIState* UI, BookElement* element, Vec2 elementC
     ObjectTransform elementTransform = UprightTransform();
     elementTransform.additionalZBias = 10.5f;
     
+    
+#if 0    
     BitmapId iconID = GetRecursiveIconId(UI->table, group->assets, skillSlot->taxonomy);
     r32 iconHeight = 0.4f * elementDim.y;
     PushUIBitmap(group, iconID, elementCenterP, iconHeight, 0, 12.5f);
+#endif
     
     
     Vec4 elementColor = V4(1, 1, 1, 0.5f);
@@ -467,9 +472,11 @@ internal b32 UIDrawSkillCategoryElement(UIState* UI, BookElement* element, Vec2 
     elementTransform.additionalZBias = 10.5f;
     
     
+#if 0    
     BitmapId iconID = GetRecursiveIconId(UI->table, group->assets, categorySlot->taxonomy);
     r32 iconHeight = 0.4f * elementDim.y;
     PushUIBitmap(group, iconID, elementCenterP, iconHeight, 0, 12.5f);
+#endif
     
     Vec4 elementColor = V4(1, 1, 1, 0.5f);
     if(activeElement)
@@ -707,6 +714,7 @@ internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input)
     GameModeWorld* worldMode = UI->worldMode;
     RenderGroup* group = UI->group;
     BitmapId bookID = GetFirstBitmap(group->assets, Asset_BookPage);
+    BitmapId bookElementID = GetFirstBitmap(group->assets, Asset_BookElement);
     
     Bitmap* bookPage = GetBitmap(group->assets, bookID);
     Vec2 bookLeft = {};
@@ -723,7 +731,9 @@ internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input)
         bookRight = V2(0.5f * pageWidth, 0);
         
         PushUIBitmap(group, bookID, bookLeft, pageHeight, 0, 12.0f, V2(1.0f, 1.0f));
+        PushUIBitmap(group, bookElementID, bookLeft, pageHeight, 0, 12.1f, V2(1.0f, 1.0f));
         PushUIBitmap(group, bookID, bookRight, pageHeight, 0, 12.0f, V2(-1.0f, 1.0f));
+        PushUIBitmap(group, bookElementID, bookRight, pageHeight, 0, 12.1f, V2(1.0f, 1.0f));
         
         BitmapId bookmarkID = GetFirstBitmap(group->assets, Asset_Bookmark);
         Bitmap* bitmap = GetBitmap(group->assets, bookmarkID);

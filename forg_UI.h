@@ -279,6 +279,7 @@ inline UIMemoryReference Fixed(type value){UIMemoryReference result = Fixed_(&va
 FixedDefinition(u32);
 FixedDefinition(u64);
 FixedDefinition(b32);
+FixedDefinition(Vec3);
 
 
 inline UIMemoryReference ColdPointer(void* pointer, u32 offset = 0)

@@ -733,7 +733,7 @@ inline r32 GetActionTargetTime(SimRegion* region, SimEntity* actor, SimEntity* t
         
         case Action_Rolling:
         {
-            result = 0.3f;
+            result = 0.1f;
         } break;
         
         default:

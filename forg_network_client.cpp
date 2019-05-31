@@ -121,15 +121,8 @@ internal void TrackUpdate( ClientPlayer* player, Vec3 acceleration, Vec3 velocit
 
 internal void SendUpdate(Vec3 acceleration, u64 targetEntityID, u32 desiredAction, u64 overlappingEntityID)
 {
-    if(LengthSq(acceleration) > 0)
-    {
-        desiredAction = Action_Move;
-    }
-    
     StartPacket(ActionRequest);
-    
     Pack("LVLQQ", 0, acceleration, desiredAction, targetEntityID, overlappingEntityID);
-    
     CloseAndSendStandardPacket();
 }
 
@@ -673,7 +666,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 EntityAction oldAction = e->action;
                 u32 oldTaxonomy = e->taxonomy;
                 
-                Unpack("llVLLQCLdddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->recipeTaxonomy, &e->lifePoints, &e->maxLifePoints, &e->status, &e->generationIntensity);
+                Unpack("llVLLQCLddddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->recipeTaxonomy, &e->lifePoints, &e->stamina, &e->maxLifePoints, &e->status, &e->generationIntensity);
                 
                 if(e->action != oldAction)
                 {

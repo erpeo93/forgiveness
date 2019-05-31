@@ -560,7 +560,7 @@ inline b32 TooFarForAction(ClientPlayer* myPlayer, u32 desiredAction, u64 target
     return result;
 }
 
-inline b32 NearEnoughForAction(ClientPlayer* myPlayer, u32 desiredAction, u64 targetID)
+inline b32 NearEnoughForAction(ClientPlayer* myPlayer, u32 desiredAction, u64 targetID, b32* resetAcceleration)
 {
     b32 result = false;
     if(desiredAction >= Action_Attack)
@@ -569,13 +569,25 @@ inline b32 NearEnoughForAction(ClientPlayer* myPlayer, u32 desiredAction, u64 ta
         {
             if(targetID == myPlayer->targetIdentifier && myPlayer->targetPossibleActions[desiredAction] == PossibleAction_CanBeDone)
             {
+                *resetAcceleration = true;
                 result = true;
             }
         }
     }
     else
     {
-        result = true;
+        if(desiredAction > Action_Move)
+        {
+            if(desiredAction == Action_Rolling)
+            {
+                *resetAcceleration = false;
+            }
+            else
+            {
+                *resetAcceleration = true;
+            }
+            result = true;
+        }
     }
     
     return result;
@@ -944,7 +956,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             {
                                 if(myPlayer->distanceCoeffFromServerP < 0.3f && input->timeToAdvance > 0)
                                 {
-                                    Vec3 acc = ComputeAcceleration(myPlayer->acceleration, myPlayer->velocity, DefaultMoveSpec());
+                                    r32 accelerationCoeff = 1.0f;
+                                    Vec3 acc = ComputeAcceleration(myPlayer->acceleration, myPlayer->velocity, DefaultMoveSpec(accelerationCoeff));
                                     myPlayer->velocity += acc * input->timeToAdvance;
                                     
                                     Vec3 velocity;
@@ -1085,10 +1098,14 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
 				}
                 else
                 {
-                    if(NearEnoughForAction(myPlayer, output.desiredAction, output.targetEntityID))
+                    b32 resetAcceleration = false;
+                    if(NearEnoughForAction(myPlayer, output.desiredAction, output.targetEntityID, &resetAcceleration))
                     {
                         player->action = (EntityAction) output.desiredAction;
-                        output.inputAcc = {};
+                        if(resetAcceleration)
+                        {
+                            output.inputAcc = {};
+                        }
                     }
                 }
                 

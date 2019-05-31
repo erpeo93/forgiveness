@@ -6,6 +6,7 @@ MemberDefinition memberDefinitionOfCreatureComponent[] =
 { MetaType_r32, "skillCooldown", (u32) ( &(( CreatureComponent* )0)->skillCooldown ) }, 
 { MetaType_r32, "strength", (u32) ( &(( CreatureComponent* )0)->strength ) }, 
 { MetaType_r32, "lifePoints", (u32) ( &(( CreatureComponent* )0)->lifePoints ) }, 
+{ MetaType_r32, "stamina", (u32) ( &(( CreatureComponent* )0)->stamina ) }, 
 { MetaType_r32, "maxLifePoints", (u32) ( &(( CreatureComponent* )0)->maxLifePoints ) }, 
 { MetaType_u64, "openedContainerID", (u32) ( &(( CreatureComponent* )0)->openedContainerID ) }, 
 { MetaType_Vec3, "customTargetP", (u32) ( &(( CreatureComponent* )0)->customTargetP ) }, 
@@ -206,7 +207,6 @@ char* MetaTable_AssetTypeId[] =
 "BookPage",
 "BookElement",
 "Bookmark",
-"Icon",
 "count",
 };
 MetaFlag MetaFlags_EditorRole[] = 

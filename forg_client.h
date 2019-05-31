@@ -220,6 +220,7 @@ struct ClientEntity
     
     r32 status;
     r32 lifePoints;
+    r32 stamina;
     r32 maxLifePoints;
     
     // TODO(Leonardo): encode P in 6 bytes total when sending complete update

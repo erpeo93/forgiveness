@@ -355,6 +355,7 @@ internal u16 PrepareEntityUpdate(SimRegion* region, SimEntity* entity, unsigned 
     UniversePos P = GetUniverseP(region, entity->P);
     
     r32 lifePoints = 0;
+    r32 stamina = 0;
     r32 maxLifePoints = 0;
     u8 action = 0;
     
@@ -366,12 +367,13 @@ internal u16 PrepareEntityUpdate(SimRegion* region, SimEntity* entity, unsigned 
     {
         CreatureComponent* creature = Creature(region, entity);
         lifePoints = creature->lifePoints;
+        stamina = creature->stamina;
         maxLifePoints = creature->maxLifePoints;
         action = SafeTruncateToU8(entity->action);
     }
     
     unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
-    Pack("llVLLQCLdddd", P.chunkX, P.chunkY, P.chunkOffset, entity->flags, entity->taxonomy, entity->gen.generic, SafeTruncateToU8(action), entity->recipeTaxonomy, lifePoints, maxLifePoints, entity->status, entity->generationIntensity);
+    Pack("llVLLQCLddddd", P.chunkX, P.chunkY, P.chunkOffset, entity->flags, entity->taxonomy, entity->gen.generic, SafeTruncateToU8(action), entity->recipeTaxonomy, lifePoints, stamina, maxLifePoints, entity->status, entity->generationIntensity);
     u16 totalSize = ForgEndPacket_( buff_, buff );
     return totalSize;
 }

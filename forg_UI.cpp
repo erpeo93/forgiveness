@@ -3781,6 +3781,34 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
     }
 }
 
+inline void UIAddProtectInteraction(UIState* UI, PlatformInput* input, UIOutput* output)
+{
+                    UIInteraction protectInteraction = {};
+                protectInteraction.idleFrameOfDelay = 10;
+
+                UIAddStandardAction(UI, &protectInteraction, UI_Idle, u32, ColdPointer(&output->desiredAction), Fixed(Action_Protecting));
+                UIAddStandardAction(UI, &protectInteraction, UI_Idle, u32, ColdPointer(&output->targetEntityID), Fixed(0));
+                
+    
+    if(UI->player->stamina > 0)
+    {
+        Vec3 dir = UI->worldMouseP - UI->player->P;
+                UIAddStandardAction(UI, &protectInteraction, UI_DoubleClick | UI_Retroactive, Vec3,
+ ColdPointer(&output->inputAcc), Fixed(dir));
+
+                UIAddStandardAction(UI, &protectInteraction, UI_DoubleClick | UI_Retroactive, u32, ColdPointer(&output->desiredAction), Fixed(Action_Rolling));
+                UIAddStandardAction(UI, &protectInteraction, UI_DoubleClick | UI_Retroactive, u32, ColdPointer(&output->targetEntityID), Fixed(0));
+                //UIAddInvalidCondition(&protectInteraction, u32,ColdPointer(UI->myPlayer->canRoll), Fixed(false));
+                UIAddInvalidCondition(&protectInteraction, b32,ColdPointer(&UI->player->animation.lastSyncronizedAction), Fixed(Action_Rolling));
+                
+                
+    }
+                
+                UIAddInteraction(UI, input, mouseRight, protectInteraction);
+                
+                
+}
+
 internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, ClientEntity** overlappingEntities, u32 maxOverlappingEntities)
 {
     UIOutput* output = &UI->output;
@@ -3917,23 +3945,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             
             if(addProtectInteraction)
             {
-
-                UIInteraction protectInteraction = {};
-                protectInteraction.idleFrameOfDelay = 10;
-
-                UIAddStandardAction(UI, &protectInteraction, UI_Idle, u32, ColdPointer(&output->desiredAction), Fixed(Action_Protecting));
-                UIAddStandardAction(UI, &protectInteraction, UI_Idle, u32, ColdPointer(&output->targetEntityID), Fixed(0));
-                UIAddClearAction(UI, &protectInteraction, UI_Idle, ColdPointer(&output->inputAcc), sizeof(output->inputAcc));
-
-                UIAddStandardAction(UI, &protectInteraction, UI_DoubleClick | UI_Retroactive, u32, ColdPointer(&output->desiredAction), Fixed(Action_Rolling));
-                UIAddStandardAction(UI, &protectInteraction, UI_DoubleClick | UI_Retroactive, u32, ColdPointer(&output->targetEntityID), Fixed(0));
-                //UIAddInvalidCondition(&protectInteraction, u32,ColdPointer(UI->myPlayer->canRoll), Fixed(false));
-                UIAddInvalidCondition(&protectInteraction, b32,ColdPointer(&UI->player->animation.lastSyncronizedAction), Fixed(Action_Rolling));
-                
-                
-                UIAddInteraction(UI, input, mouseRight, protectInteraction);
-                
-                
+                UIAddProtectInteraction(UI, input, output);
             }
             
             switch(UI->mouseMovement)
@@ -3956,7 +3968,6 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                 {
                     Vec3 dir = UI->worldMouseP - player->P;
                     output->inputAcc = dir;
-                    output->desiredAction = Action_Move;
                 } break;
             }
             UI->mouseMovement = UIMouseMovement_None;
@@ -4352,12 +4363,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             
             if(addProtectInteraction)
             {
-                
-                UIInteraction protectInteraction = {};
-                UIAddStandardAction(UI, &protectInteraction, UI_Idle, u32, ColdPointer(&output->desiredAction), Fixed(Action_Protecting));
-                UIAddStandardAction(UI, &protectInteraction, UI_Idle, u32, ColdPointer(&output->targetEntityID), Fixed(0));
-                UIAddClearAction(UI, &protectInteraction, UI_Idle, ColdPointer(&output->inputAcc), sizeof(output->inputAcc));
-                UIAddInteraction(UI, input, mouseRight, protectInteraction);
+                UIAddProtectInteraction(UI, input, output);
             }
             
             switch(UI->mouseMovement)
@@ -4380,7 +4386,6 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                 {
                     Vec3 dir = UI->worldMouseP - player->P;
                     output->inputAcc = dir;
-                    output->desiredAction = Action_Move;
                 } break;
             }
             UI->mouseMovement = UIMouseMovement_None;

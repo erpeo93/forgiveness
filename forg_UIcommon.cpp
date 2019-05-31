@@ -206,6 +206,8 @@ inline void ActionBeganPrediciton(ClientEntity* playerC, EntityAction action)
     playerC->prediction.timeLeft = R32_MAX;
     
 }
+
+#if 0
 inline BitmapId GetRecursiveIconId(TaxonomyTable* table, Assets* assets, u32 taxonomy)
 {
     BitmapId result = {};
@@ -230,6 +232,7 @@ inline BitmapId GetRecursiveIconId(TaxonomyTable* table, Assets* assets, u32 tax
     Assert(IsValid(result));
     return result;
 }
+#endif
 
 inline void GetUIName_(char* output, u32 outputSize, TaxonomyTable* table, u32 taxonomy, u32 recipeTaxonomy)
 {

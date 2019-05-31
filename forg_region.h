@@ -85,6 +85,7 @@ introspection() struct CreatureComponent
     r32 skillCooldown; 
     r32 strength;
     r32 lifePoints;
+    r32 stamina;
     r32 maxLifePoints;
     u64 openedContainerID;
     

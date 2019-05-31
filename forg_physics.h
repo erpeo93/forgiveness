@@ -14,10 +14,10 @@ struct MoveSpec
     Vec3* steps;
 };
 
-inline MoveSpec DefaultMoveSpec()
+inline MoveSpec DefaultMoveSpec(r32 accelerationCoeff)
 {
     MoveSpec moveSpec = {27.0f, -7.8f};
-    moveSpec.acceleration *= 1.0f;
+    moveSpec.acceleration *= accelerationCoeff;
     
     return moveSpec;
 }

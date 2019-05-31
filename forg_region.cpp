@@ -480,7 +480,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 if(request.desiredAction < Action_Attack)
                 {
                     entity->action = (EntityAction)request.desiredAction;
-                    if(LengthSq(request.acceleration) > 0)
+                    if(LengthSq(request.acceleration) > 0 && entity->action != Action_Rolling)
                     {
                         entity->action = Action_Move;
                     }
@@ -1451,7 +1451,8 @@ inline void UpdateStatus(SimRegion* region, SimEntity* entity)
 
 internal void MoveEntity(SimRegion* region, SimEntity* entity)
 {
-    MoveSpec moveSpec = DefaultMoveSpec();
+    r32 accelerationCoeff = 1.0f;
+    MoveSpec moveSpec = DefaultMoveSpec(accelerationCoeff);
 #if 0    
     if(entity->IDs[Component_Creature] && entity->action == Action_Move)
     {

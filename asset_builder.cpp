@@ -3035,20 +3035,6 @@ internal void WriteUI()
     AddBitmapAsset(UIPath, "bookmark.png");
     EndAssetType();
     
-    BeginAssetType(assets, Asset_Icon);
-    char* iconsPath = "definition/UI/icons";
-    PlatformFileGroup fileGroup = Win32GetAllFilesBegin(PlatformFile_image, iconsPath);
-    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex)
-    {
-        PlatformFileHandle handle = Win32OpenNextFile(&fileGroup, iconsPath);
-        char nameWithoutPoint[64];
-        GetNameWithoutPoint(nameWithoutPoint, ArrayCount(nameWithoutPoint), handle.name);
-        u64 stringHashID = StringHash(nameWithoutPoint);
-        AddBitmapAsset(iconsPath, handle.name, stringHashID);
-    }
-    Win32GetAllFilesEnd(&fileGroup);
-    EndAssetType();
-    
     WritePak(assets, "forgUI.pak");
 }
 
