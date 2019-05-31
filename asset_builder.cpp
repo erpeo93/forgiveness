@@ -264,7 +264,7 @@ internal LoadedBitmap LoadGlyph( LoadedFont* font, u32 codePoint, PakAsset* asse
     int MaxWidth = FONT_MAX_WIDTH;
     int MaxHeight = FONT_MAX_HEIGHT;
     
-    SelectObject(globalFontDC, font->win32Font );
+    SelectObject(globalFontDC, font->win32Font);
     memset(Bits, 0x00, MaxWidth*MaxHeight*sizeof(u32));
     wchar_t CheesePoint = (wchar_t)codePoint;
     
@@ -408,10 +408,10 @@ internal LoadedBitmap LoadGlyph( LoadedFont* font, u32 codePoint, PakAsset* asse
         }
     }
 #else
-    EntireFile fontFile = ReadFile( filename );
+    EntireFile fontFile = ReadFile(filename);
     
     stbtt_fontinfo font;
-    stbtt_InitFont( &font, ( u8* ) fontFile.content, stbtt_GetFontOffsetForIndex( ( u8* ) fontFile.content, 0 ) );
+    stbtt_InitFont( &font, ( u8* ) fontFile.content, stbtt_GetFontOffsetForIndex( ( u8* ) fontFile.content, 0));
     
     
     int width, height, XOffset, YOffset;
@@ -3332,21 +3332,23 @@ internal void WriteFonts()
     InitializeAssets(assets );
     
     LoadedFont fonts[2] = {
-        LoadFont("c:/windows/fonts/arial.ttf", "Arial", 64 ),
-        LoadFont("c:/windows/fonts/courier.ttf", "Courier New", 20 ),
+        LoadFont("definition/fonts/MorrisRoman-Black.ttf", "Morris Roman Black", 64),
+        LoadFont("c:/windows/fonts/arial.ttf", "Arial", 64),
+        //LoadFont("definition/fonts/dum1.ttf", "Dumbledor 1", 64),
+        //LoadFont("c:/windows/fonts/courier.ttf", "Courier New", 64 ),
     };
     
     BeginAssetType(assets, Asset_glyph );
     
     for(u32 fontIndex = 0;
-        fontIndex < ArrayCount(fonts );
+        fontIndex < ArrayCount(fonts);
         fontIndex++ )
     {
         for(u32 codePoint = ' ';
             codePoint < '~';
             codePoint++ )
         {
-            AddCharacterAsset(fonts + fontIndex, codePoint );
+            AddCharacterAsset(fonts + fontIndex, codePoint);
         }
     }
     EndAssetType();
@@ -3354,9 +3356,10 @@ internal void WriteFonts()
     
     BeginAssetType(assets, Asset_font);
     AddFontAsset(fonts + 0);
-    AddTag(Tag_fontType, (r32 ) Font_default );
+    AddTag(Tag_fontType, (r32) Font_default);
     AddFontAsset(fonts + 1);
     AddTag(Tag_fontType, (r32) Font_debug);
+    
     EndAssetType();
     
     WritePak(assets, "forgivenessF.pak" );

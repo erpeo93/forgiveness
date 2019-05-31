@@ -758,6 +758,14 @@ struct UIAutocomplete
 };
 
 
+struct UIFont
+{
+    r32 fontScale;
+    FontId fontId;
+    Font* font;
+    PakFont* fontInfo;
+    b32 drawShadow;
+};
 
 struct UIState
 {
@@ -798,10 +806,8 @@ struct UIState
     UIScrollableList possibleOverlappingActions;
     UIScrollableList possibleObjectActions;
     
-    r32 fontScale;
-    FontId fontId;
-    Font* font;
-    PakFont* fontInfo;
+    UIFont editorFont;
+    UIFont gameFont;
     
     BitmapId scrollIconID;
     

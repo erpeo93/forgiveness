@@ -161,7 +161,7 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
     RenderObject(group, UI->worldMode, &object, objectP, V2(0.4f * elementDim.x, 0.6f * elementDim.y), additionalZBias);
     
     Vec2 objectTextP = elementCenterP + V2(-0.1f * elementDim.x, 0.25f * elementDim.y);
-    PushUITextWithDimension(UI, recipeSlot->name, objectTextP, V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
+    PushUITextWithDimension(UI, &UI->gameFont, recipeSlot->name, objectTextP, V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
     
     RecipeIngredients ingredients;
     GetRecipeIngredients(&ingredients, UI->table, recipeSlot->taxonomy, gen);
@@ -190,7 +190,7 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
                 color = V4(0, 1, 0, 1);
             }
             
-            PushUITextWithDimension(UI, toolSlot->name, toolTextP, toolTextDim, color);
+            PushUITextWithDimension(UI, &UI->gameFont, toolSlot->name, toolTextP, toolTextDim, color);
             toolTextP.y -= 1.2f * toolTextDim.y;
         }
     }
@@ -260,7 +260,7 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
         
         char quantities[16];
         FormatString(quantities, sizeof(quantities), "%d / %d", owned, necessary);
-        PushUITextWithDimension(UI, quantities, ingredientQuantityP, V2(0.5f * ingredientDim.x, 0.3f * ingredientDim.y), quantitiesColor);
+        PushUITextWithDimension(UI, &UI->gameFont, quantities, ingredientQuantityP, V2(0.5f * ingredientDim.x, 0.3f * ingredientDim.y), quantitiesColor);
         
         ingredientP.x += ingredientDim.x;
     }
@@ -327,7 +327,7 @@ internal b32 UIDrawRecipeCategoryElement(UIState* UI, BookElement* element, Vec2
     
     
     Vec2 categoryTextP = elementCenterP + V2(-0.1f * elementDim.x, 0.25f * elementDim.y);
-    PushUITextWithDimension(UI, categorySlot->name, categoryTextP, V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
+    PushUITextWithDimension(UI, &UI->gameFont, categorySlot->name, categoryTextP, V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
     
     BitmapId elementID = GetFirstBitmap(group->assets, Asset_BookElement);
     ObjectTransform elementTransform = UprightTransform();
@@ -358,11 +358,11 @@ internal b32 UIDrawSkillElement(UIState* UI, BookElement* element, Vec2 elementC
     
     
     Vec2 skillTextP = elementCenterP + V2(-0.1f * elementDim.x, 0.25f * elementDim.y);
-    PushUITextWithDimension(UI, skillSlot->name, skillTextP, V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
+    PushUITextWithDimension(UI, &UI->gameFont, skillSlot->name, skillTextP, V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
     
     char stringLevel[16];
     FormatString(stringLevel, sizeof(stringLevel), "level: %d", level);
-    PushUITextWithDimension(UI, stringLevel, skillTextP + V2(0, -0.5f), V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
+    PushUITextWithDimension(UI, &UI->gameFont, stringLevel, skillTextP + V2(0, -0.5f), V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
     
     
     
@@ -465,7 +465,7 @@ internal b32 UIDrawSkillCategoryElement(UIState* UI, BookElement* element, Vec2 
     
     
     Vec2 categoryTextP = elementCenterP + V2(-0.1f * elementDim.x, 0.25f * elementDim.y);
-    PushUITextWithDimension(UI, categorySlot->name, categoryTextP, V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
+    PushUITextWithDimension(UI, &UI->gameFont, categorySlot->name, categoryTextP, V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
     
     BitmapId elementID = GetFirstBitmap(group->assets, Asset_BookElement);
     ObjectTransform elementTransform = UprightTransform();

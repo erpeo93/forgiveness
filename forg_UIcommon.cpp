@@ -1,4 +1,4 @@
-internal Rect2 UIOrthoTextOp(RenderGroup* group, Font* font, PakFont* info, char* string, r32 fontScale, Vec3 P, TextOperation op, Vec4 color)
+internal Rect2 UIOrthoTextOp(RenderGroup* group, Font* font, PakFont* info, char* string, r32 fontScale, Vec3 P, TextOperation op, Vec4 color, b32 drawShadow)
 {
     Rect2 result = InvertedInfinityRect2();
     
@@ -19,7 +19,11 @@ internal Rect2 UIOrthoTextOp(RenderGroup* group, Font* font, PakFont* info, char
                     r32 glyphHeight = fontScale * glyphInfo->dimension[1];
                     if( op == TextOp_draw )
                     {
-                        PushBitmap( group, FlatTransform(), ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight, V2( 1.0f, 1.0f ), V4( 0.0f, 0.0f, 0.0f, 1.0f ) );
+                        if(drawShadow)
+                        {
+                            PushBitmap( group, FlatTransform(), ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight, V2( 1.0f, 1.0f ), V4( 0.0f, 0.0f, 0.0f, 1.0f ) );
+                        }
+                        
                         PushBitmap( group, FlatTransform(), ID, P, glyphHeight, V2( 1.0f, 1.0f ), color );
                     }
                     else
@@ -45,38 +49,38 @@ internal Rect2 UIOrthoTextOp(RenderGroup* group, Font* font, PakFont* info, char
     return result;
 }
 
-inline Rect2 GetUIOrthoTextBounds(UIState* UI, char* text, r32 fontScale, Vec2 screenP)
+inline Rect2 GetUIOrthoTextBounds(RenderGroup* group, UIFont* font, char* text, r32 fontScale, Vec2 screenP)
 {
-    Rect2 bounds = UIOrthoTextOp(UI->group, UI->font, UI->fontInfo, text, fontScale, V3(screenP, 0), TextOp_getSize, V4(1, 1, 1, 1));
+    Rect2 bounds = UIOrthoTextOp(group, font->font, font->fontInfo, text, fontScale, V3(screenP, 0), TextOp_getSize, V4(1, 1, 1, 1), font->drawShadow);
     
     return bounds;
 }
 
-inline void PushUIOrthoText(UIState* UI, char* text, r32 fontScale, Vec2 screenP, Vec4 color, r32 additionalZ = 0.0f)
+inline void PushUIOrthoText(RenderGroup* group, UIFont* font, char* text, r32 fontScale, Vec2 screenP, Vec4 color, r32 additionalZ = 0.0f)
 {
-    UIOrthoTextOp(UI->group, UI->font, UI->fontInfo, text, fontScale, V3(screenP, additionalZ), TextOp_draw, color);
+    UIOrthoTextOp(group, font->font, font->fontInfo, text, fontScale, V3(screenP, additionalZ), TextOp_draw, color, font->drawShadow);
 }
 
 
-inline void PushCenteredOrthoText(UIState* UI, char* string, r32 fontScale, Vec2 screenP, r32 additionalZ, Vec4 color)
+inline void PushCenteredOrthoText(RenderGroup* group, UIFont* font, char* string, r32 fontScale, Vec2 screenP, r32 additionalZ, Vec4 color)
 {
-    Rect2 textRect = GetUIOrthoTextBounds(UI, string, fontScale, screenP);
+    Rect2 textRect = GetUIOrthoTextBounds(group, font, string, fontScale, screenP);
     Vec2 textCenter = GetCenter(textRect);
     Vec2 textDim = GetDim(textRect);
     
-    UIOrthoTextOp(UI->group, UI->font, UI->fontInfo, string, fontScale, V3(screenP - (0.5f * textDim), additionalZ), TextOp_draw, color);
+    UIOrthoTextOp(group, font->font, font->fontInfo, string, fontScale, V3(screenP - (0.5f * textDim), additionalZ), TextOp_draw, color, font->drawShadow);
 }
 
-inline void PushUICenteredOrthoTextWithDimension(UIState* UI, char* text, Vec2 screenP, Vec2 dim, r32 additionalZ, Vec4 color)
+inline void PushUICenteredOrthoTextWithDimension(RenderGroup* group, UIFont* font, char* text, Vec2 screenP, Vec2 dim, r32 additionalZ, Vec4 color)
 {
-    Vec2 standardDim = GetDim(GetUIOrthoTextBounds(UI, text, UI->fontScale, screenP));
+    Vec2 standardDim = GetDim(GetUIOrthoTextBounds(group, font, text, font->fontScale, screenP));
     r32 coeffX = dim.x / standardDim.x;
     r32 coeffY = dim.y / standardDim.y;
     r32 coeff = Min(coeffX, coeffY);
-    PushCenteredOrthoText(UI, text, UI->fontScale * coeff, screenP, additionalZ, color);
+    PushCenteredOrthoText(group, font, text, font->fontScale * coeff, screenP, additionalZ, color);
 }
 
-internal Rect2 UITextOp(UIState* UI, RenderGroup* group, Font* font, PakFont* info, char* string, r32 fontScale, Vec2 PIn, Vec4 color, b32 computeRect = false)
+internal Rect2 UITextOp(UIState* UI, RenderGroup* group, Font* font, PakFont* info, char* string, r32 fontScale, Vec2 PIn, Vec4 color, b32 drawShadow, b32 computeRect = false)
 {
     Vec2 P = PIn;
     Rect2 result = InvertedInfinityRect2();
@@ -111,7 +115,10 @@ internal Rect2 UITextOp(UIState* UI, RenderGroup* group, Font* font, PakFont* in
                     }
                     else
                     {
-                        PushUIBitmap(group, ID, P + V2(fontScale * 4.0f, 0), glyphHeight, 0, darkZBias, V2(1.0f, 1.0f), V4( 0.0f, 0.0f, 0.0f, 1.0f));
+                        if(drawShadow)
+                        {
+                            PushUIBitmap(group, ID, P + V2(fontScale * 4.0f, 0), glyphHeight, 0, darkZBias, V2(1.0f, 1.0f), V4( 0.0f, 0.0f, 0.0f, 1.0f));
+                        }
                         PushUIBitmap(group, ID, P + V2( 0, 0), glyphHeight, 0, lightZBias, V2( 1.0f, 1.0f), color);
                     }
                 }
@@ -126,24 +133,24 @@ internal Rect2 UITextOp(UIState* UI, RenderGroup* group, Font* font, PakFont* in
 
 inline Rect2 GetTextRect(UIState* UI, RenderGroup* group, Font* font, PakFont* info, char* string, r32 fontScale)
 {
-    Rect2 result = UITextOp(UI, group, font, info, string, fontScale, V2(0, 0), V4(1, 1, 1, 1), true);
+    Rect2 result = UITextOp(UI, group, font, info, string, fontScale, V2(0, 0), V4(1, 1, 1, 1), false, true);
     
     return result;
 }
 
-inline void PushCenteredText(UIState* UI, RenderGroup* group, Font* font, PakFont* info, char* string, r32 fontScale, Vec2 centerOffset, Vec4 color)
+inline void PushCenteredText(UIState* UI, RenderGroup* group, Font* font, PakFont* info, char* string, r32 fontScale, Vec2 centerOffset, Vec4 color, b32 drawShadow)
 {
     Rect2 textRect = GetTextRect(UI, group, font, info, string, fontScale);
     Vec2 textCenter = GetCenter(textRect);
     Vec2 textDim = GetDim(textRect);
     
     UITextOp(UI, group, font, info, string, fontScale, centerOffset - (0.5f * textDim),
-             color, false);
+             color, drawShadow, false);
 }
 
-inline void PushUIText_(UIState* UI, char* text, Vec2 centerOffset, Vec4 color, r32 scale = 1.0f)
+inline void PushUIText_(UIState* UI, UIFont* font, char* text, Vec2 centerOffset, Vec4 color, r32 scale = 1.0f)
 {
-    PushCenteredText(UI, UI->group, UI->font, UI->fontInfo, text, UI->fontScale * scale, centerOffset, color);
+    PushCenteredText(UI, UI->group, font->font, font->fontInfo, text, font->fontScale * scale, centerOffset, color, font->drawShadow);
 }
 
 inline void PushUITooltip(UIState* UI, char* text, Vec4 color, b32 prefix = false, b32 suffix = false, r32 scale = 1.0f)
@@ -153,13 +160,13 @@ inline void PushUITooltip(UIState* UI, char* text, Vec4 color, b32 prefix = fals
     FormatString(UI->tooltipText, sizeof(UI->tooltipText), "%s", text);
 }
 
-inline void PushUITextWithDimension(UIState* UI, char* text, Vec2 centerOffset, Vec2 dim, Vec4 color)
+inline void PushUITextWithDimension(UIState* UI, UIFont* font, char* text, Vec2 centerOffset, Vec2 dim, Vec4 color)
 {
-    Vec2 standardDim = GetDim(GetTextRect(UI, UI->group, UI->font, UI->fontInfo, text, UI->fontScale));
+    Vec2 standardDim = GetDim(GetTextRect(UI, UI->group, font->font, font->fontInfo, text, font->fontScale));
     r32 coeffX = dim.x / standardDim.x;
     r32 coeffY = dim.y / standardDim.y;
     r32 coeff = Min(coeffX, coeffY);
-    PushUIText_(UI, text, centerOffset, color, coeff);
+    PushUIText_(UI, font, text, centerOffset, color, coeff);
 }
 
 inline b32 UIElementActive(UIState* UI, RenderGroup* group, Vec2 elementCenterP, Vec2 elementDim)

@@ -12,7 +12,7 @@ inline UIButton UIBtn(UIState* UI, Vec2 P, EditorLayout* layout, Vec4 color, cha
 {
     UIButton result;
     
-    Rect2 bounds = GetUIOrthoTextBounds(UI, text, layout->fontScale, P);
+    Rect2 bounds = GetUIOrthoTextBounds(UI->group, &UI->editorFont, text, layout->fontScale, P);
     result.textP = P;
     result.textDim = GetDim(bounds);
     
@@ -83,7 +83,7 @@ inline DrawButtonResult UIDrawButton(UIState* UI, PlatformInput* input, UIButton
         
     PushRect(UI->group, buttonTranform, button->bounds, buttonColor);
     PushRectOutline(UI->group, buttonTranform, button->bounds, V4(1, 1, 1, textAlpha), 1.4f);
-    PushUIOrthoText(UI, button->text, button->fontScale, button->textP, V4(1, 1, 1, textAlpha), button->Z + 0.002f);
+    PushUIOrthoText(UI->group, &UI->editorFont, button->text, button->fontScale, button->textP, V4(1, 1, 1, textAlpha), button->Z + 0.002f);
     
     result.bounds = button->bounds;
     return result;
@@ -106,7 +106,7 @@ inline void UIRenderAutocomplete(UIState* UI, EditorWidget* widget, PlatformInpu
             u32 count = StrLen(nameIn);
             if(StrEqual(count, name, nameIn))
             {
-                Rect2 bounds = GetUIOrthoTextBounds(UI, name, layout->fontScale, P);
+                Rect2 bounds = GetUIOrthoTextBounds(UI->group, &UI->editorFont, name, layout->fontScale, P);
                 
                 Vec2 boundsMin = bounds.min - V2(2, 4);
                 Vec2 dim = GetDim(bounds) + V2(layout->nameValueDistance, 0);
@@ -129,8 +129,8 @@ inline void UIRenderAutocomplete(UIState* UI, EditorWidget* widget, PlatformInpu
                     UIAddInteraction(UI, input, confirmButton, autoConfirmInteraction);
                 }
                 
-                PushUIOrthoText(UI, name, layout->fontScale, P, autocompleteColor, layout->additionalZBias + 1.1f);
-                PushUIOrthoText(UI, nameIn, layout->fontScale, P, V4(0.5f, 0.5f, 0.5f, 1.0f), layout->additionalZBias + 1.11f);
+                PushUIOrthoText(UI->group, &UI->editorFont, name, layout->fontScale, P, autocompleteColor, layout->additionalZBias + 1.1f);
+                PushUIOrthoText(UI->group, &UI->editorFont, nameIn, layout->fontScale, P, V4(0.5f, 0.5f, 0.5f, 1.0f), layout->additionalZBias + 1.11f);
                 
                 ObjectTransform autoTranform = FlatTransform();
                 autoTranform.additionalZBias = layout->additionalZBias + 1.0f;
@@ -166,7 +166,7 @@ inline void UIRenderAutocomplete(UIState* UI, EditorWidget* widget, PlatformInpu
     else
     {
         char* text = "no match";
-        Rect2 bounds = GetUIOrthoTextBounds(UI, text, layout->fontScale, P);
+        Rect2 bounds = GetUIOrthoTextBounds(UI->group, &UI->editorFont, text, layout->fontScale, P);
         
         Vec2 boundsMin = bounds.min - V2(2, 4);
         Vec2 dim = GetDim(bounds) + V2(layout->nameValueDistance, 0);
@@ -174,7 +174,7 @@ inline void UIRenderAutocomplete(UIState* UI, EditorWidget* widget, PlatformInpu
         
         Vec4 color = V4(1, 0, 0, 1);
         
-        PushUIOrthoText(UI, text, layout->fontScale, P, color, layout->additionalZBias + 1.1f);
+        PushUIOrthoText(UI->group, &UI->editorFont, text, layout->fontScale, P, color, layout->additionalZBias + 1.1f);
         
         ObjectTransform autoTranform = FlatTransform();
         autoTranform.additionalZBias = layout->additionalZBias + 1.0f;
@@ -509,7 +509,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
     
     if(root != UI->active)
     {
-        result.bounds = GetUIOrthoTextBounds(UI, text, layout->fontScale, P);
+        result.bounds = GetUIOrthoTextBounds(UI->group, &UI->editorFont, text, layout->fontScale, P);
         result.color = V4(0.7f, 0.7f, 0, 1);
         if(!UI->activeLabel)
         {
@@ -612,7 +612,7 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
     }
     else
     {
-        result.bounds = GetUIOrthoTextBounds(UI, UI->keyboardBuffer, layout->fontScale, P);
+        result.bounds = GetUIOrthoTextBounds(UI->group, &UI->editorFont, UI->keyboardBuffer, layout->fontScale, P);
         result.color = V4(1, 0, 0, 1);
         if(UI->bufferValid)
         {
@@ -1009,7 +1009,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
             
             Vec3 lineStartP = V3(layout->P, layout->additionalZBias);
             
-            Rect2 nameTestBounds = GetUIOrthoTextBounds(UI, name, layout->fontScale, layout->P);
+            Rect2 nameTestBounds = GetUIOrthoTextBounds(UI->group, &UI->editorFont, name, layout->fontScale, layout->P);
             
             u32 seed = (u32) StringHash(root->name) + childIndex;
             RandomSequence seq = Seed(seed);
@@ -1091,10 +1091,10 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                 char* sign = IsSet(root, EditorElem_Expanded) ? "-" : "+";
                 
                 Vec2 insideDim = Hadamart(0.5f * GetDim(square), V2(0.7f, 0.8f));
-                PushUIOrthoText(UI, sign, 0.6f * layout->fontScale, GetCenter(square) - insideDim, V4(1, 1, 1, 1), layout->additionalZBias + 0.01f);
+                PushUIOrthoText(UI->group, &UI->editorFont, sign, 0.6f * layout->fontScale, GetCenter(square) - insideDim, V4(1, 1, 1, 1), layout->additionalZBias + 0.01f);
             }
             
-            Rect2 nameBounds = AddRadius(GetUIOrthoTextBounds(UI, name, layout->fontScale, nameP), V2(layout->padding, layout->padding));
+            Rect2 nameBounds = AddRadius(GetUIOrthoTextBounds(UI->group, &UI->editorFont, name, layout->fontScale, nameP), V2(layout->padding, layout->padding));
             
            
             if(root == UI->pasted)
@@ -1216,13 +1216,13 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
 					if(root == UI->active && UI->keyboardBuffer[0] == 0)
 					{
                         Vec4 shadowColor = V4(0.6f, 0.6f, 0.6f, 1.0f);
-                        PushUIOrthoText(UI, root->value, layout->fontScale, valueP, shadowColor, layout->additionalZBias);
-                        result = Union(result, GetUIOrthoTextBounds(UI, root->value, layout->fontScale, valueP));
+                        PushUIOrthoText(UI->group, &UI->editorFont, root->value, layout->fontScale, valueP, shadowColor, layout->additionalZBias);
+                        result = Union(result, GetUIOrthoTextBounds(UI->group, &UI->editorFont, root->value, layout->fontScale, valueP));
 					}
                     
                     UIAddTabResult addTab = UIAddTabValueInteraction(UI, widget, input, parents, root, valueP, layout, text);
                     
-                    PushUIOrthoText(UI, text, layout->fontScale, valueP, addTab.color, layout->additionalZBias);
+                    PushUIOrthoText(UI->group, &UI->editorFont, text, layout->fontScale, valueP, addTab.color, layout->additionalZBias);
                     result = Union(result, AddRadius(addTab.bounds, V2(layout->padding, layout->padding)));
                     
                     if(root->type == EditorElement_Text)
@@ -1933,11 +1933,11 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
 			if(shadowLabel[0])
 			{
 				Vec4 shadowColor = V4(0.6f, 0.6f, 0.6f, 1.0f);
-				PushUIOrthoText(UI, shadowLabel, layout->fontScale, nameP, shadowColor, layout->additionalZBias);
+				PushUIOrthoText(UI->group, &UI->editorFont, shadowLabel, layout->fontScale, nameP, shadowColor, layout->additionalZBias);
 			}
             if(showName)
             {
-                PushUIOrthoText(UI, nameToShow, layout->fontScale, nameP, nameColor, layout->additionalZBias);
+                PushUIOrthoText(UI->group, &UI->editorFont, nameToShow, layout->fontScale, nameP, nameColor, layout->additionalZBias);
             }
             
             totalResult.bounds = Union(totalResult.bounds, result);
@@ -2054,13 +2054,13 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     
     if(UI->table->errorCount)
     {
-        PushUIOrthoText(UI, "There were errors when loading the assets! check the editorError file", importantMessageScale, importantMessageP, importantColor);
+        PushUIOrthoText(UI->group, &UI->editorFont, "There were errors when loading the assets! check the editorError file", importantMessageScale, importantMessageP, importantColor);
         importantMessageP.y -= 40.0f;
     }
     
     if(UI->reloadingAssets)
     {
-        PushUIOrthoText(UI, "Reloading Assets...", importantMessageScale, importantMessageP, importantColor);
+        PushUIOrthoText(UI->group, &UI->editorFont, "Reloading Assets...", importantMessageScale, importantMessageP, importantColor);
     }
     else if(UI->patchingLocalServer)
     {
@@ -2070,7 +2070,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             patchText = "Checking if is possible to patch...";
         }
         
-        PushUIOrthoText(UI, patchText, importantMessageScale, importantMessageP, importantColor);
+        PushUIOrthoText(UI->group, &UI->editorFont, patchText, importantMessageScale, importantMessageP, importantColor);
     }
     
     UI->hotStructThisFrame = false;
@@ -2414,7 +2414,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             layout->P = widgetP;
             layout->additionalZBias = widgetZ;
             
-            Rect2 widgetTitleBounds = GetUIOrthoTextBounds(UI, widget->name, layout->fontScale, widgetP);
+            Rect2 widgetTitleBounds = GetUIOrthoTextBounds(UI->group, &UI->editorFont, widget->name, layout->fontScale, widgetP);
             
             r32 widgetAlpha = widget->permanent.expanded ? 1.0f : 0.1f;
             Vec4 widgetColor = V4(0, 1, 0, widgetAlpha);
@@ -2423,7 +2423,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                 widgetColor = V4(1, 0, 0, 1);
                 UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &widget->permanent.expanded, !widget->permanent.expanded));
             }
-            PushUIOrthoText(UI, widget->name, layout->fontScale, widgetP, widgetColor, layout->additionalZBias);
+            PushUIOrthoText(UI->group, &UI->editorFont, widget->name, layout->fontScale, widgetP, widgetColor, layout->additionalZBias);
             
             if(widget->permanent.expanded)
             {
@@ -2775,12 +2775,14 @@ inline void UIRenderTooltip(UIState* UI)
         Vec2 centerTooltipP = tooltipP;
         
         SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / width, 0.0f, 0.0f), V3(0.0f, 2.0f / width, 0.0f), V3( 0, 0, 1));
-        if(UI->font)
+        
+        UIFont* font = &UI->gameFont;
+        if(font->font)
         {
             r32 tooltipScale = 0.42f;
             
             char* text = UI->tooltipText;
-            Rect2 tooltipDim = UIOrthoTextOp(group, UI->font, UI->fontInfo, text, tooltipScale, V3(0, 0, 0), TextOp_getSize,V4(1, 1, 1, 1));
+            Rect2 tooltipDim = UIOrthoTextOp(group, font->font, font->fontInfo, text, tooltipScale, V3(0, 0, 0), TextOp_getSize,V4(1, 1, 1, 1), font->drawShadow);
             Vec2 textDim = GetDim(tooltipDim);
             
             Vec2 textP = tooltipP;
@@ -2788,7 +2790,7 @@ inline void UIRenderTooltip(UIState* UI)
             
             centerTooltipP.y += 0.5f * textDim.y;
             
-            UIOrthoTextOp(group, UI->font, UI->fontInfo, text, tooltipScale, V3(textP, tooltipZ), TextOp_draw,V4(1, 1, 1, 1));
+            UIOrthoTextOp(group, font->font, font->fontInfo, text, tooltipScale, V3(textP, tooltipZ), TextOp_draw,V4(1, 1, 1, 1), true);
         }
         
         if(UI->prefix || UI->suffix)
@@ -3268,6 +3270,32 @@ inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, Vec2 P, u
     return result;
 }
 
+inline UIFont LoadUIFont(RenderGroup* group, TagVector* matchVector, TagVector* weightVector, r32 fontCoeff, b32 drawShadow)
+{
+    UIFont result = {};
+    result.fontId = GetMatchingFont(group->assets, Asset_font, matchVector, weightVector);
+    if(IsValid(result.fontId))
+    {
+        result.font = PushFont(group, result.fontId);
+        if(result.font)
+        {
+            result.fontInfo = GetFontInfo(group->assets, result.fontId);        
+            for(u8 codepoint = 65; codepoint <= 122; ++codepoint)
+            {
+                BitmapId ID = GetBitmapForGlyph(group->assets, result.font, result.fontInfo, codepoint);
+                PrefetchBitmap(group->assets, ID);
+            }
+        }
+    }
+    result.fontScale = 0.0042f * fontCoeff;
+    Assert(fontCoeff < 100000);
+    Assert(result.fontScale > 0);
+
+    result.drawShadow = drawShadow;
+    
+    return result;
+}
+
 inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, ClientEntity* player, PlatformInput* input, r32 fontCoeff, b32 loadTaxonomyAutocompletes, b32 loadAssetAutocompletes)
 {
     UI->output = {};
@@ -3556,40 +3584,28 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
     u32 triggered = TruncateReal32ToU32(UI->runningCursorTimer / cursorInterval);
     UI->showCursor = ((triggered % 2) == 0);
     
-    
-    
+   
     TagVector matchVector = {};
     TagVector weightVector = {};
     weightVector.E[Tag_fontType] = 1.0f;
     matchVector.E[Tag_fontType] = ( r32 ) Font_default;
-    UI->fontId = GetMatchingFont(group->assets, Asset_font, &matchVector, &weightVector);
+    
+    UI->gameFont = LoadUIFont(UI->group, &matchVector, &weightVector, fontCoeff, false);
+    
+    matchVector.E[Tag_fontType] = ( r32 ) Font_debug;
+    UI->editorFont = LoadUIFont(UI->group, &matchVector, &weightVector, fontCoeff, true);
+   
+   
+    
     
     UI->scrollIconID = GetMatchingBitmap(group->assets, Asset_scrollUI, &matchVector, &weightVector);
-    
-
-    if(IsValid(UI->fontId))
-       {
-        UI->font = PushFont(group, UI->fontId);
-        if(UI->font)
-        {
-            UI->fontInfo = GetFontInfo(group->assets, UI->fontId);        
-            for(u8 codepoint = 65; codepoint <= 122; ++codepoint)
-            {
-                BitmapId ID = GetBitmapForGlyph(group->assets, UI->font, UI->fontInfo, codepoint);
-                PrefetchBitmap(group->assets, ID);
-            }
-        }
-       }
-       
+      
     
     UI->prefix = false;
     UI->suffix = false;
     UI->tooltipText[0] = 0;
     
-    UI->fontScale = 0.0042f * fontCoeff;
-    Assert(UI->fontScale > 0);
-    Assert(fontCoeff < 100000);
-    
+   
     UI->additionalCameraOffset = {};
     UI->zoomLevel = 1.0f;
     
