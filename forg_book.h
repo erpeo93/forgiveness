@@ -98,10 +98,8 @@ struct BookMode
     u32 filterTaxonomy;
     u32 filteredElementCount;
     BookReference* filteredElements;
-    
-    r32 targetSecurityTimer;
     u32 currentElementBookIndex;
-    
+    Vec4 defaultTextColor;
     BookElementsBlock* elements;
 };
 

@@ -509,7 +509,7 @@ inline void AddToElementBlock(UIState* UI, BookMode* mode, BookElement element)
 
 inline void AddToRecipeBlock(UIState* UI, Recipe recipe)
 {
-    BookElement element;
+    BookElement element = {};
     element.type = Book_Recipe;
     element.taxonomy = recipe.taxonomy;
     element.gen = recipe.gen;
@@ -519,7 +519,7 @@ inline void AddToRecipeBlock(UIState* UI, Recipe recipe)
 
 inline void AddToRecipeCategoryBlock(UIState* UI, u32 recipeCategory)
 {
-    BookElement element;
+    BookElement element = {};
     element.type = Book_RecipeCategory;
     element.taxonomy = recipeCategory;
     
@@ -528,7 +528,7 @@ inline void AddToRecipeCategoryBlock(UIState* UI, u32 recipeCategory)
 
 inline void AddToSkillBlock(UIState* UI, SkillSlot skill)
 {
-    BookElement element;
+    BookElement element = {};
     element.type = Book_Skill;
     element.taxonomy = skill.taxonomy;
     element.skillLevel = skill.level;
@@ -539,7 +539,7 @@ inline void AddToSkillBlock(UIState* UI, SkillSlot skill)
 
 inline void AddToSkillCategoryBlock(UIState* UI, SkillCategory skillCategory)
 {
-    BookElement element;
+    BookElement element = {};
     element.type = Book_SkillCategory;
     element.taxonomy = skillCategory.taxonomy;
     element.unlocked = skillCategory.unlocked;

@@ -2997,12 +2997,12 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
     }
 }
 
-inline void RenderEssence(UIState* UI, RenderGroup* group, TaxonomySlot* slot, Vec3 P, r32 iconDim, r32 additionalZBias)
+inline void RenderEssence(UIState* UI, RenderGroup* group, TaxonomySlot* slot, Vec3 P, r32 iconDim, r32 additionalZBias, r32 alpha)
 {
     u64 modelTypeID = StringHash("rock");
     u64 modelNameID = StringHash("pyramid.obj");
-    Vec4 standardColor = V4(1, 1, 1, 1);
-    Vec4 hoverColor = V4(1, 0, 0, 1);
+    Vec4 standardColor = V4(1, 1, 1, alpha);
+    Vec4 hoverColor = V4(1, 0, 0, alpha);
     
     ModelId MID = FindModelByName(group->assets, modelTypeID, modelNameID);
     
@@ -3037,7 +3037,7 @@ inline void RenderEssence(UIState* UI, RenderGroup* group, TaxonomySlot* slot, V
     }
 }
 
-inline void UIOverdrawEssences(UIState* UI)
+inline void UIOverdrawEssences(UIState* UI, r32 alpha)
 {
     RenderGroup* group = UI->group;
     TaxonomySlot* essencesSlot = NORUNTIMEGetTaxonomySlotByName(UI->table, "essences");
@@ -3056,14 +3056,14 @@ inline void UIOverdrawEssences(UIState* UI)
     for(u32 essenceIndex = 0; essenceIndex < half; ++essenceIndex)
     {
         TaxonomySlot* slot = GetNthChildSlot(UI->table, essencesSlot, essenceIndex);
-        RenderEssence(UI, group, slot, iconPLeft, essenceDim, additionalZBias);
+        RenderEssence(UI, group, slot, iconPLeft, essenceDim, additionalZBias, alpha);
         iconPLeft += essenceSpace * group->gameCamera.Y;
     }
     
     for(u32 essenceIndex = half; essenceIndex < essencesSlot->subTaxonomiesCount; ++essenceIndex)
     {
         TaxonomySlot* slot = GetNthChildSlot(UI->table, essencesSlot, essenceIndex);
-        RenderEssence(UI, group, slot, iconPRight, essenceDim, additionalZBias);
+        RenderEssence(UI, group, slot, iconPRight, essenceDim, additionalZBias, alpha);
         iconPRight += essenceSpace * group->gameCamera.Y;
     }
 }
@@ -3913,7 +3913,12 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                             PushUITooltip(UI, "inventory", V4(1, 0, 0, 1));
                             
                             UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_Equipment));
-                            UIAddInteraction(UI, input, mouseRight, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_Book));
+                            
+                            UIInteraction bookInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_Book);
+                            UIAddSetValueAction(UI, &bookInteraction, UI_Trigger, &UI->exitingFromBookMode, false);
+                            UIAddSetValueAction(UI, &bookInteraction, UI_Trigger, &UI->bookInTime, 0.0f);
+                            
+                            UIAddInteraction(UI, input, mouseRight, bookInteraction);
                             UIMarkListToUpdate(UI, possibleTargets);
                         }
                     }
@@ -4287,15 +4292,44 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
         
         case UIMode_Book:
         {
-            b32 bookOnFocus = UpdateAndRenderBook(UI, input);
+            r32 inTimer = 0.3f;
+            r32 outTimer = 0.22f;
+            
+            Vec2 outOffset = V2(0, -10.0f);
+            Vec2 bookOffset;
+            r32 essenceAlpha;
+            
+            if(UI->exitingFromBookMode)
+            {
+                UI->bookOutTime += input->timeToAdvance;
+                r32 lerp = Clamp01MapToRange(0, UI->bookOutTime, outTimer);
+                bookOffset = Lerp(V2(0, 0), lerp, outOffset);
+                essenceAlpha = 1.0f - lerp;
+            }
+            else
+            {
+                UI->bookInTime += input->timeToAdvance;
+                r32 lerp = Clamp01MapToRange(0, UI->bookInTime, inTimer);
+                bookOffset = Lerp(outOffset, lerp, V2(0, 0));
+                essenceAlpha = lerp;
+            }
+            
+            b32 bookOnFocus = UpdateAndRenderBook(UI, input, bookOffset);
             if(!bookOnFocus)
             {
-                UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_None));
+                UIInteraction exitInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->exitingFromBookMode, true);
+                UIAddSetValueAction(UI, &exitInteraction, UI_Trigger, &UI->bookOutTime, 0.0f);
+                UIAddInteraction(UI, input, mouseLeft, exitInteraction);
             }
-            if(true)
+            
+            UI->skillSlotTimeout = UI->skillSlotMaxTimeout;
+            UIOverdrawEssences(UI, essenceAlpha);
+            
+            
+            if(UI->exitingFromBookMode && UI->bookOutTime >= outTimer)
             {
-                UI->skillSlotTimeout = UI->skillSlotMaxTimeout;
-                UIOverdrawEssences(UI);
+                UI->exitingFromBookMode = false;
+                UI->nextMode = UIMode_None;
             }
         } break;
         

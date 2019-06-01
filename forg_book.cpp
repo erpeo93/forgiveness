@@ -1,3 +1,104 @@
+struct FitTextRow
+{
+    Vec2 P;
+    u32 characterCount;
+};
+
+struct FitTextResult
+{
+    FitTextRow row;
+    r32 fontScale;
+};
+
+inline FitTextResult FitTextIntoRect(UIState* UI, UIFont* font, Rect2 rect, char* text, r32 desiredFontScale = 1.0f, r32 lineHeightCoeff = 1.2f)
+{
+    FitTextResult result = {};
+    
+    r32 fontScale = desiredFontScale;
+    
+    Vec2 rectDim = GetDim(rect);
+    Vec2 rectCenter = GetCenter(rect);
+    
+    while(true)
+    {
+        r32 lineHeight = lineHeightCoeff * font->fontScale * fontScale;
+        
+        b32 fitsVertically = false;
+        while(!fitsVertically)
+        {
+            Rect2 probe = UITextOp(UI, UI->group, font->font, font->fontInfo, text, font->fontScale * fontScale, rectCenter, V4(1, 1, 1, 1), false, true);
+            
+            Vec2 probeDim = GetDim(probe);
+            
+            if(probeDim.y <= rectDim.y)
+            {
+                fitsVertically = true;
+            }
+            else
+            {
+                fontScale *= 0.9f;
+            }
+        }
+        
+        Rect2 probe = UITextOp(UI, UI->group, font->font, font->fontInfo, text, font->fontScale * fontScale, rectCenter, V4(1, 1, 1, 1), false, true);
+        
+        Vec2 probeDim = GetDim(probe);
+        if(probeDim.x <= rectDim.x)
+        {
+            result.fontScale = fontScale;
+            result.row.characterCount = StrLen(text);
+            result.row.P = rectCenter;
+            break;
+        }
+        else
+        {
+            fontScale *= 0.9f;
+        }
+    }
+    
+    return result;
+}
+
+struct FitProjectedModelResult
+{
+    Vec3 modelScale;
+    Vec3 modelP;
+};
+
+inline FitProjectedModelResult FitProjectedModelIntoRect(UIState* UI, Rect2 rect, ModelId MID, Vec3 desiredScale = V3(1, 1, 1))
+{
+    FitProjectedModelResult result = {};
+    if(IsValid(MID))
+    {
+        PakModel* modelInfo = GetModelInfo(UI->group->assets, MID);
+        
+        Vec2 rectCenter = GetCenter(rect);
+        Vec2 rectDim = GetDim(rect);
+        Vec3 P3d = rectCenter.x * UI->group->gameCamera.X + rectCenter.y * UI->group->gameCamera.Y;
+        Vec3 refScale = modelInfo->dim;
+        Vec3 scale = Hadamart(modelInfo->dim, desiredScale);
+        while(true)
+        {
+            r32 ignoredCameraZ;
+            Rect2 probeRect = ProjectOnScreen(UI->group, RectCenterDim(P3d, scale), &ignoredCameraZ);
+            
+            Vec2 probeDim = GetDim(probeRect);
+            if(probeDim.x <= rectDim.x && probeDim.y <= rectDim.y)
+            {
+                result.modelScale = V3(scale.x / refScale.x, scale.y / refScale.y, scale.z /refScale.z);
+                result.modelP = P3d;
+                break;
+            }
+            else
+            {
+                scale *= 0.9f;
+            }
+        }
+    }
+    
+    return result;
+}
+
 inline UIBookmark* UIAddBookmark(UIState* UI, UIBookmarkPosition position, UIBookmarkCondition condition)
 {
     Assert(UI->totalBookmarkCount < ArrayCount(UI->bookmarks));
@@ -281,15 +382,16 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
             if(Pressed(&input->mouseLeft))
             {
                 element->hot = true;
-                element->securityTimer = 0;
             }
             
             if(element->hot && IsDown(&input->mouseLeft))
             {
                 element->securityTimer += input->timeToAdvance;
                 r32 destTimer = 2.0f;
+                r32 timeToComeback = 2.0f;
                 if(element->securityTimer >= destTimer)
                 {
+                    element->securityTimer = destTimer + timeToComeback;
                     SendCraftRequest(recipeSlot->taxonomy, gen);
                     //ActionBeganPrediciton(UI->player, Action_Craft);
                     UI->nextMode = UIMode_None;
@@ -301,16 +403,22 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
             }
             else
             {
+                element->securityTimer -= input->timeToAdvance;
+                element->securityTimer = Max(element->securityTimer, 0.0f);
                 element->hot = false;
             }
         }
         else
         {
+            element->securityTimer -= input->timeToAdvance;
+            element->securityTimer = Max(element->securityTimer, 0.0f);
             element->hot = false;
         }
     }
     else
     {
+        element->securityTimer -= input->timeToAdvance;
+        element->securityTimer = Max(element->securityTimer, 0.0f);
         element->hot = false;
     }
     
@@ -349,65 +457,80 @@ internal b32 UIDrawRecipeCategoryElement(UIState* UI, BookElement* element, Vec2
     return result;
 }
 
-internal b32 UIDrawSkillElement(UIState* UI, BookElement* element, Vec2 elementCenterP, Vec2 elementDim, TaxonomySlot* skillSlot, u32 level, PlatformInput* input)
+internal void UIDrawSkillElement(UIState* UI, BookMode* bookMode, BookElement* element, Vec2 elementCenterP, Vec2 elementDim, TaxonomySlot* skillSlot, u32 level, PlatformInput* input)
 {
-    b32 result = false;
-    
     RenderGroup* group = UI->group;
     b32 activeElement = UIElementActive(UI, group, elementCenterP, elementDim);
     
     
-    Vec2 skillTextP = elementCenterP + V2(-0.1f * elementDim.x, 0.25f * elementDim.y);
-    PushUITextWithDimension(UI, &UI->gameFont, skillSlot->name, skillTextP, V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
     
+    Rect2 rect = RectCenterDim(elementCenterP + 0.4f *V2(0, elementDim.y), V2(0.8f * elementDim.x, 0.2f * elementDim.y));
+    
+    FitTextResult fitSkill = FitTextIntoRect(UI, &UI->gameFont, rect, skillSlot->name, 2.0f);
+    PushUIText_(UI, &UI->gameFont, skillSlot->name, fitSkill.row.P, bookMode->defaultTextColor, fitSkill.fontScale);
+    
+    
+    
+    Rect2 levelRect = RectCenterDim(elementCenterP + 0.0f *V2(0, elementDim.y), V2(0.8f * elementDim.x, 0.2f * elementDim.y));
     char stringLevel[16];
     FormatString(stringLevel, sizeof(stringLevel), "level: %d", level);
-    PushUITextWithDimension(UI, &UI->gameFont, stringLevel, skillTextP + V2(0, -0.5f), V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
+    
+    FitTextResult fitLevel = FitTextIntoRect(UI, &UI->gameFont, levelRect, stringLevel, 1.5f);
+    PushUIText_(UI, &UI->gameFont, stringLevel, fitLevel.row.P, bookMode->defaultTextColor, fitLevel.fontScale);
     
     
     
-    BitmapId elementID = GetFirstBitmap(group->assets, Asset_BookElement);
-    ObjectTransform elementTransform = UprightTransform();
-    elementTransform.additionalZBias = 10.5f;
+    Rect2 modelRect = RectCenterDim(elementCenterP - 0.0f *V2(0, elementDim.y), V2(0.8f * elementDim.x, 0.3f * elementDim.y));
+    u64 modelTypeID = StringHash("rock");
+    u64 modelNameID = StringHash("pyramid.obj");
+    Vec4 standardColor = V4(1, 1, 1, 1);
+    ModelId MID = FindModelByName(group->assets, modelTypeID, modelNameID);
+    FitProjectedModelResult fitModel = FitProjectedModelIntoRect(UI, modelRect, MID);
+    
+    PushModel(group, MID, Identity(), fitModel.modelP, V4(-1, -1, -1, -1), fitModel.modelScale, standardColor, 0, 15.0f);
     
     
-#if 0    
-    BitmapId iconID = GetRecursiveIconId(UI->table, group->assets, skillSlot->taxonomy);
-    r32 iconHeight = 0.4f * elementDim.y;
-    PushUIBitmap(group, iconID, elementCenterP, iconHeight, 0, 12.5f);
-#endif
     
     
-    Vec4 elementColor = V4(1, 1, 1, 0.5f);
+    
+    
+    
+    
+    
     if(activeElement)
     {
         if(HasEssences(UI->myPlayer->essences, skillSlot->essences))
         {
             PushUITooltip(UI, "level up", V4(1, 0, 0, 1));
-            elementColor = V4(1, 1, 1, 1.0f);
             if(Pressed(&input->mouseLeft))
             {
                 element->hot = true;
-                element->securityTimer = 0;
             }
             
             if(element->hot && IsDown(&input->mouseLeft))
             {
                 element->securityTimer += input->timeToAdvance;
                 r32 destTimer = 2.0f;
+                r32 timeToComeback = 2.0f;
+                
                 if(element->securityTimer >= destTimer)
                 {
+                    element->securityTimer = destTimer + timeToComeback;
                     SendSkillLevelUpRequest(skillSlot->taxonomy);
                     element->hot = false;
                 }
             }
             else
             {
+                element->securityTimer -= input->timeToAdvance;
+                element->securityTimer = Max(element->securityTimer, 0.0f);
                 element->hot = false;
             }
         }
         else
         {
+            element->securityTimer -= input->timeToAdvance;
+            element->securityTimer = Max(element->securityTimer, 0.0f);
             element->hot = false;
         }
         
@@ -450,9 +573,6 @@ internal b32 UIDrawSkillElement(UIState* UI, BookElement* element, Vec2 elementC
     {
         element->hot = false;
     }
-    
-    //PushBitmap(group, elementTransform, elementID, elementCenterP, elementDim.y, V2(1.0f, 1.0f), elementColor);
-    return result;
 }
 
 
@@ -499,33 +619,40 @@ internal b32 UIDrawSkillCategoryElement(UIState* UI, BookElement* element, Vec2 
                 if(Pressed(&input->mouseLeft))
                 {
                     element->hot = true;
-                    element->securityTimer = 0;
                 }
                 
                 if(element->hot && IsDown(&input->mouseLeft))
                 {
                     element->securityTimer += input->timeToAdvance;
                     r32 destTimer = 2.0f;
+                    r32 timeToComeback = 2.0f;
                     if(element->securityTimer >= destTimer)
                     {
                         SendUnlockSkillCategoryRequest(categorySlot->taxonomy);
+                        element->securityTimer = destTimer + timeToComeback;
                         element->hot = false;
                     }
                 }
                 else
                 {
+                    element->securityTimer -= input->timeToAdvance;
+                    element->securityTimer = Max(element->securityTimer, 0.0f);
                     element->hot = false;
                 }
                 
             }
             else
             {
+                element->securityTimer -= input->timeToAdvance;
+                element->securityTimer = Max(element->securityTimer, 0.0f);
                 element->hot = false;
             }
         }
     }
     else
     {
+        element->securityTimer -= input->timeToAdvance;
+        element->securityTimer = Max(element->securityTimer, 0.0f);
         element->hot = false;
     }
     
@@ -619,50 +746,9 @@ internal b32 UIDrawPage(UIState* UI, Vec2 pageP, Vec2 pageDim, u32 startingEleme
         if(toDraw)
         {
             Assert(toDraw->taxonomy);
-            Vec2 elementCenterP = pageP + elementOffset;
-            if(toDraw->hot)
-            {
-                Vec3 elementCenterP3d = V3(elementCenterP, 0.0f);
-                r32 destTimer = 2.0f;
-                r32 securityTimerQuarter = destTimer * 0.25f;
-                r32 oneOverSecurityTimerQuarter = 1.0f / securityTimerQuarter;
-                r32 lowBarPercentage = Clamp01(toDraw->securityTimer * oneOverSecurityTimerQuarter);
-                r32 rightBarPercentage = Clamp01((toDraw->securityTimer - 1.0f * securityTimerQuarter)* oneOverSecurityTimerQuarter);
-                r32 highBarPercentage = Clamp01((toDraw->securityTimer - 2.0f * securityTimerQuarter)* oneOverSecurityTimerQuarter);
-                r32 leftBarPercentage = Clamp01((toDraw->securityTimer - 3.0f * securityTimerQuarter)* oneOverSecurityTimerQuarter);
-                
-                ObjectTransform barTransform = UprightTransform();
-                barTransform.additionalZBias = 12.5f;
-                
-                r32 barDim = 0.05f;
-                
-                r32 maxElementWidth = 1.0f;
-                r32 maxElementHeight = 1.0f;
-                
-                // NOTE(Leonardo): low
-                r32 barWidth = lowBarPercentage * maxElementWidth * elementDim.x;
-                barTransform.cameraOffset = V3(-0.5f * maxElementWidth * elementDim.x, -0.5f * maxElementHeight * elementDim.y, 0) + V3(0.5f * barWidth, 0.5f * barDim, 0);
-                PushUIRect(UI->group, barTransform, elementCenterP3d, V2(barWidth, barDim), V4(1, 0, 0, 1));
-                
-                
-                // NOTE(Leonardo): right
-                r32 barHeight = rightBarPercentage * maxElementHeight * elementDim.y;
-                barTransform.cameraOffset = V3(0.5f * maxElementWidth * elementDim.x, -0.5f * maxElementHeight * elementDim.y, 0) + V3(-0.5f * barDim, 0.5f * barHeight, 0);
-                PushUIRect(UI->group, barTransform, elementCenterP3d, V2(barDim, barHeight), V4(1, 0, 0, 1));
-                
-                
-                // NOTE(Leonardo): up
-                barWidth = highBarPercentage * maxElementWidth * elementDim.x;
-                barTransform.cameraOffset = V3(0.5f * maxElementWidth * elementDim.x, 0.5f * maxElementHeight * elementDim.y, 0) + V3(-0.5f * barWidth, -0.5f * barDim, 0);
-                PushUIRect(UI->group, barTransform, elementCenterP3d, V2(barWidth, barDim), V4(1, 0, 0, 1));
-                
-                
-                // NOTE(Leonardo): left
-                barHeight = leftBarPercentage * maxElementHeight * elementDim.y;
-                barTransform.cameraOffset = V3(-0.5f * maxElementWidth * elementDim.x, 0.5f * maxElementHeight * elementDim.y, 0) + V3(0.5f * barDim, -0.5f * barHeight, 0);
-                PushUIRect(UI->group, barTransform, elementCenterP3d, V2(barDim, barHeight), V4(1, 0, 0, 1));
-            }
             
+            Vec2 elementCenterP = pageP + elementOffset;
+            Vec4 decorationBaseColor = {};
             switch(toDraw->type)
             {
                 case Book_Recipe:
@@ -672,7 +758,7 @@ internal b32 UIDrawPage(UIState* UI, Vec2 pageP, Vec2 pageDim, u32 startingEleme
                     
                     TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, taxonomy);
                     UIDrawRecipeElement(UI, toDraw, elementCenterP, elementDim, slot, gen, input);
-                    
+                    decorationBaseColor = V4(0, 0, 1, 0.3f);
                 } break;
                 
                 case Book_RecipeCategory:
@@ -681,12 +767,14 @@ internal b32 UIDrawPage(UIState* UI, Vec2 pageP, Vec2 pageDim, u32 startingEleme
                     
                     TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, taxonomy);
                     UIDrawRecipeCategoryElement(UI, toDraw, elementCenterP, elementDim, slot, input);
+                    decorationBaseColor = V4(0, 1, 1, 0.3f);
                 } break;
                 
                 case Book_Skill:
                 {
                     TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, toDraw->taxonomy);
-                    UIDrawSkillElement(UI, toDraw, elementCenterP, elementDim, slot, toDraw->skillLevel, input);
+                    UIDrawSkillElement(UI, bookMode, toDraw, elementCenterP, elementDim, slot, toDraw->skillLevel, input);
+                    decorationBaseColor = V4(1, 0, 0, 0.3f);
                     
                 } break;
                 
@@ -694,11 +782,24 @@ internal b32 UIDrawPage(UIState* UI, Vec2 pageP, Vec2 pageDim, u32 startingEleme
                 {
                     TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, toDraw->taxonomy);
                     UIDrawSkillCategoryElement(UI, toDraw, elementCenterP, elementDim, slot, input);
-                    
+                    decorationBaseColor = V4(1, 1, 0, 0.3f);
                 } break;
                 
                 InvalidDefaultCase;
             }
+            
+            r32 destTimer = 2.0f;
+            r32 currentTimer = Min(toDraw->securityTimer, destTimer);
+            r32 lerp = currentTimer / destTimer;
+            
+            decorationBaseColor.a = Lerp(decorationBaseColor.a, lerp, 1.0f);
+            
+            
+            BitmapId bookElementID = GetFirstBitmap(group->assets, Asset_BookElement);
+            PushUIBitmap(group, bookElementID, elementCenterP, elementDim.y, 0, 12.1f, V2(1.0f, 1.0f), decorationBaseColor);
+            
+            
+            
             elementOffset.y -= elementDim.y;
         }
     }
@@ -707,8 +808,13 @@ internal b32 UIDrawPage(UIState* UI, Vec2 pageP, Vec2 pageDim, u32 startingEleme
 }
 
 
-internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input)
+internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input, Vec2 bookP)
 {
+    for(u32 bookModeIndex = 0; bookModeIndex < UIBook_Count; ++bookModeIndex)
+    {
+        UI->bookModes[bookModeIndex].defaultTextColor = V4(0, 0, 0, 1);
+    }
+    
 	b32 onFocus = false;
     
     GameModeWorld* worldMode = UI->worldMode;
@@ -727,13 +833,13 @@ internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input)
         pageHeight = 8.7f;
         pageWidth = pageHeight * bookPage->widthOverHeight;
         
-        bookLeft = V2(-0.5f * pageWidth, 0);
-        bookRight = V2(0.5f * pageWidth, 0);
+        bookLeft = bookP + V2(-0.5f * pageWidth, 0);
+        bookRight = bookP + V2(0.5f * pageWidth, 0);
         
         PushUIBitmap(group, bookID, bookLeft, pageHeight, 0, 12.0f, V2(1.0f, 1.0f));
-        PushUIBitmap(group, bookElementID, bookLeft, pageHeight, 0, 12.1f, V2(1.0f, 1.0f));
+        //PushUIBitmap(group, bookElementID, bookLeft, pageHeight, 0, 12.1f, V2(1.0f, 1.0f));
         PushUIBitmap(group, bookID, bookRight, pageHeight, 0, 12.0f, V2(-1.0f, 1.0f));
-        PushUIBitmap(group, bookElementID, bookRight, pageHeight, 0, 12.1f, V2(1.0f, 1.0f));
+        //PushUIBitmap(group, bookElementID, bookRight, pageHeight, 0, 12.1f, V2(1.0f, 1.0f));
         
         BitmapId bookmarkID = GetFirstBitmap(group->assets, Asset_Bookmark);
         Bitmap* bitmap = GetBitmap(group->assets, bookmarkID);
@@ -778,7 +884,7 @@ internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input)
             {
                 
                 UIBookmark* bookmark = UI->bookmarks + bookmarkIndex;
-                UIDrawBookmark(UI, group, bookmark, bookmarkID, position[bookmark->position], dimension[bookmark->position], activeOffset[bookmark->position]);
+                UIDrawBookmark(UI, group, bookmark, bookmarkID, bookP + position[bookmark->position], dimension[bookmark->position], activeOffset[bookmark->position]);
                 
                 position[bookmark->position] += delta[bookmark->position];
             }
@@ -836,7 +942,8 @@ internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input)
         }
         else
         {
-            UI->nextMode = UIMode_None;
+            UI->bookOutTime = 0;
+            UI->exitingFromBookMode = true;
         }
     }
     

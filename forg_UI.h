@@ -841,6 +841,11 @@ struct UIState
     UISkill skills[MAXIMUM_SKILL_SLOTS];
     
     
+    r32 bookInTime;
+    b32 exitingFromBookMode;
+    r32 bookOutTime;
+    r32 bookEssenceFadeInTime;
+    
     u32 currentElementBookIndex;
     u32 totalBookmarkCount;
     u32 bookmarkCount[UIBookmark_Count];

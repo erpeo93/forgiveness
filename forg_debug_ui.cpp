@@ -50,7 +50,7 @@ inline Rect2 TextOp(DebugState* debugState, char* string, Vec2 p, TextOperation 
     {
         RenderGroup* renderGroup = &debugState->renderGroup;
         PakFont* info = debugState->debugFontInfo;
-        result =UIOrthoTextOp(renderGroup, font, info, string, debugState->fontScale, V3(p.x, p.y, 0), op, color);
+        result =UIOrthoTextOp(renderGroup, font, info, string, debugState->fontScale, V3(p.x, p.y, 0), op, color, true);
     }
     
     return result;
