@@ -223,10 +223,10 @@ internal void SendActiveSkillRequest(u32 taxonomy)
     CloseAndSendReliablePacket();
 }
 
-internal void SendPassiveSkillRequest(u32 taxonomy, b32 deactivate)
+internal void SendPassiveSkillRequest(u32 taxonomy)
 {
     StartPacket(PassiveSkillRequest);
-    Pack("Ll", taxonomy, deactivate);
+    Pack("L", taxonomy);
     CloseAndSendReliablePacket();
 }
 

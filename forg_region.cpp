@@ -1173,8 +1173,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
         case Type_PassiveSkillRequest:
         {
             PassiveSkillRequest passive;
-            b32 activate;
-            unpack(data, "Ll", &passive.taxonomy, &activate);
+            unpack(data, "L", &passive.taxonomy);
             
             b32 hasPassiveSkill = false;
             for(u32 skillIndex = 0; skillIndex < creature->skillCount; ++skillIndex)
@@ -1200,25 +1199,22 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                     }
                 }
                 
-                if(activate)
+                for(u32 passiveSlotIndex = 0; passiveSlotIndex < MAX_PASSIVE_SKILLS_ACTIVE; ++passiveSlotIndex)
                 {
-                    for(u32 passiveSlotIndex = 0; passiveSlotIndex < MAX_PASSIVE_SKILLS_ACTIVE; ++passiveSlotIndex)
+                    SkillSlot* skill = creature->passiveSkills + passiveSlotIndex;
+                    if(!skill->taxonomy)
                     {
-                        SkillSlot* skill = creature->passiveSkills + passiveSlotIndex;
-                        if(!skill->taxonomy)
+                        skill->taxonomy = passive.taxonomy;
+                        PassiveSkillEffects* effects = creature->passiveSkillEffects + passiveSlotIndex;
+                        
+                        TaxonomySlot* slot = GetSlotForTaxonomy(region->taxTable, skill->taxonomy);
+                        
+                        for(TaxonomyEffect* taxEffect = slot->firstEffect; taxEffect; taxEffect = taxEffect->next)
                         {
-                            skill->taxonomy = passive.taxonomy;
-                            PassiveSkillEffects* effects = creature->passiveSkillEffects + passiveSlotIndex;
-                            
-                            TaxonomySlot* slot = GetSlotForTaxonomy(region->taxTable, skill->taxonomy);
-                            
-                            for(TaxonomyEffect* taxEffect = slot->firstEffect; taxEffect; taxEffect = taxEffect->next)
-                            {
-                                Assert(effects->effectCount < ArrayCount(effects->effects));
-                                effects->effects[effects->effectCount++] = taxEffect->effect;
-                            }
-                            break;
+                            Assert(effects->effectCount < ArrayCount(effects->effects));
+                            effects->effects[effects->effectCount++] = taxEffect->effect;
                         }
+                        break;
                     }
                 }
             }

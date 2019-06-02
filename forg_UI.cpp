@@ -2881,32 +2881,21 @@ inline void UIOverdrawInventoryView(UIState* UI)
     }
 }
 
-inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput* input)
+inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput* input, r32 lerp)
 {
     RenderGroup* group = UI->group;
     u32 slotCount = MAXIMUM_SKILL_SLOTS;
 
-    r32 additionalZBias = 10.0f;    
-    r32 minYRotation = 0;
-    r32 yIncrement = 0;
-    r32 yRotation = 0;
-    Vec3 totalOffset = {};
-    Vec3 runningOffset = {};
-    Vec3 deltaOffset = {};
+    r32 additionalZBias = 10.0f;        
+    r32 YOffset = 5.8f;
     
-    if(UI->mode == UIMode_Book)
-    {
         
-        totalOffset = V3(6.0f, 0, 0);
-        deltaOffset = totalOffset * (1.0f / (r32) slotCount);
-        runningOffset = V3(-0.5f * totalOffset.x, -5.8f, 0.0f);
-    }
-    else
-    {
-        minYRotation = -35.0f;
-        yIncrement = (2.0f * Abs(minYRotation)) / (r32) slotCount;
-        yRotation = minYRotation;   
-    }
+        Vec3 totalOffset = V3(5.0f, 0, 0);
+        Vec3 deltaOffset = totalOffset * (1.0f / (r32) slotCount);        
+        Vec3 runningOffset = -0.5f * totalOffset.x * group->gameCamera.X + YOffset * group->gameCamera.Y;
+        r32 minYRotation = -35.0f;
+        r32 yIncrement = (2.0f * Abs(minYRotation)) / (r32) slotCount;
+        r32 yRotation = minYRotation;   
     
     if(slotCount % 2 == 0)
     {
@@ -2937,13 +2926,13 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
         }
         
         
-        m4x4 rotation = YRotation(DegToRad(yRotation));
-            Vec3 P = runningOffset;
+            Vec3 PBook = runningOffset;
             
-            if(UI->mode != UIMode_Book)
-            {
-                P += GetColumn(rotation, 2) * 2.8f;
-            }
+            
+            m4x4 rotation = YRotation(DegToRad(yRotation));
+            Vec3 PDefault = GetColumn(rotation, 2) * 2.8f;
+            
+            Vec3 P = Lerp(PDefault, lerp, PBook);
                
         ModelId MID = FindModelByName(UI->group->assets, modelTypeID, modelNameID);
             
@@ -2964,25 +2953,19 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
                 {
                     color = hooverColor;
                     
-                    if(Pressed(&input->mouseLeft))
+                    UIInteraction skillInteraction = {};
+                    if(slot->isPassiveSkill)
+                    {       
+                    }
+                    else
                     {
-                        if(slot->isPassiveSkill)
-                        {
-                            b32 active = skill->active;
-                            b32 activate = !active;
-                            
-                            SendPassiveSkillRequest(skill->taxonomy, activate);
-                            skill->active = !skill->active;
-                        }
-                        else
-                        {
-                            Assert(skill->active);
-                            SendActiveSkillRequest(skill->taxonomy);
-                            UI->activeSkillSlotIndex = slotIndex;
-                        }
-                        
-                        platformAPI.DEBUGWriteFile("skills", UI->skills, sizeof(UI->skills));
-                    }   
+                            UIAddRequestAction(UI, &skillInteraction, UI_Trigger, ActiveSkillRequest(skill->taxonomy, true));
+                            UIAddSetValueAction(UI, &skillInteraction, UI_Trigger, &UI->activeSkillSlotIndex, slotIndex);
+                    }
+                    
+                        UIAddWriteFileAction(UI, &skillInteraction, UI_Trigger, "skills", UI->skills, sizeof(UI->skills));
+                       
+                        UIAddInteraction(UI, input, mouseLeft, skillInteraction);
                 }
         }
          
@@ -3300,6 +3283,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
 {
     UI->output = {};
     UI->table = worldMode->table;
+    UI->scrollUsed = true;
     if(!UI->initialized)
     {
         UI->initialized = true;
@@ -3506,19 +3490,6 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         {
             Copy(sizeof(UI->skills), UI->skills, skillsFile.content);
             platformAPI.DEBUGFreeFile(&skillsFile);
-            
-            for(u32 skillIndex = 0; skillIndex < MAXIMUM_SKILL_SLOTS; ++skillIndex)
-            {
-                UISkill* skill = UI->skills + skillIndex;
-                if(skill->taxonomy)
-                {
-                    TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, skill->taxonomy);
-                    if(slot->isPassiveSkill && skill->active)
-                    {
-                        SendPassiveSkillRequest(skill->taxonomy, true);
-                    }
-                }
-            }
         }
         
         
@@ -3732,7 +3703,7 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
             
             for(u32 actionIndex = Action_Attack; actionIndex < destAction; ++actionIndex)
             {
-                if(UI->myPlayer->overlappingPossibleActions[actionIndex])
+                if(UI->myPlayer->overlappingPossibleActions[actionIndex] && actionIndex != Action_Cast)
                 {
                     UIRequest actionRequest = StandardActionRequest(actionIndex, overlapping->identifier);
                     UIAddPossibility(&UI->possibleOverlappingActions, MetaTable_EntityAction[actionIndex], entityName, actionRequest);
@@ -3825,6 +3796,95 @@ inline void UIAddProtectInteraction(UIState* UI, PlatformInput* input, UIOutput*
                 
 }
 
+inline void UIUpdateSkillBar(UIState* UI, PlatformInput* input)
+{
+        u32 targetWrapCount = 1;
+    i32 wrapHere = UI->activeSkillSlotIndex;
+    i32 offset = 0;
+    i32 startIndex = 0;
+    
+    if(input->mouseWheelOffset > 0)
+    {
+        startIndex = UI->activeSkillSlotIndex + 1;
+        offset = 1;
+        if(UI->activeSkillSlotIndex == -1)
+        {
+            wrapHere = 0;
+            startIndex = wrapHere;
+            targetWrapCount = 2;
+        }
+    }
+    else if(input->mouseWheelOffset < 0)
+    {
+        startIndex = UI->activeSkillSlotIndex - 1;
+        offset = -1;
+        if(UI->activeSkillSlotIndex == -1)
+        {
+            wrapHere = MAXIMUM_SKILL_SLOTS - 1;
+            startIndex = wrapHere;
+            targetWrapCount = 2;
+        }
+    }
+   
+    if(offset)
+    {
+        if(UI->skillSlotTimeout <= 0.0f)
+        {
+            UI->skillSlotTimeout = UI->skillFadeInSlotTimeout;
+            offset = 0;
+        }
+        else
+        {
+            UI->skillSlotTimeout = UI->skillSlotMaxTimeout;
+        }
+    }
+    else
+    {
+        if(UI->activeSkillSlotIndex != -1)
+        {
+            UISkill* skill = UI->skills + UI->activeSkillSlotIndex;
+            if(skill->taxonomy)
+            {
+                TaxonomySlot* taxSlot = GetSlotForTaxonomy(UI->table, skill->taxonomy);
+                if(taxSlot->isPassiveSkill)
+                {
+                    offset = 1;
+                    startIndex = UI->activeSkillSlotIndex + 1;
+                }
+            }
+        }
+    }
+    if(offset)
+    {	
+        u32 wrappedCount = 0;
+        while(true)
+        {
+            startIndex = Wrap(0, startIndex, MAXIMUM_SKILL_SLOTS);
+            if(startIndex == wrapHere)
+            {
+                if(++wrappedCount == targetWrapCount)
+                {
+                    break;
+                }
+            }
+            
+            UISkill* skill = UI->skills + startIndex;
+            u32 taxonomy = skill->taxonomy;
+            TaxonomySlot* taxSlot = GetSlotForTaxonomy(UI->table, taxonomy);
+            
+            
+            if(taxonomy && !taxSlot->isPassiveSkill)
+            {
+                UI->activeSkillSlotIndex = (u32) startIndex;
+                SendActiveSkillRequest(taxonomy);
+                break;
+            }
+            startIndex += offset;
+        }
+    }
+}
+
+
 internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, ClientEntity** overlappingEntities, u32 maxOverlappingEntities)
 {
     UIOutput* output = &UI->output;
@@ -3862,10 +3922,13 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
     UIAddInteraction(UI, input, moveRight, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.x, 1.0f), UIPriority_Standard, &UI->movementGroup);
     UIAddInteraction(UI, input, moveDown, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.y, -1.0f), UIPriority_Standard, &UI->movementGroup);
     UIAddInteraction(UI, input, moveUp, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.y, 1.0f), UIPriority_Standard, &UI->movementGroup);
+    
+    r32 slotLerp = 0.0f;
     switch(UI->mode)
     {
         case UIMode_None:
         {
+            UI->scrollUsed = false;
             UI->lockedInventoryID1 = 0;
             UI->lockedInventoryID2 = 0;
             UIResetListPossibility(UI, possibleTargets);
@@ -4017,6 +4080,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
         
         case UIMode_Equipment:
         {
+            UI->scrollUsed = false;
             UI->zoomLevel = 4.2f;
             
             b32 specialEquipmentMode = false;
@@ -4295,6 +4359,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             r32 inTimer = 0.3f;
             r32 outTimer = 0.22f;
             
+            Vec2 inOffset = V2(0, -0.6f);
             Vec2 outOffset = V2(0, -10.0f);
             Vec2 bookOffset;
             r32 essenceAlpha;
@@ -4303,16 +4368,18 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             {
                 UI->bookOutTime += input->timeToAdvance;
                 r32 lerp = Clamp01MapToRange(0, UI->bookOutTime, outTimer);
-                bookOffset = Lerp(V2(0, 0), lerp, outOffset);
+                bookOffset = Lerp(inOffset, lerp, outOffset);
                 essenceAlpha = 1.0f - lerp;
             }
             else
             {
                 UI->bookInTime += input->timeToAdvance;
                 r32 lerp = Clamp01MapToRange(0, UI->bookInTime, inTimer);
-                bookOffset = Lerp(outOffset, lerp, V2(0, 0));
+                bookOffset = Lerp(outOffset, lerp, inOffset);
                 essenceAlpha = lerp;
             }
+            
+            slotLerp = essenceAlpha;
             
             b32 bookOnFocus = UpdateAndRenderBook(UI, input, bookOffset);
             if(!bookOnFocus)
@@ -4320,6 +4387,10 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                 UIInteraction exitInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->exitingFromBookMode, true);
                 UIAddSetValueAction(UI, &exitInteraction, UI_Trigger, &UI->bookOutTime, 0.0f);
                 UIAddInteraction(UI, input, mouseLeft, exitInteraction);
+                
+                UIInteraction exitRightInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->exitingFromBookMode, true);
+                UIAddSetValueAction(UI, &exitRightInteraction, UI_Trigger, &UI->bookOutTime, 0.0f);
+                UIAddInteraction(UI, input, mouseRight, exitRightInteraction);
             }
             
             UI->skillSlotTimeout = UI->skillSlotMaxTimeout;
@@ -4335,6 +4406,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
         
         case UIMode_Combat:
         {
+            UI->scrollUsed = false;
             UI->lockedInventoryID1 = 0;
             UI->lockedInventoryID2 = 0;
             UIResetListPossibility(UI, possibleTargets);
@@ -4449,94 +4521,11 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             }
         } break;
     }
+   
+
     
     
     
-    u32 targetWrapCount = 1;
-    i32 wrapHere = UI->activeSkillSlotIndex;
-    i32 offset = 0;
-    i32 startIndex = 0;
-    
-    if(input->mouseWheelOffset > 0)
-    {
-        startIndex = UI->activeSkillSlotIndex + 1;
-        offset = 1;
-        if(UI->activeSkillSlotIndex == -1)
-        {
-            wrapHere = 0;
-            startIndex = wrapHere;
-            targetWrapCount = 2;
-        }
-    }
-    else if(input->mouseWheelOffset < 0)
-    {
-        startIndex = UI->activeSkillSlotIndex - 1;
-        offset = -1;
-        if(UI->activeSkillSlotIndex == -1)
-        {
-            wrapHere = MAXIMUM_SKILL_SLOTS - 1;
-            startIndex = wrapHere;
-            targetWrapCount = 2;
-        }
-    }
-    
-    if(offset)
-    {
-        if(UI->skillSlotTimeout <= 0.0f)
-        {
-            UI->skillSlotTimeout = UI->skillFadeInSlotTimeout;
-            offset = 0;
-        }
-        else
-        {
-            UI->skillSlotTimeout = UI->skillSlotMaxTimeout;
-        }
-    }
-    else
-    {
-        if(UI->activeSkillSlotIndex != -1)
-        {
-            UISkill* skill = UI->skills + UI->activeSkillSlotIndex;
-            if(skill->taxonomy)
-            {
-                TaxonomySlot* taxSlot = GetSlotForTaxonomy(UI->table, skill->taxonomy);
-                if(taxSlot->isPassiveSkill)
-                {
-                    offset = 1;
-                    startIndex = UI->activeSkillSlotIndex + 1;
-                }
-            }
-        }
-    }
-    
-    if(offset)
-    {	
-        u32 wrappedCount = 0;
-        while(true)
-        {
-            startIndex = Wrap(0, startIndex, MAXIMUM_SKILL_SLOTS);
-            if(startIndex == wrapHere)
-            {
-                if(++wrappedCount == targetWrapCount)
-                {
-                    break;
-                }
-            }
-            
-            UISkill* skill = UI->skills + startIndex;
-            u32 taxonomy = skill->taxonomy;
-            TaxonomySlot* taxSlot = GetSlotForTaxonomy(UI->table, taxonomy);
-            
-            
-            if(taxonomy && !taxSlot->isPassiveSkill)
-            {
-                UI->activeSkillSlotIndex = (u32) startIndex;
-                SendActiveSkillRequest(taxonomy);
-                break;
-            }
-            startIndex += offset;
-        }
-    }
     
     if(UI->mode != UIMode_Combat && LengthSq(output->inputAcc) > 0)
     {
@@ -4557,12 +4546,18 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
         alpha = 1.0f - Clamp01MapToRange(UI->skillSlotMaxTimeout, UI->skillSlotTimeout, UI->skillFadeInSlotTimeout);
     }
     
-    UIOverdrawSkillSlots(UI, alpha, input);
+    UIOverdrawSkillSlots(UI, alpha, input, slotLerp);
     
     
     WrapScrollableList(&UI->possibleTargets);
     UpdateScrollableList(UI, UI->toUpdateList, scrollOffset);
     UIRenderList(UI, UI->toRenderList);
+    
+    
+    if(!UI->scrollUsed)
+    {
+        UIUpdateSkillBar(UI, input);
+    }
     
     if(worldMode->editingEnabled)
     {

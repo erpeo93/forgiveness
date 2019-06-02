@@ -541,6 +541,26 @@ inline UIRequest SaveTaxonomyTabRequest()
     return result;
 }
 
+inline UIRequest PassiveSkillRequest(u32 taxonomy)
+{
+    UIRequest result = {};
+    result.requestCode = UIRequest_PassiveSkill;
+    result.taxonomy = taxonomy;
+    
+    return result;
+}
+
+inline UIRequest ActiveSkillRequest(u32 taxonomy, b32 sendActiveRequest)
+{
+    UIRequest result = {};
+    result.requestCode = UIRequest_ActiveSkill;
+    result.taxonomy = taxonomy;
+    result.sendActiveRequest = sendActiveRequest;
+    
+    return result;
+}
+
+
 
 
 inline void UIAddUndoRedoCommand(UIState* UI, UndoRedoCommand command);
@@ -831,6 +851,37 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
             
             SendSaveTabRequest(UI->editingTaxonomy);
         } break;
+        
+        case UIRequest_ActiveSkill:
+        {
+            for(i32 slotButtonIndex = 0; slotButtonIndex < MAXIMUM_SKILL_SLOTS; ++slotButtonIndex)
+            {
+                UISkill* skill = UI->skills + slotButtonIndex;
+                if(skill->taxonomy == request->taxonomy)
+                {
+                    skill->taxonomy = 0;
+                }
+            }
+            
+            if(request->sendActiveRequest)
+            {
+                SendActiveSkillRequest(request->taxonomy);
+            }
+        } break;
+        
+        case UIRequest_PassiveSkill:
+        {
+            for(i32 slotButtonIndex = 0; slotButtonIndex < MAXIMUM_SKILL_SLOTS; ++slotButtonIndex)
+            {
+                UISkill* skill = UI->skills + slotButtonIndex;
+                if(skill->taxonomy == request->taxonomy)
+                {
+                    skill->taxonomy = 0;
+                }
+            }
+            
+            SendPassiveSkillRequest(request->taxonomy);
+        } break;
         InvalidDefaultCase;
     }
 }
@@ -881,11 +932,18 @@ inline void UpdateScrollableList(UIState* UI, UIScrollableList* list, i32 offset
 {
     if(list)
     {
+        UI->scrollUsed = true;
+        u32 oldIndex = list->currentIndex;
         i32 newIndex = (i32) list->currentIndex + offset;
         newIndex = Wrap(0, newIndex, (i32) list->possibilityCount);
         
         Assert(newIndex >= 0 && newIndex < 100000);
         list->currentIndex = (u32) newIndex;
+        
+        if(list->possibilityCount == 1 && UI->mode == UIMode_Combat)
+        {
+            UI->scrollUsed = false;
+        }
     }
 }
 
@@ -1139,6 +1197,22 @@ inline void UIAddUndoRedoAction(UIState* UI, UIInteraction* interaction, u32 fla
     dest->type = UIInteractionAction_UndoRedoCommand;
     dest->flags = flags;
     dest->undoRedo = command;
+}
+
+inline void UIAddWriteFileAction(UIState* UI, UIInteraction* interaction, u32 flags, char* fileName, void* filePtr, u32 fileSize)
+{
+    UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
+    dest->type = UIInteractionAction_WriteFile;
+    FormatString(dest->filename, sizeof(dest->filename), "%s", fileName);
+    dest->filePtr = filePtr;
+    dest->fileSize = fileSize;
+}
+
+inline void UIAddDispatchBookmarkConditionAction(UIState* UI, UIInteraction* interaction, u32 flags, UIBookmark* bookmark)
+{
+    UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
+    dest->type = UIInteractionAction_DispatchBookmarkConditions;
+    dest->bookmark = bookmark;
 }
 
 inline UIInteraction NullInteraction()
@@ -1491,6 +1565,33 @@ inline u16 SLOWGetChildIndexInList(EditorElement* list, EditorElement* child)
     }
     
     return result;
+}
+
+inline void UIDispatchBookmarkCondition(UIState* UI, UIBookmark* bookmark)
+{
+    b32 active = !bookmark->active;
+    
+    UIBookmarkCondition* condition = &bookmark->condition;
+    switch(condition->type)
+    {
+        case UICondition_Mode:
+        {
+            UI->currentBookModeIndex = condition->mode;
+            for(u32 bookmarkIndex = 0; bookmarkIndex < UI->totalBookmarkCount; ++bookmarkIndex)
+            {
+                UIBookmark* toDeactivate = UI->bookmarks + bookmarkIndex;
+                if(toDeactivate->active && toDeactivate->position == bookmark->position)
+                {
+                    toDeactivate->active = false;
+                    break;
+                }
+            }
+            
+            bookmark->active = true;
+        } break;
+        
+        InvalidDefaultCase;
+    }
 }
 
 inline b32 UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 flag, r32 timeToAdvance, b32 onlyNotActivated = false)
@@ -2118,6 +2219,16 @@ inline b32 UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 fl
                     {
                         platformAPI.GetClipboardText(action->clipboardBuffer, action->clipboardSize);
                         UpdateWidgetChangeCount(UI, action->clipboardWidget, 1);
+                    } break;
+                    
+                    case UIInteractionAction_WriteFile:
+                    {
+                        platformAPI.DEBUGWriteFile(action->filename, action->filePtr, action->fileSize);
+                    } break;
+                    
+                    case UIInteractionAction_DispatchBookmarkConditions:
+                    {
+                        UIDispatchBookmarkCondition(UI, action->bookmark);
                     } break;
                 }
                 

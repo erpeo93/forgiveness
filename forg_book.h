@@ -1,5 +1,6 @@
 #pragma once
 
+#define PAGE_ZBIAS 20.0f
 
 enum UIBookMode
 {

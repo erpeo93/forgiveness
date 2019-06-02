@@ -548,7 +548,6 @@ internal Vec3 MoveEntityClient(GameModeWorld* worldMode, ClientEntity* entity, r
 inline b32 TooFarForAction(ClientPlayer* myPlayer, u32 desiredAction, u64 targetID)
 {
     b32 result = false;
-    
     if(desiredAction >= Action_Attack && targetID)
     {
         if(targetID == myPlayer->targetIdentifier && myPlayer->targetPossibleActions[desiredAction] == PossibleAction_TooFar)

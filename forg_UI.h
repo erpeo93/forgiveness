@@ -47,6 +47,8 @@ enum UIRequestType
     UIRequest_PatchCheck,
     UIRequest_SaveTaxonomyTab,
     UIRequest_RegenerateWorldChunks,
+    UIRequest_PassiveSkill,
+    UIRequest_ActiveSkill,
 };
 
 struct UIRequest
@@ -138,6 +140,11 @@ struct UIRequest
             Vec3 customTargetP;
         };
         
+        struct
+        {
+            u32 taxonomy;
+            b32 sendActiveRequest;
+        };
         u32 seed;
     };
 };
@@ -588,6 +595,8 @@ enum UIInteractionActionType
     UIInteractionAction_Redo,
     UIInteractionAction_CopyToClipboard,
     UIInteractionAction_PasteFromClipboard,
+    UIInteractionAction_WriteFile,
+    UIInteractionAction_DispatchBookmarkConditions,
 };
 
 struct UIInteractionAction
@@ -658,6 +667,18 @@ struct UIInteractionAction
             u32 clipboardSize;
         };
         
+        struct
+        {
+            char filename[32];
+            void* filePtr;
+            u32 fileSize;
+        };
+        
+        struct
+        {
+            UIBookmark* bookmark;
+        };
+        
         UIMemoryReference toReload;
         UndoRedoCommand undoRedo;
     };
@@ -719,7 +740,6 @@ enum UIMouseMovementType
 
 struct UISkill
 {
-    b32 active;
     u32 taxonomy;
 };
 
@@ -948,5 +968,6 @@ struct UIState
     Vec3 cameraOffset;
     u32 chunkApron;
     
+    b32 scrollUsed;
     UIOutput output;
 };

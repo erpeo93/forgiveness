@@ -65,7 +65,7 @@ struct FitProjectedModelResult
     Vec3 modelP;
 };
 
-inline FitProjectedModelResult FitProjectedModelIntoRect(UIState* UI, Rect2 rect, ModelId MID, Vec3 desiredScale = V3(1, 1, 1))
+inline FitProjectedModelResult FitProjectedModelIntoRect(UIState* UI, Vec3 P, Rect2 rect, ModelId MID, Vec3 desiredScale = V3(1, 1, 1))
 {
     FitProjectedModelResult result = {};
     if(IsValid(MID))
@@ -73,8 +73,12 @@ inline FitProjectedModelResult FitProjectedModelIntoRect(UIState* UI, Rect2 rect
         PakModel* modelInfo = GetModelInfo(UI->group->assets, MID);
         
         Vec2 rectCenter = GetCenter(rect);
-        Vec2 rectDim = GetDim(rect);
-        Vec3 P3d = rectCenter.x * UI->group->gameCamera.X + rectCenter.y * UI->group->gameCamera.Y;
+        Vec3 P3d = P + rectCenter.x * UI->group->gameCamera.X + rectCenter.y * UI->group->gameCamera.Y;
+        
+        r32 cameraZ;
+        Rect2 projectedRef = ProjectOnScreenCameraAligned(UI->group, P, rect, &cameraZ);
+        Vec2 refDim = GetDim(projectedRef);
+        
         Vec3 refScale = modelInfo->dim;
         Vec3 scale = Hadamart(modelInfo->dim, desiredScale);
         while(true)
@@ -83,7 +87,7 @@ inline FitProjectedModelResult FitProjectedModelIntoRect(UIState* UI, Rect2 rect
             Rect2 probeRect = ProjectOnScreen(UI->group, RectCenterDim(P3d, scale), &ignoredCameraZ);
             
             Vec2 probeDim = GetDim(probeRect);
-            if(probeDim.x <= rectDim.x && probeDim.y <= rectDim.y)
+            if(probeDim.x <= refDim.x && probeDim.y <= refDim.y)
             {
                 result.modelScale = V3(scale.x / refScale.x, scale.y / refScale.y, scale.z /refScale.z);
                 result.modelP = P3d;
@@ -118,33 +122,6 @@ inline UIBookmarkCondition BookModeCondition(UIBookMode mode)
     result.mode = mode;
     
     return result;
-}
-
-inline void UIDispatchBookmarkCondition(UIState* UI, UIBookmark* bookmark)
-{
-    b32 active = !bookmark->active;
-    
-    UIBookmarkCondition* condition = &bookmark->condition;
-    switch(condition->type)
-    {
-        case UICondition_Mode:
-        {
-            UI->currentBookModeIndex = condition->mode;
-            for(u32 bookmarkIndex = 0; bookmarkIndex < UI->totalBookmarkCount; ++bookmarkIndex)
-            {
-                UIBookmark* toDeactivate = UI->bookmarks + bookmarkIndex;
-                if(toDeactivate->active && toDeactivate->position == bookmark->position)
-                {
-                    toDeactivate->active = false;
-                    break;
-                }
-            }
-            
-            bookmark->active = true;
-        } break;
-        
-        InvalidDefaultCase;
-    }
 }
 
 inline void AddToFilteredElements(UIState* UI, BookMode* bookMode, BookElement* element)
@@ -252,8 +229,6 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
     
     RenderGroup* group = UI->group;
     
-    b32 activeElement = UIElementActive(UI, group, elementCenterP, elementDim);
-    
     Object object = {};
     object.taxonomy = recipeSlot->taxonomy;
     object.gen = gen;
@@ -309,12 +284,6 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
             ClientEntity* player = UI->player;
             
             TaxonomySlot* essenceSlot = GetSlotForTaxonomy(UI->table, ingredientTaxonomy);
-            
-#if 0            
-            BitmapId iconID = GetRecursiveIconId(UI->table, group->assets, essenceSlot->taxonomy);
-            PushUIBitmap(group, iconID, ingredientP, ingredientDim.y, 0, 20.2f, V2(1, 1), V4(1, 1, 1, 1));
-#endif
-            
             owned = 0;
             for(u32 essenceIndex = 0; essenceIndex < MAX_DIFFERENT_ESSENCES; ++essenceIndex)
             {
@@ -366,53 +335,39 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
         ingredientP.x += ingredientDim.x;
     }
     
-    BitmapId elementID = GetFirstBitmap(group->assets, Asset_BookElement);
-    ObjectTransform elementTransform = UprightTransform();
-    elementTransform.additionalZBias = 10.5f;
     
-    Vec4 elementColor = V4(1, 1, 1, 0.5f);
     
-    if(activeElement && canCraft)
+    
+    
+    
+    b32 activeElement = UIElementActive(UI, group, elementCenterP, elementDim);
+    if(activeElement && canCraft && renderCraftTooltip)
     {
-        if(renderCraftTooltip)
+        PushUITooltip(UI, "craft", V4(1, 0, 0, 1));
+        if(element->hot)
         {
-            PushUITooltip(UI, "craft", V4(1, 0, 0, 1));
-            elementColor = V4(1, 1, 1, 1.0f);
-            
-            if(Pressed(&input->mouseLeft))
+            element->securityTimer += input->timeToAdvance;
+            r32 destTimer = 2.0f;
+            r32 timeToComeback = 2.0f;
+            if(element->securityTimer >= destTimer)
             {
-                element->hot = true;
-            }
-            
-            if(element->hot && IsDown(&input->mouseLeft))
-            {
-                element->securityTimer += input->timeToAdvance;
-                r32 destTimer = 2.0f;
-                r32 timeToComeback = 2.0f;
-                if(element->securityTimer >= destTimer)
-                {
-                    element->securityTimer = destTimer + timeToComeback;
-                    SendCraftRequest(recipeSlot->taxonomy, gen);
-                    //ActionBeganPrediciton(UI->player, Action_Craft);
-                    UI->nextMode = UIMode_None;
-                    
-                    
-                    element->hot = false;
-                }
-                
-            }
-            else
-            {
-                element->securityTimer -= input->timeToAdvance;
-                element->securityTimer = Max(element->securityTimer, 0.0f);
+                element->securityTimer = destTimer + timeToComeback;
+                SendCraftRequest(recipeSlot->taxonomy, gen);
+                //ActionBeganPrediciton(UI->player, Action_Craft);
+                UI->nextMode = UIMode_None;
                 element->hot = false;
             }
+            
         }
         else
         {
             element->securityTimer -= input->timeToAdvance;
             element->securityTimer = Max(element->securityTimer, 0.0f);
-            element->hot = false;
+            
+            UIInteraction craftInteraction = {};
+            UIAddSetValueAction(UI, &craftInteraction, UI_Trigger, &element->hot, true);
+            UIAddSetValueAction(UI, &craftInteraction, UI_Release, &element->hot, false);
+            UIAddInteraction(UI, input, mouseLeft, craftInteraction);
         }
     }
     else
@@ -422,7 +377,6 @@ internal b32 UIDrawRecipeElement(UIState* UI, BookElement* element, Vec2 element
         element->hot = false;
     }
     
-    //PushBitmap(group, elementTransform, elementID, elementCenterP, elementDim.y, V2(1.0f, 1.0f), elementColor);
     return result;
 }
 
@@ -431,33 +385,28 @@ internal b32 UIDrawRecipeCategoryElement(UIState* UI, BookElement* element, Vec2
     b32 result = false;
     
     RenderGroup* group = UI->group;
-    b32 activeElement = UIElementActive(UI, group, elementCenterP, elementDim);
     
     
     Vec2 categoryTextP = elementCenterP + V2(-0.1f * elementDim.x, 0.25f * elementDim.y);
     PushUITextWithDimension(UI, &UI->gameFont, categorySlot->name, categoryTextP, V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
     
-    BitmapId elementID = GetFirstBitmap(group->assets, Asset_BookElement);
-    ObjectTransform elementTransform = UprightTransform();
-    elementTransform.additionalZBias = 10.5f;
     
-    Vec4 elementColor = V4(1, 1, 1, 0.5f);
+    
+    
+    b32 activeElement = UIElementActive(UI, group, elementCenterP, elementDim);
     if(activeElement)
     {
         PushUITooltip(UI, "drill down", V4(1, 0, 0, 1));
-        elementColor = V4(1, 1, 1, 1.0f);
-        if(Pressed(&input->mouseLeft))
-        {
-            BookMode* activeBookMode = UI->bookModes + UI->currentBookModeIndex;
-            activeBookMode->filterTaxonomy = categorySlot->taxonomy;
-        }
+        BookMode* activeBookMode = UI->bookModes + UI->currentBookModeIndex;
+        UIInteraction recipeCatInteraction = {};
+        UIAddSetValueAction(UI, &recipeCatInteraction, UI_Trigger, &activeBookMode->filterTaxonomy, categorySlot->taxonomy);
+        UIAddInteraction(UI, input, mouseLeft, recipeCatInteraction);
     }
     
-    //PushBitmap(group, elementTransform, elementID, elementCenterP, elementDim.y, V2(1.0f, 1.0f), elementColor);
     return result;
 }
 
-internal void UIDrawSkillElement(UIState* UI, BookMode* bookMode, BookElement* element, Vec2 elementCenterP, Vec2 elementDim, TaxonomySlot* skillSlot, u32 level, PlatformInput* input)
+internal void UIDrawSkillElement(UIState* UI, BookMode* bookMode, Vec3 bookP, BookElement* element, Vec2 elementCenterP, Vec2 elementDim, TaxonomySlot* skillSlot, PlatformInput* input)
 {
     RenderGroup* group = UI->group;
     b32 activeElement = UIElementActive(UI, group, elementCenterP, elementDim);
@@ -473,21 +422,21 @@ internal void UIDrawSkillElement(UIState* UI, BookMode* bookMode, BookElement* e
     
     Rect2 levelRect = RectCenterDim(elementCenterP + 0.0f *V2(0, elementDim.y), V2(0.8f * elementDim.x, 0.2f * elementDim.y));
     char stringLevel[16];
-    FormatString(stringLevel, sizeof(stringLevel), "level: %d", level);
+    FormatString(stringLevel, sizeof(stringLevel), "level: %d", element->skillLevel);
     
     FitTextResult fitLevel = FitTextIntoRect(UI, &UI->gameFont, levelRect, stringLevel, 1.5f);
     PushUIText_(UI, &UI->gameFont, stringLevel, fitLevel.row.P, bookMode->defaultTextColor, fitLevel.fontScale);
     
     
     
-    Rect2 modelRect = RectCenterDim(elementCenterP - 0.0f *V2(0, elementDim.y), V2(0.8f * elementDim.x, 0.3f * elementDim.y));
-    u64 modelTypeID = StringHash("rock");
-    u64 modelNameID = StringHash("pyramid.obj");
-    Vec4 standardColor = V4(1, 1, 1, 1);
+    Rect2 modelRect = RectCenterDim(elementCenterP - 0.25f *V2(0, elementDim.y), V2(0.8f * elementDim.x, 0.2f * elementDim.y));
+    u64 modelTypeID = skillSlot->iconModelTypeID;
+    u64 modelNameID = skillSlot->iconModelNameID;
+    Vec4 standardColor = skillSlot->iconActiveColor;
     ModelId MID = FindModelByName(group->assets, modelTypeID, modelNameID);
-    FitProjectedModelResult fitModel = FitProjectedModelIntoRect(UI, modelRect, MID);
+    FitProjectedModelResult fitModel = FitProjectedModelIntoRect(UI, bookP, modelRect, MID);
     
-    PushModel(group, MID, Identity(), fitModel.modelP, V4(-1, -1, -1, -1), fitModel.modelScale, standardColor, 0, 15.0f);
+    PushModel(group, MID, Identity(), fitModel.modelP, V4(-1, -1, -1, -1), fitModel.modelScale, standardColor, 0, PAGE_ZBIAS + 0.02f);
     
     
     
@@ -502,12 +451,8 @@ internal void UIDrawSkillElement(UIState* UI, BookMode* bookMode, BookElement* e
         if(HasEssences(UI->myPlayer->essences, skillSlot->essences))
         {
             PushUITooltip(UI, "level up", V4(1, 0, 0, 1));
-            if(Pressed(&input->mouseLeft))
-            {
-                element->hot = true;
-            }
             
-            if(element->hot && IsDown(&input->mouseLeft))
+            if(element->hot)
             {
                 element->securityTimer += input->timeToAdvance;
                 r32 destTimer = 2.0f;
@@ -524,7 +469,11 @@ internal void UIDrawSkillElement(UIState* UI, BookMode* bookMode, BookElement* e
             {
                 element->securityTimer -= input->timeToAdvance;
                 element->securityTimer = Max(element->securityTimer, 0.0f);
-                element->hot = false;
+                
+                UIInteraction levelUpInteraction = {};
+                UIAddSetValueAction(UI, &levelUpInteraction, UI_Trigger, &element->hot, true);
+                UIAddSetValueAction(UI, &levelUpInteraction, UI_Release, &element->hot, false);
+                UIAddInteraction(UI, input, mouseLeft, levelUpInteraction);
             }
         }
         else
@@ -537,49 +486,37 @@ internal void UIDrawSkillElement(UIState* UI, BookMode* bookMode, BookElement* e
         
         for(i32 slotButtonIndex = 0; slotButtonIndex < MAXIMUM_SKILL_SLOTS; ++slotButtonIndex)
         {
-            if(Pressed(input->slotButtons + slotButtonIndex))
+            
+            UIInteraction slotInteraction = {};
+            
+            if(skillSlot->isPassiveSkill)
             {
-                for(i32 slotButtonIndex2 = 0; slotButtonIndex2 < MAXIMUM_SKILL_SLOTS; ++slotButtonIndex2)
-                {
-                    UISkill* skill = UI->skills + slotButtonIndex2;
-                    if(skill->taxonomy == skillSlot->taxonomy)
-                    {
-                        skill->taxonomy = 0;
-                        skill->active = false;
-                    }
-                }
-                
-                UISkill* skill = UI->skills + slotButtonIndex;
-                skill->taxonomy = skillSlot->taxonomy;
-                skill->active = true;
-                
-                if(skillSlot->isPassiveSkill)
-                {
-                    SendPassiveSkillRequest(skillSlot->taxonomy, true);
-                }
-                else
-                {
-                    if(slotButtonIndex == UI->activeSkillSlotIndex)
-                    {
-                        SendActiveSkillRequest(skillSlot->taxonomy);
-                    }
-                }
-                
-                platformAPI.DEBUGWriteFile("skills", UI->skills, sizeof(UI->skills));
+                UIAddRequestAction(UI, &slotInteraction, UI_Trigger, PassiveSkillRequest(skillSlot->taxonomy));
             }
+            else
+            {
+                b32 sendActiveRequest = (slotButtonIndex == UI->activeSkillSlotIndex);
+                UIAddRequestAction(UI, &slotInteraction, UI_Trigger, ActiveSkillRequest(skillSlot->taxonomy, sendActiveRequest));
+            }
+            
+            UISkill* skill = UI->skills + slotButtonIndex;
+            UIAddSetValueAction(UI, &slotInteraction, UI_Trigger, &skill->taxonomy, skillSlot->taxonomy);
+            UIAddWriteFileAction(UI, &slotInteraction, UI_Trigger, "skills", UI->skills, sizeof(UI->skills));
+            
+            UIAddInteraction(UI, input, slotButtons[slotButtonIndex], slotInteraction);
         }
     }
     else
     {
+        element->securityTimer -= input->timeToAdvance;
+        element->securityTimer = Max(element->securityTimer, 0.0f);
         element->hot = false;
     }
 }
 
 
-internal b32 UIDrawSkillCategoryElement(UIState* UI, BookElement* element, Vec2 elementCenterP, Vec2 elementDim, TaxonomySlot* categorySlot, PlatformInput* input)
+internal void UIDrawSkillCategoryElement(UIState* UI, BookElement* element, Vec2 elementCenterP, Vec2 elementDim, TaxonomySlot* categorySlot, PlatformInput* input)
 {
-    b32 result = false;
-    
     RenderGroup* group = UI->group;
     b32 activeElement = UIElementActive(UI, group, elementCenterP, elementDim);
     
@@ -587,41 +524,29 @@ internal b32 UIDrawSkillCategoryElement(UIState* UI, BookElement* element, Vec2 
     Vec2 categoryTextP = elementCenterP + V2(-0.1f * elementDim.x, 0.25f * elementDim.y);
     PushUITextWithDimension(UI, &UI->gameFont, categorySlot->name, categoryTextP, V2(0.3f * elementDim.x, 0.1f * elementDim.y), V4(1, 0, 0, 1));
     
-    BitmapId elementID = GetFirstBitmap(group->assets, Asset_BookElement);
-    ObjectTransform elementTransform = UprightTransform();
-    elementTransform.additionalZBias = 10.5f;
     
     
-#if 0    
-    BitmapId iconID = GetRecursiveIconId(UI->table, group->assets, categorySlot->taxonomy);
-    r32 iconHeight = 0.4f * elementDim.y;
-    PushUIBitmap(group, iconID, elementCenterP, iconHeight, 0, 12.5f);
-#endif
-    
-    Vec4 elementColor = V4(1, 1, 1, 0.5f);
     if(activeElement)
     {
-        elementColor = V4(1, 1, 1, 1.0f);
         if(element->unlocked)
         {
             PushUITooltip(UI, "drill down", V4(1, 0, 0, 1));
-            if(Pressed(&input->mouseLeft))
-            {
-                BookMode* activeBookMode = UI->bookModes + UI->currentBookModeIndex;
-                activeBookMode->filterTaxonomy = categorySlot->taxonomy;
-            }
+            
+            UIInteraction drillInteraction = {};
+            BookMode* activeBookMode = UI->bookModes + UI->currentBookModeIndex;
+            UIAddSetValueAction(UI, &drillInteraction, UI_Trigger, &activeBookMode->filterTaxonomy, categorySlot->taxonomy);
+            UIAddInteraction(UI, input, mouseLeft, drillInteraction);
+            
+            element->securityTimer -= input->timeToAdvance;
+            element->securityTimer = Max(element->securityTimer, 0.0f);
+            element->hot = false;
         }
         else
         {
             if(HasEssences(UI->myPlayer->essences, categorySlot->essences))
             {
                 PushUITooltip(UI, "unlock", V4(1, 0, 0, 1));
-                if(Pressed(&input->mouseLeft))
-                {
-                    element->hot = true;
-                }
-                
-                if(element->hot && IsDown(&input->mouseLeft))
+                if(element->hot)
                 {
                     element->securityTimer += input->timeToAdvance;
                     r32 destTimer = 2.0f;
@@ -637,7 +562,11 @@ internal b32 UIDrawSkillCategoryElement(UIState* UI, BookElement* element, Vec2 
                 {
                     element->securityTimer -= input->timeToAdvance;
                     element->securityTimer = Max(element->securityTimer, 0.0f);
-                    element->hot = false;
+                    
+                    UIInteraction unlockInteraction = {};
+                    UIAddSetValueAction(UI, &unlockInteraction, UI_Trigger, &element->hot, true);
+                    UIAddSetValueAction(UI, &unlockInteraction, UI_Release, &element->hot, false);
+                    UIAddInteraction(UI, input, mouseLeft, unlockInteraction);
                 }
                 
             }
@@ -655,9 +584,6 @@ internal b32 UIDrawSkillCategoryElement(UIState* UI, BookElement* element, Vec2 
         element->securityTimer = Max(element->securityTimer, 0.0f);
         element->hot = false;
     }
-    
-    //PushBitmap(group, elementTransform, elementID, elementCenterP, elementDim.y, V2(1.0f, 1.0f), elementColor);
-    return result;
 }
 
 
@@ -700,7 +626,7 @@ inline void UIDrawBookmark(UIState* UI, RenderGroup* group, UIBookmark* bookmark
     PushUIBitmap(group, BID, drawingP, max(dim.x, dim.y), angle, 9.5f, V2(1, 1), bookmarkColor);
 }
 
-internal b32 UIDrawPage(UIState* UI, Vec2 pageP, Vec2 pageDim, u32 startingElementIndex, u32 elementCount, PlatformInput* input)
+internal b32 UIDrawPage(UIState* UI, Vec3 bookP, Vec2 pageP, Vec2 pageDim, u32 startingElementIndex, u32 elementCount, PlatformInput* input)
 {
 	b32 onFocus = false;
     
@@ -773,7 +699,7 @@ internal b32 UIDrawPage(UIState* UI, Vec2 pageP, Vec2 pageDim, u32 startingEleme
                 case Book_Skill:
                 {
                     TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, toDraw->taxonomy);
-                    UIDrawSkillElement(UI, bookMode, toDraw, elementCenterP, elementDim, slot, toDraw->skillLevel, input);
+                    UIDrawSkillElement(UI, bookMode, bookP, toDraw, elementCenterP, elementDim, slot, input);
                     decorationBaseColor = V4(1, 0, 0, 0.3f);
                     
                 } break;
@@ -796,7 +722,7 @@ internal b32 UIDrawPage(UIState* UI, Vec2 pageP, Vec2 pageDim, u32 startingEleme
             
             
             BitmapId bookElementID = GetFirstBitmap(group->assets, Asset_BookElement);
-            PushUIBitmap(group, bookElementID, elementCenterP, elementDim.y, 0, 12.1f, V2(1.0f, 1.0f), decorationBaseColor);
+            PushUIBitmap(group, bookElementID, elementCenterP, elementDim.y, 0, PAGE_ZBIAS + 0.01f, V2(1.0f, 1.0f), decorationBaseColor);
             
             
             
@@ -806,7 +732,6 @@ internal b32 UIDrawPage(UIState* UI, Vec2 pageP, Vec2 pageDim, u32 startingEleme
     
 	return onFocus;
 }
-
 
 internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input, Vec2 bookP)
 {
@@ -820,7 +745,6 @@ internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input, Vec2 bookP)
     GameModeWorld* worldMode = UI->worldMode;
     RenderGroup* group = UI->group;
     BitmapId bookID = GetFirstBitmap(group->assets, Asset_BookPage);
-    BitmapId bookElementID = GetFirstBitmap(group->assets, Asset_BookElement);
     
     Bitmap* bookPage = GetBitmap(group->assets, bookID);
     Vec2 bookLeft = {};
@@ -836,16 +760,14 @@ internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input, Vec2 bookP)
         bookLeft = bookP + V2(-0.5f * pageWidth, 0);
         bookRight = bookP + V2(0.5f * pageWidth, 0);
         
-        PushUIBitmap(group, bookID, bookLeft, pageHeight, 0, 12.0f, V2(1.0f, 1.0f));
-        //PushUIBitmap(group, bookElementID, bookLeft, pageHeight, 0, 12.1f, V2(1.0f, 1.0f));
-        PushUIBitmap(group, bookID, bookRight, pageHeight, 0, 12.0f, V2(-1.0f, 1.0f));
-        //PushUIBitmap(group, bookElementID, bookRight, pageHeight, 0, 12.1f, V2(1.0f, 1.0f));
+        PushUIBitmap(group, bookID, bookLeft, pageHeight, 0, PAGE_ZBIAS, V2(1.0f, 1.0f));
+        PushUIBitmap(group, bookID, bookRight, pageHeight, 0, PAGE_ZBIAS, V2(-1.0f, 1.0f));
         
         BitmapId bookmarkID = GetFirstBitmap(group->assets, Asset_Bookmark);
         Bitmap* bitmap = GetBitmap(group->assets, bookmarkID);
         if(bitmap)
         {
-            r32 bookmarkHeight = pageHeight / 10.0f;
+            r32 bookmarkHeight = pageHeight / 6.0f;
             r32 bookmarkWidth = bookmarkHeight * bitmap->widthOverHeight;
             
             Vec2 position[UIBookmark_Count];
@@ -891,11 +813,9 @@ internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input, Vec2 bookP)
             
             if(UI->hotBookmark)
             {
-                if(Pressed(&input->mouseLeft))
-                {
-                    UIDispatchBookmarkCondition(UI, UI->hotBookmark);
-                }
-                
+                UIInteraction bookmarkInteraction = {};
+                UIAddDispatchBookmarkConditionAction(UI, &bookmarkInteraction, UI_Trigger, UI->hotBookmark);
+                UIAddInteraction(UI, input, mouseLeft, bookmarkInteraction);
 				onFocus = true;
             }
         }
@@ -933,19 +853,21 @@ internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input, Vec2 bookP)
         toFilter = toFilter->next;
     }
     
-    if(Pressed(&input->mouseRight))
+    UIInteraction rightMouseInteraction = {};
+    
+    BookMode* activeBookMode = UI->bookModes + UI->currentBookModeIndex;
+    if(activeBookMode->filterTaxonomy != activeBookMode->rootTaxonomy)
     {
-        BookMode* activeBookMode = UI->bookModes + UI->currentBookModeIndex;
-        if(activeBookMode->filterTaxonomy != activeBookMode->rootTaxonomy)
-        {
-            activeBookMode->filterTaxonomy = GetParentTaxonomy(UI->table, activeBookMode->filterTaxonomy);
-        }
-        else
-        {
-            UI->bookOutTime = 0;
-            UI->exitingFromBookMode = true;
-        }
+        u32 parentTaxonomy = GetParentTaxonomy(UI->table, activeBookMode->filterTaxonomy);
+        UIAddSetValueAction(UI, &rightMouseInteraction, UI_Trigger, &activeBookMode->filterTaxonomy, parentTaxonomy);
     }
+    else
+    {
+        UIAddSetValueAction(UI, &rightMouseInteraction, UI_Trigger, &UI->bookOutTime, 0.0f);
+        UIAddSetValueAction(UI, &rightMouseInteraction, UI_Trigger, &UI->exitingFromBookMode, true);
+    }
+    
+    UIAddInteraction(UI, input, mouseRight, rightMouseInteraction);
     
     u32 elementsPerPage = 1;
     u32 viewingElements = elementsPerPage * 2;
@@ -982,8 +904,9 @@ internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input, Vec2 bookP)
     
     if(bookPage)
     {
-        b32 p1OnFocus = UIDrawPage(UI, bookLeft, V2(pageWidth, pageHeight), leftPageElementIndex, elementsPerPage, input);
-        b32 p2OnFocus = UIDrawPage(UI, bookRight, V2(pageWidth, pageHeight), rightPageElementIndex, elementsPerPage, input);
+        Vec3 P3d = V3(bookP, 0) + group->gameCamera.screenCameraOffset.x * group->gameCamera.X + group->gameCamera.screenCameraOffset.y * group->gameCamera.Y;
+        b32 p1OnFocus = UIDrawPage(UI, P3d, bookLeft, V2(pageWidth, pageHeight), leftPageElementIndex, elementsPerPage, input);
+        b32 p2OnFocus = UIDrawPage(UI, P3d, bookRight, V2(pageWidth, pageHeight), rightPageElementIndex, elementsPerPage, input);
         
 		onFocus = onFocus || p1OnFocus || p2OnFocus;
     }
