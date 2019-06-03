@@ -3956,7 +3956,17 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             }
             
             
-            b32 addProtectInteraction = true;
+            
+            UIAddProtectInteraction(UI, input, output);
+            
+            if(UI->player->draggingID)
+            {
+                UIInteraction releaseInteraction = {};
+                UIAddRequestAction(UI, &releaseInteraction, UI_Trigger, ReleaseDraggingRequest());
+                
+                UIAddInteraction(UI, input, mouseRight, releaseInteraction);
+            }
+            
             UIScrollableElement* activeElement = GetActiveElement(&UI->possibleTargets);
             if(activeElement)
             {
@@ -3965,7 +3975,6 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                 {
                     if(overlapping->identifier == player->identifier)
                     {
-                        addProtectInteraction = false;
                         if(UI->worldMode->editingEnabled && input->altDown)
                         {
                             TaxonomySlot* slot = GetSlotForTaxonomy(UI->table, overlapping->taxonomy);
@@ -4032,12 +4041,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
 
             }
             
-            
-            if(addProtectInteraction)
-            {
-                UIAddProtectInteraction(UI, input, output);
-            }
-            
+           
             switch(UI->mouseMovement)
             {
                 case UIMouseMovement_ToMouseP:
@@ -4437,8 +4441,20 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             }
             
             
+                UIAddProtectInteraction(UI, input, output);
+
             
-            b32 addProtectInteraction = true;
+            if(UI->player->draggingID)
+            {
+                UIInteraction releaseInteraction = {};
+                UIAddRequestAction(UI, &releaseInteraction, UI_Trigger, ReleaseDraggingRequest());
+                
+                UIAddInteraction(UI, input, mouseRight, releaseInteraction);
+            }
+            
+           
+            
+            
             UIScrollableElement* activeElement = GetActiveElement(&UI->possibleTargets);
             if(activeElement)
             {
@@ -4491,11 +4507,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             }
             
             
-            if(addProtectInteraction)
-            {
-                UIAddProtectInteraction(UI, input, output);
-            }
-            
+           
             switch(UI->mouseMovement)
             {
                 case UIMouseMovement_ToMouseP:

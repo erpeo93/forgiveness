@@ -175,6 +175,10 @@ enum Packet_Type
     Type_CraftFromInventoryRequest,
     Type_CustomTargetPRequest,
     
+    Type_StartedDragging,
+    Type_EndedDragging,
+    Type_ReleaseDraggingRequest,
+    
     Type_containerHeader,
     Type_containerInfo,
     Type_objectRemoved,

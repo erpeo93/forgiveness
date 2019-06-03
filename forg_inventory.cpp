@@ -323,7 +323,7 @@ internal b32 EquipObject(SimRegion* region, SimEntity* actor, SimEntity* object)
     EquipInfo info = PossibleToEquip_(region->taxTable, actor->taxonomy, creature->equipment, object->taxonomy, (i16) object->status);
     if(IsValid(info))
     {
-        AddFlags(object, Flag_Equipped);
+        AddFlags(object, Flag_Attached);
         object->velocity = {};
         
         EquipmentSlot* equipmentSlot = creature->equipment + info.slot;

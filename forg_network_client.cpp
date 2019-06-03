@@ -230,6 +230,12 @@ internal void SendPassiveSkillRequest(u32 taxonomy)
     CloseAndSendReliablePacket();
 }
 
+internal void SendReleaseDraggingRequest()
+{
+    StartPacket(ReleaseDraggingRequest);
+    CloseAndSendReliablePacket();
+}
+
 internal void SendUnlockSkillCategoryRequest(u32 taxonomy)
 {
     StartPacket(UnlockSkillCategoryRequest);
@@ -711,7 +717,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 r32 maxDistancePrediction = 2.5f;
                 Vec3 deltaP = Subtract(P, e->universeP);
                 r32 deltaLength = Length(deltaP);
-                if(deltaLength >= maxDistancePrediction || (e->flags & Flag_Equipped))
+                if(deltaLength >= maxDistancePrediction || (e->flags & Flag_Attached))
                 {
                     e->universeP = P;
                     e->velocity = {};
@@ -1058,6 +1064,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 {
                     Vec3 relative = targetEntity->P - currentEntity->P;
                     currentEntity->animation.flipOnYAxis = (relative.x < 0);
+                    currentEntity->actionID = target;
                 }
                 
                 if((target == worldMode->player.identifier && action == Action_Attack) ||
@@ -1075,6 +1082,22 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 Unpack("CQ", &action, &target);
                 
                 SignalAnimationSyncCompleted(&currentEntity->animation, action, AnimationSync_WaitingForCompletion);
+                currentEntity->actionID = 0;
+            } break;
+            
+            case Type_StartedDragging:
+            {
+                u64 target;
+                Unpack("Q", &target);
+                
+                ClientEntity* player = GetEntityClient(worldMode, worldMode->player.identifier);
+                player->draggingID = target;
+            } break;
+            
+            case Type_EndedDragging:
+            {
+                ClientEntity* player = GetEntityClient(worldMode, worldMode->player.identifier);
+                player->draggingID = 0;
             } break;
             
             case Type_DataFileHeader:

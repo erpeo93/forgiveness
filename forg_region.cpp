@@ -331,7 +331,7 @@ internal void EndSim(SimRegion* region)
                             if(equipmentID)
                             {
                                 SimEntity* equipment = GetRegionEntityByID(region, equipmentID);
-                                ClearFlags(equipment, Flag_Equipped);
+                                ClearFlags(equipment, Flag_Attached);
                             }
                         }
                         
@@ -488,7 +488,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 else
                 {
                     SimEntity* destEntity = GetRegionEntityByID(region, request.targetEntityID);
-                    if(destEntity && !IsSet(destEntity, Flag_Equipped))
+                    if(destEntity && !IsSet(destEntity, Flag_Attached))
                     {
                         b32 unableBecauseOfDistance;
                         if(EntityCanDoAction(region, entity, destEntity, (EntityAction)request.desiredAction, true, &unableBecauseOfDistance))
@@ -512,6 +512,30 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                     Assert(container);
                     creature->openedContainerID = 0;
                 }
+                
+                if(entity->action > Action_Move && creature->externalDraggingID)
+                {
+                    SimEntity* dragging = GetRegionEntityByID(region, creature->externalDraggingID);
+                    if(dragging)
+                    {
+                        ClearFlags(dragging, Flag_Attached);
+                        creature->externalDraggingID = 0;
+                        if(entity->playerID)
+                        {
+                            SendEndDraggingMessage(player);
+                        }
+                    }
+                }
+            }
+        } break;
+        
+        case Type_ReleaseDraggingRequest:
+        {
+            SimEntity* dragging = GetRegionEntityByID(region, creature->externalDraggingID);
+            if(dragging)
+            {
+                ClearFlags(dragging, Flag_Attached);
+                creature->externalDraggingID = 0;
             }
         } break;
         
@@ -824,7 +848,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 {
                     if(Owned(equipmentPiece, entity->identifier))
                     {
-                        Assert(IsSet(equipmentPiece, Flag_Equipped));
+                        Assert(IsSet(equipmentPiece, Flag_Attached));
                         Assert(!player->draggingEntity.taxonomy);
                         
                         player->draggingEntity = *equipmentPiece;
@@ -1417,7 +1441,7 @@ internal b32 UpdateCreature(SimRegion* region, SimEntity* entity)
         if(brain->oldAction == Action_Craft)
         {
             SimEntity* target = GetRegionEntityByID(region, brain->oldTargetID);
-            Assert(IsSet(target, Flag_Equipped));
+            Assert(IsSet(target, Flag_Attached));
             if(!PickObject(region, entity, target))
             {
                 AddFlags(entity, Flag_deleted);
@@ -1486,7 +1510,7 @@ internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)
         for( u32 blockIndex = 0; blockIndex < entityBlock->entityCount; blockIndex++ )
         {
             SimEntity* entity = entityBlock->entities[blockIndex];
-            if(!IsSet(entity, Flag_deleted) && !IsSet(entity, Flag_Equipped))
+            if(!IsSet(entity, Flag_deleted) && !IsSet(entity, Flag_Attached))
             {
                 b32 died = false;
                 Vec3 oldP = entity->P;
@@ -1571,7 +1595,7 @@ internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)
         for( u32 entityBlockIndex = 0; entityBlockIndex < entityBlock->entityCount; entityBlockIndex++ )
         {
             SimEntity* entity = entityBlock->entities[entityBlockIndex];
-            if(!IsSet(entity, Flag_deleted) && IsSet(entity, Flag_Equipped))
+            if(!IsSet(entity, Flag_deleted) && IsSet(entity, Flag_Attached))
             {
                 Assert(entity->ownerID);
                 SimEntity* owner = GetRegionEntityByID(region, entity->ownerID);

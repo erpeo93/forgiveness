@@ -836,7 +836,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             group->assets = gameState->assets;
             
             player->identifier = myPlayer->identifier;
-            player->targetID = myPlayer->targetIdentifier;
             player->P = V3(0, 0, 0);
             
             UI->output = {};
@@ -1036,7 +1035,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 }
                             }
                             
-                            if(entity->identifier && !IsSet(entity, Flag_deleted | Flag_Equipped))
+                            if(entity->identifier && !IsSet(entity, Flag_deleted | Flag_Attached))
                             {
                                 r32 cameraZ = 0.0f;
                                 
@@ -1127,7 +1126,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     while(entity)
                     {
                         ClientEntity* next = entity->next;
-                        if(entity->identifier && !IsSet(entity, Flag_deleted | Flag_Equipped))
+                        if(entity->identifier && !IsSet(entity, Flag_deleted | Flag_Attached))
                         {
                             entity->P = Subtract(entity->universeP, player->universeP);
                             entity->timeFromLastUpdate += input->timeToAdvance;
@@ -1156,10 +1155,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 
                                 entity->animation.spawnAshParticlesCount = 0;
                                 
-                                if(entity->animation.output.entityPresent && entity->targetID)
+                                if(entity->animation.output.entityPresent && entity->draggingID)
                                 {
                                     // NOTE(Leonardo): render target entity here at specified angle and offset
-                                    ClientEntity* targetEntity = GetEntityClient(worldMode, entity->targetID);
+                                    ClientEntity* targetEntity = GetEntityClient(worldMode, entity->draggingID);
                                     if(targetEntity)
                                     {
                                         targetEntity->animation.flipOnYAxis = entity->animation.flipOnYAxis;

@@ -235,7 +235,9 @@ struct ClientEntity
     // TODO(Leonardo): encode this as a single byte
     EntityAction action;
     r32 actionTime;
-    u64 targetID;
+    u64 actionID;
+    
+    u64 draggingID;
     
     
     // TODO(Leonardo): send these only when sending a recipe entity

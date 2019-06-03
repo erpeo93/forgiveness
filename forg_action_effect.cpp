@@ -403,7 +403,7 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
         case Action_Craft:
         {
             Assert(target->status < 0);
-            AddFlags(target, Flag_Equipped);
+            AddFlags(target, Flag_Attached);
             target->status += region->timeToUpdate;
             if(target->status >= 0)
             {
@@ -463,6 +463,18 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
         case Action_Eat:
         {
             AddFlags(target, Flag_deleted);
+        } break;
+        
+        case Action_Dragging:
+        {
+            AddFlags(target, Flag_Attached);
+            actorCreature->externalDraggingID = target->identifier;
+            
+            if(actor->playerID)
+            {
+                ServerPlayer* player = region->server->players + actor->playerID;
+                SendStartDraggingMessage(player, target->identifier);
+            }
         } break;
     }
 }
@@ -645,7 +657,7 @@ inline b32 EntityCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* tar
                 }
             }
             
-            if(IsSet(target, Flag_Equipped))
+            if(IsSet(target, Flag_Attached))
             {
                 canDoAction = false;
             }

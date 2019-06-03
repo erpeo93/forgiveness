@@ -204,10 +204,21 @@ inline void SendNewRecipeMessage(ServerPlayer* player, Recipe* recipe)
 {
     StartPacket(player, NewRecipe);
     Pack("LQ", recipe->taxonomy, recipe->gen.generic);
-    
     CloseAndStoreReliablePacket(player);
 }
 
+inline void SendStartDraggingMessage(ServerPlayer* player, u64 identifier)
+{
+    StartPacket(player, StartedDragging);
+    Pack("Q", identifier);
+    CloseAndStoreReliablePacket(player);
+}
+
+inline void SendEndDraggingMessage(ServerPlayer* player)
+{
+    StartPacket(player, EndedDragging);
+    CloseAndStoreReliablePacket(player);
+}
 
 internal unsigned char* SubCategoryOperation(TaxonomyTable* table, ServerPlayer* player, TaxonomySlot* slot, u32* total, unsigned char* buff)
 {

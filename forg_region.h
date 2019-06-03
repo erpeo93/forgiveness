@@ -25,7 +25,7 @@ enum Entity_flags
     Flag_distanceLimit = (1 << 2),
     Flag_deleteWhenDistanceCovered = (1 << 3),
     Flag_insideRegion = (1 << 4),
-    Flag_Equipped = (1 << 5),
+    Flag_Attached = (1 << 5),
     
     Flag_deleted = (1 << 20),
 };
@@ -88,7 +88,7 @@ introspection() struct CreatureComponent
     r32 stamina;
     r32 maxLifePoints;
     u64 openedContainerID;
-    
+    u64 externalDraggingID;
     Vec3 customTargetP;
     SimEntity* draggingEntity;
     i32 activeSkillIndex;

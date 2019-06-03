@@ -49,6 +49,7 @@ enum UIRequestType
     UIRequest_RegenerateWorldChunks,
     UIRequest_PassiveSkill,
     UIRequest_ActiveSkill,
+    UIRequest_ReleaseDragging,
 };
 
 struct UIRequest

@@ -561,6 +561,14 @@ inline UIRequest ActiveSkillRequest(u32 taxonomy, b32 sendActiveRequest)
 }
 
 
+inline UIRequest ReleaseDraggingRequest()
+{
+    UIRequest result = {};
+    result.requestCode = UIRequest_ReleaseDragging;
+    return result;
+}
+
+
 
 
 inline void UIAddUndoRedoCommand(UIState* UI, UndoRedoCommand command);
@@ -881,6 +889,12 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
             }
             
             SendPassiveSkillRequest(request->taxonomy);
+        } break;
+        
+        case UIRequest_ReleaseDragging:
+        {
+            UI->player->draggingID = 0;
+            SendReleaseDraggingRequest();
         } break;
         InvalidDefaultCase;
     }

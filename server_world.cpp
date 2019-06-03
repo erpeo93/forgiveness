@@ -314,7 +314,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
             entity->ownerID = params.ownerID;
             if(params.equipped)
             {
-                AddFlags(entity, Flag_Equipped);
+                AddFlags(entity, Flag_Attached);
             }
         }
         

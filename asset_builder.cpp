@@ -1066,15 +1066,9 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                     {
                         isComposed = true;
                         
-                        char* toCheck = "weapons";
-                        char* toCheck2 = "Weapons";
-                        char* toCheck3 = "equipment";
-                        char* toCheck4 = "Equipment";
+                        char* toCheck = "Dragging";
                         
-                        if(!StrEqual(StrLen(toCheck), toCheck, pieceName) &&
-                           !StrEqual(StrLen(toCheck2), toCheck2, pieceName) &&
-                           !StrEqual(StrLen(toCheck3), toCheck3, pieceName) &&
-                           !StrEqual(StrLen(toCheck4), toCheck4, pieceName))
+                        if(!StrEqual(StrLen(toCheck), toCheck, pieceName))
                         {
                             isComposed = false;
                             isEntity = true;
@@ -2652,12 +2646,20 @@ internal void WriteAnimations(char* folder, char* name)
     AddEveryAnimationThatStartsWith(completePath, hashID, "idle");
     EndAssetType();
     
+    BeginAssetType(assets, Asset_standingDragging);
+    AddEveryAnimationThatStartsWith(completePath, hashID, "idle_drag");
+    EndAssetType();
+    
     
     BeginAssetType(assets, Asset_moving);
     AddEveryAnimationThatStartsWith(completePath, hashID, "walk");
     AddEveryAnimationThatStartsWith(completePath, hashID, "run");
     AddEveryAnimationThatStartsWith(completePath, hashID, "move");
     AddEveryAnimationThatStartsWith(completePath, hashID, "fly");
+    EndAssetType();
+    
+    BeginAssetType(assets, Asset_movingDragging);
+    AddEveryAnimationThatStartsWith(completePath, hashID, "idle_drag");
     EndAssetType();
     
     

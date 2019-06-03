@@ -1786,7 +1786,7 @@ struct GetAIDResult
     Vec2 originOffset;
 };
 
-inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy, u32 action,r32 tileHeight, u64 forcedNameHashID = 0)
+inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy, u32 action,b32 dragging, r32 tileHeight, u64 forcedNameHashID = 0)
 {
     GetAIDResult result = {};
     result.coloration = V4(1, 1, 1, 1);
@@ -1810,7 +1810,7 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
     {
         
         AssetTypeId fallbackID = Asset_rig;
-        result.assetID = GetAssetIDForEntity(assets, taxTable, taxonomy, action, tileHeight);
+        result.assetID = GetAssetIDForEntity(assets, taxTable, taxonomy, action, dragging, tileHeight);
         Assert(result.assetID);
         
         if(!result.skeletonHashID)
@@ -1926,12 +1926,14 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
     {
         PushNewAction(animationState, entityC->action);
         
+        b32 dragging = (entityC->draggingID != 0);
+        
         WorldTile* tile = GetTile(worldMode, worldMode->player.universeP, P.xy);
         r32 tileHeight = tile->waterLevel;
-        GetAIDResult prefetchAID = GetAID(group->assets, taxTable, entityC->taxonomy, entityC->action, tileHeight);
+        GetAIDResult prefetchAID = GetAID(group->assets, taxTable, entityC->taxonomy, entityC->action, dragging, tileHeight);
         PrefetchAnimation(group->assets, prefetchAID.AID);
         
-        GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, tileHeight,  debugParams.forcedNameHashID);
+        GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, dragging, tileHeight,  debugParams.forcedNameHashID);
         
         input.defaultColoration = AID.coloration;
         input.combatAnimation = (AID.assetID == Asset_attacking);

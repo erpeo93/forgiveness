@@ -1292,7 +1292,7 @@ inline BitmapId GetBitmapForGlyph(Assets* assets, Font* font, PakFont* info, u32
     
 }
 
-inline AssetTypeId GetAssetIDForEntity(Assets* assets, TaxonomyTable* table, u32 taxonomy, u32 action, r32 tileHeight)
+inline AssetTypeId GetAssetIDForEntity(Assets* assets, TaxonomyTable* table, u32 taxonomy, u32 action, b32 dragging, r32 tileHeight)
 {
     u32 currentTaxonomy = taxonomy;
     
@@ -1304,6 +1304,11 @@ inline AssetTypeId GetAssetIDForEntity(Assets* assets, TaxonomyTable* table, u32
             case Action_Move:
             {
                 result = Asset_moving;
+                
+                if(dragging)
+                {
+                    result = Asset_movingDragging;
+                }
             } break;
             
             case Action_Attack:
@@ -1339,6 +1344,11 @@ inline AssetTypeId GetAssetIDForEntity(Assets* assets, TaxonomyTable* table, u32
             default:
             {
                 result = Asset_standing;
+                
+                if(dragging)
+                {
+                    result = Asset_standingDragging;
+                }
             } break;
         }
     }

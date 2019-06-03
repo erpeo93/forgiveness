@@ -69,7 +69,9 @@ printTable(noPrefix) enum AssetTypeId
     
     Asset_rig,
     Asset_standing,
+    Asset_standingDragging,
     Asset_moving,
+    Asset_movingDragging,
     Asset_attacking,
     Asset_eating,
     Asset_casting,

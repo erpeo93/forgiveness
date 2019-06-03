@@ -644,7 +644,7 @@ in r32 modulationPercentage;
           zVertex.z += zBias;
           
           Vec4 zMinTransform = transform * inVertex;
-                                          Vec4 zMaxTransform = transform * zVertex;
+          Vec4 zMaxTransform = transform * zVertex;
                                           
                                            r32 modifiedZ = zMaxTransform.z * (zMinTransform.w / zMaxTransform.w);
                                           gl_Position = vec4(zMinTransform.x, zMinTransform.y, modifiedZ, zMinTransform.w);
