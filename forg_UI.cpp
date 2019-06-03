@@ -3559,8 +3559,8 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
     TagVector matchVector = {};
     TagVector weightVector = {};
     weightVector.E[Tag_fontType] = 1.0f;
+
     matchVector.E[Tag_fontType] = ( r32 ) Font_default;
-    
     UI->gameFont = LoadUIFont(UI->group, &matchVector, &weightVector, fontCoeff, false);
     
     matchVector.E[Tag_fontType] = ( r32 ) Font_debug;
@@ -3721,7 +3721,7 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
                 UIAddInvalidCondition(&actionListInteraction, u32,ColdPointer(&output->desiredAction), Fixed(requireContinousClickActions[actionIndex]), UI_Ended);                
             }
             
-            UIAddInvalidCondition(&actionListInteraction, b32,ColdPointer(&UI->movingWithKeyboard), Fixed((b32)true), 0);
+            //UIAddInvalidCondition(&actionListInteraction, b32,ColdPointer(&UI->movingWithKeyboard), Fixed((b32)true), 0);
             
             UIAddInteraction(UI, input, mouseLeft, actionListInteraction);
             

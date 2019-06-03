@@ -954,7 +954,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             Vec3 offset = {};
                             if(entity->identifier == player->identifier)
                             {
-                                if(myPlayer->distanceCoeffFromServerP < 0.3f && input->timeToAdvance > 0)
+                                r32 maxDistanceForAccPrediction = 0.3f;
+                                if(myPlayer->distanceCoeffFromServerP < maxDistanceForAccPrediction && input->timeToAdvance > 0)
                                 {
                                     r32 accelerationCoeff = 1.0f;
                                     Vec3 acc = ComputeAcceleration(myPlayer->acceleration, myPlayer->velocity, DefaultMoveSpec(accelerationCoeff));
@@ -967,7 +968,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                     }
                                     else
                                     {
-                                        velocity = Lerp(myPlayer->velocity, myPlayer->distanceCoeffFromServerP, entity->velocity);
+                                        r32 lerp = Clamp01MapToRange(0.0f, myPlayer->distanceCoeffFromServerP, maxDistanceForAccPrediction);
+                                        velocity = Lerp(myPlayer->velocity, lerp, entity->velocity);
                                     }
                                     
                                     if(Abs(myPlayer->acceleration.x) > 0.1f)
@@ -975,7 +977,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                         entity->animation.flipOnYAxis = (myPlayer->acceleration.x < 0);
                                     }
                                     
-                                    if(myPlayer->distanceCoeffFromServerP < 0.2f)
+                                    if(myPlayer->distanceCoeffFromServerP < 0.15f)
                                     {
                                         offset = MoveEntityClient(worldMode, entity, input->timeToAdvance, acc, velocity, &myPlayer->velocity);
                                         
