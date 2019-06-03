@@ -787,6 +787,19 @@ struct UIFont
     b32 drawShadow;
 };
 
+enum UISoundType
+{
+    UISound_BookOpen,
+    UISound_BookClose,
+    
+    UISound_Count
+};
+
+struct UISoundMapping
+{
+    u64 stringHashID;
+};
+
 struct UIState
 {
     b32 initialized;
@@ -970,4 +983,12 @@ struct UIState
     
     b32 scrollUsed;
     UIOutput output;
+    
+    UISoundMapping soundMappings[UISound_Count];
 };
+
+inline u64 UISound(UIState* UI, UISoundType sound)
+{
+    u64 result = UI->soundMappings[sound].stringHashID;
+    return result;
+}

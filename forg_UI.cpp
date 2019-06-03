@@ -3528,6 +3528,11 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         FormatString(UI->falseString, sizeof(UI->falseString), "false");
         
         UIAddEditorUnionLayout(UI, "effectParams", "effectParamName");
+        
+#define UISoundMapping(UI, sound, string) (UI)->soundMappings[UISound_##sound].stringHashID = StringHash(string);        
+        
+        UISoundMapping(UI, BookOpen, "bookOpen");
+        UISoundMapping(UI, BookClose, "bookClose");
     }
     
     
@@ -3980,6 +3985,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                             UIInteraction bookInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_Book);
                             UIAddSetValueAction(UI, &bookInteraction, UI_Trigger, &UI->exitingFromBookMode, false);
                             UIAddSetValueAction(UI, &bookInteraction, UI_Trigger, &UI->bookInTime, 0.0f);
+                            UIAddPlaySoundEventAction(UI, &bookInteraction, UI_Trigger, UISound_BookOpen);
                             
                             UIAddInteraction(UI, input, mouseRight, bookInteraction);
                             UIMarkListToUpdate(UI, possibleTargets);
@@ -4386,10 +4392,12 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             {
                 UIInteraction exitInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->exitingFromBookMode, true);
                 UIAddSetValueAction(UI, &exitInteraction, UI_Trigger, &UI->bookOutTime, 0.0f);
+                UIAddPlaySoundEventAction(UI, &exitInteraction, UI_Trigger, UISound_BookClose);
                 UIAddInteraction(UI, input, mouseLeft, exitInteraction);
                 
                 UIInteraction exitRightInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->exitingFromBookMode, true);
                 UIAddSetValueAction(UI, &exitRightInteraction, UI_Trigger, &UI->bookOutTime, 0.0f);
+                UIAddPlaySoundEventAction(UI, &exitRightInteraction, UI_Trigger, UISound_BookClose);
                 UIAddInteraction(UI, input, mouseRight, exitRightInteraction);
             }
             

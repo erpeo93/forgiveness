@@ -865,6 +865,7 @@ internal b32 UpdateAndRenderBook(UIState* UI, PlatformInput* input, Vec2 bookP)
     {
         UIAddSetValueAction(UI, &rightMouseInteraction, UI_Trigger, &UI->bookOutTime, 0.0f);
         UIAddSetValueAction(UI, &rightMouseInteraction, UI_Trigger, &UI->exitingFromBookMode, true);
+        UIAddPlaySoundEventAction(UI, &rightMouseInteraction, UI_Trigger, UISound_BookClose);
     }
     
     UIAddInteraction(UI, input, mouseRight, rightMouseInteraction);

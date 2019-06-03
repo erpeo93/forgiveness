@@ -1128,6 +1128,14 @@ inline UIInteraction UIPlaySoundInteraction(UIState* UI, u32 flags, u64 soundTyp
 }
 
 
+inline void UIAddPlaySoundEventAction(UIState* UI, UIInteraction* interaction, u32 flags, UISoundType sound)
+{
+    UIInteractionAction* dest = UIGetFreeAction(UI, interaction);
+    dest->type = UIInteractionAction_PlaySoundEvent;
+    dest->flags = flags;
+    dest->eventNameHash = UISound(UI, sound);
+}
+
 inline UIInteraction UIPlaySoundEventInteraction(UIState* UI, u32 flags, u64 eventNameHash)
 {
     UIInteraction result = {};
