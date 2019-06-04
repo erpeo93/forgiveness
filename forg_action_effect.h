@@ -9,11 +9,11 @@ printTable(noPrefix) enum EntityAction
 {
     Action_None,
     Action_Move,
-    Action_Dragging,
     Action_Examine,
     Action_Protecting,
     Action_Rolling,
     Action_Attack,
+    Action_Drag,
     Action_Cast,
     Action_Eat,
     Action_Drink,

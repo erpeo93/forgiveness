@@ -1341,10 +1341,14 @@ inline AssetTypeId GetAssetIDForEntity(Assets* assets, TaxonomyTable* table, u32
                 result = Asset_protecting;
             } break;
             
+            case Action_Drag:
+            {
+                result = Asset_standing;
+            } break;
+            
             default:
             {
                 result = Asset_standing;
-                
                 if(dragging)
                 {
                     result = Asset_standingDragging;

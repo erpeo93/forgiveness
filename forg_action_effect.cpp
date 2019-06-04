@@ -465,15 +465,17 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
             AddFlags(target, Flag_deleted);
         } break;
         
-        case Action_Dragging:
+        case Action_Drag:
         {
             AddFlags(target, Flag_Attached);
-            actorCreature->externalDraggingID = target->identifier;
-            
-            if(actor->playerID)
+            if(Owned(target, actor->identifier))
             {
-                ServerPlayer* player = region->server->players + actor->playerID;
-                SendStartDraggingMessage(player, target->identifier);
+                actorCreature->externalDraggingID = target->identifier;
+                if(actor->playerID)
+                {
+                    ServerPlayer* player = region->server->players + actor->playerID;
+                    SendStartDraggingMessage(player, target->identifier);
+                }
             }
         } break;
     }

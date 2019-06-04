@@ -72,11 +72,11 @@ char* MetaTable_EntityAction[] =
  {
 "None",
 "Move",
-"Dragging",
 "Examine",
 "Protecting",
 "Rolling",
 "Attack",
+"Drag",
 "Cast",
 "Eat",
 "Drink",

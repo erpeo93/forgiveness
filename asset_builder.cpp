@@ -1068,7 +1068,7 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                         
                         char* toCheck = "Dragging";
                         
-                        if(!StrEqual(StrLen(toCheck), toCheck, pieceName))
+                        if(StrEqual(StrLen(toCheck), toCheck, pieceName))
                         {
                             isComposed = false;
                             isEntity = true;

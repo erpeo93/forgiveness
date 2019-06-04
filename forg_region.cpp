@@ -518,12 +518,10 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                     SimEntity* dragging = GetRegionEntityByID(region, creature->externalDraggingID);
                     if(dragging)
                     {
+                        ReleaseOwnership(dragging);
                         ClearFlags(dragging, Flag_Attached);
                         creature->externalDraggingID = 0;
-                        if(entity->playerID)
-                        {
-                            SendEndDraggingMessage(player);
-                        }
+                        SendEndDraggingMessage(player);
                     }
                 }
             }
@@ -534,8 +532,10 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             SimEntity* dragging = GetRegionEntityByID(region, creature->externalDraggingID);
             if(dragging)
             {
+                ReleaseOwnership(dragging);
                 ClearFlags(dragging, Flag_Attached);
                 creature->externalDraggingID = 0;
+                SendEndDraggingMessage(player);
             }
         } break;
         
@@ -1599,7 +1599,15 @@ internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)
             {
                 Assert(entity->ownerID);
                 SimEntity* owner = GetRegionEntityByID(region, entity->ownerID);
-                entity->P = owner->P;
+                
+                if(owner)
+                {
+                    entity->P = owner->P;
+                }
+                else
+                {
+                    ClearFlags(entity, Flag_Attached);
+                }
             }
             
             if(region->border != Border_Mirror && entity->playerID)

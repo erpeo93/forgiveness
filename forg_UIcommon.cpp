@@ -893,7 +893,6 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         
         case UIRequest_ReleaseDragging:
         {
-            UI->player->draggingID = 0;
             SendReleaseDraggingRequest();
         } break;
         InvalidDefaultCase;

@@ -31,6 +31,11 @@ inline b32 Owned(SimEntity* entity, u64 myID)
     return result;
 }
 
+inline void ReleaseOwnership(SimEntity* entity)
+{
+    entity->ownerID = 0;
+}
+
 inline void ObjectToEntity(TaxonomyTable* table, Object* object, SimEntity* entity)
 {
     if(IsRecipe(object))

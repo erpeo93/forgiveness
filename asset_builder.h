@@ -109,7 +109,7 @@ struct PieceAss
 enum SpriteInfoFlags
 {
     Sprite_Composed = (1 << 1),
-    Sprite_Entity = (1 << 3),
+    Sprite_Entity = (1 << 2),
 };
 
 struct SpriteInfo
