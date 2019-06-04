@@ -198,7 +198,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         }
         else if(IsObject(taxTable, taxonomy))
         {
-            entity->IDs[Component_Object] = GetFreeComponent(server->components, Component_Object);
+            entity->IDs[Component_Container] = GetFreeComponent(server->components, Component_Container);
         }
         else if(IsFluid(taxTable, taxonomy))
         {
@@ -239,8 +239,8 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         
         if(maxObjectCount)
         {
-            ObjectComponent* object = Object(region, entity);
-            object->objects.maxObjectCount = maxObjectCount;
+            ContainerComponent* container = Container(region, entity);
+            container->objects.maxObjectCount = maxObjectCount;
         }
         
         b32 running = true;
@@ -296,8 +296,8 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         
         if(params.objectCount)
         {
-            ObjectComponent* object = Object(region, entity);
-            ContainedObjects* objects = &object->objects;
+            ContainerComponent* container = Container(region, entity);
+            ContainedObjects* objects = &container->objects;
             Assert(params.objectCount <= objects->maxObjectCount);
             objects->objectCount = params.objectCount;
             

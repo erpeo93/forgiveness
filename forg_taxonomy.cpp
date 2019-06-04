@@ -142,6 +142,14 @@ inline b32 IsSubTaxonomy(u32 child, TaxonomySlot* parent)
     return result;
 }
 
+inline b32 IsSubTaxonomy(TaxonomyTable* table, u32 child, u32 parent)
+{
+    TaxonomySlot* parentSlot = GetSlotForTaxonomy(table, parent);
+    b32 result = IsSubTaxonomy(child, parentSlot);
+    
+    return result;
+}
+
 
 inline u32 GetParentTaxonomy(TaxonomySlot* slot)
 {
@@ -563,9 +571,9 @@ inline void TranslatePlantComponent(EntityComponentArray* components, TaxonomyTa
     // NOTE(Leonardo): nothing to do!
 }
 
-inline void TranslateObjectComponent(EntityComponentArray* components, TaxonomyTable* oldTable, TaxonomyTable* newTable, u32 ID)
+inline void TranslateContainerComponent(EntityComponentArray* components, TaxonomyTable* oldTable, TaxonomyTable* newTable, u32 ID)
 {
-    ObjectComponent* objects = Object_(components, ID);
+    ContainerComponent* objects = Container_(components, ID);
     ContainedObjects* objs = &objects->objects;
     
     for(u8 objectIndex = 0; objectIndex < objs->objectCount; ++objectIndex)
@@ -694,9 +702,9 @@ inline void TranslateSimEntity(ServerState* server, SimEntity* entity)
         TranslatePlantComponent(components, oldTable, newTable, entity->IDs[Component_Plant]);
     }
     
-    if(entity->IDs[Component_Object])
+    if(entity->IDs[Component_Container])
     {
-        TranslateObjectComponent(components, oldTable, newTable, entity->IDs[Component_Object]);
+        TranslateContainerComponent(components, oldTable, newTable, entity->IDs[Component_Container]);
     }
     
     if(entity->IDs[Component_Fluid])

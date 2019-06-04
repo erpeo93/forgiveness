@@ -705,13 +705,13 @@ inline void SendObjectAddUpdate(ServerPlayer* player, u8 objectIndex, Object* ob
 }
 
 inline Object* GetObject(SimRegion* region, SimEntity* container, u32 objectIndex);
-inline void SendCompleteContainerInfoIdentifier(SimRegion* region, ServerPlayer* player, u64 ID, SimEntity* container)
+inline void SendCompleteContainerInfoIdentifier(SimRegion* region, ServerPlayer* player, u64 ID, SimEntity* entity)
 {
-    ObjectComponent* object = Object(region, container);
-    SendContainerInfo(player, ID, object->objects.maxObjectCount);
-    for(u8 objectIndex = 0; objectIndex < object->objects.maxObjectCount; ++objectIndex)
+    ContainerComponent* container = Container(region, entity);
+    SendContainerInfo(player, ID, container->objects.maxObjectCount);
+    for(u8 objectIndex = 0; objectIndex < container->objects.maxObjectCount; ++objectIndex)
     {
-        Object* toSend = GetObject(region, container, objectIndex);
+        Object* toSend = GetObject(region, entity, objectIndex);
         if(toSend->taxonomy)
         {
             SendObjectAddUpdate(player, objectIndex, toSend);

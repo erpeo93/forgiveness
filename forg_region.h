@@ -58,9 +58,12 @@ struct PlantComponent
     u32 nextFree;
 };
 
-struct ObjectComponent
+struct ContainerComponent
 {
 	ContainedObjects objects;
+    
+    ContainerInteraction insideInteraction;
+    r32 updateTime;
     
     u32 nextFree;
 };
@@ -116,7 +119,7 @@ enum EntityComponentType
 {
     Component_Effect,
     Component_Plant,
-    Component_Object,
+    Component_Container,
     Component_Fluid,
     Component_Creature,
     
@@ -154,14 +157,14 @@ introspection() struct SimEntity
 #define Entity_(comp, ID) (EntityComponent*) GetComponent_(comp, Component_Entity, ID)
 #define Effects_(comp, ID) (EffectComponent*) GetComponent_(comp, Component_Effect, ID)
 #define Plant_(comp, ID) (PlantComponent*) GetComponent_(comp, Component_Plant, ID)
-#define Object_(comp, ID) (ObjectComponent*) GetComponent_(comp, Component_Object, ID)
+#define Container_(comp, ID) (ContainerComponent*) GetComponent_(comp, Component_Container, ID)
 #define Fluid_(comp, ID) (FluidComponent*) GetComponent_(comp, Component_Fluid, ID)
 #define Creature_(comp, ID) (CreatureComponent*) GetComponent_(comp, Component_Creature, ID)
 
 #define Entity(region, entity) Entity_(region->components, (entity)->IDs[Component_Entity])
 #define Effects(region, entity) Effects_(region->components, (entity)->IDs[Component_Effect])
 #define Plant(region, entity) Plant_(region->components, (entity)->IDs[Component_Plant])
-#define Object(region, entity) Object_(region->components, (entity)->IDs[Component_Object])
+#define Container(region, entity) Container_(region->components, (entity)->IDs[Component_Container])
 #define Fluid(region, entity) Fluid_(region->components, (entity)->IDs[Component_Fluid])
 #define Creature(region, entity) Creature_(region->components, (entity)->IDs[Component_Creature])
 

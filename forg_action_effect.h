@@ -102,3 +102,21 @@ struct Effect
     r32 timer;
     r32 targetTimer;
 };
+
+
+#define MAX_CONTAINER_INTERACTION_REQUIRED 6
+#define MAX_CONTAINER_INTERACTION_EFFECTS 4
+struct ContainerInteraction
+{
+    b32 valid;
+    
+    r32 validTime;
+    r32 targetTime;
+    
+    u32 requiredCount;
+    u32 requiredTaxonomies[MAX_CONTAINER_INTERACTION_REQUIRED];
+    u32 containerIndexes[MAX_CONTAINER_INTERACTION_REQUIRED];
+    
+    u32 effectCount;
+    Effect effects[MAX_CONTAINER_INTERACTION_EFFECTS];
+};

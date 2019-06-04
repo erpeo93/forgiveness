@@ -763,58 +763,7 @@ inline void IsPassive()
     currentSlot_->isPassiveSkill = true;
 }
 
-inline void AddEffect(char* action, char* effect, char* minIntensity, char* maxIntensity)
-{
-    TaxonomyEffect* newEffect;
-    TAXTABLE_ALLOC(newEffect, TaxonomyEffect);
-    
-    newEffect->effect.triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
-    newEffect->effect.ID = (EffectIdentifier) GetValuePreprocessor(EffectIdentifier, effect);
-    newEffect->effect.minIntensity = ToR32(minIntensity, 1.0f);
-    newEffect->effect.maxIntensity = ToR32(maxIntensity, 1.0f);
-    
-    FREELIST_INSERT(newEffect, currentSlot_->firstEffect);
-    currentEffect_ = newEffect;
-}
 
-inline void AddEffectRange(char* rangeType, char* rangeRadious)
-{
-    currentEffect_->effect.range.type = (EffectTargetRangeType) GetValuePreprocessor(EffectTargetRangeType, rangeType);
-    currentEffect_->effect.range.radious = ToR32(rangeRadious, 0.0f);
-}
-
-inline void Spawn(char* name)
-{
-    TaxonomySlot* spawnSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    if(spawnSlot)
-    {
-        if(currentEffect_)
-        {
-            currentEffect_->effect.data.taxonomy = spawnSlot->taxonomy;
-        }
-    }
-    else
-    {
-        EditorErrorLog(name);
-    }
-}
-
-inline void AddFlag(char* flagName)
-{
-    if(currentEffect_)
-    {
-        u32 flag = GetFlagPreprocessor(EffectFlags, flagName);
-        currentEffect_->effect.flags |= flag;
-    }
-}
-
-inline void Timer(char* timer)
-{
-    if(currentEffect_)
-    {
-        currentEffect_->effect.targetTimer = ToR32(timer);
-    }
-}
 
 inline void AddFreeHandReq(char* slot, char* taxonomy)
 {
@@ -2859,6 +2808,95 @@ inline void ParsePlantLevelParams(PlantLevelParams* destParams, EditorElement* l
     }
 }
 
+inline void Spawn(Effect* effect, char* name)
+{
+    TaxonomySlot* spawnSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
+    if(spawnSlot)
+    {
+        if(effect)
+        {
+            effect->data.taxonomy = spawnSlot->taxonomy;
+        }
+    }
+    else
+    {
+        EditorErrorLog(name);
+    }
+}
+
+internal void ParseEffect(EditorElement* element, Effect* dest)
+{
+    
+            char* action = GetValue(element, "action");
+            char* effectName = GetValue(element, "effectID");
+            char* minIntensity = GetValue(element, "minIntensity");
+            char* maxIntensity = GetValue(element, "maxIntensity");
+            
+           
+            dest->triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
+            dest->ID = (EffectIdentifier) GetValuePreprocessor(EffectIdentifier, effectName);
+            dest->minIntensity = ToR32(minIntensity, 1.0f);
+            dest->maxIntensity = ToR32(maxIntensity, 1.0f);
+            
+  
+            char* timer = GetValue(element, "timer");
+            if(timer)
+            {
+                dest->targetTimer = ToR32(timer);
+            }
+            
+            EditorElement* flagList = GetList(element, "flags");
+            while(flagList)
+            {
+                char* flag = GetValue(flagList, "name");
+                u32 flagValue = GetFlagPreprocessor(EffectFlags, flag);
+                dest->flags |= flagValue;
+                
+                flagList = flagList->next;
+            }
+            
+            EditorElement* range = GetStruct(element, "range");
+            char* rangeType = GetValue(range, "rangeType");
+            char* rangeValue = GetValue(range, "radious");
+                dest->range.type = (EffectTargetRangeType) GetValuePreprocessor(EffectTargetRangeType, rangeType);
+                dest->range.radious = ToR32(rangeValue, 0.0f);
+                        
+            dest->data = {};
+            EditorElement* params = GetList(element, "effectParams");
+            while(params)
+            {
+                char* paramName = GetValue(params, "effectParamName");
+                if(StrEqual(paramName, "velocity"))
+                {
+                    dest->data.speed = ToV3(GetElement(params, "velocity"));
+                }
+                else if(StrEqual(paramName, "offset"))
+                {
+                    dest->data.offset = ToV3(GetElement(params, "offset"));
+                }
+                else if(StrEqual(paramName, "offsetV"))
+                {
+                    dest->data.offsetV = ToV3(GetElement(params, "offsetV"));
+                }
+                else if(StrEqual(paramName, "taxonomyName"))
+                {
+                    char* taxonomy = GetValue(params, "taxonomyName");
+                    Spawn(dest, taxonomy);
+                }
+                else if(StrEqual(paramName, "timeToLive"))
+                {
+                    dest->data.timeToLive = ToR32(GetValue(params, "timeToLive"));
+                }
+                else if(StrEqual(paramName, "spawnCount"))
+                {
+                    dest->data.spawnCount = ToU32(GetValue(params, "spawnCount"));
+                }
+                
+               
+                params = params->next;
+            }
+}
+
 internal void Import(TaxonomySlot* slot, EditorElement* root)
 {
     currentSlot_ = slot;
@@ -3026,86 +3064,28 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     else if(StrEqual(name, "effects"))
     {
         FREELIST_FREE(currentSlot_->firstEffect, TaxonomyEffect, taxTable_->firstFreeTaxonomyEffect);
-        FREELIST_FREE(currentSlot_->nakedHandReq, NakedHandReq, taxTable_->firstFreeNakedHandReq);
-        
         EditorElement* effectList = root->firstInList;
         while(effectList)
         {
-            char* action = GetValue(effectList, "action");
-            char* effectName = GetValue(effectList, "effectID");
-            char* minIntensity = GetValue(effectList, "minIntensity");
-            char* maxIntensity = GetValue(effectList, "maxIntensity");
-            AddEffect(action, effectName, minIntensity, maxIntensity);
-            
-            
-            char* timer = GetValue(effectList, "timer");
-            if(timer)
-            {
-                Timer(timer);
-            }
-            
-            EditorElement* flagList = GetList(effectList, "flags");
-            while(flagList)
-            {
-                char* flag = GetValue(flagList, "name");
-                AddFlag(flag);
-                
-                flagList = flagList->next;
-            }
-            
-            EditorElement* range = GetStruct(effectList, "range");
-            char* rangeType = GetValue(range, "rangeType");
-            char* rangeValue = GetValue(range, "radious");
-            AddEffectRange(rangeType, rangeValue);
-            
-            currentEffect_->effect.data = {};
-            EditorElement* params = GetList(effectList, "effectParams");
-            while(params)
-            {
-                char* paramName = GetValue(params, "effectParamName");
-                if(StrEqual(paramName, "velocity"))
-                {
-                    currentEffect_->effect.data.speed = ToV3(GetElement(params, "velocity"));
-                }
-                else if(StrEqual(paramName, "offset"))
-                {
-                    currentEffect_->effect.data.offset = ToV3(GetElement(params, "offset"));
-                }
-                else if(StrEqual(paramName, "offsetV"))
-                {
-                    currentEffect_->effect.data.offsetV = ToV3(GetElement(params, "offsetV"));
-                }
-                else if(StrEqual(paramName, "taxonomyName"))
-                {
-                    char* taxonomy = GetValue(params, "taxonomyName");
-                    Spawn(taxonomy);
-                }
-                else if(StrEqual(paramName, "timeToLive"))
-                {
-                    currentEffect_->effect.data.timeToLive = ToR32(GetValue(params, "timeToLive"));
-                }
-                else if(StrEqual(paramName, "spawnCount"))
-                {
-                    currentEffect_->effect.data.spawnCount = ToU32(GetValue(params, "spawnCount"));
-                }
-                
-               
-                params = params->next;
-            }
-            
-            
-            EditorElement* freeHandsReq = GetList(effectList, "freeHandReq");
-            while(freeHandsReq)
-            {
-                char* slotName = GetValue(freeHandsReq, "slot");
-                char* taxonomy = GetValue(freeHandsReq, "name");
-                
-                AddFreeHandReq(slotName, taxonomy);
-                
-                freeHandsReq = freeHandsReq->next;
-            }
-            
+            TaxonomyEffect* newEffect;
+            TAXTABLE_ALLOC(newEffect, TaxonomyEffect);            
+            FREELIST_INSERT(newEffect, currentSlot_->firstEffect);
+            ParseEffect(effectList, &newEffect->effect);    
             effectList = effectList->next;
+        }
+    }
+    else if(StrEqual(name, "freeHandsRequirements"))
+    {
+        FREELIST_FREE(currentSlot_->nakedHandReq, NakedHandReq, taxTable_->firstFreeNakedHandReq);
+        EditorElement* freeHandsReq = root->firstInList;
+        while(freeHandsReq)
+        {
+            char* slotName = GetValue(freeHandsReq, "slot");
+            char* taxonomy = GetValue(freeHandsReq, "name");
+            
+            AddFreeHandReq(slotName, taxonomy);
+            
+            freeHandsReq = freeHandsReq->next;
         }
     }
     else if(StrEqual(name, "craftingEffects"))
@@ -3222,12 +3202,59 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         }
     }
 #endif
-    else if(StrEqual(name, "space"))
+    else if(StrEqual(name, "container"))
     {
         u8 width = ToU8(GetValue(root, "width"));
         u8 height = ToU8(GetValue(root, "height"));
         
         InventorySpace(width, height);
+        
+        #if FORG_SERVER
+        FREELIST_FREE(currentSlot_->firstInsideInteraction, TaxonomyContainerInteraction, taxTable_->firstFreeTaxonomyContainerInteraction);
+        EditorElement* insideInteractions = GetList(root, "interactions");
+        while(insideInteractions)
+        {
+            TaxonomyContainerInteraction* interaction;
+            TAXTABLE_ALLOC(interaction, TaxonomyContainerInteraction);
+            
+            interaction->targetTime = ToR32(GetValue(root, "time"));
+            
+            EditorElement* ingredients = GetList(insideInteractions, "required");
+            while(ingredients)
+            {
+                char* ingredient = GetValue(ingredients, "taxonomyName");
+                TaxonomySlot* ingredientSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, ingredient);
+                
+                if(ingredientSlot)
+                {
+                    if(interaction->requiredCount < ArrayCount(interaction->requiredTaxonomies))
+                    {
+                        interaction->requiredTaxonomies[interaction->requiredCount++] = slot->taxonomy;
+                    }
+                }
+                else
+                {
+                    EditorErrorLog(ingredient);
+                }
+                
+                ingredients = ingredients->next;
+            }
+            
+            EditorElement* effects = GetList(insideInteractions, "effects");
+            while(effects)
+            {
+                if(interaction->effectCount < ArrayCount(interaction->effects))
+                {
+                    Effect* dest = interaction->effects + interaction->effectCount++;                    
+                    ParseEffect(effects, dest);
+                }
+                
+                effects = effects->next;
+            }
+            
+            insideInteractions = insideInteractions->next;
+        }
+        #endif
     }
     else if(StrEqual(name, "tileParams"))
     {

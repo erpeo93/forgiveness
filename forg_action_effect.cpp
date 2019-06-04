@@ -684,10 +684,10 @@ inline b32 EntityCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* tar
             
             if(possibleAction->flags & CanDoAction_Empty)
             {
-                if(target->IDs[Component_Object])
+                if(target->IDs[Component_Container])
                 {
-                    ObjectComponent* object = Object(region, target);
-                    if(object->objects.objectCount != 0)
+                    ContainerComponent* container = Container(region, target);
+                    if(container->objects.objectCount != 0)
                     {
                         canDoAction = false;
                     }

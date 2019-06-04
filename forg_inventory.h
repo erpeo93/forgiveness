@@ -80,3 +80,4 @@ inline b32 IsRecipe(Object* object)
     b32 result = (object->quantity == 0xffff);
     return result;
 }
+

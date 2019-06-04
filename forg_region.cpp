@@ -348,9 +348,9 @@ internal void EndSim(SimRegion* region)
                                     }
                                     else
                                     {
-                                        ObjectComponent* object = Object(region, dragging);
+                                        ContainerComponent* container = Container(region, dragging);
                                         
-                                        AddEntity(region, entity->P, dragging->taxonomy, dragging->gen, Dropped((u16) dragging->quantity, (i16) dragging->status, &object->objects));
+                                        AddEntity(region, entity->P, dragging->taxonomy, dragging->gen, Dropped((u16) dragging->quantity, (i16) dragging->status, &container->objects));
                                     }
                                     
                                     ServerPlayer* player = region->server->players + entity->playerID;
@@ -549,8 +549,8 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             {
                 if(Owned(container, entity->identifier))
                 {
-                    ObjectComponent* objectComp = Object(region, container);
-                    ContainedObjects* objects = &objectComp->objects;
+                    ContainerComponent* containerComp = Container(region, container);
+                    ContainedObjects* objects = &containerComp->objects;
                     Object* object = objects->objects + equip->sourceObjectIndex;
                     
                     u32 objectTaxonomy = GetObjectTaxonomy(region->taxTable, object);
@@ -584,8 +584,8 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             
             EquipDraggingRequest* equipDragging = &equipDragging_;
             SimEntity* dragging = creature->draggingEntity;
-            ObjectComponent* object = Object(region, dragging);
-            ContainedObjects* objects = &object->objects;
+            ContainerComponent* container = Container(region, dragging);
+            ContainedObjects* objects = &container->objects;
             if(dragging->status >= 0 && dragging->taxonomy)
             {
                 EquipmentMapping slotPresent = InventorySlotPresent(region->taxTable, entity->taxonomy, dragging->taxonomy);
@@ -643,7 +643,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                     if(!disequip->destContainerID)
                     {
                         
-                        ObjectComponent* object = Object(region, toDisequip);
+                        ContainerComponent* object = Container(region, toDisequip);
                         ContainedObjects* objects = &object->objects;
                         
                         AddEntityAdditionalParams params = Dropped((u16) 1, (u16) toDisequip->status, objects);
@@ -652,7 +652,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                     else
                     {
                         SimEntity* destContainer = GetRegionEntityByID(region, disequip->destContainerID);
-                        ObjectComponent* object = Object(region, destContainer);
+                        ContainerComponent* object = Container(region, destContainer);
                         if(destContainer)
                         {
                             Object* destObject = object->objects.objects + disequip->destObjectIndex;
@@ -690,7 +690,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             {
                 if(creature->draggingEntity && creature->draggingEntity->taxonomy)
                 {
-                    ObjectComponent* object = Object(region, creature->draggingEntity);
+                    ContainerComponent* object = Container(region, creature->draggingEntity);
                     ContainedObjects* objects = &object->objects;
                     AddEntityAdditionalParams params = Dropped((u16) creature->draggingEntity->quantity, (u16) creature->draggingEntity->status, objects);
                     GenerationData gen = creature->draggingEntity->gen;
@@ -715,7 +715,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                 {
                     if(Owned(container, entity->identifier))
                     {
-                        ObjectComponent* objectComp = Object(region, container);
+                        ContainerComponent* objectComp = Container(region, container);
                         ContainedObjects* objects = &objectComp->objects;
                         Object* object = objects->objects + drop->sourceObjectIndex;
                         Assert(object->taxonomy);
@@ -748,8 +748,8 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             {
                 if(Owned(sourceContainer, entity->identifier) && Owned(destContainer, entity->identifier))
                 {
-                    ObjectComponent* source = Object(region, sourceContainer);
-                    ObjectComponent* dest = Object(region, destContainer);
+                    ContainerComponent* source = Container(region, sourceContainer);
+                    ContainerComponent* dest = Container(region, destContainer);
                     ContainedObjects* sourceObjects = &source->objects;
                     ContainedObjects* destObjects = &dest->objects;
                     
@@ -785,7 +785,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             {
                 if(Owned(sourceContainer, entity->identifier))
                 {
-                    ObjectComponent* objectComp = Object(region, sourceContainer);
+                    ContainerComponent* objectComp = Container(region, sourceContainer);
                     ContainedObjects* sourceObjects = &objectComp->objects;
                     if(swap->sourceObjectIndex < sourceObjects->maxObjectCount)
                     {
@@ -794,7 +794,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                         
                         if(creature->draggingEntity && creature->draggingEntity->taxonomy)
                         {
-                            ObjectComponent* dragObject = Object(region, creature->draggingEntity);
+                            ContainerComponent* dragObject = Container(region, creature->draggingEntity);
                             if(!dragObject->objects.objectCount)
                             {
                                 if(sourceObject->taxonomy)
@@ -938,7 +938,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                         if(ID)
                         {
                             SimEntity* container = GetRegionEntityByID(region, ID);
-                            ObjectComponent* objectComp = Object(region, container);
+                            ContainerComponent* objectComp = Container(region, container);
                             ContainedObjects* objects = &objectComp->objects;
                             
                             for(u32 objectIndex = 0; objectIndex < objects->maxObjectCount; ++objectIndex)
@@ -1457,6 +1457,100 @@ internal b32 UpdateCreature(SimRegion* region, SimEntity* entity)
     return result;
 }
 
+
+#define TARGET_CONTAINER_UPDATE_TIME 10.0f
+internal void UpdateContainer(SimRegion* region, SimEntity* entity)
+{
+    ContainerComponent* container = Container(region, entity);
+    container->updateTime += region->timeToUpdate;
+    
+    if(container->updateTime >= TARGET_CONTAINER_UPDATE_TIME)
+    {
+        ContainerInteraction* interaction = &container->insideInteraction;
+        if(interaction->valid)
+        {
+            b32 allObjectsAtRightPlace = true;
+            
+            for(u32 ingredientIndex = 0; ingredientIndex < interaction->requiredCount; ++ingredientIndex)
+            {
+                u32 required = interaction->requiredTaxonomies[ingredientIndex];
+                if(required)
+                {
+                    Object* object = GetObject(region, entity, interaction->containerIndexes[ingredientIndex]);
+                    if(!IsSubTaxonomy(region->taxTable, object->taxonomy, required))
+                    {
+                        allObjectsAtRightPlace = false;
+                        break;
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
+            
+            if(allObjectsAtRightPlace)
+            {
+                interaction->validTime += TARGET_CONTAINER_UPDATE_TIME;
+                
+                if(interaction->validTime >= interaction->targetTime)
+                {
+                    DispatchEffectsContext context = {};
+                    DispatchEffects(&context, region, entity, 0, interaction->effects, interaction->effectCount, false, Action_None);
+                    interaction->valid = false;
+                }
+            }
+            else
+            {
+                interaction->valid = false;
+            }
+        }
+        else
+        {
+            TaxonomySlot* containerSlot = GetSlotForTaxonomy(region->taxTable, entity->taxonomy);
+            for(TaxonomyContainerInteraction* refInteraction = containerSlot->firstInsideInteraction; refInteraction; refInteraction = refInteraction->next)
+            {
+                b32 allRequiredArePresent = true;
+                for(u32 requiredIndex = 0; requiredIndex < refInteraction->requiredCount; ++requiredIndex)
+                {
+                    u32 requiredTaxonomy = refInteraction->requiredTaxonomies[requiredIndex];
+                    
+                    u8 objectIndex = HasObjectOfKind(region, container, requiredTaxonomy);
+                    if(IsValid(objectIndex))
+                    {
+                        interaction->requiredTaxonomies[requiredIndex] = requiredTaxonomy;
+                        interaction->containerIndexes[requiredIndex] = objectIndex;
+                    }
+                    else
+                    {
+                        allRequiredArePresent = false;
+                        break;
+                    }
+                    
+                }
+                
+                
+                if(allRequiredArePresent)
+                {
+                    interaction->valid = true;
+                    interaction->validTime = 0;
+                    interaction->requiredCount = refInteraction->requiredCount;
+                    interaction->targetTime = refInteraction->targetTime;
+                    
+                    for(u32 effectIndex = 0; effectIndex < refInteraction->effectCount; ++effectIndex)
+                    {
+                        interaction->effects[effectIndex] = refInteraction->effects[effectIndex];
+                    }
+                    interaction->effectCount = refInteraction->effectCount;
+                }
+            }
+        }
+        
+        container->updateTime = 0;
+    }
+}
+
+
 inline void UpdateStatus(SimRegion* region, SimEntity* entity)
 {
 	Assert(entity->status != 0.0f);
@@ -1552,6 +1646,11 @@ internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)
                         if(IsCreature(region->taxTable, entityTaxonomy))
                         {
                             died = UpdateCreature(region, entity);
+                        }
+                        
+                        if(entity->IDs[Component_Container])
+                        {
+                            UpdateContainer(region, entity);
                         }
                         
                         if(LengthSq(entity->acceleration) > 0 || LengthSq(entity->velocity) > 0)

@@ -1188,7 +1188,7 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
     MemoryPool* pool = &server->worldPool;
     InitComponents(pool, server->components, Effect, 0xffff);
     InitComponents(pool, server->components, Plant, 0xffff);
-    InitComponents(pool, server->components, Object, 0xffff);
+    InitComponents(pool, server->components, Container, 0xffff);
     InitComponents(pool, server->components, Fluid, 0xffff);
     InitComponents(pool, server->components, Creature, 0xffff);
     

@@ -383,6 +383,22 @@ struct NoiseParams
     r32 amplitude;
 };
 
+struct TaxonomyContainerInteraction
+{
+    r32 targetTime;
+    
+    u32 requiredCount;
+    u32 requiredTaxonomies[MAX_CONTAINER_INTERACTION_REQUIRED];
+    u32 effectCount;
+    Effect effects[MAX_CONTAINER_INTERACTION_EFFECTS];
+    
+    union
+    {
+        TaxonomyContainerInteraction* next;
+        TaxonomyContainerInteraction* nextFree;
+    };
+};
+
 struct TaxonomySlot
 {
     u32 taxonomy;
@@ -507,6 +523,8 @@ struct TaxonomySlot
     NoiseParams tileNoise;
     
     struct WorldGenerator* generator;
+    
+    TaxonomyContainerInteraction* firstInsideInteraction;
     
     
     b32 editorCollapsed;
@@ -639,6 +657,7 @@ struct TaxonomyTable
     
     struct TaxonomyAssociation* firstFreeTaxonomyAssociation;
     struct TaxonomyTileAssociations* firstFreeTaxonomyTileAssociations;
+    TaxonomyContainerInteraction* firstFreeTaxonomyContainerInteraction;
     
     RandomSequence eventSequence;
     RandomSequence translateSequence;

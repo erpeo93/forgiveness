@@ -212,9 +212,9 @@ inline void SendCompleteContainerInfo(SimRegion* region, ServerPlayer* player, S
 inline void RemoveFromContainer(SimRegion* region, u64 ownerID, SimEntity* entity, u8 objectIndex)
 {
     Assert(entity);
-    ObjectComponent* object = Object(region, entity);
+    ContainerComponent* container = Container(region, entity);
     
-    RemoveFromContainer_(region, &object->objects, objectIndex);
+    RemoveFromContainer_(region, &container->objects, objectIndex);
     
     Assert(ownerID);
     SimEntity* owner = GetRegionEntityByID(region, ownerID);
@@ -228,9 +228,9 @@ inline void RemoveFromContainer(SimRegion* region, u64 ownerID, SimEntity* entit
 
 inline void AddToContainer(SimRegion* region, u64 ownerID, SimEntity* entity, u8 objectIndex, Object object)
 {
-    ObjectComponent* objectComponent = Object(region, entity);
+    ContainerComponent* container = Container(region, entity);
     
-    ContainedObjects* objects = &objectComponent->objects;
+    ContainedObjects* objects = &container->objects;
     Assert(object.taxonomy);
     Assert(objects->objectCount < objects->maxObjectCount);
     ++objects->objectCount;
@@ -249,14 +249,14 @@ inline void AddToContainer(SimRegion* region, u64 ownerID, SimEntity* entity, u8
     
 }
 
-inline Object* GetObject(SimRegion* region, SimEntity* container, u32 objectIndex)
+inline Object* GetObject(SimRegion* region, SimEntity* entity, u32 objectIndex)
 {
-    ObjectComponent* object = Object(region, container);
+    ContainerComponent* container = Container(region, entity);
     
     Object* result = 0;
-    if(objectIndex < object->objects.maxObjectCount)
+    if(objectIndex < container->objects.maxObjectCount)
     {
-        result = object->objects.objects + objectIndex;
+        result = container->objects.objects + objectIndex;
     }
     else
     {
@@ -277,6 +277,44 @@ inline Object* GetObjectIfOwned(SimRegion* region, SimEntity* entity, SimEntity*
     return result;
 }
 
+inline b32 IsValid(u8 objectIndex)
+{
+    b32 result = (objectIndex != 0xff);
+    
+    return result;
+}
+
+inline u8 HasObjectOfKind(SimRegion* region, ContainerComponent* container, u32 objectTaxonomy)
+{
+    u8 result = 0xff;
+    Assert(container->objects.maxObjectCount <= 0xff);
+    for(u32 objectIndex = 0; objectIndex < container->objects.maxObjectCount; ++objectIndex)
+    {
+        Object* obj = container->objects.objects + objectIndex;
+        if(obj->taxonomy)
+        {
+            if(IsRecipe(obj))
+            {
+                if(objectTaxonomy == region->taxTable->recipeTaxonomy)
+                {
+                    result = SafeTruncateToU8(objectIndex);
+                    break;
+                }
+            }
+            else
+            {
+                TaxonomySlot* slot = GetSlotForTaxonomy(region->taxTable, obj->taxonomy);
+                if(IsSubTaxonomy(objectTaxonomy, slot))
+                {
+                    result = SafeTruncateToU8(objectIndex);
+                    break;
+                }
+            }
+        }
+    }
+    
+    return result;
+}
 
 inline ObjectReference HasObjectOfKind(SimRegion* region, SimEntity* entity, u32 objectTaxonomy)
 {
@@ -287,35 +325,17 @@ inline ObjectReference HasObjectOfKind(SimRegion* region, SimEntity* entity, u32
         u64 equipmentID = creature->equipment[slotIndex].ID;
         if(equipmentID)
         {
-            SimEntity* container = GetRegionEntityByID(region, equipmentID);
-            ObjectComponent* object = Object(region, container);
+            SimEntity* containerEntity = GetRegionEntityByID(region, equipmentID);
+            ContainerComponent* container = Container(region, containerEntity);
             
-            for(u32 objectIndex = 0; objectIndex < object->objects.maxObjectCount; ++objectIndex)
+            u8 objectIndex = HasObjectOfKind(region, container, objectTaxonomy);
+            if(objectIndex != 0xff)
             {
-                Object* obj = object->objects.objects + objectIndex;
-                if(obj->taxonomy)
-                {
-                    if(IsRecipe(obj))
-                    {
-                        if(objectTaxonomy == region->taxTable->recipeTaxonomy)
-                        {
-                            result.containerID = equipmentID;
-                            result.objectIndex = SafeTruncateToU8(objectIndex);
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        TaxonomySlot* slot = GetSlotForTaxonomy(region->taxTable, obj->taxonomy);
-                        if(IsSubTaxonomy(objectTaxonomy, slot))
-                        {
-                            result.containerID = equipmentID;
-                            result.objectIndex = SafeTruncateToU8(objectIndex);
-                            break;
-                        }
-                    }
-                }
+                result.objectIndex = objectIndex;
+                result.containerID = equipmentID;
+                break;
             }
+            
         }
     }
     return result;
@@ -352,7 +372,7 @@ internal b32 PickObject( SimRegion* region, SimEntity* actor, SimEntity* obj)
     if(!EquipObject( region, actor, obj))
     {
         CreatureComponent* creature = Creature(region, actor);
-        ObjectComponent* object = Object(region, obj);
+        ContainerComponent* object = Container(region, obj);
         result = false;
         if(!object->objects.objectCount)
         {
@@ -363,7 +383,7 @@ internal b32 PickObject( SimRegion* region, SimEntity* actor, SimEntity* obj)
                 {
                     SimEntity* container = GetRegionEntityByID(region, slot->ID);
                     Assert(container);
-                    ObjectComponent* containerObject = Object(region, container);
+                    ContainerComponent* containerObject = Container(region, container);
                     
                     if(containerObject->objects.objectCount < containerObject->objects.maxObjectCount)
                     {
