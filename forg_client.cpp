@@ -113,7 +113,6 @@ internal void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
 {
     AddFlags(entity, Flag_deleted);
     
-    
     u32 taxonomy = entity->taxonomy;
     Assert(taxonomy);
     if(IsRock(worldMode->table, taxonomy))
@@ -144,6 +143,7 @@ internal void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
         
     }
     
+    entity->beingDeleted = false;
     entity->effectCount = 0;
     entity->objects.maxObjectCount = 0;
     entity->objects.objectCount = 0;
@@ -171,7 +171,6 @@ internal void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
     }
     
     entity->prediction.type = Prediction_None;
-    
 }
 
 inline b32 ActionRequiresZooming(EntityAction action, r32* zoomLevel)
@@ -387,6 +386,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     clientNetwork->nextSendReliableApplicationData = {};
     ResetReceiver(&clientNetwork->receiver);
     platformAPI.net.OpenConnection(clientNetwork->network, loginServer, LOGIN_PORT);
+    
     
     LoginRequest(4444);
     
@@ -1130,7 +1130,13 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         {
                             entity->P = Subtract(entity->universeP, player->universeP);
                             entity->timeFromLastUpdate += input->timeToAdvance;
-                            if(entity->timeFromLastUpdate >= 3.0f)
+                            
+                            if(entity->beingDeleted)
+                            {
+                                entity->animation.goOutTime += input->timeToAdvance;
+                            }
+                            
+                            if(entity->timeFromLastUpdate >= 3.0f || entity->animation.goOutTime >= ALPHA_GO_OUT_SECONDS)
                             {
                                 DeleteEntityClient(worldMode, entity);
                             }

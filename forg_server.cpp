@@ -137,9 +137,14 @@ inline ForgFile* FindFile(ServerState* server, ForgFile** firstFilePtr, char* fi
 {
     ForgFile* result = 0;
     
+    char nameWithoutPoint[64];
+    GetNameWithoutPoint(nameWithoutPoint, sizeof(nameWithoutPoint), fileName);
+    
+    u32 withoutPointLength = StrLen(nameWithoutPoint);
+    
     for(ForgFile* test = *firstFilePtr; test; test = test->next)
     {
-        if(StrEqual(test->filename, fileName))
+        if(StrEqual(withoutPointLength, test->filename, nameWithoutPoint))
         {
             result = test;
             break;
@@ -170,9 +175,25 @@ inline void AddAllPakFileHashes(ServerState* server)
         char* buffer = (char*) PushSize(&server->scratchPool, handle.fileSize);
         platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
         
+        
+        uLong uncompressedSize = *((uLong*) buffer);
+        u32 fileSize = uncompressedSize;
+        
+        u8* uncompressed = PushArray(&server->scratchPool, u8, uncompressedSize);
+        
+        u8* compressedSource = (u8*) buffer + 4;
+        uLong compressedLen = handle.fileSize - 4;
+        
+        int cmp_status = uncompress(uncompressed, &uncompressedSize, compressedSource, compressedLen);
+        Assert(cmp_status == Z_OK);
+        Assert(uncompressedSize == fileSize);
+        
+        
+        
+        
         ForgFile* serverFile = FindFile(server, &server->files, handle.name);
         
-        meow_hash hash = MeowHash_Accelerated(0, handle.fileSize, buffer);
+        meow_hash hash = MeowHash_Accelerated(0, uncompressedSize, uncompressed);
         serverFile->hash = MeowU64From(hash, 0);
         
         platformAPI.CloseHandle(&handle);
@@ -805,7 +826,6 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
             char filename[64];
             u64 hash;
             packetPtr = unpack(packetPtr, "sQ", filename, &hash);
-            
             ForgFile* file = FindFile(server, &player->files, filename);
             file->hash = hash;
         } break;

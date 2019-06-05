@@ -1,5 +1,10 @@
 #pragma once
 
+#define ALPHA_CAME_IN_SECONDS 2.0f
+#define ALPHA_GO_OUT_SECONDS 2.0f
+#define MIN_STATUS_ALPHA -20.0f
+#define MAX_STATUS_ALPHA 20.0f
+
 #define bodyDead V4(0.02f, 0.02f, 0.02f, 1)
 #define bodyAlive V4(1, 1, 1, 1)
 
@@ -156,6 +161,7 @@ struct AnimationState
     r32 ashDim;
     
     r32 cameInTime;
+    r32 goOutTime;
 };
 
 enum AnimationEffectType
@@ -258,10 +264,7 @@ struct AnimationFixedParams
     AnimationEffect* firstActiveEffect;
     
     r32 cameInTime;
-    u32 lifePointsSeedResetCounter;
-    r32 lifePointRatio;
-    r32 lifePointThreesold;
-    r32 lifePointFadeDuration;
+    r32 goOutTime;
     
     struct ClientEntity* entity;
     struct ClientEntity* draggingEntity;

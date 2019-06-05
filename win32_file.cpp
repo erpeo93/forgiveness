@@ -164,6 +164,10 @@ internal PLATFORM_GET_ALL_FILE_BEGIN(Win32GetAllFilesBegin)
             extension = "*.obj";
         } break;
         
+        case PlatformFile_all:
+        {
+            extension = "*.*";
+        } break;
         InvalidDefaultCase;
     }
     

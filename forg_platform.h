@@ -570,6 +570,7 @@ typedef enum PlatformFileType
     PlatformFile_entityDefinition,
     PlatformFile_assetDefinition,
     PlatformFile_autocomplete,
+    PlatformFile_all,
     
     PlatformFile_count,
 } PlatformFileType;

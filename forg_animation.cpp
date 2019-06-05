@@ -1339,27 +1339,20 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
     return result;
 }
 
-#define ALPHA_CAME_IN_SECONDS 2.0f
-#define MIN_STATUS_ALPHA -20.0f
-#define MAX_STATUS_ALPHA 20.0f
-
-inline r32 GetAssAlphaFade(u64 identifier, u32 assIndex, u32 lifePointsSeedResetCounter, r32 fadeDuration, r32 alphaThreesold, r32 lifePointRatio, r32 cameInTime, r32 status)
+inline r32 GetAssAlphaFade(u64 identifier, u32 assIndex, r32 goOutTime, r32 cameInTime, r32 status)
 {
-    RandomSequence seqLife = Seed((u32) identifier * assIndex + lifePointsSeedResetCounter);
     RandomSequence seqCameIn = Seed((u32) identifier * assIndex);
+    RandomSequence seqGoOut = Seed((u32) identifier * assIndex);
     RandomSequence seqStatus = Seed((u32) identifier * assIndex);
     
-    r32 lifePointsAlpha = 1.0f;
     
-    r32 threesoldUp = RandomRangeFloat(&seqLife, fadeDuration, alphaThreesold);
-    if(lifePointRatio < alphaThreesold)
-    {
-        r32 threesoldDown = threesoldUp - fadeDuration;
-        lifePointsAlpha = Clamp01MapToRange(threesoldDown, lifePointRatio, threesoldUp);
-    }
+    r32 maxAlphaOutTime = ALPHA_GO_OUT_SECONDS;
+    r32 goOutAlphaThreeSold = RandomRangeFloat(&seqGoOut, 0.8f, 1.0f) * maxAlphaOutTime;
+    r32 goOutAlpha = 1.0f - Clamp01MapToRange(0, goOutTime, goOutAlphaThreeSold);
     
-    r32 maxAlphaTime = ALPHA_CAME_IN_SECONDS;
-    r32 cameInAlphaThreeSold = RandomRangeFloat(&seqCameIn, 0.8f, 1.0f) * maxAlphaTime;
+    
+    r32 maxAlphaInTime = ALPHA_CAME_IN_SECONDS;
+    r32 cameInAlphaThreeSold = RandomRangeFloat(&seqCameIn, 0.8f, 1.0f) * maxAlphaInTime;
     r32 cameInAlpha = Clamp01MapToRange(0, cameInTime, cameInAlphaThreeSold);
     
     
@@ -1376,7 +1369,7 @@ inline r32 GetAssAlphaFade(u64 identifier, u32 assIndex, u32 lifePointsSeedReset
         statusAlpha = Clamp01MapToRange(0, status, statusAlphaThreesold);
     }
     
-    r32 result = lifePointsAlpha * cameInAlpha * statusAlpha;
+    r32 result = goOutAlpha * cameInAlpha * statusAlpha;
     
     return result;
 }
@@ -1426,7 +1419,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
             case CycleAss_Render:
             {
                 r32 alpha = GetAssAlphaFade(input->entity->identifier, assIndex, 
-                                            input->lifePointsSeedResetCounter, input->lifePointFadeDuration, input->lifePointThreesold, input->lifePointRatio, input->cameInTime, input->entity->status);
+                                            input->goOutTime, input->cameInTime, input->entity->status);
                 proceduralColor.a *= alpha;
                 
                 RenderAssResult render = RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, true,  proceduralColor);
@@ -1467,7 +1460,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                 case CycleAss_Render:
                 {
                     r32 alpha = GetAssAlphaFade(input->entity->identifier, (u32) spriteInfo->stringHashID,
-                                                input->lifePointsSeedResetCounter, input->lifePointFadeDuration, input->lifePointThreesold, input->lifePointRatio, input->cameInTime, input->entity->status);
+                                                input->goOutTime, input->cameInTime, input->entity->status);
                     
                     equipmentAss->alpha *= alpha;
                     
@@ -1658,14 +1651,12 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
     }
     
     input->cameInTime = entityC->animation.cameInTime;
+    input->goOutTime = entityC->animation.goOutTime;
+    
     if(timeToAdvance == 0 && input->cameInTime == 0)
     {
         input->cameInTime = R32_MAX;
     }
-    input->lifePointsSeedResetCounter = entityC->animation.lifePointsSeedResetCounter;
-    input->lifePointRatio = lifePointRatio;
-    input->lifePointFadeDuration = lifePointFadeDuration;
-    input->lifePointThreesold = lifePointThreesold;
     
     input->entity = entityC;
     input->firstActiveEffect = entityC->firstActiveEffect;

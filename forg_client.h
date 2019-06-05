@@ -213,6 +213,7 @@ struct ClientEntity
     
     TaxonomySlot* slot;
     
+    b32 beingDeleted;
     u32 flags;
     u32 taxonomy; // NOTE(Leonardo): 4 bytes
     GenerationData gen; // NOTE(Leonardo): 8 bytes

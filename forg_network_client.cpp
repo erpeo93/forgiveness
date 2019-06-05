@@ -470,6 +470,13 @@ inline void SendRegenerateWorldChunksRequest(u32 worldSeed)
     CloseAndSendReliablePacket();
 }
 
+inline void SendFileHash(char* fileName, u64 hash)
+{
+    StartPacket(FileHash);
+    Pack("sQ", fileName, hash);
+    CloseAndSendReliablePacket();
+}
+
 #if FORGIVENESS_INTERNAL
 inline SavedNameSlot* GetNameSlot( DebugTable* debugTable, u64 pointer )
 {
@@ -639,6 +646,26 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 clientNetwork->nextSendUnreliableApplicationData = {};
                 clientNetwork->nextSendReliableApplicationData = {};
                 
+                char* assetPath = "assets";
+                PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, assetPath);
+                
+                for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; fileIndex++)
+                {
+                    TempMemory fileMemory = BeginTemporaryMemory(worldMode->temporaryPool);
+                    PlatformFileHandle handle = platformAPI.OpenNextFile(&fileGroup, assetPath);
+                    
+                    if(!StrEqual(handle.name, ".") && !StrEqual(handle.name, ".."))
+                    {
+                        char* buffer = PushArray(worldMode->temporaryPool, char, handle.fileSize);
+                        meow_hash hash = MeowHash_Accelerated(0, handle.fileSize, buffer);
+                        u64 hash64 = MeowU64From(hash, 0);
+                        SendFileHash(handle.name, hash64);
+                    }
+                    EndTemporaryMemory(fileMemory);
+                }
+                platformAPI.GetAllFilesEnd(&fileGroup);
+                
+                
                 clientNetwork->serverChallenge = login.challenge;
                 GameAccessRequest(clientNetwork->serverChallenge, true);
             } break;
@@ -803,7 +830,8 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 ClientEntity* entityC = GetEntityClient(worldMode, deletedID);
                 if(entityC)
                 {
-                    entityC->timeFromLastUpdate = R32_MAX;
+                    entityC->beingDeleted = true;
+                    entityC->animation.goOutTime = 0.0f;
                 }
                 
                 if(deletedID == worldMode->player.targetIdentifier)
