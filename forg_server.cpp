@@ -193,8 +193,8 @@ inline void AddAllPakFileHashes(ServerState* server)
         
         ForgFile* serverFile = FindFile(server, &server->files, handle.name);
         
-        meow_hash hash = MeowHash_Accelerated(0, uncompressedSize, uncompressed);
-        serverFile->hash = MeowU64From(hash, 0);
+        u64 hash64 = *(u64*) uncompressed;
+        serverFile->hash = hash64;
         
         platformAPI.CloseHandle(&handle);
         

@@ -732,7 +732,7 @@ internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformText
         
         file->handle = platformAPI.OpenNextFile(&fileGroup, assetPath);
         ZeroStruct(file->header);
-        platformAPI.ReadFromFile(&file->handle, 0, sizeof(file->header), &file->header);
+        platformAPI.ReadFromFile(&file->handle, sizeof(u64), sizeof(file->header), &file->header);
         
         u32 assetTypeArraySize = file->header.assetTypeCount * sizeof(PakAssetType);
         file->assetTypes = (PakAssetType*) PushSize(pool, assetTypeArraySize);

@@ -1787,7 +1787,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         
         platformAPI.PushWork(gameState->slowQueue, ReceiveNetworkPackets, &gameState->receiveNetworkPackets);
         
+        PlayGame(gameState, input);
     }
+    
     
     
     TempMemory renderMemory = BeginTemporaryMemory(&gameState->framePool);
@@ -1795,6 +1797,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     
     b32 rerun = false;
     input->allowedToQuit = true;
+    
     do
     {
         switch(gameState->mode)

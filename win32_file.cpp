@@ -251,7 +251,10 @@ internal PLATFORM_CLOSE_HANDLE_INTERNAL( Win32CloseHandle )
 {
     Win32PlatformFileHandle* win32Handle = ( Win32PlatformFileHandle* ) handle->platform;
     Assert( win32Handle );
-    CloseHandle( win32Handle->handle );
+    if(!CloseHandle( win32Handle->handle ))
+    {
+        InvalidCodePath;
+    }
     win32Handle->handle = 0;
 }
 

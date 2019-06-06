@@ -657,8 +657,8 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                     if(!StrEqual(handle.name, ".") && !StrEqual(handle.name, ".."))
                     {
                         char* buffer = PushArray(worldMode->temporaryPool, char, handle.fileSize);
-                        meow_hash hash = MeowHash_Accelerated(0, handle.fileSize, buffer);
-                        u64 hash64 = MeowU64From(hash, 0);
+                        platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
+                        u64 hash64 = *(u64*) buffer;
                         SendFileHash(handle.name, hash64);
                     }
                     EndTemporaryMemory(fileMemory);

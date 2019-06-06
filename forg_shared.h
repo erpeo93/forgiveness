@@ -16,6 +16,19 @@ inline u64 StringHash( char* string, u32 length = U32_MAX )
     return result;
 }
 
+inline u64 DataHash(char* buffer, u64 length)
+{
+    u64 result = 0;
+    
+    for(u64 index = 0; index < length; ++index)
+    {
+        char c = buffer[index];
+        result = 65599 * result + c;
+    }
+    
+    return result;
+}
+
 inline u32 StrLen( char* string )
 {
     u32 result = 0;

@@ -1956,8 +1956,20 @@ inline void AddLabel(char* label, u32 labelLength, r32 value)
     AddTag(hashIndex, value);
 }
 
+inline u64 WriteToFile(void* content, u64 size)
+{
+	fwrite(content, size, 1, out);
+	u64 result = DataHash((char*) content, size);
+    
+	return result;
+}
+
 internal void WritePak(Assets* assets, char* fileName_)
 {
+	if(StrEqual(fileName_, "arm armourB.pak"))
+	{
+		int a = 5;
+	}
     char outputpak[128];
     FormatString(outputpak, sizeof(outputpak), "assets/%s", fileName_);
     
@@ -1967,6 +1979,8 @@ internal void WritePak(Assets* assets, char* fileName_)
         
         if(out )
         {
+			u64 dataHash = 0;
+            
             PAKHeader header = {};
             header.magicValue = PAK_MAGIC_NUMBER;
             header.version = PAK_VERSION;
@@ -1979,13 +1993,25 @@ internal void WritePak(Assets* assets, char* fileName_)
             u32 assetArrayTypeSize = header.assetTypeCount * sizeof(PakAssetType );
             u32 assetArraySize = header.assetcount * sizeof(PakAsset ) ;
             
-            header.tagOffset = sizeof(PAKHeader );
+            header.tagOffset = sizeof(PAKHeader) + sizeof(u64);
             header.assetTypeOffset = header.tagOffset + tagArraySize;
             header.assetOffset = header.assetTypeOffset + assetArrayTypeSize;
             
-            fwrite(&header, sizeof(PAKHeader ), 1, out );
-            fwrite(&assets->tags, tagArraySize, 1, out );
-            fwrite(&assets->types, assetArrayTypeSize, 1, out );
+            u64 fakeDataHash = 1111111;
+            fwrite(&fakeDataHash, sizeof(fakeDataHash), 1, out);
+            fwrite(&header, sizeof(PAKHeader), 1, out);
+            fwrite(&assets->tags, tagArraySize, 1, out);
+            fwrite(&assets->types, assetArrayTypeSize, 1, out);
+            
+            
+            for(u32 tagIndex = 0; tagIndex < assets->countTags; ++tagIndex)
+            {
+                PakTag* tag = assets->tags + tagIndex;
+                char valueString[32];
+                FormatString(valueString, sizeof(valueString), "%.0f", tag->value);
+                
+                dataHash += tag->ID * DataHash(valueString, StrLen(valueString));
+            }
             
             fseek(out, assetArraySize, SEEK_CUR );
             
@@ -2003,7 +2029,7 @@ internal void WritePak(Assets* assets, char* fileName_)
                         dest->bitmap.dimension[0] = bitmap.width;
                         dest->bitmap.dimension[1] = bitmap.height;
                         
-                        fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out );
+                        dataHash += WriteToFile(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ));
                         free(bitmap.free );
                     } break;
                     
@@ -2019,14 +2045,14 @@ internal void WritePak(Assets* assets, char* fileName_)
                         FinalizeFontKernings(font);
                         
                         u32 glyphsSize = font->glyphsCount * sizeof(PakGlyph );
-                        fwrite(font->glyphs, glyphsSize, 1, out );
+                        dataHash += WriteToFile(font->glyphs, glyphsSize);
                         
                         u8* horizontalAdvancePtr = (u8* ) font->horizontalAdvancement;
                         for(u32 glyphIndex = 0; glyphIndex < font->glyphsCount; glyphIndex++ )
                         {
                             
                             u32 horizontalAdvanceSliceSize = sizeof(r32 ) * font->glyphsCount; 
-                            fwrite(horizontalAdvancePtr, horizontalAdvanceSliceSize, 1, out );
+                            dataHash += WriteToFile(horizontalAdvancePtr, horizontalAdvanceSliceSize);
                             horizontalAdvancePtr += sizeof(r32 ) * font->maximumGlyphsCount;
                         }
                         
@@ -2039,7 +2065,7 @@ internal void WritePak(Assets* assets, char* fileName_)
                         
                         dest->bitmap.dimension[0] = bitmap.width;
                         dest->bitmap.dimension[1] = bitmap.height;
-                        fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out );
+                        dataHash += WriteToFile(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ));
                         
                         free(bitmap.free );
                     } break;
@@ -2054,7 +2080,7 @@ internal void WritePak(Assets* assets, char* fileName_)
                         
                         for(u32 channelIndex = 0; channelIndex < sound.countChannels; channelIndex++ )
                         {
-                            fwrite(sound.samples[channelIndex], sound.countSamples * sizeof(i16 ), 1, out); 
+                            dataHash += WriteToFile(sound.samples[channelIndex], sound.countSamples * sizeof(i16 )); 
                         }
                         
                         free(sound.free );
@@ -2092,11 +2118,11 @@ internal void WritePak(Assets* assets, char* fileName_)
                         dest->animation.assCount = countTotalAss;
                         
                         Assert(source->animation.header.durationMS > 0);
-                        fwrite(&source->animation.header, sizeof(AnimationHeader), 1, out);
-                        fwrite(animation.spriteInfos, sizeof(SpriteInfo) * animation.spriteInfoCount, 1, out);
-                        fwrite(animation.frames, sizeof(FrameData) * animation.frameCount, 1, out);
-                        fwrite(animation.bones, countTotalBones * sizeof(Bone), 1, out);
-                        fwrite(animation.ass, countTotalAss * sizeof(PieceAss), 1, out);
+                        dataHash += WriteToFile(&source->animation.header, sizeof(AnimationHeader));
+                        dataHash += WriteToFile(animation.spriteInfos, sizeof(SpriteInfo) * animation.spriteInfoCount);
+                        dataHash += WriteToFile(animation.frames, sizeof(FrameData) * animation.frameCount);
+                        dataHash += WriteToFile(animation.bones, countTotalBones * sizeof(Bone));
+                        dataHash += WriteToFile(animation.ass, countTotalAss * sizeof(PieceAss));
                         
                         free(animation.bones);
                         free(animation.ass);
@@ -2110,8 +2136,8 @@ internal void WritePak(Assets* assets, char* fileName_)
                         dest->model.vertexCount = model.vertexCount;
                         dest->model.faceCount = model.faceCount;
                         dest->model.dim = model.dim;
-                        fwrite(model.vertexes, sizeof(ColoredVertex) * model.vertexCount, 1, out);
-                        fwrite(model.faces, sizeof(ModelFace) * model.faceCount, 1, out);
+                        dataHash += WriteToFile(model.vertexes, sizeof(ColoredVertex) * model.vertexCount);
+                        dataHash += WriteToFile(model.faces, sizeof(ModelFace) * model.faceCount);
                         
                         free(model.vertexes);
                         free(model.faces);
@@ -2123,10 +2149,14 @@ internal void WritePak(Assets* assets, char* fileName_)
             fseek(out, (u32 ) header.assetOffset, SEEK_SET );
             fwrite(&assets->assets, header.assetcount * sizeof(PakAsset), 1, out);
             
+            fseek(out, 0, SEEK_SET);
+            fwrite(&dataHash, sizeof(dataHash), 1, out);
+            
+            
+            fseek(out, 0, SEEK_END);
             fclose(out );
             
-            
-            PlatformFile uncompressed = DEBUGWin32ReadFile(outputpak);
+			PlatformFile uncompressed = DEBUGWin32ReadFile(outputpak);
             
             uLong uncompressedSize = (uLong) uncompressed.size;
             uLong compressedLen = compressBound(uncompressedSize);
