@@ -285,7 +285,7 @@ struct AnimationVolatileParams
     r32 additionalZbias;
     r32 modulationWithFocusColor;
     Vec3 cameraOffset;
-    Vec4 lightIndexes;
+    Lights lights;
     Vec4 color;
     r32 angle;
     Vec2 scale;
@@ -323,6 +323,5 @@ inline AnimationEntityParams ContainerEntityParams(b32 onTop = false)
 
 struct TileAnimationData
 {
-    u8 lightCount;
-    Vec4 lightIndexes;
+    Lights lights;
 };

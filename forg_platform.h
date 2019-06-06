@@ -234,7 +234,10 @@ struct TexturedVertex
     Vec3 N;
     Vec2 UV;
     u32 color;
-    Vec4 lightIndexes;
+    
+    u16 lightStartingIndex;
+    u16 lightEndingIndex;
+    
     r32 modulationPercentage;
     u16 textureIndex;
 };

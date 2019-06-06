@@ -1186,7 +1186,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                                 spaceTransform.additionalZBias += params->additionalZbias;
                                 spaceTransform.cameraOffset = objectP;
                                 
-                                PushRect(group, spaceTransform, P, V2(cellDim, cellDim), cellColor, pieceParams.lightIndexes);
+                                PushRect(group, spaceTransform, P, V2(cellDim, cellDim), cellColor, pieceParams.lights);
                             }
                             
                             pieceParams.cameraOffset = objectP;
@@ -1277,7 +1277,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     }
                     
                     Vec2 pivot = sprite->pivot;
-                    BitmapDim dim = PushBitmapWithPivot(group, objectTransform, BID, P, pivot, 0, finalScale, color, pieceParams.lightIndexes);
+                    BitmapDim dim = PushBitmapWithPivot(group, objectTransform, BID, P, pivot, 0, finalScale, color, pieceParams.lights);
                     
                     if(input->debug.ortho)
                     {
@@ -1826,7 +1826,7 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
     return result;
 }
 
-internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup* group, Vec4 lightIndexes, ClientEntity* entityC, Vec3 P, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, AnimationDebugParams debugParams = {})
+internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup* group, Lights lights, ClientEntity* entityC, Vec3 P, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, AnimationDebugParams debugParams = {})
 {
     AnimationOutput result = {};
     TaxonomyTable* taxTable = worldMode->table;
@@ -1848,7 +1848,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
     params.additionalZbias = additionalZbias;
     params.modulationWithFocusColor = entityC->modulationWithFocusColor;
     params.cameraOffset = offset;
-    params.lightIndexes = lightIndexes;
+    params.lights = lights;
     params.color = color;
     params.angle = angle;
     params.scale = scale;
@@ -1874,7 +1874,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
             
         }
         
-        PushModel(group, MID, Identity(), P + entitySlot->modelOffset, lightIndexes, modelScale, entitySlot->modelColoration, entityC->modulationWithFocusColor);
+        PushModel(group, MID, Identity(), P + entitySlot->modelOffset, lights, modelScale, entitySlot->modelColoration, entityC->modulationWithFocusColor);
     }
     else if(IsObject(worldMode->table, entityC->taxonomy))
     {
@@ -2221,7 +2221,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     
     ClientEntity* player = GetEntityClient(worldMode, worldMode->player.identifier);
     
-    Vec4 lightIndexes = V4(-1, -1, -1, -1);
+    Lights lights = GetLights(worldMode, entityC->P);
     TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, entityC->taxonomy);
     
     for(AnimationEffect* effect = entityC->firstActiveEffect; effect; effect = effect->next)
@@ -2278,7 +2278,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         
         
         PlantRenderingParams renderingParams = {};
-        renderingParams.lightIndexes = lightIndexes;
+        renderingParams.lights = lights;
         renderingParams.modulationWithFocusColor = entityC->modulationWithFocusColor;
         
         UpdateAndRenderPlant(worldMode, group, renderingParams, slot->plant, entityC->plant, animationP);
@@ -2347,7 +2347,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
                 m4x4 rotation = ZRotation(RandomUni(&rockRenderSeq) * TAU32);
                 Vec3 finalScale = rock->dim + rockDefinition->scaleRandomness *Hadamart(RandomBilV3(&rockRenderSeq), rock->dim);
                 
-                PushModel(group, &onTheFly, rotation, finalP, lightIndexes, finalScale, V4(1, 1, 1, 1), entityC->modulationWithFocusColor);
+                PushModel(group, &onTheFly, rotation, finalP, lights, finalScale, V4(1, 1, 1, 1), entityC->modulationWithFocusColor);
                 
                 Rect3 rockBounds = Offset(bounds, finalP);
                 entityC->bounds = Union(entityC->bounds, rockBounds);
@@ -2378,7 +2378,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             r32 velocityAngle = AArm2(entityC->velocity.xy);
             params.angle += RadToDeg(velocityAngle);
         }
-        result = PlayAndDrawEntity(worldMode, group, lightIndexes, entityC, animationP, animationScale, params.angle, params.offset, timeToUpdate, bodyColor, params.drawOpened, params.onTop, params.bounds, additionalZbias);
+        result = PlayAndDrawEntity(worldMode, group, lights, entityC, animationP, animationScale, params.angle, params.offset, timeToUpdate, bodyColor, params.drawOpened, params.onTop, params.bounds, additionalZbias);
         
         if(IsValid(dragging))
         {

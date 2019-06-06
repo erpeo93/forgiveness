@@ -20,7 +20,8 @@ struct OpenGLProgramCommon
     GLuint vertPID;
     GLuint vertNID;
     GLuint vertColorID;
-    GLuint lightIndexID;
+    GLuint lightStartingIndexID;
+    GLuint lightEndingIndexID;
     GLuint textureIndexID;
     GLuint modulationID;
 };
@@ -106,7 +107,8 @@ struct Opengl
     b32 supportSRGBFrameBuffer;
     
     ZBiasProgram zBiasNoDepthPeel;
-    ZBiasProgram zBiasDepthPeel;
+    ZBiasProgram zBiasDepthPeelLight;
+    ZBiasProgram zBiasDepthPeelNoLight;
     PeelCompositeProgram peelComposite;
     FinalStretchProgram finalStretch;
     

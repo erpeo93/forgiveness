@@ -436,7 +436,7 @@ internal void UIDrawSkillElement(UIState* UI, BookMode* bookMode, Vec3 bookP, Bo
     ModelId MID = FindModelByName(group->assets, modelTypeID, modelNameID);
     FitProjectedModelResult fitModel = FitProjectedModelIntoRect(UI, bookP, modelRect, MID);
     
-    PushModel(group, MID, Identity(), fitModel.modelP, V4(-1, -1, -1, -1), fitModel.modelScale, standardColor, 0, PAGE_ZBIAS + 0.02f);
+    PushModel(group, MID, Identity(), fitModel.modelP, {}, fitModel.modelScale, standardColor, 0, PAGE_ZBIAS + 0.02f);
     
     
     

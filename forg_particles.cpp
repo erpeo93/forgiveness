@@ -517,7 +517,7 @@ internal void SpawnFluidParticles(ParticleCache* particleCache, FluidSpawnType t
     }
 }
 
-inline Vec4 GetLightIndexes(GameModeWorld* worldMode, Vec3 P);
+inline Lights GetLights(GameModeWorld* worldMode, Vec3 P);
 internal void UpdateAndRenderSystem( GameModeWorld* worldMode, ParticleSystem* system, RandomSequence* entropy, r32 dt, Vec3 frameDisplacementInit, RenderGroup* renderGroup )
 {
     GameRenderCommands* commands = renderGroup->commands;
@@ -556,7 +556,7 @@ internal void UpdateAndRenderSystem( GameModeWorld* worldMode, ParticleSystem* s
                 M(A->P.y, subIndex),
                 M(A->P.z, subIndex)
             };
-            Vec4 lightIndexes = GetLightIndexes(worldMode, P);
+            Lights lights = GetLights(worldMode, P);
             
             Vec4 color = 
             {
@@ -573,7 +573,7 @@ internal void UpdateAndRenderSystem( GameModeWorld* worldMode, ParticleSystem* s
             {
                 ObjectTransform transform = UprightTransform();
                 transform.angle = angle;
-                PushBitmap(renderGroup, transform, system->bitmapID, P, height, V2(1.0f, 1.0f),  color, lightIndexes);
+                PushBitmap(renderGroup, transform, system->bitmapID, P, height, V2(1.0f, 1.0f),  color, lights);
             }
             else
             {
@@ -590,7 +590,7 @@ internal void UpdateAndRenderSystem( GameModeWorld* worldMode, ParticleSystem* s
                 Vec4 P3 = V4(P - XAxisHalf + YAxisHalf, 0);
                 
                 ReservedVertexes vertexes = ReserveQuads(renderGroup, 1);
-                PushQuad(renderGroup, renderGroup->whiteTexture, lightIndexes, &vertexes,
+                PushQuad(renderGroup, renderGroup->whiteTexture, lights, &vertexes,
                          P0, UV, C,
                          P1, UV, C,
                          P2, UV, C,
@@ -635,7 +635,7 @@ internal void UpdateAndRenderSineSystem(GameModeWorld* worldMode, ParticleSystem
                 M(P4x.y, subIndex),
                 M(P4x.z, subIndex)
             };
-            Vec4 lightIndexes = GetLightIndexes(worldMode, P);
+            Lights lights = GetLights(worldMode, P);
             
             Vec4 color = 
             {
@@ -668,7 +668,7 @@ internal void UpdateAndRenderSineSystem(GameModeWorld* worldMode, ParticleSystem
             
             
             ReservedVertexes vertexes = ReserveQuads(renderGroup, 1);
-            PushQuad(renderGroup, renderGroup->whiteTexture, lightIndexes, &vertexes,
+            PushQuad(renderGroup, renderGroup->whiteTexture, lights, &vertexes,
                      P0, UV, C,
                      P1, UV, C,
                      P2, UV, C,

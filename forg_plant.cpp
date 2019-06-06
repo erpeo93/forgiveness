@@ -575,7 +575,7 @@ inline void UpdatePlant(GameModeWorld* worldMode, PlantDefinition* definition, C
 
 struct PlantRenderingParams
 {
-    Vec4 lightIndexes;
+    Lights lights;
     r32 modulationWithFocusColor;
 };
 
@@ -635,7 +635,7 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
         
         if(IsValid(plant->trunkBitmap))
         {
-            PushTrunkatedPyramid(group, plant->trunkBitmap, segmentBaseP, topP, 4, bottomXAxis, bottomYAxis, bottomZAxis, topXAxis, topYAxis, topZAxis, baseRadious, topRadious, length, baseColor, topColor, renderingParams.lightIndexes, renderingParams.modulationWithFocusColor, drawBase, drawTop);
+            PushTrunkatedPyramid(group, plant->trunkBitmap, segmentBaseP, topP, 4, bottomXAxis, bottomYAxis, bottomZAxis, topXAxis, topYAxis, topZAxis, baseRadious, topRadious, length, baseColor, topColor, renderingParams.lights, renderingParams.modulationWithFocusColor, drawBase, drawTop);
         }
         
         for(PlantStem* child = segment->childs; child; child = child->next)
@@ -692,7 +692,7 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
                 leafTransform.angle = leafAngle;
                 leafTransform.modulationPercentage = renderingParams.modulationWithFocusColor;
                 
-                PushBitmap(group, leafTransform, plant->leafBitmap, leafP, 0, scale, leafColor, renderingParams.lightIndexes);
+                PushBitmap(group, leafTransform, plant->leafBitmap, leafP, 0, scale, leafColor, renderingParams.lights);
             }
         }
     }

@@ -260,22 +260,25 @@ inline void ResetLightGrid(GameModeWorld* worldMode)
     for(u32 chunkIndex = 0; chunkIndex < ArrayCount(worldMode->chunks); ++chunkIndex)
     {
         WorldChunk* chunk = worldMode->chunks[chunkIndex]; 
-        if(chunk)
+        while(chunk)
         {
             for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
             {
                 for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
                 {
-                    chunk->tiles[tileY][tileX].lightCount = 0;
-                    chunk->tiles[tileY][tileX].lightIndexes = V4(-1, -1, -1, -1);
+                    chunk->tiles[tileY][tileX].lights = {};
                 }
             }
+            
+            chunk = chunk->next;
         }
     }
 }
 
 inline void AddLightToGrid(GameModeWorld* worldMode, Vec3 P, u32 index)
 {
+    
+#if 0    
     u32 voxelApron = 8;
     for(r32 offsetY = -VOXEL_SIZE * voxelApron; offsetY <= VOXEL_SIZE * voxelApron; offsetY += VOXEL_SIZE)
     {
@@ -315,15 +318,17 @@ inline void AddLightToGrid(GameModeWorld* worldMode, Vec3 P, u32 index)
             }
         }
     }
+#endif
+    
 }
 
-inline Vec4 GetLightIndexes(GameModeWorld* worldMode, Vec3 P)
+inline Lights GetLights(GameModeWorld* worldMode, Vec3 P)
 {
-    Vec4 result = V4(-1, -1, -1, -1);
+    Lights result = {};
     GetUniversePosQuery query = TranslateRelativePos(worldMode, worldMode->player.universeP, P.xy);
     if(query.chunk)
     {
-        result = query.chunk->tiles[query.tileY][query.tileX].lightIndexes;
+        result = query.chunk->tiles[query.tileY][query.tileX].lights;
     }
     
     return result;
@@ -1787,7 +1792,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         
         platformAPI.PushWork(gameState->slowQueue, ReceiveNetworkPackets, &gameState->receiveNetworkPackets);
         
-        PlayGame(gameState, input);
     }
     
     

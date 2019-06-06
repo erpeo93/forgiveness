@@ -20,8 +20,7 @@ struct WorldTile
     
 #ifndef FORG_SERVER
     r32 layoutNoise;
-    u8 lightCount;
-    Vec4 lightIndexes;
+    Lights lights;
     
     r32 waterPhase;
     r32 waterSine;

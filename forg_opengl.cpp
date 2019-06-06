@@ -385,7 +385,8 @@ internal void OpenGLUseProgramBegin(OpenGLProgramCommon* prog)
     GLuint CArray = prog->vertColorID;
     GLuint PArray = prog->vertPID;
     GLuint NArray = prog->vertNID;
-    GLuint lightArray = prog->lightIndexID;
+    GLuint lightStartingArray = prog->lightStartingIndexID;
+    GLuint lightEndingArray = prog->lightStartingIndexID;
     GLuint textureArray = prog->textureIndexID;
     GLuint modulationArray = prog->modulationID;
     
@@ -415,10 +416,16 @@ internal void OpenGLUseProgramBegin(OpenGLProgramCommon* prog)
     }
     
     
-    if(IsValidArray(lightArray))
+    if(IsValidArray(lightStartingArray))
     {
-        glEnableVertexAttribArray(lightArray);
-        glVertexAttribPointer(lightArray, 4, GL_FLOAT, false, sizeof(TexturedVertex), (void*) OffsetOf(TexturedVertex, lightIndexes));
+        glEnableVertexAttribArray(lightStartingArray);
+        glVertexAttribIPointer(lightStartingArray, 1, GL_UNSIGNED_SHORT, sizeof(TexturedVertex), (void*) OffsetOf(TexturedVertex, lightStartingIndex));
+    }
+    
+    if(IsValidArray(lightEndingArray))
+    {
+        glEnableVertexAttribArray(lightEndingArray);
+        glVertexAttribIPointer(lightEndingArray, 1, GL_UNSIGNED_SHORT, sizeof(TexturedVertex), (void*) OffsetOf(TexturedVertex, lightEndingIndex));
     }
     
     
@@ -493,9 +500,14 @@ internal void OpenGLUseProgramEnd(OpenGLProgramCommon* prog)
         glDisableVertexAttribArray(prog->vertPID);
     }
     
-    if(IsValidArray(prog->lightIndexID))
+    if(IsValidArray(prog->lightStartingIndexID))
     {
-        glDisableVertexAttribArray(prog->lightIndexID);
+        glDisableVertexAttribArray(prog->lightStartingIndexID);
+    }
+    
+    if(IsValidArray(prog->lightEndingIndexID))
+    {
+        glDisableVertexAttribArray(prog->lightEndingIndexID);
     }
     
     if(IsValidArray(prog->textureIndexID))
@@ -568,7 +580,8 @@ internal GLuint OpenGLCreateProgram(char* defines, char* headerCode, char* verte
     common->vertPID = glGetAttribLocation(programID, "vertP");
     common->vertNID = glGetAttribLocation(programID, "vertN");
     common->vertColorID = glGetAttribLocation(programID, "vertColor");
-    common->lightIndexID = glGetAttribLocation(programID, "lightIndexes");
+    common->lightStartingIndexID = glGetAttribLocation(programID, "lightStartingIndex");
+    common->lightEndingIndexID = glGetAttribLocation(programID, "lightEndingIndex");
     common->textureIndexID = glGetAttribLocation(programID, "textureIndex");
     common->modulationID = glGetAttribLocation(programID, "modulationPercentage");
     
@@ -603,7 +616,7 @@ return(Result);
 
 )FOO";
 
-internal void OpenGLCompileZBiasProgram(ZBiasProgram* result, b32 depthPeel)
+internal void OpenGLCompileZBiasProgram(ZBiasProgram* result, b32 depthPeel, b32 light)
 {
     
     char defines[4096];
@@ -622,7 +635,8 @@ internal void OpenGLCompileZBiasProgram(ZBiasProgram* result, b32 depthPeel)
         in Vec3 vertN;
         in Vec2 vertUV;
         in Vec4 vertColor;
-in Vec4 lightIndexes;
+in int lightStartingIndex;
+in int lightEndingIndex;
 in int textureIndex;
 in r32 modulationPercentage;
 
@@ -631,7 +645,8 @@ in r32 modulationPercentage;
          smooth out Vec4 fragColor;
          smooth out Vec3 worldPos;
          smooth out Vec3 worldNorm;
-          flat out Vec4 fragLightIndex;
+          flat out int fragLightStartingIndex;
+          flat out int fragLightEndingIndex;
           flat out int fragTextureIndex;
            smooth out r32 modulationWithFocusColor;
            
@@ -645,23 +660,26 @@ in r32 modulationPercentage;
           
           Vec4 zMinTransform = transform * inVertex;
           Vec4 zMaxTransform = transform * zVertex;
-                                          
+          
                                            r32 modifiedZ = zMaxTransform.z * (zMinTransform.w / zMaxTransform.w);
                                           gl_Position = vec4(zMinTransform.x, zMinTransform.y, modifiedZ, zMinTransform.w);
                                           
                                           fragUV = vertUV;
                                           fragColor = vertColor;
-                                          worldPos = zVertex.xyz;
+                                          worldPos = inVertex.xyz;
                                           worldNorm = vertN;
-                                           fragLightIndex = lightIndexes;
+                                            fragLightStartingIndex = lightStartingIndex;
+                                            fragLightEndingIndex = lightEndingIndex;
                                            fragTextureIndex = textureIndex;
                                            modulationWithFocusColor = modulationPercentage;
     }
     
    )FOO";
     
-#if 0    
-    char* fragmentCode = R"FOO(
+    char* fragmentCode;
+    if(light)
+    {
+        fragmentCode = R"FOO(
         //fragment code
         uniform sampler2DArray textureSampler;
         #if depthPeeling
@@ -673,7 +691,10 @@ in r32 modulationPercentage;
         smooth in Vec4 fragColor;
         smooth in Vec3 worldPos;
         smooth in Vec3 worldNorm;
-         flat in Vec4 fragLightIndex;
+        
+         flat in int fragLightStartingIndex;
+         flat in int fragLightEndingIndex;
+         
          flat in int fragTextureIndex;
          smooth in r32 modulationWithFocusColor;
         uniform Vec3 ambientLightColor;
@@ -684,13 +705,6 @@ uniform r32 pointLightStrength[256];
 
         void main(void)
          {
-         int pointLightIndexes[4];
-         pointLightIndexes[0] = int(fragLightIndex.x);
-         pointLightIndexes[1] = int(fragLightIndex.y);
-         pointLightIndexes[2] = int(fragLightIndex.z);
-         pointLightIndexes[3] = int(fragLightIndex.w);
-         
-         
          Vec3 directionalLightColor = V3(1.0f, 1.0f, 0);
          Vec3 lightDir = normalize(V3(0, 1, -1));
          
@@ -714,44 +728,31 @@ uniform r32 pointLightStrength[256];
          if(resultColor.a > alphaThreesold)
          {
          
+         
+         
          // NOTE(Leonardo): point light test!
-         
-         Vec3 modulationLightColor = V3(0, 0, 0);
-         
-         int lightCount = 4;
-         int lightPresent = 0;
-         for(int index = 0; index < 4; ++index)
+if(fragLightStartingIndex != fragLightEndingIndex)
 {
-int lightI = pointLightIndexes[index];
-if(lightI >= 0)
+   Vec3 modulationLightColor = ambientLightColor;
+         for(int index = fragLightStartingIndex; index < fragLightEndingIndex; ++index)
 {
-++lightPresent;
-Vec3 toLight = pointLightPos[lightI] - worldPos;
+Vec3 toLight = pointLightPos[index] - worldPos;
          r32 lightDistance = length(toLight);
          
-//toLight *= (1.0f / lightDistance);
-         //r32 cosAngle = Dot(toLight, worldNorm);
-         //cosAngle = clamp(cosAngle, 0, 1);
-         
-         r32 lightInfluence = pointLightStrength[lightI] / (lightDistance * lightDistance);
+         r32 lightInfluence = pointLightStrength[index] / (lightDistance * lightDistance);
          lightInfluence = clamp(lightInfluence, 0, 1);
-         modulationLightColor += Lerp(ambientLightColor, lightInfluence, pointLightColors[lightI]);
-}
-else
-{
-break;
-}
+         modulationLightColor += lightInfluence * pointLightColors[index];
 }
 
-if(lightPresent > 0)
-{
-modulationLightColor *= 1.0f/lightPresent;
+modulationLightColor = clamp(modulationLightColor, 0, 1);
 resultColor.rgb *= modulationLightColor;
 }
 else
 {
 resultColor.rgb *= ambientLightColor;
 }
+
+
 
 
          // NOTE(Leonardo): directional light!
@@ -767,6 +768,9 @@ resultColor.rgb *= ambientLightColor;
 }
 #endif
 
+
+
+
 resultColor.rgb = Clamp01(resultColor.rgb);
 resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.7f, 0.7f, 0.7f));
 #if shaderSimTexWriteSRGB
@@ -779,10 +783,10 @@ resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.7f, 0.7f,
     }
          }
        )FOO";
-#endif
-    
-    
-    char* fragmentCode = R"FOO(
+    }
+    else
+    {
+        fragmentCode = R"FOO(
         //fragment code
         uniform sampler2DArray textureSampler;
         #if depthPeeling
@@ -839,6 +843,7 @@ resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.7f, 0.7f,
     }
          }
        )FOO";
+    }
     
     GLuint prog = OpenGLCreateProgram(defines, globalHeaderCode, vertexCode, fragmentCode, &result->common);
     result->GLSLTransformID = glGetUniformLocation(prog, "transform");
@@ -1106,7 +1111,8 @@ internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
     {
         FreeFrameBuffer(&opengl.depthPeelBuffer[depthPeelIndex]);
     }
-    FreeProgram(&opengl.zBiasDepthPeel.common);
+    FreeProgram(&opengl.zBiasDepthPeelLight.common);
+    FreeProgram(&opengl.zBiasDepthPeelNoLight.common);
     FreeProgram(&opengl.zBiasNoDepthPeel.common);
     FreeProgram(&opengl.peelComposite.common);
     FreeProgram(&opengl.finalStretch.common);
@@ -1120,8 +1126,9 @@ internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
     u32 renderWidth = settings->width;
     u32 renderHeight = settings->height;
     
-    OpenGLCompileZBiasProgram(&opengl.zBiasDepthPeel, true);
-    OpenGLCompileZBiasProgram(&opengl.zBiasNoDepthPeel, false);
+    OpenGLCompileZBiasProgram(&opengl.zBiasDepthPeelLight, true, true);
+    OpenGLCompileZBiasProgram(&opengl.zBiasDepthPeelNoLight, true, false);
+    OpenGLCompileZBiasProgram(&opengl.zBiasNoDepthPeel, false, true);
     OpenGLCompilePeelComposite(&opengl.peelComposite);
     OpenGLCompileFinalStretch(&opengl.finalStretch);
     
@@ -1257,7 +1264,14 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
                     r32 alphaThreesold = 0.0f;
                     if(peeling)
                     {
-                        program = &opengl.zBiasDepthPeel;
+                        if(peelIndex <= 1)
+                        {
+                            program = &opengl.zBiasDepthPeelLight;
+                        }
+                        else
+                        {
+                            program = &opengl.zBiasDepthPeelNoLight;
+                        }
                         glActiveTexture(GL_TEXTURE1);
                         glBindTexture(GL_TEXTURE_2D, opengl.depthPeelBuffer[peelIndex - 1].depthHandle);
                         glActiveTexture(GL_TEXTURE0);

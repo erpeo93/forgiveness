@@ -136,19 +136,19 @@ inline ReservedVertexes ReserveTriangles(RenderGroup* group, u32 triangleCount)
     return result;
 }
 
-
-inline void PushVertex(TexturedVertex* vert, Vec4 P, Vec3 N, Vec2 UV, u32 C, Vec4 lightIndexes, r32 modulationPercentage, u16 textureIndex)
+inline void PushVertex(TexturedVertex* vert, Vec4 P, Vec3 N, Vec2 UV, u32 C, Lights lights, r32 modulationPercentage, u16 textureIndex)
 {
     vert->P = P;
     vert->N = N;
     vert->UV = UV;
     vert->color = C;
-    vert->lightIndexes = lightIndexes;
+    vert->lightStartingIndex = lights.lightStartingIndex;
+    vert->lightEndingIndex = lights.lightStartingIndex;
     vert->modulationPercentage = modulationPercentage;
     vert->textureIndex = textureIndex;
 }
 
-inline void PushQuad(RenderGroup* group, RenderTexture texture, Vec4 lightIndexes,
+inline void PushQuad(RenderGroup* group, RenderTexture texture, Lights lights,
                      ReservedVertexes* reservedVertexes, 
                      Vec4 P0, Vec2 UV0, u32 C0,
                      Vec4 P1, Vec2 UV1, u32 C1,
@@ -175,10 +175,10 @@ inline void PushQuad(RenderGroup* group, RenderTexture texture, Vec4 lightIndexe
         UV3 = Hadamart(UV3, invUV);
         
         
-        PushVertex(vert + 0, P0, N, UV0, C0, lightIndexes, modulationPercentage, textureIndex);
-        PushVertex(vert + 1, P1, N, UV1, C1, lightIndexes, modulationPercentage, textureIndex);
-        PushVertex(vert + 2, P2, N, UV2, C2, lightIndexes, modulationPercentage, textureIndex);
-        PushVertex(vert + 3, P3, N, UV3, C3, lightIndexes, modulationPercentage, textureIndex);
+        PushVertex(vert + 0, P0, N, UV0, C0, lights, modulationPercentage, textureIndex);
+        PushVertex(vert + 1, P1, N, UV1, C1, lights, modulationPercentage, textureIndex);
+        PushVertex(vert + 2, P2, N, UV2, C2, lights, modulationPercentage, textureIndex);
+        PushVertex(vert + 3, P3, N, UV3, C3, lights, modulationPercentage, textureIndex);
         
         indeces[0] = VI + 0;
         indeces[1] = VI + 1;
@@ -189,14 +189,14 @@ inline void PushQuad(RenderGroup* group, RenderTexture texture, Vec4 lightIndexe
     }
 }
 
-inline void PushQuad(RenderGroup* group, RenderTexture texture, Vec4 lightIndexes,
+inline void PushQuad(RenderGroup* group, RenderTexture texture, Lights lights,
                      ReservedVertexes* reservedVertexes,
                      Vec4 P0, Vec2 UV0, Vec4 C0,
                      Vec4 P1, Vec2 UV1, Vec4 C1,
                      Vec4 P2, Vec2 UV2, Vec4 C2,
                      Vec4 P3, Vec2 UV3, Vec4 C3, r32 modulationPercentage)
 {
-    PushQuad(group, texture, lightIndexes,
+    PushQuad(group, texture, lights,
              reservedVertexes,
              P0, UV0, RGBAPack8x4(C0 * 255.0f),
              P1, UV1, RGBAPack8x4(C1 * 255.0f),
@@ -204,7 +204,7 @@ inline void PushQuad(RenderGroup* group, RenderTexture texture, Vec4 lightIndexe
              P3, UV3, RGBAPack8x4(C3 * 255.0f), modulationPercentage);
 }
 
-inline void PushTriangle(RenderGroup* group, RenderTexture texture, Vec4 lightIndexes,
+inline void PushTriangle(RenderGroup* group, RenderTexture texture, Lights lights,
                          ReservedVertexes* reservedVertexes,
                          Vec4 P0, u32 C0,
                          Vec4 P1, u32 C1,
@@ -221,9 +221,9 @@ inline void PushTriangle(RenderGroup* group, RenderTexture texture, Vec4 lightIn
         Vec3 N = V3(0, 0, 0);//Normalize(Cross(P1.xyz - P0.xyz, P2.xyz - P1.xyz));
         u16 textureIndex = (u16) texture.index;
         
-        PushVertex(vert + 0, P0, N, V2(0, 0), C0, lightIndexes, modulationPercentage, textureIndex);
-        PushVertex(vert + 1, P1, N, V2(0, 0), C1, lightIndexes, modulationPercentage, textureIndex);
-        PushVertex(vert + 2, P2, N, V2(0, 0), C2, lightIndexes, modulationPercentage, textureIndex);
+        PushVertex(vert + 0, P0, N, V2(0, 0), C0, lights, modulationPercentage, textureIndex);
+        PushVertex(vert + 1, P1, N, V2(0, 0), C1, lights, modulationPercentage, textureIndex);
+        PushVertex(vert + 2, P2, N, V2(0, 0), C2, lights, modulationPercentage, textureIndex);
         
         indeces[0] = VI + 0;
         indeces[1] = VI + 1;
@@ -231,7 +231,7 @@ inline void PushTriangle(RenderGroup* group, RenderTexture texture, Vec4 lightIn
     }
 }
 
-inline void PushTriangle(RenderGroup* group, RenderTexture texture, Vec4 lightIndexes,
+inline void PushTriangle(RenderGroup* group, RenderTexture texture, Lights lights,
                          ReservedVertexes* reservedVertexes,
                          Vec4 P0, Vec4 C0,
                          Vec4 P1, Vec4 C1,
@@ -240,10 +240,10 @@ inline void PushTriangle(RenderGroup* group, RenderTexture texture, Vec4 lightIn
     u32 c0 = RGBAPack8x4(C0 * 255.0f);
     u32 c1 = RGBAPack8x4(C1 * 255.0f);
     u32 c2 = RGBAPack8x4(C2 * 255.0f);
-    PushTriangle(group, texture, lightIndexes, reservedVertexes, P0, c0, P1, c1, P2, c2, modulationPercentage);
+    PushTriangle(group, texture, lights, reservedVertexes, P0, c0, P1, c1, P2, c2, modulationPercentage);
 }
 
-inline void PushLineSegment(RenderGroup* group, RenderTexture texture, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, Vec4 lightIndexes = V4(-1, -1, -1, -1))
+inline void PushLineSegment(RenderGroup* group, RenderTexture texture, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, Lights lights = {0, 0})
 {
     Vec3 line = toP - fromP;
     Vec3 perp = Cross(group->gameCamera.Z, line);
@@ -257,15 +257,15 @@ inline void PushLineSegment(RenderGroup* group, RenderTexture texture, Vec4 colo
     u32 c = StoreColor(color);
     
     ReservedVertexes vertexes = ReserveQuads(group, 1);
-    PushQuad(group, texture, lightIndexes, &vertexes, P0, V2(0, 0), c, P1, V2(1, 0), c, P2, V2(1, 1), c, P3, V2(0, 1), c, 0);
+    PushQuad(group, texture, lights, &vertexes, P0, V2(0, 0), c, P1, V2(1, 0), c, P2, V2(1, 1), c, P3, V2(0, 1), c, 0);
 }
 
-inline void PushLine(RenderGroup* group, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, Vec4 lightIndexes = V4(-1, -1, -1, -1))
+inline void PushLine(RenderGroup* group, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, Lights lights = {0, 0})
 {
-    PushLineSegment(group, group->whiteTexture, color, fromP, toP, tickness, lightIndexes);
+    PushLineSegment(group, group->whiteTexture, color, fromP, toP, tickness, lights);
 }
 
-inline void PushDottedLine(RenderGroup* group, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, r32 segmentLength, r32 spacing, Vec4 lightIndexes = V4(-1, -1, -1, -1))
+inline void PushDottedLine(RenderGroup* group, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, r32 segmentLength, r32 spacing, Lights lights = {0, 0})
 {
     Vec3 delta = toP - fromP;
     r32 lineLength = Length(delta);
@@ -283,13 +283,13 @@ inline void PushDottedLine(RenderGroup* group, Vec4 color, Vec3 fromP, Vec3 toP,
         {
             endP = toP;
         }
-        PushLineSegment(group, group->whiteTexture, color, startP, endP, tickness, lightIndexes);
+        PushLineSegment(group, group->whiteTexture, color, startP, endP, tickness, lights);
         
         startP = endP + spacing * normDelta;
     }
 }
 
-inline void PushRect4Colors(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 c1, Vec4 c2, Vec4 c3, Vec4 c4, Vec4 lightIndexes)
+inline void PushRect4Colors(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 c1, Vec4 c2, Vec4 c3, Vec4 c4, Lights lights)
 {
     GameRenderCommands* commands = renderGroup->commands;
     Vec3 XAxis = V3(1, 0, 0);
@@ -321,32 +321,32 @@ inline void PushRect4Colors(RenderGroup* renderGroup, ObjectTransform objectTran
     Vec2 maxUV = V2(1.0f, 1.0f);
     
     ReservedVertexes vertexes = ReserveQuads(renderGroup, 1);
-    PushQuad(renderGroup, renderGroup->whiteTexture, lightIndexes, &vertexes,
+    PushQuad(renderGroup, renderGroup->whiteTexture, lights, &vertexes,
              V4(min.x, min.y, min.z, objectTransform.additionalZBias), V2(minUV.x, minUV.y), c1,
              V4(max.x, min.y, min.z, objectTransform.additionalZBias), V2(maxUV.x, minUV.y), c2,
              V4(max.x, max.y, max.z, objectTransform.additionalZBias), V2(maxUV.x, maxUV.y), c3,
              V4(min.x, max.y, max.z, objectTransform.additionalZBias), V2(minUV.x, maxUV.y), c4, objectTransform.modulationPercentage);
 }
 
-inline void PushRect4Colors(RenderGroup* renderGroup, ObjectTransform objectTransform, Rect2 rect, Vec4 c0, Vec4 c1, Vec4 c2, Vec4 c3, Vec4 lightIndexes = V4(-1, -1, -1, -1))
+inline void PushRect4Colors(RenderGroup* renderGroup, ObjectTransform objectTransform, Rect2 rect, Vec4 c0, Vec4 c1, Vec4 c2, Vec4 c3, Lights lights = {0, 0})
 {
-    PushRect4Colors(renderGroup, objectTransform, V3(GetCenter(rect), 0.0f), GetDim(rect), c0, c1, c2, c3, lightIndexes);
+    PushRect4Colors(renderGroup, objectTransform, V3(GetCenter(rect), 0.0f), GetDim(rect), c0, c1, c2, c3, lights);
 }
 
-inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 color, Vec4 lightIndexes = V4(-1, -1, -1, -1))
+inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 color, Lights lights = {0, 0})
 {
-    PushRect4Colors(renderGroup, objectTransform, P, dim, color, color, color, color, lightIndexes);
+    PushRect4Colors(renderGroup, objectTransform, P, dim, color, color, color, color, lights);
 }
 
-inline void PushUIRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 color, Vec4 lightIndexes = V4(-1, -1, -1, -1))
+inline void PushUIRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 color, Lights lights = {0, 0})
 {
     objectTransform.cameraOffset += V3(renderGroup->gameCamera.screenCameraOffset, 0);
-    PushRect4Colors(renderGroup, objectTransform, P, dim, color, color, color, color, lightIndexes);
+    PushRect4Colors(renderGroup, objectTransform, P, dim, color, color, color, color, lights);
 }
 
-inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Rect2 rect, Vec4 color, Vec4 lightIndexes = V4(-1, -1, -1, -1))
+inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Rect2 rect, Vec4 color, Lights lights = {0, 0})
 {
-    PushRect(renderGroup, objectTransform, V3(GetCenter(rect), 0.0f), GetDim(rect), color, lightIndexes);
+    PushRect(renderGroup, objectTransform, V3(GetCenter(rect), 0.0f), GetDim(rect), color, lights);
 }
 
 
@@ -432,7 +432,7 @@ inline BitmapDim GetBitmapDim(Bitmap* bitmap, Vec3 P, Vec3 XAxis, Vec3 YAxis, r3
     return result;
 }
 
-inline void PushBitmap__(RenderGroup* group, Bitmap* bitmap, Vec3 P, Vec3 XAxis, Vec3 YAxis, Vec4 color, Vec4 lightIndexes, r32 modulationPercentage, r32 ZBias)
+inline void PushBitmap__(RenderGroup* group, Bitmap* bitmap, Vec3 P, Vec3 XAxis, Vec3 YAxis, Vec4 color, Lights lights, r32 modulationPercentage, r32 ZBias)
 {
     r32 oneTexelU = 1.0f / bitmap->width;
     r32 oneTexelV = 1.0f / bitmap->height;
@@ -451,7 +451,7 @@ inline void PushBitmap__(RenderGroup* group, Bitmap* bitmap, Vec3 P, Vec3 XAxis,
     if((XAxis.x >= 0 && YAxis.y >= 0) ||
        (XAxis.x < 0 && YAxis.y < 0))
     {
-        PushQuad(group, bitmap->textureHandle, lightIndexes, &vertexes,
+        PushQuad(group, bitmap->textureHandle, lights, &vertexes,
                  minXminY, V2(minUV.x, minUV.y), colorInt,
                  maxXminY, V2(maxUV.x, minUV.y), colorInt,
                  maxXmaxY, V2(maxUV.x, maxUV.y), colorInt,
@@ -459,7 +459,7 @@ inline void PushBitmap__(RenderGroup* group, Bitmap* bitmap, Vec3 P, Vec3 XAxis,
     }
     else
     {
-        PushQuad(group, bitmap->textureHandle, lightIndexes, &vertexes,
+        PushQuad(group, bitmap->textureHandle, lights, &vertexes,
                  minXminY, V2(minUV.x, minUV.y), colorInt,
                  minXmaxY, V2(minUV.x, maxUV.y), colorInt,
                  maxXmaxY, V2(maxUV.x, maxUV.y), colorInt,
@@ -468,7 +468,7 @@ inline void PushBitmap__(RenderGroup* group, Bitmap* bitmap, Vec3 P, Vec3 XAxis,
     
 }
 
-inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTransform, Bitmap* bitmap,  Vec3 P, r32 height, Vec2 scale, Vec4 color, Vec4 lightIndexes, Vec2 pivot)
+inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTransform, Bitmap* bitmap,  Vec3 P, r32 height, Vec2 scale, Vec4 color, Lights lights, Vec2 pivot)
 {
     BitmapDim result = {};
     GameRenderCommands* commands = renderGroup->commands;
@@ -518,20 +518,20 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTra
         XAxis= XAxis * dim.size.x;
         YAxis = YAxis * dim.size.y;
         
-        PushBitmap__(renderGroup, bitmap, P, XAxis, YAxis, color, lightIndexes, objectTransform.modulationPercentage, objectTransform.additionalZBias);
+        PushBitmap__(renderGroup, bitmap, P, XAxis, YAxis, color, lights, objectTransform.modulationPercentage, objectTransform.additionalZBias);
     }
     
     return result;
 }
 
 
-inline void PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Vec4 lightIndexes = V4(-1, -1, -1, -1))
+inline void PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
 {
     Bitmap* bitmap = GetBitmap(renderGroup->assets, ID);
     if(bitmap)
     {
         color = Hadamart(color, ID.coloration);
-        PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lightIndexes, bitmap->pivot);
+        PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, bitmap->pivot);
     }
     else
     {
@@ -551,14 +551,14 @@ inline void PushUIBitmap(RenderGroup* group, BitmapId ID, Vec2 screenCenterOffse
     PushBitmap(group, transform, ID, V3(0, 0, 0), height, scale, color);
 }
 
-inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, Vec2 pivot, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Vec4 lightIndexes = V4(-1, -1, -1, -1))
+inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, Vec2 pivot, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
 {
     BitmapDim result = {};
     Bitmap* bitmap = GetBitmap(renderGroup->assets, ID);
     if(bitmap)
     {
         color = Hadamart(color, ID.coloration);
-        result = PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lightIndexes, pivot);
+        result = PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, pivot);
     }
     else
     {
@@ -569,7 +569,7 @@ inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform o
     return result;
 }
 
-inline void PushCube_(RenderGroup* group, Vec3 P, r32 height, r32 width, RenderTexture texture, Vec4 color, Vec4 lightIndexes)
+inline void PushCube_(RenderGroup* group, Vec3 P, r32 height, r32 width, RenderTexture texture, Vec4 color, Lights lights)
 {
     r32 radius = 0.5f * width;
     
@@ -600,25 +600,25 @@ inline void PushCube_(RenderGroup* group, Vec3 P, r32 height, r32 width, RenderT
     Vec4 BGr = color;
     
     ReservedVertexes vertexes = ReserveQuads(group, 6);
-    PushQuad(group, texture, lightIndexes, &vertexes, P0, T0, TC, P1, T1, TC, P2, T2, TC, P3, T3, TC, 0);
-    PushQuad(group, texture, lightIndexes, &vertexes, P7, T0, BC, P6, T1, BC, P5, T2, BC, P4, T3, BC, 0);
+    PushQuad(group, texture, lights, &vertexes, P0, T0, TC, P1, T1, TC, P2, T2, TC, P3, T3, TC, 0);
+    PushQuad(group, texture, lights, &vertexes, P7, T0, BC, P6, T1, BC, P5, T2, BC, P4, T3, BC, 0);
     
-    PushQuad(group, texture, lightIndexes, &vertexes, P4, T0, BGr, P5, T1, BGr, P1, T2, TGr, P0, T3, TGr, 0);
+    PushQuad(group, texture, lights, &vertexes, P4, T0, BGr, P5, T1, BGr, P1, T2, TGr, P0, T3, TGr, 0);
     
-    PushQuad(group, texture, lightIndexes, &vertexes, P2, T0, TGr, P6, T1, BGr, P7, T2, BGr, P3, T3, TGr, 0);
+    PushQuad(group, texture, lights, &vertexes, P2, T0, TGr, P6, T1, BGr, P7, T2, BGr, P3, T3, TGr, 0);
     
-    PushQuad(group, texture, lightIndexes, &vertexes, P1, T0, TGr, P5, T1, BGr, P6, T2, BGr, P2, T3, TGr, 0);
+    PushQuad(group, texture, lights, &vertexes, P1, T0, TGr, P5, T1, BGr, P6, T2, BGr, P2, T3, TGr, 0);
     
-    PushQuad(group, texture, lightIndexes, &vertexes, P7, T0, BGr, P4, T1, BGr, P0, T2, TGr, P3, T3, TGr, 0);
+    PushQuad(group, texture, lights, &vertexes, P7, T0, BGr, P4, T1, BGr, P0, T2, TGr, P3, T3, TGr, 0);
     
 }
 
-inline void PushTexturedCube(RenderGroup* group, Vec3 P, r32 height, r32 width, BitmapId ID, Vec4 color = V4(1.0f, 1.0f, 1.0f, 1.0f), Vec4 lightIndexes = V4(-1, -1, -1, -1))
+inline void PushTexturedCube(RenderGroup* group, Vec3 P, r32 height, r32 width, BitmapId ID, Vec4 color = V4(1.0f, 1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
 {
     Bitmap* bitmap = GetBitmap(group->assets, ID);
     if(bitmap)
     {
-        PushCube_(group, P, height, width, bitmap->textureHandle, color, lightIndexes);
+        PushCube_(group, P, height, width, bitmap->textureHandle, color, lights);
     }
     else
     {
@@ -626,12 +626,12 @@ inline void PushTexturedCube(RenderGroup* group, Vec3 P, r32 height, r32 width, 
     }
 }
 
-inline void PushCube(RenderGroup* group, Vec3 P, r32 height, r32 width, Vec4 color, Vec4 lightIndexes = V4(-1, -1, -1, -1))
+inline void PushCube(RenderGroup* group, Vec3 P, r32 height, r32 width, Vec4 color, Lights lights = {0, 0})
 {
-    PushCube_(group, P, height, width, group->whiteTexture, color, lightIndexes);
+    PushCube_(group, P, height, width, group->whiteTexture, color, lights);
 }
 
-inline void PushTrunkatedPyramid(RenderGroup* group, RenderTexture texture, Vec3 P, Vec3 topP, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxisBottom, Vec3 XAxisTop, Vec3 YAxisTop, Vec3 ZAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 baseColor, Vec4 topColor, Vec4 lightIndexes, r32 modulationPercentage, b32 drawBase = true, b32 drawTop = true)
+inline void PushTrunkatedPyramid(RenderGroup* group, RenderTexture texture, Vec3 P, Vec3 topP, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxisBottom, Vec3 XAxisTop, Vec3 YAxisTop, Vec3 ZAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 baseColor, Vec4 topColor, Lights lights, r32 modulationPercentage, b32 drawBase = true, b32 drawTop = true)
 {
     r32 anglePerSubdivision = TAU32 / subdivisions;
     Vec4 darkColorBase = V4(baseColor.rgb * 0.65f, baseColor.a); 
@@ -667,19 +667,19 @@ inline void PushTrunkatedPyramid(RenderGroup* group, RenderTexture texture, Vec3
         if(drawBase)
         {
             ReservedVertexes vertexes = ReserveTriangles(group, 1);
-            PushTriangle(group, texture, lightIndexes, &vertexes, rotatedPBottom, cBaseToUse, basePBottom, cBaseToUse, PBottom, cBaseToUse, modulationPercentage);
+            PushTriangle(group, texture, lights, &vertexes, rotatedPBottom, cBaseToUse, basePBottom, cBaseToUse, PBottom, cBaseToUse, modulationPercentage);
         }
         
         if(drawTop)
         {
             ReservedVertexes vertexes = ReserveTriangles(group, 1);
-            PushTriangle(group, texture, lightIndexes, &vertexes, PTop, cTopToUse, basePTop, cTopToUse, rotatedPTop, cTopToUse, modulationPercentage);
+            PushTriangle(group, texture, lights, &vertexes, PTop, cTopToUse, basePTop, cTopToUse, rotatedPTop, cTopToUse, modulationPercentage);
         }
         
         
         ReservedVertexes quad = ReserveQuads(group, 1);
         
-        PushQuad(group, texture, lightIndexes, &quad, 
+        PushQuad(group, texture, lights, &quad, 
                  basePBottom, V2(0, 0), cBaseToUse, 
                  rotatedPBottom, V2(1, 0), cBaseToUse,
                  rotatedPTop, V2(1, 1), cTopToUse,
@@ -694,14 +694,14 @@ inline void PushTrunkatedPyramid(RenderGroup* group, RenderTexture texture, Vec3
     //PushLineSegment(group, group->whiteTexture, V4(1, 1, 1, 1), P, topP, 0.1f);
 }
 
-inline void PushTrunkatedPyramid(RenderGroup* group, BitmapId BID, Vec3 P, Vec3 topP, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxisBottom, Vec3 XAxisTop, Vec3 YAxisTop, Vec3 ZAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 baseColor, Vec4 topColor, Vec4 lightIndexes, r32 modulationPercentage, b32 drawBase = true, b32 drawTop = true)
+inline void PushTrunkatedPyramid(RenderGroup* group, BitmapId BID, Vec3 P, Vec3 topP, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxisBottom, Vec3 XAxisTop, Vec3 YAxisTop, Vec3 ZAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 baseColor, Vec4 topColor, Lights lights, r32 modulationPercentage, b32 drawBase = true, b32 drawTop = true)
 {
     Bitmap* bitmap = GetBitmap(group->assets, BID);
     if(bitmap)
     {
         baseColor = Hadamart(baseColor, BID.coloration);
         topColor = Hadamart(topColor, BID.coloration);
-        PushTrunkatedPyramid(group, bitmap->textureHandle, P, topP, subdivisions, XAxisBottom, YAxisBottom, ZAxisBottom, XAxisTop, YAxisTop, ZAxisTop, radiousBottom, radiousTop, height, baseColor, topColor, lightIndexes,modulationPercentage, drawBase, drawTop);
+        PushTrunkatedPyramid(group, bitmap->textureHandle, P, topP, subdivisions, XAxisBottom, YAxisBottom, ZAxisBottom, XAxisTop, YAxisTop, ZAxisTop, radiousBottom, radiousTop, height, baseColor, topColor, lights,modulationPercentage, drawBase, drawTop);
     }
     else
     {
@@ -710,7 +710,7 @@ inline void PushTrunkatedPyramid(RenderGroup* group, BitmapId BID, Vec3 P, Vec3 
     }
 }
 
-inline void PushModel(RenderGroup* group, VertexModel* model, m4x4 rotation, Vec3 P, Vec4 lightIndexes,  Vec3 scale = V3(1, 1, 1), Vec4 color = V4(1, 1, 1, 1), r32 modulationPercentage = 0.0f, r32 additionalZBias = 0.0f)
+inline void PushModel(RenderGroup* group, VertexModel* model, m4x4 rotation, Vec3 P, Lights lights,  Vec3 scale = V3(1, 1, 1), Vec4 color = V4(1, 1, 1, 1), r32 modulationPercentage = 0.0f, r32 additionalZBias = 0.0f)
 {
     GameRenderCommands* commands = group->commands;
     ReservedVertexes vertexes = ReserveVertexes(group, model->faceCount, model->vertexCount);
@@ -740,7 +740,7 @@ inline void PushModel(RenderGroup* group, VertexModel* model, m4x4 rotation, Vec
             Vec4 finalP = V4(P, additionalZBias) + vertFinalP;
             Vec4 vertColor = Hadamart(vert->color, color);
             
-            PushVertex(vertexPtr + vertexIndex, finalP, V3(0, 0, 0), V2(0, 0), RGBAPack8x4(vertColor * 255.0f), lightIndexes, modulationPercentage, 0);
+            PushVertex(vertexPtr + vertexIndex, finalP, V3(0, 0, 0), V2(0, 0), RGBAPack8x4(vertColor * 255.0f), lights, modulationPercentage, 0);
         }
     }
     else
@@ -750,13 +750,13 @@ inline void PushModel(RenderGroup* group, VertexModel* model, m4x4 rotation, Vec
 }
 
 
-inline void PushModel(RenderGroup* group, ModelId ID, m4x4 rotation, Vec3 P, Vec4 lightIndexes,  Vec3 scale = V3(1, 1, 1), Vec4 color = V4(1, 1, 1, 1), r32 modulationPercentage = 0.0f, r32 additionalZBias = 0.0f)
+inline void PushModel(RenderGroup* group, ModelId ID, m4x4 rotation, Vec3 P, Lights lights,  Vec3 scale = V3(1, 1, 1), Vec4 color = V4(1, 1, 1, 1), r32 modulationPercentage = 0.0f, r32 additionalZBias = 0.0f)
 {
     VertexModel* model = GetModel(group->assets, ID);
     
     if(model)
     {
-        PushModel(group, model, rotation, P, lightIndexes, scale, color, modulationPercentage, additionalZBias);
+        PushModel(group, model, rotation, P, lights, scale, color, modulationPercentage, additionalZBias);
     }
     else
     {

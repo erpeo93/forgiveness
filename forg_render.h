@@ -7,6 +7,12 @@
       -all the coordinates passed to the render are in meters
 */
 
+struct Lights
+{
+    u16 lightStartingIndex;
+    u16 lightEndingIndex;
+};
+
 struct EnvironmentMap
 {
     // NOTE(leonardo): LOD[0] is the most detailed env map.

@@ -286,28 +286,28 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
         
         if(zeroIsOnLeftSide)
         {
-            PushTriangle(group, group->whiteTexture, QSite0->lightIndexes, triangleVertexes,  site0PCamera, color0, smooth0From, color0, smooth0To, color0, 0);
+            PushTriangle(group, group->whiteTexture, QSite0->lights, triangleVertexes,  site0PCamera, color0, smooth0From, color0, smooth0To, color0, 0);
             
-            PushTriangle(group, group->whiteTexture, QSite1->lightIndexes, triangleVertexes, site1PCamera, color1, smooth1To, color1, smooth1From, color1, 0);
+            PushTriangle(group, group->whiteTexture, QSite1->lights, triangleVertexes, site1PCamera, color1, smooth1To, color1, smooth1From, color1, 0);
         }
         else
         {
-            PushTriangle(group, group->whiteTexture, QSite0->lightIndexes, triangleVertexes, site0PCamera, color0, smooth0To, color0, smooth0From, color0, 0);
+            PushTriangle(group, group->whiteTexture, QSite0->lights, triangleVertexes, site0PCamera, color0, smooth0To, color0, smooth0From, color0, 0);
             
-            PushTriangle(group, group->whiteTexture, QSite1->lightIndexes, triangleVertexes, site1PCamera, color1, smooth1From, color1, smooth1To, color1, 0);
+            PushTriangle(group, group->whiteTexture, QSite1->lights, triangleVertexes, site1PCamera, color1, smooth1From, color1, smooth1To, color1, 0);
         }
         
         if(zeroIsOnLeftSide)
         {
-            PushQuad(group, group->whiteTexture, QSite0->lightIndexes, quadVertexes, smooth0From, {}, color0, offsetFromCamera, {}, colorFrom, offsetToCamera, {}, colorTo, smooth0To, {}, color0, 0);
+            PushQuad(group, group->whiteTexture, QSite0->lights, quadVertexes, smooth0From, {}, color0, offsetFromCamera, {}, colorFrom, offsetToCamera, {}, colorTo, smooth0To, {}, color0, 0);
             
-            PushQuad(group, group->whiteTexture, QSite1->lightIndexes, quadVertexes, smooth1From, {}, color1, smooth1To, {}, color1, offsetToCamera, {}, colorTo, offsetFromCamera, {}, colorFrom, 0);
+            PushQuad(group, group->whiteTexture, QSite1->lights, quadVertexes, smooth1From, {}, color1, smooth1To, {}, color1, offsetToCamera, {}, colorTo, offsetFromCamera, {}, colorFrom, 0);
         }
         else
         {
-            PushQuad(group, group->whiteTexture, QSite0->lightIndexes, quadVertexes, smooth0To, {}, color0, offsetToCamera, {}, colorTo, offsetFromCamera, {}, colorFrom, smooth0From, {}, color0, 0);
+            PushQuad(group, group->whiteTexture, QSite0->lights, quadVertexes, smooth0To, {}, color0, offsetToCamera, {}, colorTo, offsetFromCamera, {}, colorFrom, smooth0From, {}, color0, 0);
             
-            PushQuad(group, group->whiteTexture, QSite1->lightIndexes, quadVertexes, smooth1To, {}, color1, smooth1From, {}, color1, offsetFromCamera, {}, colorFrom, offsetToCamera, {}, colorTo, 0);
+            PushQuad(group, group->whiteTexture, QSite1->lights, quadVertexes, smooth1To, {}, color1, smooth1From, {}, color1, offsetFromCamera, {}, colorFrom, offsetToCamera, {}, colorTo, 0);
         }
         
         
@@ -324,11 +324,11 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
         {
             if(zeroIsOnLeftSide)
             {
-                PushTriangle(group, group->whiteTexture, QSite0->lightIndexes, triangleVertexes, site0PCamera + waterOffset, waterColor0, offsetFromCamera + waterOffset, waterColorFrom, offsetToCamera + waterOffset, waterColorTo, 0);
+                PushTriangle(group, group->whiteTexture, QSite0->lights, triangleVertexes, site0PCamera + waterOffset, waterColor0, offsetFromCamera + waterOffset, waterColorFrom, offsetToCamera + waterOffset, waterColorTo, 0);
             }
             else
             {
-                PushTriangle(group, group->whiteTexture, QSite0->lightIndexes, triangleVertexes, site0PCamera + waterOffset, waterColor0, offsetToCamera + waterOffset, waterColorTo, offsetFromCamera + waterOffset, waterColorFrom, 0);
+                PushTriangle(group, group->whiteTexture, QSite0->lights, triangleVertexes, site0PCamera + waterOffset, waterColor0, offsetToCamera + waterOffset, waterColorTo, offsetFromCamera + waterOffset, waterColorFrom, 0);
             }
         }
         
@@ -336,11 +336,11 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
         {
             if(zeroIsOnLeftSide)
             {
-                PushTriangle(group, group->whiteTexture, QSite1->lightIndexes, triangleVertexes, site1PCamera + waterOffset, waterColor1, offsetToCamera + waterOffset, waterColorTo, offsetFromCamera + waterOffset, waterColorFrom, 0);
+                PushTriangle(group, group->whiteTexture, QSite1->lights, triangleVertexes, site1PCamera + waterOffset, waterColor1, offsetToCamera + waterOffset, waterColorTo, offsetFromCamera + waterOffset, waterColorFrom, 0);
             }
             else
             {
-                PushTriangle(group, group->whiteTexture, QSite1->lightIndexes, triangleVertexes, site1PCamera + waterOffset, waterColor1, offsetFromCamera + waterOffset, waterColorFrom, offsetToCamera + waterOffset, waterColorTo, 0);
+                PushTriangle(group, group->whiteTexture, QSite1->lights, triangleVertexes, site1PCamera + waterOffset, waterColor1, offsetFromCamera + waterOffset, waterColorFrom, offsetToCamera + waterOffset, waterColorTo, 0);
             }
         }
         

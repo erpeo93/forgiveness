@@ -184,21 +184,6 @@ inline void UIRenderAutocomplete(UIState* UI, EditorWidget* widget, PlatformInpu
     }
 }
 
-inline UIAutocomplete* UIAddAutocomplete(UIState* UI, char* name)
-{
-    Assert(UI->autocompleteCount < ArrayCount(UI->autocompletes));
-    UIAutocomplete* result = UI->autocompletes + UI->autocompleteCount++;
-    
-    result->additionalHash = 0;
-    if(StrLen(name) >= 2 && name[1] == '_')
-    {
-        result->additionalHash = StringHash(name, 1);
-        name = name + 2;
-    }
-    result->hash = StringHash(name);
-    return result;
-}
-
 inline void UIFreeAutocompleteOptions(UIState* UI, UIAutocomplete* autocomplete)
 {
     FREELIST_FREE(autocomplete->firstBlock, UIAutocompleteBlock, UI->firstFreeAutocompleteBlock);
@@ -225,6 +210,32 @@ inline UIAutocomplete* UIFindAutocomplete(UIState* UI, char* name)
     UIAutocomplete* result = UIFindAutocomplete(UI, StringHash(name), 0);
     return result;
 }
+
+
+inline UIAutocomplete* UIAddAutocomplete(UIState* UI, char* name)
+{
+    u64 additionalHash = 0;
+    if(StrLen(name) >= 2 && name[1] == '_')
+    {
+        additionalHash = StringHash(name, 1);
+        name = name + 2;
+    }
+    u64 hash = StringHash(name);
+    
+    UIAutocomplete* result = UIFindAutocomplete(UI, hash, additionalHash);
+    if(!result)
+    {
+        Assert(UI->autocompleteCount < ArrayCount(UI->autocompletes));
+        result = UI->autocompletes + UI->autocompleteCount++;
+    }
+    
+    UIFreeAutocompleteOptions(UI, result);
+    
+    result->additionalHash = additionalHash;
+    result->hash = hash;
+    return result;
+}
+
 
 inline void UIAddOption(UIState* UI, UIAutocomplete* autocomplete, char* option, u32 optionLength = 0)
 {
@@ -1655,7 +1666,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         Vec3 animationBase = P;
                         animationBase.xy += Hadamart(info.originOffset, animationScale);
                                                 
-                        AnimationOutput output =  PlayAndDrawEntity(UI->worldMode, UI->group, V4(-1, -1, -1, -1), &test, test.P, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), drawOpened, 0, InvertedInfinityRect2(), 1, {true, showBones, !showBitmaps, showPivots, timer, nameHashID, UI->fakeEquipment});
+                        AnimationOutput output =  PlayAndDrawEntity(UI->worldMode, UI->group, {}, &test, test.P, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), drawOpened, 0, InvertedInfinityRect2(), 1, {true, showBones, !showBitmaps, showPivots, timer, nameHashID, UI->fakeEquipment});
                         
                         if(output.hotBoneIndex >= 0)
                         {
@@ -1845,7 +1856,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
 
                     ReservedVertexes triangleVertex = ReserveTriangles(UI->group, 1);
                     r32 triangleZ = layout->additionalZBias;
-                    PushTriangle(UI->group, UI->group->whiteTexture, V4(-1, -1, -1, -1), &triangleVertex, V4(up, triangleZ, 0), V4(pickColor, 1.0f), V4(left, triangleZ, 0), V4(black, 1.0f), V4(right, triangleZ, 0), V4(white, 1.0f), 0);
+                    PushTriangle(UI->group, UI->group->whiteTexture, {}, &triangleVertex, V4(up, triangleZ, 0), V4(pickColor, 1.0f), V4(left, triangleZ, 0), V4(black, 1.0f), V4(right, triangleZ, 0), V4(white, 1.0f), 0);
                     
                     
                     if(root->scrolling2)
@@ -2970,7 +2981,8 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
         }
          
             color.a *= modulationAlpha;
-            PushModel(UI->group, MID, Identity(), P, V4(-1, -1, -1, -1), scale, color, 0, additionalZBias);
+                Lights lights = {};
+            PushModel(UI->group, MID, Identity(), P, lights, scale, color, 0, additionalZBias);
             }
 
             
@@ -3015,7 +3027,8 @@ inline void RenderEssence(UIState* UI, RenderGroup* group, TaxonomySlot* slot, V
         PushUITooltip(UI, essenceString, V4(1, 1, 1, 1));
     }
     
-    PushModel(group, MID, Identity(), P, V4(-1, -1, -1, -1), scale, color, 0, additionalZBias);
+        Lights lights = {};
+    PushModel(group, MID, Identity(), P, lights, scale, color, 0, additionalZBias);
        
     }
 }
