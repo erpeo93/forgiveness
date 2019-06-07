@@ -858,13 +858,13 @@ inline void PushAmbientColor(RenderGroup* renderGroup, Vec3 ambientLightColor)
 inline u16 PushPointLight(RenderGroup* renderGroup, Vec3 P, Vec3 color, r32 strength)
 {
     u16 result = 0xffff;
-    if(renderGroup->commands->lightCount < ArrayCount(renderGroup->commands->lights))
+    if(renderGroup->commands->lightCount < ArrayCount(renderGroup->commands->lightSource0))
     {
         result = renderGroup->commands->lightCount++;
-        PointLight* light = renderGroup->commands->lights + result;
-        light->P = P;
-        light->color = color;
-        light->strength = strength;
+        
+        renderGroup->commands->lightSource0[result].xyz = P;
+        renderGroup->commands->lightSource0[result].w = strength;
+        renderGroup->commands->lightSource1[result].rgb = color;
         
     }
     return result;

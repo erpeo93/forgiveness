@@ -42,8 +42,8 @@ struct ZBiasProgram
     GLuint depthSamplerID;
     GLuint alphaThreesoldID;
     GLuint ambientLightColorID;
-    
-    GLPointLight pointLights[256];
+    GLuint lightSource0ID;
+    GLuint lightSource1ID;
 };
 
 struct PeelCompositeProgram
@@ -97,6 +97,9 @@ struct Opengl
     
     b32 shaderSimTexLoadSRGB;
     b32 shaderSimTexWriteSRGB;
+    
+    GLuint lightSource0;
+    GLuint lightSource1;
     
     GLuint blitTextureHandle;
     GLuint defaultSpriteTextureFormat;

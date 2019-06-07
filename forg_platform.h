@@ -257,14 +257,7 @@ struct GameRenderSettings
     u32 height;
 };
 
-struct PointLight
-{
-    Vec3 P;
-    Vec3 color;
-    r32 strength;
-    r32 padding;
-};
-
+#define MAX_LIGHTS 1024
 struct GameRenderCommands
 {
     GameRenderSettings settings;
@@ -286,7 +279,8 @@ struct GameRenderCommands
     u32 bufferElementCount;
     
     u16 lightCount;
-    PointLight lights[1024];
+    Vec4 lightSource0[MAX_LIGHTS];
+    Vec4 lightSource1[MAX_LIGHTS];
 };
 
 inline GameRenderCommands DefaultRenderCommands(u8* pushBuffer, u32 pushBufferSize, u32 width, u32 height, u32 maxVertexCount, u32 maxIndexCount,  TexturedVertex* vertexArray, u16* indexArray, Vec4 clearColor)
