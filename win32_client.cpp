@@ -77,6 +77,9 @@ typedef void gl_uniform_4f( GLint location, GLfloat v0, GLfloat v1, GLfloat v2, 
 typedef void gl_uniform_1i( GLint location, GLint v0 );
 typedef void type_glUniform1f (GLint location, GLfloat v0);
 typedef void type_glUniform3fv (GLint location, GLsizei count, const GLfloat *value);
+typedef GLuint type_glGetUniformBlockIndex (GLuint program, const GLchar *uniformBlockName);
+typedef void type_glUniformBlockBinding (GLuint program, GLuint uniformBlockIndex, GLuint uniformBlockBinding);
+typedef void type_glBindBufferBase (GLenum target, GLuint index, GLuint buffer);
 
 typedef void type_glDisableVertexAttribArray(GLuint index);
 typedef void type_glEnableVertexAttribArray(GLuint index);
@@ -143,6 +146,9 @@ global_variable gl_uniform_4f* glUniform4f;
 global_variable gl_uniform_1i* glUniform1i;
 OpenGLGlobalFunction(glUniform1f);
 OpenGLGlobalFunction(glUniform3fv);
+OpenGLGlobalFunction(glGetUniformBlockIndex);
+OpenGLGlobalFunction(glUniformBlockBinding);
+OpenGLGlobalFunction(glBindBufferBase);
 
 OpenGLGlobalFunction( glDisableVertexAttribArray );
 OpenGLGlobalFunction( glEnableVertexAttribArray );
@@ -396,6 +402,9 @@ internal void Win32LoadWGLExtension()
             glUniform1i = ( gl_uniform_1i* ) wglGetProcAddress( "glUniform1i" );
             GetOpenGLFunction(glUniform1f);
             GetOpenGLFunction(glUniform3fv);
+            GetOpenGLFunction(glGetUniformBlockIndex);
+            GetOpenGLFunction(glUniformBlockBinding);
+            GetOpenGLFunction(glBindBufferBase);
             
             GetOpenGLFunction( glDisableVertexAttribArray );
             GetOpenGLFunction( glEnableVertexAttribArray );

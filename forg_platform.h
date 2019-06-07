@@ -262,6 +262,7 @@ struct PointLight
     Vec3 P;
     Vec3 color;
     r32 strength;
+    r32 padding;
 };
 
 struct GameRenderCommands
@@ -285,7 +286,7 @@ struct GameRenderCommands
     u32 bufferElementCount;
     
     u16 lightCount;
-    PointLight lights[256];
+    PointLight lights[1024];
 };
 
 inline GameRenderCommands DefaultRenderCommands(u8* pushBuffer, u32 pushBufferSize, u32 width, u32 height, u32 maxVertexCount, u32 maxIndexCount,  TexturedVertex* vertexArray, u16* indexArray, Vec4 clearColor)

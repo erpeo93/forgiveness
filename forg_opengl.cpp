@@ -5,6 +5,7 @@
 
 #define GL_ARRAY_BUFFER                   0x8892
 #define GL_ELEMENT_ARRAY_BUFFER           0x8893
+#define GL_UNIFORM_BUFFER                 0x8A11
 #define GL_STREAM_DRAW                    0x88E0
 #define GL_STREAM_READ                    0x88E1
 #define GL_STREAM_COPY                    0x88E2
@@ -440,8 +441,6 @@ internal void OpenGLUseProgramBegin(OpenGLProgramCommon* prog)
         glEnableVertexAttribArray(modulationArray);
         glVertexAttribPointer(modulationArray, 1, GL_FLOAT, false, sizeof(TexturedVertex), (void*) OffsetOf(TexturedVertex, modulationPercentage));
     }
-    
-    
 }
 
 internal void OpenGLUseProgramBegin(ZBiasProgram* prog, RenderSetup* setup, r32 alphaThreesold, PointLight* pointLights, u32 pointLightCount)
@@ -454,7 +453,7 @@ internal void OpenGLUseProgramBegin(ZBiasProgram* prog, RenderSetup* setup, r32 
     glUniform1f(prog->alphaThreesoldID, alphaThreesold);
     glUniform3fv(prog->ambientLightColorID, 1, setup->ambientLightColor.E);
     
-    Assert(pointLightCount <= ArrayCount(prog->pointLights));
+    Assert(pointLightCount < ArrayCount(prog->pointLights));
     for(u32 pointLightIndex = 0; pointLightIndex < pointLightCount; ++pointLightIndex)
     {
         PointLight* source = pointLights + pointLightIndex;
@@ -692,17 +691,17 @@ in r32 modulationPercentage;
         smooth in Vec3 worldPos;
         smooth in Vec3 worldNorm;
         
-         flat in int fragLightStartingIndex;
-         flat in int fragLightEndingIndex;
-         
+        flat in int fragLightStartingIndex;
+        flat in int fragLightEndingIndex;
          flat in int fragTextureIndex;
+         
          smooth in r32 modulationWithFocusColor;
         uniform Vec3 ambientLightColor;
         
-uniform Vec3 pointLightPos[256];
-uniform Vec3 pointLightColors[256];
-uniform r32 pointLightStrength[256];
-
+        uniform Vec3 lightPos[256];
+        uniform Vec3 lightColor[256];
+        uniform r32 lightStrength[256];
+        
         void main(void)
          {
          Vec3 directionalLightColor = V3(1.0f, 1.0f, 0);
@@ -729,19 +728,18 @@ uniform r32 pointLightStrength[256];
          {
          
          
-         
          // NOTE(Leonardo): point light test!
 if(fragLightStartingIndex != fragLightEndingIndex)
 {
    Vec3 modulationLightColor = ambientLightColor;
          for(int index = fragLightStartingIndex; index < fragLightEndingIndex; ++index)
 {
-Vec3 toLight = pointLightPos[index] - worldPos;
+Vec3 toLight = lightPos[index] - worldPos;
          r32 lightDistance = length(toLight);
          
-         r32 lightInfluence = pointLightStrength[index] / (lightDistance * lightDistance);
+         r32 lightInfluence = lightStrength[index] / (lightDistance * lightDistance);
          lightInfluence = clamp(lightInfluence, 0, 1);
-         modulationLightColor += lightInfluence * pointLightColors[index];
+         modulationLightColor += lightInfluence * lightColor[index];
 }
 
 modulationLightColor = clamp(modulationLightColor, 0, 1);
@@ -803,6 +801,9 @@ resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.7f, 0.7f,
          smooth in r32 modulationWithFocusColor;
         uniform Vec3 ambientLightColor;
         
+uniform Vec3 pointLightPos[256];
+uniform Vec3 pointLightColors[256];
+uniform r32 pointLightStrength[256];
         void main(void)
          {
          
@@ -853,13 +854,13 @@ resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.7f, 0.7f,
         GLPointLight* dest = result->pointLights + lightIndex;
         char buff[64];
         
-        FormatString(buff, sizeof(buff), "pointLightPos[%d]", lightIndex);
+        FormatString(buff, sizeof(buff), "lightPos[%d]", lightIndex);
         dest->posID = glGetUniformLocation(prog, buff);
         
-        FormatString(buff, sizeof(buff), "pointLightColors[%d]", lightIndex);
+        FormatString(buff, sizeof(buff), "lightColor[%d]", lightIndex);
         dest->colorID = glGetUniformLocation(prog, buff);
         
-        FormatString(buff, sizeof(buff), "pointLightStrength[%d]", lightIndex);
+        FormatString(buff, sizeof(buff), "lightStrength[%d]", lightIndex);
         dest->strengthID = glGetUniformLocation(prog, buff);
     }
 }
