@@ -328,6 +328,9 @@ struct GameModeWorld
     r32 currentPhaseTimer;
     ForgDayPhase currentPhase;
     
+    MemoryPool lightPool;
+    TempLight* firstFreeTempLight;
+    
     
     b32 forceVoronoiRegeneration;
     u8 chunkDim;

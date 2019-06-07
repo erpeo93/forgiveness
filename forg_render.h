@@ -9,8 +9,8 @@
 
 struct Lights
 {
-    u16 lightStartingIndex;
-    u16 lightEndingIndex;
+    u16 startingIndex;
+    u16 endingIndex;
 };
 
 struct EnvironmentMap

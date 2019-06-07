@@ -142,8 +142,8 @@ inline void PushVertex(TexturedVertex* vert, Vec4 P, Vec3 N, Vec2 UV, u32 C, Lig
     vert->N = N;
     vert->UV = UV;
     vert->color = C;
-    vert->lightStartingIndex = lights.lightStartingIndex;
-    vert->lightEndingIndex = lights.lightStartingIndex;
+    vert->lightStartingIndex = lights.startingIndex;
+    vert->lightEndingIndex = lights.endingIndex;
     vert->modulationPercentage = modulationPercentage;
     vert->textureIndex = textureIndex;
 }
@@ -855,14 +855,18 @@ inline void PushAmbientColor(RenderGroup* renderGroup, Vec3 ambientLightColor)
     PushSetup(renderGroup, &setup);
 }
 
-inline u32 PushPointLight(RenderGroup* renderGroup, Vec3 P, Vec3 color, r32 strength)
+inline u16 PushPointLight(RenderGroup* renderGroup, Vec3 P, Vec3 color, r32 strength)
 {
-    u32 result = renderGroup->commands->lightCount++;
-    PointLight* light = renderGroup->commands->lights + result;
-    light->P = P;
-    light->color = color;
-    light->strength = strength;
-    
+    u16 result = 0xffff;
+    if(renderGroup->commands->lightCount < ArrayCount(renderGroup->commands->lights))
+    {
+        result = renderGroup->commands->lightCount++;
+        PointLight* light = renderGroup->commands->lights + result;
+        light->P = P;
+        light->color = color;
+        light->strength = strength;
+        
+    }
     return result;
 }
 

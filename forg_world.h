@@ -20,7 +20,6 @@ struct WorldTile
     
 #ifndef FORG_SERVER
     r32 layoutNoise;
-    Lights lights;
     
     r32 waterPhase;
     r32 waterSine;
@@ -28,7 +27,7 @@ struct WorldTile
     RandomSequence waterSeq;
     r32 blueNoise;
     r32 alphaNoise;
-    
+    Lights lights;
     r32 chunkynessSame;
     r32 chunkynessOther;
     Vec4 baseColor;
@@ -38,6 +37,18 @@ struct WorldTile
 #endif
 };
 
+struct TempLight
+{
+    Vec3 P;
+    Vec3 color;
+    r32 strength;
+    
+    union
+    {
+        TempLight* next;
+        TempLight* nextFree;
+    };
+};
 
 struct WorldChunk
 {
@@ -47,7 +58,12 @@ struct WorldChunk
     i32 worldY;
     i32 worldZ;
     
+#ifndef FORG_SERVER
+    Lights lights;
+#endif
     WorldTile tiles[CHUNK_DIM][CHUNK_DIM];
+    
+    TempLight* firstTempLight;
     
     EntityBlock* entities;
     WorldChunk* next;

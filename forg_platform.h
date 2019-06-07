@@ -284,7 +284,7 @@ struct GameRenderCommands
     
     u32 bufferElementCount;
     
-    u32 lightCount;
+    u16 lightCount;
     PointLight lights[256];
 };
 

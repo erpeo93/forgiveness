@@ -253,87 +253,6 @@ GetUniversePosQuery TranslateRelativePos(GameModeWorld* worldMode, UniversePos b
 }
 
 
-inline void ResetLightGrid(GameModeWorld* worldMode)
-{
-    UniversePos playerP = worldMode->player.universeP;
-    
-    for(u32 chunkIndex = 0; chunkIndex < ArrayCount(worldMode->chunks); ++chunkIndex)
-    {
-        WorldChunk* chunk = worldMode->chunks[chunkIndex]; 
-        while(chunk)
-        {
-            for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
-            {
-                for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
-                {
-                    chunk->tiles[tileY][tileX].lights = {};
-                }
-            }
-            
-            chunk = chunk->next;
-        }
-    }
-}
-
-inline void AddLightToGrid(GameModeWorld* worldMode, Vec3 P, u32 index)
-{
-    
-#if 0    
-    u32 voxelApron = 8;
-    for(r32 offsetY = -VOXEL_SIZE * voxelApron; offsetY <= VOXEL_SIZE * voxelApron; offsetY += VOXEL_SIZE)
-    {
-        for(r32 offsetX = -VOXEL_SIZE * voxelApron; offsetX <= VOXEL_SIZE * voxelApron; offsetX += VOXEL_SIZE)
-        {
-            GetUniversePosQuery query = TranslateRelativePos(worldMode, worldMode->player.universeP, P.xy + V2(offsetX, offsetY));
-            
-            if(query.chunk)
-            {
-                u32 tileX = query.tileX;
-                u32 tileY = query.tileY;
-                
-                Assert(tileX < CHUNK_DIM);
-                Assert(tileY < CHUNK_DIM);
-                
-                WorldTile* tile = &query.chunk->tiles[tileY][tileX];
-                if(tile->lightCount < 4)
-                {
-                    r32 lightIndexReal = (r32) index;
-                    Vec4* lightIndexes = (Vec4*) &tile->lightIndexes;
-                    
-                    
-                    if((lightIndexes->x != lightIndexReal) &&
-                       (lightIndexes->y != lightIndexReal) &&
-                       (lightIndexes->z != lightIndexReal) &&
-                       (lightIndexes->w != lightIndexReal))
-                    {
-                        u8 lightIndex = tile->lightCount++;
-                        lightIndexes->E[lightIndex] = (r32) index;
-                    }
-                    
-                }
-                else
-                {
-                    InvalidCodePath;
-                }
-            }
-        }
-    }
-#endif
-    
-}
-
-inline Lights GetLights(GameModeWorld* worldMode, Vec3 P)
-{
-    Lights result = {};
-    GetUniversePosQuery query = TranslateRelativePos(worldMode, worldMode->player.universeP, P.xy);
-    if(query.chunk)
-    {
-        result = query.chunk->tiles[query.tileY][query.tileX].lights;
-    }
-    
-    return result;
-}
-
 inline WorldTile* GetTile(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
 {
     WorldTile* result = &worldMode->nullTile;
@@ -357,6 +276,96 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
 #include "forg_UI.cpp"
 #include "forg_cutscene.cpp"
 #include "forg_ground.cpp"
+
+
+inline void ResetLightGrid(GameModeWorld* worldMode)
+{
+    for(u32 chunkIndex = 0; chunkIndex < ArrayCount(worldMode->chunks); ++chunkIndex)
+    {
+        WorldChunk* chunk = worldMode->chunks[chunkIndex]; 
+        while(chunk)
+        {
+            FREELIST_FREE(chunk->firstTempLight, TempLight, worldMode->firstFreeTempLight);
+            chunk = chunk->next;
+        }
+    }
+}
+
+inline void AddLightToGrid(GameModeWorld* worldMode, Vec3 P, Vec3 lightColor, r32 strength)
+{
+    r32 chunkSide = VOXEL_SIZE * CHUNK_DIM;
+    u32 chunkApron = 4;
+    for(r32 offsetY = -chunkSide * chunkApron; offsetY <= chunkSide * chunkApron; offsetY += chunkSide)
+    {
+        for(r32 offsetX = -chunkSide * chunkApron; offsetX <= chunkSide * chunkApron; offsetX += chunkSide)
+        {
+            GetUniversePosQuery query = TranslateRelativePos(worldMode, worldMode->player.universeP, P.xy + V2(offsetX, offsetY));
+            
+            if(query.chunk)
+            {
+                TempLight* light;
+                FREELIST_ALLOC(light, worldMode->firstFreeTempLight, PushStruct(&worldMode->lightPool, TempLight));
+                light->P = P;
+                light->color = lightColor;
+                light->strength = strength;
+                
+                FREELIST_INSERT(light, query.chunk->firstTempLight);
+            }
+        }
+    }
+}
+
+inline void FinalizeLightGrid(GameModeWorld* worldMode, RenderGroup* group)
+{
+    for(u32 chunkIndex = 0; chunkIndex < ArrayCount(worldMode->chunks); ++chunkIndex)
+    {
+        WorldChunk* chunk = worldMode->chunks[chunkIndex]; 
+        while(chunk)
+        {
+            b32 first = true;
+            u16 startingIndex = 0;
+            u16 endingIndex = 0;
+            for(TempLight* light = chunk->firstTempLight; light; light = light->next)
+            {
+                u16 lightIndex = PushPointLight(group, light->P, light->color, light->strength);
+                
+                if(first)
+                {
+                    first = false;
+                    startingIndex = lightIndex;
+                }
+                
+                endingIndex = lightIndex + 1;
+                
+            }
+            
+            chunk->lights.startingIndex = startingIndex;
+            chunk->lights.endingIndex = endingIndex;
+            
+            for(u32 Y = 0; Y < CHUNK_DIM; ++Y)
+            {
+                for(u32 X = 0; X < CHUNK_DIM; ++X)
+                {
+                    WorldTile* tile = GetTile(chunk, X, Y);
+                    tile->lights = chunk->lights;
+                }
+            }
+            chunk = chunk->next;
+        }
+    }
+}
+
+inline Lights GetLights(GameModeWorld* worldMode, Vec3 P)
+{
+    Lights result = {};
+    GetUniversePosQuery query = TranslateRelativePos(worldMode, worldMode->player.universeP, P.xy);
+    if(query.chunk)
+    {
+        result = query.chunk->lights;
+    }
+    
+    return result;
+}
 
 PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 {
@@ -1035,8 +1044,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             {
                                 if(slot->lightIntensity)
                                 {
-                                    u32 lightIndex = PushPointLight(group, entity->P, slot->lightColor, slot->lightIntensity);
-                                    AddLightToGrid(worldMode, entity->P, lightIndex);
+                                    AddLightToGrid(worldMode, entity->P, slot->lightColor, slot->lightIntensity);
                                 }
                             }
                             
@@ -1088,6 +1096,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     }
                     
                 }
+                
+                FinalizeLightGrid(worldMode, group);
                 
                 DEBUG_VALUE(worldMode->modulationWithFocusColor);
                 

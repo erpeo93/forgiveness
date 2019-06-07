@@ -386,7 +386,7 @@ internal void OpenGLUseProgramBegin(OpenGLProgramCommon* prog)
     GLuint PArray = prog->vertPID;
     GLuint NArray = prog->vertNID;
     GLuint lightStartingArray = prog->lightStartingIndexID;
-    GLuint lightEndingArray = prog->lightStartingIndexID;
+    GLuint lightEndingArray = prog->lightEndingIndexID;
     GLuint textureArray = prog->textureIndexID;
     GLuint modulationArray = prog->modulationID;
     
@@ -454,7 +454,7 @@ internal void OpenGLUseProgramBegin(ZBiasProgram* prog, RenderSetup* setup, r32 
     glUniform1f(prog->alphaThreesoldID, alphaThreesold);
     glUniform3fv(prog->ambientLightColorID, 1, setup->ambientLightColor.E);
     
-    Assert(pointLightCount < ArrayCount(prog->pointLights));
+    Assert(pointLightCount <= ArrayCount(prog->pointLights));
     for(u32 pointLightIndex = 0; pointLightIndex < pointLightCount; ++pointLightIndex)
     {
         PointLight* source = pointLights + pointLightIndex;
@@ -803,10 +803,6 @@ resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.7f, 0.7f,
          smooth in r32 modulationWithFocusColor;
         uniform Vec3 ambientLightColor;
         
-uniform Vec3 pointLightPos[256];
-uniform Vec3 pointLightColors[256];
-uniform r32 pointLightStrength[256];
-
         void main(void)
          {
          
