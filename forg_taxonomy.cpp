@@ -746,9 +746,9 @@ inline void TranslateClientEntity(TaxonomyTable* oldTable, TaxonomyTable* newTab
         TranslateObject(oldTable, newTable, object);
     }
     
-    for(AnimationEffect* effect = entity->firstActiveEffect; effect; effect = effect->next)
+    for(ClientAnimationEffect* effect = entity->firstActiveEffect; effect; effect = effect->next)
     {
-        effect->triggerEffectTaxonomy = TranslateTaxonomy(oldTable, newTable, effect->triggerEffectTaxonomy);
+        effect->effect.triggerEffectTaxonomy = TranslateTaxonomy(oldTable, newTable, effect->effect.triggerEffectTaxonomy);
     }
     
     entity->prediction = {};

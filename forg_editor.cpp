@@ -1057,7 +1057,6 @@ inline AnimationEffect SpawnParticlesEffect(FluidSpawnType type)
 {
     AnimationEffect result = {};
     result.type = AnimationEffect_SpawnParticles;
-    result.particleType = type;
     
     return result;
 }

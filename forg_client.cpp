@@ -160,9 +160,15 @@ internal void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
     entity->effectReferenceAction = 0;
     
     
-    for(AnimationEffect** effectPtr = &entity->firstActiveEffect; *effectPtr;)
+    for(ClientAnimationEffect** effectPtr = &entity->firstActiveEffect; *effectPtr;)
     {
-        AnimationEffect* effect = *effectPtr;
+        ClientAnimationEffect* effect = *effectPtr;
+        
+        if(effect->particleRef)
+        {
+            effect->particleRef->active = false;
+        }
+        
         *effectPtr = effect->next;
         
         BeginTicketMutex(&worldMode->animationEffectMutex);
@@ -1507,8 +1513,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 }
                 
                 BEGIN_BLOCK("particles");
-                SetParticleCacheBitmaps(particleCache, group->assets);
-                UpdateAndRenderParticleSystems(worldMode, particleCache, input->timeToAdvance, group);
+                UpdateAndRenderParticleEffects(worldMode, particleCache, input->timeToAdvance, group);
                 END_BLOCK();
                 
                 if(UI->mode == UIMode_Equipment || UI->mode == UIMode_Loot)

@@ -35,6 +35,7 @@ inline PushParams AlignNoClear( memory_index align )
 {
     PushParams result = DefaultPushParams();
     result.flags &= ~PushParamFlag_Clear;
+    result.align = align;
     
     return result;
 }

@@ -1,4 +1,5 @@
 #pragma once
+#define MMSetExpr(expr) _mm_set_ps(expr, expr, expr, expr)
 
 #define mmSquare(a) _mm_mul_ps(a, a)    
 #define M(a, i) (((float *)&(a))[i])
@@ -21,7 +22,7 @@ struct V4_4x
 };
 
 
-inline V3_4x operator+( V3_4x A, V3_4x B )
+inline V3_4x operator+(V3_4x A, V3_4x B)
 {
     V3_4x result;
     result.x = _mm_add_ps( A.x, B.x );
@@ -31,11 +32,20 @@ inline V3_4x operator+( V3_4x A, V3_4x B )
     return result;
 }
 
-inline V3_4x& operator+=( V3_4x& A, V3_4x B )
+inline V3_4x& operator+=(V3_4x& A, V3_4x B)
 {
     A.x = _mm_add_ps( A.x, B.x );
     A.y = _mm_add_ps( A.y, B.y );
     A.z = _mm_add_ps( A.z, B.z );
+    
+    return A;
+}
+
+inline V3_4x& operator-=( V3_4x& A, V3_4x B )
+{
+    A.x = _mm_sub_ps( A.x, B.x );
+    A.y = _mm_sub_ps( A.y, B.y );
+    A.z = _mm_sub_ps( A.z, B.z );
     
     return A;
 }

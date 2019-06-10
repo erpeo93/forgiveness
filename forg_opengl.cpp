@@ -1277,7 +1277,7 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
                     r32 alphaThreesold = 0.0f;
                     if(peeling)
                     {
-                        if(peelIndex <= 1)
+                        if(true || peelIndex <= 1)
                         {
                             program = &opengl.zBiasDepthPeelLight;
                         }

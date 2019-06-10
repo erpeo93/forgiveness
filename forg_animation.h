@@ -199,8 +199,6 @@ struct AnimationEffect
             r32 fadeTime;
         };
         
-        FluidSpawnType particleType;
-        
         struct
         {
             Vec4 color;
@@ -261,7 +259,7 @@ struct AnimationFixedParams
     r32 minFocusSlotDistanceSq;
     r32 minHotAssDistanceSq;
     
-    AnimationEffect* firstActiveEffect;
+    struct ClientAnimationEffect* firstActiveEffect;
     
     r32 cameInTime;
     r32 goOutTime;

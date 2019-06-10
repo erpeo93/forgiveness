@@ -905,13 +905,13 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                         {
                             if(effect->triggerEffectTaxonomy == effectTaxonomy)
                             {
-                                AnimationEffect* newEffect;
+                                ClientAnimationEffect* newEffect;
                                 
                                 BeginTicketMutex(&worldMode->animationEffectMutex);
-                                FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, AnimationEffect, NoClear()));
+                                FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, ClientAnimationEffect, NoClear()));
                                 
-                                *newEffect = *effect;
-                                newEffect->targetID = targetID;
+                                newEffect->effect = *effect;
+                                newEffect->effect.targetID = targetID;
                                 FREELIST_INSERT(newEffect, actor->firstActiveEffect);
                                 EndTicketMutex(&worldMode->animationEffectMutex);
                                 found = true;

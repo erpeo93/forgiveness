@@ -930,8 +930,9 @@ inline b32 DrawModularPiece(AnimationFixedParams* input, RenderGroup* group, Vec
     return result;
 }
 
-inline void DispatchAnimationEffect(GameModeWorld* worldMode, AnimationEffect* effect, ClientEntity* entity, Vec3 P,Vec4* colorIn, r32 timeToAdvance)
+inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, ClientAnimationEffect* clientEffect, ClientEntity* entity, Vec3 P,Vec4* colorIn, r32 timeToAdvance)
 {
+    AnimationEffect* effect = &clientEffect->effect;
     ParticleCache* particleCache = worldMode->particleCache;
     switch(effect->type)
     {
@@ -954,11 +955,21 @@ inline void DispatchAnimationEffect(GameModeWorld* worldMode, AnimationEffect* e
         
         case AnimationEffect_SpawnParticles:
         {
-            SpawnFluidParticles(particleCache, effect->particleType, P);
+            ParticleEffect* particleEffect = clientEffect->particleRef;
+            
+            if(!particleEffect)
+            {
+                particleEffect = GetNewParticleEffect(particleCache);
+                clientEffect->particleRef = particleEffect;
+            }
+            
+            SpawnParticles(particleCache, particleEffect, P, 1);
         } break;
         
         case AnimationEffect_SpawnAshesTowardEntity:
         {
+            
+#if 0            
             u64 targetID = effect->targetID;
             ClientEntity* target = GetEntityClient(worldMode, targetID);
             
@@ -972,6 +983,8 @@ inline void DispatchAnimationEffect(GameModeWorld* worldMode, AnimationEffect* e
             {
                 effect->type = AnimationEffect_None;
             }
+#endif
+            
         } break;
     }
 }
@@ -983,12 +996,17 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
     if(newAction != entityC->effectReferenceAction ||
        (!newAction && !entityC->firstActiveEffect))
     {
-        for(AnimationEffect** effectPtr = &entityC->firstActiveEffect; *effectPtr;)
+        for(ClientAnimationEffect** effectPtr = &entityC->firstActiveEffect; *effectPtr;)
         {
-            AnimationEffect* effect = *effectPtr;
-            if(!effect->type ||
-               !(effect->flags & AnimationEffect_AllActions) && (effect->triggerAction == newAction))
+            ClientAnimationEffect* effect = *effectPtr;
+            if(!effect->effect.type ||
+               !(effect->effect.flags & AnimationEffect_AllActions) && (effect->effect.triggerAction == newAction))
             {
+                if(effect->particleRef)
+                {
+                    FreeParticleEffect(effect->particleRef);
+                }
+                
                 *effectPtr = effect->next;
                 FREELIST_DEALLOC(effect, worldMode->firstFreeEffect);
             }
@@ -1008,10 +1026,12 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
             {
                 if(effect->triggerAction == newAction)
                 {
-                    AnimationEffect* newEffect;
-                    FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, AnimationEffect, NoClear()));
+                    ClientAnimationEffect* newEffect;
+                    FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, ClientAnimationEffect, NoClear()));
                     
-                    *newEffect = *effect;
+                    newEffect->effect = *effect;
+                    newEffect->particleRef = 0;
+                    
                     FREELIST_INSERT(newEffect, entityC->firstActiveEffect);
                     found = true;
                     break;
@@ -1268,11 +1288,11 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     color.a *=  ass->alpha;
                     
                     
-                    for(AnimationEffect* effect = input->firstActiveEffect; effect; effect = effect->next)
+                    for(ClientAnimationEffect* effect = input->firstActiveEffect; effect; effect = effect->next)
                     {
-                        if(effect->stringHashID == sprite->stringHashID)
+                        if(effect->effect.stringHashID == sprite->stringHashID)
                         {
-                            DispatchAnimationEffect(input->worldMode, effect, input->entity, P, &color, input->timeToAdvance);
+                            DispatchClientAnimationEffect(input->worldMode, effect, input->entity, P, &color, input->timeToAdvance);
                         }
                     }
                     
@@ -1299,7 +1319,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     AnimationState* animationState = &input->entity->animation;
                     if(animationState->spawnAshParticlesCount > 0)
                     {
-                        SpawnAsh(input->worldMode->particleCache, particleP, velocity, lifeTime, animationState->ashColor, animationState->spawnAshParticlesCount, animationState->ashParticleViewPercentage, animationState->ashDim);
+                        //SpawnAsh(input->worldMode->particleCache, particleP, velocity, lifeTime, animationState->ashColor, animationState->spawnAshParticlesCount, animationState->ashParticleViewPercentage, animationState->ashDim);
                     }
                     
                 }
@@ -2224,12 +2244,12 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     Lights lights = GetLights(worldMode, entityC->P);
     TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, entityC->taxonomy);
     
-    for(AnimationEffect* effect = entityC->firstActiveEffect; effect; effect = effect->next)
+    for(ClientAnimationEffect* effect = entityC->firstActiveEffect; effect; effect = effect->next)
     {
-        if(!effect->stringHashID)
+        if(!effect->effect.stringHashID)
         {
             Vec4 ignored;
-            DispatchAnimationEffect(worldMode, effect, entityC, animationP, &ignored, timeToUpdate);
+            DispatchClientAnimationEffect(worldMode, effect, entityC, animationP, &ignored, timeToUpdate);
         }
     }
     

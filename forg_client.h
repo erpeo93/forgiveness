@@ -204,7 +204,17 @@ struct ClientPrediction
 
 
 
-
+struct ClientAnimationEffect
+{
+    AnimationEffect effect;
+    ParticleEffect* particleRef;
+    
+    union
+    {
+        ClientAnimationEffect* next;
+        ClientAnimationEffect* nextFree;
+    };
+};
 
 struct ClientEntity
 {
@@ -261,7 +271,8 @@ struct ClientEntity
     r32 timeFromLastUpdate;
     
     u32 effectReferenceAction;
-    AnimationEffect* firstActiveEffect;
+    
+    ClientAnimationEffect* firstActiveEffect;
     
     ClientRock* rock;
     ClientPlant* plant;
@@ -358,7 +369,7 @@ struct GameModeWorld
     ClientRock* firstFreeRock;
     
     TicketMutex animationEffectMutex;
-    AnimationEffect* firstFreeEffect;
+    ClientAnimationEffect* firstFreeEffect;
     
     RandomSequence leafSequence;
     RandomSequence waterRipplesSequence;
