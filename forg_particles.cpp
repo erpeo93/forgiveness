@@ -168,8 +168,10 @@ internal void SpawnParticles(ParticleCache* cache, ParticleEffect* effect, Vec3 
 
 
 inline Lights GetLights(GameModeWorld* worldMode, Vec3 P);
-inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleUpdater* updater, Particle_4x* A, RenderGroup* group, V3_4x frameDisplacement, r32 dt, b32 sine)
+inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticlePhase* phase, ParticlePhase* followingPhase, r32 normPhaseTime, Particle_4x* A, RenderGroup* group, V3_4x frameDisplacement, r32 dt, b32 sine)
 {
+    ParticleUpdater* updater = &phase->updater;
+    
     __m128 dt4x = MMSetExpr(dt);
     switch(updater->type)
     {
@@ -244,54 +246,61 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleUpdater*
         
         
         
-#if 0        
-        if(system->bitmapID.value)
+        if(updater->bitmapID.value)
         {
             ObjectTransform transform = UprightTransform();
             transform.angle = angle;
-            PushBitmap(renderGroup, transform, system->bitmapID, P, height, V2(1.0f, 1.0f),  color, lights);
-        }
-        else
-#endif
-        {
-            u32 C = StoreColor(color);
             
-            r32 cos = Cos(angle);
-            r32 sin = Sin(angle);
-            Vec3 XAxisHalf = height * 0.5f * (cos * group->gameCamera.X + sin * group->gameCamera.Y);
-            Vec3 YAxisHalf = height * 0.5f * (-sin * group->gameCamera.X + cos * group->gameCamera.Y);
-            
-            Vec4 P0 = V4(P - XAxisHalf - YAxisHalf, 0);
-            Vec4 P1 = V4(P + XAxisHalf - YAxisHalf, 0);
-            Vec4 P2 = V4(P + XAxisHalf + YAxisHalf, 0);
-            Vec4 P3 = V4(P - XAxisHalf + YAxisHalf, 0);
-            
-            Vec2 UV = {};
-            ReservedVertexes vertexes = ReserveQuads(group, 1);
-            PushQuad(group, group->whiteTexture, lights, &vertexes,
-                     P0, UV, C,
-                     P1, UV, C,
-                     P2, UV, C,
-                     P3, UV, C, 0);
+            if(updater->startDrawingFollowingBitmapAt && followingPhase)
+            {
+                r32 normLife = Clamp01MapToRange(updater->startDrawingFollowingBitmapAt, normPhaseTime, 1.0f);
+                r32 newAlpha = Lerp(0, normLife, color.a);
+                Vec4 newColor = color;
+                newColor.a = newAlpha;
+                
+                ParticleUpdater* followingUpdater = &followingPhase->updater;
+                PushBitmap(group, transform, followingUpdater->bitmapID, P, height, V2(1.0f, 1.0f),  newColor, lights);
+            }
+            PushBitmap(group, transform, updater->bitmapID, P, height, V2(1.0f, 1.0f),  color, lights);
         }
     }
 }
 
-inline ParticleUpdater* GetUpdater(ParticleEffect* effect, r32 ttl)
+inline ParticlePhase* GetPhase(ParticleEffect* effect, r32 ttl)
 {
-    ParticleUpdater* result = 0;
+    ParticlePhase* result = 0;
     
     for(u32 phaseIndex = 0; phaseIndex < effect->definition->phaseCount; ++phaseIndex)
     {
         ParticlePhase* phase = effect->definition->phases + phaseIndex;
         if(phase->ttlMax >= ttl && phase->ttlMin <= ttl)
         {
-            result = &phase->updater;
+            result = phase;
             break;
         }
     }
     return result;
 }
+
+inline ParticlePhase* GetFollowingPhase(ParticleEffect* effect, ParticlePhase* phaseIn)
+{
+    ParticlePhase* result = 0;
+    
+    r32 currentNearest = R32_MAX;
+    for(u32 phaseIndex = 0; phaseIndex < effect->definition->phaseCount; ++phaseIndex)
+    {
+        ParticlePhase* phase = effect->definition->phases + phaseIndex;
+        
+        r32 delta = Abs(phase->ttlMax - phaseIn->ttlMin);
+        if(phase != phaseIn && delta < currentNearest)
+        {
+            currentNearest = delta;
+            result = phase;
+        }
+    }
+    return result;
+}
+
 
 internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cache, ParticleEffect* effect, r32 dt, Vec3 frameDisplacementInit, RenderGroup* group)
 {
@@ -313,10 +322,12 @@ internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cac
         else
         {
             r32 ttl = M(particle->ttl4x, 0);
-            ParticleUpdater* updater = GetUpdater(effect, ttl);
-            if(updater)
+            ParticlePhase* phase = GetPhase(effect, ttl);
+            if(phase)
             {
-                UpdateAndRenderParticle4x(worldMode, updater, particle, group, frameDisplacement, dt, false);
+                ParticlePhase* followingPhase = GetFollowingPhase(effect, phase);
+                r32 normPhaseTime = 1.0f - Clamp01MapToRange(phase->ttlMin, ttl, phase->ttlMax);
+                UpdateAndRenderParticle4x(worldMode, phase, followingPhase, normPhaseTime, particle, group, frameDisplacement, dt, false);
             }
             particlePtr = &particle->next;
         }

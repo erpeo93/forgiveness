@@ -211,6 +211,7 @@ char* MetaTable_AssetTypeId[] =
 "BookPage",
 "BookElement",
 "Bookmark",
+"Particle",
 "count",
 };
 MetaFlag MetaFlags_EditorRole[] = 

@@ -834,6 +834,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 Clear(toFree);
                 gameState->pingPongAssets[destIndex] = InitAssets(gameState, toFree, gameState->textureQueue, MegaBytes(256));
                 
+                
                 gameState->assets = gameState->pingPongAssets[destIndex];
                 gameState->assetsIndex = destIndex;
                 
@@ -855,6 +856,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     gameState->music = PlaySound(&gameState->soundState, gameState->assets, GetRandomSound(gameState->assets, Asset_music, &seq), 0.0f);
                 }
 #endif
+                
             }
             
             group->assets = gameState->assets;
@@ -1517,6 +1519,21 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 }
                 
                 BEGIN_BLOCK("particles");
+                
+                TaxonomySlot* particleEffects = GetSlotForTaxonomy(worldMode->table, worldMode->table->particleEffectsTaxonomy);
+                for(u32 childIndex = 0; childIndex < particleEffects->subTaxonomiesCount; ++childIndex)
+                {
+                    TaxonomySlot* effect = GetNthChildSlot(worldMode->table, particleEffects, childIndex);
+                    
+                    Assert(effect->particleEffect);
+                    
+                    for(u32 phaseIndex = 0; phaseIndex < effect->particleEffect->phaseCount; ++phaseIndex)
+                    {
+                        ParticlePhase* phase = effect->particleEffect->phases + phaseIndex;
+                        phase->updater.bitmapID = FindBitmapByName(gameState->assets, Asset_Particle, phase->updater.particleHashID);
+                    }
+                }
+                
                 UpdateAndRenderParticleEffects(worldMode, particleCache, input->timeToAdvance, group);
                 END_BLOCK();
                 

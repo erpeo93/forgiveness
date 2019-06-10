@@ -295,10 +295,16 @@ inline b32 IsGenerator(TaxonomyTable* table, u32 taxonomy)
     return result;
 }
 
+inline b32 IsParticleEffects(TaxonomyTable* table, u32 taxonomy)
+{
+    b32 result = IsSubTaxonomy(taxonomy, table->particleEffectsTaxonomy, table->rootBits);
+    return result;
+}
+
 inline b32 IsSpawnable(TaxonomyTable* table, u32 taxonomy)
 {
     b32 result = true;
-    if(IsTile(table, taxonomy) || IsGenerator(table, taxonomy))
+    if(IsTile(table, taxonomy) || IsGenerator(table, taxonomy) || IsParticleEffects(table, taxonomy))
     {
         result = false;
     }
@@ -789,7 +795,48 @@ inline void TranslateUI(TaxonomyTable* oldTable, TaxonomyTable* newTable, UIStat
 
 inline void TranslateParticleEffects(ParticleCache* cache, TaxonomyTable* oldTable, TaxonomyTable* newTable)
 {
-    InvalidCodePath;
+    for(ParticleEffect* effect = cache->firstActiveEffect; effect; effect = effect->next)
+    {
+        ParticleEffectDefinition* definition = effect->definition;
+        
+        TaxonomySlot* particles = GetSlotForTaxonomy(oldTable, oldTable->particleEffectsTaxonomy);
+        u64 oldHashID = 0;
+        for(u32 childIndex = 0; childIndex < particles->subTaxonomiesCount; ++childIndex)
+        {
+            TaxonomySlot* oldEffect = GetNthChildSlot(oldTable, particles, childIndex);
+            if(definition == oldEffect->particleEffect)
+            {
+                oldHashID = oldEffect->stringHashID;
+                break;
+            }
+        }
+        
+        if(oldHashID)
+        {
+            TaxonomySlot* newParticles = GetSlotForTaxonomy(newTable, newTable->particleEffectsTaxonomy);
+            for(u32 childIndex = 0; childIndex < newParticles->subTaxonomiesCount; ++childIndex)
+            {
+                TaxonomySlot* newEffect = GetNthChildSlot(newTable, newParticles, childIndex);
+                if(oldHashID == newEffect->stringHashID)
+                {
+                    effect->definition = newEffect->particleEffect;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            TaxonomySlot* effectSlot = GetNthChildSlot(newTable, newTable->particleEffectsTaxonomy, 0);
+            if(effectSlot)
+            {
+                effect->definition = effectSlot->particleEffect; 
+            }
+            else
+            {
+                InvalidCodePath;
+            }
+        }
+    }
 }
 #endif
 

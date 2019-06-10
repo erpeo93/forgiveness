@@ -474,6 +474,7 @@ inline b32 SpecialHandling(char* name)
     
     if(StrEqual(name, "leafName") ||
        StrEqual(name, "trunkName") ||
+       StrEqual(name, "particleName") ||
        StrEqual(name, "name"))
     {
         result = true;

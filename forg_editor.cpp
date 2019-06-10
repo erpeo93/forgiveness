@@ -192,6 +192,11 @@ inline void FinalizeShortcut(ShortcutSlot* shortcut, u32 taxonomy)
     {
         taxTable_->generatorTaxonomy = taxonomy;
     }
+    else if(StrEqual(name, "particleEffects"))
+    {
+        taxTable_->particleEffectsTaxonomy = taxonomy;
+    }
+    
     
 }
 
@@ -3599,6 +3604,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 
                 updater->type = ParticleUpdater_Standard;
                 
+                updater->bitmapID = {};
+                updater->particleHashID = StringHash(GetValue(phases, "particleName"));
+                updater->startDrawingFollowingBitmapAt = ElemR32(phases, "startDrawingFollowingPhaseAt");
                 updater->unitDP = {};
                 updater->ddP = ToV3_4x(StructV3(phases, "acceleration"));
                 updater->UpVector = {};

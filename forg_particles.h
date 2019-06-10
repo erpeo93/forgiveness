@@ -33,6 +33,10 @@ struct ParticleUpdater
 {
     ParticleUpdaterType type;
     
+    BitmapId bitmapID;
+    u64 particleHashID;
+    r32 startDrawingFollowingBitmapAt;
+    
     V3_4x unitDP;
     V3_4x ddP;
     V3_4x UpVector;

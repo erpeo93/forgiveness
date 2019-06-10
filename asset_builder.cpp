@@ -3027,6 +3027,33 @@ internal void WriteTrunks()
     WritePak(assets, "forgtrunks.pak" );
 }
 
+internal void WriteParticles()
+{
+    char* particlePath = "definition/particles";
+    
+    Assets assets_;
+    Assets* assets = &assets_;
+    InitializeAssets(assets);
+    
+    BeginAssetType(assets, Asset_Particle);
+    PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, particlePath);
+    if(bitmapGroup.fileCount)
+    {
+        for(u32 imageIndex = 0; imageIndex < bitmapGroup.fileCount; ++imageIndex)
+        {
+            PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, particlePath);
+            AddBitmapAsset(particlePath, bitmapHandle.name, 0, 0.5f, 0);
+            Win32CloseHandle(&bitmapHandle);
+        }
+    }
+    Win32GetAllFilesEnd(&bitmapGroup);
+    EndAssetType();
+    
+    
+    
+    WritePak(assets, "forgParticles.pak" );
+}
+
 internal void WriteMisc()
 {
     char* miscPath = "definition/misc";
@@ -3162,6 +3189,7 @@ internal void WriteBitmapsAndAnimations()
     WriteTrunks();
     WriteMisc();
     WriteUI();
+    WriteParticles();
     
     char* animationPath = "definition/animation";
     PlatformSubdirNames* subdir = (PlatformSubdirNames* ) malloc(sizeof(PlatformSubdirNames ) );

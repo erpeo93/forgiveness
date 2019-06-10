@@ -610,6 +610,7 @@ struct TaxonomyTable
     u32 behaviorTaxonomy;
     u32 tileTaxonomy;
     u32 generatorTaxonomy;
+    u32 particleEffectsTaxonomy;
     u32 rootBits;
     
     TaxonomySlot root;

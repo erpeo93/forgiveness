@@ -27,7 +27,6 @@ printTable(noPrefix) enum TagId
     
     Tag_codepoint,
     
-    // NOTE(Leonardo): these has to stay at exactly those indexes, 5 and 6!
     Tag_shotIndex,
     Tag_layerIndex,
     
@@ -89,6 +88,7 @@ printTable(noPrefix) enum AssetTypeId
     Asset_BookPage,
     Asset_BookElement,
     Asset_Bookmark,
+    Asset_Particle,
     
     Asset_count,
 };
