@@ -612,6 +612,8 @@ inline b32 NearEnoughForAction(ClientPlayer* myPlayer, u32 desiredAction, u64 ta
     return result;
 }
 
+
+
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
     
@@ -775,6 +777,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     
                     platformAPI.DEBUGWriteFile("editorErrors", worldMode->table->errors, sizeof(worldMode->table->errors[0]) * worldMode->table->errorCount);
                     
+                    
+                    TranslateParticleEffects(worldMode->particleCache, worldMode->oldTable, worldMode->table);
                     
                     for(u32 entityIndex = 0; entityIndex < ArrayCount(worldMode->entities); ++entityIndex)
                     {

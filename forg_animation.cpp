@@ -956,35 +956,22 @@ inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, ClientAnimat
         case AnimationEffect_SpawnParticles:
         {
             ParticleEffect* particleEffect = clientEffect->particleRef;
-            
             if(!particleEffect)
             {
-                particleEffect = GetNewParticleEffect(particleCache);
-                clientEffect->particleRef = particleEffect;
+                TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, effect->particleEffectTaxonomy);
+                
+                if(slot->particleEffect)
+                {
+                    particleEffect = GetNewParticleEffect(particleCache, slot->particleEffect);
+                    clientEffect->particleRef = particleEffect;
+                }
             }
             
-            SpawnParticles(particleCache, particleEffect, P, 1);
-        } break;
-        
-        case AnimationEffect_SpawnAshesTowardEntity:
-        {
-            
-#if 0            
-            u64 targetID = effect->targetID;
-            ClientEntity* target = GetEntityClient(worldMode, targetID);
-            
-            if(target)
+            if(particleEffect)
             {
-                SpawnAshFromSourceToDest(particleCache, P, target->P, effect->color, 1, effect->dim, effect->timeToArriveAtDest);
+                //UpdateParticleEffectData(P);
+                SpawnParticles(particleCache, particleEffect, P, 1);
             }
-            
-            effect->timer += timeToAdvance;
-            if(effect->timer >= effect->targetTimer)
-            {
-                effect->type = AnimationEffect_None;
-            }
-#endif
-            
         } break;
     }
 }

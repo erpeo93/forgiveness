@@ -5,6 +5,44 @@
 #define M(a, i) (((float *)&(a))[i])
 #define Mi(a, i) (((u32 *)&(a))[i])
 
+inline __m128 operator*(__m128 A, __m128 B)
+{
+    __m128 result = _mm_mul_ps(A, B);
+    return result;
+}
+
+inline __m128 operator+(__m128 A, __m128 B)
+{
+    __m128 result = _mm_add_ps(A, B);
+    return result;
+}
+
+inline __m128 operator-(__m128 A, __m128 B)
+{
+    __m128 result = _mm_sub_ps(A, B);
+    return result;
+}
+
+inline __m128& operator+=(__m128 A, __m128 B)
+{
+    A = _mm_add_ps(A, B);
+    return A;
+}
+
+inline __m128& operator-=(__m128 A, __m128 B)
+{
+    A = _mm_sub_ps(A, B);
+    return A;
+}
+
+inline __m128& operator*=(__m128 A, __m128 B)
+{
+    A = _mm_mul_ps(A, B);
+    return A;
+}
+
+
+
 
 struct V3_4x
 {
@@ -126,6 +164,18 @@ inline V3_4x ToV3_4x(Vec3 A)
     result.x = _mm_set1_ps( A.x );
     result.y = _mm_set1_ps( A.y );
     result.z = _mm_set1_ps( A.z );
+    
+    return result;
+}
+
+
+inline V4_4x ToV4_4x(Vec4 A)
+{
+    V4_4x result;
+    result.r = _mm_set1_ps(A.r);
+    result.g = _mm_set1_ps(A.g);
+    result.b = _mm_set1_ps(A.b);
+    result.a = _mm_set1_ps(A.a);
     
     return result;
 }

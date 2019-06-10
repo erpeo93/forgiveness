@@ -88,13 +88,43 @@ internal void SpawnAshFromSourceToDest(ParticleCache* cache, Vec3 PStart, Vec3 P
 #define MMSetRandomize(seq, value, magnitude) _mm_set_ps(value + RandomBil(seq) * magnitude, value + RandomBil(seq) * magnitude, value + RandomBil(seq) * magnitude, value + RandomBil(seq) * magnitude);
 
 
+#if 0
+struct ParticleEffectData
+{
+	Vec3 sourceP;
+	Vec3 sourceVel;
+	Vec3 sourceAcc;
+	Rect3 sourceBounds3D;
+	Rect2 sourceBounds2D;
+    
+	Vec3 targetP;
+	Vec3 targetVel;
+	Vec3 targetAcc;
+	Rect3 targetBounds3D;
+	Rect2 targetBounds2D;
+};
+
+inline void FillParticleEffectData(ParticleEffect* effect, Vec3 sourceP, Vec3 sourceVel, Vec3 sourceAcc, Rect3 sourceBounds, Vec3 targetP, Vec3 targetVel, Vec3 targetAcc, Rect3 targetBounds)
+{
+	effect->data.sourceP = sourceP;
+	effect->data.sourceVel = sourceVel;
+	effect->data.sourceAcc = sourceAcc;
+	effect->data.sourceBounds = sourceBounds;
+    
+	effect->data.sourceP = sourceP;
+	effect->data.sourceVel = sourceVel;
+	effect->data.sourceAcc = sourceAcc;
+	effect->data.sourceBounds = sourceBounds;
+}
+#endif
+
 internal void SpawnParticles(ParticleCache* cache, ParticleEffect* effect, Vec3 atPInit, u32 particle4xCount)
 {
     effect->particle4xCount += particle4xCount;
     RandomSequence* entropy = &cache->particleEntropy;
     Vec3 atP = atPInit - cache->deltaParticleP;
     
-    ParticleEmitter* emitter = &effect->emitter;
+    ParticleEmitter* emitter = &effect->definition->emitter;
     for( u32 newParticle = 0; newParticle < particle4xCount; newParticle++ )
     {
         Particle_4x *A;
@@ -140,11 +170,11 @@ internal void SpawnParticles(ParticleCache* cache, ParticleEffect* effect, Vec3 
 inline Lights GetLights(GameModeWorld* worldMode, Vec3 P);
 inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleUpdater* updater, Particle_4x* A, RenderGroup* group, V3_4x frameDisplacement, r32 dt, b32 sine)
 {
+    __m128 dt4x = MMSetExpr(dt);
     switch(updater->type)
     {
         case ParticleUpdater_Sine:
         {
-            __m128 dt4x = MMSetExpr(dt);
             A->P += frameDisplacement;
             A->lerp4x = _mm_add_ps(A->lerp4x, _mm_mul_ps(dt4x, updater->lerpVel4x));
             A->C.a = _mm_add_ps(A->C.a, _mm_mul_ps(dt4x, updater->lerpAlpha4x));
@@ -166,15 +196,13 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleUpdater*
             A->C += ((0.5f * Square(dt) * updater->ddC) + (dt * A->dC));
             A->dC += dt * updater->ddC;
             A->C = Clamp01(A->C);
+            
+            A->height4x += dt4x * updater->dHeight;
+            A->angle4x += dt4x * updater->dAngle;
 #if 0
             if( particle->P.z < 0 )
             {
                 particle->P.z = 0;
-            }
-            
-            if(color.a > 0.9f)
-            {
-                color.a = 0.9f * Clamp01MapToRange( 1.0f, color.a, 0.9f );
             }
 #endif
         } break;
@@ -249,6 +277,22 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleUpdater*
     }
 }
 
+inline ParticleUpdater* GetUpdater(ParticleEffect* effect, r32 ttl)
+{
+    ParticleUpdater* result = 0;
+    
+    for(u32 phaseIndex = 0; phaseIndex < effect->definition->phaseCount; ++phaseIndex)
+    {
+        ParticlePhase* phase = effect->definition->phases + phaseIndex;
+        if(phase->ttlMax >= ttl && phase->ttlMin <= ttl)
+        {
+            result = &phase->updater;
+            break;
+        }
+    }
+    return result;
+}
+
 internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cache, ParticleEffect* effect, r32 dt, Vec3 frameDisplacementInit, RenderGroup* group)
 {
     V3_4x frameDisplacement = ToV3_4x(frameDisplacementInit);
@@ -268,8 +312,12 @@ internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cac
         }
         else
         {
-            ParticleUpdater* updater = &effect->updater;
-            UpdateAndRenderParticle4x(worldMode, updater, particle, group, frameDisplacement, dt, false);
+            r32 ttl = M(particle->ttl4x, 0);
+            ParticleUpdater* updater = GetUpdater(effect, ttl);
+            if(updater)
+            {
+                UpdateAndRenderParticle4x(worldMode, updater, particle, group, frameDisplacement, dt, false);
+            }
             particlePtr = &particle->next;
         }
     }
@@ -283,54 +331,14 @@ inline void FreeParticleEffect(ParticleEffect* effect)
     effect->active = false;
 }
 
-inline void InitEmitter(ParticleEmitter* emitter)
-{
-    emitter->type = ParticleEmitter_Standard;
-    
-    
-    emitter->lifeTime = 2.0f;
-    emitter->lifeTimeV = 0.0f;
-    
-    emitter->startPV = V3(0.1f, 0.1f, 0.1f);
-    
-    emitter->dP = V3(0, 0, 1);
-    emitter->dPV = V3(0.1f, 0.1f, 0.1f);
-    
-    emitter->C = V4(1.0f, 0.6f, 0.0f, 1.0f);
-    emitter->CV = V4(0.1f, 0.1f, 0.0f, 0.0f);
-    
-    emitter->dC = emitter->C * (1.0f / emitter->lifeTime);
-    emitter->dCV = V4(0, 0, 0, 0);
-    
-    emitter->angle = 45.0f;
-    emitter->angleV = 90.0f;
-    
-    emitter->height = 0.07f;
-    emitter->heightV = 0.01f;
-}
 
-inline void InitUpdater(ParticleUpdater* updater)
-{
-    updater->type = ParticleUpdater_Standard;
-    
-    updater->unitDP = {};
-    updater->ddP = {};
-    updater->UpVector = {};
-    updater->ddC = {};
-    updater->lerpVel4x = {};
-    updater->lerpAlpha4x = {};
-}
-
-inline ParticleEffect* GetNewParticleEffect(ParticleCache* cache)
+inline ParticleEffect* GetNewParticleEffect(ParticleCache* cache, ParticleEffectDefinition* definition)
 {
     ParticleEffect* result;
     FREELIST_ALLOC(result, cache->firstFreeEffect, PushStruct(&cache->pool, ParticleEffect));
     
     result->active = true;
-    
-    InitEmitter(&result->emitter);
-    InitUpdater(&result->updater);
-    
+    result->definition = definition;
     Assert(result->particle4xCount == 0);
     Assert(!result->firstParticle);
     

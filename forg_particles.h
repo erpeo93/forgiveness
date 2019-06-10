@@ -39,6 +39,9 @@ struct ParticleUpdater
     
     V4_4x ddC;
     
+    __m128 dHeight;
+    __m128 dAngle;
+    
     __m128 lerpVel4x;
     __m128 lerpAlpha4x;
 };
@@ -75,12 +78,21 @@ struct ParticleEmitter
     r32 heightV;
 };
 
+struct ParticlePhase
+{
+    r32 ttlMax;
+    r32 ttlMin;
+    
+    ParticleUpdater updater;
+};
+
+
+#define MAX_PHASE_COUNT 8
 struct ParticleEffect
 {
     b32 active;
     
-    ParticleEmitter emitter;
-    ParticleUpdater updater;
+    ParticleEffectDefinition* definition;
     
     u32 particle4xCount;
     Particle_4x* firstParticle;
@@ -101,4 +113,19 @@ struct ParticleCache
     ParticleEffect* firstFreeEffect;
     Particle_4x* firstFreeParticle4x;
     MemoryPool pool;
+};
+
+
+struct ParticleEffectDefinition
+{
+    ParticleEmitter emitter;
+    
+    u32 phaseCount;
+    ParticlePhase phases[MAX_PHASE_COUNT];
+    
+    union
+    {
+        ParticleEffectDefinition* next;
+        ParticleEffectDefinition* nextFree;
+    };
 };

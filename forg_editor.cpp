@@ -488,6 +488,10 @@ inline Vec3 ToV3(EditorElement* element, Vec3 default = {})
 }
 
 
+#define ElemR32(root, name) ToR32(GetValue(root, name))
+#define StructV3(root, name) ToV3(GetStruct(root, name))
+#define ColorV4(root, name) ToV4Color(GetStruct(root, name))
+
 
 #if FORG_SERVER
 #define EditorErrorLog(name) EditorErrorLogServer(__FUNCTION__, name)
@@ -1053,23 +1057,20 @@ inline AnimationEffect StandardColorEffect(Vec4 color, r32 fadeTime)
     return result;
 }
 
-inline AnimationEffect SpawnParticlesEffect(FluidSpawnType type)
+inline AnimationEffect SpawnParticlesEffect(char* particleEffectName)
 {
     AnimationEffect result = {};
     result.type = AnimationEffect_SpawnParticles;
     
-    return result;
-}
-
-inline AnimationEffect SpawnAshToDestEffect(Vec4 color, r32 lastingTime, r32 timeToArriveAtDest, r32 dim)
-{
-    AnimationEffect result = {};
-    result.flags = AnimationEffect_AllActions;
-    result.type = AnimationEffect_SpawnAshesTowardEntity;
-    result.targetTimer = lastingTime;
-    result.color = color;
-    result.timeToArriveAtDest = timeToArriveAtDest;
-    result.dim = dim;
+    TaxonomySlot* effectSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, particleEffectName);
+    if(effectSlot)
+    {
+    result.particleEffectTaxonomy = effectSlot->taxonomy;
+    }
+    else
+    {
+        EditorErrorLog(particleEffectName);
+    }
     
     return result;
 }
@@ -3318,7 +3319,8 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             char* type = GetValue(effects, "type");
             if(StrEqual(type, "perpetual"))
             {
-                AddPerpetualEffect(SpawnParticlesEffect(FluidSpawn_Fire));
+                char* effectName = GetValue(effects, "particleEffectName");
+                AddPerpetualEffect(SpawnParticlesEffect(effectName));
             }
             else
             {
@@ -3545,6 +3547,75 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         plant->leafStringHash = StringHash(GetValue(root, "leafName"));
         plant->trunkStringHash = StringHash(GetValue(root, "trunkName"));
     }
+#ifndef FORG_SERVER
+    else if(StrEqual(name, "particleEffectDefinition"))
+    {
+        if(currentSlot_->particleEffect)
+        {
+            TAXTABLE_DEALLOC(currentSlot_->particleEffect, ParticleEffectDefinition);
+        }
+        TAXTABLE_ALLOC(currentSlot_->particleEffect, ParticleEffectDefinition);
+        
+        ParticleEffectDefinition* definition = currentSlot_->particleEffect;
+        
+        EditorElement* emitterEl = GetElement(root, "emitter");
+        
+        ParticleEmitter* emitter = &definition->emitter;
+        emitter->type = ParticleEmitter_Standard;
+        
+        emitter->lifeTime = ElemR32(emitterEl, "lifeTime");
+        emitter->lifeTimeV = ElemR32(emitterEl, "lifeTimeV");
+        
+        emitter->startPV =StructV3(emitterEl, "startPV");
+        
+        emitter->dP = StructV3(emitterEl, "dP");
+        emitter->dPV = StructV3(emitterEl, "dPV");
+        
+        emitter->C = ColorV4(emitterEl, "color");
+        emitter->CV = ColorV4(emitterEl, "colorV");
+        
+        emitter->dC = ColorV4(emitterEl, "colorVelocity");
+        emitter->dCV = ColorV4(emitterEl, "colorVelocityV");
+        
+        emitter->angle = ElemR32(emitterEl, "angle");
+        emitter->angleV = ElemR32(emitterEl, "angleV");
+        
+        emitter->height = ElemR32(emitterEl, "height");
+        emitter->heightV = ElemR32(emitterEl, "heightV");
+        
+        
+        
+       
+        EditorElement* phases = GetList(root, "phases"); 
+        while(phases)
+        {
+            if(definition->phaseCount < ArrayCount(definition->phases))
+            {
+                ParticlePhase* phase = definition->phases + definition->phaseCount++;
+                phase->ttlMax = ElemR32(phases, "ttlMax");
+                phase->ttlMin = ElemR32(phases, "ttlMin");
+                
+                ParticleUpdater* updater = &phase->updater;
+                
+                updater->type = ParticleUpdater_Standard;
+                
+                updater->unitDP = {};
+                updater->ddP = ToV3_4x(StructV3(phases, "acceleration"));
+                updater->UpVector = {};
+                updater->ddC = ToV4_4x(ColorV4(phases, "colorAcceleration"));
+                
+                updater->dHeight = MMSetExpr(ElemR32(phases, "dHeight"));
+                updater->dAngle = MMSetExpr(ElemR32(phases, "dAngle"));
+                
+                updater->lerpVel4x = {};
+                updater->lerpAlpha4x = {};
+                
+            }
+            
+            phases = phases->next;
+        }
+    }
+#endif
     else if(StrEqual(name, "generatorParams"))
     {
         if(currentSlot_->generator)

@@ -169,7 +169,6 @@ enum AnimationEffectType
     AnimationEffect_None,
     AnimationEffect_ChangeColor,
     AnimationEffect_SpawnParticles,
-    AnimationEffect_SpawnAshesTowardEntity,
 };
 
 enum AnimationEffectFlags
@@ -187,6 +186,7 @@ struct AnimationEffect
     u32 triggerAction;
     u32 triggerEffectTaxonomy;
     
+    u64 targetID;
     
     u64 stringHashID;
     r32 timer;
@@ -201,11 +201,7 @@ struct AnimationEffect
         
         struct
         {
-            Vec4 color;
-            r32 timeToArriveAtDest;
-            r32 dim;
-            u64 targetID;
-            r32 targetTimer;
+            u32 particleEffectTaxonomy;
         };
     };
     

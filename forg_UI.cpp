@@ -3556,6 +3556,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTaxonomy(UI, "objects", "recipeTaxonomy");
         UIAddAutocompleteFromTaxonomy(UI, "tiles", "tileType");
         UIAddAutocompleteFromTaxonomy(UI, "root", "taxonomyName");
+        UIAddAutocompleteFromTaxonomy(UI, "particleEffects", "particleEffectName");
     }
     
     if(loadAssetAutocompletes)

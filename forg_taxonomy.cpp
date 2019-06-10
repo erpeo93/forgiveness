@@ -786,6 +786,11 @@ inline void TranslateUI(TaxonomyTable* oldTable, TaxonomyTable* newTable, UIStat
         }
     }
 }
+
+inline void TranslateParticleEffects(ParticleCache* cache, TaxonomyTable* oldTable, TaxonomyTable* newTable)
+{
+    InvalidCodePath;
+}
 #endif
 
 
