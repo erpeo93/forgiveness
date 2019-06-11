@@ -153,18 +153,11 @@ struct AnimationState
     Rect2 bounds;
     Vec2 cameraEntityOffset;
     
-    u32 lifePointsSeedResetCounter;
-    u32 spawnAshParticlesCount;
-    r32 ashIdleTimer;
-    Vec4 ashColor;
-    r32 ashParticleViewPercentage;
-    r32 ashDim;
-    
     r32 cameInTime;
     r32 goOutTime;
 };
 
-enum AnimationEffectType
+printTable(noPrefix) enum AnimationEffectType
 {
     AnimationEffect_None,
     AnimationEffect_ChangeColor,
@@ -180,16 +173,15 @@ enum AnimationEffectFlags
 
 struct AnimationEffect
 {
-    u32 flags;
     AnimationEffectType type;
     
-    
+    u32 flags;
     u32 triggerAction;
-    u32 triggerEffectTaxonomy;
-    
-    u64 targetID;
-    
     u64 stringHashID;
+    u32 triggerEffectTaxonomy;
+    u64 targetID;
+    r32 fadeTime;
+    r32 inTimer;
     r32 timer;
     
     union
@@ -197,12 +189,17 @@ struct AnimationEffect
         struct
         {
             Vec4 color;
-            r32 fadeTime;
         };
         
         struct
         {
             u32 particleEffectTaxonomy;
+        };
+        
+        struct
+        {
+            Vec3 lightColor;
+            r32 lightIntensity;
         };
     };
     

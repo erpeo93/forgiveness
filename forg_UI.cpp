@@ -475,7 +475,8 @@ inline b32 SpecialHandling(char* name)
     if(StrEqual(name, "leafName") ||
        StrEqual(name, "trunkName") ||
        StrEqual(name, "particleName") ||
-       StrEqual(name, "name"))
+       StrEqual(name, "name") ||
+       StrEqual(name, "animationPieceName"))
     {
         result = true;
     }
@@ -3518,6 +3519,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTable(UI, ForgDayPhase, "dayPhase");
         UIAddAutocompleteFromTable(UI, EffectIdentifier, "effectID");
         UIAddAutocompleteFromTable(UI, EffectTargetRangeType, "rangeType");
+        UIAddAutocompleteFromTable(UI, AnimationEffectType, "animationEffectType");
         
         UIAddAutocomplete(UI, "layoutName");
 		UIAddAutocomplete(UI, "pieceName");
@@ -3558,6 +3560,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTaxonomy(UI, "tiles", "tileType");
         UIAddAutocompleteFromTaxonomy(UI, "root", "taxonomyName");
         UIAddAutocompleteFromTaxonomy(UI, "particleEffects", "particleEffectName");
+        UIAddAutocompleteFromTaxonomy(UI, "effects", "triggerEffect");
     }
     
     if(loadAssetAutocompletes)

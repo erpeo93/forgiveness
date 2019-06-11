@@ -64,6 +64,7 @@ struct WorldChunk
     WorldTile tiles[CHUNK_DIM][CHUNK_DIM];
     
     TempLight* firstTempLight;
+    TempLight* firstTempLightNextFrame;
     
     EntityBlock* entities;
     WorldChunk* next;

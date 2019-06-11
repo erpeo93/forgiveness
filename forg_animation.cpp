@@ -938,17 +938,8 @@ inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, ClientAnimat
     {
         case AnimationEffect_ChangeColor:
         {
-            if(effect->triggerAction == entity->effectReferenceAction)
-            {
-                effect->timer += timeToAdvance;
-                effect->timer = Min(effect->timer, effect->fadeTime);
-            }
-            else
-            {
-                effect->timer -= timeToAdvance;
-            }
-            
-            r32 effectPower = Clamp01(effect->timer / effect->fadeTime);
+            effect->inTimer = Min(effect->inTimer, effect->fadeTime);
+            r32 effectPower = Clamp01(effect->inTimer / effect->fadeTime);
             Vec4 effectColor = Lerp(V4(1, 1, 1, 1), effectPower, effect->color);
             *colorIn = Hadamart(*colorIn, effectColor);
         } break;
@@ -975,8 +966,7 @@ inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, ClientAnimat
         
         case AnimationEffect_Light:
         {
-            InvalidCodePath;
-            //AddLightToGridForNextFrame();
+            AddLightToGridNextFrame(worldMode, P, effect->lightColor, effect->lightIntensity);
         } break;
     }
 }
@@ -991,15 +981,23 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
         for(ClientAnimationEffect** effectPtr = &entityC->firstActiveEffect; *effectPtr;)
         {
             ClientAnimationEffect* effect = *effectPtr;
-            if(!(effect->effect.flags & AnimationEffect_AllActions) && (effect->effect.triggerAction == newAction))
+            if(!(effect->effect.flags & AnimationEffect_AllActions) && (effect->effect.triggerAction == entityC->effectReferenceAction))
             {
                 if(effect->particleRef)
                 {
                     FreeParticleEffect(effect->particleRef);
                 }
                 
-                *effectPtr = effect->next;
-                FREELIST_DEALLOC(effect, worldMode->firstFreeEffect);
+                if(effect->effect.fadeTime > 0)
+                {
+                    effect->effect.timer = effect->effect.fadeTime;
+                    effectPtr = &effect->next;
+                }
+                else
+                {
+                    *effectPtr = effect->next;
+                    FREELIST_DEALLOC(effect, worldMode->firstFreeEffect);
+                }
             }
             else
             {
@@ -1008,9 +1006,8 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
         }
         
         
-        b32 found = false;
         u32 currentTaxonomy = entityC->taxonomy;
-        while(currentTaxonomy && !found)
+        while(currentTaxonomy)
         {
             TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, currentTaxonomy);
             for(AnimationEffect* effect = slot->firstAnimationEffect; effect; effect = effect->next)
@@ -1024,8 +1021,6 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
                     newEffect->particleRef = 0;
                     
                     FREELIST_INSERT(newEffect, entityC->firstActiveEffect);
-                    found = true;
-                    break;
                 }
             }
             currentTaxonomy = GetParentTaxonomy(worldMode->table, currentTaxonomy);
@@ -1044,6 +1039,7 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
         ClientAnimationEffect* effect = *effectPtr;
         if(effect->effect.timer > 0)
         {
+            effect->effect.inTimer -= timeToAdvance;
             effect->effect.timer -= timeToAdvance;
             if(effect->effect.timer <= 0)
             {
@@ -1062,6 +1058,7 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
         }
         else
         {
+            effect->effect.inTimer += timeToAdvance;
             effectPtr = &effect->next;
         }
     }
@@ -1334,17 +1331,6 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                             result.screenInRect = true;
                         }
                     }
-                    
-                    Vec3 particleP = P + pieceParams.cameraOffset.x * group->gameCamera.X + pieceParams.cameraOffset.y * group->gameCamera.Y + pieceParams.cameraOffset.z * group->gameCamera.Z;
-                    Vec3 velocity = V3(0, 0, 0.14f);
-                    r32 lifeTime = 2.5f;
-                    
-                    AnimationState* animationState = &input->entity->animation;
-                    if(animationState->spawnAshParticlesCount > 0)
-                    {
-                        //SpawnAsh(input->worldMode->particleCache, particleP, velocity, lifeTime, animationState->ashColor, animationState->spawnAshParticlesCount, animationState->ashParticleViewPercentage, animationState->ashDim);
-                    }
-                    
                 }
                 
                 
@@ -1684,14 +1670,6 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
     input->relativeScreenMouseP = worldMode->UI->relativeScreenMouse;
     
     
-    r32 lifePointFadeDuration = 0.08f;
-    r32 lifePointThreesold = 0.2f;
-    r32 lifePointRatio = entityC->lifePoints / entityC->maxLifePoints;
-    
-    if(lifePointRatio > lifePointThreesold)
-    {
-        ++entityC->animation.lifePointsSeedResetCounter;
-    }
     
     input->cameInTime = entityC->animation.cameInTime;
     input->goOutTime = entityC->animation.goOutTime;
@@ -2254,10 +2232,6 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     Vec4 ashColor = Lerp(ashDead, ratio, ashAlive);
     
     
-    entityC->animation.ashColor = ashColor;
-    entityC->animation.ashDim = 0.06f;
-    entityC->animation.ashParticleViewPercentage = 1.0f;
-    
     
     
     AnimationOutput result = {};
@@ -2274,17 +2248,6 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             Vec4 ignored;
             DispatchClientAnimationEffect(worldMode, effect, entityC, animationP, &ignored, timeToUpdate);
         }
-    }
-    
-    
-    entityC->animation.ashIdleTimer += timeToUpdate;
-    if(!entityC->animation.spawnAshParticlesCount && entityC->animation.ashIdleTimer >= 1.3f)
-    {
-        entityC->animation.ashIdleTimer = 0;
-        entityC->animation.spawnAshParticlesCount = 1;
-        entityC->animation.ashParticleViewPercentage = 0.13f;
-        entityC->animation.ashColor.a = 1.0f;
-        entityC->animation.ashDim = 0.05f;
     }
     
     EntityAction soundAction = entityC->action;

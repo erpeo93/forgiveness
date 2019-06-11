@@ -91,6 +91,7 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectDa
             r32 normRadiants = normPhase * M(updater->totalRadiants, 0);
             r32 radiantsSine = Sin(normRadiants);
             
+            A->P += frameDisplacement;
             finalParticleP = A->P + normPhase * dP + radiantsSine * upVector4x;
             
             

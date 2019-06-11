@@ -644,6 +644,7 @@ int main( int argc, char** argv )
         "forg_taxonomy.cpp",
         "forg_editor.h",
         "forg_client.h",
+        "forg_animation.h",
     };
     for( int fileIndex = 0; fileIndex < sizeof( fileNames ) / sizeof( fileNames[0] ); ++fileIndex )
     {

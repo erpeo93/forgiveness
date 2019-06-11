@@ -1004,61 +1004,61 @@ inline void AddActor(char* name, char* requiredTime)
 
 
 #ifndef FORG_SERVER
-
-inline void AddActionEffect(AnimationEffect effect, u32 action, char* pieceName = 0)
+inline void AddAnimationEffect(AnimationEffect effect, u32 flags, u32 triggerAction, char* triggerEffect, r32 timer, r32 fadeTime, char* pieceName)
 {
     AnimationEffect* dest;
     TAXTABLE_ALLOC(dest, AnimationEffect);
+    *dest = effect;
+    
+    dest->flags = flags;
+    dest->triggerAction = triggerAction;
+    dest->timer = timer;
+    dest->fadeTime = fadeTime;
+    
     if(pieceName)
     {
-        effect.stringHashID = StringHash(pieceName);
+        if(StrEqual(pieceName, "all"))
+        {
+            dest->stringHashID = 0xffffffffffffffff;
+        }
+        else if(StrEqual(pieceName, "none"))
+        {
+            dest->stringHashID = 0;        
+        }
+        else
+        {
+            dest->stringHashID = StringHash(pieceName);
+        }
     }
     else
     {
-        effect.stringHashID = 0;
+        dest->stringHashID = 0;
     }
     
-    effect.triggerAction = action;
     
-    *dest = effect;
-    dest->timer = 0;
+    
+    if(!StrEqual(triggerEffect, "invalid"))
+    {
+        TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, triggerEffect);
+        if(slot)
+        {
+            dest->triggerEffectTaxonomy = slot->taxonomy;
+        }
+        else
+        {
+            EditorErrorLog(triggerEffect);
+        }   
+    }
     
     FREELIST_INSERT(dest, currentSlot_->firstAnimationEffect);
 }
 
 
-inline void AddTriggerEffect(AnimationEffect effect, char* effectName)
-{
-    TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, effectName);
-    
-    if(slot)
-    {
-        AnimationEffect* dest;
-        TAXTABLE_ALLOC(dest, AnimationEffect);
-        effect.triggerEffectTaxonomy = slot->taxonomy;
-        
-        *dest = effect;
-        dest->timer = 0;
-        
-        FREELIST_INSERT(dest, currentSlot_->firstAnimationEffect);
-    }
-    else
-    {
-        EditorErrorLog(effectName);
-    }
-}
-
-inline void AddPerpetualEffect(AnimationEffect effect, char* pieceName = 0)
-{
-    AddActionEffect(effect, Action_None, pieceName);
-}
-
-inline AnimationEffect StandardColorEffect(Vec4 color, r32 fadeTime)
+inline AnimationEffect ColorationEffect(Vec4 color)
 {
     AnimationEffect result = {};
     result.type = AnimationEffect_ChangeColor;
     result.color = color;
-    result.fadeTime = fadeTime;
     return result;
 }
 
@@ -1076,6 +1076,17 @@ inline AnimationEffect SpawnParticlesEffect(char* particleEffectName)
     {
         EditorErrorLog(particleEffectName);
     }
+    
+    return result;
+}
+
+inline AnimationEffect LightEffect(Vec3 color, r32 intensity)
+{
+    AnimationEffect result = {};
+    result.type = AnimationEffect_Light;
+    
+    result.lightColor = color;
+    result.lightIntensity = intensity;
     
     return result;
 }
@@ -1131,16 +1142,6 @@ inline void AddAssAlteration(char* assIndex, char* scaleX, char* scaleY, char* o
     
     FREELIST_INSERT(alt, currentSlot_->firstAssAlteration);
 }
-
-internal void ReadAnimationData()
-{
-    
-#if 0    
-    AddActionEffect(StandardColorEffect(V4(0, 0, 1, 1), 1.0f), Action_Attack, "belly");
-    AddTriggerEffect(SpawnAshToDestEffect(V4(1, 0, 0, 1), 2.0f, 1.0f, 0.05f), "generic_spawn");
-#endif
-}
-
 
 
 
@@ -3324,17 +3325,43 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         EditorElement* effects = root->firstInList;
         while(effects)
         {
-            char* type = GetValue(effects, "type");
-            if(StrEqual(type, "perpetual"))
+            AnimationEffectType type = (AnimationEffectType) GetValuePreprocessor(AnimationEffectType, GetValue(effects, "animationEffectType"));
+            AnimationEffect effect = {};
+            // TODO(Leonardo): parse the flags as well!
+            u32 flags = 0;
+            EntityAction action = (EntityAction) GetValuePreprocessor(EntityAction, GetValue(effects, "action"));
+            char* triggerEffect = GetValue(effects, "triggerEffect");
+            char* pieceName = GetValue(effects, "animationPieceName");
+            r32 timer = ElemR32(effects, "timer");
+            r32 fadeTime = ElemR32(effects, "fadeInTimer");
+            
+            switch(type)
             {
-                char* effectName = GetValue(effects, "particleEffectName");
-                AddPerpetualEffect(SpawnParticlesEffect(effectName));
-            }
-            else
-            {
-                InvalidCodePath;
+                case AnimationEffect_ChangeColor:
+                {
+                    Vec4 color = ColorV4(effects, "color");
+                    effect = ColorationEffect(color);       
+                } break;
+                
+                case AnimationEffect_SpawnParticles:
+                {
+                    char* effectName = GetValue(effects, "particleEffectName");
+                    effect = SpawnParticlesEffect(effectName);       
+                } break;
+                
+                case AnimationEffect_Light:
+                {
+                    Vec4 color = ColorV4(effects, "color");
+                    r32 intensity = ElemR32(effects, "lightIntensity");
+                    effect = LightEffect(color.rgb, intensity);     
+                } break;
             }
             
+            if(effect.type)
+            {
+               AddAnimationEffect(effect, flags, action, triggerEffect, timer, fadeTime, pieceName);
+            }
+          
             effects = effects->next;
         }
     }
