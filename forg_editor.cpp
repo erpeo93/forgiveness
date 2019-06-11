@@ -1080,9 +1080,11 @@ inline AnimationEffect SpawnParticlesEffect(char* particleEffectName)
     return result;
 }
 
-inline void AddLight(r32 intensity, Vec3 color)
+inline void AddLight(r32 minIntensity, r32 maxIntensity, Vec3 color)
 {
-    currentSlot_->lightIntensity = intensity;
+    currentSlot_->minLightIntensity = minIntensity;
+    currentSlot_->maxLightIntensity = maxIntensity;
+    currentSlot_->hasLight = true;
     currentSlot_->lightColor = color;
 }
 
@@ -3312,8 +3314,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     }
     else if(StrEqual(name, "light"))
     {
-        char* intensity = GetValue(root, "intensity");
-        AddLight(ToR32(intensity), V3(1, 1, 1));
+        char* min = GetValue(root, "minIntensity");
+        char* max = GetValue(root, "maxIntensity");
+        AddLight(ToR32(min), ToR32(max), V3(1, 1, 1));
     }
     else if(StrEqual(name, "animationEffects"))
     {
@@ -3619,7 +3622,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 updater->dScaleY = MMSetExpr(ElemR32(phases, "dScaleY"));
                 updater->dAngle = MMSetExpr(ElemR32(phases, "dAngle"));
                
-                updater->totalRadiants = MMSetExpr(DegToRad(180.0f));
+                updater->totalRadiants = MMSetExpr(DegToRad(720.0f));
             }
             
             phases = phases->next;

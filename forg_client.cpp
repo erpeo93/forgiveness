@@ -171,9 +171,7 @@ internal void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
         
         *effectPtr = effect->next;
         
-        BeginTicketMutex(&worldMode->animationEffectMutex);
         FREELIST_DEALLOC(effect, worldMode->firstFreeEffect);
-        EndTicketMutex(&worldMode->animationEffectMutex);
     }
     
     entity->prediction.type = Prediction_None;
@@ -1054,9 +1052,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             
                             if(entity->identifier && !IsSet(entity, Flag_deleted))
                             {
-                                if(slot->lightIntensity)
+                                if(slot->hasLight)
                                 {
-                                    AddLightToGrid(worldMode, entity->P, slot->lightColor, slot->lightIntensity);
+                                    AddLightToGrid(worldMode, entity->P, slot->lightColor, entity->lightIntensity);
                                 }
                             }
                             

@@ -134,8 +134,15 @@ inline r32 RadToDeg( r32 rad )
 
 r32 RadiantsBetweenVectors( Vec2 v1, Vec2 v2 )
 {
-    r32 cosine = Dot( v1, v2 ) / ( Length( v1 ) * Length( v2 ) );
-    r32 result = ArcCos( cosine );
+	r32 result = 0;
+    
+	r32 divisor = Length(v1) * Length(v2);
+    
+	if(divisor)
+	{
+        r32 cosine = Dot(v1, v2) /  divisor;
+        result = ArcCos(cosine);
+	}
     
     return result;
 }

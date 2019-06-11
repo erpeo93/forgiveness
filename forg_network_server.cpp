@@ -368,6 +368,7 @@ internal u16 PrepareEntityUpdate(SimRegion* region, SimEntity* entity, unsigned 
     r32 lifePoints = 0;
     r32 stamina = 0;
     r32 maxLifePoints = 0;
+    r32 lightIntensity = 2.0f;
     u8 action = 0;
     
     r32 plantTotalAge = 0;
@@ -384,7 +385,7 @@ internal u16 PrepareEntityUpdate(SimRegion* region, SimEntity* entity, unsigned 
     }
     
     unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
-    Pack("llVLLQCLddddd", P.chunkX, P.chunkY, P.chunkOffset, entity->flags, entity->taxonomy, entity->gen.generic, SafeTruncateToU8(action), entity->recipeTaxonomy, lifePoints, stamina, maxLifePoints, entity->status, entity->generationIntensity);
+    Pack("llVLLQCLdddddd", P.chunkX, P.chunkY, P.chunkOffset, entity->flags, entity->taxonomy, entity->gen.generic, SafeTruncateToU8(action), entity->recipeTaxonomy, lifePoints, stamina, maxLifePoints, entity->status, entity->generationIntensity, lightIntensity);
     u16 totalSize = ForgEndPacket_( buff_, buff );
     return totalSize;
 }

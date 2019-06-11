@@ -169,6 +169,7 @@ enum AnimationEffectType
     AnimationEffect_None,
     AnimationEffect_ChangeColor,
     AnimationEffect_SpawnParticles,
+    AnimationEffect_Light,
 };
 
 enum AnimationEffectFlags

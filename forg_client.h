@@ -233,6 +233,8 @@ struct ClientEntity
     r32 lifePoints;
     r32 stamina;
     r32 maxLifePoints;
+    r32 lightIntensity;
+    
     
     // TODO(Leonardo): encode P in 6 bytes total when sending complete update
     // TODO(Leonardo): encode P in 3 bytes total when sending intra-frame update
@@ -367,8 +369,6 @@ struct GameModeWorld
     PlantStem* firstFreePlantStem;
     ClientPlant* firstFreePlant;
     ClientRock* firstFreeRock;
-    
-    TicketMutex animationEffectMutex;
     ClientAnimationEffect* firstFreeEffect;
     
     RandomSequence leafSequence;

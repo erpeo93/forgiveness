@@ -972,6 +972,12 @@ inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, ClientAnimat
                 FillParticleEffectData(particleEffect, P, P + V3(0, 0, 2));
             }
         } break;
+        
+        case AnimationEffect_Light:
+        {
+            InvalidCodePath;
+            //AddLightToGridForNextFrame();
+        } break;
     }
 }
 
@@ -985,8 +991,7 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
         for(ClientAnimationEffect** effectPtr = &entityC->firstActiveEffect; *effectPtr;)
         {
             ClientAnimationEffect* effect = *effectPtr;
-            if(!effect->effect.type ||
-               !(effect->effect.flags & AnimationEffect_AllActions) && (effect->effect.triggerAction == newAction))
+            if(!(effect->effect.flags & AnimationEffect_AllActions) && (effect->effect.triggerAction == newAction))
             {
                 if(effect->particleRef)
                 {
@@ -1027,6 +1032,38 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
         }
         
         entityC->effectReferenceAction = newAction;
+    }
+    
+    
+    
+    
+    
+    
+    for(ClientAnimationEffect** effectPtr = &entityC->firstActiveEffect; *effectPtr;)
+    {
+        ClientAnimationEffect* effect = *effectPtr;
+        if(effect->effect.timer > 0)
+        {
+            effect->effect.timer -= timeToAdvance;
+            if(effect->effect.timer <= 0)
+            {
+                if(effect->particleRef)
+                {
+                    FreeParticleEffect(effect->particleRef);
+                }
+                
+                *effectPtr = effect->next;
+                FREELIST_DEALLOC(effect, worldMode->firstFreeEffect);
+            }
+            else
+            {
+                effectPtr = &effect->next;
+            }
+        }
+        else
+        {
+            effectPtr = &effect->next;
+        }
     }
 }
 
@@ -1276,7 +1313,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     
                     for(ClientAnimationEffect* effect = input->firstActiveEffect; effect; effect = effect->next)
                     {
-                        if(effect->effect.stringHashID == sprite->stringHashID)
+                        if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
                         {
                             DispatchClientAnimationEffect(input->worldMode, effect, input->entity, P, &color, input->timeToAdvance);
                         }

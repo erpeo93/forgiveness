@@ -699,7 +699,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 EntityAction oldAction = e->action;
                 u32 oldTaxonomy = e->taxonomy;
                 
-                Unpack("llVLLQCLddddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->recipeTaxonomy, &e->lifePoints, &e->stamina, &e->maxLifePoints, &e->status, &e->generationIntensity);
+                Unpack("llVLLQCLdddddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->recipeTaxonomy, &e->lifePoints, &e->stamina, &e->maxLifePoints, &e->status, &e->generationIntensity, &e->lightIntensity);
                 
                 if(e->action != oldAction)
                 {
@@ -906,14 +906,11 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                             if(effect->triggerEffectTaxonomy == effectTaxonomy)
                             {
                                 ClientAnimationEffect* newEffect;
-                                
-                                BeginTicketMutex(&worldMode->animationEffectMutex);
                                 FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, ClientAnimationEffect, NoClear()));
                                 
                                 newEffect->effect = *effect;
                                 newEffect->effect.targetID = targetID;
                                 FREELIST_INSERT(newEffect, actor->firstActiveEffect);
-                                EndTicketMutex(&worldMode->animationEffectMutex);
                                 found = true;
                                 break;
                             }
