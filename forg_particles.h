@@ -4,11 +4,11 @@ struct Particle_4x
     V3_4x P;
     V3_4x dP;
     __m128 angle4x;
-    __m128 height4x;
+    __m128 scaleX4x;
+    __m128 scaleY4x;
     
     V4_4x C;
     V4_4x dC;
-    
     
     union
     {
@@ -17,8 +17,8 @@ struct Particle_4x
     };
     u64 padding;
     __m128 ttl4x;
-    __m128 lerp4x;
-    __m128 padding3;
+    __m128 padding1;
+    __m128 padding2;
 };
 
 enum ParticleUpdaterType
@@ -29,6 +29,7 @@ enum ParticleUpdaterType
     ParticleUpdater_Count
 };
 
+
 struct ParticleUpdater
 {
     ParticleUpdaterType type;
@@ -37,17 +38,15 @@ struct ParticleUpdater
     u64 particleHashID;
     r32 startDrawingFollowingBitmapAt;
     
-    V3_4x unitDP;
     V3_4x ddP;
+    V4_4x ddC;
     V3_4x UpVector;
     
-    V4_4x ddC;
-    
-    __m128 dHeight;
+    __m128 dScaleX;
+    __m128 dScaleY;
     __m128 dAngle;
     
-    __m128 lerpVel4x;
-    __m128 lerpAlpha4x;
+    __m128 totalRadiants;
 };
 
 enum ParticleEmitterType
@@ -60,6 +59,8 @@ enum ParticleEmitterType
 struct ParticleEmitter
 {
     ParticleEmitterType type;
+    
+    r32 particlesPerSec;
     
     r32 lifeTime;
     r32 lifeTimeV;
@@ -78,8 +79,11 @@ struct ParticleEmitter
     r32 angle;
     r32 angleV;
     
-    r32 height;
-    r32 heightV;
+    r32 scaleX;
+    r32 scaleXV;
+    
+    r32 scaleY;
+    r32 scaleYV;
 };
 
 struct ParticlePhase
@@ -91,11 +95,19 @@ struct ParticlePhase
 };
 
 
+struct ParticleEffectData
+{
+	Vec3 P;
+    Vec3 destP;
+};
+
 #define MAX_PHASE_COUNT 8
 struct ParticleEffect
 {
     b32 active;
     
+    ParticleEffectData data;
+    r32 spawnParticlesLeftOff;
     ParticleEffectDefinition* definition;
     
     u32 particle4xCount;

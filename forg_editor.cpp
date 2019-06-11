@@ -3568,6 +3568,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         ParticleEmitter* emitter = &definition->emitter;
         emitter->type = ParticleEmitter_Standard;
         
+        emitter->particlesPerSec = ElemR32(emitterEl, "particlesPerSec");
         emitter->lifeTime = ElemR32(emitterEl, "lifeTime");
         emitter->lifeTimeV = ElemR32(emitterEl, "lifeTimeV");
         
@@ -3585,8 +3586,11 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         emitter->angle = ElemR32(emitterEl, "angle");
         emitter->angleV = ElemR32(emitterEl, "angleV");
         
-        emitter->height = ElemR32(emitterEl, "height");
-        emitter->heightV = ElemR32(emitterEl, "heightV");
+        emitter->scaleX = ElemR32(emitterEl, "scaleX");
+        emitter->scaleXV = ElemR32(emitterEl, "scaleXV");
+        
+        emitter->scaleY = ElemR32(emitterEl, "scaleY");
+        emitter->scaleYV = ElemR32(emitterEl, "scaleYV");
         
         
         
@@ -3602,22 +3606,20 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 
                 ParticleUpdater* updater = &phase->updater;
                 
-                updater->type = ParticleUpdater_Standard;
+                updater->type = ParticleUpdater_Sine;
                 
                 updater->bitmapID = {};
                 updater->particleHashID = StringHash(GetValue(phases, "particleName"));
                 updater->startDrawingFollowingBitmapAt = ElemR32(phases, "startDrawingFollowingPhaseAt");
-                updater->unitDP = {};
                 updater->ddP = ToV3_4x(StructV3(phases, "acceleration"));
                 updater->UpVector = {};
                 updater->ddC = ToV4_4x(ColorV4(phases, "colorAcceleration"));
                 
-                updater->dHeight = MMSetExpr(ElemR32(phases, "dHeight"));
+                updater->dScaleX = MMSetExpr(ElemR32(phases, "dScaleX"));
+                updater->dScaleY = MMSetExpr(ElemR32(phases, "dScaleY"));
                 updater->dAngle = MMSetExpr(ElemR32(phases, "dAngle"));
-                
-                updater->lerpVel4x = {};
-                updater->lerpAlpha4x = {};
-                
+               
+                updater->totalRadiants = MMSetExpr(DegToRad(180.0f));
             }
             
             phases = phases->next;

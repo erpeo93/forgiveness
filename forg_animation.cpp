@@ -969,8 +969,7 @@ inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, ClientAnimat
             
             if(particleEffect)
             {
-                //UpdateParticleEffectData(P);
-                SpawnParticles(particleCache, particleEffect, P, 1);
+                FillParticleEffectData(particleEffect, P, P + V3(0, 0, 2));
             }
         } break;
     }

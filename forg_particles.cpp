@@ -1,134 +1,29 @@
-#if 0
-internal void SpawnAshFromSourceToDest(ParticleCache* cache, Vec3 PStart, Vec3 PDest, Vec4 ashColor, u32 particleCount4x, r32 dim, r32 timeToArriveAtDest)
-{
-    ParticleSystem* system = &cache->ashSineSystem;
-    RandomSequence* entropy = &cache->particleEntropy;
-    
-    r32 radiants = PI32;
-    r32 timeToMakeRadiants = timeToArriveAtDest;
-    
-    Vec3 deltaP = PDest - PStart;
-    deltaP = (1.0f / radiants) * deltaP;
-    
-    V3_4x PStart4x = ToV3_4x(PStart - cache->deltaParticleP);
-    V3_4x unitDP = ToV3_4x(deltaP);
-    
-    Vec2 horizontalPlane = PDest.xy - PStart.xy;
-    r32 zRotation = RadiantsBetweenVectors(V2(1, 0), horizontalPlane);
-    
-    Vec2 verticalPlane = V2(PDest.x, PDest.z) - V2(PStart.x, PStart.z);
-    r32 yRotation = RadiantsBetweenVectors(V2(1, 0), verticalPlane);
-    
-    
-    m4x4 matrix = ZRotation(zRotation) * YRotation(yRotation);
-    
-    Vec3 UpVector = GetColumn(matrix, 2);
-    UpVector.z = Abs(UpVector.z);
-    
-    V3_4x UpVector4x = ToV3_4x(UpVector);
-    
-    for(u32 newParticle = 0; newParticle < particleCount4x; newParticle++)
-    {
-        u32 i = system->nextParticle4++;
-        
-        if( system->nextParticle4 >= MAX_PARTICLE_COUNT_4 )
-        {
-            system->nextParticle4 = 0;
-        }
-        
-        Particle_4x *A = system->particles + i;
-        
-        
-        __m128 Xs = _mm_set_ps(PStart.x + RandomBil(entropy) * 0.1f,
-                               PStart.x + RandomBil(entropy) * 0.1f,
-                               PStart.x + RandomBil(entropy) * 0.1f,
-                               PStart.x + RandomBil(entropy) * 0.1f);
-        
-        __m128 Ys = _mm_set_ps(PStart.y + RandomBil(entropy) * 0.1f,
-                               PStart.y + RandomBil(entropy) * 0.1f,
-                               PStart.y + RandomBil(entropy) * 0.1f,
-                               PStart.y + RandomBil(entropy) * 0.1f);
-        
-        __m128 Zs = _mm_set_ps(PStart.z + RandomBil(entropy) * 0.1f,
-                               PStart.z + RandomBil(entropy) * 0.1f,
-                               PStart.z + RandomBil(entropy) * 0.1f,
-                               PStart.z + RandomBil(entropy) * 0.1f);
-        
-        A->startP.x = Xs;
-        A->startP.y = Ys;
-        A->startP.z = Zs;
-        
-        
-        A->unitDP.x = unitDP.x;
-        A->unitDP.y = unitDP.y;
-        A->unitDP.z = unitDP.z;
-        
-        A->UpVector = UpVector4x;
-        
-        r32 radiantsPerSec = radiants / timeToMakeRadiants;
-        
-        
-        A->startC.r = MMSetExpr(Clamp01(ashColor.r - RandomUni(entropy) * 0.05f));
-        A->startC.g = MMSetExpr(Clamp01(ashColor.g - RandomUni(entropy) * 0.05f));
-        A->startC.b = MMSetExpr(ashColor.b);
-        A->startC.a = MMSetExpr(1.0f);
-        
-        A->lerp4x = MMSetExpr(0);
-        A->lerpVel4x = _mm_set_ps(radiantsPerSec, radiantsPerSec, radiantsPerSec, radiantsPerSec);
-        A->lerpColorAlpha = MMSetExpr(0);
-        
-        
-        r32 startingAngle = DegToRad(45.0f);
-        A->angle4x = _mm_set_ps(DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f), DegToRad(startingAngle + RandomBil(entropy) * 90.0f));
-        A->height4x = MMSetExpr(dim);
-    }
-}
-#endif
-
 #define MMSetRandomize(seq, value, magnitude) _mm_set_ps(value + RandomBil(seq) * magnitude, value + RandomBil(seq) * magnitude, value + RandomBil(seq) * magnitude, value + RandomBil(seq) * magnitude);
 
-
-#if 0
-struct ParticleEffectData
+inline void FillParticleEffectData(ParticleEffect* effect, Vec3 P, Vec3 destP)
 {
-	Vec3 sourceP;
-	Vec3 sourceVel;
-	Vec3 sourceAcc;
-	Rect3 sourceBounds3D;
-	Rect2 sourceBounds2D;
-    
-	Vec3 targetP;
-	Vec3 targetVel;
-	Vec3 targetAcc;
-	Rect3 targetBounds3D;
-	Rect2 targetBounds2D;
-};
-
-inline void FillParticleEffectData(ParticleEffect* effect, Vec3 sourceP, Vec3 sourceVel, Vec3 sourceAcc, Rect3 sourceBounds, Vec3 targetP, Vec3 targetVel, Vec3 targetAcc, Rect3 targetBounds)
-{
-	effect->data.sourceP = sourceP;
-	effect->data.sourceVel = sourceVel;
-	effect->data.sourceAcc = sourceAcc;
-	effect->data.sourceBounds = sourceBounds;
-    
-	effect->data.sourceP = sourceP;
-	effect->data.sourceVel = sourceVel;
-	effect->data.sourceAcc = sourceAcc;
-	effect->data.sourceBounds = sourceBounds;
+	effect->data.P = P;
+    effect->data.destP = destP;
 }
-#endif
 
-internal void SpawnParticles(ParticleCache* cache, ParticleEffect* effect, Vec3 atPInit, u32 particle4xCount)
+internal void SpawnParticles(ParticleCache* cache, ParticleEffect* effect, r32 dt)
 {
-    effect->particle4xCount += particle4xCount;
     RandomSequence* entropy = &cache->particleEntropy;
-    Vec3 atP = atPInit - cache->deltaParticleP;
+    Vec3 atP = effect->data.P - cache->deltaParticleP;
     
     ParticleEmitter* emitter = &effect->definition->emitter;
+    
+    
+    r32 particleCount = emitter->particlesPerSec * dt + effect->spawnParticlesLeftOff;
+    u32 particle4xCount = (u32) (particleCount / 4.0f);
+    effect->spawnParticlesLeftOff = particleCount - (r32) (particle4xCount * 4);
+    effect->particle4xCount += particle4xCount;
+    
     for( u32 newParticle = 0; newParticle < particle4xCount; newParticle++ )
     {
         Particle_4x *A;
         FREELIST_ALLOC(A, cache->firstFreeParticle4x, PushStruct(&cache->pool, Particle_4x, AlignNoClear(128)));
+        FREELIST_INSERT(A, effect->firstParticle);
         switch(emitter->type)
         {
             case ParticleEmitter_Standard:
@@ -157,10 +52,10 @@ internal void SpawnParticles(ParticleCache* cache, ParticleEffect* effect, Vec3 
                 r32 angle = DegToRad(emitter->angle);
                 r32 angleV = DegToRad(emitter->angleV);
                 A->angle4x = MMSetRandomize(entropy, angle, angleV); 
-                A->height4x = MMSetRandomize(entropy, emitter->height, emitter->heightV);
-                
-                FREELIST_INSERT(A, effect->firstParticle);
+                A->scaleX4x = MMSetRandomize(entropy, emitter->scaleX, emitter->scaleXV);
+                A->scaleY4x = MMSetRandomize(entropy, emitter->scaleY, emitter->scaleYV);
             } break;
+            
             InvalidDefaultCase;
         }
     }
@@ -168,25 +63,44 @@ internal void SpawnParticles(ParticleCache* cache, ParticleEffect* effect, Vec3 
 
 
 inline Lights GetLights(GameModeWorld* worldMode, Vec3 P);
-inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticlePhase* phase, ParticlePhase* followingPhase, r32 normPhaseTime, Particle_4x* A, RenderGroup* group, V3_4x frameDisplacement, r32 dt, b32 sine)
+inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectData* data, ParticlePhase* phase, ParticlePhase* followingPhase, r32 normPhaseTime, Particle_4x* A, RenderGroup* group, V3_4x frameDisplacement, r32 dt, b32 sine)
 {
     ParticleUpdater* updater = &phase->updater;
     
     __m128 dt4x = MMSetExpr(dt);
+    
+    V3_4x finalParticleP = {};
+    
     switch(updater->type)
     {
         case ParticleUpdater_Sine:
         {
-            A->P += frameDisplacement;
-            A->lerp4x = _mm_add_ps(A->lerp4x, _mm_mul_ps(dt4x, updater->lerpVel4x));
-            A->C.a = _mm_add_ps(A->C.a, _mm_mul_ps(dt4x, updater->lerpAlpha4x));
+            Vec3 deltaP = data->destP - data->P;
+            V3_4x dP = ToV3_4x(deltaP);
             
-            __m128 sin4x = _mm_set_ps(Sin(M(A->lerp4x, 0)), 
-                                      Sin(M(A->lerp4x, 1)), 
-                                      Sin(M(A->lerp4x, 2)), 
-                                      Sin(M(A->lerp4x, 3)));
+            Vec2 horizontalPlane = deltaP.xy;
+            r32 zRotation = RadiantsBetweenVectors(V2(1, 0), horizontalPlane);
+            Vec2 verticalPlane = V2(deltaP.x, deltaP.z);
+            r32 yRotation = RadiantsBetweenVectors(V2(1, 0), verticalPlane);
+            m4x4 matrix = ZRotation(zRotation) * YRotation(yRotation);
+            Vec3 upVector = GetColumn(matrix, 2);
+            upVector.z = Abs(upVector.z);
+            V3_4x upVector4x = ToV3_4x(upVector);
             
-            A->P = A->lerp4x * updater->unitDP + sin4x * updater->UpVector;
+            r32 normPhase = Clamp01MapToRange(phase->ttlMax, M(A->ttl4x, 0), phase->ttlMin);
+            r32 normRadiants = normPhase * M(updater->totalRadiants, 0);
+            r32 radiantsSine = Sin(normRadiants);
+            
+            finalParticleP = A->P + normPhase * dP + radiantsSine * upVector4x;
+            
+            
+            A->C += ((0.5f * Square(dt) * updater->ddC) + (dt * A->dC));
+            A->dC += dt * updater->ddC;
+            A->C = Clamp01(A->C);
+            
+            A->scaleX4x += dt4x * updater->dScaleX;
+            A->scaleY4x += dt4x * updater->dScaleY;
+            A->angle4x += dt4x * updater->dAngle;
         } break;
         
         case ParticleUpdater_Standard:
@@ -194,19 +108,15 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticlePhase* p
             A->P += frameDisplacement;
             A->P += ((0.5f * Square(dt) * updater->ddP) + (dt * A->dP));
             A->dP += dt * updater->ddP;
+            finalParticleP = A->P;
             
             A->C += ((0.5f * Square(dt) * updater->ddC) + (dt * A->dC));
             A->dC += dt * updater->ddC;
             A->C = Clamp01(A->C);
             
-            A->height4x += dt4x * updater->dHeight;
+            A->scaleX4x += dt4x * updater->dScaleX;
+            A->scaleY4x += dt4x * updater->dScaleY;
             A->angle4x += dt4x * updater->dAngle;
-#if 0
-            if( particle->P.z < 0 )
-            {
-                particle->P.z = 0;
-            }
-#endif
         } break;
         
         InvalidDefaultCase;
@@ -219,18 +129,18 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticlePhase* p
     
     Vec3 lightP = 
     { 
-        M(A->P.x, 0),
-        M(A->P.y, 0),
-        M(A->P.z, 0)
+        M(finalParticleP.x, 0),
+        M(finalParticleP.y, 0),
+        M(finalParticleP.z, 0)
     };
     Lights lights = GetLights(worldMode, lightP);
     for(u32 subIndex = 0; subIndex < 4; ++subIndex)
     {
         Vec3 P = 
         { 
-            M(A->P.x, subIndex),
-            M(A->P.y, subIndex),
-            M(A->P.z, subIndex)
+            M(finalParticleP.x, subIndex),
+            M(finalParticleP.y, subIndex),
+            M(finalParticleP.z, subIndex)
         };
         
         Vec4 color = 
@@ -242,7 +152,8 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticlePhase* p
         };
         
         r32 angle = M(A->angle4x, subIndex);
-        r32 height = M(A->height4x, subIndex);
+        r32 scaleX = M(A->scaleX4x, subIndex);
+        r32 scaleY = M(A->scaleY4x, subIndex);
         
         
         
@@ -259,9 +170,9 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticlePhase* p
                 newColor.a = newAlpha;
                 
                 ParticleUpdater* followingUpdater = &followingPhase->updater;
-                PushBitmap(group, transform, followingUpdater->bitmapID, P, height, V2(1.0f, 1.0f),  newColor, lights);
+                PushBitmap(group, transform, followingUpdater->bitmapID, P, 0, V2(scaleX, scaleY),  newColor, lights);
             }
-            PushBitmap(group, transform, updater->bitmapID, P, height, V2(1.0f, 1.0f),  color, lights);
+            PushBitmap(group, transform, updater->bitmapID, P, 9, V2(scaleX, scaleY),  color, lights);
         }
     }
 }
@@ -304,6 +215,8 @@ inline ParticlePhase* GetFollowingPhase(ParticleEffect* effect, ParticlePhase* p
 
 internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cache, ParticleEffect* effect, r32 dt, Vec3 frameDisplacementInit, RenderGroup* group)
 {
+    SpawnParticles(cache, effect, dt);
+    
     V3_4x frameDisplacement = ToV3_4x(frameDisplacementInit);
     for(Particle_4x** particlePtr = &effect->firstParticle; *particlePtr;)
     {
@@ -327,7 +240,7 @@ internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cac
             {
                 ParticlePhase* followingPhase = GetFollowingPhase(effect, phase);
                 r32 normPhaseTime = 1.0f - Clamp01MapToRange(phase->ttlMin, ttl, phase->ttlMax);
-                UpdateAndRenderParticle4x(worldMode, phase, followingPhase, normPhaseTime, particle, group, frameDisplacement, dt, false);
+                UpdateAndRenderParticle4x(worldMode, &effect->data, phase, followingPhase, normPhaseTime, particle, group, frameDisplacement, dt, false);
             }
             particlePtr = &particle->next;
         }
@@ -349,6 +262,8 @@ inline ParticleEffect* GetNewParticleEffect(ParticleCache* cache, ParticleEffect
     FREELIST_ALLOC(result, cache->firstFreeEffect, PushStruct(&cache->pool, ParticleEffect));
     
     result->active = true;
+    result->data = {};
+    result->spawnParticlesLeftOff = 0;
     result->definition = definition;
     Assert(result->particle4xCount == 0);
     Assert(!result->firstParticle);

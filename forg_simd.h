@@ -23,19 +23,19 @@ inline __m128 operator-(__m128 A, __m128 B)
     return result;
 }
 
-inline __m128& operator+=(__m128 A, __m128 B)
+inline __m128& operator+=(__m128& A, __m128 B)
 {
     A = _mm_add_ps(A, B);
     return A;
 }
 
-inline __m128& operator-=(__m128 A, __m128 B)
+inline __m128& operator-=(__m128& A, __m128 B)
 {
     A = _mm_sub_ps(A, B);
     return A;
 }
 
-inline __m128& operator*=(__m128 A, __m128 B)
+inline __m128& operator*=(__m128& A, __m128 B)
 {
     A = _mm_mul_ps(A, B);
     return A;
