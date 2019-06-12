@@ -1833,7 +1833,7 @@ internal void ReadSynthesisRules()
     AddOption("attacker", Minutes(40), Minutes(2));
     //AddBooleanConsideration();
     
-    AddSynthesisRule(Action_None);
+    AddSynthesisRule(Action_Idle);
     AddNode("monsters");
     AddOption("hostile", Minutes(20), Minutes(1));
     

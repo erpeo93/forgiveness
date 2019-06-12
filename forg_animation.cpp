@@ -971,17 +971,38 @@ inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, ClientAnimat
     }
 }
 
+inline void SetEquipmentReferenceAction(GameModeWorld* worldMode, ClientEntity* entityC)
+{
+    if(!IsSet(entityC, Flag_Attached))
+    {
+        for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
+        {
+            EquipmentSlot* slot = entityC->equipment + slotIndex;
+            if(slot->ID)
+            {
+                ClientEntity* entity = GetEntityClient(worldMode, slot->ID);
+                if(entity)
+                {
+                    entity->ownerAction = (EntityAction) entityC->animation.action;
+                    entity->ownerSlot = (SlotName) slotIndex;
+                }
+            }
+        }
+    }
+}
 
 internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToAdvance)
 {
     u32 newAction = entityC->action;
+    
     if(newAction != entityC->effectReferenceAction ||
        (!newAction && !entityC->firstActiveEffect))
     {
         for(ClientAnimationEffect** effectPtr = &entityC->firstActiveEffect; *effectPtr;)
         {
             ClientAnimationEffect* effect = *effectPtr;
-            if(!(effect->effect.flags & AnimationEffect_AllActions) && (effect->effect.triggerAction == entityC->effectReferenceAction))
+            
+            if(effect->effect.triggerAction == Action_Count || effect->effect.triggerAction == entityC->effectReferenceAction)
             {
                 if(effect->particleRef)
                 {
@@ -1012,12 +1033,20 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
             TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, currentTaxonomy);
             for(AnimationEffect* effect = slot->firstAnimationEffect; effect; effect = effect->next)
             {
-                if(effect->triggerAction == newAction)
+                if(effect->triggerAction == Action_Count ||
+                   effect->triggerAction == newAction)
                 {
                     ClientAnimationEffect* newEffect;
                     FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, ClientAnimationEffect, NoClear()));
                     
                     newEffect->effect = *effect;
+                    newEffect->referenceSlot = Slot_None;
+                    
+                    if(IsSet(entityC, Flag_Attached))
+                    {
+                        Assert(entityC->ownerSlot);
+                        newEffect->referenceSlot = entityC->ownerSlot;
+                    }
                     newEffect->particleRef = 0;
                     
                     FREELIST_INSERT(newEffect, entityC->firstActiveEffect);
@@ -1077,7 +1106,7 @@ struct RenderAssResult
     r32 distanceFromAssCenter;
 };
 
-inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender, b32 isEquipmentAss, Vec4 proceduralColor = V4(1, 1, 1, 1))
+inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, SlotName spriteReferenceSlot, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender, b32 isEquipmentAss, Vec4 proceduralColor = V4(1, 1, 1, 1))
 {
     RenderAssResult result = {};
     
@@ -1307,12 +1336,27 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     Vec4 color = pieceParams.color;
                     color.a *=  ass->alpha;
                     
-                    
-                    for(ClientAnimationEffect* effect = input->firstActiveEffect; effect; effect = effect->next)
+                    if(sprite->flags & Sprite_Equipment)
                     {
-                        if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
+                        for(ClientAnimationEffect* effect = input->firstActiveEquipmentEffect; effect; effect = effect->next)
                         {
-                            DispatchClientAnimationEffect(input->worldMode, effect, input->entity, P, &color, input->timeToAdvance);
+                            if(effect->referenceSlot == spriteReferenceSlot)
+                            {
+                                if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
+                                {
+                                    DispatchClientAnimationEffect(input->worldMode, effect, input->entity, P, &color, input->timeToAdvance);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        for(ClientAnimationEffect* effect = input->firstActiveEffect; effect; effect = effect->next)
+                        {
+                            if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
+                            {
+                                DispatchClientAnimationEffect(input->worldMode, effect, input->entity, P, &color, input->timeToAdvance);
+                            }
                         }
                     }
                     
@@ -1440,7 +1484,6 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         Bone* parentBone = GetBone(blended, currentAss.boneID);
         SpriteInfo* sprite = GetSprite(blended, assIndex);
         
-        
         Vec4 proceduralColor = input->defaultColoration;
         ApplyAssAlterations(&currentAss, assAlt, parentBone, &proceduralColor);
         switch(operation)
@@ -1451,7 +1494,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                                             input->goOutTime, input->cameInTime, input->entity->status);
                 proceduralColor.a *= alpha;
                 
-                RenderAssResult render = RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, true,  proceduralColor);
+                RenderAssResult render = RenderPieceAss_(input, group, P, sprite, Slot_None, parentBone, &currentAss, params, false, true,  proceduralColor);
                 
                 if(render.onFocus)
                 {
@@ -1506,7 +1549,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                         pieceParams.modulationWithFocusColor = input->defaultModulatonWithFocusColor;
                     }
                     
-                    if(RenderPieceAss_(input, group, P, spriteInfo, parentBone, equipmentAss, &pieceParams, false, true).onFocus)
+                    if(RenderPieceAss_(input, group, P, spriteInfo, (SlotName) equipment->slot.slot, parentBone, equipmentAss, &pieceParams, false, true).onFocus)
                     {
                         input->output->focusSlots = equipment->slot;
                     }
@@ -1531,7 +1574,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         Vec4 proceduralColor = input->defaultColoration;
         ApplyAssAlterations(&currentAss, assAlt, parentBone, &proceduralColor);
         
-        RenderPieceAss_(input, group, P, sprite, parentBone, &currentAss, params, false, false, Hadamart(proceduralColor, V4(0.1f, 0.1f, 0.1f, 1)));
+        RenderPieceAss_(input, group, P, sprite, Slot_None, parentBone, &currentAss, params, false, false, Hadamart(proceduralColor, V4(0.1f, 0.1f, 0.1f, 1)));
         
         if(input->debug.showPivots)
         {
@@ -1987,7 +2030,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
                 if(!debugParams.ortho)
                 {
                     animationState->bounds = Offset(animationBounds, AID.originOffset);
-                    if(entityC->action == Action_None)
+                    if(entityC->action == Action_Idle)
                     {
                         animationState->cameraEntityOffset = GetCenter(animationState->bounds);
                     }

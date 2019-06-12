@@ -520,7 +520,7 @@ internal void RecalculateObstacleMap(SimRegion* region, SimEntity* entity)
 
 inline b32 CommandRequiresTarget(AICommand command)
 {
-    b32 result = (command.action != Action_None && command.action != Action_Move);
+    b32 result = (command.action != Action_None && command.action != Action_Idle && command.action != Action_Move);
     return result;
 }
 
@@ -656,7 +656,7 @@ internal void ExecuteAction(SimRegion* region, SimEntity* entity, AICommand comm
         else
         {
             entity->targetID = 0;
-            entity->action = Action_None;
+            entity->action = Action_Idle;
         }
     }
     else

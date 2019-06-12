@@ -543,7 +543,7 @@ internal void HandleClientPrediction(ClientEntity* entity, r32 timeToUpdate)
         case Prediction_ActionBegan:
         {
             EntityAction currentAction = entity->action;
-            if((currentAction == prediction->action) || (currentAction == Action_None))
+            if((currentAction == prediction->action) || (currentAction <= Action_Idle))
             {
                 entity->action = prediction->action;
             }
@@ -892,6 +892,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             player->P = V3(0, 0, 0);
             
             UI->output = {};
+            UI->output.desiredAction = Action_Idle;
+            
             b32 canRender = (worldMode->patchSectionArrived >= 2);
             if(canRender)
             {
@@ -1014,7 +1016,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                     myPlayer->velocity += acc * input->timeToAdvance;
                                     
                                     Vec3 velocity;
-                                    if(myPlayer->distanceCoeffFromServerP < 0.15f && player->action == Action_None)
+                                    if(myPlayer->distanceCoeffFromServerP < 0.15f && player->action <= Action_Idle)
                                     {
                                         velocity = myPlayer->velocity;
                                     }
@@ -1077,18 +1079,16 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             entity->modulationWithFocusColor = 0;
                             
                             HandleClientPrediction(entity, input->timeToAdvance);
+                            SetEquipmentReferenceAction(worldMode, entity);
                             UpdateAnimationEffects(worldMode, entity, input->timeToAdvance);
-                            
-                            if(entity->identifier && !IsSet(entity, Flag_deleted))
-                            {
-                                if(slot->hasLight)
-                                {
-                                    //AddLightToGridCurrentFrame(worldMode, entity->P, slot->lightColor, entity->lightIntensity);
-                                }
-                            }
                             
                             if(entity->identifier && !IsSet(entity, Flag_deleted | Flag_Attached))
                             {
+                                if(slot->hasLight)
+                                {
+                                    AddLightToGridCurrentFrame(worldMode, entity->P, slot->lightColor, entity->lightIntensity);
+                                }
+                                
                                 r32 cameraZ = 0.0f;
                                 
                                 Rect2 screenBounds = InvertedInfinityRect2();

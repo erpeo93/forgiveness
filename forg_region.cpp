@@ -1062,7 +1062,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                         i16 status = -10;
                         u64 identifier = AddEntity(region, entity->P, craft->taxonomy, craft->gen, Incomplete(entity->identifier, 0, status));
                         
-                        IgnoreAction(region, entity, Action_None);
+                        IgnoreAction(region, entity, Action_Idle);
                         entity->action = Action_Craft;
                         entity->targetID = identifier;
                     }
@@ -1100,7 +1100,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                     u64 identifier = AddEntity(region, entity->P, toCraft->taxonomy, toCraft->gen, Incomplete(entity->identifier, toCraft->quantity, toCraft->status));
                     RemoveFromContainer(region, entity->identifier, container, SafeTruncateToU8(craftFromInventory->objectIndex));
                     
-                    IgnoreAction(region, entity, Action_None);
+                    IgnoreAction(region, entity, Action_Idle);
                     entity->action = Action_Craft;
                     entity->targetID = identifier;
                     
@@ -1160,7 +1160,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                     entity->action = Action_Eat;
                     entity->targetID = entityID;
                     
-                    IgnoreAction(region, entity, Action_None);
+                    IgnoreAction(region, entity, Action_Idle);
                     
                     RemoveFromContainer(region, entity->identifier, container, SafeTruncateToU8(consume->objectIndex));
                 }

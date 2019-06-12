@@ -206,6 +206,7 @@ struct ClientPrediction
 
 struct ClientAnimationEffect
 {
+    SlotName referenceSlot;
     AnimationEffect effect;
     ParticleEffect* particleRef;
     
@@ -249,9 +250,11 @@ struct ClientEntity
     EntityAction action;
     r32 actionTime;
     u64 actionID;
-    
     u64 draggingID;
     
+    
+    EntityAction ownerAction;
+    SlotName ownerSlot;
     
     // TODO(Leonardo): send these only when sending a recipe entity
     u32 recipeTaxonomy;

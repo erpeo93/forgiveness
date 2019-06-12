@@ -71,6 +71,7 @@ MemberDefinition memberDefinitionOfRect3[] =
 char* MetaTable_EntityAction[] = 
  {
 "None",
+"Idle",
 "Move",
 "Examine",
 "Protecting",

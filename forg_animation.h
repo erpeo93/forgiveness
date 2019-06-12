@@ -167,7 +167,7 @@ printTable(noPrefix) enum AnimationEffectType
 
 enum AnimationEffectFlags
 {
-    AnimationEffect_AllActions = (1 << 1),
+    AnimationEffect_IsEquipped = (1 << 1),
 };
 
 
@@ -254,6 +254,7 @@ struct AnimationFixedParams
     r32 minHotAssDistanceSq;
     
     struct ClientAnimationEffect* firstActiveEffect;
+    struct ClientAnimationEffect* firstActiveEquipmentEffect;
     
     r32 cameInTime;
     r32 goOutTime;

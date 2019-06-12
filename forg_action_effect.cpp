@@ -585,7 +585,7 @@ internal DispatchEffectsContext DispatchEffects(SimRegion* region, SimEntity* ac
 
 inline void DispatchPassiveEffects(SimRegion* region, SimEntity* entity)
 {
-    DispatchEffects(region, entity, 0, Action_None);
+    DispatchEffects(region, entity, 0, Action_Idle);
 }
 
 inline PossibleAction* GetPossibleAction(TaxonomySlot* slot, EntityAction action)
@@ -738,6 +738,7 @@ inline r32 GetActionTargetTime(SimRegion* region, SimEntity* actor, SimEntity* t
     switch(action)
     {
         case Action_None:
+        case Action_Idle:
         case Action_Move:
         case Action_Protecting:
         case Action_Examine:
