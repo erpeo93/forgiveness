@@ -991,6 +991,38 @@ inline void SetEquipmentReferenceAction(GameModeWorld* worldMode, ClientEntity* 
     }
 }
 
+inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, EntityAction action, u64 targetID, u32 animationEffectFlags)
+{
+    u32 currentTaxonomy = entity->taxonomy;
+    while(currentTaxonomy)
+    {
+        TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, currentTaxonomy);
+        for(AnimationEffect* effect = slot->firstAnimationEffect; effect; effect = effect->next)
+        {
+            if((effect->triggerAction == Action_Count ||
+                effect->triggerAction == (u32) action) && 
+               ((effect->flags & animationEffectFlags) == animationEffectFlags))
+            {
+                ClientAnimationEffect* newEffect;
+                FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, ClientAnimationEffect, NoClear()));
+                
+                newEffect->effect = *effect;
+                newEffect->referenceSlot = Slot_None;
+                
+                if(IsSet(entity, Flag_Attached))
+                {
+                    Assert(entity->ownerSlot);
+                    newEffect->referenceSlot = entity->ownerSlot;
+                }
+                newEffect->particleRef = 0;
+                
+                FREELIST_INSERT(newEffect, entity->firstActiveEffect);
+            }
+        }
+        currentTaxonomy = GetParentTaxonomy(worldMode->table, currentTaxonomy);
+    }
+}
+
 internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToAdvance)
 {
     u32 newAction = entityC->action;
@@ -1002,7 +1034,8 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
         {
             ClientAnimationEffect* effect = *effectPtr;
             
-            if(effect->effect.triggerAction == Action_Count || effect->effect.triggerAction == entityC->effectReferenceAction)
+            if(effect->effect.triggerAction == Action_Count || effect->effect.triggerAction == entityC->effectReferenceAction ||
+               (effect->effect.flags & AnimationEffect_DeleteWhenActionChanges))
             {
                 if(effect->particleRef)
                 {
@@ -1026,35 +1059,8 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
             }
         }
         
-        
-        u32 currentTaxonomy = entityC->taxonomy;
-        while(currentTaxonomy)
-        {
-            TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, currentTaxonomy);
-            for(AnimationEffect* effect = slot->firstAnimationEffect; effect; effect = effect->next)
-            {
-                if(effect->triggerAction == Action_Count ||
-                   effect->triggerAction == newAction)
-                {
-                    ClientAnimationEffect* newEffect;
-                    FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, ClientAnimationEffect, NoClear()));
-                    
-                    newEffect->effect = *effect;
-                    newEffect->referenceSlot = Slot_None;
-                    
-                    if(IsSet(entityC, Flag_Attached))
-                    {
-                        Assert(entityC->ownerSlot);
-                        newEffect->referenceSlot = entityC->ownerSlot;
-                    }
-                    newEffect->particleRef = 0;
-                    
-                    FREELIST_INSERT(newEffect, entityC->firstActiveEffect);
-                }
-            }
-            currentTaxonomy = GetParentTaxonomy(worldMode->table, currentTaxonomy);
-        }
-        
+        // TODO(Leonardo): fill the target reasonably here!
+        AddAnimationEffects(worldMode, entityC, (EntityAction) newAction, 0, 0);
         entityC->effectReferenceAction = newAction;
     }
     

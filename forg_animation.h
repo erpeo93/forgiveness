@@ -167,7 +167,9 @@ printTable(noPrefix) enum AnimationEffectType
 
 enum AnimationEffectFlags
 {
-    AnimationEffect_IsEquipped = (1 << 1),
+    AnimationEffect_ActionStart = (1 << 1),
+    AnimationEffect_ActionCompleted = (1 << 2),
+    AnimationEffect_DeleteWhenActionChanges = (1 << 3),
 };
 
 

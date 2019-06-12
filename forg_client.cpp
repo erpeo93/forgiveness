@@ -646,7 +646,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     
     Vec3 inputAcc = {};
     u64 targetEntityID = 0;
-    u32 desiredAction = 0;
+    u32 desiredAction = Action_Idle;
     u64 overlappingEntityID = 0;
     
     

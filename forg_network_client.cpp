@@ -611,6 +611,7 @@ inline void DeleteAllFilesNotArrived(GameModeWorld* worldMode, char* path)
 }
 
 inline void SignalAnimationSyncCompleted(AnimationState* animation, u32 action, AnimationSyncState state);
+inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, EntityAction action, u64 targetID, u32 animationEffectFlags);
 internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
     UIState* UI = worldMode->UI;
@@ -1098,6 +1099,9 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                     worldMode->UI->nextMode = UIMode_Combat;
                     worldMode->UI->modeTimer = 10.0f;
                 }
+                
+                
+                AddAnimationEffects(worldMode, currentEntity, (EntityAction) action, target, AnimationEffect_ActionStart);
             } break;
             
             case Type_CompletedAction:
@@ -1108,6 +1112,8 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 
                 SignalAnimationSyncCompleted(&currentEntity->animation, action, AnimationSync_WaitingForCompletion);
                 currentEntity->actionID = 0;
+                
+                AddAnimationEffects(worldMode, currentEntity, (EntityAction) action, target, AnimationEffect_ActionCompleted);
             } break;
             
             case Type_StartedDragging:
