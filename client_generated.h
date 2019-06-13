@@ -260,6 +260,26 @@ char* MetaTable_AnimationEffectType[] =
 "SpawnParticles",
 "Light",
 };
+MetaFlag MetaFlags_AnimationEffectFlags[] = 
+ {
+{"ActionStart",
+(1 << 1)},
+{"ActionCompleted",
+(1 << 2)},
+{"DeleteWhenActionChanges",
+(1 << 3)},
+};
+char* MetaTable_ParticleUpdaterType[] = 
+ {
+"Standard",
+"Sine",
+"Count",
+};
+char* MetaTable_ParticleUpdaterEndPosition[] = 
+ {
+"FixedOffset",
+"DestPos",
+};
 #define META_HANDLE_TYPE_DUMP( MemberPtr, indentLevel )case MetaType_Rect3:{DEBUGTextLine( member->name ); DumpStruct( memberPtr, memberDefinitionOfRect3, ArrayCount(memberDefinitionOfRect3 ), indentLevel );} break;\
 case MetaType_Rect2:{DEBUGTextLine( member->name ); DumpStruct( memberPtr, memberDefinitionOfRect2, ArrayCount(memberDefinitionOfRect2 ), indentLevel );} break;\
 case MetaType_SimEntity:{DEBUGTextLine( member->name ); DumpStruct( memberPtr, memberDefinitionOfSimEntity, ArrayCount(memberDefinitionOfSimEntity ), indentLevel );} break;\

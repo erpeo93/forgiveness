@@ -21,7 +21,7 @@ struct Particle_4x
     __m128 padding2;
 };
 
-enum ParticleUpdaterType
+printTable(noPrefix) enum ParticleUpdaterType
 {
     ParticleUpdater_Standard,
     ParticleUpdater_Sine,
@@ -29,14 +29,22 @@ enum ParticleUpdaterType
     ParticleUpdater_Count
 };
 
+printTable(noPrefix) enum ParticleUpdaterEndPosition
+{
+    UpdaterEndPos_FixedOffset,
+    UpdaterEndPos_DestPos,
+};
+
 
 struct ParticleUpdater
 {
     ParticleUpdaterType type;
+    ParticleUpdaterEndPosition destPType;
     
     BitmapId bitmapID;
     u64 particleHashID;
     r32 startDrawingFollowingBitmapAt;
+    Vec3 POffset;
     
     V3_4x ddP;
     V4_4x ddC;

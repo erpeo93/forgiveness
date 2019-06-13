@@ -960,7 +960,7 @@ inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, ClientAnimat
             
             if(particleEffect)
             {
-                FillParticleEffectData(particleEffect, P, P + V3(0, 0, 2));
+                FillParticleEffectData(particleEffect, P, P);
             }
         } break;
         
@@ -991,6 +991,36 @@ inline void SetEquipmentReferenceAction(GameModeWorld* worldMode, ClientEntity* 
     }
 }
 
+inline void AddAnimationEffectToEntity(GameModeWorld* worldMode, ClientEntity* entity, AnimationEffect* effect)
+{
+    ClientAnimationEffect* newEffect;
+    FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, ClientAnimationEffect, NoClear()));
+    
+    newEffect->effect = *effect;
+    newEffect->referenceSlot = Slot_None;
+    
+    if(IsSet(entity, Flag_Attached))
+    {
+        Assert(entity->ownerSlot);
+        newEffect->referenceSlot = entity->ownerSlot;
+    }
+    newEffect->particleRef = 0;
+    
+    FREELIST_INSERT(newEffect, entity->firstActiveEffect);
+}
+
+inline void AddSkillAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, u32 skillTaxonomy, u64 targetID, u32 animationEffectFlags)
+{
+    TaxonomySlot* skillSlot = GetSlotForTaxonomy(worldMode->table, skillTaxonomy);
+    for(AnimationEffect* effect = skillSlot->firstAnimationEffect; effect; effect = effect->next)
+    {
+        if((effect->flags & animationEffectFlags) == animationEffectFlags)
+        {
+            AddAnimationEffectToEntity(worldMode, entity, effect);
+        }
+    }
+}
+
 inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, EntityAction action, u64 targetID, u32 animationEffectFlags)
 {
     u32 currentTaxonomy = entity->taxonomy;
@@ -1003,20 +1033,7 @@ inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, 
                 effect->triggerAction == (u32) action) && 
                ((effect->flags & animationEffectFlags) == animationEffectFlags))
             {
-                ClientAnimationEffect* newEffect;
-                FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, ClientAnimationEffect, NoClear()));
-                
-                newEffect->effect = *effect;
-                newEffect->referenceSlot = Slot_None;
-                
-                if(IsSet(entity, Flag_Attached))
-                {
-                    Assert(entity->ownerSlot);
-                    newEffect->referenceSlot = entity->ownerSlot;
-                }
-                newEffect->particleRef = 0;
-                
-                FREELIST_INSERT(newEffect, entity->firstActiveEffect);
+                AddAnimationEffectToEntity(worldMode, entity, effect);
             }
         }
         currentTaxonomy = GetParentTaxonomy(worldMode->table, currentTaxonomy);

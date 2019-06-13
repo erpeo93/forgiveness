@@ -385,8 +385,6 @@ inline u32 GetValuePreprocessor_(char** values, u32 count, char* test)
 #define GetFlagPreprocessor(flagName, test) GetFlagPreprocessor_(MetaFlags_##flagName, ArrayCount(MetaFlags_##flagName), test)
 inline u32 GetFlagPreprocessor_(MetaFlag* values, u32 count, char* test)
 {
-    b32 found = false;
-    
 	u32 result = 0;
     
     for(u32 valueIndex = 0; valueIndex < count; ++valueIndex)
@@ -395,12 +393,10 @@ inline u32 GetFlagPreprocessor_(MetaFlag* values, u32 count, char* test)
         if(StrEqual(test, flag->name))
         {
             result = flag->value;
-            found = true;
             break;
         }
     }
     
-    Assert(found);
     return result;
 }
 
@@ -493,6 +489,7 @@ inline Vec3 ToV3(EditorElement* element, Vec3 default = {})
 }
 
 
+#define ElemU32(root, name) ToU32(GetValue(root, name))
 #define ElemR32(root, name) ToR32(GetValue(root, name))
 #define StructV3(root, name) ToV3(GetStruct(root, name))
 #define ColorV4(root, name) ToV4Color(GetStruct(root, name))
@@ -3327,8 +3324,20 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         {
             AnimationEffectType type = (AnimationEffectType) GetValuePreprocessor(AnimationEffectType, GetValue(effects, "animationEffectType"));
             AnimationEffect effect = {};
-            // TODO(Leonardo): parse the flags as well!
             u32 flags = 0;
+            
+            EditorElement* flagElem = GetList(effects, "flags");
+            
+            while(flagElem)
+            {
+                char* flagName = GetValue(flagElem, "effectFlag");
+                u32 flag = GetFlagPreprocessor(AnimationEffectFlags, flagName);
+                flags |= flag;
+                
+                flagElem = flagElem->next;
+            }
+           
+            
             EntityAction action = (EntityAction) GetValuePreprocessor(EntityAction, GetValue(effects, "action"));
             char* triggerEffect = GetValue(effects, "triggerEffect");
             char* pieceName = GetValue(effects, "animationPieceName");
@@ -3636,7 +3645,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 
                 ParticleUpdater* updater = &phase->updater;
                 
-                updater->type = ParticleUpdater_Sine;
+                updater->type = (ParticleUpdaterType) GetValuePreprocessor(ParticleUpdaterType, GetValue(phases, "particleUpdType"));
                 
                 updater->bitmapID = {};
                 updater->particleHashID = StringHash(GetValue(phases, "particleName"));
@@ -3649,7 +3658,11 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 updater->dScaleY = MMSetExpr(ElemR32(phases, "dScaleY"));
                 updater->dAngle = MMSetExpr(ElemR32(phases, "dAngle"));
                
-                updater->totalRadiants = MMSetExpr(DegToRad(720.0f));
+                r32 radiants = DegToRad(180.0f * Max(1, ElemU32(phases, "totalPITimes")));
+                updater->totalRadiants = MMSetExpr(radiants);
+                
+                updater->destPType = (ParticleUpdaterEndPosition) GetValuePreprocessor(ParticleUpdaterEndPosition, GetValue(phases, "endPositionType"));
+                updater->POffset = StructV3(phases, "offset");
             }
             
             phases = phases->next;

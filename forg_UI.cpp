@@ -307,6 +307,17 @@ inline void UIAddAutocompleteFromTable_(UIState* UI, char** values, u32 valueCou
     }
 }
 
+#define UIAddAutocompleteFromFlags(UI, tableName, name) UIAddAutocompleteFromFlags_(UI, MetaFlags_##tableName, ArrayCount(MetaFlags_##tableName), name)
+inline void UIAddAutocompleteFromFlags_(UIState* UI, MetaFlag* values, u32 valueCount, char* name)
+{
+    UIAutocomplete* autocomplete = UIAddAutocomplete(UI, name);
+    for(u32 valueIndex = 0; valueIndex < valueCount; ++valueIndex)
+    {
+        MetaFlag* value = values + valueIndex;
+        UIAddOption(UI, autocomplete, value->name);
+    }
+}
+
 
 
 inline void UIAddAutocompleteFromFiles(UIState* UI)
@@ -348,7 +359,7 @@ inline void UIAddAutocompleteFromFiles(UIState* UI)
         while(parsing)
         {
             Token value = GetToken(&tokenizer);
-            
+           
             switch(value.type)
             {
                 case Token_String:
@@ -3520,6 +3531,10 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTable(UI, EffectIdentifier, "effectID");
         UIAddAutocompleteFromTable(UI, EffectTargetRangeType, "rangeType");
         UIAddAutocompleteFromTable(UI, AnimationEffectType, "animationEffectType");
+        UIAddAutocompleteFromTable(UI, ParticleUpdaterType, "particleUpdType");
+        UIAddAutocompleteFromTable(UI, ParticleUpdaterEndPosition, "endPositionType");
+        
+        UIAddAutocompleteFromFlags(UI, AnimationEffectFlags, "effectFlag");
         
         UIAddAutocomplete(UI, "layoutName");
 		UIAddAutocomplete(UI, "pieceName");

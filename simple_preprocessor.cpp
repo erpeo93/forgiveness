@@ -645,6 +645,7 @@ int main( int argc, char** argv )
         "forg_editor.h",
         "forg_client.h",
         "forg_animation.h",
+        "forg_particles.h",
     };
     for( int fileIndex = 0; fileIndex < sizeof( fileNames ) / sizeof( fileNames[0] ); ++fileIndex )
     {

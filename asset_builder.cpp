@@ -3521,11 +3521,15 @@ int main(int argc, char** argv )
     DeleteAll("assets", "*.autocomplete");
 #endif
     
+    WriteModels();
+    
+#if 0    
     WriteMusic();
     WriteSounds();
     WriteFonts();
-    WriteModels();
     WriteBitmapsAndAnimations();
+#endif
+    
 }
 
 

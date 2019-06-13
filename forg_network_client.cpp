@@ -612,6 +612,7 @@ inline void DeleteAllFilesNotArrived(GameModeWorld* worldMode, char* path)
 
 inline void SignalAnimationSyncCompleted(AnimationState* animation, u32 action, AnimationSyncState state);
 inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, EntityAction action, u64 targetID, u32 animationEffectFlags);
+inline void AddSkillAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, u32 skillTaxonomy, u64 targetID, u32 animationEffectFlags);
 internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
     UIState* UI = worldMode->UI;
@@ -1083,6 +1084,13 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 u8 action;
                 Unpack("CQ", &action, &target);
                 
+                if(action == Action_Cast)
+                {
+                    u32 skillTaxonomy;
+                    Unpack("L", &skillTaxonomy);
+                    AddSkillAnimationEffects(worldMode, currentEntity, skillTaxonomy, target, AnimationEffect_ActionStart);
+                }
+                
                 SignalAnimationSyncCompleted(&currentEntity->animation, action, AnimationSync_Preparing);
                 
                 ClientEntity* targetEntity = GetEntityClient(worldMode, target);
@@ -1109,6 +1117,13 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 u64 target;
                 u8 action;
                 Unpack("CQ", &action, &target);
+                
+                if(action == Action_Cast)
+                {
+                    u32 skillTaxonomy;
+                    Unpack("L", &skillTaxonomy);
+                    AddSkillAnimationEffects(worldMode, currentEntity, skillTaxonomy, target, AnimationEffect_ActionCompleted);
+                }
                 
                 SignalAnimationSyncCompleted(&currentEntity->animation, action, AnimationSync_WaitingForCompletion);
                 currentEntity->actionID = 0;

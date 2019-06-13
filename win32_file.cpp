@@ -23,6 +23,9 @@ DEBUG_PLATFORM_READ_FILE(DEBUGWin32ReadFile)
                    ( fileSize32 == bytesRead ) )
                 {
                     result.size = fileSize32;
+                    
+                    char* toZero = (char*) result.content;
+                    toZero[result.size] = 0;
                 }
                 else
                 {

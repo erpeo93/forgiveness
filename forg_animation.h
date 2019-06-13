@@ -165,7 +165,7 @@ printTable(noPrefix) enum AnimationEffectType
     AnimationEffect_Light,
 };
 
-enum AnimationEffectFlags
+printFlags(noPrefix) enum AnimationEffectFlags
 {
     AnimationEffect_ActionStart = (1 << 1),
     AnimationEffect_ActionCompleted = (1 << 2),

@@ -75,7 +75,22 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectDa
     {
         case ParticleUpdater_Sine:
         {
-            Vec3 deltaP = data->destP - data->P;
+            Vec3 destP = data->P;
+            
+            switch(updater->destPType)
+            {
+                case UpdaterEndPos_FixedOffset:
+                {
+                    destP = data->P + updater->POffset;
+                } break;
+                
+                case UpdaterEndPos_DestPos:
+                {
+                    destP = data->destP + updater->POffset;
+                } break;
+            }
+            
+            Vec3 deltaP = destP - data->P;
             V3_4x dP = ToV3_4x(deltaP);
             
             Vec2 horizontalPlane = deltaP.xy;
