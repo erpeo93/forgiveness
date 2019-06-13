@@ -3662,7 +3662,8 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 updater->totalRadiants = MMSetExpr(radiants);
                 
                 updater->destPType = (ParticleUpdaterEndPosition) GetValuePreprocessor(ParticleUpdaterEndPosition, GetValue(phases, "endPositionType"));
-                updater->POffset = StructV3(phases, "offset");
+                updater->startOffset = StructV3(phases, "startOffset");
+                updater->endOffset = StructV3(phases, "endOffset");
             }
             
             phases = phases->next;

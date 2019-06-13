@@ -44,7 +44,8 @@ struct ParticleUpdater
     BitmapId bitmapID;
     u64 particleHashID;
     r32 startDrawingFollowingBitmapAt;
-    Vec3 POffset;
+    Vec3 startOffset;
+    Vec3 endOffset;
     
     V3_4x ddP;
     V4_4x ddC;

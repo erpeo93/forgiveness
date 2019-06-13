@@ -61,10 +61,55 @@ internal void SpawnParticles(ParticleCache* cache, ParticleEffect* effect, r32 d
     }
 }
 
+inline Vec3 GetPhaseEndP(ParticleUpdater* updater, ParticleEffectData* data, Vec3 startP)
+{
+	Vec3 result = startP;
+	switch(updater->destPType)
+    {
+		case UpdaterEndPos_FixedOffset:
+		{
+			result = startP + updater->endOffset;
+		} break;
+        
+		case UpdaterEndPos_DestPos:
+		{
+			result = data->destP + updater->endOffset;
+		} break;
+	}
+    
+	return result;
+}
+
+inline ParticleUpdater* GetUpdater(ParticleEffect* effect, u32 phaseIndex)
+{
+    Assert(phaseIndex < effect->definition->phaseCount);
+    ParticleUpdater* result = &effect->definition->phases[phaseIndex].updater;
+    
+    return result;
+}
+
+inline Vec3 GetPhaseStartP(ParticleEffect* effect, ParticleEffectData* data, u32 phaseIndex)
+{
+    ParticleUpdater* updater = GetUpdater(effect, phaseIndex);
+	Vec3 result = data->P;
+	if(phaseIndex == 0)
+	{
+		result = data->P + updater->startOffset;
+	}
+	else
+	{
+        Vec3 prevStartP = GetPhaseStartP(effect, data, phaseIndex - 1);
+		result = GetPhaseEndP(updater, data, prevStartP) + updater->startOffset;
+	}
+    
+	return result;
+    
+}
 
 inline Lights GetLights(GameModeWorld* worldMode, Vec3 P);
-inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectData* data, ParticlePhase* phase, ParticlePhase* followingPhase, r32 normPhaseTime, Particle_4x* A, RenderGroup* group, V3_4x frameDisplacement, r32 dt, b32 sine)
+inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffect* effect,ParticlePhase* phase, ParticlePhase* followingPhase, u32 phaseIndex, r32 normPhaseTime, Particle_4x* A, RenderGroup* group, V3_4x frameDisplacement, r32 dt, b32 sine)
 {
+    ParticleEffectData* data = &effect->data;
     ParticleUpdater* updater = &phase->updater;
     
     __m128 dt4x = MMSetExpr(dt);
@@ -75,22 +120,10 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectDa
     {
         case ParticleUpdater_Sine:
         {
-            Vec3 destP = data->P;
+			Vec3 startP = GetPhaseStartP(effect, data, phaseIndex);
+			Vec3 destP = GetPhaseEndP(updater, data, startP);
             
-            switch(updater->destPType)
-            {
-                case UpdaterEndPos_FixedOffset:
-                {
-                    destP = data->P + updater->POffset;
-                } break;
-                
-                case UpdaterEndPos_DestPos:
-                {
-                    destP = data->destP + updater->POffset;
-                } break;
-            }
-            
-            Vec3 deltaP = destP - data->P;
+            Vec3 deltaP = destP - startP;
             V3_4x dP = ToV3_4x(deltaP);
             
             Vec2 horizontalPlane = deltaP.xy;
@@ -193,7 +226,7 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectDa
     }
 }
 
-inline ParticlePhase* GetPhase(ParticleEffect* effect, r32 ttl)
+inline ParticlePhase* GetPhase(ParticleEffect* effect, r32 ttl, u32* phaseIndexOut)
 {
     ParticlePhase* result = 0;
     
@@ -203,6 +236,7 @@ inline ParticlePhase* GetPhase(ParticleEffect* effect, r32 ttl)
         if(phase->ttlMax >= ttl && phase->ttlMin <= ttl)
         {
             result = phase;
+            *phaseIndexOut = phaseIndex;
             break;
         }
     }
@@ -251,12 +285,13 @@ internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cac
         else
         {
             r32 ttl = M(particle->ttl4x, 0);
-            ParticlePhase* phase = GetPhase(effect, ttl);
+            u32 phaseIndex;
+            ParticlePhase* phase = GetPhase(effect, ttl, &phaseIndex);
             if(phase)
             {
                 ParticlePhase* followingPhase = GetFollowingPhase(effect, phase);
                 r32 normPhaseTime = 1.0f - Clamp01MapToRange(phase->ttlMin, ttl, phase->ttlMax);
-                UpdateAndRenderParticle4x(worldMode, &effect->data, phase, followingPhase, normPhaseTime, particle, group, frameDisplacement, dt, false);
+                UpdateAndRenderParticle4x(worldMode, effect, phase, followingPhase, phaseIndex,normPhaseTime, particle, group, frameDisplacement, dt, false);
             }
             particlePtr = &particle->next;
         }
