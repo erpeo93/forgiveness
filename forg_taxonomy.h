@@ -466,6 +466,8 @@ struct TaxonomySlot
     r32 minLightIntensity;
     r32 maxLightIntensity;
     Vec3 lightColor;
+    u64 lightPieceHashID;
+    
     u64 skeletonHashID;
     u64 skinHashID;
     Vec4 defaultColoration;

@@ -1088,12 +1088,17 @@ inline AnimationEffect LightEffect(Vec3 color, r32 intensity)
     return result;
 }
 
-inline void AddLight(r32 minIntensity, r32 maxIntensity, Vec3 color)
+inline void AddLight(r32 minIntensity, r32 maxIntensity, char* pieceName, Vec3 color)
 {
     currentSlot_->minLightIntensity = minIntensity;
     currentSlot_->maxLightIntensity = maxIntensity;
     currentSlot_->hasLight = true;
     currentSlot_->lightColor = color;
+    currentSlot_->lightPieceHashID = 0;
+    if(pieceName)
+    {
+        currentSlot_->lightPieceHashID = StringHash(pieceName);
+    }
 }
 
 inline void UsesSkeleton(char* skeletonName, char* skinName, Vec4 defaultColoration, Vec2 originOffset)
@@ -3314,7 +3319,8 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     {
         char* min = GetValue(root, "minIntensity");
         char* max = GetValue(root, "maxIntensity");
-        AddLight(ToR32(min), ToR32(max), V3(1, 1, 1));
+        char* pieceName = GetValue(root, "animationPieceName");
+        AddLight(ToR32(min), ToR32(max), pieceName, V3(1, 1, 1));
     }
     else if(StrEqual(name, "animationEffects"))
     {

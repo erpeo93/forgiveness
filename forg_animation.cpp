@@ -991,13 +991,13 @@ inline void SetEquipmentReferenceAction(GameModeWorld* worldMode, ClientEntity* 
     }
 }
 
-inline void AddAnimationEffectToEntity(GameModeWorld* worldMode, ClientEntity* entity, AnimationEffect* effect)
+inline void AddAnimationEffectToEntity(GameModeWorld* worldMode, ClientEntity* entity, AnimationEffect* effect, SlotName slot)
 {
     ClientAnimationEffect* newEffect;
     FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, ClientAnimationEffect, NoClear()));
     
     newEffect->effect = *effect;
-    newEffect->referenceSlot = Slot_None;
+    newEffect->referenceSlot = slot;
     
     if(IsSet(entity, Flag_Attached))
     {
@@ -1016,7 +1016,7 @@ inline void AddSkillAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
     {
         if((effect->flags & animationEffectFlags) == animationEffectFlags)
         {
-            AddAnimationEffectToEntity(worldMode, entity, effect);
+            AddAnimationEffectToEntity(worldMode, entity, effect, Slot_None);
         }
     }
 }
@@ -1033,33 +1033,32 @@ inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, 
                 effect->triggerAction == (u32) action) && 
                ((effect->flags & animationEffectFlags) == animationEffectFlags))
             {
-                AddAnimationEffectToEntity(worldMode, entity, effect);
+                AddAnimationEffectToEntity(worldMode, entity, effect, Slot_None);
             }
         }
         currentTaxonomy = GetParentTaxonomy(worldMode->table, currentTaxonomy);
     }
     
     
-#if 0    
-    for(each equipmentPiece)
+    for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
     {
-        TaxonomySlot* slot = GetSlotForTaxonomy();
+        u64 equipmentID = entity->equipment[slotIndex].ID;
+        ClientEntity* object = GetEntityClient(worldMode, equipmentID);
         
-        for(each animation effect)
+        if(object)
         {
-            if()
+            TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, object->taxonomy);
+            for(AnimationEffect* effect = slot->firstAnimationEffect; effect; effect = effect->next)
             {
-                AddAnimationEffectToEntity();
+                if((effect->triggerAction == Action_Count ||
+                    effect->triggerAction == (u32) action) && 
+                   ((effect->flags & animationEffectFlags) == animationEffectFlags))
+                {
+                    AddAnimationEffectToEntity(worldMode, entity, effect, (SlotName) slotIndex);
+                }
             }
         }
-        
-        if(slot->light)
-        {
-            AddCustomLightEffect();
-        }
     }
-#endif
-    
 }
 
 internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToAdvance)
@@ -1386,6 +1385,20 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                             if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
                             {
                                 DispatchClientAnimationEffect(input->worldMode, effect, input->entity, P, &color, input->timeToAdvance);
+                            }
+                        }
+                    }
+                    
+                    if(spriteReferenceSlot)
+                    {
+                        for(ClientAnimationEffect* effect = input->firstActiveEquipmentLightEffect; effect; effect = effect->next)
+                        {
+                            if(effect->referenceSlot == spriteReferenceSlot)
+                            {
+                                if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
+                                {
+                                    DispatchClientAnimationEffect(input->worldMode, effect, input->entity, P, &color, input->timeToAdvance);
+                                }
                             }
                         }
                     }
@@ -1792,6 +1805,19 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
                     {
                         taxonomy = objectEntity->taxonomy;
                         gen = objectEntity->gen;
+                        
+                        TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, taxonomy);
+                        if(slot->hasLight)
+                        {
+                            ClientAnimationEffect* lightEffect = PushStruct(tempPool, ClientAnimationEffect);
+                            lightEffect->referenceSlot = (SlotName) slotIndex;
+                            lightEffect->effect.type = AnimationEffect_Light;
+                            lightEffect->effect.stringHashID = slot->lightPieceHashID;
+                            lightEffect->effect.lightColor = slot->lightColor;
+                            lightEffect->effect.lightIntensity = objectEntity->lightIntensity;
+                            
+                            FREELIST_INSERT(lightEffect, input->firstActiveEquipmentLightEffect);
+                        }
                     }
                     
                     EquipmentAnimationSlot* dest = input->equipment + slotCount++;
