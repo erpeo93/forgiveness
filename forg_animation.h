@@ -256,7 +256,6 @@ struct AnimationFixedParams
     r32 minHotAssDistanceSq;
     
     struct ClientAnimationEffect* firstActiveEffect;
-    struct ClientAnimationEffect* firstActiveEquipmentEffect;
     
     r32 cameInTime;
     r32 goOutTime;

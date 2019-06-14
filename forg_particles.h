@@ -17,7 +17,7 @@ struct Particle_4x
     };
     u64 padding;
     __m128 ttl4x;
-    __m128 padding1;
+    __m128 randomUni4x;
     __m128 padding2;
 };
 
@@ -56,6 +56,8 @@ struct ParticleUpdater
     __m128 dAngle;
     
     __m128 totalRadiants;
+    
+    u32 sineSubdivisions;
 };
 
 enum ParticleEmitterType
@@ -108,6 +110,7 @@ struct ParticleEffectData
 {
 	Vec3 P;
     Vec3 destP;
+    r32 updaterAngle;
 };
 
 #define MAX_PHASE_COUNT 8
@@ -145,6 +148,7 @@ struct ParticleEffectDefinition
 {
     ParticleEmitter emitter;
     
+    r32 dAngleSineUpdaters;
     u32 phaseCount;
     ParticlePhase phases[MAX_PHASE_COUNT];
     

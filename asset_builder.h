@@ -110,7 +110,6 @@ enum SpriteInfoFlags
 {
     Sprite_Composed = (1 << 1),
     Sprite_Entity = (1 << 2),
-    Sprite_Equipment = (1 << 3),
 };
 
 struct SpriteInfo

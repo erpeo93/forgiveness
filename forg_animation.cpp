@@ -1038,6 +1038,28 @@ inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, 
         }
         currentTaxonomy = GetParentTaxonomy(worldMode->table, currentTaxonomy);
     }
+    
+    
+#if 0    
+    for(each equipmentPiece)
+    {
+        TaxonomySlot* slot = GetSlotForTaxonomy();
+        
+        for(each animation effect)
+        {
+            if()
+            {
+                AddAnimationEffectToEntity();
+            }
+        }
+        
+        if(slot->light)
+        {
+            AddCustomLightEffect();
+        }
+    }
+#endif
+    
 }
 
 internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToAdvance)
@@ -1080,8 +1102,6 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
         AddAnimationEffects(worldMode, entityC, (EntityAction) newAction, 0, 0);
         entityC->effectReferenceAction = newAction;
     }
-    
-    
     
     
     
@@ -1359,22 +1379,9 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     Vec4 color = pieceParams.color;
                     color.a *=  ass->alpha;
                     
-                    if(sprite->flags & Sprite_Equipment)
+                    for(ClientAnimationEffect* effect = input->firstActiveEffect; effect; effect = effect->next)
                     {
-                        for(ClientAnimationEffect* effect = input->firstActiveEquipmentEffect; effect; effect = effect->next)
-                        {
-                            if(effect->referenceSlot == spriteReferenceSlot)
-                            {
-                                if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
-                                {
-                                    DispatchClientAnimationEffect(input->worldMode, effect, input->entity, P, &color, input->timeToAdvance);
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        for(ClientAnimationEffect* effect = input->firstActiveEffect; effect; effect = effect->next)
+                        if(effect->referenceSlot == spriteReferenceSlot)
                         {
                             if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
                             {
@@ -1715,9 +1722,6 @@ internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group
     }
 }
 
-
-
-
 inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPool* tempPool, AnimationOutput* output, GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToAdvance, ClientEntity* fakeEquipment = 0)
 {
     AnimationState* animationState = &entityC->animation;
@@ -1774,9 +1778,7 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
             u64 objectEntityID = entityC->equipment[slotIndex].ID;
             if(objectEntityID)
             {
-                ClientEntity* objectEntity = 0;
-                objectEntity = GetEntityClient(worldMode, objectEntityID);
-                
+                ClientEntity* objectEntity = GetEntityClient(worldMode, objectEntityID);
                 if(objectEntity)
                 {
                     u32 taxonomy;

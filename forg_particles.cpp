@@ -1,5 +1,7 @@
 #define MMSetRandomize(seq, value, magnitude) _mm_set_ps(value + RandomBil(seq) * magnitude, value + RandomBil(seq) * magnitude, value + RandomBil(seq) * magnitude, value + RandomBil(seq) * magnitude);
 
+#define MMSetRandomUni(seq) _mm_set_ps(RandomUni(seq), RandomUni(seq), RandomUni(seq), RandomUni(seq))
+
 inline void FillParticleEffectData(ParticleEffect* effect, Vec3 P, Vec3 destP)
 {
 	effect->data.P = P;
@@ -30,6 +32,7 @@ internal void SpawnParticles(ParticleCache* cache, ParticleEffect* effect, r32 d
             {
                 r32 ttl = emitter->lifeTime + RandomBil(entropy) * emitter->lifeTimeV;
                 A->ttl4x = MMSetExpr(ttl);
+                A->randomUni4x = MMSetRandomUni(entropy);
                 
                 A->P.x = MMSetRandomize(entropy, atP.x, emitter->startPV.x);
                 A->P.y = MMSetRandomize(entropy, atP.y, emitter->startPV.y);
@@ -133,6 +136,17 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffect* 
             m4x4 matrix = ZRotation(zRotation) * YRotation(yRotation);
             Vec3 upVector = GetColumn(matrix, 2);
             upVector.z = Abs(upVector.z);
+            
+			r32 particleAngle = 0;
+			if(updater->sineSubdivisions > 1)
+			{
+				r32 subdivisionAngle = TAU32 / (r32) updater->sineSubdivisions;
+				u32 subIndex = RoundReal32ToU32(M(A->randomUni4x, 0) * (updater->sineSubdivisions - 1));
+				particleAngle = subIndex * subdivisionAngle;
+			}
+			r32 angle = particleAngle + data->updaterAngle;
+            
+			upVector = RotateVectorAroundAxis(upVector, deltaP, angle);
             V3_4x upVector4x = ToV3_4x(upVector);
             
             r32 normPhase = Clamp01MapToRange(phase->ttlMax, M(A->ttl4x, 0), phase->ttlMin);
@@ -265,6 +279,7 @@ inline ParticlePhase* GetFollowingPhase(ParticleEffect* effect, ParticlePhase* p
 
 internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cache, ParticleEffect* effect, r32 dt, Vec3 frameDisplacementInit, RenderGroup* group)
 {
+	effect->data.updaterAngle += effect->definition->dAngleSineUpdaters * dt;
     SpawnParticles(cache, effect, dt);
     
     V3_4x frameDisplacement = ToV3_4x(frameDisplacementInit);

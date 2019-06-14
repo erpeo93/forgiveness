@@ -3602,6 +3602,8 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         
         ParticleEffectDefinition* definition = currentSlot_->particleEffect;
         
+        definition->dAngleSineUpdaters = ElemR32(root, "dAngleSineUpdaters");
+        
         EditorElement* emitterEl = GetElement(root, "emitter");
         
         ParticleEmitter* emitter = &definition->emitter;
@@ -3664,6 +3666,8 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 updater->destPType = (ParticleUpdaterEndPosition) GetValuePreprocessor(ParticleUpdaterEndPosition, GetValue(phases, "endPositionType"));
                 updater->startOffset = StructV3(phases, "startOffset");
                 updater->endOffset = StructV3(phases, "endOffset");
+                
+                updater->sineSubdivisions = ElemU32(phases, "sineSubdivisions");
             }
             
             phases = phases->next;
@@ -3674,7 +3678,6 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     {
         if(currentSlot_->generator)
         {
-            
             for(TaxonomyTileAssociations* toFree = currentSlot_->generator->firstAssociation; toFree;)
             {
                 TaxonomyTileAssociations* next = toFree->next;
