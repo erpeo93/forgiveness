@@ -313,9 +313,9 @@ internal PLATFORM_OPEN_NEXT_FILE( Win32OpenNextFile )
 }
 
 //void name( PlatformFileHandle* handle, u64 offset, u32 size, void* dest )
-internal PLATFORM_READ_FROM_FILE( Win32ReadFromFile )
+internal PLATFORM_READ_FROM_FILE(Win32ReadFromFile)
 {
-    if( PlatformNoFileErrors( handle ) )
+    if(PlatformNoFileErrors(handle))
     {
         Win32PlatformFileHandle* win32Handle = ( Win32PlatformFileHandle* ) handle->platform;
         
@@ -323,17 +323,17 @@ internal PLATFORM_READ_FROM_FILE( Win32ReadFromFile )
         overlapped.Offset = ( u32 ) ( ( offset >> 0 ) & 0xffffffff );
         overlapped.OffsetHigh = ( u32 ) ( ( offset >> 32 ) & 0xffffffff );
         
-        u32 fileSize32 = SafeTruncateUInt64ToU32( size );
+        u32 fileSize32 = SafeTruncateUInt64ToU32(size);
         
         DWORD bytesRead;
-        if( ReadFile( win32Handle->handle, dest, fileSize32, &bytesRead, &overlapped ) &&
-           ( fileSize32 == bytesRead ) )
+        if(ReadFile(win32Handle->handle, dest, fileSize32, &bytesRead, &overlapped) &&
+           (fileSize32 == bytesRead))
         {
             // NOTE( Leonardo ): read completed successfully!
         }
         else
         {
-            Win32FileError( handle, "error reading file" );
+            Win32FileError(handle, "error reading file");
         }
     }
 }

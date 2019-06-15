@@ -199,7 +199,7 @@ inline ExpressionValue Evaluate(ExpressionContext* context, Tokenizer* tokenizer
         Token t = GetToken(tokenizer);
         if(t.type == Token_Number)
         {
-            result = ExpressionVal((r32)atof(t.text));
+            result = ExpressionVal(R32FromChar(t.text));
         }
         else if(t.type == Token_SemiColon)
         {
@@ -486,7 +486,7 @@ inline ExpressionValue Evaluate(ExpressionContext* context, Tokenizer* tokenizer
                             
                             case Token_Number:
                             {
-                                r32 value = (r32) atof(probe.text);
+                                r32 value = R32FromChar(probe.text);
                                 AddParam_(&context->params, ExpressionVal(value));
                             } break;
                             

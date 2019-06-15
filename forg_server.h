@@ -4,8 +4,6 @@
 #define INTROSPECTION
 
 #include "forg_basic_types.h"
-#include "meow_intrinsics.h"
-#include "meow_hash.h"
 #include "net.h"
 #include "forg_platform.h"
 #include "forg_shared.h"

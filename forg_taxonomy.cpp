@@ -779,6 +779,8 @@ inline void TranslateUI(TaxonomyTable* oldTable, TaxonomyTable* newTable, UIStat
         skill->taxonomy = TranslateTaxonomy(oldTable, newTable, skill->taxonomy);
     }
     
+    platformAPI.DEBUGWriteFile("skills", UI->skills, sizeof(UI->skills));
+    
     for(u32 modeIndex = 0; modeIndex < UIBook_Count; ++modeIndex)
     {
         BookMode* mode = UI->bookModes + modeIndex;

@@ -328,9 +328,8 @@ internal void BuildChunk(TaxonomyTable* table, WorldGenerator* generator, WorldC
     
     i32 lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
     
-    i32 ign;
-    chunkX = Wrap(0, chunkX, lateralChunkSpan, &ign);
-    chunkY = Wrap(0, chunkY, lateralChunkSpan, &ign);
+    chunkX = Wrap(0, chunkX, lateralChunkSpan);
+    chunkY = Wrap(0, chunkY, lateralChunkSpan);
     
     u32 baseTileX = chunkX * CHUNK_DIM;
     u32 baseTileY = chunkY * CHUNK_DIM;

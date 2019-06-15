@@ -613,7 +613,7 @@ inline void DeleteAllFilesNotArrived(GameModeWorld* worldMode, char* path)
 inline void SignalAnimationSyncCompleted(AnimationState* animation, u32 action, AnimationSyncState state);
 inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, EntityAction action, u64 targetID, u32 animationEffectFlags);
 inline void AddSkillAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, u32 skillTaxonomy, u64 targetID, u32 animationEffectFlags);
-internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
+internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
     UIState* UI = worldMode->UI;
     ClientEntity* currentEntity = 0;
@@ -648,25 +648,17 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
                 clientNetwork->nextSendUnreliableApplicationData = {};
                 clientNetwork->nextSendReliableApplicationData = {};
                 
-                char* assetPath = "assets";
-                PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, assetPath);
-                
-                for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; fileIndex++)
+                for(u32 fileIndex = 0; fileIndex < gameState->assets->fileCount; fileIndex++)
                 {
-                    TempMemory fileMemory = BeginTemporaryMemory(worldMode->temporaryPool);
-                    PlatformFileHandle handle = platformAPI.OpenNextFile(&fileGroup, assetPath);
-                    
-                    if(!StrEqual(handle.name, ".") && !StrEqual(handle.name, ".."))
+                    AssetFile* file = gameState->assets->files + fileIndex;
+                    PlatformFileHandle* handle = &file->handle;
+                    if(!StrEqual(handle->name, ".") && !StrEqual(handle->name, ".."))
                     {
-                        char* buffer = PushArray(worldMode->temporaryPool, char, handle.fileSize);
-                        platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
-                        u64 hash64 = *(u64*) buffer;
-                        SendFileHash(handle.name, hash64);
+                        u64 hash;
+                        platformAPI.ReadFromFile(handle, 0, sizeof(u64), &hash);
+                        SendFileHash(handle->name, hash);
                     }
-                    EndTemporaryMemory(fileMemory);
                 }
-                platformAPI.GetAllFilesEnd(&fileGroup);
-                
                 
                 clientNetwork->serverChallenge = login.challenge;
                 GameAccessRequest(clientNetwork->serverChallenge, true);
@@ -1269,7 +1261,7 @@ internal void DispatchApplicationPacket(GameModeWorld* worldMode, unsigned char*
     }
 }
 
-internal void ReceiveNetworkPackets(GameModeWorld* worldMode)
+internal void ReceiveNetworkPackets(GameState* gameState, GameModeWorld* worldMode)
 {
     NetworkPacketReceived packet;
     while(true)
@@ -1308,7 +1300,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode)
                         {
                             ++receiver->orderedBiggestReceived.index;
                             
-                            DispatchApplicationPacket(worldMode, test->data + sizeof(ForgNetworkApplicationData), test->dataSize - sizeof(ForgNetworkApplicationData));
+                            DispatchApplicationPacket(gameState, worldMode, test->data + sizeof(ForgNetworkApplicationData), test->dataSize - sizeof(ForgNetworkApplicationData));
                             test->dataSize = 0;
                             ++dispatched;
                         }
@@ -1331,7 +1323,7 @@ internal void ReceiveNetworkPackets(GameModeWorld* worldMode)
             if(ApplicationIndexGreater(applicationData, receiver->unorderedBiggestReceived))
             {
                 receiver->unorderedBiggestReceived = applicationData;
-                DispatchApplicationPacket(worldMode, packetPtr, packet.dataSize - sizeof(ForgNetworkApplicationData));
+                DispatchApplicationPacket(gameState, worldMode, packetPtr, packet.dataSize - sizeof(ForgNetworkApplicationData));
             }
         }
     }

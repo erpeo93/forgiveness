@@ -6,6 +6,7 @@
 
 #include <float.h>
 #include <limits.h>
+#include <stdio.h>
 
 #if !defined(internal)
 #define internal static

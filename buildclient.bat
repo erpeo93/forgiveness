@@ -17,7 +17,7 @@ REM cl %commoncompilerflags% ..\code\simple_compressor.cpp /link %commonlinkerfl
 
 
 REM asset builder
-cl %commoncompilerflags% -Od ..\code\asset_builder.cpp /link %commonlinkerflags% Gdi32.lib User32.lib Shell32.lib
+cl %commoncompilerflags% -O2 ..\code\asset_builder.cpp /link %commonlinkerflags% Gdi32.lib User32.lib Shell32.lib
 
 echo WAITING FOR PDB > lock.tmp
 

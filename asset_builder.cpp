@@ -136,8 +136,10 @@ EntireFile ReadFile( char* filename )
         fseek( in, 0, SEEK_END );
         result.size = ftell( in );
         fseek( in, 0, SEEK_SET );
-        result.content = malloc( result.size );
-        fread( result.content, result.size, 1, in );
+        result.content = malloc(result.size + 1);
+        fread(result.content, result.size, 1, in);
+        char* contentString = (char*) result.content;
+        contentString[result.size] = 0;
         fclose(in);
     }
     return result;
@@ -978,12 +980,15 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
     
     
     u32 frameCountResult = 64;
-    TempFrame* frames = (TempFrame* ) calloc(frameCountResult, sizeof(TempFrame ) );
+    TempFrame* frames = (TempFrame*) malloc(frameCountResult * sizeof(TempFrame));
+    memset(frames, 0, frameCountResult * sizeof(TempFrame));
     
     u32 boneCount = 1024;
     u32 assCount = 1024;
-    result.bones = (Bone* ) calloc(boneCount, sizeof(Bone ) );
-    result.ass = (PieceAss* ) calloc(assCount, sizeof(PieceAss ) );
+    result.bones = (Bone* ) malloc(boneCount * sizeof(Bone));
+    memset(result.bones, 0, boneCount * sizeof(Bone));
+    result.ass = (PieceAss* ) malloc(assCount * sizeof(PieceAss));
+    memset(result.ass, 0, assCount * sizeof(PieceAss));
     
     char filePath[256] = {};
     char* onePastLastSlash = filename;
@@ -1003,7 +1008,7 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
     sprintf(toRead, "%s/%s", path, filename );
     EntireFile animation = ReadFile(toRead);
     
-    SpriteInfo tempSprites[64];
+    SpriteInfo tempSprites[64] = {};
     i32 currentFolderID = 0;
     u32 folderSpriteCount[8] = {};
     u32* currentfolderSpriteCounter = 0;
@@ -1513,7 +1518,6 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
         }
     }
     
-    
     return result;
 }
 
@@ -1562,7 +1566,7 @@ internal void GetAnimationName(char* path, char* filename, u32 animationIndex, c
     char completeName[256];
     sprintf(completeName, "%s/%s", path, filename );
     EntireFile animation = ReadFile(completeName );
-    //Assert(animation.content );
+    //Assert(animation.content);
     if(animation.content )
     {
         // TODO(Leonardo ): robustness!
@@ -1640,9 +1644,9 @@ internal LoadedModel LoadModel(char* path, char* filename)
                         
                         if(x.type == Token_Number && y.type == Token_Number && z.type == Token_Number)
                         {
-                            dest->P.x = (r32) atof(x.text);
-                            dest->P.y = (r32) atof(y.text);
-                            dest->P.z = (r32) atof(z.text);
+                            dest->P.x = (r32) R32FromChar(x.text);
+                            dest->P.y = (r32) R32FromChar(y.text);
+                            dest->P.z = (r32) R32FromChar(z.text);
                             
                             if(dest->P.x > max.x)
                             {
@@ -1741,6 +1745,7 @@ internal AddedAsset AddAsset(Assets* assets)
     result.source = assets->assetSources + assetIndex;
     
     result.dest = assets->assets + assetIndex;
+    *result.dest = {};
     result.dest->firstTagIndex = assets->countTags;
     result.dest->onePastLastTagIndex = assets->countTags;
     assets->assetIndex = result.ID;
@@ -1853,6 +1858,7 @@ internal AnimationId AddAnimationAsset(char* path, char* filename, u32 animation
     AddedAsset asset = AddAsset(assets );
     
     asset.source->type = Pak_animation;
+    asset.source->animation.header = {};
     asset.dest->typeHashID = stringHashID;
     asset.dest->nameHashID = stringHashID;
     asset.dest->offsetFromOriginalOffset = 0;
@@ -1881,9 +1887,9 @@ internal void AddEveryAnimationThatStartsWith(char* path, u64 hashID, char* anim
                 AddAnimationAsset(path, fileName, animationIndex, hashID);
             }
         }
-        Win32CloseHandle(&handle );
+        Win32CloseHandle(&handle);
     }
-    Win32GetAllFilesEnd(&fileGroup );
+    Win32GetAllFilesEnd(&fileGroup);
 }
 
 internal SoundId AddSoundAsset(char* filename, u64 stringHash, i32 firstSampleIndex = 0, i32 sampleCount = 0)
@@ -1956,20 +1962,8 @@ inline void AddLabel(char* label, u32 labelLength, r32 value)
     AddTag(hashIndex, value);
 }
 
-inline u64 WriteToFile(void* content, u64 size)
-{
-	fwrite(content, size, 1, out);
-	u64 result = DataHash((char*) content, size);
-    
-	return result;
-}
-
 internal void WritePak(Assets* assets, char* fileName_)
 {
-	if(StrEqual(fileName_, "arm armourB.pak"))
-	{
-		int a = 5;
-	}
     char outputpak[128];
     FormatString(outputpak, sizeof(outputpak), "assets/%s", fileName_);
     
@@ -1979,8 +1973,6 @@ internal void WritePak(Assets* assets, char* fileName_)
         
         if(out )
         {
-			u64 dataHash = 0;
-            
             PAKHeader header = {};
             header.magicValue = PAK_MAGIC_NUMBER;
             header.version = PAK_VERSION;
@@ -1997,21 +1989,12 @@ internal void WritePak(Assets* assets, char* fileName_)
             header.assetTypeOffset = header.tagOffset + tagArraySize;
             header.assetOffset = header.assetTypeOffset + assetArrayTypeSize;
             
-            u64 fakeDataHash = 1111111;
+            u64 fakeDataHash = 0;
             fwrite(&fakeDataHash, sizeof(fakeDataHash), 1, out);
             fwrite(&header, sizeof(PAKHeader), 1, out);
             fwrite(&assets->tags, tagArraySize, 1, out);
             fwrite(&assets->types, assetArrayTypeSize, 1, out);
             
-            
-            for(u32 tagIndex = 0; tagIndex < assets->countTags; ++tagIndex)
-            {
-                PakTag* tag = assets->tags + tagIndex;
-                char valueString[32];
-                FormatString(valueString, sizeof(valueString), "%.0f", tag->value);
-                
-                dataHash += tag->ID * DataHash(valueString, StrLen(valueString));
-            }
             
             fseek(out, assetArraySize, SEEK_CUR );
             
@@ -2029,7 +2012,7 @@ internal void WritePak(Assets* assets, char* fileName_)
                         dest->bitmap.dimension[0] = bitmap.width;
                         dest->bitmap.dimension[1] = bitmap.height;
                         
-                        dataHash += WriteToFile(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ));
+                        fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out);
                         free(bitmap.free );
                     } break;
                     
@@ -2045,14 +2028,14 @@ internal void WritePak(Assets* assets, char* fileName_)
                         FinalizeFontKernings(font);
                         
                         u32 glyphsSize = font->glyphsCount * sizeof(PakGlyph );
-                        dataHash += WriteToFile(font->glyphs, glyphsSize);
+                        fwrite(font->glyphs, glyphsSize, 1, out);
                         
                         u8* horizontalAdvancePtr = (u8* ) font->horizontalAdvancement;
                         for(u32 glyphIndex = 0; glyphIndex < font->glyphsCount; glyphIndex++ )
                         {
                             
                             u32 horizontalAdvanceSliceSize = sizeof(r32 ) * font->glyphsCount; 
-                            dataHash += WriteToFile(horizontalAdvancePtr, horizontalAdvanceSliceSize);
+                            fwrite(horizontalAdvancePtr, horizontalAdvanceSliceSize, 1, out);
                             horizontalAdvancePtr += sizeof(r32 ) * font->maximumGlyphsCount;
                         }
                         
@@ -2065,7 +2048,7 @@ internal void WritePak(Assets* assets, char* fileName_)
                         
                         dest->bitmap.dimension[0] = bitmap.width;
                         dest->bitmap.dimension[1] = bitmap.height;
-                        dataHash += WriteToFile(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ));
+                        fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32), 1, out);
                         
                         free(bitmap.free );
                     } break;
@@ -2080,7 +2063,7 @@ internal void WritePak(Assets* assets, char* fileName_)
                         
                         for(u32 channelIndex = 0; channelIndex < sound.countChannels; channelIndex++ )
                         {
-                            dataHash += WriteToFile(sound.samples[channelIndex], sound.countSamples * sizeof(i16 )); 
+                            fwrite(sound.samples[channelIndex], sound.countSamples * sizeof(i16), 1, out); 
                         }
                         
                         free(sound.free );
@@ -2118,11 +2101,11 @@ internal void WritePak(Assets* assets, char* fileName_)
                         dest->animation.assCount = countTotalAss;
                         
                         Assert(source->animation.header.durationMS > 0);
-                        dataHash += WriteToFile(&source->animation.header, sizeof(AnimationHeader));
-                        dataHash += WriteToFile(animation.spriteInfos, sizeof(SpriteInfo) * animation.spriteInfoCount);
-                        dataHash += WriteToFile(animation.frames, sizeof(FrameData) * animation.frameCount);
-                        dataHash += WriteToFile(animation.bones, countTotalBones * sizeof(Bone));
-                        dataHash += WriteToFile(animation.ass, countTotalAss * sizeof(PieceAss));
+                        fwrite(&source->animation.header, sizeof(AnimationHeader), 1, out);
+                        fwrite(animation.spriteInfos, sizeof(SpriteInfo) * animation.spriteInfoCount, 1, out);
+                        fwrite(animation.frames, sizeof(FrameData) * animation.frameCount, 1, out);
+                        fwrite(animation.bones, countTotalBones * sizeof(Bone), 1, out);
+                        fwrite(animation.ass, countTotalAss * sizeof(PieceAss), 1, out);
                         
                         free(animation.bones);
                         free(animation.ass);
@@ -2136,8 +2119,8 @@ internal void WritePak(Assets* assets, char* fileName_)
                         dest->model.vertexCount = model.vertexCount;
                         dest->model.faceCount = model.faceCount;
                         dest->model.dim = model.dim;
-                        dataHash += WriteToFile(model.vertexes, sizeof(ColoredVertex) * model.vertexCount);
-                        dataHash += WriteToFile(model.faces, sizeof(ModelFace) * model.faceCount);
+                        fwrite(model.vertexes, sizeof(ColoredVertex) * model.vertexCount, 1, out);
+                        fwrite(model.faces, sizeof(ModelFace) * model.faceCount, 1, out);
                         
                         free(model.vertexes);
                         free(model.faces);
@@ -2149,14 +2132,14 @@ internal void WritePak(Assets* assets, char* fileName_)
             fseek(out, (u32 ) header.assetOffset, SEEK_SET );
             fwrite(&assets->assets, header.assetcount * sizeof(PakAsset), 1, out);
             
-            fseek(out, 0, SEEK_SET);
-            fwrite(&dataHash, sizeof(dataHash), 1, out);
-            
-            
             fseek(out, 0, SEEK_END);
-            fclose(out );
+            fclose(out);
             
 			PlatformFile uncompressed = DEBUGWin32ReadFile(outputpak);
+            u64 dataHash = DataHash((char*) uncompressed.content, uncompressed.size);
+            
+            //printf("%s: %llu\n", outputpak, dataHash);
+            *((u64*) uncompressed.content) = dataHash;
             
             uLong uncompressedSize = (uLong) uncompressed.size;
             uLong compressedLen = compressBound(uncompressedSize);
@@ -2167,7 +2150,15 @@ internal void WritePak(Assets* assets, char* fileName_)
             *((u32*) compressed) = uncompressedSize;
             
             int cmp_status = compress(compressed + 4, &compressedLen, (const unsigned char *) uncompressed.content, uncompressedSize);
-            Assert(cmp_status == Z_OK);
+            if(cmp_status == Z_OK)
+            {
+                
+            }
+            else
+            {
+                printf("ERROR!! Please check %s\n", outputpak);
+                getchar();
+            }
             
             
             DEBUGWin32FreeFile(&uncompressed);
@@ -2188,6 +2179,8 @@ internal void InitializeAssets(Assets* assets )
     assets->DEBUGAssetType = 0;
     assets->countAssets = 1;
     assets->assetIndex = 0;
+    
+    assets->tags[0] = {};
     
     for(u32 assetType = 0; assetType < Asset_count + HASHED_ASSET_SLOTS; assetType++ )
     {
@@ -2407,7 +2400,7 @@ internal void AddLabelsFromFile(Tokenizer* tokenizer)
                                             {
                                                 Token labelValue = GetToken(tokenizer);
                                                 
-                                                AddLabel(labelName.text, labelName.textLength, (r32) atof(labelValue.text));
+                                                AddLabel(labelName.text, labelName.textLength, R32FromChar(labelValue.text));
                                             }
                                         }
                                         
@@ -2435,7 +2428,7 @@ inline r32 ParseR32WithName(Tokenizer* tokenizer)
     if(RequireToken(tokenizer, Token_EqualSign))
     {
         Token value = GetToken(tokenizer);
-        result = (r32) atof(value.text);
+        result = R32FromChar(value.text);
     }
     else
     {
@@ -3521,15 +3514,11 @@ int main(int argc, char** argv )
     DeleteAll("assets", "*.autocomplete");
 #endif
     
+    WriteBitmapsAndAnimations();
     WriteModels();
-    
-#if 0    
     WriteMusic();
     WriteSounds();
     WriteFonts();
-    WriteBitmapsAndAnimations();
-#endif
-    
 }
 
 

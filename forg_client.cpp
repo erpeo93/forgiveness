@@ -662,7 +662,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     
     ClientPlayer* myPlayer = &worldMode->player;
     UIState* UI = worldMode->UI;
-    ReceiveNetworkPackets(worldMode);
+    ReceiveNetworkPackets(gameState, worldMode);
     
 #if FORGIVENESS_INTERNAL
     input->timeToAdvance = input->timeToAdvance * (gameState->timeCoeff / 100.0f);

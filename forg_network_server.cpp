@@ -188,7 +188,7 @@ internal void SendGameAccessConfirm(ServerPlayer* player, u64 worldSeed, u64 ide
 {
     StartPacket(player, gameAccess);
     Pack("LQQC", worldSeed, identifier, openedContainerID, additionalMS5x);
-    CloseAndStoreStandardPacket(player);
+    CloseAndStoreReliablePacket(player);
 }
 
 

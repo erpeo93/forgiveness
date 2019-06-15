@@ -513,6 +513,7 @@ NETWORK_QUEUE_PACKET(Win32QueuePacket)
 
 NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
 {
+    elapsedTime = Min(elapsedTime, 0.2f);
     b32 result = true;
     
     NetworkConnection* connection = network->connections + connectionSlot;
@@ -547,16 +548,16 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
             {
                 packetExpired = true;
                 SignalPacketLost(connection);
-                packet->lostTimer = 0;
             }
             else if(packet->resendTimer >= timer)
             {
                 packetExpired = true;
-                packet->resendTimer = 0;
             }
             
             if(packetExpired)
             {
+                packet->lostTimer = 0;
+                packet->resendTimer = 0;
                 if(packet == connection->lastSent)
                 {
                     connection->lastSent = packet->prev;

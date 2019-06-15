@@ -1,4 +1,6 @@
 #pragma once
+
+
 inline u64 StringHash( char* string, u32 length = U32_MAX )
 {
     u64 result = 0;
@@ -16,15 +18,22 @@ inline u64 StringHash( char* string, u32 length = U32_MAX )
     return result;
 }
 
+#include "meow_intrinsics.h"
+#include "meow_hash.h"
 inline u64 DataHash(char* buffer, u64 length)
 {
     u64 result = 0;
     
+#if 1
+    meow_hash hash = MeowHash_Accelerated(0, length, buffer);
+    result = MeowU64From(hash, 0);
+#else
     for(u64 index = 0; index < length; ++index)
     {
         char c = buffer[index];
         result = 65599 * result + c;
     }
+#endif
     
     return result;
 }
@@ -123,7 +132,7 @@ inline void StrCpy( char* s1, i32 countS1, char* s2, i32 countS2, char* dest, i3
     *dest = 0;
 }
 
-inline void StrCpy( char* s1, i32 countS1, char* dest, i32 destCount = 10000 )
+inline void StrCpy(char* s1, i32 countS1, char* dest, i32 destCount = 10000 )
 {
     Assert( countS1 < destCount );
     i32 count = 0;
@@ -149,10 +158,17 @@ internal i32 I32FromCharInternal( char** string )
     return result;
 }
 
-internal i32 I32FromChar( char* string )
+inline i32 I32FromChar(char* string)
 {
     char* ignored = string;
     i32 result = I32FromCharInternal(&ignored);
+    return result;
+}
+
+inline r32 R32FromChar(char* string)
+{
+    r32 result;
+    sscanf(string, "%f", &result);
     return result;
 }
 

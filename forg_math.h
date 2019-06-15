@@ -185,16 +185,18 @@ inline r32 ACoTan2(r32 y, r32 x)
     return result;
 }
 
-inline i32 Wrap( i32 min, i32 value, i32 max, i32* addDeltaTo, i32 deltaToApply = 1 )
+inline i32 Wrap_(i32 min, i32 value, i32 max, i32* addDeltaTo, i32 deltaToApply = 1)
 {
-    if( value < min )
+    if(value < min)
     {
         value = max + value;
+        value = Max(min, value);
         *addDeltaTo = *addDeltaTo - deltaToApply;
     }
-    else if( value >= max )
+    else if(value >= max)
     {
         value = value - max;
+        value = Min(max, value);
         *addDeltaTo = *addDeltaTo + deltaToApply;
     }
     return value;
@@ -204,7 +206,7 @@ inline i32 Wrap(i32 min, i32 value, i32 maxPlusOne)
 {
     i32 ignored;
     i32 result = min;
-    result = Wrap( min, value, maxPlusOne, &ignored );
+    result = Wrap_( min, value, maxPlusOne, &ignored);
     return result;
 }
 

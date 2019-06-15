@@ -445,7 +445,7 @@ inline r32 ToR32(char* string, r32 standard = 1.0f)
     
     if(string)
     {
-        result = (r32) atof(string);
+        result = R32FromChar(string);
     }
     
     return result;
