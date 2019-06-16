@@ -934,6 +934,7 @@ inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, ClientAnimat
 {
     AnimationEffect* effect = &clientEffect->effect;
     ParticleCache* particleCache = worldMode->particleCache;
+    BoltCache* boltCache = worldMode->boltCache;
     switch(effect->type)
     {
         case AnimationEffect_ChangeColor:
@@ -967,6 +968,16 @@ inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, ClientAnimat
         case AnimationEffect_Light:
         {
             AddLightToGridNextFrame(worldMode, P, effect->lightColor, effect->lightIntensity);
+        } break;
+        
+        case AnimationEffect_Bolt:
+        {
+            clientEffect->boltTimer += timeToAdvance;
+            if(clientEffect->boltTimer >= effect->boltTargetTimer)
+            {
+                clientEffect->boltTimer = 0;
+                SpawnBolt(boltCache, P, P + V3(2, 0, 0));
+            }
         } break;
     }
 }
@@ -1075,7 +1086,7 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
             if(effect->effect.triggerAction == Action_Count || effect->effect.triggerAction == entityC->effectReferenceAction ||
                (effect->effect.flags & AnimationEffect_DeleteWhenActionChanges))
             {
-                if(effect->particleRef)
+                if(effect->effect.type == AnimationEffect_SpawnParticles && effect->particleRef)
                 {
                     FreeParticleEffect(effect->particleRef);
                 }
@@ -1114,7 +1125,7 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
             effect->effect.timer -= timeToAdvance;
             if(effect->effect.timer <= 0)
             {
-                if(effect->particleRef)
+                if(effect->effect.type == AnimationEffect_SpawnParticles && effect->particleRef)
                 {
                     FreeParticleEffect(effect->particleRef);
                 }

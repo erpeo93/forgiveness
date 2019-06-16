@@ -37,6 +37,7 @@
 #include "forg_world.h"
 #include "forg_sound.h"
 #include "forg_particles.h"
+#include "forg_bolt.h"
 #include "forg_book.h"
 #include "forg_meta.h"
 #include "forg_cutscene.h"
@@ -206,7 +207,12 @@ struct ClientAnimationEffect
 {
     SlotName referenceSlot;
     AnimationEffect effect;
-    ParticleEffect* particleRef;
+    
+    union
+    {
+        ParticleEffect* particleRef;
+        r32 boltTimer;
+    };
     
     union
     {
@@ -375,6 +381,10 @@ struct GameModeWorld
     RandomSequence leafSequence;
     RandomSequence waterRipplesSequence;
     ParticleCache* particleCache;
+    
+    RandomSequence boltSequence;
+    r32 boltTime;
+    BoltCache* boltCache;
     
     TaxonomyTable* table;
     TaxonomyTable* oldTable;

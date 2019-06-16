@@ -163,6 +163,7 @@ printTable(noPrefix) enum AnimationEffectType
     AnimationEffect_ChangeColor,
     AnimationEffect_SpawnParticles,
     AnimationEffect_Light,
+    AnimationEffect_Bolt,
 };
 
 printFlags(noPrefix) enum AnimationEffectFlags
@@ -202,6 +203,11 @@ struct AnimationEffect
         {
             Vec3 lightColor;
             r32 lightIntensity;
+        };
+        
+        struct
+        {
+            r32 boltTargetTimer;
         };
     };
     

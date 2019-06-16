@@ -394,6 +394,7 @@ inline Lights GetLights(GameModeWorld* worldMode, Vec3 P)
 #include "forg_model.cpp"
 #include "forg_crafting.cpp"
 #include "forg_particles.cpp"
+#include "forg_bolt.cpp"
 #include "forg_audio.cpp"
 #include "forg_animation.cpp"
 #include "forg_UI.cpp"
@@ -459,6 +460,10 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     
     result->particleCache = PushStruct(&gameState->modePool, ParticleCache, AlignClear(16));
     InitParticleCache(result->particleCache, gameState->assets);
+    
+    result->boltCache = PushStruct(&gameState->modePool, BoltCache);
+    InitBoltCache(result->boltCache, 11111);
+    
     
     gameState->world = result;
     result->defaultCameraZ = 34.0f;
@@ -683,6 +688,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     worldMode->windTime += worldMode->windSpeed * input->timeToAdvance;
     
     ParticleCache* particleCache = worldMode->particleCache;
+    BoltCache* boltCache = worldMode->boltCache;
     
     Assert(input);
     Vec2 mouseP = V2(input->mouseX, input->mouseY);
@@ -1256,6 +1262,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     particleDelta = {};
                 }
                 particleCache->deltaParticleP = particleDelta;
+                boltCache->deltaP = particleDelta;
+                
                 UI->deltaMouseP += deltaP;
                 
                 for(u32 voronoiIndex = 0; voronoiIndex < ArrayCount(worldMode->voronoiPingPong); ++voronoiIndex)
@@ -1559,7 +1567,18 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     }
                 }
                 
+                
+                worldMode->boltTime += input->timeToAdvance;
+                if(worldMode->boltTime > 3.0f)
+                {
+                    worldMode->boltTime = 0;
+                    
+                    Vec2 random = 10.0f * RandomBilV2(&worldMode->boltSequence);
+                    SpawnBolt(worldMode->boltCache, V3(random, 7), V3(random, 0));
+                }
+                
                 UpdateAndRenderParticleEffects(worldMode, particleCache, input->timeToAdvance, group);
+                UpdateAndRenderBolts(worldMode, boltCache, input->timeToAdvance, group);
                 END_BLOCK();
                 
                 if(UI->mode == UIMode_Equipment || UI->mode == UIMode_Loot)

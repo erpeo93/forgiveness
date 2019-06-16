@@ -1088,6 +1088,16 @@ inline AnimationEffect LightEffect(Vec3 color, r32 intensity)
     return result;
 }
 
+inline AnimationEffect BoltEffect(r32 timer)
+{
+    AnimationEffect result = {};
+    result.type = AnimationEffect_Bolt;
+    
+    result.boltTargetTimer = timer;
+    
+    return result;
+}
+
 inline void AddLight(r32 minIntensity, r32 maxIntensity, char* pieceName, Vec3 color)
 {
     currentSlot_->minLightIntensity = minIntensity;
@@ -3369,6 +3379,12 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                     Vec4 color = ColorV4(effects, "color");
                     r32 intensity = ElemR32(effects, "lightIntensity");
                     effect = LightEffect(color.rgb, intensity);     
+                } break;
+                
+                case AnimationEffect_Bolt:
+                {
+                    r32 boltTimer = ElemR32(effects, "boltTimer");
+                    effect = BoltEffect(boltTimer);
                 } break;
             }
             

@@ -259,6 +259,7 @@ char* MetaTable_AnimationEffectType[] =
 "ChangeColor",
 "SpawnParticles",
 "Light",
+"Bolt",
 };
 MetaFlag MetaFlags_AnimationEffectFlags[] = 
  {
