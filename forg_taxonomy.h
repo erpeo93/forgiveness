@@ -512,6 +512,7 @@ struct TaxonomySlot
     
     
     
+    b32 hasBrain;
     TaxonomyBehavior* startingBehavior;
     TaxonomyConsideration* consideration;
     
@@ -677,6 +678,8 @@ struct TaxonomyTable
     EditorElement* soundEventsRoot;
     EditorElement* componentsRoot;
     EditorElement* oldComponentsRoot;
+    
+    AIStateMachine testStateMachine;
     
     u32 errorCount;
     char errors[512][128];

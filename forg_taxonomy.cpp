@@ -628,6 +628,8 @@ inline void TranslateMemory(TaxonomyTable* oldTable, TaxonomyTable* newTable, Me
 
 inline void TranslateBrain(TaxonomyTable* oldTable, TaxonomyTable* newTable, Brain* brain)
 {
+    
+#if 0    
     for(u32 behaviorIndex = 0; behaviorIndex < brain->behaviorCount; ++behaviorIndex)
     {
         BrainBehavior* behavior = brain->behaviorStack + behaviorIndex;
@@ -648,6 +650,8 @@ inline void TranslateBrain(TaxonomyTable* oldTable, TaxonomyTable* newTable, Bra
     
     
     TranslateMemory(oldTable, newTable, &brain->memory);
+#endif
+    
 }
 
 inline void TranslateCreatureComponent(EntityComponentArray* components, TaxonomyTable* oldTable, TaxonomyTable* newTable, u32 ID)

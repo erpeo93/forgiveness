@@ -134,6 +134,7 @@ internal void UpdateAndRenderBolts(GameModeWorld* worldMode, BoltCache* cache, r
                 if(event)
                 {
                     r32 distanceFromPlayer = Length(bolt->endP);
+                    distanceFromPlayer = 0;
                     u32 labelCount = 0;
                     SoundLabel* labels = 0;
                     PlaySoundEvent(worldMode->soundState, group->assets, event, labelCount, labels, &cache->entropy, distanceFromPlayer);

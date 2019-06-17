@@ -1,35 +1,3 @@
-inline r32 Score(ExpressionContext* context, AIAction* action, r32 bonus, r32 min)
-{
-    r32 result = action->importance + bonus;
-    Assert(action->considerationCount > 0);
-    for(u32 considerationIndex = 0; (considerationIndex < action->considerationCount) && (result > min); ++considerationIndex)
-    {
-        Consideration* consideration = action->considerations + considerationIndex;
-        context->params = consideration->params;
-        result *= EvaluateConsideration(context, consideration);
-    }
-    
-    
-    
-    return result;
-}
-
-inline AIConceptTargets* AIGetConceptTargets(AIConceptTargets* targets, u32 conceptTargetsCount, u32 conceptTaxonomy)
-{
-    AIConceptTargets* result = 0;
-    for(u32 conceptIndex = 0; conceptIndex < conceptTargetsCount; ++conceptIndex)
-    {
-        AIConceptTargets* targetsProbe = targets + conceptIndex;
-        if(conceptTaxonomy == targetsProbe->conceptTaxonomy)
-        {
-            result = targetsProbe;
-        }
-    }
-    
-    return result;
-}
-
-
 inline ReachableTile* GetReachableTileRaw(Brain* brain, u16 indexX, u16 indexY)
 {
     Assert(indexX < REACHABLE_TILEMAP_DIM);
@@ -517,280 +485,85 @@ internal void RecalculateObstacleMap(SimRegion* region, SimEntity* entity)
     }
 }
 
-
-inline b32 CommandRequiresTarget(AICommand command)
+inline b32 Satisfied(Brain* brain, AICondition* condition)
 {
-    b32 result = (command.action != Action_None && command.action != Action_Idle && command.action != Action_Move);
-    return result;
-}
-
-inline r32 Score(SimRegion* region, SimEntity* entity, BrainBehavior* behavior, AIAction* action, r32 bonus, r32 min, r32 scoreBonusPercentageIfTargetMatch = 0.2f)
-{
-    r32 result = 0;
-    
-    CreatureComponent* creature = Creature(region, entity);
-    Brain* brain = &creature->brain;
-    
-    ExpressionContext context = {};
-    context.region = region;
-    context.self = entity;
-    
-    AIConceptTargets* targets = AIGetConceptTargets(brain->conceptTargets, ArrayCount(brain->conceptTargets), action->associatedConcept);
-    if(targets)
+    b32 result = false;
+    switch(condition->type)
     {
-        for(u32 targetIndex = 0; targetIndex < targets->targetCount; ++targetIndex)
+        case AICondition_DoingActionFor:
         {
-            SimEntity* target = GetRegionEntityByID(region, targets->targets[targetIndex]);
-            if(target)
+            if(brain->commandTime >= condition->data.time)
             {
-                Vec3 relativeP = target->P - entity->P;
-                if(Reachable(brain, relativeP, entity->boundType, entity->bounds, target->boundType, target->bounds))
-                {
-                    Assert(context.targetCount < ArrayCount(context.targets));
-                    if(context.targetCount < ArrayCount(context.targets))
-                    {
-                        context.targets[context.targetCount++] = target;
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
+                result = true;
             }
-        }
-    }
-    
-    if(action->type == AIAction_Command)
-    {
-        if(CommandRequiresTarget(action->command))
-        {
-            action->command.targetID = 0;
-            for(u32 targetIndex = 0; targetIndex < context.targetCount; ++targetIndex)
-            {
-                SimEntity* target = context.targets[targetIndex];
-                context.target = target;
-                r32 targetScore = Score(&context, action, bonus, min);
-                if(target->identifier == entity->targetID)
-                {
-                    targetScore += (scoreBonusPercentageIfTargetMatch * targetScore);
-                }
-                if(targetScore > result)
-                {
-                    action->command.targetID = target->identifier;
-                    result = targetScore;
-                }
-            }
-        }
-        else
-        {
-            result = Score(&context, action, bonus, min);
-        }
-    }
-    else
-    {
-        result = Score(&context, action, bonus, min);
+        } break;
+        
+        InvalidDefaultCase;
     }
     
     return result;
 }
 
-
-inline void PushAIBehavior(TaxonomyTable* table, Brain* brain, u32 behaviorTaxonomy)
+inline void ExecuteStateMachineAction(SimEntity* entity, AICommand command)
 {
-    TaxonomySlot* slot = GetSlotForTaxonomy(table, behaviorTaxonomy);
-    AIBehavior* behavior = slot->behaviorContent;
-    
-    Assert(behavior->actionCount > 0);
-    Assert(brain->behaviorCount < ArrayCount(brain->behaviorStack));
-    BrainBehavior* dest = brain->behaviorStack + brain->behaviorCount++;
-    
-    dest->taxonomy = behaviorTaxonomy;
-    dest->importance = 0;
-}
-
-
-internal void ExecuteAction(SimRegion* region, SimEntity* entity, AICommand command, r32 maxDistanceSq)
-{
-    CreatureComponent* creature = Creature(region, entity);
-    Brain* brain = &creature->brain;
-    u64 targetID = command.targetID;
-    if(targetID)
+    switch(command.type)
     {
-        SimEntity* target = GetRegionEntityByID(region, targetID);
-        if(target)
+        case AIAction_Behavior:
         {
-            Vec3 toTarget = target->P - entity->P;
-            if(LengthSq(toTarget) <= maxDistanceSq)
-            {
-                entity->action = command.action;
-                entity->targetID = command.targetID;
-                entity->acceleration = V3(0, 0, 0);
-            }
-            else
-            {
-                entity->action = Action_Move;
-                
-                b32 directMovement = false;
-                if(entity->boundType)
-                {
-                    if(FollowPath(entity, brain, entity->P))
-                    {
-                        directMovement = true;
-                    }
-                }
-                else
-                {
-                    directMovement = true;
-                }
-                
-                if(directMovement)
-                {
-                    entity->acceleration = toTarget;
-                }
-                else
-                {
-                    entity->acceleration = {};
-                }
-            }
-        }
-        else
+            InvalidCodePath;
+        } break;
+        
+        case AIAction_StandardAction:
         {
-            entity->targetID = 0;
+            InvalidCodePath;
+        } break;
+        
+        case AIAction_SpecialAction:
+        {
+            switch(command.data.specialAction)
+            {
+                case SpecialAction_MoveLeft:
+                {
+                    entity->action = Action_Move;
+                    entity->acceleration = V3(-1, 0, 0);
+                } break;
+                
+                case SpecialAction_MoveRight:
+                {
+                    entity->action = Action_Move;
+                    entity->acceleration = V3(1, 0, 0);
+                } break;
+                
+                InvalidDefaultCase;
+            }
+        } break;
+        
+        default:
+        {
             entity->action = Action_Idle;
-        }
-    }
-    else
-    {
-        
-#if 0        
-        if(command.type == AIAction_Destination)
-        {
-            FollowPath();
-        }
-        else
-#endif
-        
-        {
-            entity->targetID = 0;
-            entity->action = command.action;
-        }
+            entity->acceleration = {};
+        } break;
     }
 }
 
-#if 0
-enum GeographicScale
+inline void HandleStateMachine(Brain* brain, AIStateMachine* stateMachine, r32 timeToUpdate)
 {
-    Tile,
-    Chunk,
-    Islands
-}
-
-internal void RecalculateInfluenceMap(SimRegion* region, SimEntity* entity, InfluenceMap* dest. b32 considerMemory, GeographycScale scale)
-{
-    for(everyEntity)
-    {
-        Vec3 relativeP = target->P - entity->P;
-        u32 index = MapPToIndex(relativeP);
-        
-        r32 influence = ?;
-        u8 influenceInt = ?;
-        
-        u32 influenceBif = Max(0xff, dest->values[index] + influenceInt);
-        dest->values[index] += SafeTruncateToU8(influenceBig);
-    }
+    AIAction* action = stateMachine->actions + brain->currentActionIndex;
+    brain->currentCommand = action->command;
+    brain->commandTime += timeToUpdate;
     
-    if(considerMemory)
+    for(u32 transitionIndex = 0; transitionIndex < action->transitionCount; ++transitionIndex)
     {
-        AddToInfluenceBasedOnMemoryAsWell();
-    }
-}
-#endif
-
-inline MemCriteria* AIGetCriteria(TaxonomyTable* table, u32 taxonomy, u32 criteriaTaxonomy)
-{
-    MemCriteria* result = 0;
-    
-    u32 currentTaxonomy = taxonomy;
-    while(currentTaxonomy && !result)
-    {
-        TaxonomySlot* slot = GetSlotForTaxonomy(table, currentTaxonomy);
-        for(TaxonomyMemBehavior* behavior = slot->firstMemBehavior; behavior && !result; behavior = behavior->next)
+        AIStateMachineTransition* transition = action->transitions + transitionIndex;
+        
+        Assert(transition->conditionCount == 1);
+        if(Satisfied(brain, transition->conditions))
         {
-            TaxonomySlot* behaviorSlot = GetSlotForTaxonomy(table, behavior->taxonomy);
-            for(MemCriteria* criteria = behaviorSlot->criteria; criteria; criteria = criteria->next)
-            {
-                if(criteria->taxonomy == criteriaTaxonomy)
-                {
-                    result = criteria;
-                    break;
-                }
-            }
-        }
-        
-        currentTaxonomy = GetParentTaxonomy(table, currentTaxonomy);
-    }
-    
-    return result;
-}
-
-internal void FillTargets(SimRegion* region, SimEntity* entity)
-{	
-    CreatureComponent* creature = Creature(region, entity);
-    Brain* brain = &creature->brain;
-    
-    r32 targetLimit = REACHABLE_TILEMAP_SPAN;
-    Rect3 targetBounds = RectCenterDim(V3(0, 0, 0), V3(targetLimit, targetLimit, targetLimit));
-    RegionPartitionQueryResult query = QuerySpacePartition(region, &region->collisionPartition, entity->P, V3(0, 0, 0), targetBounds);
-    for(u32 surfaceIndex = 0; surfaceIndex < ArrayCount(query.surfaceIndexes); ++surfaceIndex)
-    {
-        RegionPartitionSurface* surface = region->collisionPartition.partitionSurfaces + query.surfaceIndexes[surfaceIndex];
-        
-        PartitionSurfaceEntityBlock* block = surface->first;
-        while(block)
-        {
-            for(u32 blockIndex = 0; blockIndex < block->entityCount; ++blockIndex)
-            {
-                CollisionData* collider = block->colliders + blockIndex;
-                SimEntity* probe = GetRegionEntity(region, collider->entityIndex);
-                MemAssociation* associations = MemGetAssociations(&brain->memory, probe->identifier);
-                for(u32 conceptIndex = 0; conceptIndex < ArrayCount(brain->conceptTargets); ++conceptIndex)
-                {
-                    AIConceptTargets* targets = brain->conceptTargets + conceptIndex;
-                    if(targets->conceptTaxonomy)
-                    {
-                        if(targets->targetCount < ArrayCount(targets->targets))
-                        {
-                            MemCriteria* criteria = AIGetCriteria(region->taxTable, entity->taxonomy, targets->conceptTaxonomy);
-                            if(criteria)
-                            {
-                                for(u32 possibleRequiredIndex = 0; possibleRequiredIndex < criteria->possibleTaxonomiesCount; ++possibleRequiredIndex)
-                                {
-                                    if(MemAssociationPresent(&brain->memory, criteria->requiredConceptTaxonomy[possibleRequiredIndex], probe->identifier))
-                                    {
-                                        targets->targets[targets->targetCount++] = probe->identifier;
-                                        break;
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                InvalidCodePath;
-                            }
-                        }
-                        else
-                        {
-                            //InvalidCodePath;
-                        }
-                    }
-                }
-            }
-            
-            block = block->next;
+            brain->commandTime = 0;
+            brain->currentActionIndex = transition->destActionIndex;
         }
     }
 }
-
-
 
 internal void HandleAI(SimRegion* region, SimEntity* entity)
 {
@@ -801,143 +574,12 @@ internal void HandleAI(SimRegion* region, SimEntity* entity)
     r32 brainTargetSeconds = 1.0f;
     if(brain->timeSinceLastUpdate >= brainTargetSeconds)
     {
-        MemUpdate(region->taxTable, &brain->memory, 
-                  entity->taxonomy, region->timeToUpdate);
-        
-        brain->timeSinceLastUpdate -= brainTargetSeconds;
+        brain->timeSinceLastUpdate = 0;
         brain->path.nodeCount = 0;
         RecalculateObstacleMap(region, entity);
         
-#if 0    
-        for(u32 criteriaIndex = 0; criteriaIndex < behavior->criteriaCount; ++criteriaIndex)
-        {
-            RecalculateInfluenceMap(criteriaIndex);
-        }
-#endif
-        for(u32 conceptIndex = 0; conceptIndex < ArrayCount(brain->conceptTargets); ++conceptIndex)
-        {
-            brain->conceptTargets[conceptIndex] = brain->newConceptTargets[conceptIndex];
-            brain->newConceptTargets[conceptIndex].conceptTaxonomy = 0;
-        }
-        FillTargets(region, entity);
-        u32 currentConceptIndex = 0;
-        
-        
-        
-        
-        
-        AIAction* todo = 0;
-        u32 todoStackIndex = 0;
-        
-        b32 pushedAnything = false;
-        for(u32 stackIndex = 0; stackIndex < brain->behaviorCount && !pushedAnything; ++stackIndex)
-        {
-            AIAction* todoAction = 0;
-            u32 todoActionIndex = 0;
-            r32 bestScore = 0;
-            
-            BrainBehavior* behavior = brain->behaviorStack + stackIndex;
-            TaxonomySlot* slot = GetSlotForTaxonomy(region->taxTable, behavior->taxonomy);
-            AIBehavior* b = slot->behaviorContent;
-            
-            
-            for(u32 actionIndex = 0; actionIndex < b->actionCount; ++actionIndex)
-            {
-                AIAction* action = b->actions + actionIndex;
-                if(action->associatedConcept)
-                {
-                    AIConceptTargets* targets = AIGetConceptTargets(brain->newConceptTargets, ArrayCount(brain->newConceptTargets), action->associatedConcept);
-                    if(!targets)
-                    {
-                        if(currentConceptIndex < ArrayCount(brain->conceptTargets))
-                        {
-                            AIConceptTargets* newTargets = brain->newConceptTargets + currentConceptIndex++;
-                            newTargets->targetCount = 0;
-                            newTargets->conceptTaxonomy = action->associatedConcept;
-                        }
-                        else
-                        {
-                            InvalidCodePath;
-                        }
-                    }
-                }
-                
-                
-                r32 importance = action->importance;
-                if(behavior->importance > 0 && actionIndex == behavior->activeActionIndex)
-                {
-                    importance = behavior->importance;
-                }
-                
-                r32 bonus = 0.0f;
-                r32 score = Score(region, entity, behavior, action, bonus, bestScore);
-                if(score > bestScore)
-                {
-                    todoStackIndex = stackIndex;
-                    todoAction = action;
-                    todoActionIndex = actionIndex;
-                    bestScore = score;
-                }
-            }
-            
-            if(todoAction)
-            {
-                if(todoAction->type == AIAction_Command || todoAction->type == AIAction_Destination)
-                {
-                    todo = todoAction;
-                    brain->behaviorCount = todoStackIndex + 1;
-                    pushedAnything = true;
-                }
-                else
-                {
-                    if(todoActionIndex != behavior->activeActionIndex)
-                    {
-                        brain->behaviorCount = todoStackIndex + 1;
-                        PushAIBehavior(region->taxTable, brain, todoAction->behaviorTaxonomy);
-                        behavior->activeActionIndex = todoActionIndex;
-                        pushedAnything = true;
-                    }
-                }
-            }
-        }
-        
-        if(todo)
-        {
-            for(u32 backwardStackIndex = todoStackIndex; backwardStackIndex > 0; --backwardStackIndex)
-            {
-                BrainBehavior* behavior = brain->behaviorStack + backwardStackIndex;
-                behavior->importance = todo->importance;
-            }
-            
-            
-#if 0            
-            if(todoAction->type == AIAction_Destination)
-            {
-                ScoreDestinationexpression();
-            }
-            
-            else
-#endif
-            
-            {
-                entity->targetID = todo->command.targetID;
-                if(entity->targetID)
-                {
-                    brain->desiredCommand = todo->command;
-                    SimEntity* target = GetRegionEntityByID(region, todo->command.targetID);
-                    BuildPathToReach(brain, entity->P, entity->boundType, entity->bounds, target->P, target->boundType, target->bounds);
-                }
-            }
-        }
+        HandleStateMachine(brain, brain->stateMachine, brainTargetSeconds);
     }
     
-    
-    r32 maxDistanceSq = Square(1.5f);
-    ExecuteAction(region, entity, brain->desiredCommand, maxDistanceSq);
+    ExecuteStateMachineAction(entity, brain->currentCommand);
 }
-
-
-
-
-
-

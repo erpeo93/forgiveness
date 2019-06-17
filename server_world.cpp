@@ -341,6 +341,17 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         while(startingBehaviorTaxonomy)
         {
             TaxonomySlot* behaviorSlot = GetSlotForTaxonomy(taxTable, startingBehaviorTaxonomy);
+            
+            if(behaviorSlot->hasBrain)
+            {
+                CreatureComponent* creature = Creature(region, entity);
+                creature->brain.valid = true;
+                creature->brain.stateMachine = &taxTable->testStateMachine;
+                creature->brain.timeSinceLastUpdate = R32_MAX;
+            }
+            
+            
+#if 0            
             if(behaviorSlot->startingBehavior)
             {
                 CreatureComponent* creature = Creature(region, entity);
@@ -355,6 +366,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
                 memory->shortTerm.decadenceFactor = 1.0f;
                 break;
             }
+#endif
             
             startingBehaviorTaxonomy = GetParentTaxonomy(behaviorSlot);
         }
@@ -767,5 +779,5 @@ internal void BuildWorld(ServerState * server)
     }
     
     BuildServerChunks(server, generator);
-    BuildSimpleTestWorld(server, generator);
+    //BuildSimpleTestWorld(server, generator);
 }

@@ -235,11 +235,13 @@ inline void SwapTables(ServerState* server)
     InitTaxonomyReadWrite(server->activeTable);
 }
 
+
 internal void FillGenerationData(ServerState* server)
 {
     b32 freeTabs = !server->editor;
     ImportAllFiles("assets", (u32) 0xffffffff, freeTabs);
-    ReadBehaviors();
+    
+    InitDefaultStateMachine();
     ReadSynthesisRules();
     
     OutputDebugString("DEBUG0\n");

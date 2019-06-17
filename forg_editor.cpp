@@ -1419,261 +1419,6 @@ inline void AddIngredient(LayoutPiece* piece, char* name, u32 quantity)
 
 #ifdef FORG_SERVER
 
-global_variable AIBehavior* currentBehavior_;
-global_variable AIAction* currentAction_;
-global_variable Consideration* currentConsideration_;
-
-
-inline void BeginBehavior(char* name)
-{
-    TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    
-    if(slot)
-    {
-        FREELIST_FREE(slot->behaviorContent, AIBehavior, taxTable_->firstFreeAIBehavior);
-        Assert(IsBehavior(taxTable_, slot->taxonomy));
-        TAXTABLE_ALLOC(slot->behaviorContent, AIBehavior);
-        currentBehavior_ = slot->behaviorContent;
-    }
-    else
-    {
-        currentBehavior_ = 0;
-        EditorErrorLog(name);
-    }
-}
-
-inline void AddAction(EntityAction todo, char* targetCriteria = 0, r32 importance = 1.0f)
-{
-    if(currentBehavior_)
-    {
-        Assert(currentBehavior_->actionCount < ArrayCount(currentBehavior_->actions));
-        AIAction* action = currentBehavior_->actions + currentBehavior_->actionCount++;
-        action->type = AIAction_Command;
-        action->command.action = todo;
-        
-        if(targetCriteria)
-        {
-            TaxonomySlot* targetSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, targetCriteria);
-            
-            if(targetSlot)
-            {
-                action->associatedConcept = targetSlot->taxonomy;
-            }
-            else
-            {
-                EditorErrorLog(targetCriteria);
-            }
-        }
-        action->importance = importance;
-        currentAction_ = action;
-    }
-}
-
-inline void AddAction(char* behaviorName, r32 importance = 1.0f)
-{
-    TaxonomySlot* behaviorSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, behaviorName);
-    
-    if(behaviorSlot)
-    {
-        if(currentBehavior_)
-        {
-            Assert(currentBehavior_->actionCount < ArrayCount(currentBehavior_->actions));
-            AIAction* action = currentBehavior_->actions + currentBehavior_->actionCount++;
-            action->type = AIAction_Behavior;
-            action->behaviorTaxonomy = behaviorSlot->taxonomy;
-            
-            action->importance = importance;
-            currentAction_ = action;
-        }
-    }
-    else
-    {
-        currentAction_ = 0;
-        EditorErrorLog(behaviorName);
-    }
-}
-
-inline void AssociateBehavior(char* referenceName, char* specificName, b32 isStartingBlock = false)
-{
-    TaxonomyBehavior* behavior;
-    TAXTABLE_ALLOC(behavior, TaxonomyBehavior);
-    TaxonomySlot* referenceSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, referenceName);
-    TaxonomySlot* blockSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, specificName);
-    
-    if(referenceSlot)
-    {
-        if(blockSlot)
-        {
-            behavior->referenceTaxonomy = referenceSlot->taxonomy;
-            behavior->specificTaxonomy = blockSlot->taxonomy;
-            
-            FREELIST_INSERT(behavior, currentSlot_->firstPossibleBehavior);
-            
-            if(isStartingBlock)
-            {
-                currentSlot_->startingBehavior = behavior;
-            }
-        }
-        else
-        {
-            EditorErrorLog(specificName);
-        }
-    }
-    else
-    {
-        EditorErrorLog(referenceName);
-    }
-}
-
-inline void DefineConsideration(char* considerationName, char* expression)
-{
-    TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, considerationName);
-    if(slot)
-    {
-        Assert(!slot->consideration);
-        TAXTABLE_ALLOC(slot->consideration, TaxonomyConsideration);
-        
-        StrCpy(expression, StrLen(expression), slot->consideration->expression, ArrayCount(slot->consideration->expression));
-    }
-    else
-    {
-        EditorErrorLog(considerationName);
-    }
-}
-
-inline ResponseCurve Gaussian()
-{
-    ResponseCurve result = {};
-    return result;
-}
-
-inline void AddConsideration(char* name, r32 bookEndMin, r32 bookEndMax, ResponseCurve curve)
-{
-    TaxonomySlot* considerationSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    if(considerationSlot)
-    {
-        if(currentAction_)
-        {
-            Assert(currentAction_->considerationCount < ArrayCount(currentAction_->considerations));
-            Consideration* dest = currentAction_->considerations + currentAction_->considerationCount++;
-            dest->expression = NORUNTIMEGetTaxonomySlotByName(taxTable_, name)->consideration->expression;
-            
-            dest->bookEndMin = bookEndMin;
-            dest->bookEndMax = bookEndMax;
-            
-            dest->curve = curve;
-            dest->params.paramCount = 0;
-            currentConsideration_ = dest;
-        }
-    }
-    else
-    {
-        currentConsideration_ = 0;
-        EditorErrorLog(name);
-    }
-}
-
-
-inline void AddBooleanConsideration(char* name)
-{
-    AddConsideration(name, 0, 1, Gaussian());
-}
-
-#define AddParam(value) AddParam_(ExpressionVal(value))
-inline void AddParam_(ExpressionValue value)
-{
-    if(currentConsideration_)
-    {
-        ConsiderationParams* params = &currentConsideration_->params;
-        AddParam_(params, value);
-    }
-}
-
-
-internal void ReadBehaviors()
-{
-    DefineConsideration("nullConsideration", "0.1");
-    DefineConsideration("angryLevel", "0.5");
-    DefineConsideration("closeness", "Div(Square(params[0]), LengthSq(Diff(targetGen(P), selfGen(P))))");
-    
-    DefineConsideration("hisThreat", "Div(target(lifePoints), self(lifePoints))");
-    DefineConsideration("myThreat", "Div(self(lifePoints), target(lifePoints))");
-    
-    DefineConsideration("theirTotalThreat", "foreach(target){SetResult(sum(result, hisThreat()))}");
-    DefineConsideration("myTotalThreat", "foreach(target){SetResult(sum(result, myThreat()))}");
-    
-    DefineConsideration("tooDistant", "GtEq(LengthSq(Diff(targetGen(P), selfGen(P))), Square(params[0]))");
-    DefineConsideration("notTooDistant", "Not(GtEq(LengthSq(Diff(targetGen(P), selfGen(P))), Square(params[0])))");
-    DefineConsideration("tooDistantFromAllTargets", "SetResult(1.0); foreach(target){ if(notTooDistant(params[0])){SetResult(0); endLoop} }");
-    
-    //DefineConsideration("AttackedRecently", "Available(BrainNode(ID)) && node->timer <= 10.0f)");
-    //DefineConsideration("AttackedRecently", "Available(BrainNode(taxonomy) && node->timer <= 10.0f))"); 
-    
-#if 0    
-    BeginInfluenceMap("enemies");
-    FallOffFunction(???);
-    
-    BeginInfluenceMap("allies");
-    FallOffFunction(???);
-    
-    
-    BeginInfluenceMap("prey");
-    SetScale(Region);
-    FallOffFunction(???);
-    
-    BeginBehavior("help random");
-    AddAction("find someone");
-    AddAction(Action_Attack);
-    
-    
-#endif
-    
-#if 0
-    BeginBehavior("fleeFromEnemies");
-    AddAction(Action_Move);
-    AddParam("destination", "ToPosition(Maximize(Min(Enemies(All)), Min(Environment(All), Max(Allies(All))))");
-    
-    BeginBehavior("enemiesSpacing");
-    AddAction(Action_Move);
-    AddParam("destination", "ToPosition(Maximize(Min(Enemies(All)), Min(Environment(All), Min(Allies(All))))");
-#endif
-    
-    
-    
-    
-    BeginBehavior("idiot routine");
-    AddAction(Action_Attack, "enemy");
-    AddConsideration("myThreat", 0.0f, 1.0f, Gaussian());
-    
-    AddAction(Action_Eat, "foodCrit");
-    AddConsideration("angryLevel", 0.0f, 1.0f, Gaussian());
-    AddConsideration("closeness", 0.0f, 10.0f, Gaussian());
-    AddParam(2.0f);
-    
-#if 0    
-    AddAction(Action_None);
-    AddConsideration("nullConsideration", 0.0f, 20.0f, Gaussian());
-#endif
-    
-    
-#if 0    
-    AddAction(Action_Move);
-    AddDestination("Maximize(random)");
-    AddConsideration("nullConsideration", 0.0f, 20.0f, Gaussian());
-#endif
-    
-    
-#if 0    
-    AddAction("fleeFromEnemies");
-    AddConsideration("enemiesThreat");
-    
-    AddAction("enemySpacing");
-    AddInfluenceConsideration("EnemiesProximity(self)", Gaussian());
-    AddInfluenceConsideration("AlliesProximity(self)", Gaussian());
-#endif
-}
-
-
 global_variable MemCriteria* currentMemCriteria_;
 global_variable TaxonomyTree* currentSynthTree_;
 global_variable TaxonomyNode* currentSynthNode_;
@@ -1869,6 +1614,59 @@ internal void ReadSynthesisRules()
 #endif
 
 
+inline AIAction* AddSpecialAction(AIStateMachine* sm, EntitySpecialAction action)
+{
+    AIAction* result = 0;
+    if(sm->actionCount < ArrayCount(sm->actions))
+    {
+        result = sm->actions + sm->actionCount++; 
+        result->command.type = AIAction_SpecialAction;
+        result->command.data.specialAction = action;
+        result->transitionCount = 0;
+    }
+    
+    return result;
+}
+
+inline AIStateMachineTransition* AddTransition(AIStateMachine* sm, AIAction* a1, AIAction* a2)
+{
+    AIStateMachineTransition* result = 0;
+    if(a1->transitionCount < ArrayCount(a1->transitions))
+    {
+        result = a1->transitions + a1->transitionCount++;
+        result->destActionIndex = (u32) (a2 - sm->actions);
+    }
+    
+    return result;
+}
+
+inline AICondition* AddCondition(AIStateMachineTransition* transition, AIConditionType type)
+{
+    AICondition* result = 0;
+    if(transition->conditionCount < ArrayCount(transition->conditions))
+    {
+        result = transition->conditions + transition->conditionCount++;
+        result->type = type;
+    }
+    
+    return result;
+}
+
+inline void InitDefaultStateMachine()
+{
+    AIStateMachine* sm = &taxTable_->testStateMachine;
+    
+    AIAction* action = AddSpecialAction(sm, SpecialAction_MoveLeft);
+    AIAction* action2 = AddSpecialAction(sm, SpecialAction_MoveRight);
+    
+    AIStateMachineTransition* transition = AddTransition(sm, action, action2);
+    AICondition* condition = AddCondition(transition, AICondition_DoingActionFor);
+    condition->data.time = 2.0f;
+    
+    AIStateMachineTransition* transition2 = AddTransition(sm, action2, action);
+    AICondition* condition2 = AddCondition(transition2, AICondition_DoingActionFor);
+    condition2->data.time = 2.0f;
+}
 
 
 
@@ -3206,18 +3004,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     
     else if(StrEqual(name, "behaviors"))
     {
-        FREELIST_FREE(currentSlot_->firstPossibleBehavior, TaxonomyBehavior, taxTable_->firstFreeTaxonomyBehavior);
-        EditorElement* behaviors = root->firstInList;
-        while(behaviors)
-        {
-            char* generic = GetValue(behaviors, "generic");
-            char* specific = GetValue(behaviors, "specific");
-            char* primary = GetValue(behaviors, "primary");
-            
-            AssociateBehavior(generic, specific, ToB32(primary));
-            
-            behaviors = behaviors->next;
-        }
+        currentSlot_->hasBrain = true;
     }
     else if(StrEqual(name, "memBehaviors"))
     {

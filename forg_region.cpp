@@ -1424,10 +1424,10 @@ internal b32 UpdateCreature(SimRegion* region, SimEntity* entity)
     DispatchPassiveEffects(region, entity);
     
     Brain* brain = &creature->brain;
-    if(brain->valid)
+    if(brain->valid && !entity->playerID)
     {
         //MemPerceive(region, entity, &brain->memory);
-        //HandleAI(region, entity);
+        HandleAI(region, entity);
     }
     
     if( entity->action != brain->oldAction || entity->targetID != brain->oldTargetID )
