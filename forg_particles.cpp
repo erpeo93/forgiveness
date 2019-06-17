@@ -24,7 +24,7 @@ internal void SpawnParticles(ParticleCache* cache, ParticleEffect* effect, r32 d
     for( u32 newParticle = 0; newParticle < particle4xCount; newParticle++ )
     {
         Particle_4x *A;
-        FREELIST_ALLOC(A, cache->firstFreeParticle4x, PushStruct(&cache->pool, Particle_4x, AlignNoClear(128)));
+        FREELIST_ALLOC(A, cache->firstFreeParticle4x, PushStruct(cache->pool, Particle_4x, AlignNoClear(128)));
         FREELIST_INSERT(A, effect->firstParticle);
         switch(emitter->type)
         {
@@ -325,7 +325,7 @@ inline void FreeParticleEffect(ParticleEffect* effect)
 inline ParticleEffect* GetNewParticleEffect(ParticleCache* cache, ParticleEffectDefinition* definition)
 {
     ParticleEffect* result;
-    FREELIST_ALLOC(result, cache->firstFreeEffect, PushStruct(&cache->pool, ParticleEffect));
+    FREELIST_ALLOC(result, cache->firstFreeEffect, PushStruct(cache->pool, ParticleEffect));
     
     result->active = true;
     result->data = {};
@@ -339,10 +339,11 @@ inline ParticleEffect* GetNewParticleEffect(ParticleCache* cache, ParticleEffect
     return result;
 }
 
-internal void InitParticleCache( ParticleCache* particleCache, Assets* assets )
+internal void InitParticleCache(ParticleCache* particleCache, Assets* assets, MemoryPool* pool)
 {
     particleCache->particleEntropy = Seed(1234);
     particleCache->deltaParticleP = {};
+    particleCache->pool = pool;
 }
 
 internal void UpdateAndRenderParticleEffects(GameModeWorld* worldMode, ParticleCache* particleCache, r32 dt, RenderGroup* group)

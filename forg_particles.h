@@ -140,7 +140,7 @@ struct ParticleCache
     
     ParticleEffect* firstFreeEffect;
     Particle_4x* firstFreeParticle4x;
-    MemoryPool pool;
+    MemoryPool* pool;
 };
 
 

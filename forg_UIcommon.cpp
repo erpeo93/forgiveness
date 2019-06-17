@@ -1015,7 +1015,7 @@ inline void UIAddInteraction_(UIState* UI, u32 buttonIndex, UIInteraction newInt
 inline UIInteractionAction* UIGetFreeAction(UIState* UI, UIInteraction* interaction)
 {
     UIInteractionAction* action;
-    FREELIST_ALLOC(action, UI->firstFreeInteractionAction, PushStruct(&UI->interactionPool, UIInteractionAction));
+    FREELIST_ALLOC(action, UI->firstFreeInteractionAction, PushStruct(UI->pool, UIInteractionAction));
     
     action->next = 0;
     UIInteractionAction* currentLastOne = interaction->lastAction;
@@ -1551,7 +1551,7 @@ inline void UIAddUndoRedoCommand(UIState* UI, UndoRedoCommand command)
     
     
     UndoRedoCommand* newCommand;
-    FREELIST_ALLOC(newCommand, UI->firstFreeUndoRedoCommand, PushStruct(&UI->undoRedoPool, UndoRedoCommand));
+    FREELIST_ALLOC(newCommand, UI->firstFreeUndoRedoCommand, PushStruct(UI->pool, UndoRedoCommand));
     *newCommand = command;
     
     DLLIST_INSERT_AS_LAST(&UI->undoRedoSentinel, newCommand);
@@ -1817,10 +1817,11 @@ inline b32 UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 fl
                     
                     case UIInteractionAction_PlaySoundEvent:
                     {
-                        SoundEvent* event = GetSoundEvent(UI->table, action->eventNameHash);
                         
                         EditorWidget* widget = UI->widgets + EditorWidget_SoundEvents;
                         EditorElement* activeLabels = widget->root->next->firstInList;
+                        
+                        SoundEvent* event = GetSoundEvent(UI->table, action->eventNameHash);
                         
                         u32 labelCount = 0;
                         SoundLabel labels[32];
@@ -1839,24 +1840,7 @@ inline b32 UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 fl
                             activeLabels = activeLabels->next;
                         }
                         
-                        
-                        PickSoundResult pick = PickSoundFromEvent(UI->group->assets, event, labelCount, labels, &UI->table->eventSequence);
-                        
-                        r32 distanceFromPlayer = UI->fakeDistanceFromPlayer;
-                        for(u32 pickIndex = 0; pickIndex < pick.soundCount; ++pickIndex)
-                        {
-                            SoundId toPlay = pick.sounds[pickIndex];
-                            r32 decibelOffset = pick.decibelOffsets[pickIndex];
-                            r32 pitch = pick.pitches[pickIndex];
-                            r32 delay = pick.delays[pickIndex];
-                            r32 toleranceDistance = pick.toleranceDistance[pickIndex];
-                            r32 distanceFalloffCoeff = pick.distanceFalloffCoeff[pickIndex];
-                            
-                            if(IsValid(toPlay))
-                            {
-                                PlaySound(UI->worldMode->soundState, UI->group->assets, toPlay, distanceFromPlayer, decibelOffset, pitch, delay, toleranceDistance, distanceFalloffCoeff);
-                            }
-                        }
+                        PlaySoundEvent(UI->worldMode->soundState, UI->group->assets, event, labelCount, labels, &UI->table->eventSequence, UI->fakeDistanceFromPlayer);
                     } break;
                     
                     case UIInteractionAction_PlaySoundContainer:

@@ -242,7 +242,7 @@ inline void UIAddOption(UIState* UI, UIAutocomplete* autocomplete, char* option,
     UIAutocompleteBlock* block = autocomplete->firstBlock;
     if(!block || (block->count == ArrayCount(block->names)))
     {
-        FREELIST_ALLOC(block, UI->firstFreeAutocompleteBlock, PushStruct(&UI->autocompletePool, UIAutocompleteBlock));
+        FREELIST_ALLOC(block, UI->firstFreeAutocompleteBlock, PushStruct(UI->pool, UIAutocompleteBlock));
         block->count = 0;
         block->next = autocomplete->firstBlock;
         autocomplete->firstBlock = block;
@@ -3235,7 +3235,7 @@ internal EditorElement* BuildEditorTaxonomyTree(u32 editorRoles, TaxonomyTable* 
 inline EditorElement* UIAddChild(UIState* UI, EditorElement* element, EditorElementType type, char* name, char* value = 0)
 {
     EditorElement* newElement;
-    FREELIST_ALLOC(newElement, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+    FREELIST_ALLOC(newElement, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
     
     
     newElement->type = type;
@@ -3333,24 +3333,24 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             
             EditorElement* animationStruct;
-            FREELIST_ALLOC(animationStruct, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(animationStruct, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
             animationStruct->type = EditorElement_Struct;
             
             
             
             EditorElement* animationRoot;
-            FREELIST_ALLOC(animationRoot, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(animationRoot, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
             animationRoot->type = EditorElement_Animation;
             
             
             EditorElement* animationActionTimer;
-            FREELIST_ALLOC(animationActionTimer, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(animationActionTimer, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
             animationActionTimer->type = EditorElement_Struct;
             UIAddChild(UI, animationActionTimer, EditorElement_Real, "time", "0.0");
             UIAddChild(UI, animationActionTimer, EditorElement_String, "animationName", "rig");
             
             EditorElement* playButton;
-            FREELIST_ALLOC(playButton, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(playButton, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
             playButton->type = EditorElement_Struct;
             UIAddChild(UI, playButton, EditorElement_String, "autoplay", "false");
             UIAddChild(UI, playButton, EditorElement_Real, "speed", "1.0");
@@ -3372,12 +3372,12 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
 
             
             EditorElement* colorPickerRoot;
-            FREELIST_ALLOC(colorPickerRoot, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(colorPickerRoot, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
             colorPickerRoot->type = EditorElement_ColorPicker;
             
             
             EditorElement* color;
-            FREELIST_ALLOC(color, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(color, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
             color->type = EditorElement_Struct;
             FormatString(color->name, sizeof(color->name), "color");
             
@@ -3395,12 +3395,12 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             
             EditorElement* groundParamsRoot;
-            FREELIST_ALLOC(groundParamsRoot, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(groundParamsRoot, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
             groundParamsRoot->type = EditorElement_GroundParams;
             
             
             EditorElement* params;
-            FREELIST_ALLOC(params, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(params, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
             params->type = EditorElement_Struct;
             FormatString(params->name, sizeof(params->name), "params");
             
@@ -3431,7 +3431,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             
             EditorWidget* misc = StartWidget(UI, EditorWidget_Misc, V2(200, 100), 0xffffffff, "Miscellaneous");
-            FREELIST_ALLOC(misc->root, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(misc->root, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
             misc->root->type = EditorElement_Struct;
             
             UIAddChild(UI, misc->root, EditorElement_String, "recipeTaxonomy", "objects");
@@ -3444,7 +3444,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             
             EditorElement* ambientColor;
-            FREELIST_ALLOC(ambientColor, UI->emptyFixedElement, PushStruct(&UI->fixedWidgetsElementPool, EditorElement));
+            FREELIST_ALLOC(ambientColor, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
             ambientColor->type = EditorElement_Struct;
             FormatString(ambientColor->name, sizeof(ambientColor->name), "ambientColor");
             

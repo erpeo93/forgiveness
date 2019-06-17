@@ -127,7 +127,7 @@ inline UIBookmarkCondition BookModeCondition(UIBookMode mode)
 inline void AddToFilteredElements(UIState* UI, BookMode* bookMode, BookElement* element)
 {
     BookReference* reference;
-    FREELIST_ALLOC(reference, UI->firstFreeReference, PushStruct(&UI->bookReferencePool, BookReference));
+    FREELIST_ALLOC(reference, UI->firstFreeReference, PushStruct(UI->pool, BookReference));
     reference->element = element;
     reference->next = bookMode->filteredElements;
     bookMode->filteredElements = reference;

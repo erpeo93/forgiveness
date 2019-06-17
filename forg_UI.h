@@ -806,6 +806,7 @@ struct UIState
     b32 initialized;
     b32 previousFrameWasAllowedToQuit;
     
+    MemoryPool* pool;
     RenderGroup* group;
     TaxonomyTable* table;
     struct ClientEntity* player;
@@ -890,12 +891,7 @@ struct UIState
     BookMode bookModes[UIBook_Count];
     
     BookElementsBlock* firstFreeElementBlock;
-    MemoryPool bookElementsPool;
-    
     BookReference* firstFreeReference;
-    MemoryPool bookReferencePool;
-    
-    MemoryPool interactionPool;
     UIInteractionAction* firstFreeInteractionAction;
     
     char tooltipText[128];
@@ -928,7 +924,6 @@ struct UIState
     EditorElement* activeLabelParent;
     EditorWidget* activeWidget;
     
-    MemoryPool fixedWidgetsElementPool;
     EditorElement* emptyFixedElement;
     
     EditorElement* dragging;
@@ -957,7 +952,6 @@ struct UIState
     i32 currentAutocompleteSelectedIndex;
     u32 autocompleteCount;
     UIAutocomplete autocompletes[64];
-    MemoryPool autocompletePool;
     UIAutocompleteBlock* firstFreeAutocompleteBlock;
     
     
@@ -966,7 +960,6 @@ struct UIState
     
     
     
-    MemoryPool undoRedoPool;
     UndoRedoCommand* firstFreeUndoRedoCommand;
     UndoRedoCommand undoRedoSentinel;
     UndoRedoCommand* current;

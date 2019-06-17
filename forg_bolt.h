@@ -20,6 +20,15 @@ struct BoltDefinition
     r32 lightIntensity;
     r32 lightStartTime;
     r32 lightEndTime;
+    
+    u64 trailerSoundEffect;
+    u64 headerSoundEffect;
+    u64 inFlightSoundEffect;
+    union
+    {
+        BoltDefinition* next;
+        BoltDefinition* nextFree;
+    };
 };
 
 #define MAX_BOLT_SUBDIVISIONS 32
@@ -27,6 +36,7 @@ struct Bolt
 {
     r32 ttl;
     u32 seed;
+    u32 taxonomy;
     r32 timeSinceLastAnimationTick;
     RandomSequence animationSeq;
     Vec3 startP;
@@ -45,10 +55,8 @@ struct BoltCache
 {
     Vec3 deltaP;
     Bolt* firstBolt;
-    RandomSequence seedSource;
+    RandomSequence entropy;
     
-    MemoryPool pool;
+    MemoryPool* pool;
     Bolt* firstFreeBolt;
-    
-    BoltDefinition definition;
 };

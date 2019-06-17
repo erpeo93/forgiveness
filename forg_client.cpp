@@ -68,7 +68,7 @@ inline ClientEntity* GetEntityClient(GameModeWorld* worldMode, u64 identifier, b
             }
             else
             {
-                result = PushStruct(&worldMode->entityPool, ClientEntity);
+                result = PushStruct(worldMode->persistentPool, ClientEntity);
                 result->next = worldMode->entities[index];
                 worldMode->entities[index] = result;
             }
@@ -302,7 +302,7 @@ inline void AddLightToGrid_(GameModeWorld* worldMode, Vec3 P, Vec3 lightColor, r
             if(query.chunk)
             {
                 TempLight* light;
-                FREELIST_ALLOC(light, worldMode->firstFreeTempLight, PushStruct(&worldMode->lightPool, TempLight));
+                FREELIST_ALLOC(light, worldMode->firstFreeTempLight, PushStruct(worldMode->persistentPool, TempLight));
                 light->P = P;
                 light->color = lightColor;
                 light->strength = strength;
@@ -393,9 +393,9 @@ inline Lights GetLights(GameModeWorld* worldMode, Vec3 P)
 #include "forg_plant.cpp"
 #include "forg_model.cpp"
 #include "forg_crafting.cpp"
+#include "forg_audio.cpp"
 #include "forg_particles.cpp"
 #include "forg_bolt.cpp"
-#include "forg_audio.cpp"
 #include "forg_animation.cpp"
 #include "forg_UI.cpp"
 #include "forg_cutscene.cpp"
@@ -416,6 +416,9 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 
 internal void PlayGame(GameState* gameState, PlatformInput* input)
 {
+    Clear(&gameState->persistentPool);
+    Clear(&gameState->visualEffectsPool);
+    
     SetGameMode(gameState, GameMode_Playing);
     GameModeWorld* result = PushStruct(&gameState->modePool, GameModeWorld);
     
@@ -443,6 +446,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     Assert(!(entityCount & (entityCount - 1)));
     
     result->temporaryPool = &gameState->framePool;
+    result->persistentPool = &gameState->persistentPool;
     
     result->table = PushStruct(&gameState->modePool, TaxonomyTable);
     result->oldTable = PushStruct(&gameState->modePool, TaxonomyTable);
@@ -457,12 +461,13 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     
     
     result->UI = PushStruct(&gameState->modePool, UIState);
+    result->UI->pool = &gameState->modePool;
     
     result->particleCache = PushStruct(&gameState->modePool, ParticleCache, AlignClear(16));
-    InitParticleCache(result->particleCache, gameState->assets);
+    InitParticleCache(result->particleCache, gameState->assets, &gameState->visualEffectsPool);
     
     result->boltCache = PushStruct(&gameState->modePool, BoltCache);
-    InitBoltCache(result->boltCache, 11111);
+    InitBoltCache(result->boltCache, &gameState->visualEffectsPool, 11111);
     
     
     gameState->world = result;
@@ -954,27 +959,27 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 {
                     case DayPhase_Sunrise:
                     {
-                        ambientLightColor = V3(1, 0.73f, 1);
+                        ambientLightColor = V3(0.4f, 0.6f, 0.8f);
                     } break;
                     
                     case DayPhase_Morning:
                     {
-                        ambientLightColor = V3(0.83f, 0.91f, 0.99f);
+                        ambientLightColor = V3(0.5f, 0.7f, 0.9f);
                     } break;
                     
                     case DayPhase_Day:
                     {
-                        ambientLightColor = V3(1, 1, 1);
+                        ambientLightColor = V3(0.85f, 0.7f, 0.85f);
                     } break;
                     
                     case DayPhase_Sunset:
                     {
-                        ambientLightColor = V3(0.96f, 0.54f, 0.74f);
+                        ambientLightColor = V3(0.9f, 0.8f, 0.3f);
                     } break;
                     
                     case DayPhase_Dusk:
                     {
-                        ambientLightColor = V3(0.53f, 0.25f, 0.32f);
+                        ambientLightColor = V3(0.43f, 0.2f, 0.28f);
                     } break;
                     
                     case DayPhase_Night:
@@ -1305,7 +1310,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         
                         if(ChunkValid(lateralChunkSpan, X, Y))
                         {	
-                            WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, &worldMode->chunkPool);
+                            WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
                             
                             if(!chunk->initialized)
                             {
@@ -1574,7 +1579,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     worldMode->boltTime = 0;
                     
                     Vec2 random = 10.0f * RandomBilV2(&worldMode->boltSequence);
-                    SpawnBolt(worldMode->boltCache, V3(random, 7), V3(random, 0));
+                    
+                    TaxonomySlot* testSlot = NORUNTIMEGetTaxonomySlotByName(worldMode->table, "bolt");
+                    SpawnBolt(worldMode, group, worldMode->boltCache, V3(random, 7), V3(random, 0), testSlot->taxonomy);
                 }
                 
                 UpdateAndRenderParticleEffects(worldMode, particleCache, input->timeToAdvance, group);
@@ -1793,6 +1800,11 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
     return 0;
 }
 
+inline void FreeGameMode(GameModeWorld* worldMode)
+{
+    Clear(&worldMode->oldTable->pool);
+    Clear(&worldMode->table->pool);
+}
 
 #if FORGIVENESS_INTERNAL
 PlatformClientMemory* debugGlobalMemory;
@@ -1871,7 +1883,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         clientNetwork->nextSendReliableApplicationData = {};
         
         platformAPI.PushWork(gameState->slowQueue, ReceiveNetworkPackets, &gameState->receiveNetworkPackets);
-        
     }
     
     
@@ -1906,6 +1917,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 rerun = UpdateAndRenderGame(gameState, gameState->world, &group, input);
                 if(input->allowedToQuit && input->altDown && Pressed(&input->exitButton))
                 {
+                    FreeGameMode(gameState->world);
                     ChangeVolume(&gameState->soundState, gameState->music, 1.0f, V2(0.0f, 0.0f));
                     gameState->music = 0;
                     platformAPI.net.CloseConnection(input->network, 0);

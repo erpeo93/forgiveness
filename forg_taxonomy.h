@@ -441,6 +441,7 @@ struct TaxonomySlot
     RockDefinition* rock;
     PlantDefinition* plant;
     struct ParticleEffectDefinition* particleEffect;
+    struct BoltDefinition* boltEffect;
     
     
 #ifndef FORG_SERVER
@@ -641,6 +642,7 @@ struct TaxonomyTable
     RockDefinition* firstFreeRockDefinition;
     PlantDefinition* firstFreePlantDefinition;
     ParticleEffectDefinition* firstFreeParticleEffectDefinition;
+    BoltDefinition* firstFreeBoltDefinition;
     RockMineral* firstFreeRockMineral;
     
 #ifndef FORG_SERVER

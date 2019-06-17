@@ -510,7 +510,7 @@ inline void AddToElementBlock(UIState* UI, BookMode* mode, BookElement element)
     BookElementsBlock* block = mode->elements;
     if(!block || block->elementCount == ArrayCount(block->elements))
     {
-        BookElementsBlock* newBlock = PushStruct(&UI->bookElementsPool, BookElementsBlock);
+        BookElementsBlock* newBlock = PushStruct(UI->pool, BookElementsBlock);
         newBlock->next = block;
         mode->elements = newBlock;
         block = newBlock;
@@ -607,7 +607,8 @@ inline void DeleteAllFilesNotArrived(GameModeWorld* worldMode, char* path)
         }
     }
     
-    FREELIST_FREE(worldMode->firstFileToDelete, ToDeleteFile, worldMode->firstFreeFileToDelete);
+    worldMode->firstFileToDelete = 0;
+    Clear(&worldMode->deletedFilesPool);
 }
 
 inline void SignalAnimationSyncCompleted(AnimationState* animation, u32 action, AnimationSyncState state);
@@ -900,7 +901,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                             if(effect->triggerEffectTaxonomy == effectTaxonomy)
                             {
                                 ClientAnimationEffect* newEffect;
-                                FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, ClientAnimationEffect, NoClear()));
+                                FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(worldMode->persistentPool, ClientAnimationEffect, NoClear()));
                                 
                                 newEffect->effect = *effect;
                                 newEffect->effect.targetID = targetID;

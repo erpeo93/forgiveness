@@ -207,6 +207,7 @@ struct AnimationEffect
         
         struct
         {
+            u32 boltTaxonomy;
             r32 boltTargetTimer;
         };
     };

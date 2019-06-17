@@ -348,7 +348,6 @@ struct GameModeWorld
     r32 currentPhaseTimer;
     ForgDayPhase currentPhase;
     
-    MemoryPool lightPool;
     TempLight* firstFreeTempLight;
     
     
@@ -359,9 +358,7 @@ struct GameModeWorld
     r32 chunkSide;
     r32 oneOverChunkSide;
     
-    MemoryPool entityPool;
-    MemoryPool chunkPool;
-    
+    MemoryPool* persistentPool;
     MemoryPool* temporaryPool;
     
     TicketMutex entityMutex;
@@ -454,8 +451,9 @@ struct GameState
     MemoryPool totalPool;
     MemoryPool modePool;
     MemoryPool audioPool;
-    MemoryPool networkPool;
     MemoryPool framePool;
+    MemoryPool persistentPool;
+    MemoryPool visualEffectsPool;
     
     GameMode mode;
     union

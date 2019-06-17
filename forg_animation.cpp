@@ -930,7 +930,7 @@ inline b32 DrawModularPiece(AnimationFixedParams* input, RenderGroup* group, Vec
     return result;
 }
 
-inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, ClientAnimationEffect* clientEffect, ClientEntity* entity, Vec3 P,Vec4* colorIn, r32 timeToAdvance)
+inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, RenderGroup* group,  ClientAnimationEffect* clientEffect, ClientEntity* entity, Vec3 P,Vec4* colorIn, r32 timeToAdvance)
 {
     AnimationEffect* effect = &clientEffect->effect;
     ParticleCache* particleCache = worldMode->particleCache;
@@ -976,7 +976,7 @@ inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, ClientAnimat
             if(clientEffect->boltTimer >= effect->boltTargetTimer)
             {
                 clientEffect->boltTimer = 0;
-                SpawnBolt(boltCache, P, P + V3(2, 0, 0));
+                SpawnBolt(worldMode, group, boltCache, P, P + V3(2, 0, 0), effect->boltTaxonomy);
             }
         } break;
     }
@@ -1005,7 +1005,7 @@ inline void SetEquipmentReferenceAction(GameModeWorld* worldMode, ClientEntity* 
 inline void AddAnimationEffectToEntity(GameModeWorld* worldMode, ClientEntity* entity, AnimationEffect* effect, SlotName slot)
 {
     ClientAnimationEffect* newEffect;
-    FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(&worldMode->entityPool, ClientAnimationEffect, NoClear()));
+    FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(worldMode->persistentPool, ClientAnimationEffect, NoClear()));
     
     newEffect->effect = *effect;
     newEffect->referenceSlot = slot;
@@ -1395,7 +1395,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                         {
                             if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
                             {
-                                DispatchClientAnimationEffect(input->worldMode, effect, input->entity, P, &color, input->timeToAdvance);
+                                DispatchClientAnimationEffect(input->worldMode, group, effect, input->entity, P, &color, input->timeToAdvance);
                             }
                         }
                     }
@@ -1408,7 +1408,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                             {
                                 if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
                                 {
-                                    DispatchClientAnimationEffect(input->worldMode, effect, input->entity, P, &color, input->timeToAdvance);
+                                    DispatchClientAnimationEffect(input->worldMode, group, effect, input->entity, P, &color, input->timeToAdvance);
                                 }
                             }
                         }
@@ -2351,7 +2351,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         if(!effect->effect.stringHashID)
         {
             Vec4 ignored;
-            DispatchClientAnimationEffect(worldMode, effect, entityC, animationP, &ignored, timeToUpdate);
+            DispatchClientAnimationEffect(worldMode, group, effect, entityC, animationP, &ignored, timeToUpdate);
         }
     }
     
@@ -2371,7 +2371,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             ClientPlant* newPlant = worldMode->firstFreePlant;
             if(!newPlant)
             {
-                newPlant = PushStruct(&worldMode->entityPool, ClientPlant);
+                newPlant = PushStruct(worldMode->persistentPool, ClientPlant);
             }
             else
             {
@@ -2416,7 +2416,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
                 ClientRock* newRock = worldMode->firstFreeRock;
                 if(!newRock)
                 {
-                    newRock = PushStruct(&worldMode->entityPool, ClientRock);
+                    newRock = PushStruct(worldMode->persistentPool, ClientRock);
                 }
                 else
                 {

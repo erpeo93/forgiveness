@@ -3,7 +3,7 @@ inline PlantSegment* GetFreePlantSegment(GameModeWorld* worldMode)
     PlantSegment* segment;
     
     BeginTicketMutex(&worldMode->plantMutex);
-    FREELIST_ALLOC(segment, worldMode->firstFreePlantSegment, PushStruct(&worldMode->entityPool, PlantSegment));
+    FREELIST_ALLOC(segment, worldMode->firstFreePlantSegment, PushStruct(worldMode->persistentPool, PlantSegment));
     
     EndTicketMutex(&worldMode->plantMutex);
     return segment;
@@ -14,7 +14,7 @@ inline PlantStem* GetFreePlantStem(GameModeWorld* worldMode)
     PlantStem* stem;
     
     BeginTicketMutex(&worldMode->plantMutex);
-    FREELIST_ALLOC(stem, worldMode->firstFreePlantStem, PushStruct(&worldMode->entityPool, PlantStem));
+    FREELIST_ALLOC(stem, worldMode->firstFreePlantStem, PushStruct(worldMode->persistentPool, PlantStem));
     EndTicketMutex(&worldMode->plantMutex);
     return stem;
 }

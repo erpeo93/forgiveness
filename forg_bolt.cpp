@@ -16,11 +16,16 @@ inline b32 ValidVector(Vec3 original, Vec3 pick)
 
 internal void UpdateAndRenderBolt(GameModeWorld* worldMode, BoltCache* cache, RenderGroup* group, BoltDefinition* definition, Bolt* bolt, r32 timeToAdvance)
 {
-    TempMemory subdivisionsMemory = BeginTemporaryMemory(&cache->pool);
+    if(bolt->ttl > definition->ttl)
+    {
+        bolt->ttl = definition->ttl;
+    }
+    
+    TempMemory subdivisionsMemory = BeginTemporaryMemory(cache->pool);
     
     u32 subdivisions = definition->subdivisions;
     subdivisions = Min(subdivisions, MAX_BOLT_SUBDIVISIONS);
-    Vec3* subdivisionPoints = PushArray(&cache->pool, Vec3, subdivisions);
+    Vec3* subdivisionPoints = PushArray(cache->pool, Vec3, subdivisions);
     
     Vec3 deltaP = bolt->endP - bolt->startP;
     Vec3 deltaPerSegment = deltaP / (r32) subdivisions;
@@ -122,6 +127,19 @@ internal void UpdateAndRenderBolts(GameModeWorld* worldMode, BoltCache* cache, r
         
         if(bolt->ttl <= 0.0f)
         {
+            TaxonomySlot* boltSlot = GetSlotForTaxonomy(worldMode->table, bolt->taxonomy);
+            if(boltSlot && boltSlot->boltEffect)
+            {
+                SoundEvent* event = GetSoundEvent(worldMode->table, boltSlot->boltEffect->trailerSoundEffect);
+                if(event)
+                {
+                    r32 distanceFromPlayer = Length(bolt->endP);
+                    u32 labelCount = 0;
+                    SoundLabel* labels = 0;
+                    PlaySoundEvent(worldMode->soundState, group->assets, event, labelCount, labels, &cache->entropy, distanceFromPlayer);
+                }
+            }
+            
             *boltPtr = bolt->next;
             FREELIST_DEALLOC(bolt, cache->firstFreeBolt);
         }
@@ -129,50 +147,46 @@ internal void UpdateAndRenderBolts(GameModeWorld* worldMode, BoltCache* cache, r
         {
             bolt->startP += cache->deltaP;
             bolt->endP += cache->deltaP;
-            UpdateAndRenderBolt(worldMode, cache, group, &cache->definition, bolt, timeToUpdate);
+            
+            TaxonomySlot* boltSlot = GetSlotForTaxonomy(worldMode->table, bolt->taxonomy);
+            if(boltSlot && boltSlot->boltEffect)
+            {
+                UpdateAndRenderBolt(worldMode, cache, group, boltSlot->boltEffect, bolt, timeToUpdate);
+            }
             
             boltPtr = &bolt->next;
         }
     }
 }
 
-inline void SpawnBolt(BoltCache* cache, Vec3 startP, Vec3 endP)
+inline void SpawnBolt(GameModeWorld* worldMode, RenderGroup* group, BoltCache* cache, Vec3 startP, Vec3 endP, u32 boltTaxonomy)
 {
-    BoltDefinition* definition = &cache->definition;
-    
     Bolt* bolt;
-    FREELIST_ALLOC(bolt, cache->firstFreeBolt, PushStruct(&cache->pool, Bolt));
-    bolt->ttl = definition->ttl;
-    bolt->seed = GetNextUInt32(&cache->seedSource);
+    FREELIST_ALLOC(bolt, cache->firstFreeBolt, PushStruct(cache->pool, Bolt));
+    bolt->taxonomy = boltTaxonomy;
+    bolt->ttl = R32_MAX;
+    bolt->seed = GetNextUInt32(&cache->entropy);
     bolt->timeSinceLastAnimationTick = R32_MAX;
     bolt->animationSeq = Seed(bolt->seed);
     bolt->startP = startP;
     bolt->endP = endP;
     
     FREELIST_INSERT(bolt, cache->firstBolt);
+    
+    
+    TaxonomySlot* boltSlot = GetSlotForTaxonomy(worldMode->table, boltTaxonomy);
+    SoundEvent* event = GetSoundEvent(worldMode->table, boltSlot->boltEffect->headerSoundEffect);
+    if(event)
+    {
+        r32 distanceFromPlayer = Length(bolt->endP);
+        u32 labelCount = 0;
+        SoundLabel* labels = 0;
+        PlaySoundEvent(worldMode->soundState, group->assets, event, labelCount, labels, &cache->entropy, distanceFromPlayer);
+    }
 }
 
-internal void InitBoltCache(BoltCache* cache, u32 seed)
+internal void InitBoltCache(BoltCache* cache, MemoryPool* pool, u32 seed)
 {
-    cache->seedSource = Seed(seed);
-    
-    
-    BoltDefinition definition = {};
-    definition.animationTick = 0.01f;
-    definition.ttl = 0.3f;
-    definition.fadeinTime = 0.1f;
-    definition.fadeoutTime = 0.05f;
-    definition.color = V4(1, 1, 0, 1);
-    definition.thickness = 0.024f;
-    definition.magnitudoStructure = 0.1f;
-    definition.magnitudoAnimation = 0.03f;
-    definition.subdivisions = 8;
-    
-    definition.lightColor = V3(1, 1, 1);
-    definition.lightIntensity = 2.0f;
-    definition.lightStartTime = 0.2f;
-    definition.lightEndTime = 0.0f;
-    
-    cache->definition = definition;
-    
+    cache->entropy = Seed(seed);
+    cache->pool = pool;
 }

@@ -186,7 +186,7 @@ inline void AddAllPakFileHashes(ServerState* server)
         
         int cmp_status = uncompress(uncompressed, &uncompressedSize, compressedSource, compressedLen);
         Assert(cmp_status == Z_OK);
-        Assert(uncompressedSize == fileSize);
+        Assert(uncompressedSize == fileSize); 
         
         
         

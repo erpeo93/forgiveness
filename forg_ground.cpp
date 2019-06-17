@@ -70,7 +70,7 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
                 if(ChunkValid(lateralChunkSpan, X, Y))
                 {	
                     RandomSequence seq = Seed((chunkX + 10) * (chunkY + 10));
-                    WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, &worldMode->chunkPool);
+                    WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
                     
                     if(!chunk->initialized)
                     {

@@ -197,7 +197,6 @@ inline PickSoundResult PickSoundFromEvent(Assets* assets, SoundEvent* event, u32
     return result;
 }
 
-
 internal PlayingSound* PlaySound(SoundState* soundState, Assets* assets, SoundId ID, r32 distanceFromPlayer, r32 decibelOffset = 0, r32 frequency = 1.0, r32 delay = 0.0f, r32 toleranceDistance = 1.0f,r32 distanceFalloffCoeff = 1.0f)
 {
     if(!soundState->firstFreeSound)
@@ -234,6 +233,26 @@ internal PlayingSound* PlaySound(SoundState* soundState, Assets* assets, SoundId
     newSound->next = soundState->firstPlayingSound;
     soundState->firstPlayingSound = newSound;
     return newSound;
+}
+
+inline void PlaySoundEvent(SoundState* soundState, Assets* assets, SoundEvent* event, u32 labelCount, SoundLabel* labels, RandomSequence* sequence, r32 distanceFromPlayer)
+{
+    PickSoundResult pick = PickSoundFromEvent(assets, event, labelCount, labels, sequence);
+    
+    for(u32 pickIndex = 0; pickIndex < pick.soundCount; ++pickIndex)
+    {
+        SoundId toPlay = pick.sounds[pickIndex];
+        r32 decibelOffset = pick.decibelOffsets[pickIndex];
+        r32 pitch = pick.pitches[pickIndex];
+        r32 delay = pick.delays[pickIndex];
+        r32 toleranceDistance = pick.toleranceDistance[pickIndex];
+        r32 distanceFalloffCoeff = pick.distanceFalloffCoeff[pickIndex];
+        
+        if(IsValid(toPlay))
+        {
+            PlaySound(soundState, assets, toPlay, distanceFromPlayer, decibelOffset, pitch, delay, toleranceDistance, distanceFalloffCoeff);
+        }
+    }
 }
 
 internal void ChangeVolume(SoundState* soundState, PlayingSound* sound, r32 fadeDuration, Vec2 targetVolume)

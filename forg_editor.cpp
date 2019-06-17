@@ -1088,12 +1088,22 @@ inline AnimationEffect LightEffect(Vec3 color, r32 intensity)
     return result;
 }
 
-inline AnimationEffect BoltEffect(r32 timer)
+inline AnimationEffect BoltEffect(char* boltEffectName, r32 timer)
 {
     AnimationEffect result = {};
     result.type = AnimationEffect_Bolt;
-    
     result.boltTargetTimer = timer;
+    
+    TaxonomySlot* effectSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, boltEffectName);
+    
+    if(effectSlot)
+    {
+        result.boltTaxonomy = effectSlot->taxonomy;
+    }
+    else
+    {
+        EditorErrorLog(boltEffectName);
+    }
     
     return result;
 }
@@ -3383,8 +3393,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
                 
                 case AnimationEffect_Bolt:
                 {
+                    char* boltName = GetValue(effects, "boltName");
                     r32 boltTimer = ElemR32(effects, "boltTimer");
-                    effect = BoltEffect(boltTimer);
+                    effect = BoltEffect(boltName, boltTimer);
                 } break;
             }
             
@@ -3694,6 +3705,35 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             
             phases = phases->next;
         }
+    }
+    else if(StrEqual(name, "boltDefinition"))
+    {
+        if(currentSlot_->boltEffect)
+        {
+            TAXTABLE_DEALLOC(currentSlot_->boltEffect, BoltDefinition);
+        }
+        TAXTABLE_ALLOC(currentSlot_->boltEffect, BoltDefinition);
+        
+        BoltDefinition* definition = currentSlot_->boltEffect;
+
+        definition->animationTick = ElemR32(root, "animationTick");
+        definition->ttl = ElemR32(root, "ttl");
+        definition->ttlV = ElemR32(root, "ttlV");
+        definition->fadeinTime = ElemR32(root, "fadeinTime");
+        definition->fadeoutTime = ElemR32(root, "fadeoutTime");
+        definition->color = ColorV4(root, "color");
+        definition->thickness = ElemR32(root, "thickness");
+        definition->magnitudoStructure = ElemR32(root, "magnitudoStructure");
+        definition->magnitudoAnimation = ElemR32(root, "magnitudoAnimation");
+        definition->subdivisions = ElemU32(root, "subdivisions");
+        definition->subdivisionsV = ElemU32(root, "subdivisionsV");
+        
+        definition->lightColor = ColorV4(root, "lightColor").rgb;
+        definition->lightIntensity = ElemR32(root, "lightIntensity");
+        definition->lightStartTime = ElemR32(root, "lightStartTime");
+        definition->lightEndTime = ElemR32(root, "lightEndTime");
+        
+        definition->trailerSoundEffect = StringHash(GetValue(root, "trailerSoundEvent"));
     }
 #endif
     else if(StrEqual(name, "generatorParams"))
