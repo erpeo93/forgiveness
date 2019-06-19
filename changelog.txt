@@ -1,5 +1,17 @@
 ----0.0.4----
+-the book has now "real" art in it. Soon enough Anna will give me the final art for it.
+-you'll see a white thing when you spawn, that's a strength essence. Seems obvious right? it's useful because it allows you to do a level up.
+-Implemented an immersive skill bar, to "equip" a skill, open the book and press buttons from 1 to 6.
+-it's now possible to play around with particle effects. Try instantiating a campfire and edit it.
+-Only actually active particles are now updated, big performance boost.
 -Solved bug with Voronoi diagram generation that was crashing the client when all threads were busy doing other things.
+-At the beginning of the game files are now downloaded only if they differ from the actual server the server has. This means that the client won't download anything if it's all up to date.
+-Added new cool thunder particle effects, unfortunately you can't disable it at the moment.
+-Add light effect on the player, just for fun.
+-Added coloration effect on the player when he moves, just for fun.
+-Added swim animation, pretty fun to watch actually, needs a lot of tuning.
+-implemented a prototype of the drag mechanic, you'll note that it's now possible to drag that strange tree with purple leags.
+
 
 ----0.0.3----
 -it's now possible to "select" autocomplete value with both the tab and confirm button

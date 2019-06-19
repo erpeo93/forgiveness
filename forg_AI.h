@@ -48,7 +48,11 @@ enum EntitySpecialAction
 union AIActionData
 {
     u32 behaviorTaxonomy;
-    EntityAction standardAction;
+	struct
+	{
+		EntityAction standardAction;
+		u32 conceptTaxonomy;
+	};
     EntitySpecialAction specialAction;
 };
 
@@ -56,7 +60,7 @@ enum AIConditionType
 {
     AICondition_TooFar,
     AICondition_TooNear,
-    AICondition_InProximity,
+    AICondition_OnSight,
     AICondition_DoingActionFor,
 };
 
@@ -69,6 +73,7 @@ union AIConditionData
 
 struct AICondition
 {
+    b32 negated;
     AIConditionType type;
     AIConditionData data;
 };
@@ -100,6 +105,7 @@ struct AIStateMachine
     AIAction actions[8];
 };
 
+#define MAX_CONCEPTS 16
 struct Brain
 {
     b32 valid;
@@ -110,7 +116,11 @@ struct Brain
     
     u32 currentActionIndex;
     AIStateMachine* stateMachine;
-    u64 targetID;
+    
+    
+    u32 savedTaxonomies[MAX_CONCEPTS];
+    r32 bestScore[MAX_CONCEPTS];
+    u64 bestTarget[MAX_CONCEPTS];
     
     
     EntityAction oldAction;

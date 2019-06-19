@@ -75,6 +75,8 @@ copy %buildpath%\forg_server.dll .
 copy %buildpath%\win32_server.exe .
 copy %buildpath%\forg_client.dll .
 copy %buildpath%\win32_client.exe .
+copy %buildpath%\win32_client.exe .
+copy %buildpath%\win32_client.exe forgiveness.exe
 copy %buildpath%\asset_builder.exe .
 copy %buildpath%\*.pdb .
 

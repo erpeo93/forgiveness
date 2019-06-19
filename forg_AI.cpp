@@ -504,18 +504,51 @@ inline b32 Satisfied(Brain* brain, AICondition* condition)
     return result;
 }
 
-inline void ExecuteStateMachineAction(SimEntity* entity, AICommand command)
+inline u64 GetBestTarget(Brain* brain, u32 taxonomy)
+{
+    u64 result = 0;
+    b32 found = false;
+    for(u32 conceptIndex = 0; conceptIndex < ArrayCount(brain->savedTaxonomies); ++conceptIndex)
+    {
+        u32 testTaxonomy = brain->savedTaxonomies[conceptIndex];
+        if(!testTaxonomy)
+        {
+            break;
+        }
+        else
+        {
+            if(testTaxonomy == taxonomy)
+            {
+                found = true;
+                result = brain->bestTarget[conceptIndex];
+                break;
+            }
+        }
+    }
+    
+    Assert(found);
+    return result;
+}
+
+inline void PayAttentionTo(Brain* brain, u32 taxonomy)
+{
+    
+}
+
+inline void ExecuteStateMachineAction(SimEntity* entity, Brain* brain, AICommand command)
 {
     switch(command.type)
     {
         case AIAction_Behavior:
         {
             InvalidCodePath;
+            //PushOnStack(command.data.behavior);
         } break;
         
         case AIAction_StandardAction:
         {
-            InvalidCodePath;
+            entity->action = command.data.standardAction;
+			entity->targetID = GetBestTarget(brain, command.data.conceptTaxonomy);
         } break;
         
         case AIAction_SpecialAction:
@@ -565,6 +598,20 @@ inline void HandleStateMachine(Brain* brain, AIStateMachine* stateMachine, r32 t
     }
 }
 
+inline b32 HasTaxonomy(AICondition* condition)
+{
+    b32 result = false;
+    
+    if(condition->type == AICondition_OnSight ||
+       condition->type == AICondition_TooFar ||
+       condition->type == AICondition_TooNear)
+    {
+        result = true;
+    }
+    
+    return result;
+}
+
 internal void HandleAI(SimRegion* region, SimEntity* entity)
 {
     CreatureComponent* creature = Creature(region, entity);
@@ -578,8 +625,87 @@ internal void HandleAI(SimRegion* region, SimEntity* entity)
         brain->path.nodeCount = 0;
         RecalculateObstacleMap(region, entity);
         
+        brain->savedTaxonomies[0] = 0;
+        
+        AIStateMachine* sm = brain->stateMachine;
+		for(u32 actionIndex = 0; actionIndex < sm->actionCount; ++actionIndex)
+		{
+			AIAction* action = sm->actions + actionIndex;
+            
+            if(action->command.type == AIAction_StandardAction)
+            {
+                PayAttentionTo(brain, action->command.data.conceptTaxonomy);
+            }
+            
+            for(u32 transitionIndex = 0; transitionIndex < action->transitionCount; ++transitionIndex)
+            {
+                AIStateMachineTransition* transition = action->transitions + transitionIndex;
+                for(u32 conditionIndex = 0; conditionIndex < transition->conditionCount; ++conditionIndex)
+                {
+                    AICondition* condition = transition->conditions + conditionIndex;
+                    if(HasTaxonomy(condition))
+                    {
+                        PayAttentionTo(brain, condition->data.taxonomy);
+                    }
+                }
+            }
+		}
+        
+        
+#if 0        
+        r32 radious = 10.0f;
+        RegionPartitionQueryResult query = QuerySpacePartitionRadious(region, &region->collisionPartition, entity->P, V3(radious, radious, radious));
+        for(u32 surfaceIndex = 0; surfaceIndex < ArrayCount(query.surfaceIndexes); ++surfaceIndex)
+        {
+            RegionPartitionSurface* surface = region->collisionPartition.partitionSurfaces + query.surfaceIndexes[surfaceIndex];
+            
+            PartitionSurfaceEntityBlock* block = surface->first;
+            while(block)
+            {
+                for(u32 blockIndex = 0; blockIndex < block->entityCount; ++blockIndex)
+                {
+                    CollisionData* collider = block->colliders + blockIndex;
+                    SimEntity* testEntity = GetRegionEntity(region, collider->entityIndex);
+                    if(testEntity->identifier != entity->identifier)
+                    {
+                        r32 distanceSq = LengthSq(testEntity->P - entity->P);
+                        for(u32 interestIndex = 0; interestIndex < ArrayCount(brain->savedTaxonomies); ++interestIndex)
+                        {
+                            u32 savedTaxonomy = brain->savedTaxonomies[interestIndex];
+                            if(!savedTaxonomy)
+                            {
+                                break;
+                            }
+                            else
+                            {
+                                if(IsSubTaxonomy())
+                                {
+                                    r32 score = ScoreEntity();
+                                    if(score > brain->bestScore[interestIndex])
+                                    {
+                                        brain->bestScore[interestIndex] = score;
+                                        brain->bestTarget[interestIndex] = testEntity->identifier;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                block = block->next;
+            }
+        }
+#endif
+        
         HandleStateMachine(brain, brain->stateMachine, brainTargetSeconds);
+        
+#if 0        
+		if(brain->targetID)
+		{
+			BuildPathToReach();
+		}
+#endif
+        
     }
     
-    ExecuteStateMachineAction(entity, brain->currentCommand);
+    ExecuteStateMachineAction(entity, brain, brain->currentCommand);
 }
