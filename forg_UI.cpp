@@ -3739,14 +3739,22 @@ inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, Platform
                 destAction = Action_Attack + 1;
             }
             
+            b32 canDoSomething = false;
             for(u32 actionIndex = Action_Attack; actionIndex < destAction; ++actionIndex)
             {
                 if(UI->myPlayer->overlappingPossibleActions[actionIndex] && actionIndex != Action_Cast)
                 {
+                    canDoSomething = true;
                     UIRequest actionRequest = StandardActionRequest(actionIndex, overlapping->identifier);
                     UIAddPossibility(&UI->possibleOverlappingActions, MetaTable_EntityAction[actionIndex], entityName, actionRequest);
                 }
             }
+            
+            if(canDoSomething)
+            {
+                overlapping->modulationWithFocusColor = UI->worldMode->modulationWithFocusColor;
+            }
+            
             
             UIInteraction actionListInteraction = {};
             actionListInteraction.flags |= UI_MaintainWhenModeChanges;
@@ -4020,7 +4028,8 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                         }
                         else
                         {
-                            PushUITooltip(UI, "inventory", V4(1, 0, 0, 1));
+                            UI->player->modulationWithFocusColor = worldMode->modulationWithFocusColor;
+                            PushUITooltip(UI, "inventory | book", V4(1, 0, 0, 1));
                             
                             UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_Equipment));
                             
@@ -4039,7 +4048,6 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                         output->overlappingEntityID = overlapping->identifier;
                     }
                     
-                        overlapping->modulationWithFocusColor = worldMode->modulationWithFocusColor;
                     
                     UIResetListPossibility(UI, possibleOverlappingActions);
                     if(overlapping->identifier == UI->myPlayer->overlappingIdentifier || (UI->worldMode->editingEnabled && input->altDown))

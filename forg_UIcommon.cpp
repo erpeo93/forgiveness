@@ -1819,28 +1819,37 @@ inline b32 UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 fl
                     {
                         
                         EditorWidget* widget = UI->widgets + EditorWidget_SoundEvents;
-                        EditorElement* activeLabels = widget->root->next->firstInList;
+                        
                         
                         SoundEvent* event = GetSoundEvent(UI->table, action->eventNameHash);
                         
                         u32 labelCount = 0;
                         SoundLabel labels[32];
                         
-                        while(activeLabels)
+#if 0                        
+                        if(UI->editorMode)
                         {
-                            char* labelName = GetValue(activeLabels, "name");
-                            char* labelValue = GetValue(activeLabels, "value");
-                            
-                            Assert(labelCount < ArrayCount(labels));
-                            SoundLabel* label = labels + labelCount++;
-                            
-                            label->hashID = StringHash(labelName);
-                            label->value = ToR32(labelValue);
-                            
-                            activeLabels = activeLabels->next;
+                            EditorElement* activeLabels = widget->root->next->firstInList;
+                            while(activeLabels)
+                            {
+                                char* labelName = GetValue(activeLabels, "name");
+                                char* labelValue = GetValue(activeLabels, "value");
+                                
+                                Assert(labelCount < ArrayCount(labels));
+                                SoundLabel* label = labels + labelCount++;
+                                
+                                label->hashID = StringHash(labelName);
+                                label->value = ToR32(labelValue);
+                                
+                                activeLabels = activeLabels->next;
+                            }
                         }
+#endif
                         
-                        PlaySoundEvent(UI->worldMode->soundState, UI->group->assets, event, labelCount, labels, &UI->table->eventSequence, UI->fakeDistanceFromPlayer);
+                        if(event)
+                        {
+                            PlaySoundEvent(UI->worldMode->soundState, UI->group->assets, event, labelCount, labels, &UI->table->eventSequence, UI->fakeDistanceFromPlayer);
+                        }
                     } break;
                     
                     case UIInteractionAction_PlaySoundContainer:
