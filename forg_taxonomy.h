@@ -443,6 +443,11 @@ struct TaxonomySlot
     struct ParticleEffectDefinition* particleEffect;
     struct BoltDefinition* boltEffect;
     
+    b32 hasLight;
+    r32 minLightIntensity;
+    r32 maxLightIntensity;
+    Vec3 lightColor;
+    u64 lightPieceHashID;
     
 #ifndef FORG_SERVER
     VisualLabel* firstVisualLabel;
@@ -460,14 +465,6 @@ struct TaxonomySlot
     Vec3 modelScale;
     u64 modelTypeID;
     u64 modelNameID;
-    
-    
-    
-    b32 hasLight;
-    r32 minLightIntensity;
-    r32 maxLightIntensity;
-    Vec3 lightColor;
-    u64 lightPieceHashID;
     
     u64 skeletonHashID;
     u64 skinHashID;

@@ -1,5 +1,4 @@
 #include "miniz.c"
-
 inline ShortcutSlot* SaveShortcut(TaxonomyTable* table, char* name, u32 nameLength, MemoryPool* pool)
 {
     if(!nameLength)
@@ -195,11 +194,8 @@ inline void FinalizeShortcut(ShortcutSlot* shortcut, u32 taxonomy)
     else if(StrEqual(name, "particleEffects"))
     {
         taxTable_->particleEffectsTaxonomy = taxonomy;
-    }
-    
-    
+    }    
 }
-
 
 internal u32 FinalizeTaxonomies(char* giantBuffer, u32 giantBufferLength, b32 writeToFile, TaxonomySlot* parent, TaxonomySlot* slot, ShortcutSlot* shortcut)
 {
@@ -291,12 +287,6 @@ internal void WriteDataFiles()
     EndTemporaryMemory(bufferMemory);
 }
 
-
-
-
-
-
-
 internal void ReadTaxonomiesFromFile()
 {
     shortcutStack[stackShortcutCount++] = SaveShortcut(taxTable_, "root", 0, taxPool_);
@@ -333,6 +323,56 @@ internal void ReadTaxonomiesFromFile()
     TaxonomySlot* rootSlot = &taxTable_->root;
     rootSlot->taxonomy = 0;
     FinalizeTaxonomies(0, 0, 0, 0, rootSlot, rootShortcut);
+}
+
+
+inline b32 IsEditableByRole(EditorElement* root, u32 role)
+{
+    char* tabName = root->name;
+    
+    b32 result = false;
+    if(StrEqual(tabName, "soundEffects"))
+    {
+        result = (role & EditorRole_SoundDesigner);
+    }
+    else
+    {
+        result = (role & EditorRole_GameDesigner);
+    }
+    
+    return result;
+}
+
+#if FORG_SERVER
+#define EditorErrorLog(name) EditorErrorLogServer(__FUNCTION__, name)
+#else
+#define EditorErrorLog(name) EditorErrorLogClient(__FUNCTION__, name)
+#endif
+
+inline void StartingLoadingMessageServer()
+{
+    printf("\n\n\nStarting Loading Datafiles...\n\n\n");
+}
+
+inline void EndingLoadingMessageServer()
+{
+    printf("\n\n\nDatafiles Loaded.\n\n\n");
+}
+
+inline void EditorErrorLogServer(char* functionName, char* wasSearching)
+{
+    Assert(currentSlot_);
+    printf("Unable to find %s in function %s when loading %s\n", wasSearching, functionName, currentSlot_->name);
+}
+
+
+inline void EditorErrorLogClient(char* functionName, char* wasSearching)
+{
+    if(taxTable_->errorCount < ArrayCount(taxTable_->errors))
+    {
+        char* error = taxTable_->errors[taxTable_->errorCount++];
+        FormatString(error, sizeof(taxTable_->errors[0]), "Unable to find %s in function %s when loading %s\n", wasSearching, functionName, currentSlot_->name);
+    }
 }
 
 
@@ -400,7 +440,6 @@ inline u32 GetFlagPreprocessor_(MetaFlag* values, u32 count, char* test)
     return result;
 }
 
-
 inline u8 ToU8(char* string, u8 default = 0)
 {
     u8 result = default;
@@ -433,9 +472,13 @@ inline u64 ToU64(char* string)
     return result;
 }
 
-inline b32 ToB32(char* string)
+inline b32 ToB32(char* string, b32 default = false)
 {
-    b32 result = (StrEqual(string, "true"));
+    b32 result = default;
+    if(string)
+    {
+        result = (StrEqual(string, "true"));
+    }
     return result;
 }
 
@@ -493,44 +536,6 @@ inline Vec3 ToV3(EditorElement* element, Vec3 default = {})
 #define ElemR32(root, name) ToR32(GetValue(root, name))
 #define StructV3(root, name) ToV3(GetStruct(root, name))
 #define ColorV4(root, name) ToV4Color(GetStruct(root, name))
-
-
-#if FORG_SERVER
-#define EditorErrorLog(name) EditorErrorLogServer(__FUNCTION__, name)
-#else
-#define EditorErrorLog(name) EditorErrorLogClient(__FUNCTION__, name)
-#endif
-
-inline void StartingLoadingMessageServer()
-{
-    printf("\n\n\nStarting Loading Datafiles...\n\n\n");
-}
-
-inline void EndingLoadingMessageServer()
-{
-    printf("\n\n\nDatafiles Loaded.\n\n\n");
-}
-
-inline void EditorErrorLogServer(char* functionName, char* wasSearching)
-{
-    Assert(currentSlot_);
-    printf("Unable to find %s in function %s when loading %s\n", wasSearching, functionName, currentSlot_->name);
-}
-
-
-inline void EditorErrorLogClient(char* functionName, char* wasSearching)
-{
-    if(taxTable_->errorCount < ArrayCount(taxTable_->errors))
-    {
-        char* error = taxTable_->errors[taxTable_->errorCount++];
-        FormatString(error, sizeof(taxTable_->errors[0]), "Unable to find %s in function %s when loading %s\n", wasSearching, functionName, currentSlot_->name);
-    }
-}
-
-
-
-
-
 
 
 #define TAXTABLE_ALLOC(ptr, type) FREELIST_ALLOC(ptr, taxTable_->firstFree##type, PushStruct(taxPool_, type, NoClear())) ZeroStruct(*(ptr));
@@ -609,302 +614,6 @@ inline TaxonomyNode* AddToTaxonomyTree(TaxonomyTree* tree, TaxonomySlot* slot)
     return result;
 }
 
-
-
-
-
-
-inline EquipmentMapping* AddEquipmentMapping(char* equipmentName)
-{
-    TaxonomySlot* slot = currentSlot_;
-    TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, equipmentName);
-    
-    EquipmentMapping* result = 0;
-    if(target)
-    {
-        EquipmentMapping* mapping;
-        TAXTABLE_ALLOC(mapping, EquipmentMapping);
-        
-        TaxonomyNode* node = AddToTaxonomyTree(&currentSlot_->equipmentMappings, target);
-        node->data.equipmentMapping = mapping;
-        
-        result = mapping;
-    }
-    else
-    {
-        EditorErrorLog(equipmentName);
-    }
-    
-    return result;
-}
-
-inline void AddPiece(EquipmentLayout* equipmentLayout, u32 assIndex, char* pieceName, u8 index, Vec2 assOffset, r32 zOffset, r32 angle, Vec2 scale)
-{
-    EquipmentAss* equipmentAss;
-    TAXTABLE_ALLOC(equipmentAss, EquipmentAss);
-    
-    equipmentAss->assIndex = assIndex;
-    equipmentAss->stringHashID = StringHash(pieceName);
-    equipmentAss->index = index;
-    equipmentAss->assOffset = assOffset;
-    equipmentAss->zOffset = zOffset;
-    equipmentAss->angle = angle;
-    equipmentAss->scale = scale;
-    
-    equipmentAss->next = 0;
-    
-    FREELIST_INSERT(equipmentAss, equipmentLayout->firstEquipmentAss);
-}
-
-inline void CanConsume(char* action, char* name)
-{
-    TaxonomySlot* slot = currentSlot_;
-    TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    
-    if(target)
-    {
-        ConsumeMapping* mapping;
-        TAXTABLE_ALLOC(mapping, ConsumeMapping);
-        
-        
-        mapping->action = (EntityAction) GetValuePreprocessor(EntityAction, action);
-        mapping->taxonomy = target->taxonomy;
-        
-        mapping->next = slot->firstConsumeMapping;
-        slot->firstConsumeMapping = mapping;
-    }
-    else
-    {
-        EditorErrorLog(name);
-    }
-    
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-inline void DefineBounds_(char* boundsHeight_, char* boundsRadious_, ForgBoundType type)
-{
-    TaxonomySlot* slot = currentSlot_;
-    
-    r32 boundsRadious = ToR32(boundsRadious_);
-    r32 boundsHeight = ToR32(boundsHeight_);
-    
-    Vec3 min = V3(-boundsRadious, -boundsRadious, 0);
-    Vec3 max = V3(boundsRadious, boundsRadious, boundsHeight);
-    
-    slot->boundType = type;
-    slot->physicalBounds = RectMinMax(min, max);
-}
-
-inline void DefineBounds(char* boundsHeight, char* boundsRadious)
-{
-    DefineBounds_(boundsHeight, boundsRadious, ForgBound_Standard);
-}
-
-inline void DefineNullBounds(char* boundsHeight, char* boundsRadious)
-{
-    DefineBounds_(boundsHeight, boundsRadious, ForgBound_NonPhysical);
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#if FORG_SERVER
-global_variable TaxonomyEffect* currentEffect_;
-inline void IsPassive()
-{
-    currentSlot_->isPassiveSkill = true;
-}
-
-
-
-inline void AddFreeHandReq(char* slot, char* taxonomy)
-{
-    NakedHandReq* req;
-    TAXTABLE_ALLOC(req, NakedHandReq);
-    TaxonomySlot* taxonomyslot = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomy);
-    
-    if(taxonomyslot)
-    {
-        req->slotIndex = SafeTruncateToU8(GetValuePreprocessor(SlotName, slot));
-        req->taxonomy = taxonomyslot->taxonomy;
-        
-        req->next = currentSlot_->nakedHandReq;
-        currentSlot_->nakedHandReq = req;
-    }
-    else
-    {
-        EditorErrorLog(taxonomy);
-    }
-}
-
-
-
-
-
-
-
-
-
-global_variable CraftingEffectLink* activeCraftingLink_;
-inline void LinkStandard(char* action, char* effectName, char* target)
-{
-    
-    CraftingEffectLink* link;
-    TAXTABLE_ALLOC(link, CraftingEffectLink);
-    link->triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
-    link->target = target ? ToB32(target) : false;
-    link->effectID = (EffectIdentifier) GetValuePreprocessor(EffectIdentifier, effectName);
-    activeCraftingLink_ = link;
-    
-    FREELIST_INSERT(link, currentSlot_->links);
-}
-
-inline void Requires_(char* essenceName)
-{
-    TaxonomySlot* essenceSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, essenceName);
-    
-    if(essenceSlot)
-    {
-        if(activeCraftingLink_)
-        {
-            for(u32 essenceIndex = 0; essenceIndex < MAX_ESSENCES_PER_EFFECT; ++essenceIndex)
-            {
-                if(!activeCraftingLink_->essences[essenceIndex].taxonomy)
-                {
-                    activeCraftingLink_->essences[essenceIndex].taxonomy = essenceSlot->taxonomy;
-                    return;
-                }
-            }
-        }
-    }
-    else
-    {
-        EditorErrorLog(essenceName);
-    }
-}
-
-inline void Requires(char* essenceName, u32 quantity)
-{
-    for(u32 quantityIndex = 0; quantityIndex < quantity; ++quantityIndex)
-    {
-        Requires_(essenceName);
-    }
-}
-
-inline void ReadCraftingEffects()
-{
-#if 0    
-    BeginPossibleEffects("armour");
-    Link({Property_Strength, Property_Fire}, "fireProtection");
-    Link(Property_Fire, "defensiveFireAbility");
-#endif
-    
-    
-    
-    
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-inline void SaveCreatureAttribute(char* attributeName, r32 value)
-{
-    MemberDefinition member = SLOWGetRuntimeOffsetOf(CreatureComponent, attributeName);
-    u32 offset = member.offset;
-    
-    AttributeSlot* attr = GetAttributeSlot(currentSlot_, offset);
-    attr->offsetFromBase = offset;
-    attr->valueR32 = value;
-}
-
-#endif
-
-
-inline void InventorySpace(u8 width, u8 height)
-{
-    TaxonomySlot* slot = currentSlot_;
-    
-    slot->gridDimX = width;
-    slot->gridDimY = height;
-}
-
 inline void AddEssence(char* name, u32 quantity)
 {
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
@@ -939,791 +648,26 @@ inline void AddEssence(char* name, u32 quantity)
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-inline void BeginPossibleAction(char* action, char* distance)
+inline NoiseParams ParseNoiseParams(EditorElement* element)
 {
-    PossibleAction* possibleAction;
-    TAXTABLE_ALLOC(possibleAction, PossibleAction);
-    
-    u8 actionInt = SafeTruncateToU8(GetValuePreprocessor(EntityAction, action));
-    possibleAction->action = (EntityAction) actionInt;
-    possibleAction->distance = ToR32(distance, 1.0f);
-    possibleAction->flags = 0;
-    
-    possibleAction->next = currentSlot_->firstPossibleAction;
-    currentSlot_->firstPossibleAction = possibleAction;
-}
-
-inline void AddActionFlag(char* flagName)
-{
-    PossibleAction* possibleAction = currentSlot_->firstPossibleAction;
-    u32 flag = GetFlagPreprocessor(CanDoActionFlags, flagName);
-    possibleAction->flags |= flag;
-}
-
-
-inline void AddActor(char* name, char* requiredTime)
-{
-    TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    if(target)
+    r32 frequency = 1.0;
+    u32 octaves = 1;
+    r32 offset = 0;
+    r32 amplitude = 1.0f;
+    if(element)
     {
-        PossibleAction* possibleAction = currentSlot_->firstPossibleAction;
-        TaxonomyNode* node = AddToTaxonomyTree(&possibleAction->tree, target);
-        node->data.action.requiredTime = ToR32(requiredTime, 1.0f);
-    }
-    else
-    {
-        EditorErrorLog(name);
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#ifndef FORG_SERVER
-inline void AddAnimationEffect(AnimationEffect effect, u32 flags, u32 triggerAction, char* triggerEffect, r32 timer, r32 fadeTime, char* pieceName)
-{
-    AnimationEffect* dest;
-    TAXTABLE_ALLOC(dest, AnimationEffect);
-    *dest = effect;
-    
-    dest->flags = flags;
-    dest->triggerAction = triggerAction;
-    dest->timer = timer;
-    dest->fadeTime = fadeTime;
-    
-    if(pieceName)
-    {
-        if(StrEqual(pieceName, "all"))
-        {
-            dest->stringHashID = 0xffffffffffffffff;
-        }
-        else if(StrEqual(pieceName, "none"))
-        {
-            dest->stringHashID = 0;        
-        }
-        else
-        {
-            dest->stringHashID = StringHash(pieceName);
-        }
-    }
-    else
-    {
-        dest->stringHashID = 0;
-    }
-    
-    
-    
-    if(!StrEqual(triggerEffect, "invalid"))
-    {
-        TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, triggerEffect);
-        if(slot)
-        {
-            dest->triggerEffectTaxonomy = slot->taxonomy;
-        }
-        else
-        {
-            EditorErrorLog(triggerEffect);
-        }   
-    }
-    
-    FREELIST_INSERT(dest, currentSlot_->firstAnimationEffect);
-}
-
-
-inline AnimationEffect ColorationEffect(Vec4 color)
-{
-    AnimationEffect result = {};
-    result.type = AnimationEffect_ChangeColor;
-    result.color = color;
-    return result;
-}
-
-inline AnimationEffect SpawnParticlesEffect(char* particleEffectName)
-{
-    AnimationEffect result = {};
-    result.type = AnimationEffect_SpawnParticles;
-    
-    TaxonomySlot* effectSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, particleEffectName);
-    if(effectSlot)
-    {
-    result.particleEffectTaxonomy = effectSlot->taxonomy;
-    }
-    else
-    {
-        EditorErrorLog(particleEffectName);
-    }
-    
-    return result;
-}
-
-inline AnimationEffect LightEffect(Vec3 color, r32 intensity)
-{
-    AnimationEffect result = {};
-    result.type = AnimationEffect_Light;
-    
-    result.lightColor = color;
-    result.lightIntensity = intensity;
-    
-    return result;
-}
-
-inline AnimationEffect BoltEffect(char* boltEffectName, r32 timer)
-{
-    AnimationEffect result = {};
-    result.type = AnimationEffect_Bolt;
-    result.boltTargetTimer = timer;
-    
-    TaxonomySlot* effectSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, boltEffectName);
-    
-    if(effectSlot)
-    {
-        result.boltTaxonomy = effectSlot->taxonomy;
-    }
-    else
-    {
-        EditorErrorLog(boltEffectName);
-    }
-    
-    return result;
-}
-
-inline void AddLight(r32 minIntensity, r32 maxIntensity, char* pieceName, Vec3 color)
-{
-    currentSlot_->minLightIntensity = minIntensity;
-    currentSlot_->maxLightIntensity = maxIntensity;
-    currentSlot_->hasLight = true;
-    currentSlot_->lightColor = color;
-    currentSlot_->lightPieceHashID = 0;
-    if(pieceName)
-    {
-        currentSlot_->lightPieceHashID = StringHash(pieceName);
-    }
-}
-
-inline void UsesSkeleton(char* skeletonName, char* skinName, Vec4 defaultColoration, Vec2 originOffset)
-{
-    currentSlot_->skeletonHashID = StringHash(skeletonName);
-    currentSlot_->skinHashID = StringHash(skinName);
-    currentSlot_->defaultColoration = defaultColoration;
-    currentSlot_->originOffset = originOffset;
-}
-
-inline void AddBoneAlteration(char* boneIndex, char* scaleX, char* scaleY)
-{
-    TaxonomyBoneAlterations* alt;
-    TAXTABLE_ALLOC(alt, TaxonomyBoneAlterations);
-    
-    alt->boneIndex = ToU32(boneIndex);
-    
-    alt->alt.valid = true;
-    
-    alt->alt.scale.x = ToR32(scaleX);
-    alt->alt.scale.y = ToR32(scaleY);
-    
-    FREELIST_INSERT(alt, currentSlot_->firstBoneAlteration);
-}
-
-inline void AddAssAlteration(char* assIndex, char* scaleX, char* scaleY, char* offsetX, char* offsetY, b32 specialColoration, Vec4 color)
-{
-    TaxonomyAssAlterations* alt;
-    TAXTABLE_ALLOC(alt, TaxonomyAssAlterations);
-    
-    alt->assIndex = ToU32(assIndex);
-    
-    alt->alt.valid = true;
-    
-    alt->alt.scale.x = ToR32(scaleX);
-    alt->alt.scale.y = ToR32(scaleY);
-    
-    alt->alt.boneOffset.x = ToR32(offsetX);
-    alt->alt.boneOffset.y = ToR32(offsetY);
-    
-    alt->alt.specialColoration = specialColoration;
-    alt->alt.color = color;
-    
-    FREELIST_INSERT(alt, currentSlot_->firstAssAlteration);
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-inline TaxonomySound* AddSoundEffect(char* animationName, char* threesoldIn, char* eventName)
-{
-    r32 threesold = ToR32(threesoldIn);
-    u64 animationHash = StringHash(animationName);
-    u64 eventHash = StringHash(eventName);
-    
-    TaxonomySound* dest;
-    TAXTABLE_ALLOC(dest, TaxonomySound);
-    
-    dest->animationNameHash = animationHash;
-    dest->threesold = threesold;
-    dest->eventNameHash = eventHash;
-    
-    FREELIST_INSERT(dest, currentSlot_->firstSound);
-    
-    return dest;
-}
-
-inline SoundContainer* AddSoundEvent(char* eventName)
-{
-    Assert(taxTable_->eventCount < ArrayCount(taxTable_->events));
-    
-    SoundEvent* event = taxTable_->events + taxTable_->eventCount++;
-    event->eventNameHash = StringHash(eventName);
-    SoundContainer* result = &event->rootContainer;
-    
-    event->rootContainer.soundCount = 0;
-    event->rootContainer.firstSound = 0;
-    
-    event->rootContainer.containerCount = 0;
-    event->rootContainer.firstChildContainer = 0;
-    
-    event->rootContainer.labelCount = 0;
-    return result;
-}
-
-inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundType, char* soundName, r32 delay, r32 decibelOffset, r32 pitch, r32 toleranceDistance, r32 distanceFalloffCoeff)
-{
-    ++container->soundCount;
-    
-    LabeledSound* sound;
-    TAXTABLE_ALLOC(sound, LabeledSound);
-    
-    sound->typeHash = StringHash(soundType);
-    sound->nameHash = StringHash(soundName);
-    
-    sound->delay = delay;
-    sound->decibelOffset = decibelOffset;
-    sound->pitch = pitch;
-    sound->toleranceDistance = toleranceDistance;
-    sound->distanceFalloffCoeff = distanceFalloffCoeff;
-    
-    FREELIST_INSERT(sound, container->firstSound);
-    
-    return sound;
-}
-
-inline SoundContainer* AddChildContainer(SoundContainer* container)
-{
-    ++container->containerCount;
-    
-    SoundContainer* newContainer;
-    TAXTABLE_ALLOC(newContainer, SoundContainer);
-    
-    newContainer->soundCount = 0;
-    newContainer->firstSound = 0;
-    
-    newContainer->containerCount = 0;
-    newContainer->firstChildContainer = 0;
-    
-    newContainer->labelCount = 0;
-    
-    FREELIST_INSERT(newContainer, container->firstChildContainer);
-    
-    return newContainer;
-}
-
-inline void SetLabel(SoundLabel* label, char* labelName, char* labelValue)
-{
-    r32 value = labelValue ? ToR32(labelValue) : 0;
-    u64 hash = StringHash(labelName);
-    
-    label->hashID = hash;
-    label->value = value;
-}
-
-inline void AddSoundLabel(SoundContainer* container, char* labelName, char* labelValue)
-{
-    Assert(container->labelCount < ArrayCount(container->labels));
-    SoundLabel* label = container->labels + container->labelCount++;
-    SetLabel(label, labelName, labelValue);
-}
-
-inline void AddSoundLabel(LabeledSound* sound, char* labelName, char* labelValue)
-{
-    Assert(sound->labelCount < ArrayCount(sound->labels));
-    SoundLabel* label = sound->labels + sound->labelCount++;
-    SetLabel(label, labelName, labelValue);
-}
-
-
-
-inline SoundEvent* GetSoundEvent(TaxonomyTable* table, u64 eventHash)
-{
-    SoundEvent* result = 0;
-    for(u32 eventIndex = 0; eventIndex < table->eventCount; ++eventIndex)
-    {
-        SoundEvent* event = table->events + eventIndex;
-        if(event->eventNameHash == eventHash)
-        {
-            result = event;
-            break;
-        }
-    }
-    
-    return result;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-inline void AddLabel(u64 ID, r32 value)
-{
-    TaxonomySlot* slot = currentSlot_;
-    VisualLabel* dest;
-    TAXTABLE_ALLOC(dest, VisualLabel);
-    
-    u32 hash = (u32) (ID >> 32);
-    dest->ID = (hash & (LABEL_HASH_COUNT - 1)) + Tag_count;
-    dest->value = value;
-    
-    FREELIST_INSERT(dest, slot->firstVisualLabel);
-}
-#endif
-inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, char* componentName, u8 index)
-{
-    u64 componentHashID = StringHash(componentName);
-    
-    LayoutPiece* dest;
-    TAXTABLE_ALLOC(dest, LayoutPiece);
-    
-    dest->componentHashID = componentHashID;
-	dest->index = index;
-    
-    FormatString(dest->name, sizeof(dest->name), "%s", componentName);
-    dest->ingredientCount = 0;
-    dest->parent = 0;
-    
-    FREELIST_INSERT(dest, layout->firstPiece);
-    
-    ++layout->pieceCount;
-    
-    return dest;
-}
-
-inline void AddLayoutPieceParams(LayoutPiece* piece, ObjectState state, Vec3 parentOffset, r32 parentAngle, Vec2 scale, r32 alpha, Vec2 pivot)
-{
-    Assert(state < ObjectState_Count);
-    LayoutPieceParams* params = piece->params + state;
-    params->valid = true;
-    params->parentOffset = parentOffset;
-    params->parentAngle = parentAngle;
-    params->scale = scale;
-    params->alpha = alpha;
-    params->pivot = pivot;
-}
-
-inline void AddIngredient(LayoutPiece* piece, char* name, u32 quantity)
-{
-    Assert(piece->ingredientCount < ArrayCount(piece->ingredientTaxonomies));
-    TaxonomySlot* ingredientSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    if(ingredientSlot)
-    {
-		u32 ingredientIndex = piece->ingredientCount++;
-        piece->ingredientTaxonomies[ingredientIndex] = ingredientSlot->taxonomy;
-		piece->ingredientQuantities[ingredientIndex] = quantity;
-    }
-    else
-    {
-        EditorErrorLog(name);
-    }
-}
-
-
-
-#ifdef FORG_SERVER
-
-global_variable MemCriteria* currentMemCriteria_;
-global_variable TaxonomyTree* currentSynthTree_;
-global_variable TaxonomyNode* currentSynthNode_;
-global_variable MemSynthOption* currentSynthOption_;
-
-inline void BeginMemoryBehavior(char* behaviorName)
-{
-    TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, behaviorName);
-    
-    if(slot)
-    {
-        FREELIST_FREE(slot->criteria, MemCriteria, taxTable_->firstFreeMemCriteria);
+        frequency = ToR32(GetValue(element, "frequency"), 1.0f);
+        octaves = ToU32(GetValue(element, "octaves"), 1);
+        offset = ToR32(GetValue(element, "offset"));
+        amplitude = ToR32(GetValue(element, "amplitude"), 1.0f);
         
-        for(MemSynthesisRule* rule = slot->synthRules; rule; rule = rule->next)
-        {
-            FreeMemSynthRuleTree(taxTable_, rule->tree.root);
-        }
-        FREELIST_FREE(slot->synthRules, MemSynthesisRule, taxTable_->firstFreeMemSynthesisRule);
-        
-        Assert(IsBehavior(taxTable_, slot->taxonomy));
-        currentSlot_ = slot;
     }
-    else
-    {
-        EditorErrorLog(behaviorName);
-    }
-}
-
-inline void AddCriteria(char* criteriaName)
-{
-    TaxonomySlot* criteriaTax = NORUNTIMEGetTaxonomySlotByName(taxTable_, criteriaName);
-    if(criteriaTax)
-    {
-        MemCriteria* newCriteria;
-        TAXTABLE_ALLOC(newCriteria, MemCriteria);
-        newCriteria->taxonomy = criteriaTax->taxonomy;
-        
-        FREELIST_INSERT(newCriteria, currentSlot_->criteria);
-        currentMemCriteria_ = newCriteria;
-    }
-    else
-    {
-        currentMemCriteria_ = 0;
-        EditorErrorLog(criteriaName);
-    }
-}
-
-inline void AddMemConsideration(char* requiredConceptName)
-{
-    TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, requiredConceptName);
-    if(slot)
-    {
-        if(currentMemCriteria_)
-        {
-            Assert(currentMemCriteria_->possibleTaxonomiesCount < ArrayCount(currentMemCriteria_->requiredConceptTaxonomy));
-            currentMemCriteria_->requiredConceptTaxonomy[currentMemCriteria_->possibleTaxonomiesCount++] = slot->taxonomy;
-        }
-    }
-    else
-    {
-        EditorErrorLog(requiredConceptName);
-    }
-}
-
-inline void AddSynthesisRule(EntityAction action)
-{
-    MemSynthesisRule* rule;
-    TAXTABLE_ALLOC(rule, MemSynthesisRule);
-    rule->action = action;
     
-    FREELIST_INSERT(rule, currentSlot_->synthRules);
-    
-    currentSynthTree_ = &rule->tree;
-}
-
-inline void AddNode(char* name)
-{
-    TaxonomySlot* target = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    if(target)
-    {
-        if(currentSynthTree_)
-        {
-            currentSynthNode_ = AddToTaxonomyTree(currentSynthTree_, target);
-        }
-    }
-    else
-    {
-        EditorErrorLog(name);
-    }
-}
-
-inline void AddOption(char* conceptName, u32 lastingtimeUnits, u32 refreshTimeUnits)
-{
-    TaxonomySlot* conceptSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, conceptName);
-    
-    if(conceptSlot)
-    {
-        MemSynthOption* option;
-        TAXTABLE_ALLOC(option, MemSynthOption);
-        option->lastingtimeUnits = SafeTruncateToU16(lastingtimeUnits);
-        option->refreshTimeUnits = SafeTruncateToU16(refreshTimeUnits);
-        option->outputConcept = conceptSlot->taxonomy;
-        
-        FREELIST_INSERT(option, currentSynthNode_->data.firstOption);
-        currentSynthOption_ = option;
-    }
-    else
-    {
-        currentSynthOption_ = 0;
-        EditorErrorLog(conceptName);
-    }
-}
-
-#if 0
-inline void OnCondition(char* requiredAssociationConcept)
-{
-    CriteriaOption* option;
-    TAXTABLE_ALLOC(option, CriteriaOption);
-    TaxonomySlot* conceptSlot = NORUNTIMEGetTaxonomySlotByName(behaviorsTaxTable_, requiredAssociationConcept);
-    option->requiredAssociationConcept = conceptSlot->taxonomy;
-    
-    FREELIST_INSERT(option, currentCriteriaNode_->data.firstOption);
-}
-#endif
-
-inline void AddMemBehavior(char* behaviorName)
-{
-    TaxonomySlot* behaviorSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, behaviorName);
-    
-    if(behaviorSlot)
-    {
-        TaxonomyMemBehavior* newBehavior;
-        TAXTABLE_ALLOC(newBehavior, TaxonomyMemBehavior);
-        newBehavior->taxonomy = behaviorSlot->taxonomy;
-        
-        FREELIST_INSERT(newBehavior, currentSlot_->firstMemBehavior);
-    }
-    else
-    {
-        EditorErrorLog(behaviorName);
-    }
-}
-
-#define Seconds(value) value
-#define Minutes(value) 60 * Seconds(value)
-#define Hours(value) 60 * Minutes(value)
-
-internal void ReadSynthesisRules()
-{
-    BeginMemoryBehavior("idiot memory behavior");
-    AddCriteria("enemy");
-    AddMemConsideration("attacker");
-    AddMemConsideration("hostile");
-    
-    AddSynthesisRule(Action_Attack);
-    AddNode("monsters");
-    AddOption("attacker", Minutes(40), Minutes(2));
-    //AddBooleanConsideration();
-    
-    AddCriteria("foodCrit");
-    AddMemConsideration("foodCandidate");
-    
-    AddSynthesisRule(Action_None);
-    AddNode("apple");
-    AddOption("foodCandidate", Minutes(10), Minutes(1));
-    
-    
-    
-    
-    
-    
-    BeginMemoryBehavior("idiot memory behavior 2");
-    AddCriteria("enemy");
-    AddMemConsideration("attacker");
-    AddMemConsideration("hostile");
-    
-    AddSynthesisRule(Action_Attack);
-    AddNode("root");
-    AddOption("attacker", Minutes(40), Minutes(2));
-    //AddBooleanConsideration();
-    
-    AddSynthesisRule(Action_Idle);
-    AddNode("monsters");
-    AddOption("hostile", Minutes(20), Minutes(1));
-    
-    AddCriteria("foodCrit");
-    AddMemConsideration("foodCandidate");
-    
-    AddSynthesisRule(Action_None);
-    AddNode("apple");
-    AddOption("foodCandidate", Minutes(10), Minutes(1));
-}
-#endif
-
-
-inline AIAction* AddSpecialAction(AIStateMachine* sm, EntitySpecialAction action)
-{
-    AIAction* result = 0;
-    if(sm->actionCount < ArrayCount(sm->actions))
-    {
-        result = sm->actions + sm->actionCount++; 
-        result->command.type = AIAction_SpecialAction;
-        result->command.data.specialAction = action;
-        result->transitionCount = 0;
-    }
+    NoiseParams result = NoisePar(frequency, octaves, offset, amplitude);
     
     return result;
 }
 
-inline AIAction* AddAction(AIStateMachine* sm, EntityAction action, u32 taxonomy)
-{
-    AIAction* result = 0;
-    if(sm->actionCount < ArrayCount(sm->actions))
-    {
-        result = sm->actions + sm->actionCount++; 
-        result->command.type = AIAction_StandardAction;
-        result->command.data.standardAction = action;
-        result->command.data.conceptTaxonomy = taxonomy;
-        result->transitionCount = 0;
-    }
-    
-    return result;
-}
-
-inline AIStateMachineTransition* AddTransition(AIStateMachine* sm, AIAction* a1, AIAction* a2)
-{
-    AIStateMachineTransition* result = 0;
-    if(a1->transitionCount < ArrayCount(a1->transitions))
-    {
-        result = a1->transitions + a1->transitionCount++;
-        result->destActionIndex = (u32) (a2 - sm->actions);
-    }
-    
-    return result;
-}
-
-inline AICondition* AddCondition(AIStateMachineTransition* transition, AIConditionType type, b32 negated = false)
-{
-    AICondition* result = 0;
-    if(transition->conditionCount < ArrayCount(transition->conditions))
-    {
-        result = transition->conditions + transition->conditionCount++;
-        result->type = type;
-        result->negated = negated;
-    }
-    
-    return result;
-}
-
-inline void InitDefaultStateMachine()
-{
-    AIStateMachine* sm = &taxTable_->testStateMachine;
-    
-    TaxonomySlot* testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, "centaur");
-    u32 hostileTaxonomy = testSlot->taxonomy;
-    
-    AIAction* action = AddSpecialAction(sm, SpecialAction_MoveLeft);
-    AIAction* action2 = AddSpecialAction(sm, SpecialAction_MoveRight);
-    AIAction* action3 = AddAction(sm, Action_Attack, hostileTaxonomy);
-    
-    AIStateMachineTransition* transition = AddTransition(sm, action, action2);
-    AICondition* condition = AddCondition(transition, AICondition_DoingActionFor);
-    condition->data.time = 2.0f;
-    
-    AIStateMachineTransition* transition2 = AddTransition(sm, action2, action);
-    AICondition* condition2 = AddCondition(transition2, AICondition_DoingActionFor);
-    condition2->data.time = 2.0f;
-    
-    AIStateMachineTransition* transition3 = AddTransition(sm, action, action3);
-    AICondition* condition3 = AddCondition(transition3, AICondition_OnSight);
-    condition3->data.taxonomy = hostileTaxonomy;
-    
-    AIStateMachineTransition* transition4 = AddTransition(sm, action3, action);
-    AICondition* condition4 = AddCondition(transition4, AICondition_OnSight, true);
-    condition4->data.taxonomy = hostileTaxonomy;                                          
-}
-
-
-
-
-
-inline void Requires(char* toolName)
-{
-    TaxonomySlot* toolSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, toolName);
-    if(toolSlot)
-    {
-        b32 inserted = false;
-        for(u32 toolIndex = 0; toolIndex < ArrayCount(currentSlot_->neededToolTaxonomies); ++toolIndex)
-        {
-            if(!currentSlot_->neededToolTaxonomies[toolIndex])
-            {
-                inserted = true;
-                currentSlot_->neededToolTaxonomies[toolIndex] = toolSlot->taxonomy;
-                break;
-            }
-        }
-        
-        Assert(inserted);
-    }
-    else
-    {
-        
-        EditorErrorLog(toolName);
-    }
-}
 
 
 
@@ -1742,22 +686,6 @@ inline void Requires(char* toolName)
 
 
 
-
-
-
-
-internal void InitializeNewTaxonomyTabs(TaxonomySlot* slot)
-{
-    InvalidCodePath;
-#if 0    
-	for(u32 tabIndex = 0; tabIndex < Tab_Count; ++tabIndex)
-	{
-		EditorTab* tab = FindDefaultTab();
-		Copy(tab, slot->tabs[tabIndex]);
-	}
-#endif
-    
-}
 
 inline char* OutputToBuffer(char* buffer, u32* bufferSize, char* string)
 {
@@ -2305,23 +1233,6 @@ inline void FreeElement(EditorElement* element, b32 freeNext = true)
     }
 }
 
-inline b32 IsEditableByRole(EditorElement* root, u32 role)
-{
-    char* tabName = root->name;
-    
-    b32 result = false;
-    if(StrEqual(tabName, "soundEffects"))
-    {
-        result = (role & EditorRole_SoundDesigner);
-    }
-    else
-    {
-        result = (role & EditorRole_GameDesigner);
-    }
-    
-    return result;
-}
-
 internal void LoadFileInTaxonomySlot(char* content, u32 editorRoles)
 {
     Tokenizer tokenizer = {};
@@ -2468,1363 +1379,208 @@ inline EditorElement* GetList(EditorElement* element, char* listName)
     return result;
 }
 
-inline NoiseParams ParseNoiseParams(EditorElement* element)
-{
-    r32 frequency = 1.0;
-    u32 octaves = 1;
-    r32 offset = 0;
-    r32 amplitude = 1.0f;
-    if(element)
-    {
-        frequency = ToR32(GetValue(element, "frequency"), 1.0f);
-        octaves = ToU32(GetValue(element, "octaves"), 1);
-        offset = ToR32(GetValue(element, "offset"));
-        amplitude = ToR32(GetValue(element, "amplitude"), 1.0f);
-        
-    }
-    
-    NoiseParams result = NoisePar(frequency, octaves, offset, amplitude);
-    
-    return result;
-}
+
+
+
+
+
+
+#include "editor/effect.cpp"
+
+#include "editor/bounds.cpp"
+#include "editor/equipmentMappings.cpp"
+#include "editor/consumeMappings.cpp"
+#include "editor/neededTool.cpp"
+#include "editor/requiredEssences.cpp"
+#include "editor/craftingEssences.cpp"
+#include "editor/container.cpp"
+#include "editor/tileParams.cpp"
+
+#include "editor/light.cpp"
 
 #ifndef FORG_SERVER
-inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer, EditorElement* root)
-{
-    char* type = GetValue(root, "type");
-    if(type)
-    {
-        rootContainer->type = (SoundContainerType) GetValuePreprocessor(SoundContainerType, type);
-    }
-    else
-    {
-        InvalidCodePath;
-    }
-    
-	EditorElement* containerLabels = GetList(root, "labels");
-	while(containerLabels)
-	{
-        char* labelName = GetValue(containerLabels, "name");
-        char* labelValue = GetValue(containerLabels, "value");
-        
-        AddSoundLabel(rootContainer, labelName, labelValue);
-		containerLabels = containerLabels->next;
-	}
-    
-    EditorElement* sounds = GetList(root, "sounds");
-    while(sounds)
-    {
-        char* soundType = GetValue(sounds, "soundType");
-        char* soundName = GetValue(sounds, "sound");
-        
-        r32 delay = 0;
-        r32 decibelOffset = 0;
-        r32 pitch = 1;
-        r32 toleranceDistance = 1;
-        r32 distanceFalloffCoeff = 1;
-        EditorElement* params = GetList(sounds, "params");
-        while(params)
-        {
-            if(StrEqual(params->name, "delay"))
-            {
-                delay = ToR32(GetValue(params, "value"), 0);
-            }
-            else if(StrEqual(params->name, "decibelOffset"))
-            {
-                decibelOffset = ToR32(GetValue(params, "value"), 0);
-            }
-            else if(StrEqual(params->name, "pitch"))
-            {
-                pitch = ToR32(GetValue(params, "value"), 1);
-            }
-            else if(StrEqual(params->name, "toleranceDistance"))
-            {
-                toleranceDistance = ToR32(GetValue(params, "value"), 1);
-            }
-            else if(StrEqual(params->name, "distanceFalloffCoeff"))
-            {
-                distanceFalloffCoeff = ToR32(GetValue(params, "value"), 1);
-            }
-            
-            params = params->next;
-        }
-        
-        if(soundType && soundName)
-        {
-            LabeledSound* sound = AddSoundToContainer(rootContainer, soundType, soundName, delay, decibelOffset, pitch, toleranceDistance, distanceFalloffCoeff);
-			EditorElement* soundLabels = GetList(sounds, "labels");
-			while(soundLabels)
-			{
-                char* labelName = GetValue(soundLabels, "name");
-                char* labelValue = GetValue(soundLabels, "value");
-                
-                AddSoundLabel(sound, labelName, labelValue);
-				soundLabels = soundLabels->next;
-			}
-        }
-        sounds = sounds->next;
-    }
-    
-    EditorElement* childs = GetList(root, "childs");
-    while(childs)
-    {
-        SoundContainer* childContainer = AddChildContainer(rootContainer);
-        AddSoundAndChildContainersRecursively(childContainer, childs);
-        
-        childs = childs->next;
-    }
-}
+#include "editor/soundEvent.cpp"
+#include "editor/animationEffects.cpp"
+#include "editor/soundEffects.cpp"
+#include "editor/animationGeneralParams.cpp"
+#include "editor/skeleton.cpp"
+#include "editor/visualLabels.cpp"
+#include "editor/boneAlteration.cpp"
+#include "editor/assAlteration.cpp"
+#include "editor/icon.cpp"
+#include "editor/particleEffectDefinition.cpp"
+#include "editor/boltDefinition.cpp"
+#endif
+#include "editor/rockDefinition.cpp"
+#include "editor/plantDefinition.cpp"
+#include "editor/generatorParams.cpp"
+#include "editor/layouts.cpp"
+
+#if FORG_SERVER
+#include "editor/effects.cpp"
+#include "editor/freeHandsRequirements.cpp"
+#include "editor/craftingEffects.cpp"
+#include "editor/attributes.cpp"
+#include "editor/possibleActions.cpp"
+#include "editor/behaviors.cpp"
+#include "editor/memBehaviors.cpp"
 #endif
 
-internal void FreeEquipmentTreeNodeRecursive(TaxonomyNode* root)
-{
-    if(root)
-    {
-        for(TaxonomyNode* child = root->firstChild; child;)
-        {
-            TaxonomyNode* next = child->next;
-            FreeEquipmentTreeNodeRecursive(child);
-            child = next;
-        }
-        root->firstChild = 0;
-        
-        if(root->data.equipmentMapping)
-        {
-            for(EquipmentLayout* layout = root->data.equipmentMapping->firstEquipmentLayout; layout; layout = layout->next)
-            {
-                FREELIST_FREE(layout->firstEquipmentAss, EquipmentAss, taxTable_->firstFreeEquipmentAss);
-                layout->firstEquipmentAss = 0;
-            }
-            
-            
-            FREELIST_FREE(root->data.equipmentMapping->firstEquipmentLayout, EquipmentLayout,  taxTable_->firstFreeEquipmentLayout);
-            root->data.equipmentMapping->firstEquipmentLayout = 0;
-            
-            FREELIST_DEALLOC(root->data.equipmentMapping, taxTable_->firstFreeEquipmentMapping);
-        }
-        root->data.equipmentMapping = 0;
-        
-        FREELIST_DEALLOC(root, taxTable_->firstFreeTaxonomyNode);
-    }
-}
-
-inline void AddTileBucket(Selector* band, char* tileName, r32 temperature)
-{
-    TaxonomySlot* tileSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, tileName);
-    if(tileSlot)
-    {
-        AddBucket(band, temperature, tileSlot->taxonomy);
-    }
-    else
-    {
-        EditorErrorLog(tileName);
-    }
-}
-
-inline void ParsePlantLevelParams(PlantLevelParams* destParams, EditorElement* levelParams)
-{
-    if(levelParams)
-    {
-        destParams->curveRes = ToU8(GetValue(levelParams, "curveRes"));
-        destParams->curveBack = ToR32(GetValue(levelParams, "curveBack"));
-        destParams->curve = ToR32(GetValue(levelParams, "curve"));
-        destParams->curveV = ToR32(GetValue(levelParams, "curveV"));
-        
-        destParams->segSplits = ToR32(GetValue(levelParams, "segSplits"));
-        destParams->baseSplits = ToR32(GetValue(levelParams, "baseSplits"));
-        
-        destParams->splitAngle = ToR32(GetValue(levelParams, "splitAngle"));
-        destParams->splitAngleV = ToR32(GetValue(levelParams, "splitAngleV"));
-        
-        destParams->branches = ToR32(GetValue(levelParams, "branches"));
-        destParams->branchesV = ToR32(GetValue(levelParams, "branchesV"));
-        destParams->downAngle = ToR32(GetValue(levelParams, "downAngle"));destParams->downAngleV = ToR32(GetValue(levelParams, "downAngleV"));
-        destParams->rotate = ToR32(GetValue(levelParams, "rotate"));destParams->rotateV = ToR32(GetValue(levelParams, "rotateV"));
-        destParams->lengthCoeff = ToR32(GetValue(levelParams, "lengthCoeff"));
-        destParams->lengthCoeffV = ToR32(GetValue(levelParams, "lengthCoeffV"));
-        destParams->taper = ToR32(GetValue(levelParams, "taper"));
-        destParams->radiousMod = ToR32(GetValue(levelParams, "radiousMod"), 1.0f);
-        destParams->clonePercRatio = ToR32(GetValue(levelParams, "clonePercRatio"), 0.5f);
-        destParams->clonePercRatioV = ToR32(GetValue(levelParams, "clonePercRatioV"), 0.0f);
-        
-        destParams->baseYoungColor = ToV4Color(GetStruct(levelParams, "baseYoungColor"));
-        destParams->topYoungColor = ToV4Color(GetStruct(levelParams, "topYoungColor"));
-        destParams->baseOldColor = ToV4Color(GetStruct(levelParams, "baseOldColor"));
-        destParams->topOldColor = ToV4Color(GetStruct(levelParams, "topOldColor"));
-        
-        destParams->radiousIncreaseSpeed = ToR32(GetValue(levelParams, "radiousIncreaseSpeed"));
-        destParams->lengthIncreaseSpeed = ToR32(GetValue(levelParams, "lengthIncreaseSpeed"));
-        
-        destParams->leafCount = Min(MAX_LEAFS_PER_STEM, ToU8(GetValue(levelParams, "leafCount")));
-        destParams->allLeafsAtStemLength = ToR32(GetValue(levelParams, "allLeafsAtStemLength"), 0.5f);
-    }
-    else
-    {
-        *destParams = {};
-    }
-}
-
-inline void Spawn(Effect* effect, char* name)
-{
-    TaxonomySlot* spawnSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    if(spawnSlot)
-    {
-        if(effect)
-        {
-            effect->data.taxonomy = spawnSlot->taxonomy;
-        }
-    }
-    else
-    {
-        EditorErrorLog(name);
-    }
-}
-
-internal void ParseEffect(EditorElement* element, Effect* dest)
-{
-    
-            char* action = GetValue(element, "action");
-            char* effectName = GetValue(element, "effectID");
-            char* minIntensity = GetValue(element, "minIntensity");
-            char* maxIntensity = GetValue(element, "maxIntensity");
-            
-           
-            dest->triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
-            dest->ID = (EffectIdentifier) GetValuePreprocessor(EffectIdentifier, effectName);
-            dest->minIntensity = ToR32(minIntensity, 1.0f);
-            dest->maxIntensity = ToR32(maxIntensity, 1.0f);
-            
-  
-            char* timer = GetValue(element, "timer");
-            if(timer)
-            {
-                dest->targetTimer = ToR32(timer);
-            }
-            
-            EditorElement* flagList = GetList(element, "flags");
-            while(flagList)
-            {
-                char* flag = GetValue(flagList, "name");
-                u32 flagValue = GetFlagPreprocessor(EffectFlags, flag);
-                dest->flags |= flagValue;
-                
-                flagList = flagList->next;
-            }
-            
-            EditorElement* range = GetStruct(element, "range");
-            char* rangeType = GetValue(range, "rangeType");
-            char* rangeValue = GetValue(range, "radious");
-                dest->range.type = (EffectTargetRangeType) GetValuePreprocessor(EffectTargetRangeType, rangeType);
-                dest->range.radious = ToR32(rangeValue, 0.0f);
-                        
-            dest->data = {};
-            EditorElement* params = GetList(element, "effectParams");
-            while(params)
-            {
-                char* paramName = GetValue(params, "effectParamName");
-                if(StrEqual(paramName, "velocity"))
-                {
-                    dest->data.speed = ToV3(GetElement(params, "velocity"));
-                }
-                else if(StrEqual(paramName, "offset"))
-                {
-                    dest->data.offset = ToV3(GetElement(params, "offset"));
-                }
-                else if(StrEqual(paramName, "offsetV"))
-                {
-                    dest->data.offsetV = ToV3(GetElement(params, "offsetV"));
-                }
-                else if(StrEqual(paramName, "taxonomyName"))
-                {
-                    char* taxonomy = GetValue(params, "taxonomyName");
-                    Spawn(dest, taxonomy);
-                }
-                else if(StrEqual(paramName, "timeToLive"))
-                {
-                    dest->data.timeToLive = ToR32(GetValue(params, "timeToLive"));
-                }
-                else if(StrEqual(paramName, "spawnCount"))
-                {
-                    dest->data.spawnCount = ToU32(GetValue(params, "spawnCount"));
-                }
-                
-               
-                params = params->next;
-            }
-}
 
 internal void Import(TaxonomySlot* slot, EditorElement* root)
 {
     currentSlot_ = slot;
     
     char* name = root->name;
-    if(StrEqual(name, "bounds"))
+    
+    b32 valid = ToB32(GetValue(root, "valid"), true);
+    
+    if(valid)
     {
-        char* exists = GetValue(root, "physical");
-        b32 physical = ToB32(exists);
-        
-        char* height = GetValue(root, "height");
-        char* radious = GetValue(root, "radious");
-        
-        if(physical)
-        {
-            DefineBounds(height, radious);
-        }
-        else
-        {
-            DefineNullBounds(height, radious);
-        }
-        
-        
-        slot->scaleDimBasedOnIntensity = ToB32(GetValue(root, "scaleDimBasedOnGenIntensity"));
-        slot->scaleDimGenCoeffV = ToR32(GetValue(root, "scaleDimGenCoeff"));
+        if(StrEqual(name, "bounds"))
+    {
+            ImportBoundsTab(slot, root);
     }
     else if(StrEqual(name, "equipmentMappings"))
     {
-        FreeEquipmentTreeNodeRecursive(currentSlot_->equipmentMappings.root);
-        currentSlot_->equipmentMappings.root = 0;
-        
-        EditorElement* singleSlot = root->firstInList;
-        while(singleSlot)
-        {
-            char* equipmentName = GetValue(singleSlot, "equipment");
-            EquipmentMapping* mapping = AddEquipmentMapping(equipmentName);
-            
-            EditorElement* layouts = GetList(singleSlot, "layouts");
-            while(layouts)
-            {
-                char* layoutName = GetValue(layouts, "layoutName");
-                char* slotName = GetValue(layouts, "slot");
-                
-                EquipmentLayout* equipmentLayout;
-                TAXTABLE_ALLOC(equipmentLayout, EquipmentLayout);
-                equipmentLayout->layoutHashID = StringHash(layoutName);
-                equipmentLayout->slot = {(SlotName) GetValuePreprocessor(SlotName, slotName)};
-                
-                FREELIST_INSERT(equipmentLayout, mapping->firstEquipmentLayout);
-                
-                EditorElement* pieces = GetList(layouts, "pieces");
-                while(pieces)
-                {
-                    u32 assIndex = ToU32(GetValue(pieces, "assIndex"));
-                    
-                    
-                    char* pieceName = GetValue(pieces, "pieceName");
-                    u8 index = ToU8(GetValue(pieces, "index"));
-                    
-                    if(StrEqual(pieceName, "all"))
-                    {
-                        index = 0xff;
-                    }
-                    Vec2 assOffset = ToV2(GetStruct(pieces, "assOffset"));
-                    r32 zOffset = ToR32(GetValue(pieces, "zOffset"));
-                    r32 angle = ToR32(GetValue(pieces, "angle"));
-                    Vec2 scale = ToV2(GetStruct(pieces, "scale"));
-                    
-                    AddPiece(equipmentLayout, assIndex, pieceName, index, assOffset, zOffset, angle, scale);
-                    
-                    pieces = pieces->next;
-                }
-                
-                
-                layouts = layouts->next;
-            }
-            
-            singleSlot = singleSlot->next;
-        }
+        ImportEquipmentMappingsTab(slot, root);
+
     }
     
     
     else if(StrEqual(name, "consumeMappings"))
     {
-        FREELIST_FREE(currentSlot_->firstConsumeMapping, ConsumeMapping, taxTable_->firstFreeConsumeMapping);
-        EditorElement* consume = root->firstInList;
-        while(consume)
-        {
-            char* actionName = GetValue(consume, "action");
-            char* objectName = GetValue(consume, "object");
-            CanConsume(actionName, objectName);
-            
-            consume = consume->next;
-        }
+            ImportConsumeMappingsTab(slot, root);
     }
     
     
     else if(StrEqual(name, "neededTools"))
     {
-        for(u32 toolIndex = 0; toolIndex < ArrayCount(currentSlot_->neededToolTaxonomies); ++toolIndex)
-        {
-            currentSlot_->neededToolTaxonomies[toolIndex] = 0;
-        }
-        EditorElement* tools = root->firstInList;
-        while(tools)
-        {
-            char* toolName = tools->name;
-            Requires(toolName);
-            tools = tools->next;
-        }
+            ImportNeededToolsTab(slot, root);
     }
     else if(StrEqual(name, "requireEssences"))
     {
-        FREELIST_FREE(currentSlot_->essences, TaxonomyEssence, taxTable_->firstFreeTaxonomyEssence);
-        EditorElement* essences = root->firstInList;
-        
-        while(essences)
-        {
-            char* essenceName = GetValue(essences, "name");
-            char* quantity = GetValue(essences, "quantity");
-            
-            AddEssence(essenceName, ToU8(quantity));
-            
-            essences = essences->next;
-        }
+            ImportRequiredEssenceTab(slot, root);
     }
 #if FORG_SERVER
     else if(StrEqual(name, "craftingEssences"))
     {
-        FREELIST_FREE(currentSlot_->essences, TaxonomyEssence, taxTable_->firstFreeTaxonomyEssence);
-        EditorElement* essences = root->firstInList;
-        
-        while(essences)
-        {
-            char* essenceName = GetValue(essences, "essence");
-            char* quantity = GetValue(essences, "quantity");
-            
-            AddEssence(essenceName, ToU8(quantity));
-            
-            essences = essences->next;
-        }
-    }
-    else if(StrEqual(name, "skill"))
-    {
-        r32 distance = ToR32(GetValue(root, "distance"), 1.0f);
-        currentSlot_->skillDistanceAllowed = distance;
-        currentSlot_->cooldown = ToR32(GetValue(root, "cooldown"), 0.0f);
-        
-        currentSlot_->turningPointLevel = ToU32(GetValue(root, "turningPointLevel"), 0);
-        currentSlot_->maxLevel = ToU32(GetValue(root, "maxLevel"), 100);
-        
-        currentSlot_->radixExponent = ToR32(GetValue(root, "radixExponent"), 2.0f);
-        currentSlot_->exponentiationExponent = Max(ToR32(GetValue(root, "exponentiationExponent"), 2.0f), 0.0f);
-        currentSlot_->radixLerping = ToR32(GetValue(root, "radixLerping"), 0.5f);
-        currentSlot_->exponentiationLerping = Max(ToR32(GetValue(root, "exponentiationLerping"), 0.5f), 0.0f);
-        
-        char* passive = GetValue(root, "passive");
-        if(passive)
-        {
-            InvalidCodePath;
-            IsPassive();
-        }
-        
+            ImportCraftingEssencesTab(slot, root);
     }
     else if(StrEqual(name, "effects"))
     {
-        FREELIST_FREE(currentSlot_->firstEffect, TaxonomyEffect, taxTable_->firstFreeTaxonomyEffect);
-        EditorElement* effectList = root->firstInList;
-        while(effectList)
-        {
-            TaxonomyEffect* newEffect;
-            TAXTABLE_ALLOC(newEffect, TaxonomyEffect);            
-            FREELIST_INSERT(newEffect, currentSlot_->firstEffect);
-            ParseEffect(effectList, &newEffect->effect);    
-            effectList = effectList->next;
-        }
+            ImportEffectsTab(slot, root);
+         
     }
     else if(StrEqual(name, "freeHandsRequirements"))
     {
-        FREELIST_FREE(currentSlot_->nakedHandReq, NakedHandReq, taxTable_->firstFreeNakedHandReq);
-        EditorElement* freeHandsReq = root->firstInList;
-        while(freeHandsReq)
-        {
-            char* slotName = GetValue(freeHandsReq, "slot");
-            char* taxonomy = GetValue(freeHandsReq, "name");
-            
-            AddFreeHandReq(slotName, taxonomy);
-            
-            freeHandsReq = freeHandsReq->next;
-        }
+            ImportFreeHandsRequirementsTab(slot, root);
     }
     else if(StrEqual(name, "craftingEffects"))
     {
-        FREELIST_FREE(currentSlot_->links, CraftingEffectLink, taxTable_->firstFreeCraftingEffectLink);
-        EditorElement* craftingEffectsList = root->firstInList;
-        while(craftingEffectsList)
-        {
-            char* action = GetValue(craftingEffectsList, "action");
-            char* id = GetValue(craftingEffectsList, "id");
-            char* target = GetValue(craftingEffectsList, "target");
+            ImportCraftingEffectsTab(slot, root);
             
-            LinkStandard(action, id, target);
-            
-            EditorElement* requirements = GetList(craftingEffectsList, "requirements");
-            Assert(requirements);
-            while(requirements)
-            {
-                char* ingredient = GetValue(requirements, "name");
-                char* quantity = GetValue(requirements, "quantity");
-                
-                Requires(ingredient, ToU32(quantity));
-                
-                requirements = requirements->next;
-            }
-            
-            craftingEffectsList = craftingEffectsList->next;
-        }
     }
     else if(StrEqual(name, "attributes"))
     {
-        for(u32 attributeIndex = 0; attributeIndex < ArrayCount(currentSlot_->attributeHashmap); ++attributeIndex)
-        {
-            currentSlot_->attributeHashmap[attributeIndex] = {};
-        }
-        EditorElement* attributes = root->firstInList;
-        
-        while(attributes)
-        {
-            char* attributeName = GetValue(attributes, "name");
-            char* value = GetValue(attributes, "value");
-            
-            SaveCreatureAttribute(attributeName, ToR32(value));
-            
-            attributes = attributes->next;
-        }
+            ImportAttributesTab(slot, root);
     }
     
     else if(StrEqual(name, "possibleActions"))
     {
-        for(PossibleAction* action = currentSlot_->firstPossibleAction; action; action = action->next)
-        {
-            FreeActionTree(taxTable_, action->tree.root);
-        }
-        
-        FREELIST_FREE(currentSlot_->firstPossibleAction, PossibleAction, taxTable_->firstFreePossibleAction);
-        
-        EditorElement* actions = root->firstInList;
-        while(actions)
-        {
-            char* action = GetValue(actions, "action");
-            char* distance = GetValue(actions, "distance");
-            
-            BeginPossibleAction(action, distance);
-            
-            EditorElement* flags = GetList(actions, "flags");
-            while(flags)
-            {
-                char* flagName = GetValue(flags, "name");
-                AddActionFlag(flagName);
-                
-                flags = flags->next;
-            }
-            
-            EditorElement* actors = GetList(actions, "actors");
-            while(actors)
-            {
-                char* actorName = GetValue(actors, "name");
-                char* requiredTime = GetValue(actors, "time");
-                AddActor(actorName, requiredTime);
-                
-                actors = actors->next;
-            }
-            
-            actions = actions->next;
-        }
+            ImportPossibleActionsTab(slot, root);
     }
     
     else if(StrEqual(name, "behaviors"))
     {
-        currentSlot_->hasBrain = true;
+            ImportBehaviorsTab(slot, root);
     }
     else if(StrEqual(name, "memBehaviors"))
     {
-        FREELIST_FREE(currentSlot_->firstMemBehavior, TaxonomyMemBehavior, taxTable_->firstFreeTaxonomyMemBehavior);
-        EditorElement* behaviors = root->firstInList;
-        while(behaviors)
-        {
-            char* behavior = GetValue(behaviors, "name");
-            AddMemBehavior(behavior);
-            
-            behaviors = behaviors->next;
-        }
+            ImportMemBehaviorsTab(slot, root);
     }
 #endif
     else if(StrEqual(name, "container"))
     {
-        u8 width = ToU8(GetValue(root, "width"));
-        u8 height = ToU8(GetValue(root, "height"));
-        
-        InventorySpace(width, height);
-        
-        #if FORG_SERVER
-        FREELIST_FREE(currentSlot_->firstInsideInteraction, TaxonomyContainerInteraction, taxTable_->firstFreeTaxonomyContainerInteraction);
-        EditorElement* insideInteractions = GetList(root, "interactions");
-        while(insideInteractions)
-        {
-            TaxonomyContainerInteraction* interaction;
-            TAXTABLE_ALLOC(interaction, TaxonomyContainerInteraction);
-            
-            interaction->targetTime = ToR32(GetValue(root, "time"));
-            
-            EditorElement* ingredients = GetList(insideInteractions, "required");
-            while(ingredients)
-            {
-                char* ingredient = GetValue(ingredients, "taxonomyName");
-                TaxonomySlot* ingredientSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, ingredient);
-                
-                if(ingredientSlot)
-                {
-                    if(interaction->requiredCount < ArrayCount(interaction->requiredTaxonomies))
-                    {
-                        interaction->requiredTaxonomies[interaction->requiredCount++] = slot->taxonomy;
-                    }
-                }
-                else
-                {
-                    EditorErrorLog(ingredient);
-                }
-                
-                ingredients = ingredients->next;
-            }
-            
-            EditorElement* effects = GetList(insideInteractions, "effects");
-            while(effects)
-            {
-                if(interaction->effectCount < ArrayCount(interaction->effects))
-                {
-                    Effect* dest = interaction->effects + interaction->effectCount++;                    
-                    ParseEffect(effects, dest);
-                }
-                
-                effects = effects->next;
-            }
-            
-            insideInteractions = insideInteractions->next;
-        }
-        #endif
+        ImportContainerTab(slot, root);
     }
     else if(StrEqual(name, "tileParams"))
     {
-        currentSlot_->groundPointMaxOffset = ToR32(GetValue(root, "groundPointMaxOffset"));
-        currentSlot_->chunkynessWithSame = ToR32(GetValue(root, "chunkynessSame"), 0.5f);
-        currentSlot_->chunkynessWithOther = ToR32(GetValue(root, "chunkynessOther"), 0.5f);
-        currentSlot_->groundPointPerTile = ToR32(GetValue(root, "pointsPerTile"));
-        currentSlot_->groundPointPerTileV = ToR32(GetValue(root, "pointsPerTileV"));
-        currentSlot_->tileColor = ToV4Color(GetElement(root, "color"));
-        currentSlot_->colorDelta = ToV4Color(GetElement(root, "colorDelta"), V4(0, 0, 0, 0));
-        currentSlot_->tileBorderColor = ToV4Color(GetElement(root, "borderColor"), V4(0, 0, 0, 0));
-        currentSlot_->tilePointsLayout = GetValuePreprocessor(TilePointsLayout, GetValue(root, "tileLayout"));
-        currentSlot_->colorRandomness = ToR32(GetValue(root, "colorRandomness"), 0.0f);
-        currentSlot_->tileNoise = ParseNoiseParams(GetStruct(root, "noise"));
+            ImportTileParamsTab(slot, root);
     }
 #ifndef FORG_SERVER
     else if(StrEqual(name, "visualLabels"))
     {
-        FREELIST_FREE(currentSlot_->firstVisualLabel, VisualLabel, taxTable_->firstFreeVisualLabel);
-        EditorElement* labels = root->firstInList;
-        
-        while(labels)
-        {
-            char* labelName = GetValue(labels, "name");
-            char* value = GetValue(labels, "value");
-            
-            u64 ID = StringHash(labelName);
-            r32 val = ToR32(value);
-            AddLabel(ID, val);
-            labels = labels->next;
-        }
+         ImportVisualLabelsTab(slot, root);
     }
     else if(StrEqual(name, "animationGeneralParams"))
     {
-        currentSlot_->animationIn3d = ToB32(GetValue(root, "animationIn3d"));        
-        currentSlot_->animationFollowsVelocity = ToB32(GetValue(root, "animationFollowsVelocity"));        
-        currentSlot_->modelTypeID = StringHash(GetValue(root, "modelType"));
-        currentSlot_->modelNameID = StringHash(GetValue(root, "modelName"));
-        currentSlot_->modelOffset = ToV3(GetStruct(root, "offset"));
-        currentSlot_->modelColoration = ToV4Color(GetStruct(root, "coloration"));
-        currentSlot_->modelScale = ToV3(GetStruct(root, "scale"), V3(1, 1, 1));
+            ImportAnimationGeneralParamsTab(slot, root);
     }
     else if(StrEqual(name, "skeleton"))
     {
-        char* skeleton = GetValue(root, "skeletonName");
-        char* skin = GetValue(root, "skinName");
-        Vec4 color = ToV4Color(GetStruct(root, "defaultColoration"));
-        Vec2 originOffset = ToV2(GetStruct(root, "originOffset"));
-        UsesSkeleton(skeleton, skin, color, originOffset);
+            ImportSkeletonTab(slot, root);
     }
     else if(StrEqual(name, "light"))
     {
-        char* min = GetValue(root, "minIntensity");
-        char* max = GetValue(root, "maxIntensity");
-        char* pieceName = GetValue(root, "animationPieceName");
-        AddLight(ToR32(min), ToR32(max), pieceName, V3(1, 1, 1));
+            ImportLightTab(slot, root);
     }
     else if(StrEqual(name, "animationEffects"))
     {
-        FREELIST_FREE(currentSlot_->firstAnimationEffect, AnimationEffect, taxTable_->firstFreeAnimationEffect);
-        EditorElement* effects = root->firstInList;
-        while(effects)
-        {
-            AnimationEffectType type = (AnimationEffectType) GetValuePreprocessor(AnimationEffectType, GetValue(effects, "animationEffectType"));
-            AnimationEffect effect = {};
-            u32 flags = 0;
-            
-            EditorElement* flagElem = GetList(effects, "flags");
-            
-            while(flagElem)
-            {
-                char* flagName = GetValue(flagElem, "effectFlag");
-                u32 flag = GetFlagPreprocessor(AnimationEffectFlags, flagName);
-                flags |= flag;
-                
-                flagElem = flagElem->next;
-            }
-           
-            
-            EntityAction action = (EntityAction) GetValuePreprocessor(EntityAction, GetValue(effects, "action"));
-            char* triggerEffect = GetValue(effects, "triggerEffect");
-            char* pieceName = GetValue(effects, "animationPieceName");
-            r32 timer = ElemR32(effects, "timer");
-            r32 fadeTime = ElemR32(effects, "fadeInTimer");
-            
-            switch(type)
-            {
-                case AnimationEffect_ChangeColor:
-                {
-                    Vec4 color = ColorV4(effects, "color");
-                    effect = ColorationEffect(color);       
-                } break;
-                
-                case AnimationEffect_SpawnParticles:
-                {
-                    char* effectName = GetValue(effects, "particleEffectName");
-                    effect = SpawnParticlesEffect(effectName);       
-                } break;
-                
-                case AnimationEffect_Light:
-                {
-                    Vec4 color = ColorV4(effects, "color");
-                    r32 intensity = ElemR32(effects, "lightIntensity");
-                    effect = LightEffect(color.rgb, intensity);     
-                } break;
-                
-                case AnimationEffect_Bolt:
-                {
-                    char* boltName = GetValue(effects, "boltName");
-                    r32 boltTimer = ElemR32(effects, "boltTimer");
-                    effect = BoltEffect(boltName, boltTimer);
-                } break;
-            }
-            
-            if(effect.type)
-            {
-               AddAnimationEffect(effect, flags, action, triggerEffect, timer, fadeTime, pieceName);
-            }
-          
-            effects = effects->next;
-        }
+            ImportAnimationEffectsTab(slot, root);
     }
     else if(StrEqual(name, "soundEffects"))
     {
-        FREELIST_FREE(currentSlot_->firstSound, TaxonomySound, taxTable_->firstFreeTaxonomySound);
-        EditorElement* effects = root->firstInList;
-        while(effects)
-        {
-            char* animationName = GetValue(effects, "animationName");
-            char* time = GetValue(effects, "time");
-            char* event = GetValue(effects, "name");
-            
-            
-            TaxonomySound* sound = AddSoundEffect(animationName, time, event);
-            
-            
-#if 0            
-            EditorElement* labels = GetList(effects, "labels");
-            while(labels)
-            {
-                char* labelName = GetValue(labels, "name");
-                char* labelValue = GetValue(labels, "value");
-                
-                AddLabel(sound, labelName, labelValue);
-                
-                labels = labels->next;
-            }
-#endif
-            
-            effects = effects->next;
-        }
+            ImportSoundEffectsTab(slot, root);
     }
     else if(StrEqual(name, "soundEvents"))
     {
-        switch(root->versionNumber)
-        {
-            case 1:
-            {
-                taxTable_->eventCount = 0;
-                EditorElement* events = root->firstInList;
-                while(events)
-                {
-                    char* eventName = events->name;
-                    SoundContainer* rootContainer = AddSoundEvent(eventName);
-                    
-                    AddSoundAndChildContainersRecursively(rootContainer, events);
-                    events = events->next;
-                }
-            } break;
-            
-            InvalidDefaultCase;
-        }
+
+            ImportSoundEventTab(root);
     }
     else if(StrEqual(name, "boneAlterations"))
     {
-        FREELIST_FREE(currentSlot_->firstBoneAlteration, TaxonomyBoneAlterations, taxTable_->firstFreeTaxonomyBoneAlterations);
-        EditorElement* alterations = root->firstInList;
-        while(alterations)
-        {
-            char* boneIndex = GetValue(alterations, "boneIndex");
-            EditorElement* scale = GetStruct(alterations, "scale");
-            char* scaleX = GetValue(scale, "x");
-            char* scaleY = GetValue(scale, "y");
-            
-            AddBoneAlteration(boneIndex, scaleX, scaleY);
-            
-            alterations = alterations->next;
-        }
+            ImportBoneAlterationsTab(slot, root);
     }
     else if(StrEqual(name, "assAlterations"))
     {
-        FREELIST_FREE(currentSlot_->firstAssAlteration, TaxonomyAssAlterations, taxTable_->firstFreeTaxonomyAssAlterations);
-        
-        EditorElement* alterations = root->firstInList;
-        while(alterations)
-        {
-            char* assIndex = GetValue(alterations, "assIndex");
-            EditorElement* scale = GetStruct(alterations, "scale");
-            char* scaleX = GetValue(scale, "x");
-            char* scaleY = GetValue(scale, "y");
-            
-            EditorElement* offset = GetStruct(alterations, "boneOffset");
-            char* offsetX = GetValue(offset, "x");
-            char* offsetY = GetValue(offset, "y");
-            
-			b32 specialColoration = ToB32(GetValue(alterations, "specialColoration"));
-            Vec4 color = ToV4Color(GetStruct(alterations, "color"));
-            
-            AddAssAlteration(assIndex, scaleX, scaleY, offsetX, offsetY, specialColoration, color);
-            
-            alterations = alterations->next;
-        }
+            ImportAssAlterationsTab(slot, root);
     }
     else if(StrEqual(name, "icon"))
     {
-        currentSlot_->iconColor = ToV4Color(GetStruct(root, "standardColor"));
-        currentSlot_->iconActiveColor = ToV4Color(GetStruct(root, "activeColor"));
-        currentSlot_->iconHoverColor = ToV4Color(GetStruct(root, "hoverColor"));
+            ImportIconTab(slot, root);
         
-        currentSlot_->iconModelTypeID = StringHash(GetValue(root, "modelType"));
-        currentSlot_->iconModelNameID = StringHash(GetValue(root, "modelName"));
-        currentSlot_->iconScale = ToV3(GetStruct(root, "modelScale"));
     }
 #endif
     else if(StrEqual(name, "rockDefinition"))
     {
-        if(currentSlot_->rock)
-        {
-            if(currentSlot_->rock->firstPossibleMineral)
-            {
-                FREELIST_FREE(currentSlot_->rock->firstPossibleMineral, RockMineral,  taxTable_->firstFreeRockMineral);
-            }
-            
-            FREELIST_DEALLOC(currentSlot_->rock, taxTable_->firstFreeRockDefinition);
-            currentSlot_->rock = 0;
-        }
-        
-        TAXTABLE_ALLOC(currentSlot_->rock, RockDefinition);
-        RockDefinition* definition = currentSlot_->rock;
-        
-        definition->collides = ToB32(GetValue(root, "collides"));
-        definition->modelTypeHash = StringHash(GetValue(root, "modelType"));
-        definition->modelNameHash = StringHash(GetValue(root, "modelName"));
-        definition->color = ToV4Color(GetStruct(root, "color"));
-        definition->startingColorDelta = ToV4Color(GetStruct(root, "startingColorDelta"));
-        definition->perVertexColorDelta = ToV4Color(GetStruct(root, "perVertexColorDelta"));
-        definition->iterationCount = ToU32(GetValue(root, "iterations"));
-        definition->minDisplacementY = ToR32(GetValue(root, "minDisplacementY"));
-        definition->maxDisplacementY = ToR32(GetValue(root, "maxDisplacementY"));
-        definition->minDisplacementZ = ToR32(GetValue(root, "minDisplacementZ"));
-        definition->maxDisplacementZ = ToR32(GetValue(root, "maxDisplacementZ"));
-        definition->smoothness = ToR32(GetValue(root, "smoothness"));
-        definition->smoothnessDelta = ToR32(GetValue(root, "smoothnessDelta"));
-        definition->scale = ToV3(GetStruct(root, "scale"));
-        definition->scaleDelta = ToV3(GetStruct(root, "scaleDelta"));
-        
-        definition->percentageOfMineralVertexes = ToR32(GetValue(root, "percentageOfMineralVertexes"));
-        definition->mineralCount = 0;
-        EditorElement* minerals = GetList(root, "minerals");
-        while(minerals)
-        {
-            RockMineral* mineral;
-            TAXTABLE_ALLOC(mineral, RockMineral);
-            
-            mineral->lerp = ToR32(GetValue(minerals, "lerp"));
-            mineral->lerpDelta = ToR32(GetValue(minerals, "lerpDelta"));
-            mineral->color = ToV4Color(GetStruct(minerals, "color"));
-            
-            FREELIST_INSERT(mineral, definition->firstPossibleMineral);
-            ++definition->mineralCount;
-            
-            minerals = minerals->next;
-        }
-        
-        definition->renderingRocksCount = ToU32(GetValue(root, "renderingRocksCount"));
-        definition->renderingRocksDelta = ToU32(GetValue(root, "renderingRocksDelta"));
-        definition->renderingRocksRandomOffset = ToV3(GetStruct(root, "renderingRocksOffset"));
-        definition->scaleRandomness = ToR32(GetValue(root, "scaleRandomness"));
-        
+            ImportRockDefinitionTab(slot, root);
     }
     else if(StrEqual(name, "plantDefinition"))
     {
-        if(currentSlot_->plant)
-        {
-            TAXTABLE_DEALLOC(currentSlot_->plant, PlantDefinition);
-        }
-        TAXTABLE_ALLOC(currentSlot_->plant, PlantDefinition);
-        PlantDefinition* plant = currentSlot_->plant;
-        
-        plant->collides = ToB32(GetValue(root, "collides"));
-        plant->shape = (PlantShape) GetValuePreprocessor(PlantShape, GetValue(root, "shape"));
-        
-        plant->growingCoeff = ToR32(GetValue(root, "growingCoeff"), 1.0f);
-        
-        plant->plantCount = ToU32(GetValue(root, "plantCount"));
-        plant->plantCountV = ToR32(GetValue(root, "plantCountV"));
-        
-        plant->plantOffsetV = ToV2(GetStruct(root, "plantOffsetV"));
-        plant->plantAngleZV = ToR32(GetValue(root, "plantAngleZV"));
-        
-        plant->attractionUp = ToR32(GetValue(root, "attractionUp"));
-        
-        plant->maxLevels = Min(4, ToU8(GetValue(root, "levels"), 1));
-        plant->baseSize = ToR32(GetValue(root, "baseSize"));
-        plant->scale = ToR32(GetValue(root, "scale"));
-        plant->scaleV = ToR32(GetValue(root, "scaleV"));
-        plant->scale_0 = ToR32(GetValue(root, "scale_0"));
-        plant->scaleV_0 = ToR32(GetValue(root, "scaleV_0"));
-        plant->ratio = ToR32(GetValue(root, "ratio"));
-        plant->ratioPower = ToR32(GetValue(root, "ratioPower"));
-        plant->flare = ToR32(GetValue(root, "flare"));
-        
-        ParsePlantLevelParams(plant->levelParams + 0, GetStruct(root, "level0"));
-        ParsePlantLevelParams(plant->levelParams + 1, GetStruct(root, "level1"));
-        ParsePlantLevelParams(plant->levelParams + 2, GetStruct(root, "level2"));
-        ParsePlantLevelParams(plant->levelParams + 3, GetStruct(root, "level3"));
-        
-        plant->leafColor = ToV4Color(GetStruct(root, "leafColor"));
-        plant->leafColorV = ToV4Color(GetStruct(root, "leafColorV"));
-        
-        plant->leafDimSpeed = ToR32(GetValue(root, "leafDimSpeed"));
-        plant->leafOffsetSpeed = ToR32(GetValue(root, "leafOffsetSpeed"));
-        
-        plant->leafScale = ToV2(GetStruct(root, "leafScale"));
-        plant->leafScaleV = ToV2(GetStruct(root, "leafScaleV"));
-        
-        plant->leafOffsetV = ToV3(GetStruct(root, "leafOffsetV"));
-        plant->leafAngleV = ToR32(GetValue(root, "leafAngleV"));
-        
-        plant->leafWindAngleV = ToR32(GetValue(root, "leafWindAngleV"));
-        plant->leafWindDirectionV = ToR32(GetValue(root, "leafWindDirectionV"));
-        
-        plant->trunkColorV = ToV4Color(GetStruct(root, "trunkColorV"));
-        plant->lobeDepth = ToR32(GetValue(root, "lobeDepth"));
-        plant->lobes = ToR32(GetValue(root, "lobes"));
-        
-        plant->leafStringHash = StringHash(GetValue(root, "leafName"));
-        plant->trunkStringHash = StringHash(GetValue(root, "trunkName"));
+            ImportPlantDefinitionTab(slot, root);
+
     }
 #ifndef FORG_SERVER
     else if(StrEqual(name, "particleEffectDefinition"))
     {
-        if(currentSlot_->particleEffect)
-        {
-            TAXTABLE_DEALLOC(currentSlot_->particleEffect, ParticleEffectDefinition);
-        }
-        TAXTABLE_ALLOC(currentSlot_->particleEffect, ParticleEffectDefinition);
-        
-        ParticleEffectDefinition* definition = currentSlot_->particleEffect;
-        
-        definition->dAngleSineUpdaters = ElemR32(root, "dAngleSineUpdaters");
-        
-        EditorElement* emitterEl = GetElement(root, "emitter");
-        
-        ParticleEmitter* emitter = &definition->emitter;
-        emitter->type = ParticleEmitter_Standard;
-        
-        emitter->particlesPerSec = ElemR32(emitterEl, "particlesPerSec");
-        emitter->lifeTime = ElemR32(emitterEl, "lifeTime");
-        emitter->lifeTimeV = ElemR32(emitterEl, "lifeTimeV");
-        
-        emitter->startPV =StructV3(emitterEl, "startPV");
-        
-        emitter->dP = StructV3(emitterEl, "dP");
-        emitter->dPV = StructV3(emitterEl, "dPV");
-        
-        emitter->C = ColorV4(emitterEl, "color");
-        emitter->CV = ColorV4(emitterEl, "colorV");
-        
-        emitter->dC = ColorV4(emitterEl, "colorVelocity");
-        emitter->dCV = ColorV4(emitterEl, "colorVelocityV");
-        
-        emitter->angle = ElemR32(emitterEl, "angle");
-        emitter->angleV = ElemR32(emitterEl, "angleV");
-        
-        emitter->scaleX = ElemR32(emitterEl, "scaleX");
-        emitter->scaleXV = ElemR32(emitterEl, "scaleXV");
-        
-        emitter->scaleY = ElemR32(emitterEl, "scaleY");
-        emitter->scaleYV = ElemR32(emitterEl, "scaleYV");
-        
-        
-        
-       
-        EditorElement* phases = GetList(root, "phases"); 
-        while(phases)
-        {
-            if(definition->phaseCount < ArrayCount(definition->phases))
-            {
-                ParticlePhase* phase = definition->phases + definition->phaseCount++;
-                phase->ttlMax = ElemR32(phases, "ttlMax");
-                phase->ttlMin = ElemR32(phases, "ttlMin");
-                
-                ParticleUpdater* updater = &phase->updater;
-                
-                updater->type = (ParticleUpdaterType) GetValuePreprocessor(ParticleUpdaterType, GetValue(phases, "particleUpdType"));
-                
-                updater->bitmapID = {};
-                updater->particleHashID = StringHash(GetValue(phases, "particleName"));
-                updater->startDrawingFollowingBitmapAt = ElemR32(phases, "startDrawingFollowingPhaseAt");
-                updater->ddP = ToV3_4x(StructV3(phases, "acceleration"));
-                updater->UpVector = {};
-                updater->ddC = ToV4_4x(ColorV4(phases, "colorAcceleration"));
-                
-                updater->dScaleX = MMSetExpr(ElemR32(phases, "dScaleX"));
-                updater->dScaleY = MMSetExpr(ElemR32(phases, "dScaleY"));
-                updater->dAngle = MMSetExpr(ElemR32(phases, "dAngle"));
-               
-                r32 radiants = DegToRad(180.0f * Max(1, ElemU32(phases, "totalPITimes")));
-                updater->totalRadiants = MMSetExpr(radiants);
-                
-                updater->destPType = (ParticleUpdaterEndPosition) GetValuePreprocessor(ParticleUpdaterEndPosition, GetValue(phases, "endPositionType"));
-                updater->startOffset = StructV3(phases, "startOffset");
-                updater->endOffset = StructV3(phases, "endOffset");
-                
-                updater->sineSubdivisions = ElemU32(phases, "sineSubdivisions");
-            }
-            
-            phases = phases->next;
-        }
+            ImportParticleEffectDefinitionTab(slot, root);
     }
     else if(StrEqual(name, "boltDefinition"))
     {
-        if(currentSlot_->boltEffect)
-        {
-            TAXTABLE_DEALLOC(currentSlot_->boltEffect, BoltDefinition);
-        }
-        TAXTABLE_ALLOC(currentSlot_->boltEffect, BoltDefinition);
-        
-        BoltDefinition* definition = currentSlot_->boltEffect;
-
-        definition->animationTick = ElemR32(root, "animationTick");
-        definition->ttl = ElemR32(root, "ttl");
-        definition->ttlV = ElemR32(root, "ttlV");
-        definition->fadeinTime = ElemR32(root, "fadeinTime");
-        definition->fadeoutTime = ElemR32(root, "fadeoutTime");
-        definition->color = ColorV4(root, "color");
-        definition->thickness = ElemR32(root, "thickness");
-        definition->magnitudoStructure = ElemR32(root, "magnitudoStructure");
-        definition->magnitudoAnimation = ElemR32(root, "magnitudoAnimation");
-        definition->subdivisions = ElemU32(root, "subdivisions");
-        definition->subdivisionsV = ElemU32(root, "subdivisionsV");
-        
-        definition->lightColor = ColorV4(root, "lightColor").rgb;
-        definition->lightIntensity = ElemR32(root, "lightIntensity");
-        definition->lightStartTime = ElemR32(root, "lightStartTime");
-        definition->lightEndTime = ElemR32(root, "lightEndTime");
-        
-        definition->trailerSoundEffect = StringHash(GetValue(root, "trailerSoundEvent"));
+            ImportBoltDefinitionTab(slot, root);
     }
 #endif
     else if(StrEqual(name, "generatorParams"))
     {
-        if(currentSlot_->generator)
-        {
-            for(TaxonomyTileAssociations* toFree = currentSlot_->generator->firstAssociation; toFree;)
-            {
-                TaxonomyTileAssociations* next = toFree->next;
-                
-                
-                for(TaxonomyAssociation* assToFree = toFree->firstAssociation; assToFree;)
-                {
-                    TaxonomyAssociation* assNext = assToFree->next;
-                    TAXTABLE_DEALLOC(assToFree, TaxonomyAssociation);
-                    assToFree = assNext;
-                }
-                
-                TAXTABLE_DEALLOC(toFree, TaxonomyTileAssociations);
-                
-                toFree = next;
-            }
-            
-            
-            FREELIST_DEALLOC(currentSlot_->generator, taxTable_->firstFreeWorldGenerator);
-            currentSlot_->generator = 0;
-        }
-        TAXTABLE_ALLOC(currentSlot_->generator, WorldGenerator);
-        WorldGenerator* generator = currentSlot_->generator;
-        
-        
-        generator->landscapeNoise = ParseNoiseParams(GetStruct(root, "landscapeNoise"));
-        generator->temperatureNoise = ParseNoiseParams(GetStruct(root, "temperatureNoise"));
-        generator->precipitationNoise = ParseNoiseParams(GetStruct(root, "precipitationNoise"));
-        generator->elevationNoise = ParseNoiseParams(GetStruct(root, "elevationNoise"));
-        generator->elevationPower = ToR32(GetValue(root, "elevationPower"), 1.0f);
-        generator->beachThreesold = ToR32(GetValue(root, "beachThreesold"), 0.05f);
-        
-        generator->beachTaxonomy = 0;
-        char* beachTaxonomy = GetValue(root, "beachTaxonomy");
-        if(beachTaxonomy)
-        {
-            TaxonomySlot* beachSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, beachTaxonomy);
-            if(beachSlot)
-            {
-                generator->beachTaxonomy = beachSlot->taxonomy;
-            }
-        }
-        
-        generator->landscapeSelect = {};
-        generator->temperatureSelect = {};
-        EditorElement* landscape = GetList(root, "landscapes");
-        while(landscape)
-        {
-            r32 threesold = ToR32(GetValue(landscape, "threesold"));
-            
-            NoiseParams noise = ParseNoiseParams(GetStruct(landscape, "noiseParams"));
-            AddBucket(&generator->landscapeSelect, threesold, noise);
-            
-            
-            r32 minTemperature = ToR32(GetValue(landscape, "minTemperature"));
-            r32 maxTemperature = ToR32(GetValue(landscape, "maxTemperature"));
-            AddBucket(&generator->temperatureSelect, threesold,MinMax(minTemperature, maxTemperature)); 
-            
-            landscape = landscape->next;
-        }
-        
-        generator->biomePyramid = {};
-        
-        EditorElement* precipitationBand = GetList(root, "precipitationBands");
-        while(precipitationBand)
-        {
-            r32 threesold = ToR32(GetValue(precipitationBand, "threesold"));
-            Selector* band = AddSelectorForDryness(&generator->biomePyramid, threesold);
-            
-            EditorElement* tiles = GetList(precipitationBand, "tileTypes");
-            while(tiles)
-            {
-                r32 temperature = ToR32(GetValue(tiles, "temperature"));
-                
-                AddTileBucket(band, tiles->name, temperature);
-                
-                tiles = tiles->next;
-            }
-            
-            precipitationBand = precipitationBand->next;
-        }
-        
-        
-        EditorElement* tileAssociations = GetList(root, "tileAssociations");
-        while(tileAssociations)
-        {
-            char* tileName = GetValue(tileAssociations, "tileType");
-            TaxonomySlot* tileSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, tileName);
-            
-            if(tileSlot)
-            {
-                TaxonomyTileAssociations* tileAssoc;
-                TAXTABLE_ALLOC(tileAssoc, TaxonomyTileAssociations);
-                
-                tileAssoc->taxonomy = tileSlot->taxonomy;
-                tileAssoc->totalWeight = 0;
-                tileAssoc->firstAssociation = 0;
-                
-                
-                EditorElement* taxonomyAssociations = GetList(tileAssociations, "taxonomies");
-                while(taxonomyAssociations)
-                {
-                    char* taxonomyName = GetValue(taxonomyAssociations, "taxonomyName");
-                    r32 weight = ToR32(GetValue(taxonomyAssociations, "weight"));
-                    
-                    TaxonomySlot* taxonomySlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName);
-                    
-                    if(taxonomySlot)
-                    {
-                        TaxonomyAssociation* ass;
-                        TAXTABLE_ALLOC(ass, TaxonomyAssociation);
-                        
-                        ass->taxonomy = taxonomySlot->taxonomy;
-                        ass->weight = weight;
-                        
-                        tileAssoc->totalWeight += weight;
-                        FREELIST_INSERT(ass, tileAssoc->firstAssociation);
-                        
-                    }
-                    else
-                    {
-                        EditorErrorLog(tileName);
-                    }
-                    
-                    taxonomyAssociations = taxonomyAssociations->next;
-                }
-                
-                
-                FREELIST_INSERT(tileAssoc, currentSlot_->generator->firstAssociation);
-                
-            }
-            else
-            {
-                EditorErrorLog(tileName);
-            }
-            
-            tileAssociations = tileAssociations->next;
-        }
+            ImportGeneratorParamsTab(slot, root);
+
     }
     else if(StrEqual(name, "layouts"))
     {
-        for(ObjectLayout* toDelete = currentSlot_->firstLayout; toDelete; toDelete = toDelete->next)
-        {
-            FREELIST_FREE(toDelete->firstPiece, LayoutPiece, taxTable_->firstFreeLayoutPiece);
-        }
-        FREELIST_FREE(currentSlot_->firstLayout, ObjectLayout, taxTable_->firstFreeObjectLayout);
-        currentSlot_->layoutCount = 0;
-        
-        
-        
-        EditorElement* layouts = root->firstInList;
-        while(layouts)
-        {
-            ObjectLayout* newLayout;
-            TAXTABLE_ALLOC(newLayout, ObjectLayout);
-            
-            newLayout->nameHashID = StringHash(layouts->name);
-            FormatString(newLayout->name, sizeof(newLayout->name), "%s", layouts->name);
-            
-            EditorElement* pieces = GetList(layouts, "pieces");
-            while(pieces)
-            {
-                char* pieceName = GetValue(pieces, "component");
-                u64 pieceHash = StringHash(pieceName);
-                
-				u8 index = 0;
-				for(LayoutPiece* test = newLayout->firstPiece; test; test = test->next)
-				{
-					if(test->componentHashID == pieceHash)
-					{
-						++index;
-					}
-				}
-                LayoutPiece* piece = AddLayoutPiece(newLayout, pieceName, index);
-                
-                
-                for(u32 state = ObjectState_Default; state < ObjectState_Count; ++state)
-                {
-                    piece->params[state].valid = false;
-                }
-                EditorElement* params = GetList(pieces, "params");
-                while(params)
-                {
-                    ObjectState type = (ObjectState) GetValuePreprocessor(ObjectState, GetValue(params, "objectState"));
-                    EditorElement* offset = GetStruct(params, "offset");
-                    r32 x = ToR32(GetValue(offset, "x"));
-                    r32 y = ToR32(GetValue(offset, "y"));
-                    r32 z = ToR32(GetValue(offset, "z"));
-                    
-                    r32 angle = ToR32(GetValue(params, "angle"));
-                    
-                    EditorElement* scale = GetStruct(params, "scale");
-                    r32 scaleX = ToR32(GetValue(scale, "x"));
-                    r32 scaleY = ToR32(GetValue(scale, "y"));
-                    r32 pieceAlpha = ToR32(GetValue(params, "alpha"));
-                    Vec2 pivot = ToV2(GetStruct(params, "pivot"), V2(0.5f, 0.5f));
-                    
-                    AddLayoutPieceParams(piece, type, V3(x, y, z), angle, V2(scaleX, scaleY), pieceAlpha, pivot);
-                    
-                    params = params->next;
-                }
-                
-                EditorElement* ingredient = GetList(pieces, "ingredients");
-                while(ingredient)
-                {
-                    char* ingredientName = GetValue(ingredient, "ingredient");
-                    u32 quantity = ToU32(GetValue(ingredient, "quantity"));
-                    AddIngredient(piece, ingredientName, quantity);
-                    
-                    ingredient = ingredient->next;
-                }
-                
-                EditorElement* decorationPieces = GetList(pieces, "childPieces");
-                while(decorationPieces)
-                {
-                    char* childName = GetValue(decorationPieces, "component");
-                    u64 childHash = StringHash(childName);
-                    
-                    u8 childIndex = 0;
-                    for(LayoutPiece* test = newLayout->firstPiece; test; test = test->next)
-                    {
-                        if(test->componentHashID == childHash)
-                        {
-                            ++childIndex;
-                        }
-                    }
-                    
-                    LayoutPiece* childPiece = AddLayoutPiece(newLayout, childName, childIndex);
-                    childPiece->parent = piece;
-                    
-                    for(u32 state = ObjectState_Default; state < ObjectState_Count; ++state)
-                    {
-                        childPiece->params[state].valid = false;
-                    }
-                    
-                    EditorElement* childParams = GetList(decorationPieces, "params");
-                    while(childParams)
-                    {
-                        ObjectState childType = (ObjectState) GetValuePreprocessor(ObjectState, GetValue(childParams, "objectState"));
-                        EditorElement* childOffset = GetStruct(childParams, "offset");
-                        r32 childX = ToR32(GetValue(childOffset, "x"));
-                        r32 childY = ToR32(GetValue(childOffset, "y"));
-                        r32 childZ = ToR32(GetValue(childOffset, "z"));
-                        
-                        r32 childAngle = ToR32(GetValue(childParams, "angle"));
-                        
-                        EditorElement* scale = GetStruct(decorationPieces, "scale");
-                        r32 childScaleX = ToR32(GetValue(scale, "x"));
-                        r32 childScaleY = ToR32(GetValue(scale, "y"));
-                        r32 childAlpha = ToR32(GetValue(childParams, "alpha"));
-                        
-                        Vec2 childPivot = ToV2(GetStruct(childParams, "pivot"), V2(0.5f, 0.5f));
-                        
-                        AddLayoutPieceParams(childPiece, childType, V3(childX, childY, childZ), childAngle, V2(childScaleX, childScaleY), childAlpha, childPivot); 
-                        
-                        childParams = childParams->next;
-                    }
-                    
-                    decorationPieces = decorationPieces->next;
-                    
-                }
-                
-                pieces = pieces->next;
-            }
-            
-            ++currentSlot_->layoutCount;
-            FREELIST_INSERT(newLayout, currentSlot_->firstLayout);
-            
-            layouts = layouts->next;
-        }
+            ImportLayoutsTab(slot, root);
+
+    }
     }
     
     

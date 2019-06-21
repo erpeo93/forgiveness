@@ -1,0 +1,29 @@
+internal void ImportBoltDefinitionTab(TaxonomySlot* slot, EditorElement* root)
+{
+    if(slot->boltEffect)
+    {
+        TAXTABLE_DEALLOC(slot->boltEffect, BoltDefinition);
+    }
+    TAXTABLE_ALLOC(slot->boltEffect, BoltDefinition);
+    
+    BoltDefinition* definition = slot->boltEffect;
+    
+    definition->animationTick = ElemR32(root, "animationTick");
+    definition->ttl = ElemR32(root, "ttl");
+    definition->ttlV = ElemR32(root, "ttlV");
+    definition->fadeinTime = ElemR32(root, "fadeinTime");
+    definition->fadeoutTime = ElemR32(root, "fadeoutTime");
+    definition->color = ColorV4(root, "color");
+    definition->thickness = ElemR32(root, "thickness");
+    definition->magnitudoStructure = ElemR32(root, "magnitudoStructure");
+    definition->magnitudoAnimation = ElemR32(root, "magnitudoAnimation");
+    definition->subdivisions = ElemU32(root, "subdivisions");
+    definition->subdivisionsV = ElemU32(root, "subdivisionsV");
+    
+    definition->lightColor = ColorV4(root, "lightColor").rgb;
+    definition->lightIntensity = ElemR32(root, "lightIntensity");
+    definition->lightStartTime = ElemR32(root, "lightStartTime");
+    definition->lightEndTime = ElemR32(root, "lightEndTime");
+    
+    definition->trailerSoundEffect = StringHash(GetValue(root, "trailerSoundEvent"));
+}
