@@ -369,7 +369,7 @@ internal void MemUpdate(TaxonomyTable* table, Mem* memory, u32 entityTaxonomy, r
                 for(TaxonomyMemBehavior* memBehavior = slot->firstMemBehavior; memBehavior  && !ruleApplied; memBehavior = memBehavior->next)
                 {
                     TaxonomySlot* memBehaviorSlot = GetSlotForTaxonomy(table, memBehavior->taxonomy);
-                    for(MemSynthesisRule* test = memBehaviorSlot->synthRules; test && !ruleApplied; test = test->next)
+                    for(MemSynthesisRule* test = memBehaviorSlot->firstSynthRule; test && !ruleApplied; test = test->next)
                     {
                         if(test->action == toProcess->action)
                         {

@@ -14,9 +14,9 @@ inline void AddTileBucket(Selector* band, char* tileName, r32 temperature)
 
 internal void ImportGeneratorParamsTab(TaxonomySlot* slot, EditorElement* root)
 {
-    if(slot->generator)
+    if(slot->generatorDefinition)
     {
-        for(TaxonomyTileAssociations* toFree = slot->generator->firstAssociation; toFree;)
+        for(TaxonomyTileAssociations* toFree = slot->generatorDefinition->firstAssociation; toFree;)
         {
             TaxonomyTileAssociations* next = toFree->next;
             
@@ -34,11 +34,11 @@ internal void ImportGeneratorParamsTab(TaxonomySlot* slot, EditorElement* root)
         }
         
         
-        FREELIST_DEALLOC(slot->generator, taxTable_->firstFreeWorldGenerator);
-        slot->generator = 0;
+        TAXTABLE_DEALLOC(slot->generatorDefinition, WorldGeneratorDefinition);
+        slot->generatorDefinition = 0;
     }
-    TAXTABLE_ALLOC(slot->generator, WorldGenerator);
-    WorldGenerator* generator = slot->generator;
+    TAXTABLE_ALLOC(slot->generatorDefinition, WorldGeneratorDefinition);
+    WorldGeneratorDefinition* generator = slot->generatorDefinition;
     
     
     generator->landscapeNoise = ParseNoiseParams(GetStruct(root, "landscapeNoise"));
@@ -144,7 +144,7 @@ internal void ImportGeneratorParamsTab(TaxonomySlot* slot, EditorElement* root)
             }
             
             
-            FREELIST_INSERT(tileAssoc, slot->generator->firstAssociation);
+            FREELIST_INSERT(tileAssoc, generator->firstAssociation);
             
         }
         else

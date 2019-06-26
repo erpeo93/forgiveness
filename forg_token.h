@@ -19,6 +19,7 @@ enum ForgTokenType
     Token_Number,
     Token_Comma,
     Token_Colon,
+    Token_Slash,
 };
 
 struct Token

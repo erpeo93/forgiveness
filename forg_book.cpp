@@ -448,7 +448,7 @@ internal void UIDrawSkillElement(UIState* UI, BookMode* bookMode, Vec3 bookP, Bo
     
     if(activeElement)
     {
-        if(HasEssences(UI->myPlayer->essences, skillSlot->essences))
+        if(HasEssences(UI->myPlayer->essences, skillSlot->firstEssence))
         {
             PushUITooltip(UI, "level up", V4(1, 0, 0, 1));
             
@@ -496,14 +496,14 @@ internal void UIDrawSkillElement(UIState* UI, BookMode* bookMode, Vec3 bookP, Bo
             else
             {
                 b32 sendActiveRequest = (slotButtonIndex == UI->activeSkillSlotIndex);
-                UIAddRequestAction(UI, &slotInteraction, UI_Trigger, ActiveSkillRequest(skillSlot->taxonomy, sendActiveRequest));
+                UIAddRequestAction(UI, &slotInteraction, UI_Trigger, ActiveSkillRequest(skillSlot->taxonomy, sendActiveRequest, true));
             }
             
             UISkill* skill = UI->skills + slotButtonIndex;
             UIAddSetValueAction(UI, &slotInteraction, UI_Trigger, &skill->taxonomy, skillSlot->taxonomy);
             UIAddWriteFileAction(UI, &slotInteraction, UI_Trigger, "skills", UI->skills, sizeof(UI->skills));
             
-            UIAddInteraction(UI, input, slotButtons[slotButtonIndex], slotInteraction);
+            UIAddInteraction(UI, input, slotButtons[slotButtonIndex + 1], slotInteraction);
         }
     }
     else
@@ -543,7 +543,7 @@ internal void UIDrawSkillCategoryElement(UIState* UI, BookElement* element, Vec2
         }
         else
         {
-            if(HasEssences(UI->myPlayer->essences, categorySlot->essences))
+            if(HasEssences(UI->myPlayer->essences, categorySlot->firstEssence))
             {
                 PushUITooltip(UI, "unlock", V4(1, 0, 0, 1));
                 if(element->hot)

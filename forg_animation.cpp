@@ -952,9 +952,9 @@ inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, RenderGroup*
             {
                 TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, effect->particleEffectTaxonomy);
                 
-                if(slot->particleEffect)
+                if(slot->particleEffectDefinition)
                 {
-                    particleEffect = GetNewParticleEffect(particleCache, slot->particleEffect);
+                    particleEffect = GetNewParticleEffect(particleCache, slot->particleEffectDefinition);
                     clientEffect->particleRef = particleEffect;
                 }
             }
@@ -2363,9 +2363,8 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     GetPhysicalProperties(worldMode->table, entityC->taxonomy, entityC->identifier, &entityC->boundType, &bounds, entityC->generationIntensity);
     entityC->bounds = Offset(bounds, animationP);
     
-    if(IsPlant(worldMode->table, entityC->taxonomy))
+    if(IsPlant(worldMode->table, entityC->taxonomy) && slot->plantDefinition)
     {
-        Assert(slot->plant);
         if(!entityC->plant)
         {
             ClientPlant* newPlant = worldMode->firstFreePlant;
@@ -2384,15 +2383,15 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             plant->sequence = Seed((u32)entityC->identifier);
         }
         
-        entityC->plant->leafBitmap = FindBitmapByName(group->assets, Asset_leaf, slot->plant->leafStringHash);
-        entityC->plant->trunkBitmap = FindBitmapByName(group->assets, Asset_trunk, slot->plant->trunkStringHash);
+        entityC->plant->leafBitmap = FindBitmapByName(group->assets, Asset_leaf, slot->plantDefinition->leafStringHash);
+        entityC->plant->trunkBitmap = FindBitmapByName(group->assets, Asset_trunk, slot->plantDefinition->trunkStringHash);
         
         
         PlantRenderingParams renderingParams = {};
         renderingParams.lights = lights;
         renderingParams.modulationWithFocusColor = entityC->modulationWithFocusColor;
         
-        UpdateAndRenderPlant(worldMode, group, renderingParams, slot->plant, entityC->plant, animationP);
+        UpdateAndRenderPlant(worldMode, group, renderingParams, slot->plantDefinition, entityC->plant, animationP);
         
         for(u32 plantIndex = 0; plantIndex < entityC->plant->plant.plantCount; ++plantIndex)
         {
@@ -2402,11 +2401,9 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             entityC->bounds = Union(entityC->bounds, plantBounds);
         }
     }
-    else if(IsRock(worldMode->table, entityC->taxonomy))
+    else if(IsRock(worldMode->table, entityC->taxonomy) && slot->rockDefinition)
     {
-        TaxonomySlot* rockSlot = GetSlotForTaxonomy(worldMode->table, entityC->taxonomy);
-        RockDefinition* rockDefinition = rockSlot->rock;
-        
+        RockDefinition* rockDefinition = slot->rockDefinition;
         if(!entityC->rock)
         {
             ModelId ID = FindModelByName(group->assets, rockDefinition->modelTypeHash, rockDefinition->modelNameHash);

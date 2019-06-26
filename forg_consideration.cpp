@@ -460,67 +460,71 @@ inline ExpressionValue Evaluate(ExpressionContext* context, Tokenizer* tokenizer
 #endif
                 
                 {
-                    Assert(slot->consideration);
-                    char* considerationExpression = slot->consideration->expression;
-                    
-                    ConsiderationParams oldParams = context->params;
-                    context->params.paramCount = 0;
-                    
-                    RequiresToken(tokenizer, OpenParen);
-                    
-                    b32 parsingParams = true;
-                    while(parsingParams)
+                    if(slot->considerationDefinition)
                     {
-                        Token probe = GetToken(tokenizer);
-                        switch(probe.type)
+                        char* considerationExpression = slot->considerationDefinition->expression;
+                        ConsiderationParams oldParams = context->params;
+                        context->params.paramCount = 0;
+                        
+                        RequiresToken(tokenizer, OpenParen);
+                        
+                        b32 parsingParams = true;
+                        while(parsingParams)
                         {
-                            case Token_CloseParen:
+                            Token probe = GetToken(tokenizer);
+                            switch(probe.type)
                             {
-                                parsingParams = false;
-                            } break;
-                            
-                            case Token_Comma:
-                            {
+                                case Token_CloseParen:
+                                {
+                                    parsingParams = false;
+                                } break;
                                 
-                            } break;
-                            
-                            case Token_Number:
-                            {
-                                r32 value = R32FromChar(probe.text);
-                                AddParam_(&context->params, ExpressionVal(value));
-                            } break;
-                            
-                            case Token_Identifier:
-                            {
-                                if(TokenEquals(probe, "params"))
+                                case Token_Comma:
                                 {
-                                    RequiresToken(tokenizer, OpenBracket);
                                     
-                                    Token number = GetToken(tokenizer);
-                                    Assert(number.type == Token_Number);
-                                    u32 paramIndex = atoi(number.text);
-                                    
-                                    Assert(paramIndex < oldParams.paramCount);
-                                    AddParam_(&context->params, oldParams.params[paramIndex]);
-                                    RequiresToken(tokenizer, CloseBracket);
-                                }
-                                else
+                                } break;
+                                
+                                case Token_Number:
                                 {
-                                    InvalidCodePath;
-                                }
-                            } break;
-                            
-                            default:
-                            {
-                                tokenizer->at -= probe.textLength;
-                            } break;
+                                    r32 value = R32FromChar(probe.text);
+                                    AddParam_(&context->params, ExpressionVal(value));
+                                } break;
+                                
+                                case Token_Identifier:
+                                {
+                                    if(TokenEquals(probe, "params"))
+                                    {
+                                        RequiresToken(tokenizer, OpenBracket);
+                                        
+                                        Token number = GetToken(tokenizer);
+                                        Assert(number.type == Token_Number);
+                                        u32 paramIndex = atoi(number.text);
+                                        
+                                        Assert(paramIndex < oldParams.paramCount);
+                                        AddParam_(&context->params, oldParams.params[paramIndex]);
+                                        RequiresToken(tokenizer, CloseBracket);
+                                    }
+                                    else
+                                    {
+                                        InvalidCodePath;
+                                    }
+                                } break;
+                                
+                                default:
+                                {
+                                    tokenizer->at -= probe.textLength;
+                                } break;
+                            }
                         }
+                        
+                        Tokenizer expression = {};
+                        expression.at = considerationExpression;
+                        result = Evaluate(context, &expression);
+                        context->params = oldParams;
                     }
-                    
-                    Tokenizer expression = {};
-                    expression.at = considerationExpression;
-                    result = Evaluate(context, &expression);
-                    context->params = oldParams;
+                    else
+                    {
+                    }
                 }
             }
         }

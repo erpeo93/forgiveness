@@ -535,6 +535,15 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
     {
         result.bounds = GetUIOrthoTextBounds(UI->group, &UI->editorFont, text, layout->fontScale, P);
         result.color = V4(0.7f, 0.7f, 0, 1);
+        if(StrEqual(text, "true"))
+        {
+            result.color = V4(0, 1, 0, 1);                    
+        }
+        else if(StrEqual(text, "false"))
+        {
+             result.color = V4(1, 0, 0, 1);
+        }
+        
         if(!UI->activeLabel)
         {
             if(PointInRect(result.bounds, UI->relativeScreenMouse))
@@ -915,6 +924,31 @@ inline void SetColorsVertical(Rect24C* rect, Vec4 cStart, Vec4 cEnd)
     rect->c1 = rect->c2 = cEnd;
 }
 
+#define Helper(name, text) AddDocumentation_(UI, name, text)
+inline void AddDocumentation_(UIState* UI, char* name, char* helperText)
+{
+    UITooltipHelper* helper = PushStruct(UI->pool, UITooltipHelper);
+    helper->stringHashID = StringHash(name);
+    FormatString(helper->tooltipText, sizeof(helper->tooltipText), "%s", helperText);
+    FREELIST_INSERT(helper, UI->firstHelper);
+}
+
+inline char* UIFindHelperTooltip(UIState* UI, char* name)
+{
+    u64 stringHashID = StringHash(name);
+    
+    char* result = 0;
+    for(UITooltipHelper* helper = UI->firstHelper; helper; helper = helper->next)
+    {
+        if(stringHashID == helper->stringHashID)
+        {
+            result = helper->tooltipText;
+            break;
+        }
+    }
+    
+    return result;
+}
 
 struct UIRenderTreeResult
 {
@@ -922,7 +956,7 @@ struct UIRenderTreeResult
     r32 lineEndY;
 };
 
-inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElementParents parents, EditorElement* parent_, b32 propagateLineColor, Vec4 parentSquareColor, EditorElement* root_, PlatformInput* input, b32 canDelete, b32 showNames = true, Vec2 parentNameP = {})
+inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, EditorLayout* layout, EditorElementParents parents, EditorElement* parent_, b32 propagateLineColor, Vec4 parentSquareColor, EditorElement* root_, PlatformInput* input, b32 canDelete, b32 showNames = true, Vec2 parentNameP = {}, Vec4 titleColor = V4(1, 1, 1, 1))
 {
     UIRenderTreeResult totalResult = {};
     
@@ -1044,8 +1078,14 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                 squareDim *= 0.6f;
             }
             
-            Vec4 nameColor = V4(1, 1, 1, 1);
+            Vec4 nameColor = titleColor;
+            if(root->flags & EditorElem_SpecialNameColor)
+            {
+                nameColor = V4(1, 1, 0, 1);
+            }
+            
             Vec4 squareLineColor;
+            Vec4 childLineColor = V4(0.6f * RandomUniV3(&seq), 1);
             
             if(root == UI->copying)
             {
@@ -1061,7 +1101,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                 }
                 else
                 {
-                    squareLineColor = V4(0.6f * RandomUniV3(&seq), 1);
+                    squareLineColor = childLineColor;
                     if(root->type < EditorElement_List)
                     {
                         if(root->type == EditorElement_String ||
@@ -1133,12 +1173,36 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
             
             
             if(PointInRect(nameBounds, UI->relativeScreenMouse))
-            {                
+            {
+                char* tooltipText = UIFindHelperTooltip(UI, nameToShow);
+                if(tooltipText)
+                {
+                    UI->requestedHelperTooltip = true;
+                    nameColor = 0.8f * nameColor;
+                    u64 stringHashID = StringHash(nameToShow);
+                    if(stringHashID == UI->requestedHelperHash)
+                    {
+                        UI->tooltipHelperTimer += input->timeToAdvance;
+                        if(UI->tooltipHelperTimer >= 0.5f)
+                        {
+                            
+                            PushUITooltip(UI, tooltipText, V4(1, 1, 1, 1), false, false, 1.0f, true);
+                        }
+                        
+                    }
+                    else
+                    {
+                        UI->tooltipHelperTimer = 0;
+                        UI->requestedHelperHash = stringHashID;
+                    }
+                }
+                
+                
                 if(!UI->activeLabel && !UI->active && father && (father->flags & EditorElem_LabelsEditable))
                 {
                     if(!father->labelName[0] || UIFindAutocomplete(UI, parents, father->labelName))
                     {
-                                         nameColor = V4(1, 0, 0, 1);
+                         nameColor = V4(1, 0, 0, 1);
                     UIInteraction labelInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->activeLabel, root);
                     UIAddSetValueAction(UI, &labelInteraction, UI_Trigger, &UI->activeLabelParent, father);
                     UIAddClearAction(UI, &labelInteraction, UI_Trigger, ColdPointer(UI->keyboardBuffer), sizeof(UI->keyboardBuffer));
@@ -1261,10 +1325,11 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                 {
                     CopyPasteInteractionRes copyPaste = AddCopyPasteInteraction(UI, input, widget, layout, root, canDelete, nameBounds);
 
-                    b32 propagateLineC = propagateLineColor;
+                    b32 propagateLineC = false;                    
                     if(copyPaste.propagateColor)
                     {
                         propagateLineC = true;
+                        childLineColor = copyPaste.color;
                         squareLineColor = copyPaste.color;
                     }
                     
@@ -1330,7 +1395,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         }
                         
                         
-                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstInList, input, canDeleteElements);
+                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, childLineColor, root->firstInList, input, canDeleteElements);
                         
                         result = Union(result, childs.bounds);
                         
@@ -1343,7 +1408,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         
                         if(root->firstInList)
                         {
-                            PushEditorLine(UI->group, propagateLineC, squareLineColor, verticalStartP, verticalEndP, layout->lineThickness, layout->lineSegmentLength, layout->lineSpacing);   
+                            PushEditorLine(UI->group, propagateLineC, childLineColor, verticalStartP, verticalEndP, layout->lineThickness, layout->lineSegmentLength, layout->lineSpacing);   
                         }
                         
                     }
@@ -1351,7 +1416,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                 
                 case EditorElement_Struct:
                 {
-                    b32 propagateLineC = propagateLineColor;
+                    b32 propagateLineC = false;
                     b32 simpleValue = false;
                    
                     
@@ -1362,7 +1427,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
 						Vec2 drawHere = nameP;
                         drawHere.x = nameBounds.max.x;
                         
-                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, false, false, drawHere);
+                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, childLineColor, root->firstValue, input, false, false, drawHere);
                         
                         nameBounds.max.x = childs.bounds.max.x;
                     }
@@ -1376,8 +1441,8 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         if(structButtons.hot)
                         {
                             nameColor = structButtons.nameColor;
-                                propagateLineC = true;
-                                squareLineColor = nameColor;   
+                            propagateLineC = true;
+                            childLineColor = nameColor;   
                         }
                     }
                     
@@ -1387,6 +1452,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                     if(copyPaste.propagateColor)
                     {
                         propagateLineC = true;
+                        childLineColor = copyPaste.color;
                         squareLineColor = copyPaste.color;
                     }
                     
@@ -1470,7 +1536,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                             }
                             
                             
-                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstValue, input, false);
+                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, childLineColor, root->firstValue, input, false);
                                                 
 
                         
@@ -1478,7 +1544,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         layout->P += V2(-layout->nameValueDistance, 0);
                         
                         Vec3 verticalEndP = V3(verticalStartP.x, childs.lineEndY, layout->additionalZBias);
-                        PushEditorLine(UI->group, propagateLineC, squareLineColor, verticalStartP, verticalEndP, layout->lineThickness, layout->lineSegmentLength, layout->lineSpacing);
+                        PushEditorLine(UI->group, propagateLineC, childLineColor, verticalStartP, verticalEndP, layout->lineThickness, layout->lineSegmentLength, layout->lineSpacing);
                                                
                       
                     }     
@@ -1519,7 +1585,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                             
                             if(UI->worldMode->editorRoles & EditorRole_GameDesigner)
                             {
-                                b32 cancActive = UI->previousFrameWasAllowedToQuit;
+                                b32 cancActive = true;
                                 char* cancText = "canc";
                                 UIInteraction cancReviveInteraction = SendRequestInteraction(UI, UI_Trigger, DeleteTaxonomyRequest(root->taxonomy));
                                 
@@ -1561,6 +1627,8 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                             
                             
                             UIInteraction editInteraction = SendRequestInteraction(UI, UI_Trigger,EditRequest(root->taxonomy));
+                            UIAddSetValueAction(UI, &editInteraction, UI_Trigger, &UI->widgetLocked[EditorWidget_TaxonomyTree], true);
+                            
                             UIButton editButton = UIBtn(UI, UIFollowingP(&instantiateButton, buttonSeparator), layout, V4(0, 1, 0, 1), "edit", true, editInteraction);
                                                         
                             DrawButtonResult editDraw = UIDrawButton(UI, input, &editButton);
@@ -1576,13 +1644,13 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         
                         layout->P += V2(layout->nameValueDistance, 0);
                         
-                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, squareLineColor, root->firstChild, input, false);
+                        UIRenderTreeResult childs = UIRenderEditorTree(UI, widget, layout, parents, root, propagateLineC, childLineColor, root->firstChild, input, false);
                         result = Union(result, childs.bounds);
                         
                         layout->P += V2(-layout->nameValueDistance, 0);
                         
                         Vec3 verticalEndP = V3(verticalStartP.x, childs.lineEndY, layout->additionalZBias);
-                        PushEditorLine(UI->group, propagateLineC, squareLineColor, verticalStartP, verticalEndP, layout->lineThickness, layout->lineSegmentLength, layout->lineSpacing);
+                        PushEditorLine(UI->group, propagateLineC, childLineColor, verticalStartP, verticalEndP, layout->lineThickness, layout->lineSegmentLength, layout->lineSpacing);
                     }
                 } break;
                 
@@ -1590,8 +1658,6 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                 {
                     if(root != UI->active)
                     {                            
-                        if(UI->previousFrameWasAllowedToQuit)
-                        {
                         if(PointInRect(nameBounds, UI->relativeScreenMouse))
                         {
                             UIInteraction mouseInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->active, root);
@@ -1602,11 +1668,6 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                                 nameColor = parentSquareColor;
                                 nameColor = V4(1, 1, 0, 1);
                         }   
-                        }
-                        else
-                        {
-                            nameColor.a = 0.3f;
-                        }
                     }
                     else
                     {
@@ -1987,9 +2048,23 @@ inline b32 ChangesMustBeSaved(u32 widgetIndex)
        widgetIndex == EditorWidget_GeneralButtons || 
        widgetIndex == EditorWidget_ColorPicker ||
        widgetIndex == EditorWidget_GroundParams ||
-       widgetIndex == EditorWidget_Misc)
+       widgetIndex == EditorWidget_Misc ||
+       widgetIndex == EditorWidget_Debug3DModels ||
+       widgetIndex == EditorWidget_WidgetSelection)
     {
         result = false;
+    }
+    
+    return result;
+}
+
+inline b32 VisibleWidget(UIState* UI, EditorWidgetType widgetIndex)
+{
+    b32 result = false;
+    if(widgetIndex == EditorWidget_WidgetSelection ||
+       widgetIndex == UI->currentActiveWidget || UI->widgetLocked[widgetIndex])
+    {
+        result = true;
     }
     
     return result;
@@ -1998,6 +2073,37 @@ inline b32 ChangesMustBeSaved(u32 widgetIndex)
 inline void UIRenderEditor(UIState* UI, PlatformInput* input)
 {
     RenderGroup* group = UI->group;
+    
+    EditorWidget* modelWidget = UI->widgets + EditorWidget_Debug3DModels;
+    
+    if(modelWidget->root)
+    {
+        EditorElement* models = modelWidget->root->firstChild;
+        
+        while(models)
+        {
+            u64 modelTypeID = StringHash(GetValue(models, "modelType"));
+            u64 modelNameID = StringHash(GetValue(models, "modelName"));
+            ModelId MID = FindModelByName(group->assets, modelTypeID, modelNameID);
+            if(IsValid(MID))
+            {
+                r32 x = DegToRad(ElemR32(models, "xRotation"));
+                r32 y = DegToRad(ElemR32(models, "yRotation"));
+                r32 z = DegToRad(ElemR32(models, "zRotation"));
+                m4x4 matrix = ZRotation(z) * YRotation(y) * XRotation(x);
+                Vec3 P = StructV3(models, "position");
+                Lights lights = GetLights(UI->worldMode, P);
+                Vec3 scale = StructV3(models, "scale");
+                Vec4 color = ColorV4(models, "color");
+                PushModel(group, MID, matrix, P, lights, scale, color);
+           }
+   
+            models = models->next;
+        }
+    }
+   
+    
+    
     GameRenderCommands* commands = group->commands;
     
     r32 width = (r32) commands->settings.width;
@@ -2012,6 +2118,40 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     {
         Vec3 mouseOffset = UI->worldMouseP;
         UIAddInteraction(UI, input, mouseRight,SendRequestInteraction(UI, UI_Trigger, InstantiateTaxonomyRequest(UI->instantiatingTaxonomy, mouseOffset)));
+    }
+    
+    
+    
+    EditorWidget* widgetSelection = UI->widgets + EditorWidget_WidgetSelection;
+    if(widgetSelection->root)
+    {
+        EditorElement* child = widgetSelection->root->firstValue;
+        while(child)
+        {
+            child->flags = 0;    
+            child = child->next;
+        }
+        
+        for(u32 widgetIndex = 0; widgetIndex < EditorWidget_Count; ++widgetIndex)
+        {
+            UI->widgetCarousel[widgetIndex] = false;
+            char* toSearch = MetaTable_EditorWidgetType[widgetIndex];
+            char* value = GetValue(widgetSelection->root, toSearch);
+            
+            if(value && StrEqual(value, "true"))
+            {
+                UI->widgetCarousel[widgetIndex] = true;
+            }
+            
+            if(widgetIndex == (u32) UI->currentActiveWidget)
+            {
+                EditorElement* currentChild = GetElement(widgetSelection->root, toSearch);
+                if(currentChild)
+                {
+                    currentChild->flags |= EditorElem_SpecialNameColor;
+                }
+            }
+        }
     }
     
     if(input->altDown)
@@ -2029,6 +2169,116 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         UIAddInteraction(UI, input, moveDown, moveInteraction);
         
         
+        
+        
+        
+        EditorWidgetType nextWidget;
+        if(UI->currentActiveWidget >= EditorWidget_WidgetSelection - 1)
+        {
+            nextWidget = (EditorWidgetType) (EditorWidget_None + 1);
+        }
+        else
+        {
+            nextWidget = (EditorWidgetType) (UI->currentActiveWidget + 1);
+        }
+        
+        EditorWidgetType startingWidget = nextWidget;
+        while(true)
+        {
+            if(UI->widgetCarousel[nextWidget] && !UI->widgetLocked[nextWidget])
+            {
+                break;
+            }
+            else
+            {
+                nextWidget = (EditorWidgetType) (nextWidget + 1);
+                if(nextWidget == EditorWidget_WidgetSelection)
+                {
+                    nextWidget = (EditorWidgetType) (EditorWidget_None + 1);
+                }
+            }
+            
+            if(nextWidget == startingWidget)
+            {
+                nextWidget = EditorWidget_None;
+                break;
+            }
+        }
+        UIInteraction tabInteractionRight = UISetValueInteraction(UI, UI_Trigger, &UI->currentActiveWidget, nextWidget);                
+        UIAddInteraction(UI, input, actionRight, tabInteractionRight);
+        
+        
+        
+        
+        
+        
+        
+        EditorWidgetType prevWidget;
+        if(UI->currentActiveWidget <= EditorWidget_None + 1)
+        {
+            prevWidget = (EditorWidgetType) (EditorWidget_WidgetSelection - 1);
+        }
+        else
+        {
+            prevWidget = (EditorWidgetType) (UI->currentActiveWidget - 1);
+        }
+        
+        startingWidget = prevWidget;
+        while(true)
+        {
+            if(UI->widgetCarousel[prevWidget] && !UI->widgetLocked[prevWidget])
+            {
+                break;
+            }
+            else
+            {
+                prevWidget = (EditorWidgetType) (prevWidget - 1);
+                if(prevWidget == EditorWidget_None)
+                {
+                    prevWidget = (EditorWidgetType) (EditorWidget_WidgetSelection - 1);
+                }
+            }
+            
+            if(prevWidget == startingWidget)
+            {
+                prevWidget = EditorWidget_None;
+                break;
+            }
+        }
+        UIInteraction tabInteractionLeft = UISetValueInteraction(UI, UI_Trigger, &UI->currentActiveWidget, prevWidget);                
+        UIAddInteraction(UI, input, actionLeft, tabInteractionLeft);
+        
+        
+        u32 alreadyPresentSlotIndex = 0;
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(input->slotButtons); ++slotIndex)
+        {
+            if(UI->widgetSlots[slotIndex] == UI->currentActiveWidget)
+            {
+                alreadyPresentSlotIndex = slotIndex;
+            }
+        }
+        
+        
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(input->slotButtons); ++slotIndex)
+        {
+            if(UI->widgetSlots[slotIndex])
+            {
+                UIInteraction slotInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->currentActiveWidget, UI->widgetSlots[slotIndex]);
+                UIAddInteraction(UI, input, slotButtons[slotIndex], slotInteraction);   
+            }
+        }
+        
+        if(input->ctrlDown)
+        {
+            for(u32 slotIndex = 0; slotIndex < ArrayCount(input->slotButtons); ++slotIndex)
+            {
+                UIInteraction slotInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->widgetSlots[alreadyPresentSlotIndex], EditorWidget_None);
+                
+                UIAddSetValueAction(UI, &slotInteraction, UI_Trigger, &UI->widgetSlots[slotIndex], UI->currentActiveWidget);
+                
+                UIAddInteraction(UI, input, slotButtons[slotIndex], slotInteraction);
+            }   
+        }
     }
     
     UI->saveWidgetLayoutTimer += UI->worldMode->originalTimeToAdvance;
@@ -2072,6 +2322,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     }
     
     
+    
     Vec2 importantMessageP = V2(-900, +500);
     r32 importantMessageScale = 0.42f;
     Vec4 importantColor = V4(1, 0, 0, 1);
@@ -2105,12 +2356,19 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     EditorTab* editingTab = editingSlot->tabs + UI->editingTabIndex;
     EditorElement* editingRoot = editingTab->editable ? editingTab->root : &UI->uneditableTabRoot;
     
-    EditorWidget* tabWidget = UI->widgets + 1;
+    EditorWidget* tabWidget = UI->widgets + EditorWidget_EditingTaxonomyTabs;
     tabWidget->root = editingRoot;
     
-    UI->widgets[0].root = UI->editorTaxonomyTree;
-    UI->widgets[3].root = UI->table->soundNamesRoot;
-    UI->widgets[5].root = UI->table->soundEventsRoot;
+    if(UI->canShowTaxonomyTree)
+    {
+        UI->widgets[EditorWidget_TaxonomyTree].root = UI->editorTaxonomyTree;
+    }
+    else
+    {
+        UI->widgets[EditorWidget_TaxonomyTree].root = &UI->uneditableTabRoot;
+    }
+    UI->widgets[EditorWidget_SoundDatabase].root = UI->table->soundNamesRoot;
+    UI->widgets[EditorWidget_SoundEvents].root = UI->table->soundEventsRoot;
     
     
     UIInteraction esc = UISetValueInteraction(UI, UI_Trigger, &UI->active, 0);
@@ -2139,40 +2397,6 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             
 		}
 	}
-#if 0
-    if(UI->active)
-	{
-		if(ctrlDown)
-		{
-			How do we update the grandparent?
-                UpOneLevel();
-		}
-		else if(shiftDown)
-		{
-			if(firstInList || firstValue)
-			{
-				DrillDown();
-			}
-		}
-		else
-		{
-			if(editable(UI->active->next))
-			{
-				UIInteraction moveInteraction;
-				if(bufferValid)
-				{
-					AddConfirmInteraction();
-				}
-                
-				AddClearAction(keyboardBuffer);
-				AddAction(moveDown, UI->active, UI->active->next);
-                
-				AddAction(moveUp, UI->active, UI->active->prev);
-			}
-		}
-	}
-#endif
-    
     
     u32 current = StrLen(UI->keyboardBuffer);
     u32 maxToCopy = sizeof(UI->keyboardBuffer) - (current + 1);
@@ -2376,6 +2600,8 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     }
     
     
+    
+    
     r32 widgetZ = 0.0f;
     for(u32 widgetIndex = 0; widgetIndex < EditorWidget_Count; ++widgetIndex)
     {
@@ -2392,8 +2618,22 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         layout_.lineThickness *= widget->permanent.fontSize;
         layout_.padding *= widget->permanent.fontSize;
         
-        if(widget->necessaryRole & UI->worldMode->editorRoles)
+        
+        
+        Vec2 resizeP = widget->permanent.P;
+        Vec2 widgetP = resizeP + widget->permanent.fontSize * V2(20, -8);
+        Vec2 moveDim = widget->permanent.fontSize * V2(14, 14);
+        Rect2 rect = RectCenterDim(resizeP, moveDim);
+        Vec4 color = V4(1, 1, 1, 1);
+        EditorLayout* layout = &layout_;
+        layout->P = widgetP;
+        layout->additionalZBias = widgetZ;
+        
+        if(true)
         {
+            
+            if(VisibleWidget(UI, (EditorWidgetType) widgetIndex))
+            {
             if(widget->needsToBeReloaded)
             {
                 TaxonomySlot* editing = GetSlotForTaxonomy(UI->table, UI->editingTaxonomy);
@@ -2410,11 +2650,12 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                 widget->needsToBeReloaded = false;
             }
             
-            Vec2 resizeP = widget->permanent.P;
-            Vec2 widgetP = resizeP + widget->permanent.fontSize * V2(20, -8);
-            Vec2 moveDim = widget->permanent.fontSize * V2(8, 8);
-            Rect2 rect = RectCenterDim(resizeP, moveDim);
-            Vec4 color = V4(1, 1, 1, 1);
+                
+                if(UI->widgetLocked[widgetIndex])
+                {
+                    color = V4(1, 0, 0, 1);
+                }
+                
             if(PointInRect(rect, UI->relativeScreenMouse))
             {
                 UIInteraction moveInteraction = {};
@@ -2425,32 +2666,25 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                 UIAddSetValueAction(UI, &moveInteraction, UI_Trigger, &widget->movingClipHeight, widget->oldClipHeight);
                 
                 UIAddInteraction(UI, input, mouseLeft, moveInteraction);
-                color = V4(1, 0, 0, 1);
+                color = V4(1, 1, 0, 1);
+                    
+                    UIInteraction lockInteraction = UISetValueInteraction(UI, UI_Trigger, &UI->widgetLocked[widgetIndex], !UI->widgetLocked[widgetIndex]);
+                    
+                    UIAddInteraction(UI, input, mouseRight, lockInteraction);
             }
             
-            ObjectTransform sizeTranform = FlatTransform();
-            sizeTranform.additionalZBias = widgetZ;
             
-            PushRect(UI->group, sizeTranform, rect, color);
-            
-            
-            EditorLayout* layout = &layout_;
-            layout->P = widgetP;
-            layout->additionalZBias = widgetZ;
-            
+           
             Rect2 widgetTitleBounds = GetUIOrthoTextBounds(UI->group, &UI->editorFont, widget->name, layout->fontScale, widgetP);
             
-            r32 widgetAlpha = widget->permanent.expanded ? 1.0f : 0.1f;
-            Vec4 widgetColor = V4(0, 1, 0, widgetAlpha);
-            if(PointInRect(widgetTitleBounds, UI->relativeScreenMouse))
-            {
-                widgetColor = V4(1, 0, 0, 1);
-                UIAddInteraction(UI, input, mouseLeft, UISetValueInteraction(UI, UI_Trigger, &widget->permanent.expanded, !widget->permanent.expanded));
-            }
+                ObjectTransform sizeTranform = FlatTransform();
+                sizeTranform.additionalZBias = widgetZ;
+                
+                PushRect(UI->group, sizeTranform, rect, color);
+                
+                Vec4 widgetColor = V4(0, 1, 0, 1.0f);
             PushUIOrthoText(UI->group, &UI->editorFont, widget->name, layout->fontScale, widgetP, widgetColor, layout->additionalZBias);
             
-            if(widget->permanent.expanded)
-            {
                 switch(widgetIndex)
                 {
                     case EditorWidget_EditingTaxonomyTabs:
@@ -2483,10 +2717,24 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                             UIButton saveButton = UIBtn(UI, saveP, layout, V4(1, 0, 0, 1), saveText, saveActive, saveInteraction);
                             UIDrawButton(UI, input, &saveButton);
                             
+                            
+                            
+                            Vec2 revertP = UIFollowingP(&saveButton, 30.0f);
+                                                        
+                            b32 revertActive = (editingSlot->editorChangeCount);
+                            UIInteraction revertInteraction = SendRequestInteraction(UI, UI_Trigger, RevertTaxonomyTabRequest());
+                            
+                            UIButton revertButton = UIBtn(UI, revertP, layout, V4(1, 0, 0, 1), "Revert", revertActive, revertInteraction);
+                            UIDrawButton(UI, input, &revertButton);
+                            
+                            
+                            
+                            
+                            
                             u32 parentTaxonomy = GetParentTaxonomy(UI->table, editingSlot->taxonomy);
                             if(parentTaxonomy)
                             {
-                                Vec2 editParentP = UIFollowingP(&saveButton, 30.0f);
+                                Vec2 editParentP = UIFollowingP(&revertButton, 30.0f);
                                 UIButton editParentButton = UIBtn(UI, editParentP, layout, V4(1, 0, 0, 1), "Edit Parent");
                                 
                                 
@@ -2582,6 +2830,53 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                         
                         UI->worldMode->windSpeed = ToR32(GetValue(widget->root, "windSpeed"));
                     } break;
+                    
+                    case EditorWidget_WidgetSelection:
+                    {
+                        EditorElement* widgets = widget->root->firstValue;
+                        while(widgets)
+                        {
+                            char* toSearch = widgets->name;
+             
+                            EditorWidgetType searching = EditorWidget_None;
+                            for(u32 widgetNameIndex = 0; widgetNameIndex < EditorWidget_Count; ++widgetNameIndex)
+                            {
+                                char* test = MetaTable_EditorWidgetType[widgetNameIndex];
+                                u32 testLength = StrLen(test);
+                                if(StrEqual(testLength, test, toSearch))
+                                {
+                                    searching = (EditorWidgetType) widgetNameIndex;
+                                    break;
+                                }
+                            }
+                            
+                            for(u32 slotIndex = 0; slotIndex < ArrayCount(UI->widgetSlots); ++slotIndex)
+                            {
+                                if(UI->widgetSlots[slotIndex] == searching)
+                                {
+                                    char toAdd[16];
+                                    FormatString(toAdd, sizeof(toAdd), " #%d", slotIndex);
+                                    u32 toAddLength = StrLen(toAdd);
+                                    
+                                    u32 nameLength = StrLen(widgets->name);
+                                    if(nameLength < ArrayCount(widgets->name) - toAddLength)
+                                    {
+                                        if(widgets->name[nameLength - toAddLength] != ' ')
+                                        {
+                                            char* dest = widgets->name + nameLength;
+                                            FormatString(dest, ArrayCount(widgets->name) - toAddLength, "%s", toAdd);
+                                        }
+                                    }
+                                    
+                                    break;
+                                    
+                                }
+                            }
+                            
+                            
+                            widgets = widgets->next;
+                        }
+                    } break;
                 }
             }
             
@@ -2619,10 +2914,20 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             layout->P.y += widget->dataOffsetY;
             
             widget->maxDataY = (i32) (layout->P.y + 0.5f * height);
-            if(widget->permanent.expanded && widget->root)
+            if(VisibleWidget(UI, (EditorWidgetType) widgetIndex) && widget->root)
             {
                 EditorElementParents parents = {};
-                Rect2 widgetBounds = UIRenderEditorTree(UI, widget, layout, parents, 0, false, V4(1, 1, 1, 1), widget->root, input, false).bounds;
+                
+                Vec4 textColor = V4(1, 0, 0, 1);
+                
+                b32 active = ToB32(GetValue(widget->root, "enabled"), true);
+                if(active)
+                {
+                    textColor = V4(0, 1, 0, 1);
+                }
+                
+                
+                Rect2 widgetBounds = UIRenderEditorTree(UI, widget, layout, parents, 0, false, V4(1, 1, 1, 1), widget->root, input, false, true, {}, textColor).bounds;
                 
                 widget->minDataY = (i32) (widgetBounds.min.y + 0.5f * height);
                
@@ -2712,6 +3017,25 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
             widgetZ += 1.0f;
         }
         
+        
+        switch(widgetIndex)
+        {
+            case EditorWidget_WidgetSelection:
+            {
+                EditorElement* widgets = widget->root->firstValue;
+                while(widgets)
+                {
+                    u32 nameLength = StrLen(widgets->name);
+                    if(nameLength > 3 && widgets->name[nameLength - 3] == ' ')
+                    {
+                        widgets->name[nameLength - 3] = 0;
+                    }
+                    
+                    widgets = widgets->next;
+                }
+            } break;
+        }
+        
         if(ChangesMustBeSaved(widgetIndex) && widget->changeCount)
         {
             input->allowedToQuit = false;
@@ -2743,7 +3067,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     
     if(UI->dragging)
     {
-        EditorLayout layout = UI->widgets[0].layout;
+        EditorLayout layout = UI->widgets[EditorWidget_TaxonomyTree].layout;
         layout.P = UI->relativeScreenMouse;
         layout.additionalZBias = 10.0f;
         
@@ -2805,6 +3129,8 @@ inline void UIRenderTooltip(UIState* UI)
         {
             r32 tooltipScale = 0.42f;
             
+            
+            
             char* text = UI->tooltipText;
             Rect2 tooltipDim = UIOrthoTextOp(group, font->font, font->fontInfo, text, tooltipScale, V3(0, 0, 0), TextOp_getSize,V4(1, 1, 1, 1), font->drawShadow);
             Vec2 textDim = GetDim(tooltipDim);
@@ -2813,6 +3139,14 @@ inline void UIRenderTooltip(UIState* UI)
             textP.x -= 0.5f * textDim.x;
             
             centerTooltipP.y += 0.5f * textDim.y;
+            
+            
+            if(UI->drawTooltipBackground)
+            {
+                tooltipDim = Scale(Offset(tooltipDim, textP), 1.2f);
+                PushRect(group, FlatTransform(20.0f), tooltipDim, V4(0.1f, 0.1f, 0.1f, 1));
+            }
+            
             
             UIOrthoTextOp(group, font->font, font->fontInfo, text, tooltipScale, V3(textP, tooltipZ), TextOp_draw,V4(1, 1, 1, 1), true);
         }
@@ -2910,16 +3244,45 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
     RenderGroup* group = UI->group;
     u32 slotCount = MAXIMUM_SKILL_SLOTS;
 
-    r32 additionalZBias = 10.0f;        
-    r32 YOffset = 5.8f;
     
+    r32 additionalZBias = 10.0f;        
+    
+    
+    b32 rotates = false;
+    b32 transparency = false;
+    r32 YOffset = 0;
+    Vec3 totalOffset = {};
+    Vec3 deltaOffset = {};        
+    Vec3 lerpOffset = {};
+    Vec3 runningOffset = {};
+    r32 minYRotation = 0;
+    r32 yIncrement = 0;
+    r32 yRotation = 0;   
+    
+    switch(UI->skillbarMode)
+    {
+        case UISkillbar_Bookmarks:
+        {
+            YOffset = -4.1f;
+            totalOffset = V3(5.0f, 0.0f, 0.0f);
+            lerpOffset = {};
+            deltaOffset = totalOffset * (1.0f / (r32) slotCount);        
+            runningOffset = -0.5f * totalOffset.x * group->gameCamera.X + YOffset * group->gameCamera.Y;            
+        } break;
         
-        Vec3 totalOffset = V3(5.0f, 0, 0);
-        Vec3 deltaOffset = totalOffset * (1.0f / (r32) slotCount);        
-        Vec3 runningOffset = -0.5f * totalOffset.x * group->gameCamera.X + YOffset * group->gameCamera.Y;
-        r32 minYRotation = -35.0f;
-        r32 yIncrement = (2.0f * Abs(minYRotation)) / (r32) slotCount;
-        r32 yRotation = minYRotation;   
+        case UISkillbar_Overhead:
+        {
+            YOffset = 5.8f;
+            totalOffset = V3(5.0f, 0, 0);
+            deltaOffset = totalOffset * (1.0f / (r32) slotCount);        
+            runningOffset = -0.5f * totalOffset.x * group->gameCamera.X + YOffset * group->gameCamera.Y;
+            minYRotation = -35.0f;
+            yIncrement = (2.0f * Abs(minYRotation)) / (r32) slotCount;
+            yRotation = minYRotation;   
+            transparency = true;
+            rotates = true;  
+        } break;
+    }
     
     if(slotCount % 2 == 0)
     {
@@ -2953,10 +3316,19 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
             Vec3 PBook = runningOffset;
             
             
-            m4x4 rotation = YRotation(DegToRad(yRotation));
-            Vec3 PDefault = GetColumn(rotation, 2) * 2.8f;
             
-            Vec3 P = Lerp(PDefault, lerp, PBook);
+            m4x4 rotation = YRotation(DegToRad(yRotation));
+            Vec3 PStandard = GetColumn(rotation, 2) * 2.8f;
+               
+            Vec3 P = PBook;
+            
+            if(rotates)
+            {
+            P = Lerp(PStandard, lerp, PBook);
+                
+            }
+            
+            P += Lerp({}, lerp, lerpOffset);
                
         ModelId MID = FindModelByName(UI->group->assets, modelTypeID, modelNameID);
             
@@ -2983,7 +3355,7 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
                     }
                     else
                     {
-                            UIAddRequestAction(UI, &skillInteraction, UI_Trigger, ActiveSkillRequest(skill->taxonomy, true));
+                            UIAddRequestAction(UI, &skillInteraction, UI_Trigger, ActiveSkillRequest(skill->taxonomy, true, false));
                             UIAddSetValueAction(UI, &skillInteraction, UI_Trigger, &UI->activeSkillSlotIndex, slotIndex);
                     }
                     
@@ -2993,7 +3365,10 @@ inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput
                 }
         }
          
-            color.a *= modulationAlpha;
+                if(transparency)
+                {
+                                color.a *= modulationAlpha;
+                }
                 Lights lights = {};
             PushModel(UI->group, MID, Identity(), P, lights, scale, color, 0, additionalZBias);
             }
@@ -3256,7 +3631,6 @@ inline EditorWidget* StartWidget(UIState* UI, EditorWidgetType widget, Vec2 P, u
 {
     EditorWidget* result = UI->widgets + widget;
     *result = {};
-    result->permanent.expanded = true;
     result->permanent.fontSize = 1.0f;
     result->dataOffsetY = 0;
     result->permanent.P = P;
@@ -3308,6 +3682,11 @@ inline UIFont LoadUIFont(RenderGroup* group, TagVector* matchVector, TagVector* 
 inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, ClientEntity* player, PlatformInput* input, r32 fontCoeff, b32 loadTaxonomyAutocompletes, b32 loadAssetAutocompletes)
 {
     UI->output = {};
+    
+    UI->group = group;
+    UI->worldMode = worldMode;
+    UI->myPlayer = &worldMode->player;
+    
     UI->table = worldMode->table;
     UI->scrollUsed = true;
     if(!UI->initialized)
@@ -3315,6 +3694,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UI->initialized = true;
         if(worldMode->editingEnabled)
         {
+            UI->renderEditor = true;
             UI->uneditableTabRoot.type = EditorElement_String;
             FormatString(UI->uneditableTabRoot.name, sizeof(UI->uneditableTabRoot.name), "YOU CAN'T EDIT THIS");
             
@@ -3462,6 +3842,65 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             soundEvents->root = UI->table->soundEventsRoot;
             
             
+            EditorWidget* models = StartWidget(UI, EditorWidget_Debug3DModels, V2(-200, 100), EditorRole_3DModeller, "Models");
+            FREELIST_ALLOC(models->root, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
+            models->root->type = EditorElement_List;
+            AddFlags(models->root, EditorElem_Expanded);
+            FREELIST_ALLOC(models->root->emptyElement, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
+            EditorElement* empty = models->root->emptyElement;
+            empty->type = EditorElement_Struct;
+            
+            EditorElement* colorEl = UIAddChild(UI, empty, EditorElement_Struct, "color");
+            UIAddChild(UI, colorEl, EditorElement_Real, "a", "1.0");
+            UIAddChild(UI, colorEl, EditorElement_Real, "b", "1.0");
+            UIAddChild(UI, colorEl, EditorElement_Real, "g", "1.0");
+            UIAddChild(UI, colorEl, EditorElement_Real, "r", "1.0");
+            
+            EditorElement* scale = UIAddChild(UI, empty, EditorElement_Struct, "scale");
+            UIAddChild(UI, scale, EditorElement_Real, "z", "1.0");
+            UIAddChild(UI, scale, EditorElement_Real, "y", "1.0");
+            UIAddChild(UI, scale, EditorElement_Real, "x", "1.0");
+            
+            EditorElement* position = UIAddChild(UI, empty, EditorElement_Struct, "position");
+            UIAddChild(UI, position, EditorElement_Real, "z", "0.0");
+            UIAddChild(UI, position, EditorElement_Real, "y", "0.0");
+            UIAddChild(UI, position, EditorElement_Real, "x", "0.0");
+            
+            UIAddChild(UI, empty, EditorElement_Real, "zRotation", "0.0");
+            UIAddChild(UI, empty, EditorElement_Real, "yRotation", "0.0");
+            UIAddChild(UI, empty, EditorElement_Real, "xRotation", "0.0");
+            
+            UIAddChild(UI, empty, EditorElement_String, "modelType", "rock");
+            UIAddChild(UI, empty, EditorElement_String, "modelName", "pyramid.obj");
+            
+            
+            EditorWidget* widgetSelection = StartWidget(UI, EditorWidget_WidgetSelection, V2(-100, -100), EditorRole_Everyone, "Widget selection");
+            FREELIST_ALLOC(widgetSelection->root, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
+            widgetSelection->root->type = EditorElement_Struct;
+            widgetSelection->root->flags |= EditorElem_Expanded;
+            
+            for(u32 widgetIndex = EditorWidget_WidgetSelection - 1; widgetIndex > EditorWidget_None; --widgetIndex)
+            {
+                if(widgetIndex != EditorWidget_WidgetSelection)
+                {
+                    EditorWidget* widget = UI->widgets + widgetIndex;
+                    if(widget->necessaryRole & UI->worldMode->editorRoles)
+                    {
+                        char* name = MetaTable_EditorWidgetType[widgetIndex];
+                        UIAddChild(UI, widgetSelection->root, EditorElement_String, name, "true");   
+                    } 
+                   
+                }
+            }
+            
+            
+            
+            
+                           
+                                                        
+                                                        
+            
+            
             PlatformFile layoutFile = platformAPI.DEBUGReadFile("widget");
             if(layoutFile.content)
             {
@@ -3506,10 +3945,6 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         AddButton(&UI->movementGroup, moveUp);
         AddButton(&UI->movementGroup, moveDown);
         
-        UI->group = group;
-        UI->worldMode = worldMode;
-        UI->myPlayer = &worldMode->player;
-       
         
         PlatformFile skillsFile = platformAPI.DEBUGReadFile("skills");
         if(skillsFile.content)
@@ -3564,6 +3999,10 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         
         UISoundMapping(UI, BookOpen, "bookOpen");
         UISoundMapping(UI, BookClose, "bookClose");
+        
+        
+        #include "editor/helper_documentation"
+        
     }
     
     
@@ -3609,9 +4048,15 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
     
     UI->scrollIconID = GetMatchingBitmap(group->assets, Asset_scrollUI, &matchVector, &weightVector);
       
-    
+
+    if(!UI->requestedHelperTooltip)
+    {
+        UI->tooltipHelperTimer = 0;
+    }
+    UI->requestedHelperTooltip = 0;
     UI->prefix = false;
     UI->suffix = false;
+    UI->drawTooltipBackground = false;
     UI->tooltipText[0] = 0;
     
    
@@ -4410,7 +4855,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             r32 inTimer = 0.3f;
             r32 outTimer = 0.22f;
             
-            Vec2 inOffset = V2(0, -0.6f);
+            Vec2 inOffset = V2(0, 0.2f);
             Vec2 outOffset = V2(0, -10.0f);
             Vec2 bookOffset;
             r32 essenceAlpha;
@@ -4620,7 +5065,13 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
         UIUpdateSkillBar(UI, input);
     }
     
-    if(worldMode->editingEnabled)
+    
+    if(Pressed(&input->editorButton))
+    {
+        UI->renderEditor = !UI->renderEditor;
+    }
+    
+    if(worldMode->editingEnabled && UI->renderEditor)
     {
         UIRenderEditor(UI, input);
     }

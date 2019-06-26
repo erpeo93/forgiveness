@@ -738,40 +738,60 @@ internal void Win32ProcessKeyboardMessage( HWND window, PlatformInput* input, MS
                 Win32ProcessButton(&input->editorButton, isDown);
             } break;
             
-            
-            case '1':
+            case '0':
             {
                 Win32ProcessButton(input->slotButtons + 0, isDown);
             } break;
             
-            
-            case '2':
+            case '1':
             {
                 Win32ProcessButton(input->slotButtons + 1, isDown);
             } break;
             
             
-            case '3':
+            case '2':
             {
                 Win32ProcessButton(input->slotButtons + 2, isDown);
             } break;
             
             
-            case '4':
+            case '3':
             {
                 Win32ProcessButton(input->slotButtons + 3, isDown);
             } break;
             
             
-            case '5':
+            case '4':
             {
                 Win32ProcessButton(input->slotButtons + 4, isDown);
             } break;
             
             
-            case '6':
+            case '5':
             {
                 Win32ProcessButton(input->slotButtons + 5, isDown);
+            } break;
+            
+            
+            case '6':
+            {
+                Win32ProcessButton(input->slotButtons + 6, isDown);
+            } break;
+            
+            
+            case '7':
+            {
+                Win32ProcessButton(input->slotButtons + 7, isDown);
+            } break;
+            
+            case '8':
+            {
+                Win32ProcessButton(input->slotButtons + 8, isDown);
+            } break;
+            
+            case '9':
+            {
+                Win32ProcessButton(input->slotButtons + 9, isDown);
             } break;
             
             case 'C':

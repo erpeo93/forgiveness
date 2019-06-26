@@ -879,10 +879,10 @@ internal void SendDataFile(ServerPlayer* player, char* name, char* source, u32 f
     SendFileChunks(player, source, fileSize, chunkSize);
 }
 
-internal void SendAllDataFileSentMessage(ServerPlayer* player, b32 loadTaxonomies)
+internal void SendAllDataFileSentMessage(ServerPlayer* player, b32 justReloadTaxonomyFile)
 {
     StartPacket(player, AllDataFileSent);
-    Pack("l", loadTaxonomies);
+    Pack("l", justReloadTaxonomyFile);
     CloseAndStoreReliablePacket(player);
 }
 

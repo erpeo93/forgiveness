@@ -128,9 +128,9 @@ internal void UpdateAndRenderBolts(GameModeWorld* worldMode, BoltCache* cache, r
         if(bolt->ttl <= 0.0f)
         {
             TaxonomySlot* boltSlot = GetSlotForTaxonomy(worldMode->table, bolt->taxonomy);
-            if(boltSlot && boltSlot->boltEffect)
+            if(boltSlot && boltSlot->boltEffectDefinition)
             {
-                SoundEvent* event = GetSoundEvent(worldMode->table, boltSlot->boltEffect->trailerSoundEffect);
+                SoundEvent* event = GetSoundEvent(worldMode->table, boltSlot->boltEffectDefinition->trailerSoundEffect);
                 if(event)
                 {
                     r32 distanceFromPlayer = Length(bolt->endP);
@@ -150,9 +150,9 @@ internal void UpdateAndRenderBolts(GameModeWorld* worldMode, BoltCache* cache, r
             bolt->endP += cache->deltaP;
             
             TaxonomySlot* boltSlot = GetSlotForTaxonomy(worldMode->table, bolt->taxonomy);
-            if(boltSlot && boltSlot->boltEffect)
+            if(boltSlot && boltSlot->boltEffectDefinition)
             {
-                UpdateAndRenderBolt(worldMode, cache, group, boltSlot->boltEffect, bolt, timeToUpdate);
+                UpdateAndRenderBolt(worldMode, cache, group, boltSlot->boltEffectDefinition, bolt, timeToUpdate);
             }
             
             boltPtr = &bolt->next;
@@ -176,13 +176,16 @@ inline void SpawnBolt(GameModeWorld* worldMode, RenderGroup* group, BoltCache* c
     
     
     TaxonomySlot* boltSlot = GetSlotForTaxonomy(worldMode->table, boltTaxonomy);
-    SoundEvent* event = GetSoundEvent(worldMode->table, boltSlot->boltEffect->headerSoundEffect);
-    if(event)
+    if(boltSlot && boltSlot->boltEffectDefinition)
     {
-        r32 distanceFromPlayer = Length(bolt->endP);
-        u32 labelCount = 0;
-        SoundLabel* labels = 0;
-        PlaySoundEvent(worldMode->soundState, group->assets, event, labelCount, labels, &cache->entropy, distanceFromPlayer);
+        SoundEvent* event = GetSoundEvent(worldMode->table, boltSlot->boltEffectDefinition->headerSoundEffect);
+        if(event)
+        {
+            r32 distanceFromPlayer = Length(bolt->endP);
+            u32 labelCount = 0;
+            SoundLabel* labels = 0;
+            PlaySoundEvent(worldMode->soundState, group->assets, event, labelCount, labels, &cache->entropy, distanceFromPlayer);
+        }
     }
 }
 

@@ -44,12 +44,12 @@ inline void ParsePlantLevelParams(PlantLevelParams* destParams, EditorElement* l
 
 internal void ImportPlantDefinitionTab(TaxonomySlot* slot, EditorElement* root)
 {
-    if(currentSlot_->plant)
+    if(slot->plantDefinition)
     {
-        TAXTABLE_DEALLOC(slot->plant, PlantDefinition);
+        TAXTABLE_DEALLOC(slot->plantDefinition, PlantDefinition);
     }
-    TAXTABLE_ALLOC(slot->plant, PlantDefinition);
-    PlantDefinition* plant = slot->plant;
+    TAXTABLE_ALLOC(slot->plantDefinition, PlantDefinition);
+    PlantDefinition* plant = slot->plantDefinition;
     
     plant->collides = ToB32(GetValue(root, "collides"));
     plant->shape = (PlantShape) GetValuePreprocessor(PlantShape, GetValue(root, "shape"));

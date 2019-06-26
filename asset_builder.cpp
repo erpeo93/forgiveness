@@ -1603,6 +1603,38 @@ internal void GetAnimationName(char* path, char* filename, u32 animationIndex, c
     free(animation.content );
 }
 
+
+struct FaceVertexData
+{
+    u16 vertexIndex;
+};
+
+inline FaceVertexData ParseFaceVertexData(Tokenizer* tokenizer)
+{
+    FaceVertexData result = {};
+    Token v = GetToken(tokenizer);
+    
+    if(v.type == Token_Number)
+    {
+        result.vertexIndex = (u16) (atoi(v.text) - 1);
+    }
+    
+    if(NextTokenIs(tokenizer, Token_Slash))
+    {
+        Token s0 = GetToken(tokenizer);
+        Token textureIndex = GetToken(tokenizer);
+        
+        
+        if(NextTokenIs(tokenizer, Token_Slash))
+        {
+            Token s1 = GetToken(tokenizer);
+            Token normalIndex = GetToken(tokenizer);
+        }
+    }
+    
+    return result;
+}
+
 internal LoadedModel LoadModel(char* path, char* filename)
 {
     LoadedModel result = {};
@@ -1625,7 +1657,6 @@ internal LoadedModel LoadModel(char* path, char* filename)
         tokenizer.at = (char*) model.content;
         
         b32 parsing = true;
-        
         while(parsing)
         {
             Token t = GetToken(&tokenizer);
@@ -1687,20 +1718,13 @@ internal LoadedModel LoadModel(char* path, char* filename)
                         Assert(result.faceCount < maxFaceCount);
                         ModelFace* dest = result.faces + result.faceCount++;
                         
-                        Token i0 = GetToken(&tokenizer);
-                        Token i1 = GetToken(&tokenizer);
-                        Token i2 = GetToken(&tokenizer);
+                        FaceVertexData d0 = ParseFaceVertexData(&tokenizer);
+                        FaceVertexData d1 = ParseFaceVertexData(&tokenizer);
+                        FaceVertexData d2 = ParseFaceVertexData(&tokenizer);
                         
-                        if(i0.type == Token_Number && i1.type == Token_Number && i2.type == Token_Number)
-                        {
-                            dest->i0 = (u16) atoi(i0.text) - 1;
-                            dest->i1 = (u16) atoi(i1.text) - 1;
-                            dest->i2 = (u16) atoi(i2.text) - 1;
-                        }
-                        else
-                        {
-                            InvalidCodePath;
-                        }
+                        dest->i0 = d0.vertexIndex;
+                        dest->i1 = d1.vertexIndex;
+                        dest->i2 = d2.vertexIndex;
                         
                     }
                 } break;
@@ -3514,8 +3538,8 @@ int main(int argc, char** argv )
     DeleteAll("assets", "*.autocomplete");
 #endif
     
-    WriteBitmapsAndAnimations();
     WriteModels();
+    WriteBitmapsAndAnimations();
     WriteMusic();
     WriteSounds();
     WriteFonts();

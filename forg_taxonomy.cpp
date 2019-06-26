@@ -420,37 +420,43 @@ inline void GetPhysicalProperties(TaxonomyTable* taxTable, u32 taxonomy, u64 ide
     TaxonomySlot* boundSlot = GetSlotForTaxonomy(taxTable, taxonomy);
     if(IsRock(taxTable, taxonomy))
     {
-        RandomSequence rockSeq = Seed((u32) identifier);
-        if(boundSlot->rock->collides)
+        if(boundSlot->rockDefinition)
         {
-            *type = ForgBound_Standard;
+            RandomSequence rockSeq = Seed((u32) identifier);
+            if(boundSlot->rockDefinition->collides)
+            {
+                *type = ForgBound_Standard;
+            }
+            else
+            {
+                *type = ForgBound_NonPhysical;
+            }
+            
+            Vec3 rockDim = GetRockDim(boundSlot->rockDefinition, &rockSeq);
+            *bounds = RectCenterDim(V3(0, 0, 0), rockDim);
         }
-        else
-        {
-            *type = ForgBound_NonPhysical;
-        }
-        
-        Vec3 rockDim = GetRockDim(boundSlot->rock, &rockSeq);
-        *bounds = RectCenterDim(V3(0, 0, 0), rockDim);
     }
     else if(IsPlant(taxTable, taxonomy))
     {
-        if(boundSlot->plant->collides)
+        if(boundSlot->plantDefinition)
         {
-            *type = ForgBound_Standard;
+            if(boundSlot->plantDefinition->collides)
+            {
+                *type = ForgBound_Standard;
+            }
+            else
+            {
+                *type = ForgBound_NonPhysical;
+            }
+            
+            r32 trunkRadious = Max(0.2f, GetPlantStandardTrunkRadious(boundSlot->plantDefinition));
+            r32 trunkLength = GetPlantStandardTrunkLength(boundSlot->plantDefinition);
+            
+            Vec3 min = V3(-trunkRadious, -trunkRadious, 0);
+            Vec3 max = V3(trunkRadious, trunkRadious, trunkLength);
+            
+            *bounds = RectMinMax(min, max);
         }
-        else
-        {
-            *type = ForgBound_NonPhysical;
-        }
-        
-        r32 trunkRadious = Max(0.2f, GetPlantStandardTrunkRadious(boundSlot->plant));
-        r32 trunkLength = GetPlantStandardTrunkLength(boundSlot->plant);
-        
-        Vec3 min = V3(-trunkRadious, -trunkRadious, 0);
-        Vec3 max = V3(trunkRadious, trunkRadious, trunkLength);
-        
-        *bounds = RectMinMax(min, max);
     }
     else
     {
@@ -810,7 +816,7 @@ inline void TranslateParticleEffects(ParticleCache* cache, TaxonomyTable* oldTab
         for(u32 childIndex = 0; childIndex < particles->subTaxonomiesCount; ++childIndex)
         {
             TaxonomySlot* oldEffect = GetNthChildSlot(oldTable, particles, childIndex);
-            if(definition == oldEffect->particleEffect)
+            if(definition == oldEffect->particleEffectDefinition)
             {
                 oldHashID = oldEffect->stringHashID;
                 break;
@@ -825,7 +831,7 @@ inline void TranslateParticleEffects(ParticleCache* cache, TaxonomyTable* oldTab
                 TaxonomySlot* newEffect = GetNthChildSlot(newTable, newParticles, childIndex);
                 if(oldHashID == newEffect->stringHashID)
                 {
-                    effect->definition = newEffect->particleEffect;
+                    effect->definition = newEffect->particleEffectDefinition;
                     break;
                 }
             }
@@ -835,7 +841,7 @@ inline void TranslateParticleEffects(ParticleCache* cache, TaxonomyTable* oldTab
             TaxonomySlot* effectSlot = GetNthChildSlot(newTable, newTable->particleEffectsTaxonomy, 0);
             if(effectSlot)
             {
-                effect->definition = effectSlot->particleEffect; 
+                effect->definition = effectSlot->particleEffectDefinition; 
             }
             else
             {

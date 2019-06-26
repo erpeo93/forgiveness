@@ -414,6 +414,11 @@ struct TaxonomySlot
     TaxonomySlot* nextInHash;
     
     
+    
+    
+    
+    
+    
     Vec3 spawnOffsetAttack;
     Vec3 spawnOffsetCast;
     
@@ -425,8 +430,8 @@ struct TaxonomySlot
     ObjectLayout* firstLayout;
     
     
-    TaxonomyEssence* essences;
-    CraftingEffectLink* links;
+    TaxonomyEssence* firstEssence;
+    CraftingEffectLink* firstCraftingLink;
     TaxonomyEffect* firstEffect;
     
     
@@ -438,10 +443,10 @@ struct TaxonomySlot
     ForgBoundType boundType;
     Rect3 physicalBounds;
     
-    RockDefinition* rock;
-    PlantDefinition* plant;
-    struct ParticleEffectDefinition* particleEffect;
-    struct BoltDefinition* boltEffect;
+    RockDefinition* rockDefinition;
+    PlantDefinition* plantDefinition;
+    struct ParticleEffectDefinition* particleEffectDefinition;
+    struct BoltDefinition* boltEffectDefinition;
     
     b32 hasLight;
     r32 minLightIntensity;
@@ -453,7 +458,6 @@ struct TaxonomySlot
     VisualLabel* firstVisualLabel;
     AnimationEffect* firstAnimationEffect;
     TaxonomySound* firstSound;
-    
     TaxonomyBoneAlterations* firstBoneAlteration;
     TaxonomyAssAlterations* firstAssAlteration;
     
@@ -493,46 +497,35 @@ struct TaxonomySlot
     r32 exponentiationLerping;
     
     
-    u8 gridDimX;
-    u8 gridDimY;
-    
-    
     AttributeSlot attributeHashmap[16];
-    
-    
-    struct AIBehavior* behaviorContent;
-    struct MemCriteria* criteria;
-    struct MemSynthesisRule* synthRules;
+    struct AIBehavior* behaviorContentDefinition;
+    struct MemCriteria* criteriaDefinition;
+    struct MemSynthesisRule* firstSynthRule;
     TaxonomyBehavior* firstPossibleBehavior;
     TaxonomyMemBehavior* firstMemBehavior;
-    NakedHandReq* nakedHandReq;
+    NakedHandReq* firstNakedHandReq;
     
     
     
     b32 hasBrain;
     TaxonomyBehavior* startingBehavior;
-    TaxonomyConsideration* consideration;
+    TaxonomyConsideration* considerationDefinition;
+    
+    struct TileDefinition* tileDefinition;
+    struct WorldGeneratorDefinition* generatorDefinition;
     
     
-    Vec4 tileBorderColor;
-    Vec4 tileColor;
-    Vec4 colorDelta;
-    r32 groundPointMaxOffset;
-    r32 groundPointPerTile;
-    r32 groundPointPerTileV;
-    r32 chunkynessWithSame;
-    r32 chunkynessWithOther;
-    u32 tilePointsLayout;
-    r32 colorRandomness;
-    NoiseParams tileNoise;
-    
-    struct WorldGenerator* generator;
-    
+    u8 gridDimX;
+    u8 gridDimY;
     TaxonomyContainerInteraction* firstInsideInteraction;
+    
+    
+    
     
     
     b32 editorCollapsed;
     i32 editorChangeCount;
+    
     u32 tabCount;
     EditorTab tabs[16];
 };
@@ -636,7 +629,8 @@ struct TaxonomyTable
     TaxonomyEssence* firstFreeTaxonomyEssence;
     CraftingEffectLink* firstFreeCraftingEffectLink;
     TaxonomyEffect* firstFreeTaxonomyEffect;
-    struct WorldGenerator* firstFreeWorldGenerator;
+    struct WorldGeneratorDefinition* firstFreeWorldGeneratorDefinition;
+    struct TileDefinition* firstFreeTileDefinition;
     RockDefinition* firstFreeRockDefinition;
     PlantDefinition* firstFreePlantDefinition;
     ParticleEffectDefinition* firstFreeParticleEffectDefinition;

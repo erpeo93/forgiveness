@@ -650,6 +650,15 @@ inline b32 NearEnoughForAction(ClientPlayer* myPlayer, u32 desiredAction, u64 ta
 }
 
 
+inline void SwapTables(GameModeWorld* worldMode)
+{
+    TaxonomyTable* old = worldMode->oldTable;
+    Clear(&old->pool);
+    ZeroStruct(*old);
+    worldMode->oldTable = worldMode->table;
+    worldMode->table = old;
+    InitTaxonomyReadWrite(worldMode->table);
+}
 
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
@@ -701,7 +710,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     worldMode->lastMouseP = mouseP;
     
     
-#if FORGIVENESS_INTERNAL
+#if 1
     if(input->altDown && IsDown(&input->mouseLeft))
     {
         r32 rotationSpeed = 0.001f * PI32;
@@ -786,58 +795,59 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             char* filePath = "assets";
             if(worldMode->allDataFilesArrived)
             {
-                if(worldMode->loadTaxonomies)
-                {
-                    platformAPI.DeleteFileWildcards(filePath, "*.fed");
-                }
-                
+                //platformAPI.DeleteFileWildcards(filePath, "*.fed");
                 WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstDataFileArrived, false);
-                worldMode->firstDataFileArrived = 0;
                 
-                if(worldMode->loadTaxonomies)
+                if(worldMode->justReloadTaxonomies)
                 {
-                    TaxonomyTable* old = worldMode->oldTable;
+                    SwapTables(worldMode);
+                    ReadTaxonomiesFromFile();
                     
-                    Clear(&old->pool);
-                    ZeroStruct(*old);
+                    ++worldMode->patchSectionArrived;
+                    CopyAndLoadTabsFromOldTable(worldMode->oldTable);
                     
-                    worldMode->oldTable = worldMode->table;
-                    worldMode->table = old;
-                    
+                    for(DataFileArrived* file = worldMode->firstDataFileArrived; file; file = file->next)
+                    {
+                        ImportAllFiles(worldMode->editorRoles, false, file->name);
+                    }
+                }
+                else
+                {
+                    SwapTables(worldMode);
+                    ReadTaxonomiesFromFile();
                     ++worldMode->patchSectionArrived;
                     
                     
-                    InitTaxonomyReadWrite(worldMode->table);
-                    ReadTaxonomiesFromFile();
-                    
-                    ImportAllFiles(filePath, worldMode->editorRoles, false);
+                    ImportAllFiles(worldMode->editorRoles, false, 0);
                     ImportAllAssetFiles(worldMode, filePath, &worldMode->filePool);
                     
                     platformAPI.DEBUGWriteFile("editorErrors", worldMode->table->errors, sizeof(worldMode->table->errors[0]) * worldMode->table->errorCount);
-                    
-                    
-                    TranslateParticleEffects(worldMode->particleCache, worldMode->oldTable, worldMode->table);
-                    
-                    for(u32 entityIndex = 0; entityIndex < ArrayCount(worldMode->entities); ++entityIndex)
-                    {
-                        ClientEntity* entity = worldMode->entities[entityIndex];
-                        while(entity)
-                        {
-                            TranslateClientEntity(worldMode->oldTable, worldMode->table, entity);
-                            entity = entity->next;
-                        }
-                    }
-                    
-                    TranslateClientPlayer(worldMode->oldTable, worldMode->table, myPlayer);
-                    TranslateUI(worldMode->oldTable, worldMode->table, worldMode->UI);
-                    
-                    UI->editorTaxonomyTree = 0;
-                    
-                    TaxonomySlot* rootSlot = &worldMode->table->root;
-                    UI->editorTaxonomyTree = BuildEditorTaxonomyTree(worldMode->editorRoles, worldMode->table, rootSlot);
-                    
-                    reloadTaxonomyAutocompletes = true;
                 }
+                worldMode->firstDataFileArrived = 0;
+                
+                TranslateParticleEffects(worldMode->particleCache, worldMode->oldTable, worldMode->table);
+                
+                for(u32 entityIndex = 0; entityIndex < ArrayCount(worldMode->entities); ++entityIndex)
+                {
+                    ClientEntity* entity = worldMode->entities[entityIndex];
+                    while(entity)
+                    {
+                        TranslateClientEntity(worldMode->oldTable, worldMode->table, entity);
+                        entity = entity->next;
+                    }
+                }
+                
+                TranslateClientPlayer(worldMode->oldTable, worldMode->table, myPlayer);
+                TranslateUI(worldMode->oldTable, worldMode->table, worldMode->UI);
+                UI->editorTaxonomyTree = 0;
+                UI->editingTaxonomy = 0;
+                TaxonomySlot* rootSlot = &worldMode->table->root;
+                UI->editorTaxonomyTree = BuildEditorTaxonomyTree(worldMode->editorRoles, worldMode->table, rootSlot);
+                UI->canShowTaxonomyTree = true;
+                
+                reloadTaxonomyAutocompletes = true;
+                
+                
                 worldMode->allDataFilesArrived = false;
             }
             
@@ -1291,69 +1301,78 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 u32 seed = worldMode->worldSeed;
                 
                 
-                WorldGenerator* generator = 0;
                 
                 RandomSequence generatorSeq = Seed(seed);
                 u32 generatorTaxonomy = GetRandomChild(worldMode->table, &generatorSeq, worldMode->table->generatorTaxonomy);
                 
+                WorldGeneratorDefinition* generator = 0;
                 if(generatorTaxonomy != worldMode->table->generatorTaxonomy)
                 {
-                    generator = GetSlotForTaxonomy(worldMode->table, generatorTaxonomy)->generator;
+                    TaxonomySlot* newGeneratorSlot =GetSlotForTaxonomy(worldMode->table, generatorTaxonomy);
+                    
+                    if(newGeneratorSlot)
+                    {
+                        generator = newGeneratorSlot->generatorDefinition;
+                    }
                 }
                 
-                for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
+                
+                if(generator)
                 {
-                    for(i32 X = originChunkX - chunkApron; X <= originChunkX + chunkApron; X++)
+                    for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
                     {
-                        i32 chunkX = Wrap(0, X, lateralChunkSpan);
-                        i32 chunkY = Wrap(0, Y, lateralChunkSpan);
-                        
-                        if(ChunkValid(lateralChunkSpan, X, Y))
-                        {	
-                            WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
+                        for(i32 X = originChunkX - chunkApron; X <= originChunkX + chunkApron; X++)
+                        {
+                            i32 chunkX = Wrap(0, X, lateralChunkSpan);
+                            i32 chunkY = Wrap(0, Y, lateralChunkSpan);
                             
-                            if(!chunk->initialized)
-                            {
-                                forceVoronoiRegeneration = true;
-                                BuildChunk(worldMode->table, generator, chunk, X, Y, seed);
-                            }
-                            
-                            
-                            r32 waterSpeed = 0.12f;
-                            r32 waterSineSpeed = 70.0f;
-                            for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
-                            {
-                                for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
+                            if(ChunkValid(lateralChunkSpan, X, Y))
+                            {	
+                                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
+                                
+                                if(!chunk->initialized)
                                 {
-                                    WorldTile* tile = GetTile(chunk, tileX, tileY);
-                                    if(tile->movingNegative)
+                                    forceVoronoiRegeneration = true;
+                                    BuildChunk(worldMode->table, generator, chunk, X, Y, seed);
+                                }
+                                
+                                
+                                r32 waterSpeed = 0.12f;
+                                r32 waterSineSpeed = 70.0f;
+                                for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
+                                {
+                                    for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
                                     {
-                                        tile->waterPhase -= waterSpeed * input->timeToAdvance;
-                                        if(tile->waterPhase < 0)
+                                        WorldTile* tile = GetTile(chunk, tileX, tileY);
+                                        if(tile->movingNegative)
                                         {
-                                            tile->waterPhase = 0;
-                                            tile->movingNegative = false;
+                                            tile->waterPhase -= waterSpeed * input->timeToAdvance;
+                                            if(tile->waterPhase < 0)
+                                            {
+                                                tile->waterPhase = 0;
+                                                tile->movingNegative = false;
+                                            }
                                         }
-                                    }
-                                    else
-                                    {
-                                        tile->waterPhase += waterSpeed * input->timeToAdvance;
-                                        if(tile->waterPhase > 1.0f)
+                                        else
                                         {
-                                            tile->waterPhase = 1.0f;
-                                            tile->movingNegative = true;
+                                            tile->waterPhase += waterSpeed * input->timeToAdvance;
+                                            if(tile->waterPhase > 1.0f)
+                                            {
+                                                tile->waterPhase = 1.0f;
+                                                tile->movingNegative = true;
+                                            }
                                         }
+                                        
+                                        RandomSequence seq = tile->waterSeq;
+                                        NoiseParams waterParams = NoisePar(4.0f, 2, 0.0f, 1.0f);
+                                        r32 blueNoise = Evaluate(tile->waterPhase, 0, waterParams, GetNextUInt32(&seq));
+                                        r32 alphaNoise = Evaluate(tile->waterPhase, 0, waterParams, GetNextUInt32(&seq));
+                                        tile->blueNoise = UnilateralToBilateral(blueNoise);
+                                        tile->alphaNoise = UnilateralToBilateral(alphaNoise);
+                                        
+                                        
+                                        tile->waterSine += waterSineSpeed * input->timeToAdvance;
                                     }
-                                    
-                                    RandomSequence seq = tile->waterSeq;
-                                    NoiseParams waterParams = NoisePar(4.0f, 2, 0.0f, 1.0f);
-                                    r32 blueNoise = Evaluate(tile->waterPhase, 0, waterParams, GetNextUInt32(&seq));
-                                    r32 alphaNoise = Evaluate(tile->waterPhase, 0, waterParams, GetNextUInt32(&seq));
-                                    tile->blueNoise = UnilateralToBilateral(blueNoise);
-                                    tile->alphaNoise = UnilateralToBilateral(alphaNoise);
-                                    
-                                    
-                                    tile->waterSine += waterSineSpeed * input->timeToAdvance;
                                 }
                             }
                         }
@@ -1563,12 +1582,13 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 {
                     TaxonomySlot* effect = GetNthChildSlot(worldMode->table, particleEffects, childIndex);
                     
-                    Assert(effect->particleEffect);
-                    
-                    for(u32 phaseIndex = 0; phaseIndex < effect->particleEffect->phaseCount; ++phaseIndex)
+                    if(effect->particleEffectDefinition)
                     {
-                        ParticlePhase* phase = effect->particleEffect->phases + phaseIndex;
-                        phase->updater.bitmapID = FindBitmapByName(gameState->assets, Asset_Particle, phase->updater.particleHashID);
+                        for(u32 phaseIndex = 0; phaseIndex < effect->particleEffectDefinition->phaseCount; ++phaseIndex)
+                        {
+                            ParticlePhase* phase = effect->particleEffectDefinition->phases + phaseIndex;
+                            phase->updater.bitmapID = FindBitmapByName(gameState->assets, Asset_Particle, phase->updater.particleHashID);
+                        }
                     }
                 }
                 

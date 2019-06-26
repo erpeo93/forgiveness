@@ -455,7 +455,7 @@ inline u64 AddRandomEntity(SimRegion* region, RandomSequence* sequence, Vec3 P, 
     return result;
 }
 
-internal void BuildSimpleTestWorld(ServerState* server, WorldGenerator* generator)
+internal void BuildSimpleTestWorld(ServerState* server, WorldGeneratorDefinition* generator)
 {
     RegionWorkContext* context = server->threadContext + 0;
     context->immediateSpawn = true;
@@ -661,7 +661,7 @@ internal void BuildSimpleTestWorld(ServerState* server, WorldGenerator* generato
     context->immediateSpawn = false;
 }
 
-internal void BuildServerChunks(ServerState* server, WorldGenerator* generator)
+internal void BuildServerChunks(ServerState* server, WorldGeneratorDefinition* generator)
 {
     u32 worldSeed = server->worldSeed;
     i32 offset = SIM_REGION_CHUNK_SPAN;
@@ -772,12 +772,20 @@ internal void BuildWorld(ServerState * server)
     
     u32 generatorTaxonomy = GetRandomChild(server->activeTable, &server->randomSequence, server->activeTable->generatorTaxonomy);
     
-    WorldGenerator* generator = 0;
+    WorldGeneratorDefinition* generator = 0;
     if(generatorTaxonomy != server->activeTable->generatorTaxonomy)
     {
-        generator = GetSlotForTaxonomy(server->activeTable, generatorTaxonomy)->generator;
+        TaxonomySlot* slot = GetSlotForTaxonomy(server->activeTable, generatorTaxonomy);
+        
+        if(slot)
+        {
+            generator = slot->generatorDefinition;
+        }
     }
     
-    BuildServerChunks(server, generator);
-    BuildSimpleTestWorld(server, generator);
+    if(generator)
+    {
+        BuildServerChunks(server, generator);
+        BuildSimpleTestWorld(server, generator);
+    }
 }

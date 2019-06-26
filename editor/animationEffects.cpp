@@ -1,3 +1,16 @@
+TRANSLATION_FUNCTION(translate0To1)
+{
+    DoStuff(root);
+}
+
+
+translate_editor_tab* animationEffectTranslations[] = 
+{
+    noTranslation,
+    translate0To1,
+};
+
+
 inline void AddAnimationEffect(TaxonomySlot* slot, AnimationEffect effect, u32 flags, u32 triggerAction, char* triggerEffect, r32 timer, r32 fadeTime, char* pieceName)
 {
     AnimationEffect* dest;
@@ -108,6 +121,8 @@ inline AnimationEffect BoltEffect(char* boltEffectName, r32 timer)
 
 internal void ImportAnimationEffectsTab(TaxonomySlot* slot, EditorElement* root)
 {
+    Translate(animationEffectTranslations, root);
+    
     
     FREELIST_FREE(slot->firstAnimationEffect, AnimationEffect, taxTable_->firstFreeAnimationEffect);
     EditorElement* effects = root->firstInList;

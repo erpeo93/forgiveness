@@ -39,6 +39,7 @@ enum EditorElementFlags
     EditorElem_RecursiveEmpty = (1 << 15),
     EditorElem_DontRender = (1 << 16),
     EditorElem_Union = (1 << 17),
+    EditorElem_SpecialNameColor = (1 << 18),
 };
 
 struct EditorUnionLayout
@@ -172,6 +173,7 @@ struct EditorLayout
     r32 childStandardHeight;
 };
 
+#define EditorRole_Everyone 0xffffffff
 printFlags(noPrefix) enum EditorRole
 {
     EditorRole_SoundDesigner = (1 << 1),
@@ -181,10 +183,12 @@ printFlags(noPrefix) enum EditorRole
     EditorRole_Animator = (1 << 5),
     EditorRole_Artist = (1 << 6),
     EditorRole_WebDeveloper = (1 << 7),
+    EditorRole_3DModeller = (1 << 8),
 };
 
-enum EditorWidgetType
+printTable(noPrefix) enum EditorWidgetType
 {
+    EditorWidget_None,
     EditorWidget_TaxonomyTree,
     EditorWidget_EditingTaxonomyTabs,
     EditorWidget_Animation,
@@ -195,6 +199,8 @@ enum EditorWidgetType
     EditorWidget_Misc,
     EditorWidget_ColorPicker,
     EditorWidget_GroundParams,
+    EditorWidget_Debug3DModels,
+    EditorWidget_WidgetSelection,
     
     EditorWidget_Count,
 };
@@ -204,8 +210,6 @@ struct WidgetPermanent
     r32 fontSize;
     Vec2 P;
     Vec2 resizeP;
-    
-    b32 expanded;
 };
 
 struct EditorWidget

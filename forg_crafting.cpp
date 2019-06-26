@@ -156,7 +156,7 @@ internal void Craft(SimRegion* region, SimEntity* dest, u32 taxonomy, Generation
     {
         u32 ingredientTaxonomy = ingredients.taxonomies[ingredientIndex];
         TaxonomySlot* ingredientSlot = GetSlotForTaxonomy(taxTable, ingredientTaxonomy);
-        for(TaxonomyEssence* essenceSlot = ingredientSlot->essences; essenceSlot; essenceSlot = essenceSlot->next)
+        for(TaxonomyEssence* essenceSlot = ingredientSlot->firstEssence; essenceSlot; essenceSlot = essenceSlot->next)
         {
             EssenceSlot essence = essenceSlot->essence;
             essence.quantity += ingredients.quantities[ingredientIndex];
@@ -208,7 +208,7 @@ internal void Craft(SimRegion* region, SimEntity* dest, u32 taxonomy, Generation
         
         while(searchingSlot->taxonomy && !matches)
         {
-            for(CraftingEffectLink* link = searchingSlot->links; link; link = link->next)
+            for(CraftingEffectLink* link = searchingSlot->firstCraftingLink; link; link = link->next)
             {
                 b32 used[MAX_ESSENCES_PER_EFFECT] = {};
                 matches = true;

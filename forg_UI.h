@@ -46,6 +46,7 @@ enum UIRequestType
     UIRequest_PatchServer,
     UIRequest_PatchCheck,
     UIRequest_SaveTaxonomyTab,
+    UIRequest_RevertTaxonomyTab,
     UIRequest_RegenerateWorldChunks,
     UIRequest_PassiveSkill,
     UIRequest_ActiveSkill,
@@ -143,9 +144,11 @@ struct UIRequest
         
         struct
         {
-            u32 taxonomy;
+            b32 reset;
+            u32 activeTaxonomy;
             b32 sendActiveRequest;
         };
+        
         u32 seed;
     };
 };
@@ -445,6 +448,7 @@ struct UndoRedoCommand
 {
     UndoRedoCommandType type;
     EditorWidget* widget;
+    u32 referenceTaxonomy;
     
     union
     {
@@ -499,7 +503,6 @@ struct UndoRedoCommand
     };
     UndoRedoCommand* prev;
 };
-
 
 inline UndoRedoCommand UndoRedoString(EditorWidget* widget, char* ptr, u32 ptrSize, char* oldString, char* newString)
 {
@@ -801,9 +804,30 @@ struct UISoundMapping
     u64 stringHashID;
 };
 
+enum UISkillbarMode
+{
+    UISkillbar_Bookmarks,
+    UISkillbar_Overhead,
+};
+
+
+struct UITooltipHelper
+{
+    u64 stringHashID;
+    char tooltipText[64];
+    
+    union
+    {
+        UITooltipHelper* next;
+        UITooltipHelper* nextFree;
+    };
+};
+
 struct UIState
 {
     b32 initialized;
+    b32 renderEditor;
+    b32 canShowTaxonomyTree;
     b32 previousFrameWasAllowedToQuit;
     
     MemoryPool* pool;
@@ -872,6 +896,7 @@ struct UIState
     r32 skillSlotMaxTimeout;
     r32 skillFadeInSlotTimeout;
     
+    UISkillbarMode skillbarMode;
     i32 activeSkillSlotIndex;
     UISkill skills[MAXIMUM_SKILL_SLOTS];
     
@@ -897,6 +922,13 @@ struct UIState
     char tooltipText[128];
     b32 prefix;
     b32 suffix;
+    b32 drawTooltipBackground;
+    
+    b32 requestedHelperTooltip;
+    r32 tooltipHelperTimer;
+    u64 requestedHelperHash;
+    UITooltipHelper* firstHelper;
+    
     
     
     b32 reloadingAssets;
@@ -931,6 +963,11 @@ struct UIState
     
     r32 saveWidgetLayoutTimer;
     r32 autosaveWidgetTimer;
+    
+    EditorWidgetType currentActiveWidget;
+    b32 widgetCarousel[EditorWidget_Count];
+    b32 widgetLocked[EditorWidget_Count];
+    EditorWidgetType widgetSlots[10];
     EditorWidget widgets[EditorWidget_Count];
     
     EditorElement* copying;

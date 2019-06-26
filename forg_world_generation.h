@@ -162,7 +162,25 @@ struct TaxonomyTileAssociations
     };
 };
 
-struct WorldGenerator
+struct TileDefinition
+{
+    
+    Vec4 tileBorderColor;
+    Vec4 tileColor;
+    Vec4 colorDelta;
+    r32 groundPointMaxOffset;
+    r32 groundPointPerTile;
+    r32 groundPointPerTileV;
+    r32 chunkynessWithSame;
+    r32 chunkynessWithOther;
+    u32 tilePointsLayout;
+    r32 colorRandomness;
+    NoiseParams tileNoise;
+    
+    TileDefinition* nextFree;
+};
+
+struct WorldGeneratorDefinition
 {
     NoiseParams landscapeNoise;
     Selector landscapeSelect;
@@ -182,5 +200,5 @@ struct WorldGenerator
     
     TaxonomyTileAssociations* firstAssociation;
     
-    WorldGenerator* nextFree;
+    WorldGeneratorDefinition* nextFree;
 };

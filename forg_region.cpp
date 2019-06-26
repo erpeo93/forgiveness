@@ -1251,9 +1251,9 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             
             UnlockCategoryRequest* unlock = &unlock_;
             TaxonomySlot* categorySlot = GetSlotForTaxonomy(region->taxTable, unlock->taxonomy);
-            if(HasEssences(creature->essences, categorySlot->essences))
+            if(HasEssences(creature->essences, categorySlot->firstEssence))
             {
-                RemoveEssences(region, entity, categorySlot->essences);
+                RemoveEssences(region, entity, categorySlot->firstEssence);
                 Assert(player->unlockedCategoryCount < ArrayCount(player->unlockedSkillCategories));
                 player->unlockedSkillCategories[player->unlockedCategoryCount++] = unlock->taxonomy;
                 SendUnlockedSkillCatConfirm(player, unlock->taxonomy);
@@ -1268,9 +1268,9 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
             LevelUpRequest* levelUp = &levelUp_;
             TaxonomySlot* skillSlot = GetSlotForTaxonomy(region->taxTable, levelUp->taxonomy);
             
-            if(HasEssences(creature->essences, skillSlot->essences))
+            if(HasEssences(creature->essences, skillSlot->firstEssence))
             {
-                RemoveEssences(region, entity, skillSlot->essences);
+                RemoveEssences(region, entity, skillSlot->firstEssence);
                 SkillSlot* toSend = 0;
                 b32 found = false;
                 for(u32 skillIndex = 0; skillIndex < creature->skillCount; ++skillIndex)
@@ -1635,7 +1635,10 @@ internal void UpdateRegionEntities(SimRegion* region, MemoryPool* tempPool)
                         if(IsPlant(region->taxTable, entityTaxonomy))
                         {
                             TaxonomySlot* slot = GetSlotForTaxonomy(region->taxTable, entityTaxonomy);
-                            UpdatePlant(region, entity, slot->plant->growingCoeff);
+                            if(slot->plantDefinition)
+                            {
+                                UpdatePlant(region, entity, slot->plantDefinition->growingCoeff);
+                            }
                         }
                         
                         if(IsEssence(region->taxTable, entityTaxonomy))

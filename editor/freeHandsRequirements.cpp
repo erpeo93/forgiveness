@@ -10,8 +10,8 @@ inline void AddFreeHandReq(TaxonomySlot* slot, char* slotName, char* taxonomy)
         req->slotIndex = SafeTruncateToU8(GetValuePreprocessor(SlotName, slotName));
         req->taxonomy = taxonomyslot->taxonomy;
         
-        req->next = slot->nakedHandReq;
-        slot->nakedHandReq = req;
+        req->next = slot->firstNakedHandReq;
+        slot->firstNakedHandReq = req;
     }
     else
     {
@@ -23,7 +23,7 @@ inline void AddFreeHandReq(TaxonomySlot* slot, char* slotName, char* taxonomy)
 internal void ImportFreeHandsRequirementsTab(TaxonomySlot* slot, EditorElement* root)
 {
     
-    FREELIST_FREE(slot->nakedHandReq, NakedHandReq, taxTable_->firstFreeNakedHandReq);
+    FREELIST_FREE(slot->firstNakedHandReq, NakedHandReq, taxTable_->firstFreeNakedHandReq);
     EditorElement* freeHandsReq = root->firstInList;
     while(freeHandsReq)
     {

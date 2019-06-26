@@ -105,6 +105,7 @@ Token GetToken( Tokenizer* tokenizer )
         case '#': result.type = Token_Pound; break; 
         case ',': result.type = Token_Comma; break; 
         case '=': result.type = Token_EqualSign; break; 
+        case '/': result.type = Token_Slash; break; 
         
         case '"':
         {

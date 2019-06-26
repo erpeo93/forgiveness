@@ -1190,7 +1190,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             {
                 CompletePastWritesBeforeFutureWrites;
                 worldMode->allDataFilesArrived = true;
-                Unpack("l", &worldMode->loadTaxonomies);
+                Unpack("l", &worldMode->justReloadTaxonomies);
             } break;
             
             case Type_AllPakFileSent:

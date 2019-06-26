@@ -31,7 +31,7 @@ inline void Requires(CraftingEffectLink* link, char* essenceName, u32 quantity)
 }
 
 
-inline CraftingEffectLink* LinkStandard(char* action, char* effectName, char* target)
+inline CraftingEffectLink* LinkStandard(TaxonomySlot* slot, char* action, char* effectName, char* target)
 {
     
     CraftingEffectLink* link;
@@ -40,7 +40,7 @@ inline CraftingEffectLink* LinkStandard(char* action, char* effectName, char* ta
     link->target = target ? ToB32(target) : false;
     link->effectID = (EffectIdentifier) GetValuePreprocessor(EffectIdentifier, effectName);
     
-    FREELIST_INSERT(link, currentSlot_->links);
+    FREELIST_INSERT(link, slot->firstCraftingLink);
     
     return link;
 }
@@ -48,7 +48,7 @@ inline CraftingEffectLink* LinkStandard(char* action, char* effectName, char* ta
 internal void ImportCraftingEffectsTab(TaxonomySlot* slot, EditorElement* root)
 {
     
-    FREELIST_FREE(slot->links, CraftingEffectLink, taxTable_->firstFreeCraftingEffectLink);
+    FREELIST_FREE(slot->firstCraftingLink, CraftingEffectLink, taxTable_->firstFreeCraftingEffectLink);
     EditorElement* craftingEffectsList = root->firstInList;
     while(craftingEffectsList)
     {
@@ -56,7 +56,7 @@ internal void ImportCraftingEffectsTab(TaxonomySlot* slot, EditorElement* root)
         char* id = GetValue(craftingEffectsList, "id");
         char* target = GetValue(craftingEffectsList, "target");
         
-        CraftingEffectLink* link = LinkStandard(action, id, target);
+        CraftingEffectLink* link = LinkStandard(slot, action, id, target);
         
         EditorElement* requirements = GetList(craftingEffectsList, "requirements");
         Assert(requirements);

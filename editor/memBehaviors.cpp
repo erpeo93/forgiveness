@@ -4,13 +4,13 @@ inline void BeginMemoryBehavior(char* behaviorName)
     
     if(slot)
     {
-        FREELIST_FREE(slot->criteria, MemCriteria, taxTable_->firstFreeMemCriteria);
+        FREELIST_FREE(slot->criteriaDefinition, MemCriteria, taxTable_->firstFreeMemCriteria);
         
-        for(MemSynthesisRule* rule = slot->synthRules; rule; rule = rule->next)
+        for(MemSynthesisRule* rule = slot->firstSynthRule; rule; rule = rule->next)
         {
             FreeMemSynthRuleTree(taxTable_, rule->tree.root);
         }
-        FREELIST_FREE(slot->synthRules, MemSynthesisRule, taxTable_->firstFreeMemSynthesisRule);
+        FREELIST_FREE(slot->firstSynthRule, MemSynthesisRule, taxTable_->firstFreeMemSynthesisRule);
         
         Assert(IsBehavior(taxTable_, slot->taxonomy));
         currentSlot_ = slot;
@@ -31,7 +31,7 @@ inline MemCriteria* AddCriteria(char* criteriaName)
         TAXTABLE_ALLOC(newCriteria, MemCriteria);
         newCriteria->taxonomy = criteriaTax->taxonomy;
         
-        FREELIST_INSERT(newCriteria, currentSlot_->criteria);
+        FREELIST_INSERT(newCriteria, currentSlot_->criteriaDefinition);
         result = newCriteria;
     }
     else
@@ -59,13 +59,13 @@ inline void AddMemConsideration(MemCriteria* criteria, char* requiredConceptName
     }
 }
 
-inline MemSynthesisRule* AddSynthesisRule(EntityAction action)
+inline MemSynthesisRule* AddSynthesisRule(TaxonomySlot* slot, EntityAction action)
 {
     MemSynthesisRule* rule;
     TAXTABLE_ALLOC(rule, MemSynthesisRule);
     rule->action = action;
     
-    FREELIST_INSERT(rule, currentSlot_->synthRules);
+    FREELIST_INSERT(rule, slot->firstSynthRule);
     
     return rule;
 }

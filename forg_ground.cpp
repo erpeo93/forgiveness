@@ -91,60 +91,65 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
                             WorldTile* tile = &chunk->tiles[tileY][tileX];
                             
                             TaxonomySlot* tileSlot = GetSlotForTaxonomy(worldMode->table, tile->taxonomy);
+                            TileDefinition* tileDef = tileSlot->tileDefinition;
                             
-                            r32 pointMaxOffset = Min(0.5f * voxelSide, tileSlot->groundPointMaxOffset);
-                            
-                            u32 pointsPerTile = RoundReal32ToU32(tileSlot->groundPointPerTile + RandomBil(&seq) * tileSlot->groundPointPerTileV);
-                            
-                            pointsPerTile = Min(maxPointsPerTile, pointsPerTile);
-                            r32 tileLayoutNoise = tile->layoutNoise;
-                            
-                            switch(tileSlot->tilePointsLayout)
+                            if(tileDef)
                             {
-                                case TilePoints_StraightLine:
-                                {
-                                    Vec2 arm = Arm2(DegToRad(tileLayoutNoise * 360.0f));
-                                    r32 voxelUsableDim = 0.9f * voxelSide;
-                                    Vec2 startingOffset = arm * voxelUsableDim;
-                                    Vec2 totalDelta = 2.0f * startingOffset;
-                                    
-                                    Vec2 pointSeparationVector = totalDelta *= (1.0f / pointsPerTile);
-                                    
-                                    destP2D += startingOffset;
-                                    
-                                    for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
-                                    {
-                                        points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
-                                        points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
-                                        
-                                        ++pointCount;
-                                        
-                                        destP2D -= pointSeparationVector;
-                                    }
-                                } break;
+                                r32 pointMaxOffset = Min(0.5f * voxelSide, tileDef->groundPointMaxOffset);
                                 
-                                case TilePoints_Random:
-                                {
-                                    for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
-                                    {
-                                        points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
-                                        points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
-                                        
-                                        ++pointCount;
-                                    }
-                                } break;
+                                u32 pointsPerTile = RoundReal32ToU32(tileDef->groundPointPerTile + RandomBil(&seq) * tileDef->groundPointPerTileV);
                                 
-                                case TilePoints_Pound:
+                                pointsPerTile = Min(maxPointsPerTile, pointsPerTile);
+                                r32 tileLayoutNoise = tile->layoutNoise;
+                                
+                                switch(tileDef->tilePointsLayout)
                                 {
-                                    for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
+                                    case TilePoints_StraightLine:
                                     {
-                                        points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
-                                        points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
+                                        Vec2 arm = Arm2(DegToRad(tileLayoutNoise * 360.0f));
+                                        r32 voxelUsableDim = 0.9f * voxelSide;
+                                        Vec2 startingOffset = arm * voxelUsableDim;
+                                        Vec2 totalDelta = 2.0f * startingOffset;
                                         
-                                        ++pointCount;
-                                    }
-                                } break;
+                                        Vec2 pointSeparationVector = totalDelta *= (1.0f / pointsPerTile);
+                                        
+                                        destP2D += startingOffset;
+                                        
+                                        for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
+                                        {
+                                            points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
+                                            points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
+                                            
+                                            ++pointCount;
+                                            
+                                            destP2D -= pointSeparationVector;
+                                        }
+                                    } break;
+                                    
+                                    case TilePoints_Random:
+                                    {
+                                        for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
+                                        {
+                                            points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
+                                            points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
+                                            
+                                            ++pointCount;
+                                        }
+                                    } break;
+                                    
+                                    case TilePoints_Pound:
+                                    {
+                                        for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
+                                        {
+                                            points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
+                                            points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
+                                            
+                                            ++pointCount;
+                                        }
+                                    } break;
+                                }
                             }
+                            
                         }
                     }                         
                 }

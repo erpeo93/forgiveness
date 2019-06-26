@@ -339,7 +339,7 @@ struct GameModeWorld
     ToDeleteFile* firstFreeFileToDelete;
     
     b32 allDataFilesArrived;
-    b32 loadTaxonomies;
+    b32 justReloadTaxonomies;
     
     b32 allPakFilesArrived;
     u32 patchSectionArrived;

@@ -1,18 +1,18 @@
 internal void ImportRockDefinitionTab(TaxonomySlot* slot, EditorElement* root)
 {
-    if(slot->rock)
+    if(slot->rockDefinition)
     {
-        if(slot->rock->firstPossibleMineral)
+        if(slot->rockDefinition->firstPossibleMineral)
         {
-            FREELIST_FREE(currentSlot_->rock->firstPossibleMineral, RockMineral,  taxTable_->firstFreeRockMineral);
+            FREELIST_FREE(slot->rockDefinition->firstPossibleMineral, RockMineral,  taxTable_->firstFreeRockMineral);
         }
         
-        FREELIST_DEALLOC(slot->rock, taxTable_->firstFreeRockDefinition);
-        slot->rock = 0;
+        FREELIST_DEALLOC(slot->rockDefinition, taxTable_->firstFreeRockDefinition);
+        slot->rockDefinition = 0;
     }
     
-    TAXTABLE_ALLOC(slot->rock, RockDefinition);
-    RockDefinition* definition = slot->rock;
+    TAXTABLE_ALLOC(slot->rockDefinition, RockDefinition);
+    RockDefinition* definition = slot->rockDefinition;
     
     definition->collides = ToB32(GetValue(root, "collides"));
     definition->modelTypeHash = StringHash(GetValue(root, "modelType"));

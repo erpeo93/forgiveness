@@ -206,7 +206,7 @@ internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region
             TaxonomySlot* actorSlot = GetSlotForTaxonomy(region->taxTable, actor->taxonomy);
             b32 nakedHands = true;
             
-            for(NakedHandReq* nakedHandReq = actorSlot->nakedHandReq; nakedHandReq; nakedHandReq = nakedHandReq->next)
+            for(NakedHandReq* nakedHandReq = actorSlot->firstNakedHandReq; nakedHandReq; nakedHandReq = nakedHandReq->next)
             {
                 u64 equipmentID = actorCreature->equipment[nakedHandReq->slotIndex].ID;
                 if(equipmentID)

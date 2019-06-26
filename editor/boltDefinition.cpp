@@ -1,12 +1,12 @@
 internal void ImportBoltDefinitionTab(TaxonomySlot* slot, EditorElement* root)
 {
-    if(slot->boltEffect)
+    if(slot->boltEffectDefinition)
     {
-        TAXTABLE_DEALLOC(slot->boltEffect, BoltDefinition);
+        TAXTABLE_DEALLOC(slot->boltEffectDefinition, BoltDefinition);
     }
-    TAXTABLE_ALLOC(slot->boltEffect, BoltDefinition);
+    TAXTABLE_ALLOC(slot->boltEffectDefinition, BoltDefinition);
     
-    BoltDefinition* definition = slot->boltEffect;
+    BoltDefinition* definition = slot->boltEffectDefinition;
     
     definition->animationTick = ElemR32(root, "animationTick");
     definition->ttl = ElemR32(root, "ttl");

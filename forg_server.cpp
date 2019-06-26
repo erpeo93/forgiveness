@@ -235,16 +235,18 @@ inline void SwapTables(ServerState* server)
     InitTaxonomyReadWrite(server->activeTable);
 }
 
+inline void LoadStaticData()
+{
+    InitDefaultStateMachine();
+    ReadSynthesisRules();
+}
+
 
 internal void FillGenerationData(ServerState* server)
 {
     b32 freeTabs = !server->editor;
-    ImportAllFiles("assets", (u32) 0xffffffff, freeTabs);
-    
-    InitDefaultStateMachine();
-    ReadSynthesisRules();
-    
-    OutputDebugString("DEBUG0\n");
+    ImportAllFiles((u32) 0xffffffff, freeTabs, 0);
+    LoadStaticData();
 }
 
 inline void TranslateServerChunks(ServerState* server)
@@ -272,7 +274,7 @@ inline void TranslateServerChunks(ServerState* server)
     }
 }
 
-inline void TranslateServerPlayers(ServerState* server)
+inline void TranslateServerPlayers(ServerState* server, b32 sendOnlyTaxonomiesFile)
 {
     for(u32 playerIndex = 0; playerIndex < MAXIMUM_SERVER_PLAYERS; ++playerIndex)
     {
@@ -280,7 +282,15 @@ inline void TranslateServerPlayers(ServerState* server)
         if(player->connectionSlot)
         {
             TranslatePlayer(server->oldTable, server->activeTable, player);
-            SendDataFiles(server->editor, player, true, false);
+            
+            if(sendOnlyTaxonomiesFile)
+            {
+                SendSpecificFile(player, "taxonomies.fed", false);
+            }
+            else
+            {
+                SendAllDataFiles(server->editor, player, true, false);
+            }
         }
     }
 }
@@ -303,20 +313,28 @@ inline void InvalidateAllHashUpdates(ServerState* server)
 }
 
 
-inline void TranslateServer(ServerState* server)
+inline void TranslateServer(ServerState* server, b32 onlyTaxonomies)
 {
-    
     TranslateServerChunks(server);
-    TranslateServerPlayers(server);
+    TranslateServerPlayers(server, onlyTaxonomies);
     InvalidateAllHashUpdates(server);
 }
 
 inline void ReloadServer(ServerState* server)
 {
     SwapTables(server);
-    WriteDataFiles();
+    WriteDataFilesAndTaxonomies();
     FillGenerationData(server);
-    TranslateServer(server);
+    TranslateServer(server, false);
+}
+
+inline void ReloadServerTaxonomies(ServerState* server)
+{
+    SwapTables(server);
+    WriteDataFilesAndTaxonomies();
+    CopyAndLoadTabsFromOldTable(server->oldTable);
+    LoadStaticData();
+    TranslateServer(server, true);
 }
 
 inline void PoundToNameAndFedFileRecursively(char* path, char* taxonomyName, b32 add)
@@ -324,15 +342,15 @@ inline void PoundToNameAndFedFileRecursively(char* path, char* taxonomyName, b32
     char originalFed[512];
     char newFed[512];
     
-    FormatString(originalFed, sizeof(originalFed), "%s/%s.fed", path, taxonomyName);
+    FormatString(originalFed, sizeof(originalFed), "%s%s.fed", path, taxonomyName);
     
     if(add)
     {
-        FormatString(newFed, sizeof(originalFed), "%s/#%s.fed", path, taxonomyName);
+        FormatString(newFed, sizeof(originalFed), "%s#%s.fed", path, taxonomyName);
     }
     else
     {
-        FormatString(newFed, sizeof(originalFed), "%s/%s.fed", path, taxonomyName + 1);
+        FormatString(newFed, sizeof(originalFed), "%s%s.fed", path, taxonomyName + 1);
     }
     
     
@@ -348,7 +366,7 @@ inline void PoundToNameAndFedFileRecursively(char* path, char* taxonomyName, b32
         if(!StrEqual(folderName, ".") && !StrEqual(folderName, "..") && !StrEqual(folderName, "side"))
         {
             char childPath[512];
-            FormatString(childPath, sizeof(childPath), "%s/%s", path, folderName);
+            FormatString(childPath, sizeof(childPath), "%s%s", path, folderName);
             PoundToNameAndFedFileRecursively(childPath, folderName, add);
         }
     }
@@ -434,7 +452,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
             {
                 if(clientReq.sendDataFiles)
                 {
-                    SendDataFiles(server->editor, player, true, true);
+                    SendAllDataFiles(server->editor, player, true, true);
                     player->allDataFileSent = true;
                 }
                 
@@ -751,13 +769,25 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 char finalSource[512];
                 FormatString(finalSource, sizeof(finalSource), "%s/reference", referenceTaxonomyPath);
                 
+                char destFilename[64];
+                FormatString(destFilename, sizeof(destFilename), "%s.fed", name);
                 char finalDest[512];
-                FormatString(finalDest, sizeof(finalDest), "%s/%s.fed", destPath, name);
+                FormatString(finalDest, sizeof(finalDest), "%s/%s", destPath, destFilename);
                 
                 if(platformAPI.CreateFolder(destPath))
                 {
                     platformAPI.CopyFileOrFolder(finalSource, finalDest);
-                    ReloadServer(server);
+                    ReloadServerTaxonomies(server);
+                    ImportSpecificFile(0xffffffff, !server->editor, destFilename);
+                    
+                    for(u32 playerIndex = 0; playerIndex < MAXIMUM_SERVER_PLAYERS; ++playerIndex)
+                    {
+                        ServerPlayer* playerToSend = server->players + playerIndex;
+                        if(playerToSend->connectionSlot)
+                        {
+                            SendSpecificFile(playerToSend, destFilename, true);
+                        }
+                    }
                 }
             }
             
@@ -778,7 +808,19 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 BuildTaxonomyDataPath(server->activeTable, toDelete, "", path, sizeof(path), ignored, sizeof(ignored));
                 
                 PoundToNameAndFedFileRecursively(path, toDeleteSlot->name, true);
-                ReloadServer(server);
+                
+                
+                ReloadServerTaxonomies(server);
+                
+                
+                for(u32 playerIndex = 0; playerIndex < MAXIMUM_SERVER_PLAYERS; ++playerIndex)
+                {
+                    ServerPlayer* playerToSend = server->players + playerIndex;
+                    if(playerToSend->connectionSlot)
+                    {
+                        SendAllDataFileSentMessage(player, true);
+                    }
+                }
             }
         } break;
         
@@ -792,11 +834,27 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 u32 toDelete;
                 packetPtr = unpack(packetPtr, "L", &toDelete);
                 
-                TaxonomySlot* toDeleteSlot = GetSlotForTaxonomy(server->activeTable, toDelete);
+                TaxonomySlot* toReviveSlot = GetSlotForTaxonomy(server->activeTable, toDelete);
                 BuildTaxonomyDataPath(server->activeTable, toDelete, "", path, sizeof(path), ignored, sizeof(ignored));
                 
-                PoundToNameAndFedFileRecursively(path, toDeleteSlot->name, false);
-                ReloadServer(server);
+                PoundToNameAndFedFileRecursively(path, toReviveSlot->name, false);
+                ReloadServerTaxonomies(server);
+                
+                char* toCopy = toReviveSlot->name;
+                Assert(toCopy[0] == '#');
+                toCopy += 1;
+                char toSendName[64];
+                FormatString(toSendName, sizeof(toSendName), "%s.fed", toCopy);
+                
+                ImportSpecificFile(0xffffffff, !server->editor, toSendName);
+                for(u32 playerIndex = 0; playerIndex < MAXIMUM_SERVER_PLAYERS; ++playerIndex)
+                {
+                    ServerPlayer* playerToSend = server->players + playerIndex;
+                    if(playerToSend->connectionSlot)
+                    {
+                        SendSpecificFile(playerToSend, toSendName, true);
+                    }
+                }
             }
         } break;
         
@@ -928,7 +986,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                 ServerPlayer* toReset = server->players + toResetIndex;
                 if(toReset->connectionSlot)
                 {
-                    SendDataFiles(server->editor, toReset, false, true);
+                    SendAllDataFiles(server->editor, toReset, false, true);
                     
                     toReset->allPakFileSent = false;
                     toReset->pakFileIndex = 0;
@@ -1321,7 +1379,7 @@ extern "C" SERVER_INITIALIZE(InitializeServer)
         
         CheckForDefinitionsToMerge(server);
         LoadAssetsSync(server);
-        WriteDataFiles();
+        WriteDataFilesAndTaxonomies();
     }
     else
     {

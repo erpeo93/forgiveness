@@ -210,7 +210,7 @@ inline u32 SelectFromBiomePyramid(BiomePyramid* pyramid, r32 precipitationLevel,
     return result;
 }
 
-inline WorldTile GenerateTile(TaxonomyTable* table, WorldGenerator* generator, r32 tileNormX, r32 tileNormY, u32 seed)
+inline WorldTile GenerateTile(TaxonomyTable* table, WorldGeneratorDefinition* generator, r32 tileNormX, r32 tileNormY, u32 seed)
 {
     WorldTile result = {};
     
@@ -257,15 +257,19 @@ inline WorldTile GenerateTile(TaxonomyTable* table, WorldGenerator* generator, r
     
 #ifndef FORG_SERVER
     TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, biome);
-    result.layoutNoise = Evaluate(tileNormX, tileNormY, tileSlot->tileNoise, seed);
     
-    result.baseColor = tileSlot->tileColor; 
-    result.colorDelta = tileSlot->colorDelta;
-    result.borderColor = tileSlot->tileBorderColor;
-    result.chunkynessSame = tileSlot->chunkynessWithSame;
-    result.chunkynessOther = tileSlot->chunkynessWithOther;
-    result.colorRandomness = tileSlot->colorRandomness;
-    
+    TileDefinition* tile = tileSlot->tileDefinition;
+    if(tile)
+    {
+        result.layoutNoise = Evaluate(tileNormX, tileNormY, tile->tileNoise, seed);
+        result.baseColor = tile->tileColor; 
+        result.colorDelta = tile->colorDelta;
+        result.borderColor = tile->tileBorderColor;
+        result.chunkynessSame = tile->chunkynessWithSame;
+        result.chunkynessOther = tile->chunkynessWithOther;
+        result.colorRandomness = tile->colorRandomness;
+        
+    }
     result.waterPhase = 0;
     result.movingNegative = false;
     result.waterSine = 0;
@@ -278,7 +282,7 @@ inline WorldTile GenerateTile(TaxonomyTable* table, WorldGenerator* generator, r
 }
 
 
-inline WorldTile OceanTile(TaxonomyTable* table, WorldGenerator* generator, r32 tileNormX, r32 tileNormY, u32 seed)
+inline WorldTile OceanTile(TaxonomyTable* table, WorldGeneratorDefinition* generator, r32 tileNormX, r32 tileNormY, u32 seed)
 {
     Assert(generator);
     
@@ -295,15 +299,19 @@ inline WorldTile OceanTile(TaxonomyTable* table, WorldGenerator* generator, r32 
     
 #ifndef FORG_SERVER
     TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, biome);
-    result.layoutNoise = Evaluate(tileNormX, tileNormY, tileSlot->tileNoise, seed);
+    TileDefinition* tile = tileSlot->tileDefinition;
     
-    result.baseColor = tileSlot->tileColor; 
-    result.colorDelta = tileSlot->colorDelta;
-    result.borderColor = tileSlot->tileBorderColor;
-    result.chunkynessSame = tileSlot->chunkynessWithSame;
-    result.chunkynessOther = tileSlot->chunkynessWithOther;
-    result.colorRandomness = tileSlot->colorRandomness;
-    
+    if(tile)
+    {
+        result.layoutNoise = Evaluate(tileNormX, tileNormY, tile->tileNoise, seed);
+        result.baseColor = tile->tileColor; 
+        result.colorDelta = tile->colorDelta;
+        result.borderColor = tile->tileBorderColor;
+        result.chunkynessSame = tile->chunkynessWithSame;
+        result.chunkynessOther = tile->chunkynessWithOther;
+        result.colorRandomness = tile->colorRandomness;
+        
+    }
     result.waterPhase = 0;
     result.movingNegative = false;
     result.waterSine = 0;
@@ -316,7 +324,7 @@ inline WorldTile OceanTile(TaxonomyTable* table, WorldGenerator* generator, r32 
 }
 
 
-internal void BuildChunk(TaxonomyTable* table, WorldGenerator* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY, u32 seed)
+internal void BuildChunk(TaxonomyTable* table, WorldGeneratorDefinition* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY, u32 seed)
 {
     Assert(generator);
     

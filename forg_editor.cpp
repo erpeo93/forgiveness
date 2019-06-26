@@ -255,7 +255,7 @@ internal u32 FinalizeTaxonomies(char* giantBuffer, u32 giantBufferLength, b32 wr
 }
 
 
-internal void WriteDataFiles()
+internal void WriteDataFilesAndTaxonomies()
 {
 	platformAPI.DeleteFileWildcards("assets", "*.fed");
     
@@ -286,6 +286,9 @@ internal void WriteDataFiles()
     
     EndTemporaryMemory(bufferMemory);
 }
+
+
+
 
 internal void ReadTaxonomiesFromFile()
 {
@@ -614,17 +617,16 @@ inline TaxonomyNode* AddToTaxonomyTree(TaxonomyTree* tree, TaxonomySlot* slot)
     return result;
 }
 
-inline void AddEssence(char* name, u32 quantity)
+inline void AddEssence(TaxonomySlot* slot, char* name, u32 quantity)
 {
-    TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
+    TaxonomySlot* essenceSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
     
-    if(slot)
+    if(essenceSlot)
     {
-        Assert(IsEssence(taxTable_, slot->taxonomy));
         b32 found = false;
-        for(TaxonomyEssence* essence = currentSlot_->essences; essence; essence = essence->next)
+        for(TaxonomyEssence* essence = slot->firstEssence; essence; essence = essence->next)
         {
-            if(essence->essence.taxonomy == slot->taxonomy)
+            if(essence->essence.taxonomy == essenceSlot->taxonomy)
             {
                 essence->essence.quantity += quantity;
                 essence->essence.quantity = SafeTruncateToU8(essence->essence.quantity);
@@ -636,9 +638,9 @@ inline void AddEssence(char* name, u32 quantity)
         {
             TaxonomyEssence* essence;
             TAXTABLE_ALLOC(essence, TaxonomyEssence);
-            essence->essence.taxonomy = slot->taxonomy;
+            essence->essence.taxonomy = essenceSlot->taxonomy;
             essence->essence.quantity = quantity;
-            FREELIST_INSERT(essence, currentSlot_->essences);
+            FREELIST_INSERT(essence, slot->firstEssence);
         }
     }
     else
@@ -1233,6 +1235,64 @@ inline void FreeElement(EditorElement* element, b32 freeNext = true)
     }
 }
 
+inline EditorElement* CopyEditorElement(TaxonomyTable* table, EditorElement* source)
+{
+    EditorElement* result;
+    FREELIST_ALLOC(result, table->firstFreeElement, PushStruct(&table->pool, EditorElement));
+    
+    *result = *source;
+    
+    
+    switch(source->type)
+    {
+        case EditorElement_String:
+        case EditorElement_Real:
+        case EditorElement_Signed:
+        case EditorElement_Unsigned:
+        {
+            
+        } break;
+        
+        case EditorElement_Text:
+        {
+            FREELIST_ALLOC(result->text, table->firstFreeEditorText, PushStruct(&table->pool, EditorTextBlock));
+            Copy(sizeof(result->text->text), result->text->text, source->text->text);
+        } break;
+        
+        case EditorElement_List:
+        {
+            if(source->emptyElement)
+            {
+                result->emptyElement = CopyEditorElement(table, source->emptyElement);
+            }
+            
+            if(source->firstChild)
+            {
+                result->firstChild = CopyEditorElement(table, source->firstChild);
+            }
+        } break;
+        
+        case EditorElement_Struct:
+        {
+            if(source->firstValue)
+            {
+                result->firstValue = CopyEditorElement(table, source->firstValue);
+            }
+        } break;
+        
+        InvalidDefaultCase;
+    }
+    
+    if(source->next)
+    {
+        result->next = CopyEditorElement(table, source->next);
+    }
+    
+    
+    return result;
+}
+
+
 internal void LoadFileInTaxonomySlot(char* content, u32 editorRoles)
 {
     Tokenizer tokenizer = {};
@@ -1254,7 +1314,9 @@ internal void LoadFileInTaxonomySlot(char* content, u32 editorRoles)
         {
             Assert(currentSlot_->tabCount < ArrayCount(currentSlot_->tabs));
             
-            EditorTab* newTab = currentSlot_->tabs + currentSlot_->tabCount++;
+            u32 tabIndex = currentSlot_->tabCount++;
+            
+            EditorTab* newTab = currentSlot_->tabs + tabIndex;
             newTab->root = LoadElementsInMemory(LoadElements_Tab, &tokenizer, &end);
             newTab->editable = IsEditableByRole(newTab->root, editorRoles);
             
@@ -1383,7 +1445,7 @@ inline EditorElement* GetList(EditorElement* element, char* listName)
 
 
 
-
+#include "editor/tab_translation.cpp"
 
 #include "editor/effect.cpp"
 
@@ -1433,154 +1495,152 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
     
     char* name = root->name;
     
-    b32 valid = ToB32(GetValue(root, "valid"), true);
+    b32 valid = ToB32(GetValue(root, "enabled"), true);
     
     if(valid)
     {
         if(StrEqual(name, "bounds"))
-    {
+        {
             ImportBoundsTab(slot, root);
-    }
-    else if(StrEqual(name, "equipmentMappings"))
-    {
-        ImportEquipmentMappingsTab(slot, root);
-
-    }
-    
-    
-    else if(StrEqual(name, "consumeMappings"))
-    {
+        }
+        else if(StrEqual(name, "equipmentMappings"))
+        {
+            ImportEquipmentMappingsTab(slot, root);
+            
+        }
+        else if(StrEqual(name, "consumeMappings"))
+        {
             ImportConsumeMappingsTab(slot, root);
-    }
-    
-    
-    else if(StrEqual(name, "neededTools"))
-    {
+        }
+        
+        
+        else if(StrEqual(name, "neededTools"))
+        {
             ImportNeededToolsTab(slot, root);
-    }
-    else if(StrEqual(name, "requireEssences"))
-    {
+        }
+        else if(StrEqual(name, "requireEssences"))
+        {
             ImportRequiredEssenceTab(slot, root);
-    }
+        }
 #if FORG_SERVER
-    else if(StrEqual(name, "craftingEssences"))
-    {
+        else if(StrEqual(name, "craftingEssences"))
+        {
             ImportCraftingEssencesTab(slot, root);
-    }
-    else if(StrEqual(name, "effects"))
-    {
+        }
+        else if(StrEqual(name, "effects"))
+        {
             ImportEffectsTab(slot, root);
-         
-    }
-    else if(StrEqual(name, "freeHandsRequirements"))
-    {
+            
+        }
+        else if(StrEqual(name, "freeHandsRequirements"))
+        {
             ImportFreeHandsRequirementsTab(slot, root);
-    }
-    else if(StrEqual(name, "craftingEffects"))
-    {
+        }
+        else if(StrEqual(name, "craftingEffects"))
+        {
             ImportCraftingEffectsTab(slot, root);
             
-    }
-    else if(StrEqual(name, "attributes"))
-    {
+        }
+        else if(StrEqual(name, "attributes"))
+        {
             ImportAttributesTab(slot, root);
-    }
-    
-    else if(StrEqual(name, "possibleActions"))
-    {
-            ImportPossibleActionsTab(slot, root);
-    }
-    
-    else if(StrEqual(name, "behaviors"))
-    {
-            ImportBehaviorsTab(slot, root);
-    }
-    else if(StrEqual(name, "memBehaviors"))
-    {
-            ImportMemBehaviorsTab(slot, root);
-    }
-#endif
-    else if(StrEqual(name, "container"))
-    {
-        ImportContainerTab(slot, root);
-    }
-    else if(StrEqual(name, "tileParams"))
-    {
-            ImportTileParamsTab(slot, root);
-    }
-#ifndef FORG_SERVER
-    else if(StrEqual(name, "visualLabels"))
-    {
-         ImportVisualLabelsTab(slot, root);
-    }
-    else if(StrEqual(name, "animationGeneralParams"))
-    {
-            ImportAnimationGeneralParamsTab(slot, root);
-    }
-    else if(StrEqual(name, "skeleton"))
-    {
-            ImportSkeletonTab(slot, root);
-    }
-    else if(StrEqual(name, "light"))
-    {
-            ImportLightTab(slot, root);
-    }
-    else if(StrEqual(name, "animationEffects"))
-    {
-            ImportAnimationEffectsTab(slot, root);
-    }
-    else if(StrEqual(name, "soundEffects"))
-    {
-            ImportSoundEffectsTab(slot, root);
-    }
-    else if(StrEqual(name, "soundEvents"))
-    {
-
-            ImportSoundEventTab(root);
-    }
-    else if(StrEqual(name, "boneAlterations"))
-    {
-            ImportBoneAlterationsTab(slot, root);
-    }
-    else if(StrEqual(name, "assAlterations"))
-    {
-            ImportAssAlterationsTab(slot, root);
-    }
-    else if(StrEqual(name, "icon"))
-    {
-            ImportIconTab(slot, root);
+        }
         
-    }
+        else if(StrEqual(name, "possibleActions"))
+        {
+            ImportPossibleActionsTab(slot, root);
+        }
+        
+        else if(StrEqual(name, "behaviors"))
+        {
+            ImportBehaviorsTab(slot, root);
+        }
+        else if(StrEqual(name, "memBehaviors"))
+        {
+            ImportMemBehaviorsTab(slot, root);
+        }
 #endif
-    else if(StrEqual(name, "rockDefinition"))
-    {
-            ImportRockDefinitionTab(slot, root);
-    }
-    else if(StrEqual(name, "plantDefinition"))
-    {
-            ImportPlantDefinitionTab(slot, root);
-
-    }
+        else if(StrEqual(name, "container"))
+        {
+            ImportContainerTab(slot, root);
+        }
+        else if(StrEqual(name, "tileParams"))
+        {
+            ImportTileParamsTab(slot, root);
+        }
 #ifndef FORG_SERVER
-    else if(StrEqual(name, "particleEffectDefinition"))
-    {
-            ImportParticleEffectDefinitionTab(slot, root);
-    }
-    else if(StrEqual(name, "boltDefinition"))
-    {
-            ImportBoltDefinitionTab(slot, root);
-    }
+        else if(StrEqual(name, "visualLabels"))
+        {
+            ImportVisualLabelsTab(slot, root);
+        }
+        else if(StrEqual(name, "animationGeneralParams"))
+        {
+            ImportAnimationGeneralParamsTab(slot, root);
+        }
+        else if(StrEqual(name, "skeleton"))
+        {
+            ImportSkeletonTab(slot, root);
+        }
+        else if(StrEqual(name, "light"))
+        {
+            ImportLightTab(slot, root);
+        }
+        else if(StrEqual(name, "animationEffects"))
+        {
+            ImportAnimationEffectsTab(slot, root);
+        }
+        else if(StrEqual(name, "soundEffects"))
+        {
+            ImportSoundEffectsTab(slot, root);
+        }
+        else if(StrEqual(name, "soundEvents"))
+        {
+            
+            ImportSoundEventTab(root);
+        }
+        else if(StrEqual(name, "boneAlterations"))
+        {
+            ImportBoneAlterationsTab(slot, root);
+        }
+        else if(StrEqual(name, "assAlterations"))
+        {
+            ImportAssAlterationsTab(slot, root);
+        }
+        else if(StrEqual(name, "icon"))
+        {
+            ImportIconTab(slot, root);
+            
+        }
 #endif
-    else if(StrEqual(name, "generatorParams"))
-    {
+        else if(StrEqual(name, "rockDefinition"))
+        {
+            ImportRockDefinitionTab(slot, root);
+        }
+        else if(StrEqual(name, "plantDefinition"))
+        {
+            ImportPlantDefinitionTab(slot, root);
+            
+        }
+#ifndef FORG_SERVER
+        else if(StrEqual(name, "particleEffectDefinition"))
+        {
+            ImportParticleEffectDefinitionTab(slot, root);
+        }
+        else if(StrEqual(name, "boltDefinition"))
+        {
+            ImportBoltDefinitionTab(slot, root);
+        }
+#endif
+        else if(StrEqual(name, "generatorParams"))
+        {
             ImportGeneratorParamsTab(slot, root);
-
-    }
-    else if(StrEqual(name, "layouts"))
-    {
+            
+        }
+        else if(StrEqual(name, "layouts"))
+        {
             ImportLayoutsTab(slot, root);
-
-    }
+            
+        }
     }
     
     
@@ -1604,8 +1664,89 @@ inline Token GetFileTaxonomyName(char* content)
     return result;
 }
 
-internal void ImportAllFiles(char* dataPath, u32 editorRoles, b32 freeTab)
+internal void CopyAndLoadTabsFromOldTable(TaxonomyTable* oldTable)
 {
+    for(u32 slotIndex = 0; slotIndex < ArrayCount(oldTable->slots); ++slotIndex)
+    {
+        for(TaxonomySlot* slot = oldTable->slots[slotIndex]; slot; slot = slot->nextInHash)
+        {
+            TaxonomySlot* newSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, slot->name);
+            
+            if(newSlot)
+            {
+                for(u32 tabIndex = 0; tabIndex < slot->tabCount; ++tabIndex)
+                {
+                    EditorTab* tab = slot->tabs + tabIndex;
+                    EditorTab* newTab = newSlot->tabs + newSlot->tabCount++;
+                    
+                    newTab->editable = tab->editable;
+                    newTab->root = CopyEditorElement(taxTable_, tab->root);
+                    Import(newSlot, newTab->root);
+                }
+            }
+        }
+    }
+}
+
+internal void ImportSpecificFile(u32 editorRoles, b32 freeTab, char* filename)
+{
+    char* dataPath = "assets";
+    MemoryPool tempPool = {};
+    TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+    
+    u32 bufferSize = MegaBytes(16);
+    char* buffer = (char*) PushSize(&tempPool, bufferSize, NoClear());
+    
+    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_entityDefinition, dataPath);
+    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex)
+    {
+        PlatformFileHandle handle = platformAPI.OpenNextFile(&fileGroup, dataPath);
+        if(StrEqual(handle.name, filename))
+        {
+            Assert(handle.fileSize <= bufferSize);
+            platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
+            buffer[handle.fileSize] = 0;
+            char* source = (char*) buffer;
+            
+            char taxonomyName[64];
+            GetNameWithoutPoint(taxonomyName, sizeof(taxonomyName), handle.name);
+            
+            currentSlot_ = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName);
+			if(!currentSlot_ && taxonomyName[0] == '#')
+			{
+				currentSlot_ = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName + 1);
+			}
+            if(currentSlot_)
+            {
+                LoadFileInTaxonomySlot(source, editorRoles);
+                for(u32 tabIndex = 0; tabIndex < currentSlot_->tabCount; ++tabIndex)
+                {
+                    EditorTab* tab = currentSlot_->tabs + tabIndex;
+                    Import(currentSlot_, tab->root);
+                    
+                    if(freeTab)
+                    {
+                        FreeElement(tab->root);
+                        tab->root = 0;
+                    }
+                }
+                
+                if(freeTab)
+                {
+                    currentSlot_->tabCount = 0;
+                }
+                
+            }
+        }
+        platformAPI.CloseHandle(&handle);
+    }
+    platformAPI.GetAllFilesEnd(&fileGroup);
+    EndTemporaryMemory(fileMemory);
+}
+
+internal void ImportAllFiles(u32 editorRoles, b32 freeTab, char* filename)
+{
+    char* dataPath = "assets";
     StartingLoadingMessageServer();
     MemoryPool tempPool = {};
     TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
@@ -1617,7 +1758,7 @@ internal void ImportAllFiles(char* dataPath, u32 editorRoles, b32 freeTab)
     for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex)
     {
         PlatformFileHandle handle = platformAPI.OpenNextFile(&fileGroup, dataPath);
-        if(!StrEqual(handle.name, "taxonomies.fed"))
+        if(!StrEqual(handle.name, "taxonomies.fed") && (!filename || (StrEqual(filename, handle.name))))
         {
             Assert(handle.fileSize <= bufferSize);
             platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
@@ -1839,10 +1980,42 @@ inline void PatchLocalServer(ServerState* server)
     SendPatchDoneMessageToAllPlayers(server);
 }
 
-
-internal void SendDataFiles(b32 editorMode, ServerPlayer* player,b32 sendTaxonomyFiles, b32 sendMetaAssetFiles)
+internal void SendSpecificFile(ServerPlayer* player, char* filename, b32 sendAllDataFilesSentMessage)
 {
-#if 1
+    char* path = "assets";
+    MemoryPool tempPool = {};
+    TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+    
+    u32 bufferSize = MegaBytes(16);
+    char* buffer = (char*) PushSize(&tempPool, bufferSize, NoClear());
+    
+    
+    PlatformFileGroup definitionGroup = platformAPI.GetAllFilesBegin(PlatformFile_entityDefinition, path);
+    for(u32 fileIndex = 0; fileIndex < definitionGroup.fileCount; ++fileIndex)
+    {
+        PlatformFileHandle handle = platformAPI.OpenNextFile(&definitionGroup, path);
+        if(StrEqual(handle.name, filename))
+        {
+            Assert(handle.fileSize <= bufferSize);
+            platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
+            buffer[handle.fileSize] = 0;
+            char* source = (char*) buffer;
+            SendDataFile(player, handle.name, source, handle.fileSize);
+        }
+        
+        platformAPI.CloseHandle(&handle);
+    }
+    platformAPI.GetAllFilesEnd(&definitionGroup);
+    EndTemporaryMemory(fileMemory);
+    
+    if(sendAllDataFilesSentMessage)
+    {
+        SendAllDataFileSentMessage(player, true);
+    }
+}
+
+internal void SendAllDataFiles(b32 editorMode, ServerPlayer* player,b32 sendTaxonomyFiles, b32 sendMetaAssetFiles)
+{
     char* path = "assets";
     
     MemoryPool tempPool = {};
@@ -1921,8 +2094,7 @@ internal void SendDataFiles(b32 editorMode, ServerPlayer* player,b32 sendTaxonom
     }
     
     EndTemporaryMemory(fileMemory);
-#endif
-    SendAllDataFileSentMessage(player, sendTaxonomyFiles);
+    SendAllDataFileSentMessage(player, false);
 }
 
 inline b32 TabHasPreemption(char* tabName, u32 roles)
