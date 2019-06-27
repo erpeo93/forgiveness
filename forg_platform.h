@@ -139,6 +139,11 @@ struct m4x4
 #define GigaBytes( value ) ( ( value ) * 1024 * 1024 * 1024 )
 #define TeraBytes( value ) ( ( value ) * 1024 * 1024 * 1024 * 1024 )
 
+#define Kilo(value) KiloBytes(value)
+#define Mega(value) MegaBytes(value)
+#define Giga(value) GigaBytes(value)
+#define Tera(value) teraBytes(value)
+
 
 #define Max( A , B ) ( ( ( A ) > ( B ) ) ? ( A ) : ( B ) )
 #define Min( A , B ) ( ( ( A ) < ( B ) ) ? ( A ) : ( B ) )

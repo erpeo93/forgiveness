@@ -143,6 +143,23 @@ inline void StrCpy(char* s1, i32 countS1, char* dest, i32 destCount = 10000 )
     *dest = 0;
 }
 
+inline b32 ContainsSubString(char* reference, char* substring)
+{
+    b32 result = false;
+    
+    u32 substringLength = StrLen(substring);
+    for(char* test = reference; *test; ++test)
+    {
+        if(StrEqual(substringLength, test, substring))
+        {
+            result = true;
+            break;
+        }
+    }
+    
+    return result;
+}
+
 internal i32 I32FromCharInternal( char** string )
 {
     i32 result = 0;

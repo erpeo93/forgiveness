@@ -1265,12 +1265,13 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
         context->pool.minimumBlockSize = MegaBytes(32);
     }
     
+#define MAX_COMPONENTS Kilo(10)
     MemoryPool* pool = &server->worldPool;
-    InitComponents(pool, server->components, Effect, 0xffff);
-    InitComponents(pool, server->components, Plant, 0xffff);
-    InitComponents(pool, server->components, Container, 0xffff);
-    InitComponents(pool, server->components, Fluid, 0xffff);
-    InitComponents(pool, server->components, Creature, 0xffff);
+    InitComponents(pool, server->components, Effect, MAX_COMPONENTS);
+    InitComponents(pool, server->components, Plant, MAX_COMPONENTS);
+    InitComponents(pool, server->components, Container, MAX_COMPONENTS);
+    InitComponents(pool, server->components, Fluid, MAX_COMPONENTS);
+    InitComponents(pool, server->components, Creature, MAX_COMPONENTS);
     
     
     server->networkPool.allocationFlags = PlatformMemory_NotRestored;

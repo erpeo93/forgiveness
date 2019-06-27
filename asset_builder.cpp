@@ -1901,14 +1901,18 @@ internal void AddEveryAnimationThatStartsWith(char* path, u64 hashID, char* anim
     {
         PlatformFileHandle handle = Win32OpenNextFile(&fileGroup, path);
         char* fileName = handle.name;
-        u32 animationCount = CountAnimationInFile(path, fileName);
-        for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
+        
+        if(!ContainsSubString(fileName, "autosave"))
         {
-            char animationName[32];
-            GetAnimationName(path, fileName, animationIndex, animationName, sizeof(animationName));
-            if(StrEqual(StrLen(animName), animationName, animName))
+            u32 animationCount = CountAnimationInFile(path, fileName);
+            for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
             {
-                AddAnimationAsset(path, fileName, animationIndex, hashID);
+                char animationName[32];
+                GetAnimationName(path, fileName, animationIndex, animationName, sizeof(animationName));
+                if(StrEqual(StrLen(animName), animationName, animName))
+                {
+                    AddAnimationAsset(path, fileName, animationIndex, hashID);
+                }
             }
         }
         Win32CloseHandle(&handle);
@@ -2397,51 +2401,41 @@ internal void AddLabelsFromFile(Tokenizer* tokenizer)
                 {
                     if(RequireToken(tokenizer, Token_EqualSign))
                     {
-                        if(RequireToken(tokenizer, Token_OpenParen) && RequireToken(tokenizer, Token_Pound))
+                        if(RequireToken(tokenizer, Token_OpenParen))
                         {
-                            Token empty = GetToken(tokenizer);
-                            if(empty.type == Token_Identifier && TokenEquals(empty, "empty"))
+                            AdvanceToNextToken(tokenizer, Token_CloseBraces);
+                            while(true)
                             {
-                                AdvanceToNextToken(tokenizer, Token_CloseBraces);
-                                
-                                while(true)
+                                Token labelToken = GetToken(tokenizer);
+                                if(labelToken.type == Token_CloseParen)
                                 {
-                                    Token labelToken = GetToken(tokenizer);
-                                    if(labelToken.type == Token_CloseParen)
-                                    {
-                                        break;
-                                    }
-                                    else
+                                    break;
+                                }
+                                else
+                                {
+                                    if(RequireToken(tokenizer, Token_OpenBraces) && 
+                                       RequireToken(tokenizer, Token_EqualSign))
                                     {
                                         if(RequireToken(tokenizer, Token_String) &&
                                            RequireToken(tokenizer, Token_EqualSign))
                                         {
-                                            Token labelName = Stringize(GetToken(tokenizer));
+                                            Token labelValue = GetToken(tokenizer);
                                             
-                                            if(RequireToken(tokenizer, Token_Comma) &&
-                                               RequireToken(tokenizer, Token_String) &&
-                                               RequireToken(tokenizer, Token_EqualSign))
-                                            {
-                                                Token labelValue = GetToken(tokenizer);
-                                                
-                                                AddLabel(labelName.text, labelName.textLength, R32FromChar(labelValue.text));
-                                            }
+                                            AddLabel(labelToken.text, labelToken.textLength, R32FromChar(labelValue.text));
                                         }
-                                        
-                                        AdvanceToNextToken(tokenizer, Token_CloseBraces);
                                     }
+                                    
+                                    AdvanceToNextToken(tokenizer, Token_CloseBraces);
                                 }
                             }
                         }
                     }
-                }
-                
-                parsing = false;
-            } break;
+                    parsing = false;
+                } break;
+            }
         }
     }
 }
-
 
 
 inline r32 ParseR32WithName(Tokenizer* tokenizer)
@@ -2820,7 +2814,7 @@ inline void AddAssetToFile(char* addHere, char* fileEnd, char* properties, b32 l
     
     if(labeled)
     {
-        FormatString(toAdd, sizeof(toAdd), "{%s, colorations = (#atLeastOneInList #showBitmap #empty = {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#empty = {name = \"invalid\", value = 0.0})} {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#empty = {name = \"invalid\", value = 0.0})}) },", properties);
+        FormatString(toAdd, sizeof(toAdd), "{%s, colorations = (#atLeastOneInList #showBitmap #empty = {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#editableLabels #empty = {value = 0.0})} {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#editableLabels #empty = {value = 0.0})}) },", properties);
     }
     else
     {

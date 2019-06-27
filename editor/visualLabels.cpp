@@ -19,7 +19,7 @@ internal void ImportVisualLabelsTab(TaxonomySlot* slot, EditorElement* root)
     
     while(labels)
     {
-        char* labelName = GetValue(labels, "name");
+        char* labelName = labels->name;
         char* value = GetValue(labels, "value");
         
         u64 ID = StringHash(labelName);

@@ -1356,10 +1356,9 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         
                         if(root->emptyElement)
                         {
-                            layout->P.y -= layout->childStandardHeight;
-                            Vec2 addP = nameP + V2(layout->nameValueDistance, -layout->childStandardHeight);
+                            Vec2 addP = nameP + V2(GetDim(nameBounds).x + 0.5f * layout->nameValueDistance, 0);
                             
-                            UIButton addButton = UIBtn(UI, addP, layout, V4(1, 0, 0, 1), "add");
+                            UIButton addButton = UIBtn(UI, addP, layout, V4(1, 0, 0, 1), " + ");
                             UIInteraction addInteraction = UIAddEmptyElementToListInteraction(UI, UI_Trigger, widget, root);
                             
                             if(StrEqual(widget->name, "Editing Tabs"))

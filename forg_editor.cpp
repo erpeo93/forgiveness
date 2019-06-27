@@ -810,7 +810,7 @@ inline char* WriteElements(char* buffer, u32* bufferSize, EditorElement* element
                     buffer = OutputToBuffer(buffer, bufferSize, "#cantBeDeleted ");
                 }
                 
-                if(element->flags & EditorElem_CantBeDeleted)
+                if(element->flags & EditorElem_AtLeastOneInList)
                 {
                     buffer = OutputToBuffer(buffer, bufferSize, "#atLeastOneInList ");
                 }
