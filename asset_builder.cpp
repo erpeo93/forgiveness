@@ -2404,6 +2404,13 @@ internal void AddLabelsFromFile(Tokenizer* tokenizer)
                         if(RequireToken(tokenizer, Token_OpenParen))
                         {
                             AdvanceToNextToken(tokenizer, Token_CloseBraces);
+                            
+                            while(NextTokenIs(tokenizer, Token_Pound))
+                            {
+                                Token ign1 = GetToken(tokenizer);
+                                Token ign2 = GetToken(tokenizer);
+                            }
+                            
                             while(true)
                             {
                                 Token labelToken = GetToken(tokenizer);
@@ -2413,13 +2420,18 @@ internal void AddLabelsFromFile(Tokenizer* tokenizer)
                                 }
                                 else
                                 {
-                                    if(RequireToken(tokenizer, Token_OpenBraces) && 
-                                       RequireToken(tokenizer, Token_EqualSign))
+                                    if(RequireToken(tokenizer, Token_EqualSign) &&
+                                       RequireToken(tokenizer, Token_OpenBraces))
                                     {
                                         if(RequireToken(tokenizer, Token_String) &&
                                            RequireToken(tokenizer, Token_EqualSign))
                                         {
                                             Token labelValue = GetToken(tokenizer);
+                                            
+                                            if(labelToken.type == Token_String)
+                                            {
+                                                labelToken = Stringize(labelToken);
+                                            }
                                             
                                             AddLabel(labelToken.text, labelToken.textLength, R32FromChar(labelValue.text));
                                         }
