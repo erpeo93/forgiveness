@@ -156,30 +156,40 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffect* 
             A->P += frameDisplacement;
             finalParticleP = A->P + normPhase * dP + radiantsSine * upVector4x;
             
+            V4_4x ddC = ToV4_4x(updater->ddC);
+            __m128 dScaleX = MMSetExpr(updater->dScaleX);
+            __m128 dScaleY = MMSetExpr(updater->dScaleY);
+            __m128 dAngle = MMSetExpr(updater->dAngle);
             
-            A->C += ((0.5f * Square(dt) * updater->ddC) + (dt * A->dC));
-            A->dC += dt * updater->ddC;
+            A->C += ((0.5f * Square(dt) * ddC) + (dt * A->dC));
+            A->dC += dt * ddC;
             A->C = Clamp01(A->C);
             
-            A->scaleX4x += dt4x * updater->dScaleX;
-            A->scaleY4x += dt4x * updater->dScaleY;
-            A->angle4x += dt4x * updater->dAngle;
+            A->scaleX4x += dt4x * dScaleX;
+            A->scaleY4x += dt4x * dScaleY;
+            A->angle4x += dt4x * dAngle;
         } break;
         
         case ParticleUpdater_Standard:
         {
+            V4_4x ddC = ToV4_4x(updater->ddC);
+            V3_4x ddP = ToV3_4x(updater->ddP);
+            __m128 dScaleX = MMSetExpr(updater->dScaleX);
+            __m128 dScaleY = MMSetExpr(updater->dScaleY);
+            __m128 dAngle = MMSetExpr(updater->dAngle);
+            
             A->P += frameDisplacement;
-            A->P += ((0.5f * Square(dt) * updater->ddP) + (dt * A->dP));
-            A->dP += dt * updater->ddP;
+            A->P += ((0.5f * Square(dt) * ddP) + (dt * A->dP));
+            A->dP += dt * ddP;
             finalParticleP = A->P;
             
-            A->C += ((0.5f * Square(dt) * updater->ddC) + (dt * A->dC));
-            A->dC += dt * updater->ddC;
+            A->C += ((0.5f * Square(dt) * ddC) + (dt * A->dC));
+            A->dC += dt * ddC;
             A->C = Clamp01(A->C);
             
-            A->scaleX4x += dt4x * updater->dScaleX;
-            A->scaleY4x += dt4x * updater->dScaleY;
-            A->angle4x += dt4x * updater->dAngle;
+            A->scaleX4x += dt4x * dScaleX;
+            A->scaleY4x += dt4x * dScaleY;
+            A->angle4x += dt4x * dAngle;
         } break;
         
         InvalidDefaultCase;

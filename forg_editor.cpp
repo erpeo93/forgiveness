@@ -175,10 +175,6 @@ inline void FinalizeShortcut(ShortcutSlot* shortcut, u32 taxonomy)
     {
         taxTable_->recipeTaxonomy = taxonomy;
     }
-    else if(StrEqual(name, "effects"))
-    {
-        taxTable_->effectTaxonomy = taxonomy;
-    }
     else if(StrEqual(name, "behaviors"))
     {
         taxTable_->behaviorTaxonomy = taxonomy;

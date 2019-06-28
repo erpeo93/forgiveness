@@ -57,16 +57,16 @@ internal void ImportParticleEffectDefinitionTab(TaxonomySlot* slot, EditorElemen
             updater->bitmapID = {};
             updater->particleHashID = StringHash(GetValue(phases, "particleName"));
             updater->startDrawingFollowingBitmapAt = ElemR32(phases, "startDrawingFollowingPhaseAt");
-            updater->ddP = ToV3_4x(StructV3(phases, "acceleration"));
+            updater->ddP = StructV3(phases, "acceleration");
             updater->UpVector = {};
-            updater->ddC = ToV4_4x(ColorV4(phases, "colorAcceleration"));
+            updater->ddC = ColorV4(phases, "colorAcceleration");
             
-            updater->dScaleX = MMSetExpr(ElemR32(phases, "dScaleX"));
-            updater->dScaleY = MMSetExpr(ElemR32(phases, "dScaleY"));
-            updater->dAngle = MMSetExpr(ElemR32(phases, "dAngle"));
+            updater->dScaleX = ElemR32(phases, "dScaleX");
+            updater->dScaleY = ElemR32(phases, "dScaleY");
+            updater->dAngle = ElemR32(phases, "dAngle");
             
             r32 radiants = DegToRad(180.0f * Max(1, ElemU32(phases, "totalPITimes")));
-            updater->totalRadiants = MMSetExpr(radiants);
+            updater->totalRadiants = radiants;
             
             updater->destPType = (ParticleUpdaterEndPosition) GetValuePreprocessor(ParticleUpdaterEndPosition, GetValue(phases, "endPositionType"));
             updater->startOffset = StructV3(phases, "startOffset");

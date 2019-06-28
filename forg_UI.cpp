@@ -271,28 +271,30 @@ inline void UIAddTaxonomyToAutocomplete(UIState* UI, UIAutocomplete* autocomplet
 
 inline void UIAddAutocompleteFromTaxonomy(UIState* UI, char* name, char* autocompleteName = 0)
 {
-    if(!autocompleteName)
-    {
-        autocompleteName = name;
-    }
     
-    UIAutocomplete* autocomplete = UIFindAutocomplete(UI, autocompleteName);
-    if(autocomplete)
-    {
-        UIFreeAutocompleteOptions(UI, autocomplete);    
-    }
-    else
-    {
-        autocomplete = UIAddAutocomplete(UI, autocompleteName);
-    }
-    
-   
     TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName(UI->table, name);
-    
-    for(u32 childIndex = 0; childIndex < slot->subTaxonomiesCount; ++childIndex)
+    if(slot)
     {
-        TaxonomySlot* child = GetNthChildSlot(UI->table, slot, childIndex);
-        UIAddTaxonomyToAutocomplete(UI, autocomplete, child);
+        if(!autocompleteName)
+        {
+            autocompleteName = name;
+        }
+        
+        UIAutocomplete* autocomplete = UIFindAutocomplete(UI, autocompleteName);
+        if(autocomplete)
+        {
+            UIFreeAutocompleteOptions(UI, autocomplete);    
+        }
+        else
+        {
+            autocomplete = UIAddAutocomplete(UI, autocompleteName);
+        }
+        
+        for(u32 childIndex = 0; childIndex < slot->subTaxonomiesCount; ++childIndex)
+        {
+            TaxonomySlot* child = GetNthChildSlot(UI->table, slot, childIndex);
+            UIAddTaxonomyToAutocomplete(UI, autocomplete, child);
+        }   
     }
 }
 
@@ -4013,7 +4015,6 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTaxonomy(UI, "tiles", "tileType");
         UIAddAutocompleteFromTaxonomy(UI, "root", "taxonomyName");
         UIAddAutocompleteFromTaxonomy(UI, "particleEffects", "particleEffectName");
-        UIAddAutocompleteFromTaxonomy(UI, "effects", "triggerEffect");
     }
     
     if(loadAssetAutocompletes)

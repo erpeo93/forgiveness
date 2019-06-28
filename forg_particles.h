@@ -47,15 +47,15 @@ struct ParticleUpdater
     Vec3 startOffset;
     Vec3 endOffset;
     
-    V3_4x ddP;
-    V4_4x ddC;
-    V3_4x UpVector;
+    Vec3 ddP;
+    Vec4 ddC;
+    Vec3 UpVector;
     
-    __m128 dScaleX;
-    __m128 dScaleY;
-    __m128 dAngle;
+    r32 dScaleX;
+    r32 dScaleY;
+    r32 dAngle;
     
-    __m128 totalRadiants;
+    r32 totalRadiants;
     
     u32 sineSubdivisions;
 };
