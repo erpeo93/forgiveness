@@ -1335,8 +1335,6 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             u16 maxTextureCount = MAX_TEXTURE_COUNT;
             HGLRC openGLRC = Win32InitOpenGL(openGLDC, maxTextureCount);
             
-            Win32ToggleFullScreen( window );
-            
             Win32ThreadStartup highPriorityStartups[6] = {};
             PlatformWorkQueue highQueue = {};
             Win32MakeQueue( &highQueue, ArrayCount( highPriorityStartups ), highPriorityStartups );
@@ -1487,6 +1485,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                     
                     b32 xboxControllerPresent = true;
                     b32 executableNeedsToBeRealoaded = false;
+                    //Win32ToggleFullScreen( window );
                     ShowWindow( window, SW_SHOW );
                     
                     

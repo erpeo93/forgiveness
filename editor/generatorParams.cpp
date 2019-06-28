@@ -137,7 +137,7 @@ internal void ImportGeneratorParamsTab(TaxonomySlot* slot, EditorElement* root)
                 }
                 else
                 {
-                    EditorErrorLog(tileName);
+                    EditorErrorLog(taxonomyName);
                 }
                 
                 taxonomyAssociations = taxonomyAssociations->next;

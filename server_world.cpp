@@ -377,6 +377,7 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
         if(entity->IDs[Component_Creature])
         {
             CreatureComponent* creature = Creature(region, entity);
+            creature->maxLifePoints = Max(creature->maxLifePoints, 1.0f);
             creature->lifePoints = creature->maxLifePoints;
             creature->stamina = 100.0f;
         }

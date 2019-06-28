@@ -28,7 +28,7 @@ internal void ImportFreeHandsRequirementsTab(TaxonomySlot* slot, EditorElement* 
     while(freeHandsReq)
     {
         char* slotName = GetValue(freeHandsReq, "slot");
-        char* taxonomy = GetValue(freeHandsReq, "name");
+        char* taxonomy = GetValue(freeHandsReq, "taxonomyName");
         
         AddFreeHandReq(slot, slotName, taxonomy);
         

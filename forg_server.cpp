@@ -644,7 +644,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 
                 TaxonomySlot* editingSlot = GetSlotForTaxonomy(taxTable, taxonomy);
                 
-                FreeElement(editingSlot->tabs[tab].root);
+                FreeElementTable(editingSlot->tabs[tab].root, true);
                 editingSlot->tabs[tab].root = stack->result;
                 stack->counter = 0;
                 
@@ -685,7 +685,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 EndTemporaryMemory(fileMemory);
                 
                 
-                FreeElement(stack->result);
+                FreeElementTable(stack->result, true);
                 stack->counter = 0;
                 
             }

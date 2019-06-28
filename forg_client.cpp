@@ -181,7 +181,7 @@ inline b32 ActionRequiresZooming(EntityAction action, r32* zoomLevel)
     if(action == Action_Open)
     {
         result = true;
-        *zoomLevel = Max(*zoomLevel, 1.8f);
+        *zoomLevel = Max(*zoomLevel, 3.8f);
     }
     return result;
 }
@@ -746,7 +746,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         cameraO = ZRotation(worldMode->debugCameraOrbit) * XRotation(worldMode->debugCameraPitch);
         cameraOffsetFinal = cameraO * (V3(worldMode->cameraEntityOffset, worldMode->cameraWorldOffset.z + worldMode->debugCameraDolly));
         
-        SetCameraTransform(group, Camera_Debug, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal + V3(worldMode->cameraWorldOffset.xy, 0), worldMode->cameraEntityOffset);
+        SetCameraTransform(group, Camera_Debug, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal, worldMode->cameraEntityOffset);
     }
     
     UpdateCamera(worldMode, input->timeToAdvance);
@@ -1188,9 +1188,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 myPlayer->acceleration = output.inputAcc;
                 
                 
-                SetCameraTransform(group, 0, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal + V3(worldMode->cameraWorldOffset.xy, 0), worldMode->cameraEntityOffset);
+                SetCameraTransform(group, 0, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal, worldMode->cameraEntityOffset);
                 
-                MoveTowards(worldMode, player, UI->additionalCameraOffset, V2(0, 0), UI->zoomLevel);
+                MoveTowards(worldMode, player, V2(0, 0), V2(0, 0), UI->zoomLevel);
                 PushAmbientColor(group, ambientLightColor);
                 
                 for(u32 entityIndex = 0; 
@@ -1616,21 +1616,27 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 EndDepthPeel(group);
                 
                 
-                
-                if(UI->mode == UIMode_Loot)
-                {
-                    ClientEntity* lootingEntity = GetEntityClient(worldMode, myPlayer->openedContainerID);
-                    Assert(lootingEntity);
-                    r32 additionalZoomCoeff = Max(1.0f, lootingEntity->animation.output.additionalZoomCoeff);
-                    MoveTowards(worldMode, lootingEntity, V2(0, 0), V2(0, 0), 3.0f * additionalZoomCoeff);
-                }
                 r32 focusZoom = UI->zoomLevel;
                 if(ActionRequiresZooming(player->action, &focusZoom))
                 {
                     ClientEntity* entityC = GetEntityClient(worldMode, output.targetEntityID);
-                    Assert(entityC);
-                    MoveTowards(worldMode, entityC, V2(0, 0), V2(0, 0), focusZoom);
+                    if(entityC)
+                    {
+                        MoveTowards(worldMode, entityC, V2(0, 0), V2(0, 0), focusZoom);
+                    }
                 }
+                
+                
+                if(UI->mode == UIMode_Loot)
+                {
+                    ClientEntity* lootingEntity = GetEntityClient(worldMode, myPlayer->openedContainerID);
+                    if(lootingEntity)
+                    {
+                        r32 additionalZoomCoeff = Max(1.0f, lootingEntity->animation.output.additionalZoomCoeff);
+                        MoveTowards(worldMode, lootingEntity, V2(0, 0), V2(0, 0),additionalZoomCoeff);
+                    }
+                }
+                
                 
                 if(!output.overlappingEntityID)
                 {

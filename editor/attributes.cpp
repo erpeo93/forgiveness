@@ -19,7 +19,7 @@ internal void ImportAttributesTab(TaxonomySlot* slot, EditorElement* root)
     
     while(attributes)
     {
-        char* attributeName = GetValue(attributes, "name");
+        char* attributeName = attributes->name;;
         char* value = GetValue(attributes, "value");
         
         SaveCreatureAttribute(slot, attributeName, ToR32(value));

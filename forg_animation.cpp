@@ -797,36 +797,39 @@ inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, Ob
     {
         LayoutPieceParams* pieceParams = GetParams(source, state);
         
-        BlendedAss* ass = output->ass + pieceIndex++;
-        PieceAss* destAss = &ass->ass;
-        
-        ass->equipmentAssCount = 0;
-        
-        AssAlterations* destAlt = &ass->alterations;
-        destAlt->valid = false;
-        
-        SpriteInfo* destSprite = &ass->sprite;
-        
-        destAss->spriteIndex = pieceIndex;
-        destAss->boneOffset = pieceParams->parentOffset.xy;
-        destAss->additionalZOffset = pieceParams->parentOffset.z;
-        destAss->angle = pieceParams->parentAngle;
-        
-        if(source->parent)
+        if(pieceParams->valid)
         {
-            LayoutPieceParams* parentParams = GetParams(source->parent, state);
-            destAss->boneOffset += parentParams->parentOffset.xy;
-            destAss->additionalZOffset += parentParams->parentOffset.z;
-            destAss->angle += parentParams->parentAngle;
+            BlendedAss* ass = output->ass + pieceIndex++;
+            PieceAss* destAss = &ass->ass;
+            
+            ass->equipmentAssCount = 0;
+            
+            AssAlterations* destAlt = &ass->alterations;
+            destAlt->valid = false;
+            
+            SpriteInfo* destSprite = &ass->sprite;
+            
+            destAss->spriteIndex = pieceIndex;
+            destAss->boneOffset = pieceParams->parentOffset.xy;
+            destAss->additionalZOffset = pieceParams->parentOffset.z;
+            destAss->angle = pieceParams->parentAngle;
+            
+            if(source->parent)
+            {
+                LayoutPieceParams* parentParams = GetParams(source->parent, state);
+                destAss->boneOffset += parentParams->parentOffset.xy;
+                destAss->additionalZOffset += parentParams->parentOffset.z;
+                destAss->angle += parentParams->parentAngle;
+            }
+            
+            destAss->scale = pieceParams->scale;
+            destAss->alpha = pieceParams->alpha;
+            
+            destSprite->pivot = pieceParams->pivot;
+            destSprite->stringHashID = source->componentHashID;
+            destSprite->index = source->index;
+            destSprite->flags = 0;
         }
-        
-        destAss->scale = pieceParams->scale;
-        destAss->alpha = pieceParams->alpha;
-        
-        destSprite->pivot = pieceParams->pivot;
-        destSprite->stringHashID = source->componentHashID;
-        destSprite->index = source->index;
-        destSprite->flags = 0;
     }
 }
 
@@ -1273,7 +1276,6 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                                 objectColor = statusColor;
                             }
                             
-                            Assert(P.z == 0.0f);
                             Rect2 cellRect = ProjectOnGround(group, P, objectP, V3(cellDim, cellDim, 0));
                             
                             if(input->debug.ortho)
@@ -2092,7 +2094,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
                 if(!debugParams.ortho)
                 {
                     animationState->bounds = Offset(animationBounds, AID.originOffset);
-                    if(entityC->action == Action_Idle)
+                    if(entityC->action <= Action_Idle)
                     {
                         animationState->cameraEntityOffset = GetCenter(animationState->bounds);
                     }

@@ -874,7 +874,6 @@ struct UIState
     
     
     
-    Vec2 additionalCameraOffset;
     r32 zoomLevel;
     
     

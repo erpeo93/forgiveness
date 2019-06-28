@@ -41,7 +41,10 @@ internal void ImportPossibleActionsTab(TaxonomySlot* slot, EditorElement* root)
     
     for(PossibleAction* action = slot->firstPossibleAction; action; action = action->next)
     {
-        FreeActionTree(taxTable_, action->tree.root);
+        if(action->tree.root)
+        {
+            FreeActionTree(taxTable_, action->tree.root);
+        }
     }
     
     FREELIST_FREE(slot->firstPossibleAction, PossibleAction, taxTable_->firstFreePossibleAction);
@@ -66,7 +69,7 @@ internal void ImportPossibleActionsTab(TaxonomySlot* slot, EditorElement* root)
         EditorElement* actors = GetList(actions, "actors");
         while(actors)
         {
-            char* actorName = GetValue(actors, "name");
+            char* actorName = GetValue(actors, "taxonomyName");
             char* requiredTime = GetValue(actors, "time");
             AddActor(possibleAction, actorName, requiredTime);
             

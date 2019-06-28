@@ -2368,8 +2368,10 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
     {
         UI->widgets[EditorWidget_TaxonomyTree].root = &UI->uneditableTabRoot;
     }
-    UI->widgets[EditorWidget_SoundDatabase].root = UI->table->soundNamesRoot;
-    UI->widgets[EditorWidget_SoundEvents].root = UI->table->soundEventsRoot;
+    UI->widgets[EditorWidget_SoundDatabase].root = UI->worldMode->soundNamesRoot;
+    UI->widgets[EditorWidget_SoundEvents].root = UI->worldMode->soundEventsRoot;
+    UI->widgets[EditorWidget_Components].root = UI->worldMode->componentsRoot;
+    
     
     
     UIInteraction esc = UISetValueInteraction(UI, UI_Trigger, &UI->active, 0);
@@ -2805,7 +2807,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                         Vec2 saveP = widgetTitleBounds.min + V2(GetDim(widgetTitleBounds).x, 0) + V2(20.0f, 0);
                         
                         UIInteraction saveInteraction =SendRequestInteraction(UI, UI_Trigger, SaveAssetFadFileRequest(widget));
-                        UIAddReloadElementAction(UI, &saveInteraction, UI_Trigger, UI->table->soundEventsRoot);
+                        UIAddReloadElementAction(UI, &saveInteraction, UI_Trigger, UI->worldMode->soundEventsRoot);
                         b32 saveActive = (widget->changeCount);
                         
                         UIButton saveButton = UIBtn(UI, saveP, layout, V4(1, 0, 0, 1.0f), " SAVE ", saveActive, saveInteraction);
@@ -3802,10 +3804,9 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             groundParams->root = groundParamsRoot;
             
             EditorWidget* soundDatabase = StartWidget(UI, EditorWidget_SoundDatabase, V2(300,200), EditorRole_SoundDesigner, "Sound Database");
-            soundDatabase->root = UI->table->soundNamesRoot;
+            
             
             EditorWidget* componentDatabase = StartWidget(UI, EditorWidget_Components, V2(300, 200), EditorRole_GameDesigner, "Visual Components", "components");
-            componentDatabase->root = UI->table->componentsRoot;
             
             
             EditorWidget* actions = StartWidget(UI, EditorWidget_GeneralButtons, V2(200, 100), 0xffffffff, "Actions:");
@@ -3840,8 +3841,9 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             
             
             EditorWidget* soundEvents = StartWidget(UI, EditorWidget_SoundEvents, V2(-200, 100), EditorRole_SoundDesigner, "Sound Events", "soundEvents");
-            soundEvents->root = UI->table->soundEventsRoot;
             
+            
+           
             
             EditorWidget* models = StartWidget(UI, EditorWidget_Debug3DModels, V2(-200, 100), EditorRole_3DModeller, "Models");
             FREELIST_ALLOC(models->root, UI->emptyFixedElement, PushStruct(UI->pool, EditorElement));
@@ -4060,7 +4062,6 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
     UI->tooltipText[0] = 0;
     
    
-    UI->additionalCameraOffset = {};
     UI->zoomLevel = 1.0f;
     
     if(UI->myPlayer->openedContainerID != UI->openedContainerID)

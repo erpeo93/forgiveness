@@ -167,16 +167,7 @@ inline void MarkAsNullAllSlots(EquipmentSlot* slots, u64 ID)
 inline EntityAction CanConsume(TaxonomyTable* table, u32 taxonomy, u32 objectTaxonomy)
 {
     EntityAction result = Action_None;
-    TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
-    for(ConsumeMapping* mapping = slot->firstConsumeMapping; mapping; mapping = mapping->next)
-    {
-        TaxonomySlot* parent = GetSlotForTaxonomy(table, mapping->taxonomy);
-        if(IsSubTaxonomy(objectTaxonomy, parent))
-        {
-            result = mapping->action;
-        }
-    }
-    
+    // TODO(Leonardo): search into target action tree
     return result;
 }
 

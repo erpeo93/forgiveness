@@ -917,10 +917,11 @@ enum LoadElementsMode
     LoadElements_Asset,
 };
 
-inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tokenizer, b32* end)
+#define LoadElementsInMemoryTable(mode, tokenizer, end) LoadElementsInMemory(mode, tokenizer, end, &taxTable_->firstFreeElement, &taxTable_->firstFreeEditorText, taxPool_)
+inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tokenizer, b32* end, EditorElement** firstFreeElement, EditorTextBlock** firstFreeEditorText,  MemoryPool* pool)
 {
 	EditorElement* newElement;
-    FREELIST_ALLOC(newElement, taxTable_->firstFreeElement, PushStruct(taxPool_, EditorElement));
+    FREELIST_ALLOC(newElement, *firstFreeElement, PushStruct(pool, EditorElement));
     *newElement = {};
     
     
@@ -956,7 +957,7 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
                     {
                         newElement->type = EditorElement_Text;
                         EditorTextBlock* text;
-                        FREELIST_ALLOC(text, taxTable_->firstFreeEditorText, PushStruct(taxPool_, EditorTextBlock));
+                        FREELIST_ALLOC(text, *firstFreeEditorText, PushStruct(pool, EditorTextBlock));
                         StrCpy(value.text + 1, value.textLength - 1, text->text, sizeof(text->text));
                         
                         newElement->text = text;
@@ -1016,7 +1017,7 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
                             {
                                 if(RequireToken(tokenizer, Token_EqualSign))
                                 {
-                                    newElement->emptyElement = LoadElementsInMemory(mode, tokenizer, end);
+                                    newElement->emptyElement = LoadElementsInMemory(mode, tokenizer, end, firstFreeElement, firstFreeEditorText, pool);
                                     FormatString(newElement->emptyElement->name, sizeof(newElement->emptyElement->name), "empty");
                                 }
                             }
@@ -1104,7 +1105,7 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
                     }
                     else
                     {
-                        newElement->firstInList = LoadElementsInMemory(mode, tokenizer, end);
+                        newElement->firstInList = LoadElementsInMemory(mode, tokenizer, end, firstFreeElement, firstFreeEditorText, pool);
                         if(!RequireToken(tokenizer, Token_CloseParen))
                         {
                             InvalidCodePath;
@@ -1125,7 +1126,7 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
                     }
                     else
                     {
-                        newElement->firstValue = LoadElementsInMemory(mode, tokenizer, end);
+                        newElement->firstValue = LoadElementsInMemory(mode, tokenizer, end, firstFreeElement, firstFreeEditorText, pool);
                         
                         if(!RequireToken(tokenizer, Token_CloseBraces))
                         {
@@ -1149,7 +1150,7 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
             
             AddStructParams(tokenizer, newElement);
             
-            newElement->firstValue = LoadElementsInMemory(mode, tokenizer, end);
+            newElement->firstValue = LoadElementsInMemory(mode, tokenizer, end, firstFreeElement, firstFreeEditorText, pool);
             if(!RequireToken(tokenizer, Token_CloseBraces))
             {
                 InvalidCodePath;
@@ -1166,7 +1167,7 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
            NextTokenIs(tokenizer, Token_String) || 
            NextTokenIs(tokenizer, Token_OpenBraces))
         {
-            newElement->next = LoadElementsInMemory(mode, tokenizer, end);
+            newElement->next = LoadElementsInMemory(mode, tokenizer, end, firstFreeElement, firstFreeEditorText, pool);
         }
     }
     else if(NextTokenIs(tokenizer, Token_EndOfFile))
@@ -1177,7 +1178,8 @@ inline EditorElement* LoadElementsInMemory(LoadElementsMode mode, Tokenizer* tok
     return newElement;
 }
 
-inline void FreeElement(EditorElement* element, b32 freeNext = true)
+#define FreeElementTable(element, freeNext) FreeElement(element, &taxTable_->firstFreeElement, &taxTable_->firstFreeEditorText, freeNext)
+inline void FreeElement(EditorElement* element, EditorElement** firstFreeElement, EditorTextBlock** firstFreeEditorText, b32 freeNext)
 {
     if(element)
     {
@@ -1193,22 +1195,22 @@ inline void FreeElement(EditorElement* element, b32 freeNext = true)
             
             case EditorElement_Text:
             {
-                FREELIST_DEALLOC(element->text, taxTable_->firstFreeEditorText);
+                FREELIST_DEALLOC(element->text, *firstFreeEditorText);
             } break;
             
             case EditorElement_List:
             {
-                FreeElement(element->firstInList, freeNext);
+                FreeElement(element->firstInList, firstFreeElement, firstFreeEditorText, freeNext);
             } break;
             
             case EditorElement_Struct:
             {
-                FreeElement(element->firstValue, freeNext);
+                FreeElement(element->firstValue, firstFreeElement, firstFreeEditorText, freeNext);
             } break;
             
             case EditorElement_Taxonomy:
             {
-                FreeElement(element->firstChild, freeNext);
+                FreeElement(element->firstChild, firstFreeElement, firstFreeEditorText, freeNext);
             } break;
             
             case EditorElement_EmptyTaxonomy:
@@ -1222,12 +1224,12 @@ inline void FreeElement(EditorElement* element, b32 freeNext = true)
         {
             if(element->next)
             {
-                FreeElement(element->next, freeNext);
+                FreeElement(element->next, firstFreeElement, firstFreeEditorText, freeNext);
             }
             
         }
         
-        FREELIST_DEALLOC(element, taxTable_->firstFreeElement);
+        FREELIST_DEALLOC(element, (*firstFreeElement));
     }
 }
 
@@ -1297,7 +1299,7 @@ internal void LoadFileInTaxonomySlot(char* content, u32 editorRoles)
     for(u32 tabIndex = 0; tabIndex < currentSlot_->tabCount; ++tabIndex)
     {
         EditorTab* tab = currentSlot_->tabs + tabIndex;
-        FreeElement(tab->root);
+        FreeElementTable(tab->root, true);
         tab->editable = 0;
     }
     currentSlot_->tabCount = 0;
@@ -1313,7 +1315,7 @@ internal void LoadFileInTaxonomySlot(char* content, u32 editorRoles)
             u32 tabIndex = currentSlot_->tabCount++;
             
             EditorTab* newTab = currentSlot_->tabs + tabIndex;
-            newTab->root = LoadElementsInMemory(LoadElements_Tab, &tokenizer, &end);
+            newTab->root = LoadElementsInMemoryTable(LoadElements_Tab, &tokenizer, &end);
             newTab->editable = IsEditableByRole(newTab->root, editorRoles);
             
             if(end)
@@ -1443,9 +1445,7 @@ inline EditorElement* GetList(EditorElement* element, char* listName)
 
 #include "editor/bounds.cpp"
 #include "editor/equipmentMappings.cpp"
-#include "editor/consumeMappings.cpp"
 #include "editor/neededTool.cpp"
-#include "editor/requiredEssences.cpp"
 #include "editor/craftingEssences.cpp"
 #include "editor/container.cpp"
 #include "editor/tileParams.cpp"
@@ -1457,7 +1457,6 @@ inline EditorElement* GetList(EditorElement* element, char* listName)
 #include "editor/animationEffects.cpp"
 #include "editor/soundEffects.cpp"
 #include "editor/animationGeneralParams.cpp"
-#include "editor/skeleton.cpp"
 #include "editor/visualLabels.cpp"
 #include "editor/boneAlteration.cpp"
 #include "editor/assAlteration.cpp"
@@ -1500,19 +1499,9 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
             ImportEquipmentMappingsTab(slot, root);
             
         }
-        else if(StrEqual(name, "consumeMappings"))
-        {
-            ImportConsumeMappingsTab(slot, root);
-        }
-        
-        
         else if(StrEqual(name, "neededTools"))
         {
             ImportNeededToolsTab(slot, root);
-        }
-        else if(StrEqual(name, "requireEssences"))
-        {
-            ImportRequiredEssenceTab(slot, root);
         }
 #if FORG_SERVER
         else if(StrEqual(name, "craftingEssences"))
@@ -1568,10 +1557,6 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         else if(StrEqual(name, "animationGeneralParams"))
         {
             ImportAnimationGeneralParamsTab(slot, root);
-        }
-        else if(StrEqual(name, "skeleton"))
-        {
-            ImportSkeletonTab(slot, root);
         }
         else if(StrEqual(name, "light"))
         {
@@ -1718,7 +1703,7 @@ internal void ImportSpecificFile(u32 editorRoles, b32 freeTab, char* filename)
                     
                     if(freeTab)
                     {
-                        FreeElement(tab->root);
+                        FreeElementTable(tab->root, true);
                         tab->root = 0;
                     }
                 }
@@ -1776,7 +1761,7 @@ internal void ImportAllFiles(u32 editorRoles, b32 freeTab, char* filename)
                     
                     if(freeTab)
                     {
-                        FreeElement(tab->root);
+                        FreeElementTable(tab->root, true);
                         tab->root = 0;
                     }
                 }
@@ -1819,28 +1804,32 @@ internal void ImportAllAssetFiles(GameModeWorld* worldMode, char* dataPath, Memo
         b32 ign = false;
         if(StrEqual(handle.name, "sound.fad"))
         {
-            worldMode->table->soundNamesRoot = LoadElementsInMemory(LoadElements_Asset, &tokenizer, &ign);
+            FreeElement(worldMode->soundNamesRoot, &worldMode->firstFreeEditorElement, &worldMode->firstFreeEditorText, true);
+            worldMode->soundNamesRoot = LoadElementsInMemory(LoadElements_Asset, &tokenizer, &ign, &worldMode->firstFreeEditorElement, &worldMode->firstFreeEditorText, worldMode->persistentPool);
         }
         else if(StrEqual(handle.name, "soundEvents.fad"))
         {
-            worldMode->table->soundEventsRoot = LoadElementsInMemory(LoadElements_Asset, &tokenizer, &ign);
-            Import(0, worldMode->table->soundEventsRoot);
+            FreeElement(worldMode->soundEventsRoot, &worldMode->firstFreeEditorElement, &worldMode->firstFreeEditorText, true);
+            worldMode->soundEventsRoot = LoadElementsInMemory(LoadElements_Asset, &tokenizer, &ign, &worldMode->firstFreeEditorElement, &worldMode->firstFreeEditorText, worldMode->persistentPool);
+            Import(0, worldMode->soundEventsRoot);
         }
         else if(StrEqual(handle.name, "components.fad"))
         {
-            worldMode->table->componentsRoot = LoadElementsInMemory(LoadElements_Asset, &tokenizer, &ign);
+            FreeElement(worldMode->componentsRoot, &worldMode->firstFreeEditorElement, &worldMode->firstFreeEditorText, true);
+            worldMode->componentsRoot = LoadElementsInMemory(LoadElements_Asset, &tokenizer, &ign, &worldMode->firstFreeEditorElement, &worldMode->firstFreeEditorText, worldMode->persistentPool);
         }
         else if(StrEqual(handle.name, "componentvanilla.fad"))
         {
-            worldMode->table->oldComponentsRoot = LoadElementsInMemory(LoadElements_Asset, &tokenizer, &ign);
+            FreeElement(worldMode->oldComponentsRoot, &worldMode->firstFreeEditorElement, &worldMode->firstFreeEditorText, true);
+            worldMode->oldComponentsRoot = LoadElementsInMemory(LoadElements_Asset, &tokenizer, &ign, &worldMode->firstFreeEditorElement, &worldMode->firstFreeEditorText, worldMode->persistentPool);
             
-            for(EditorElement** componentTypePtr = &worldMode->table->componentsRoot; *componentTypePtr; )
+            for(EditorElement** componentTypePtr = &worldMode->componentsRoot; *componentTypePtr; )
             {
                 b32 present = false;
                 EditorElement* componentType = *componentTypePtr;
                 EditorElement* vanilla = 0;
                 
-                for(EditorElement* vanillaTest = worldMode->table->oldComponentsRoot; vanillaTest; vanillaTest = vanillaTest->next)
+                for(EditorElement* vanillaTest = worldMode->oldComponentsRoot; vanillaTest; vanillaTest = vanillaTest->next)
                 {
                     if(StrEqual(vanillaTest->name, componentType->name))
                     {
@@ -1874,7 +1863,7 @@ internal void ImportAllAssetFiles(GameModeWorld* worldMode, char* dataPath, Memo
                         else
                         {
                             *componentPtr = component->next;
-                            FreeElement(component, false);
+                            FreeElement(component, &worldMode->firstFreeEditorElement, &worldMode->firstFreeEditorText, false);
                         }
                     }
                     
@@ -1883,7 +1872,7 @@ internal void ImportAllAssetFiles(GameModeWorld* worldMode, char* dataPath, Memo
                 else
                 {
                     *componentTypePtr = componentType->next;
-                    FreeElement(componentType, false);
+                    FreeElement(componentType, &worldMode->firstFreeEditorElement, &worldMode->firstFreeEditorText, false);
                 }
             }
         }
@@ -2139,7 +2128,7 @@ internal void RecursivelyMerge(char* toMergeDefinitionName, char* toMergePath, c
         b32 endSource = false;
         while(true)
         {
-            EditorElement* root = LoadElementsInMemory(LoadElements_Tab, &sourceT, &endSource);
+            EditorElement* root = LoadElementsInMemoryTable(LoadElements_Tab, &sourceT, &endSource);
             Assert(sourceTabCount < ArrayCount(sourceTabs));
             sourceTabs[sourceTabCount++] = root;
             if(endSource)
@@ -2161,7 +2150,7 @@ internal void RecursivelyMerge(char* toMergeDefinitionName, char* toMergePath, c
             b32 endDest = false;
             while(true)
             {
-                EditorElement* root = LoadElementsInMemory(LoadElements_Tab, &destT, &endDest);
+                EditorElement* root = LoadElementsInMemoryTable(LoadElements_Tab, &destT, &endDest);
                 Assert(destTabCount < ArrayCount(destTabs));
                 destTabs[destTabCount++] = root;
                 if(endDest)

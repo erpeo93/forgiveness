@@ -118,18 +118,6 @@ struct EquipmentMapping
     };
 };
 
-struct ConsumeMapping
-{
-    EntityAction action;
-    u32 taxonomy;
-    
-    union
-    {
-        ConsumeMapping* next;
-        ConsumeMapping* nextFree;
-    };
-};
-
 printTable(noPrefix) enum ObjectState
 {
     ObjectState_Default,
@@ -423,7 +411,6 @@ struct TaxonomySlot
     Vec3 spawnOffsetCast;
     
     TaxonomyTree equipmentMappings;
-    ConsumeMapping* firstConsumeMapping;
     PossibleAction* firstPossibleAction;
     
     u32 layoutCount;
@@ -620,7 +607,6 @@ struct TaxonomyTable
     EquipmentMapping* firstFreeEquipmentMapping;
     EquipmentLayout* firstFreeEquipmentLayout;
     EquipmentAss* firstFreeEquipmentAss;
-    ConsumeMapping* firstFreeConsumeMapping;
     TaxonomyNode* firstFreeTaxonomyNode;
     MemSynthOption* firstFreeMemSynthOption;
     PossibleAction* firstFreePossibleAction;
@@ -664,11 +650,6 @@ struct TaxonomyTable
     RandomSequence translateSequence;
     u32 eventCount;
     SoundEvent events[64];
-    
-    EditorElement* soundNamesRoot;
-    EditorElement* soundEventsRoot;
-    EditorElement* componentsRoot;
-    EditorElement* oldComponentsRoot;
     
     AIStateMachine testStateMachine;
     

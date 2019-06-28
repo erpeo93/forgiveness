@@ -334,6 +334,16 @@ struct GameModeWorld
     struct DataFileArrived* firstPakFileArrived;
     struct DataFileArrived* currentFile;
     
+    
+    EditorElement* firstFreeEditorElement;
+    EditorTextBlock* firstFreeEditorText;
+    
+    EditorElement* soundNamesRoot;
+    EditorElement* soundEventsRoot;
+    EditorElement* componentsRoot;
+    EditorElement* oldComponentsRoot;
+    
+    
     MemoryPool deletedFilesPool;
     ToDeleteFile* firstFileToDelete;
     ToDeleteFile* firstFreeFileToDelete;
