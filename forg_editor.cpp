@@ -1326,10 +1326,6 @@ internal void LoadFileInTaxonomySlot(char* content, u32 editorRoles)
             }
         }
     }
-    else
-    {
-        InvalidCodePath;
-    }
 }
 
 inline EditorElement* GetElement(EditorElement* element, char* name)
