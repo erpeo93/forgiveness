@@ -223,6 +223,7 @@ inline void InitLFF(PlantLFFParams* params, LeafFlowerFruit* lff, r32 segmentWin
 {
     lff->initialized = true;
     lff->renderingRandomization = RandomBil(seq);
+    lff->densityRandomization = RandomBil(seq);
     lff->colorRandomization = RandomBil(seq);
     r32 lffRandomization = RandomBil(seq);
     lff->windRandomization = Lerp(segmentWindRandomization, params->windDirectionV, lffRandomization);
@@ -234,7 +235,7 @@ inline void UpdateLFF(PlantLFFParams* params, LeafFlowerFruit* lff, r32 timeToUp
     lff->offsetCoeff += params->offsetSpeed * timeToUpdate;
     lff->dimCoeff = Min(lff->dimCoeff, 1.0f);
     lff->offsetCoeff = Min(lff->offsetCoeff, 1.0f);
-}
+}z
 
 inline void InitAndUpdateLFF(PlantStem* stem, PlantLFFParams* params, LeafFlowerFruit* lffs, u32 levelCount, r32 allAtStemLength, RandomSequence* seq, r32 timeToUpdate)
 {
@@ -585,24 +586,6 @@ inline void UpdatePlant(GameModeWorld* worldMode, PlantDefinition* definition, C
     }
 }
 
-inline PlantLFFSeasonParams* GetSeason(PlantLFFParams* params, WorldSeason season)
-{
-    Assert(season < Season_Count);
-    PlantLFFSeasonParams* result = params->seasons + season;
-    
-    return result;
-}
-
-inline PlantLFFSeasonParams* GetFollowingSeason(PlantLFFParams* params, WorldSeason season)
-{
-    Assert(season < Season_Count);
-    
-    u32 index = (season == Season_Count - 1) ? 0 : season + 1;
-    PlantLFFSeasonParams* result = params->seasons + index;
-    
-    return result;
-}
-
 struct PlantRenderingParams
 {
     Lights lights;
@@ -611,46 +594,43 @@ struct PlantRenderingParams
     r32 lerpWithFollowingSeason;
 };
 
-inline void RenderLFF(RenderGroup* group, ClientPlant* plant, r32 baseScale, Vec3 P, PlantLFFParams* params,LeafFlowerFruit* lff, BitmapId BID, PlantRenderingParams renderingParams, r32 windTime)
+inline void RenderLFF(RenderGroup* group, ClientPlant* plant, Vec3 P, PlantLFFParams* params,LeafFlowerFruit* lff, BitmapId BID, PlantRenderingParams renderingParams, r32 windTime)
 {
     PlantLFFSeasonParams* season = GetSeason(params, renderingParams.season);
     PlantLFFSeasonParams* followingSeason = GetFollowingSeason(params, renderingParams.season);
     
-    if(season->present)
+    r32 lerp = renderingParams.lerpWithFollowingSeason;
+    
+    Vec2 seasonScale = Lerp(season->scale, lerp, followingSeason->scale);
+    Vec2 seasonScaleV = Lerp(season->scaleV, lerp, followingSeason->scaleV);
+    
+    Vec2 scale = seasonScale + lff->renderingRandomization * seasonScaleV;
+    scale *= lff->dimCoeff;
+    
+    Vec4 seasonAliveColor = Lerp(season->aliveColor, lerp, followingSeason->aliveColor);
+    Vec4 seasonDeadColor = Lerp(season->deadColor, lerp, followingSeason->deadColor);
+    Vec4 seasonColorV = Lerp(season->colorV, lerp, followingSeason->colorV);
+    
+    Vec4 referenceColor = Lerp(seasonDeadColor, plant->life, seasonAliveColor);
+    Vec4 color = referenceColor + lff->colorRandomization * seasonColorV;
+    color = Clamp01(color);
+    
+    
+    ObjectTransform lffTransform = UprightTransform();
+    
+    r32 lffAngle = lff->renderingRandomization * Abs(params->angleV);
+    if(params->angleV < 0 && Cos(DegToRad(lffAngle)) < 0)
     {
-        r32 lerp = renderingParams.lerpWithFollowingSeason;
-        
-        Vec2 seasonScale = Lerp(season->scale, lerp, followingSeason->scale);
-        Vec2 seasonScaleV = Lerp(season->scaleV, lerp, followingSeason->scaleV);
-        
-        Vec2 scale = baseScale * seasonScale + lff->renderingRandomization * seasonScaleV;
-        scale *= lff->dimCoeff;
-        
-        Vec4 seasonAliveColor = Lerp(season->aliveColor, lerp, followingSeason->aliveColor);
-        Vec4 seasonDeadColor = Lerp(season->deadColor, lerp, followingSeason->deadColor);
-        Vec4 seasonColorV = Lerp(season->colorV, lerp, followingSeason->colorV);
-        
-        Vec4 referenceColor = Lerp(seasonDeadColor, plant->life, seasonAliveColor);
-        Vec4 color = referenceColor + lff->colorRandomization * seasonColorV;
-        color = Clamp01(color);
-        
-        
-        ObjectTransform lffTransform = UprightTransform();
-        
-        r32 lffAngle = lff->renderingRandomization * Abs(params->angleV);
-        if(params->angleV < 0 && Cos(DegToRad(lffAngle)) < 0)
-        {
-            lffTransform.flipOnYAxis = true;
-        }
-        
-        
-        lffAngle += Sin(windTime + TAU32 * lff->windRandomization) * params->windAngleV;
-        
-        lffTransform.angle = lffAngle;
-        lffTransform.modulationPercentage = renderingParams.modulationWithFocusColor;
-        
-        PushBitmap(group, lffTransform, BID, P, 0, scale, color, renderingParams.lights);
+        lffTransform.flipOnYAxis = true;
     }
+    
+    
+    lffAngle += Sin(windTime + TAU32 * lff->windRandomization) * params->windAngleV;
+    
+    lffTransform.angle = lffAngle;
+    lffTransform.modulationPercentage = renderingParams.modulationWithFocusColor;
+    
+    PushBitmap(group, lffTransform, BID, P, 0, scale, color, renderingParams.lights);
 }
 
 internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParams, r32 windTime, ClientPlant* plant, PlantDefinition* definition, PlantStem* stem, Vec3 stemP, u8 recursiveLevel, m4x4 originOrientation, r32 startingZ)
@@ -737,11 +717,11 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
         for(u32 leafIndex = 0; leafIndex < levelParams->leafCount; ++leafIndex)
         {
             LeafFlowerFruit* lff = stem->leafs + leafIndex;
-            r32 leafTargetDensity = BilateralToUnilateral(lff->renderingRandomization);
+            r32 leafTargetDensity = BilateralToUnilateral(lff->densityRandomization);
             if(plant->leafDensity > leafTargetDensity)
             {
                 Vec3 P = topP + V3(0, 0, 0.005f * leafIndex) + lff->offsetCoeff * lff->renderingRandomization * definition->leafParams.offsetV;
-                RenderLFF(group, plant, plant->leafDimension, P, &definition->leafParams, lff, plant->leafBitmap, renderingParams, windTime);
+                RenderLFF(group, plant, P, &definition->leafParams, lff, plant->leafBitmap, renderingParams, windTime);
             }
         }
     }
@@ -755,7 +735,7 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
             if(plant->flowerDensity > flowerTargetDensity)
             {
                 Vec3 P = topP + V3(0, 0, 0.005f * flowerIndex) + lff->offsetCoeff * lff->renderingRandomization * definition->flowerParams.offsetV;
-                RenderLFF(group, plant, plant->flowerDimension, P, &definition->flowerParams, lff, plant->flowerBitmap, renderingParams, windTime);
+                RenderLFF(group, plant, P, &definition->flowerParams, lff, plant->flowerBitmap, renderingParams, windTime);
             }
         }
     }
@@ -770,7 +750,7 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
             if(plant->fruitDensity > fruitTargetDensity)
             {
                 Vec3 P = topP + V3(0, 0, 0.005f * fruitIndex) + lff->offsetCoeff * lff->renderingRandomization * definition->fruitParams.offsetV;
-                RenderLFF(group, plant, plant->fruitDimension, P, &definition->fruitParams, lff, plant->fruitBitmap, renderingParams, windTime);
+                RenderLFF(group, plant, P, &definition->fruitParams, lff, plant->fruitBitmap, renderingParams, windTime);
             }
         }
     }

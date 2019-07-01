@@ -701,14 +701,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     
     worldMode->windTime += worldMode->windSpeed * input->timeToAdvance;
     
-    worldMode->seasonTime += input->timeToAdvance;
-    if(worldMode->seasonTime >= SEASON_DURATION)
-    {
-        worldMode->seasonTime = 0;
-        worldMode->season = (WorldSeason) ((worldMode->season == Season_Count - 1) ? 0 : worldMode->season + 1);
-    }
-    worldMode->seasonLerp = Clamp01MapToRange(0.5f * SEASON_DURATION, worldMode->seasonTime, SEASON_DURATION);
-    
     
     
     ParticleCache* particleCache = worldMode->particleCache;

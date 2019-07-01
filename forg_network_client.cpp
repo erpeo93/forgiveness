@@ -675,6 +675,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 clientNetwork->serverFPS = Lerp(clientNetwork->serverFPS, 0.8f, lastFrameFPS);
             } break;
             
+            case Type_worldInfo:
+            {
+                Unpack("Cd", &worldMode->season, &worldMode->seasonLerp);
+            } break;
+            
             case Type_entityHeader:
             {
                 u64 identifier;
@@ -760,30 +765,20 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 r32 life;
                 
                 r32 leafDensity;
-                r32 leafDimension;
-                
                 r32 flowerDensity;
-                r32 flowerDimension;
-                
                 r32 fruitDensity;
-                r32 fruitDimension;
                 
                 
                 
-                Unpack("dddddddd", &age, &life, &leafDensity, &leafDimension, &flowerDensity, &flowerDimension, &fruitDensity, &fruitDimension);
+                Unpack("ddddd", &age, &life, &leafDensity, &flowerDensity, &fruitDensity);
                 ClientPlant* plant = currentEntity->plant;
                 if(plant)
                 {
                     plant->serverAge = age;
                     plant->life = life;
                     plant->leafDensity = leafDensity;
-                    plant->leafDimension = leafDimension;
-                    
                     plant->flowerDensity = flowerDensity;
-                    plant->flowerDimension = flowerDimension;
-                    
                     plant->fruitDensity = fruitDensity;
-                    plant->fruitDimension = fruitDimension;
                 }
             } break;
             

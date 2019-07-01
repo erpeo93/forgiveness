@@ -25,6 +25,7 @@ struct LeafFlowerFruit
     r32 offsetCoeff;
     
     r32 renderingRandomization;
+    r32 densityRandomization;
     r32 colorRandomization;
     r32 windRandomization;
 };
@@ -145,14 +146,15 @@ printTable(noPrefix) enum PlantShape
 
 struct PlantLFFSeasonParams
 {
-    b32 present;
-    
     Vec2 scale;
     Vec2 scaleV;
     Vec4 aliveColor;
     Vec4 deadColor;
     Vec4 colorV;
+    
+    r32 densityAtMidSeason;
 };
+
 
 struct PlantLFFParams
 {
@@ -169,6 +171,35 @@ struct PlantLFFParams
     
     PlantLFFSeasonParams seasons[Season_Count];
 };
+
+
+inline PlantLFFSeasonParams* GetPreviousSeason(PlantLFFParams* params, WorldSeason season)
+{
+    Assert(season < Season_Count);
+    
+    u32 index = (season == 0) ? Season_Count - 1 : season - 1;
+    PlantLFFSeasonParams* result = params->seasons + index;
+    
+    return result;
+}
+
+inline PlantLFFSeasonParams* GetSeason(PlantLFFParams* params, WorldSeason season)
+{
+    Assert(season < Season_Count);
+    PlantLFFSeasonParams* result = params->seasons + season;
+    
+    return result;
+}
+
+inline PlantLFFSeasonParams* GetFollowingSeason(PlantLFFParams* params, WorldSeason season)
+{
+    Assert(season < Season_Count);
+    
+    u32 index = (season == Season_Count - 1) ? 0 : season + 1;
+    PlantLFFSeasonParams* result = params->seasons + index;
+    
+    return result;
+}
 
 #define MAX_LEVELS 4
 struct PlantDefinition

@@ -149,13 +149,8 @@ struct ClientPlant
     r32 life;
     
     r32 leafDensity;
-    r32 leafDimension;
-    
     r32 flowerDensity;
-    r32 flowerDimension;
-    
     r32 fruitDensity;
-    r32 fruitDimension;
     
     BitmapId leafBitmap;
     BitmapId flowerBitmap;
@@ -322,14 +317,12 @@ struct ToDeleteFile
     };
 };
 
-#define SEASON_DURATION 5.0f
 struct GameModeWorld
 {
     struct GameState* gameState;
     
     WorldSeason season;
     r32 seasonLerp;
-    r32 seasonTime;
     
     r32 windTime;
     r32 windSpeed;

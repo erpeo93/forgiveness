@@ -305,6 +305,8 @@ internal void EndSim(SimRegion* region)
                     server->editorPlayerPermanent.P = entity->P;
                     
                     SendGameAccessConfirm(player, server->worldSeed, entity->identifier, creature->openedContainerID, server->elapsedMS5x);
+                    
+                    SendWorldInfo(player, server->season, server->seasonLerp);
                 }
                 
                 SendEntityUpdate(region, entity);
@@ -1375,22 +1377,51 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
     }
 }
 
+inline r32 ComputeSeasonalDensity(PlantLFFParams* params, WorldSeason season, r32 seasonTime)
+{
+    r32 result = 0.0f;
+    
+    PlantLFFSeasonParams* prev = GetPreviousSeason(params, season);
+    PlantLFFSeasonParams* current = GetSeason(params, season);
+    PlantLFFSeasonParams* follow = GetFollowingSeason(params, season);
+    if(seasonTime < 0.5f * SEASON_DURATION)
+    {
+        r32 lerp = 0.5f + 0.5f * Clamp01MapToRange(0, seasonTime, 0.5f * SEASON_DURATION);
+        result = Lerp(prev->densityAtMidSeason, lerp, current->densityAtMidSeason);
+        
+    }
+    else
+    {
+        r32 lerp = 0.5f * Clamp01MapToRange(0.5f * SEASON_DURATION, seasonTime, SEASON_DURATION);
+        result = Lerp(current->densityAtMidSeason, lerp, follow->densityAtMidSeason);
+    }
+    
+    return result;
+}
+
 #define PLANT_MAX_AGE 3153600000.0f //100 years
 internal void UpdatePlant(SimRegion* region, SimEntity* entity, r32 growingCoeff)
 {
+    ServerState* server = region->server;
+    
     PlantComponent* plant = Plant(region, entity);
     
     plant->age += region->timeToUpdate * growingCoeff;
     plant->age = Min(plant->age, PLANT_MAX_AGE);
     
-    plant->leafDensity = 1;
-    plant->leafDimension = 1;
+    TaxonomySlot* plantSlot = GetSlotForTaxonomy(region->taxTable, entity->taxonomy);
+    PlantDefinition* definition = plantSlot->plantDefinition;
+    if(definition)
+    {
+        PlantLFFParams* leafParams = &definition->leafParams;
+        PlantLFFParams* flowerParams = &definition->flowerParams;
+        PlantLFFParams* fruitParams = &definition->fruitParams;
+        
+        plant->leafDensity = ComputeSeasonalDensity(leafParams, server->season, server->seasonTime);
+        plant->flowerDensity = ComputeSeasonalDensity(flowerParams, server->season, server->seasonTime);
+        plant->fruitDensity = ComputeSeasonalDensity(fruitParams, server->season, server->seasonTime);
+    }
     
-    plant->flowerDensity = 0;
-    plant->flowerDimension = 0;
-    
-    plant->fruitDensity = 0;
-    plant->fruitDimension = 0;
     
     plant->life = 1;
 }

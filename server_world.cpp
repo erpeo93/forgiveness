@@ -787,6 +787,6 @@ internal void BuildWorld(ServerState * server)
     if(generator)
     {
         BuildServerChunks(server, generator);
-        BuildSimpleTestWorld(server, generator);
+        //BuildSimpleTestWorld(server, generator);
     }
 }

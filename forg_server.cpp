@@ -1554,6 +1554,20 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
 		server->firstNewEntity = 0;
         
+        
+        
+        // NOTE(Leonardo): advance server "status"
+        server->seasonTime += timeToAdvance;
+        if(server->seasonTime >= SEASON_DURATION)
+        {
+            server->seasonTime = 0;
+            server->season = (WorldSeason) ((server->season == Season_Count - 1) ? 0 : server->season + 1);
+        }
+        server->seasonLerp = Clamp01MapToRange(0.5f * SEASON_DURATION, server->seasonTime, SEASON_DURATION);
+        
+        
+        
+        
         // NOTE(Leonardo): we first simulate all the mirror region, so that we dispatch all the update first, and then we update all the other regions
         u32 realServerRegionSpan = SERVER_REGION_SPAN + 2;
         for(u32 Y = 0; Y < realServerRegionSpan; Y++)

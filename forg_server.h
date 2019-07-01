@@ -245,6 +245,11 @@ struct ServerState
 {
     RandomSequence instantiateSequence;
     
+    WorldSeason season;
+    r32 seasonLerp;
+    r32 seasonTime;
+    
+    
     EditorTabStack editorStack;
     b32 editor;
     b32 gamePaused;

@@ -154,6 +154,7 @@ enum Packet_Type
     Type_login,
     Type_gameAccess,
     Type_serverInfo,
+    Type_worldInfo,
     
     
     

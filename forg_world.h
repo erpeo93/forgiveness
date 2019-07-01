@@ -234,6 +234,7 @@ inline AddEntityAdditionalParams DroppedRecipeObject(u32 recipeTaxonomy, i16 sta
     return result;
 }
 
+#define SEASON_DURATION 5.0f
 enum WorldSeason
 {
     Season_Autumn,

@@ -50,16 +50,16 @@ inline void ParsePlantLevelParams(PlantLevelParams* destParams, EditorElement* l
 
 inline void ParseLFFSeasonParams(PlantLFFSeasonParams* params, EditorElement* root)
 {
-    params->present = false;
     if(root)
     {
-        params->present = ToB32(GetValue(root, "present"));
         params->aliveColor = ToV4Color(GetStruct(root, "color"));
         params->deadColor = ToV4Color(GetStruct(root, "color"));
         params->colorV = ToV4Color(GetStruct(root, "colorV"));
         
         params->scale = ToV2(GetStruct(root, "scale"));
         params->scaleV = ToV2(GetStruct(root, "scaleV"));
+        
+        params->densityAtMidSeason = ElemR32(root, "densityAtMidSeason");
     }
 }
 
@@ -81,7 +81,7 @@ inline void ParsePlantLFFParams(PlantLFFParams* params, EditorElement* root)
         ParseLFFSeasonParams(params->seasons + Season_Autumn, GetStruct(root, "autumn"));
         ParseLFFSeasonParams(params->seasons + Season_Winter, GetStruct(root, "winter"));
         ParseLFFSeasonParams(params->seasons + Season_Spring, GetStruct(root, "spring"));
-        ParseLFFSeasonParams(params->seasons + Season_Summer, GetStruct(root, "summmer"));
+        ParseLFFSeasonParams(params->seasons + Season_Summer, GetStruct(root, "summer"));
     }
 }
 

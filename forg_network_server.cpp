@@ -191,6 +191,13 @@ internal void SendGameAccessConfirm(ServerPlayer* player, u64 worldSeed, u64 ide
     CloseAndStoreReliablePacket(player);
 }
 
+internal void SendWorldInfo(ServerPlayer* player, WorldSeason season, r32 seasonLerp)
+{
+    StartPacket(player, worldInfo);
+    Pack("Cd", SafeTruncateToU8(season), seasonLerp);
+    CloseAndStoreStandardPacket(player);
+}
+
 
 internal void SendUnlockedSkillCatConfirm( ServerPlayer* player, u32 taxonomy)
 {
@@ -646,8 +653,8 @@ inline void SendEntityHeaderReliably(ServerPlayer* player, u64 ID)
 inline void SendPlantUpdate(ServerPlayer* player, u64 entityID, PlantComponent* plant)
 {
     StartPacket(player, plantUpdate);
-    Pack("dddddddd", plant->age, plant->life, plant->leafDensity, plant->leafDimension,
-         plant->flowerDensity, plant->flowerDimension, plant->fruitDensity, plant->fruitDimension);
+    Pack("ddddd", plant->age, plant->life, plant->leafDensity,
+         plant->flowerDensity, plant->fruitDensity);
     CloseAndStoreStandardPacket(player, entityID);
 }
 
