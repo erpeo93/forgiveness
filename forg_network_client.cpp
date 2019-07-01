@@ -758,10 +758,19 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             {
                 r32 age;
                 r32 life;
+                
                 r32 leafDensity;
                 r32 leafDimension;
                 
-                Unpack("dddd", &age, &life, &leafDensity, &leafDimension);
+                r32 flowerDensity;
+                r32 flowerDimension;
+                
+                r32 fruitDensity;
+                r32 fruitDimension;
+                
+                
+                
+                Unpack("dddddddd", &age, &life, &leafDensity, &leafDimension, &flowerDensity, &flowerDimension, &fruitDensity, &fruitDimension);
                 ClientPlant* plant = currentEntity->plant;
                 if(plant)
                 {
@@ -769,6 +778,12 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     plant->life = life;
                     plant->leafDensity = leafDensity;
                     plant->leafDimension = leafDimension;
+                    
+                    plant->flowerDensity = flowerDensity;
+                    plant->flowerDimension = flowerDimension;
+                    
+                    plant->fruitDensity = fruitDensity;
+                    plant->fruitDimension = fruitDimension;
                 }
             } break;
             

@@ -425,8 +425,6 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
             }
             actorCreature->openedContainerID = target->identifier;
             
-            context->followingAction = Action_Examine;
-            
             if(actor->playerID)
             {
                 IgnoreAction(region, actor, Action_Open);
@@ -741,7 +739,6 @@ inline r32 GetActionTargetTime(SimRegion* region, SimEntity* actor, SimEntity* t
         case Action_Idle:
         case Action_Move:
         case Action_Protecting:
-        case Action_Examine:
         {
             
         } break;

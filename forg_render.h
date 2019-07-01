@@ -25,8 +25,6 @@ enum Render_command
     CommandType_TexturedQuadsCommand,
     CommandType_BeginPeels,
     CommandType_EndPeels,
-    CommandType_BeginSpecialTexture,
-    CommandType_EndSpecialTexture,
 };
 
 enum CameraTransformFlag

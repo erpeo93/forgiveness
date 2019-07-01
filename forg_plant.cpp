@@ -219,6 +219,48 @@ inline r32 GetStemMinUpdateTime(PlantDefinition* definition, PlantStem* stem, u8
     return result;
 }
 
+inline void InitLFF(PlantLFFParams* params, LeafFlowerFruit* lff, r32 segmentWindRandomization, RandomSequence* seq)
+{
+    lff->initialized = true;
+    lff->renderingRandomization = RandomBil(seq);
+    lff->colorRandomization = RandomBil(seq);
+    r32 lffRandomization = RandomBil(seq);
+    lff->windRandomization = Lerp(segmentWindRandomization, params->windDirectionV, lffRandomization);
+}
+
+inline void UpdateLFF(PlantLFFParams* params, LeafFlowerFruit* lff, r32 timeToUpdate)
+{
+    lff->dimCoeff += params->dimSpeed * timeToUpdate;
+    lff->offsetCoeff += params->offsetSpeed * timeToUpdate;
+    lff->dimCoeff = Min(lff->dimCoeff, 1.0f);
+    lff->offsetCoeff = Min(lff->offsetCoeff, 1.0f);
+}
+
+inline void InitAndUpdateLFF(PlantStem* stem, PlantLFFParams* params, LeafFlowerFruit* lffs, u32 levelCount, r32 allAtStemLength, RandomSequence* seq, r32 timeToUpdate)
+{
+    u32 lffToUpdate = levelCount *  Ceil(Clamp01MapToRange(0, stem->lengthNormZ, allAtStemLength));
+    Assert(lffToUpdate < MAX_LFF_PER_STEM);
+    r32 segmentWindRandomization = 0;
+    for(u32 lffIndex = 0; lffIndex < levelCount; ++lffIndex)
+    {
+        LeafFlowerFruit* lff = lffs + lffIndex;
+        if(!lff->initialized)
+        {
+            if(lffIndex == 0)
+            {
+                segmentWindRandomization = RandomBil(seq);
+            }
+            InitLFF(params, lff, segmentWindRandomization, seq);
+        }
+    }
+    
+    for(u32 lffIndex = 0; lffIndex < lffToUpdate; ++lffIndex)
+    {
+        LeafFlowerFruit* lff = lffs + lffIndex;
+        UpdateLFF(params, lff, timeToUpdate);
+    }
+}
+
 
 inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantDefinition* definition, PlantStem* trunk, PlantStem* stem, u8 recursiveLevel, m4x4 originOrientation, r32 startingZ, r32 timeToUpdate)
 {
@@ -530,39 +572,9 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
     Assert(Normalized(stem->lengthNormZ));
     
     
-    
-    u32 leafToUpdate = levelParams->leafCount *  Ceil(Clamp01MapToRange(0, stem->lengthNormZ, levelParams->allLeafsAtStemLength));
-    Assert(leafToUpdate < MAX_LEAFS_PER_STEM);
-    
-    r32 segmentWindRandomization = 0;
-    for(u32 leafIndex = 0; leafIndex < levelParams->leafCount; ++leafIndex)
-    {
-        Leaf* leaf = stem->leafs + leafIndex;
-        if(!leaf->initialized)
-        {
-            leaf->initialized = true;
-            
-            if(leafIndex == 0)
-            {
-                segmentWindRandomization = RandomBil(&worldMode->leafSequence);
-            }
-            
-            leaf->renderingRandomization = RandomBil(&worldMode->leafSequence);
-            leaf->colorRandomization = RandomBil(&worldMode->leafSequence);
-            r32 leafRandomization = RandomBil(&worldMode->leafSequence);
-            leaf->windRandomization = Lerp(segmentWindRandomization, definition->leafWindDirectionV, leafRandomization);
-        }
-    }
-    
-    for(u32 leafIndex = 0; leafIndex < leafToUpdate; ++leafIndex)
-    {
-        Leaf* leaf = stem->leafs + leafIndex;
-        leaf->dimCoeff += definition->leafDimSpeed * timeToUpdate;
-        leaf->offsetCoeff += definition->leafOffsetSpeed * timeToUpdate;
-        
-        leaf->dimCoeff = Min(leaf->dimCoeff, 1.0f);
-        leaf->offsetCoeff = Min(leaf->offsetCoeff, 1.0f);
-    }
+    InitAndUpdateLFF(stem, &definition->leafParams, stem->leafs, levelParams->leafCount, levelParams->allLeafsAtStemLength, &worldMode->leafFlowerFruitSequence, timeToUpdate);
+    InitAndUpdateLFF(stem, &definition->flowerParams, stem->flowers, levelParams->flowerCount, levelParams->allFlowersAtStemLength, &worldMode->leafFlowerFruitSequence, timeToUpdate);
+    InitAndUpdateLFF(stem, &definition->fruitParams, stem->fruits, levelParams->fruitCount, levelParams->allFruitsAtStemLength, &worldMode->leafFlowerFruitSequence, timeToUpdate);
 }
 
 inline void UpdatePlant(GameModeWorld* worldMode, PlantDefinition* definition, ClientPlant* plant, r32 timeToUpdate)
@@ -578,6 +590,36 @@ struct PlantRenderingParams
     Lights lights;
     r32 modulationWithFocusColor;
 };
+
+inline void RenderLFF(RenderGroup* group, ClientPlant* plant, r32 baseScale, Vec3 P, PlantLFFParams* params,LeafFlowerFruit* lff, BitmapId BID, PlantRenderingParams renderingParams, r32 windTime)
+{
+    Vec2 scale = baseScale * params->scale + lff->renderingRandomization * params->scaleV;
+    scale *= lff->dimCoeff;
+    
+    Vec4 aliveColor = params->aliveColor;
+    Vec4 deadColor = params->deadColor;
+    
+    Vec4 referenceColor = Lerp(deadColor, plant->life, aliveColor);
+    Vec4 color = referenceColor + lff->colorRandomization * params->colorV;
+    color = Clamp01(color);
+    
+    
+    ObjectTransform lffTransform = UprightTransform();
+    
+    r32 lffAngle = lff->renderingRandomization * Abs(params->angleV);
+    if(params->angleV < 0 && Cos(DegToRad(lffAngle)) < 0)
+    {
+        lffTransform.flipOnYAxis = true;
+    }
+    
+    
+    lffAngle += Sin(windTime + TAU32 * lff->windRandomization) * params->windAngleV;
+    
+    lffTransform.angle = lffAngle;
+    lffTransform.modulationPercentage = renderingParams.modulationWithFocusColor;
+    
+    PushBitmap(group, lffTransform, BID, P, 0, scale, color, renderingParams.lights);
+}
 
 internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParams, r32 windTime, ClientPlant* plant, PlantDefinition* definition, PlantStem* stem, Vec3 stemP, u8 recursiveLevel, m4x4 originOrientation, r32 startingZ)
 {
@@ -657,45 +699,50 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
         topZ += segmentUnitZ;
     }
     
+    
     if(IsValid(plant->leafBitmap))
     {
         for(u32 leafIndex = 0; leafIndex < levelParams->leafCount; ++leafIndex)
         {
-            Leaf* leaf = stem->leafs + leafIndex;
-            r32 leafTargetDensity = BilateralToUnilateral(leaf->renderingRandomization);
+            LeafFlowerFruit* lff = stem->leafs + leafIndex;
+            r32 leafTargetDensity = BilateralToUnilateral(lff->renderingRandomization);
             if(plant->leafDensity > leafTargetDensity)
             {
-                Vec2 leafScale = plant->leafDimension * definition->leafScale + leaf->renderingRandomization * definition->leafScaleV;
-                Vec2 scale = leaf->dimCoeff * leafScale;
-                
-                Vec3 leafP = topP + V3(0, 0, 0.005f * leafIndex) + leaf->offsetCoeff * leaf->renderingRandomization * definition->leafOffsetV;
-                
-                Vec4 aliveColor = definition->leafColor;
-                Vec4 deadColor = definition->leafColor;
-                
-                Vec4 referenceColor = Lerp(deadColor, plant->life, aliveColor);
-                Vec4 leafColor = referenceColor + leaf->colorRandomization * definition->leafColorV;
-                leafColor = Clamp01(leafColor);
-                
-                
-                ObjectTransform leafTransform = UprightTransform();
-                
-                r32 leafAngle = leaf->renderingRandomization * Abs(definition->leafAngleV);
-                if(definition->leafAngleV < 0 && Cos(DegToRad(leafAngle)) < 0)
-                {
-                    leafTransform.flipOnYAxis = true;
-                }
-                
-                
-                leafAngle += Sin(windTime + TAU32 * leaf->windRandomization) * definition->leafWindAngleV;
-                
-                leafTransform.angle = leafAngle;
-                leafTransform.modulationPercentage = renderingParams.modulationWithFocusColor;
-                
-                PushBitmap(group, leafTransform, plant->leafBitmap, leafP, 0, scale, leafColor, renderingParams.lights);
+                Vec3 P = topP + V3(0, 0, 0.005f * leafIndex) + lff->offsetCoeff * lff->renderingRandomization * definition->leafParams.offsetV;
+                RenderLFF(group, plant, plant->leafDimension, P, &definition->leafParams, lff, plant->leafBitmap, renderingParams, windTime);
             }
         }
     }
+    
+    if(IsValid(plant->flowerBitmap))
+    {
+        for(u32 flowerIndex = 0; flowerIndex < levelParams->flowerCount; ++flowerIndex)
+        {
+            LeafFlowerFruit* lff = stem->flowers + flowerIndex;
+            r32 flowerTargetDensity = BilateralToUnilateral(lff->renderingRandomization);
+            if(plant->flowerDensity > flowerTargetDensity)
+            {
+                Vec3 P = topP + V3(0, 0, 0.005f * flowerIndex) + lff->offsetCoeff * lff->renderingRandomization * definition->flowerParams.offsetV;
+                RenderLFF(group, plant, plant->flowerDimension, P, &definition->flowerParams, lff, plant->flowerBitmap, renderingParams, windTime);
+            }
+        }
+    }
+    
+    
+    if(IsValid(plant->fruitBitmap))
+    {
+        for(u32 fruitIndex = 0; fruitIndex < levelParams->fruitCount; ++fruitIndex)
+        {
+            LeafFlowerFruit* lff = stem->fruits + fruitIndex;
+            r32 fruitTargetDensity = BilateralToUnilateral(lff->renderingRandomization);
+            if(plant->fruitDensity > fruitTargetDensity)
+            {
+                Vec3 P = topP + V3(0, 0, 0.005f * fruitIndex) + lff->offsetCoeff * lff->renderingRandomization * definition->fruitParams.offsetV;
+                RenderLFF(group, plant, plant->fruitDimension, P, &definition->fruitParams, lff, plant->fruitBitmap, renderingParams, windTime);
+            }
+        }
+    }
+    
 }
 
 

@@ -2982,99 +2982,27 @@ internal void WriteComponents()
     free(subdir);
 }
 
-#if 0
-internal void WriteGroundDecorations()
+internal void WriteBitmapsFromPath(char* path, AssetTypeId assetType, char* pakName)
 {
-    BeginAssetType(GroundDecoration);
-    for(everyFolderinGroundDecorationFolder)
-    {
-        u64 hash = Hash(name);
-        AddAsset(fileName, hash);
-    }
-    EndAssetType();
-    
-    WritePak(assets, "forgGroundDecorations.pak");
-}
-#endif
-
-internal void WriteLeafs()
-{
-    char* leafPath = "definition/leafs";
-    
     Assets assets_;
     Assets* assets = &assets_;
     InitializeAssets(assets);
     
-    BeginAssetType(assets, Asset_leaf);
-    PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, leafPath);
+    PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, path);
     if(bitmapGroup.fileCount)
     {
+        BeginAssetType(assets, assetType);
         for(u32 imageIndex = 0; imageIndex < bitmapGroup.fileCount; ++imageIndex)
         {
-            PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, leafPath);
-            AddBitmapAsset(leafPath, bitmapHandle.name, 0, 0.5f, 0);
+            PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, path);
+            AddBitmapAsset(path, bitmapHandle.name, 0, 0.5f, 0);
             Win32CloseHandle(&bitmapHandle);
         }
+        
+        EndAssetType();
+        WritePak(assets, pakName);
     }
     Win32GetAllFilesEnd(&bitmapGroup);
-    EndAssetType();
-    
-    
-    
-    WritePak(assets, "forgleafs.pak" );
-}
-
-internal void WriteTrunks()
-{
-    char* trunkPath = "definition/trunks";
-    
-    Assets assets_;
-    Assets* assets = &assets_;
-    InitializeAssets(assets);
-    
-    BeginAssetType(assets, Asset_trunk);
-    PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, trunkPath);
-    if(bitmapGroup.fileCount)
-    {
-        for(u32 imageIndex = 0; imageIndex < bitmapGroup.fileCount; ++imageIndex)
-        {
-            PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, trunkPath);
-            AddBitmapAsset(trunkPath, bitmapHandle.name, 0, 0.5f, 0);
-            Win32CloseHandle(&bitmapHandle);
-        }
-    }
-    Win32GetAllFilesEnd(&bitmapGroup);
-    EndAssetType();
-    
-    
-    WritePak(assets, "forgtrunks.pak" );
-}
-
-internal void WriteParticles()
-{
-    char* particlePath = "definition/particles";
-    
-    Assets assets_;
-    Assets* assets = &assets_;
-    InitializeAssets(assets);
-    
-    BeginAssetType(assets, Asset_Particle);
-    PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, particlePath);
-    if(bitmapGroup.fileCount)
-    {
-        for(u32 imageIndex = 0; imageIndex < bitmapGroup.fileCount; ++imageIndex)
-        {
-            PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, particlePath);
-            AddBitmapAsset(particlePath, bitmapHandle.name, 0, 0.5f, 0);
-            Win32CloseHandle(&bitmapHandle);
-        }
-    }
-    Win32GetAllFilesEnd(&bitmapGroup);
-    EndAssetType();
-    
-    
-    
-    WritePak(assets, "forgParticles.pak" );
 }
 
 internal void WriteMisc()
@@ -3208,11 +3136,13 @@ inline void WriteAnimationSkinsBitmaps(char* skeletonPath, char* skeletonName)
 internal void WriteBitmapsAndAnimations()
 {
     WriteComponents();
-    WriteLeafs();
-    WriteTrunks();
+    WriteBitmapsFromPath("definition/leafs", Asset_leaf, "forgleafs.pak");
+    WriteBitmapsFromPath("definition/flowers", Asset_flower, "forgflowers.pak");
+    WriteBitmapsFromPath("definition/fruits", Asset_fruit, "forgfruits.pak");
+    WriteBitmapsFromPath("definition/trunks", Asset_trunk, "forgtrunks.pak");
+    WriteBitmapsFromPath("definition/particles", Asset_Particle, "forgparticles.pak");
     WriteMisc();
     WriteUI();
-    WriteParticles();
     
     char* animationPath = "definition/animation";
     PlatformSubdirNames* subdir = (PlatformSubdirNames* ) malloc(sizeof(PlatformSubdirNames ) );

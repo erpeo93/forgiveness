@@ -718,13 +718,13 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
         case UIRequest_EquipDragging:
         {
             SendEquipDraggingRequest(request->slotIndex);
-            EquipmentPresentPrediction(UI->worldMode, UI->player, UI->player->animation.output.focusSlots, &UI->draggingEntity);
+            EquipmentPresentPrediction(UI->worldMode, UI->player, UI->player->animation.nearestCompatibleSlotForDragging, &UI->draggingEntity);
         } break;
         
         case UIRequest_DragEquipment:
         {
             SendDragEquipmentRequest(request->slotIndex);
-            EquipmentRemovedPrediction(UI->player, UI->player->animation.output.focusSlots);
+            EquipmentRemovedPrediction(UI->player, UI->player->animation.nearestCompatibleSlotForDragging);
             UI->animationGhostAllowed = false;
             
             if(UI->player->equipment[request->slotIndex].ID == UI->lockedInventoryID1)
@@ -1757,6 +1757,8 @@ inline b32 UIDispatchInteraction(UIState* UI, UIInteraction* interaction, u32 fl
                             //entity->quantity = (r32) object->quantity;
                             entity->status = (r32) object->status;
                         }
+                        
+                        entity->identifier = 0xffffffffffffffff - 1;
                     } break;
                     
                     case UIInteractionAction_Clear:

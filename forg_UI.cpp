@@ -485,7 +485,7 @@ inline b32 SpecialHandling(char* name)
 {
     b32 result = false;
     
-    if(StrEqual(name, "leafName") ||
+    if(StrEqual(name, "imageName") ||
        StrEqual(name, "trunkName") ||
        StrEqual(name, "particleName") ||
        StrEqual(name, "name") ||
@@ -1707,6 +1707,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         b32 showPivots = ToB32(GetValue(pause, "showPivots"));
                         b32 drawOpened = ToB32(GetValue(pause, "drawOpened"));
                         r32 scale = ToR32(GetValue(pause, "scale"));
+                        Vec3 offset = StructV3(pause, "offset");
                         
                         r32 speed = ToR32(GetValue(pause, "speed"));
                         r32 timeToAdvance = play ? input->timeToAdvance : 0;
@@ -1738,7 +1739,7 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                         
                         SkeletonInfo info = GetSkeletonForTaxonomy(UI->table, animationSlot);
                         
-                        Vec3 animationBase = P;
+                        Vec3 animationBase = P + offset;
                         animationBase.xy += Hadamart(info.originOffset, animationScale);
                                                 
                         AnimationOutput output =  PlayAndDrawEntity(UI->worldMode, UI->group, {}, &test, test.P, animationScale, 0, animationBase, 0, V4(1, 1, 1, 1), drawOpened, 0, InvertedInfinityRect2(), 1, {true, showBones, !showBitmaps, showPivots, timer, nameHashID, UI->fakeEquipment});
@@ -3229,16 +3230,26 @@ inline void UIOverdrawInventoryView(UIState* UI)
         }
     }
     
-    if(UI->draggingEntity.taxonomy && !IsValid(UI->player->animation.nearestCompatibleSlotForDragging))
+    if(UI->draggingEntity.taxonomy && (!UI->animationGhostAllowed || !IsValid(UI->player->animation.nearestCompatibleSlotForDragging)))
     {
         UI->draggingEntity.animation.cameInTime = R32_MAX;
-        Vec2 standardDraggingObjectDim = V2(1.5f, 1.5f);
-        r32 zoomCoeff = UI->worldMode->cameraWorldOffset.z / UI->worldMode->defaultCameraZ;
-        Vec2 finalDraggingObjectDim = standardDraggingObjectDim * zoomCoeff;
+        
+        Vec2 draggingObjectDim;
+        if(UI->mode == UIMode_Loot)
+        {
+            Vec2 standardDraggingObjectDim = V2(1.5f, 1.5f);
+            r32 zoomCoeff = UI->worldMode->cameraWorldOffset.z / UI->worldMode->defaultCameraZ;
+            draggingObjectDim = standardDraggingObjectDim * zoomCoeff;
+            
+        }
+        else
+        {
+            draggingObjectDim = V2(-1, -1);            
+        }
         
         Vec3 objectP = UI->worldMouseP;
-        
-        RenderEntity(UI->group, UI->worldMode, &UI->draggingEntity, objectP, finalDraggingObjectDim, UI->worldMode->cameraWorldOffset.z - 0.1f);
+
+        RenderEntity(UI->group, UI->worldMode, &UI->draggingEntity, objectP, draggingObjectDim, UI->worldMode->cameraWorldOffset.z - 0.1f);
     }
 }
 
@@ -3738,6 +3749,10 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             UIAddChild(UI, playButton, EditorElement_String, "autoplay", "false");
             UIAddChild(UI, playButton, EditorElement_Real, "speed", "1.0");
             UIAddChild(UI, playButton, EditorElement_Real, "scale", "50.0");
+            EditorElement* offset = UIAddChild(UI, playButton, EditorElement_Struct, "offset");
+            UIAddChild(UI, offset, EditorElement_Real, "z", "0.0");
+            UIAddChild(UI, offset, EditorElement_Real, "y", "0.0");
+            UIAddChild(UI, offset, EditorElement_Real, "x", "0.0");
             UIAddChild(UI, playButton, EditorElement_String, "showBones", "false");
             UIAddChild(UI, playButton, EditorElement_String, "showBitmaps", "true");
             UIAddChild(UI, playButton, EditorElement_String, "showPivots", "false");
@@ -3791,10 +3806,10 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             UIAddChild(UI, params, EditorElement_String, "uniformColors", "false");
             UIAddChild(UI, params, EditorElement_String, "viewType", "Voronoi");
             UIAddChild(UI, params, EditorElement_Unsigned, "chunkApron", "2");
-            EditorElement* offset = UIAddChild(UI, params, EditorElement_Struct, "cameraOffset");
-            UIAddChild(UI, offset, EditorElement_Real, "x", "0.0");
-            UIAddChild(UI, offset, EditorElement_Real, "y", "0.0");
-            UIAddChild(UI, offset, EditorElement_Real, "z", "0.0");
+            EditorElement* cameraOffset = UIAddChild(UI, params, EditorElement_Struct, "cameraOffset");
+            UIAddChild(UI, cameraOffset, EditorElement_Real, "x", "0.0");
+            UIAddChild(UI, cameraOffset, EditorElement_Real, "y", "0.0");
+            UIAddChild(UI, cameraOffset, EditorElement_Real, "z", "0.0");
             
             
             groundParamsRoot->next = params;
@@ -4144,7 +4159,8 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
 }
 
 global_variable u32 requireContinousClickActions[] = {
- Action_Attack   
+ Action_Attack,
+ Action_Open
 };
 
 inline void HandleOverlappingInteraction(UIState* UI, UIOutput* output, PlatformInput* input, ClientEntity* overlapping)
@@ -4558,8 +4574,10 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
         
         case UIMode_Loot:
         {
+            player->animation.nearestCompatibleSlotForDragging = {};
             UIResetListPossibility(UI, possibleObjectActions);
             UIAddInteraction(UI, input, mouseRight, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_Equipment));
+            UIAddInteraction(UI, input, inventoryButton, UISetValueInteraction(UI, UI_Trigger, &UI->nextMode, UIMode_Equipment));
             
             ClientEntity* containerEntityC = GetEntityClient(worldMode, UI->openedContainerID);
             if(containerEntityC && GetFocusObject(containerEntityC))
@@ -4593,7 +4611,6 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             EquipInfo focusSlot = UI->player->animation.output.focusSlots;
             
             EquipInfo compatibleWithDragging = {};
-            
             ClientEntity* dragging = &UI->draggingEntity;
             u64 draggingID = 0;
             
@@ -4623,9 +4640,6 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                 }
                 
             }
-            
-            
-            
             player->animation.nearestCompatibleSlotForDragging = compatibleWithDragging;
             
             
@@ -4719,7 +4733,7 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
                             dragEquipmentRequest.requestCode = UIRequest_DragEquipment;
                             dragEquipmentRequest.slot = GetMainSlot(focusSlot);
                             
-                            UIInteraction dragEquipmentInteraction = mouseInteraction;
+                            UIInteraction dragEquipmentInteraction = ScrollableListRequestInteraction(UI, UI_Click, &UI->possibleObjectActions);
                             UIAddRequestAction(UI, &dragEquipmentInteraction, UI_KeptPressed, dragEquipmentRequest);
                             UIAddStandardAction(UI, &dragEquipmentInteraction, UI_KeptPressed, ClientEntity, ColdPointer(&UI->draggingEntity), ColdPointer(equipmentFocus));
                             

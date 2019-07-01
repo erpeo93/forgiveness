@@ -148,10 +148,19 @@ struct ClientPlant
     r32 serverAge;
     
     r32 life;
+    
     r32 leafDensity;
     r32 leafDimension;
     
+    r32 flowerDensity;
+    r32 flowerDimension;
+    
+    r32 fruitDensity;
+    r32 fruitDimension;
+    
     BitmapId leafBitmap;
+    BitmapId flowerBitmap;
+    BitmapId fruitBitmap;
     BitmapId trunkBitmap;
     
     ClientPlant* nextFree;
@@ -385,7 +394,7 @@ struct GameModeWorld
     ClientRock* firstFreeRock;
     ClientAnimationEffect* firstFreeEffect;
     
-    RandomSequence leafSequence;
+    RandomSequence leafFlowerFruitSequence;
     RandomSequence waterRipplesSequence;
     ParticleCache* particleCache;
     

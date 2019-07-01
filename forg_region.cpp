@@ -500,6 +500,7 @@ internal void HandlePlayerRequest(SimRegion* region, SimEntity* entity, PlayerRe
                         {
                             if(unableBecauseOfDistance)
                             {
+                                entity->acceleration = destEntity->P - entity->P;
                                 entity->action = Action_Move;
                             }
                         }
@@ -1384,6 +1385,13 @@ internal void UpdatePlant(SimRegion* region, SimEntity* entity, r32 growingCoeff
     
     plant->leafDensity = 1;
     plant->leafDimension = 1;
+    
+    plant->flowerDensity = 0;
+    plant->flowerDimension = 0;
+    
+    plant->fruitDensity = 0;
+    plant->fruitDimension = 0;
+    
     plant->life = 1;
 }
 

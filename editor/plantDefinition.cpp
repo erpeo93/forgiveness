@@ -32,8 +32,14 @@ inline void ParsePlantLevelParams(PlantLevelParams* destParams, EditorElement* l
         destParams->radiousIncreaseSpeed = ToR32(GetValue(levelParams, "radiousIncreaseSpeed"));
         destParams->lengthIncreaseSpeed = ToR32(GetValue(levelParams, "lengthIncreaseSpeed"));
         
-        destParams->leafCount = Min(MAX_LEAFS_PER_STEM, ToU8(GetValue(levelParams, "leafCount")));
+        destParams->leafCount = Min(MAX_LFF_PER_STEM, ToU8(GetValue(levelParams, "leafCount")));
         destParams->allLeafsAtStemLength = ToR32(GetValue(levelParams, "allLeafsAtStemLength"), 0.5f);
+        
+        destParams->flowerCount = Min(MAX_LFF_PER_STEM, ToU8(GetValue(levelParams, "flowerCount")));
+        destParams->allFlowersAtStemLength = ToR32(GetValue(levelParams, "allFlowersAtStemLength"), 0.5f);
+        
+        destParams->fruitCount = Min(MAX_LFF_PER_STEM, ToU8(GetValue(levelParams, "fruitCount")));
+        destParams->allFruitsAtStemLength = ToR32(GetValue(levelParams, "allFruitsAtStemLength"), 0.5f);
     }
     else
     {
@@ -41,6 +47,30 @@ inline void ParsePlantLevelParams(PlantLevelParams* destParams, EditorElement* l
     }
 }
 
+
+inline void ParsePlantLFFParams(PlantLFFParams* params, EditorElement* root)
+{
+    if(root)
+    {
+        params->aliveColor = ToV4Color(GetStruct(root, "color"));
+        params->deadColor = ToV4Color(GetStruct(root, "color"));
+        params->colorV = ToV4Color(GetStruct(root, "colorV"));
+        
+        params->dimSpeed = ToR32(GetValue(root, "dimSpeed"));
+        params->offsetSpeed = ToR32(GetValue(root, "offsetSpeed"));
+        
+        params->scale = ToV2(GetStruct(root, "scale"));
+        params->scaleV = ToV2(GetStruct(root, "scaleV"));
+        
+        params->offsetV = ToV3(GetStruct(root, "offsetV"));
+        params->angleV = ToR32(GetValue(root, "angleV"));
+        
+        params->windAngleV = ToR32(GetValue(root, "windAngleV"));
+        params->windDirectionV = ToR32(GetValue(root, "windDirectionV"));
+        
+        params->bitmapHash = StringHash(GetValue(root, "imageName"));
+    }
+}
 
 internal void ImportPlantDefinitionTab(TaxonomySlot* slot, EditorElement* root)
 {
@@ -79,25 +109,12 @@ internal void ImportPlantDefinitionTab(TaxonomySlot* slot, EditorElement* root)
     ParsePlantLevelParams(plant->levelParams + 2, GetStruct(root, "level2"));
     ParsePlantLevelParams(plant->levelParams + 3, GetStruct(root, "level3"));
     
-    plant->leafColor = ToV4Color(GetStruct(root, "leafColor"));
-    plant->leafColorV = ToV4Color(GetStruct(root, "leafColorV"));
-    
-    plant->leafDimSpeed = ToR32(GetValue(root, "leafDimSpeed"));
-    plant->leafOffsetSpeed = ToR32(GetValue(root, "leafOffsetSpeed"));
-    
-    plant->leafScale = ToV2(GetStruct(root, "leafScale"));
-    plant->leafScaleV = ToV2(GetStruct(root, "leafScaleV"));
-    
-    plant->leafOffsetV = ToV3(GetStruct(root, "leafOffsetV"));
-    plant->leafAngleV = ToR32(GetValue(root, "leafAngleV"));
-    
-    plant->leafWindAngleV = ToR32(GetValue(root, "leafWindAngleV"));
-    plant->leafWindDirectionV = ToR32(GetValue(root, "leafWindDirectionV"));
+    ParsePlantLFFParams(&plant->leafParams, GetStruct(root, "leaf"));
+    ParsePlantLFFParams(&plant->flowerParams, GetStruct(root, "flower"));
+    ParsePlantLFFParams(&plant->fruitParams, GetStruct(root, "fruit"));
     
     plant->trunkColorV = ToV4Color(GetStruct(root, "trunkColorV"));
     plant->lobeDepth = ToR32(GetValue(root, "lobeDepth"));
     plant->lobes = ToR32(GetValue(root, "lobes"));
-    
-    plant->leafStringHash = StringHash(GetValue(root, "leafName"));
     plant->trunkStringHash = StringHash(GetValue(root, "trunkName"));
 }

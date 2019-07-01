@@ -1253,17 +1253,6 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
                     }
                 } break;
                 
-                case CommandType_BeginSpecialTexture:
-                {
-                    OpenGLBindFramebuffer(opengl.specialTextures + OpenGLSpecial_GroundTexture, 256,256);
-                } break;
-                
-                case CommandType_EndSpecialTexture:
-                {
-                    Assert(peelWalkedSize == 0);
-                    OpenGLBindFramebuffer(opengl.depthPeelBuffer + 0, renderWidth, renderHeight);
-                } break;
-                
                 case CommandType_TexturedQuadsCommand:
                 {
                     glBindBuffer(GL_ARRAY_BUFFER, opengl.vertexBuffer);

@@ -17,7 +17,7 @@ struct PlantSegment
     };
 };
 
-struct Leaf
+struct LeafFlowerFruit
 {
     b32 initialized;
     
@@ -29,7 +29,7 @@ struct Leaf
     r32 windRandomization;
 };
 
-#define MAX_LEAFS_PER_STEM 16
+#define MAX_LFF_PER_STEM 16
 struct PlantStem
 {
     PlantSegment* root;
@@ -56,7 +56,9 @@ struct PlantStem
     
     r32 additionalCurveBackAngle;
     
-    Leaf leafs[MAX_LEAFS_PER_STEM];
+    LeafFlowerFruit leafs[MAX_LFF_PER_STEM];
+    LeafFlowerFruit flowers[MAX_LFF_PER_STEM];
+    LeafFlowerFruit fruits[MAX_LFF_PER_STEM];
     
     union
     {
@@ -76,6 +78,9 @@ struct PlantInstance
     u32 trunkCount;
     PlantStem* firstTrunk;
 };
+
+
+
 
 struct PlantLevelParams
 {
@@ -118,6 +123,12 @@ struct PlantLevelParams
     
     u8 leafCount;
     r32 allLeafsAtStemLength;
+    
+    u8 flowerCount;
+    r32 allFlowersAtStemLength;
+    
+    u8 fruitCount;
+    r32 allFruitsAtStemLength;
 };
 
 printTable(noPrefix) enum PlantShape
@@ -130,6 +141,28 @@ printTable(noPrefix) enum PlantShape
     PlantShape_Flame,
     PlantShape_InverseConical,
     PlantShape_TendFlame
+};
+
+
+struct PlantLFFParams
+{
+    Vec2 scale;
+    Vec2 scaleV;
+    
+    Vec3 offsetV;
+    r32 angleV;
+    
+    Vec4 aliveColor;
+    Vec4 deadColor;
+    Vec4 colorV;
+    
+    r32 windAngleV;
+    r32 windDirectionV;
+    
+    r32 dimSpeed;
+    r32 offsetSpeed;
+    
+    u64 bitmapHash;
 };
 
 #define MAX_LEVELS 4
@@ -164,27 +197,15 @@ struct PlantDefinition
     u8 maxLevels;
     PlantLevelParams levelParams[MAX_LEVELS];
     
-    Vec4 leafColor;
-    Vec4 leafColorV;
-    
-    r32 leafDimSpeed;
-    r32 leafOffsetSpeed;
-    
-    Vec2 leafScale;
-    Vec2 leafScaleV;
-    
-    Vec3 leafOffsetV;
-    r32 leafAngleV;
-    
-    r32 leafWindAngleV;
-    r32 leafWindDirectionV;
+    PlantLFFParams leafParams;
+    PlantLFFParams flowerParams;
+    PlantLFFParams fruitParams;
     
     Vec4 trunkColorV;
     
     r32 lobeDepth;
     r32 lobes;
     
-    u64 leafStringHash;
     u64 trunkStringHash;
     
     union

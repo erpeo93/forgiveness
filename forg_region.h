@@ -52,8 +52,15 @@ struct PlantComponent
 {
 	r32 age;
     r32 life;
+    
     r32 leafDensity;
     r32 leafDimension;
+    
+    r32 flowerDensity;
+    r32 flowerDimension;
+    
+    r32 fruitDensity;
+    r32 fruitDimension;
     
     u32 nextFree;
 };

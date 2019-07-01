@@ -10,7 +10,6 @@ printTable(noPrefix) enum EntityAction
     Action_None,
     Action_Idle,
     Action_Move,
-    Action_Examine,
     Action_Protecting,
     Action_Rolling,
     Action_Attack,

@@ -1259,7 +1259,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     {
                         for(u8 X = 0; X < gridDimX; ++X)
                         {
-                            i32 objectIndex = 0; 
+                            i32 objectIndex = Y * gridDimX + X; 
                             Object* object = input->objects + objectIndex;
                             
                             Vec3 objectP = lowLeftCorner + cellDim * V3(X, Y, 0);
@@ -1777,6 +1777,7 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
     
     input->entity = entityC;
     input->firstActiveEffect = entityC->firstActiveEffect;
+    input->firstActiveEquipmentLightEffect = 0;
     
     
     u32 slotCount = 0;
@@ -1804,7 +1805,16 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
             u64 objectEntityID = entityC->equipment[slotIndex].ID;
             if(objectEntityID)
             {
-                ClientEntity* objectEntity = GetEntityClient(worldMode, objectEntityID);
+                ClientEntity* objectEntity;
+                
+                if(objectEntityID == 0xffffffffffffffff - 1)
+                {
+                    objectEntity = &worldMode->UI->draggingEntity;
+                }
+                else
+                {
+                    objectEntity = GetEntityClient(worldMode, objectEntityID);
+                }
                 if(objectEntity)
                 {
                     u32 taxonomy;
@@ -2036,6 +2046,10 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
             if(!debugParams.ortho)
             {
                 animationState->bounds = animationBounds;
+                if(entityC->action <= Action_Idle)
+                {
+                    animationState->cameraEntityOffset = GetCenter(animationState->bounds);
+                }
             }
             
             RenderObjectLayout(&input, group, layout, P, &params, state);
@@ -2385,7 +2399,11 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             plant->sequence = Seed((u32)entityC->identifier);
         }
         
-        entityC->plant->leafBitmap = FindBitmapByName(group->assets, Asset_leaf, slot->plantDefinition->leafStringHash);
+        entityC->plant->leafBitmap = FindBitmapByName(group->assets, Asset_leaf, slot->plantDefinition->leafParams.bitmapHash);
+        
+        entityC->plant->flowerBitmap = FindBitmapByName(group->assets, Asset_flower, slot->plantDefinition->flowerParams.bitmapHash);
+        
+        entityC->plant->fruitBitmap = FindBitmapByName(group->assets, Asset_fruit, slot->plantDefinition->fruitParams.bitmapHash);
         entityC->plant->trunkBitmap = FindBitmapByName(group->assets, Asset_trunk, slot->plantDefinition->trunkStringHash);
         
         
@@ -2477,7 +2495,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         additionalZbias += 0.4f * GetDim(entityC->animation.bounds).y;
         
         EquipInfo dragging = entityC->animation.nearestCompatibleSlotForDragging;
-        if(IsValid(dragging))
+        if(IsValid(dragging) && worldMode->UI->animationGhostAllowed)
         {
             u64 ID = worldMode->UI->draggingEntity.identifier;
             MarkAllSlotsAsOccupied(entityC->equipment, dragging, ID);

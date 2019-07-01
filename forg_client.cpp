@@ -732,7 +732,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     Vec2 finalXYOffset = worldMode->cameraWorldOffset.xy + UI->cameraOffset.xy;
     
     m4x4 cameraO = ZRotation(worldMode->cameraOrbit) * XRotation(worldMode->cameraPitch);
-    Vec3 cameraOffsetFinal = cameraO * (V3(worldMode->cameraEntityOffset, worldMode->cameraWorldOffset.z + worldMode->cameraDolly + UI->cameraOffset.z) + V3(finalXYOffset, 0));
+    Vec3 cameraOffsetFinal = cameraO * V3(worldMode->cameraEntityOffset, worldMode->cameraWorldOffset.z + worldMode->cameraDolly + UI->cameraOffset.z) + V3(finalXYOffset, 0);
     
     SetCameraTransform(group, 0, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal, worldMode->cameraEntityOffset);
     
@@ -744,7 +744,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     if(worldMode->useDebugCamera)
     {
         cameraO = ZRotation(worldMode->debugCameraOrbit) * XRotation(worldMode->debugCameraPitch);
-        cameraOffsetFinal = cameraO * (V3(worldMode->cameraEntityOffset, worldMode->cameraWorldOffset.z + worldMode->debugCameraDolly));
+        cameraOffsetFinal = cameraO * (V3(worldMode->cameraEntityOffset, worldMode->cameraWorldOffset.z + worldMode->debugCameraDolly)) + V3(finalXYOffset, 0);
         
         SetCameraTransform(group, Camera_Debug, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal, worldMode->cameraEntityOffset);
     }
@@ -933,6 +933,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 //
                 //
                 Clear(group, V4(0.0f, 0.0f, 0.0f, 1.0f));
+                
                 BeginDepthPeel(group);
                 
                 ResetLightGrid(worldMode);
@@ -1018,6 +1019,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         ClientEntity* next = entity->next;
                         if(entity->identifier)
                         {   
+                            //PushRect(group, FlatTransform(5.0f), RectCenterDim(entity->P.xy, V2(0.1f, 0.1f)), V4(1, 1, 1, 1));
+                            
+                            
                             entity->actionTime += input->timeToAdvance;
                             TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, entity->taxonomy);
                             if(!slot)
@@ -1169,7 +1173,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
 				{
                     ClientEntity* target = GetEntityClient(worldMode, output.targetEntityID);
                     Assert(target);
-                    output.inputAcc = target->P - player->P;
+                    //output.inputAcc = target->P - player->P;
 					//ApplyCollisionAvoidance();
 				}
                 else
@@ -1636,6 +1640,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         MoveTowards(worldMode, lootingEntity, V2(0, 0), V2(0, 0),additionalZoomCoeff);
                     }
                 }
+                
                 
                 
                 if(!output.overlappingEntityID)

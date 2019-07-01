@@ -97,7 +97,7 @@ internal void AddPlayersSkills(SimRegion* region, SimEntity* player)
 
 inline Vec3 DroppingVelocity(RandomSequence* seq)
 {
-    Vec3 result = V3(Hadamart(RandomBilV2(seq), V2(20, 20)), 20.0f + RandomBil(seq) * 5.0f);
+    Vec3 result = V3(Hadamart(RandomBilV2(seq), V2(20, 20)), 0);
     return result;
 }
 
@@ -787,6 +787,6 @@ internal void BuildWorld(ServerState * server)
     if(generator)
     {
         BuildServerChunks(server, generator);
-        //BuildSimpleTestWorld(server, generator);
+        BuildSimpleTestWorld(server, generator);
     }
 }

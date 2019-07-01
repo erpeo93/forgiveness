@@ -1,7 +1,7 @@
 #pragma once
 
-#define ALPHA_CAME_IN_SECONDS 2.0f
-#define ALPHA_GO_OUT_SECONDS 2.0f
+#define ALPHA_CAME_IN_SECONDS 1.0f
+#define ALPHA_GO_OUT_SECONDS 1.0f
 #define MIN_STATUS_ALPHA -20.0f
 #define MAX_STATUS_ALPHA 20.0f
 

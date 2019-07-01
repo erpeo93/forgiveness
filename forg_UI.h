@@ -731,8 +731,6 @@ struct UIOutput
     u32 desiredAction;
     u64 targetEntityID;
     u64 overlappingEntityID;
-    
-    b32 animationGhostAllowed;
 };
 
 enum UIMouseMovementType

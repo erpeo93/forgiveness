@@ -646,7 +646,8 @@ inline void SendEntityHeaderReliably(ServerPlayer* player, u64 ID)
 inline void SendPlantUpdate(ServerPlayer* player, u64 entityID, PlantComponent* plant)
 {
     StartPacket(player, plantUpdate);
-    Pack("dddd", plant->age, plant->life, plant->leafDensity, plant->leafDimension);
+    Pack("dddddddd", plant->age, plant->life, plant->leafDensity, plant->leafDimension,
+         plant->flowerDensity, plant->flowerDimension, plant->fruitDensity, plant->fruitDimension);
     CloseAndStoreStandardPacket(player, entityID);
 }
 
