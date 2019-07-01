@@ -143,18 +143,21 @@ printTable(noPrefix) enum PlantShape
     PlantShape_TendFlame
 };
 
-
-struct PlantLFFParams
+struct PlantLFFSeasonParams
 {
+    b32 present;
+    
     Vec2 scale;
     Vec2 scaleV;
-    
-    Vec3 offsetV;
-    r32 angleV;
-    
     Vec4 aliveColor;
     Vec4 deadColor;
     Vec4 colorV;
+};
+
+struct PlantLFFParams
+{
+    Vec3 offsetV;
+    r32 angleV;
     
     r32 windAngleV;
     r32 windDirectionV;
@@ -163,6 +166,8 @@ struct PlantLFFParams
     r32 offsetSpeed;
     
     u64 bitmapHash;
+    
+    PlantLFFSeasonParams seasons[Season_Count];
 };
 
 #define MAX_LEVELS 4

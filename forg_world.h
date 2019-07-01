@@ -233,3 +233,13 @@ inline AddEntityAdditionalParams DroppedRecipeObject(u32 recipeTaxonomy, i16 sta
     
     return result;
 }
+
+enum WorldSeason
+{
+    Season_Autumn,
+    Season_Winter,
+    Season_Spring,
+    Season_Summer,
+    
+    Season_Count
+};

@@ -18,7 +18,6 @@
 #include "forg_render.h"
 #include "forg_rule.h"
 #include "forg_model.h"
-#include "forg_plant.h"
 #include "forg_crafting.h"
 #include "forg_inventory.h"
 #include "forg_fluid.h"
@@ -323,9 +322,14 @@ struct ToDeleteFile
     };
 };
 
+#define SEASON_DURATION 5.0f
 struct GameModeWorld
 {
     struct GameState* gameState;
+    
+    WorldSeason season;
+    r32 seasonLerp;
+    r32 seasonTime;
     
     r32 windTime;
     r32 windSpeed;

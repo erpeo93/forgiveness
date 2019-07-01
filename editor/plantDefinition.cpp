@@ -48,19 +48,27 @@ inline void ParsePlantLevelParams(PlantLevelParams* destParams, EditorElement* l
 }
 
 
-inline void ParsePlantLFFParams(PlantLFFParams* params, EditorElement* root)
+inline void ParseLFFSeasonParams(PlantLFFSeasonParams* params, EditorElement* root)
 {
+    params->present = false;
     if(root)
     {
+        params->present = ToB32(GetValue(root, "present"));
         params->aliveColor = ToV4Color(GetStruct(root, "color"));
         params->deadColor = ToV4Color(GetStruct(root, "color"));
         params->colorV = ToV4Color(GetStruct(root, "colorV"));
         
-        params->dimSpeed = ToR32(GetValue(root, "dimSpeed"));
-        params->offsetSpeed = ToR32(GetValue(root, "offsetSpeed"));
-        
         params->scale = ToV2(GetStruct(root, "scale"));
         params->scaleV = ToV2(GetStruct(root, "scaleV"));
+    }
+}
+
+inline void ParsePlantLFFParams(PlantLFFParams* params, EditorElement* root)
+{
+    if(root)
+    {
+        params->dimSpeed = ToR32(GetValue(root, "dimSpeed"));
+        params->offsetSpeed = ToR32(GetValue(root, "offsetSpeed"));
         
         params->offsetV = ToV3(GetStruct(root, "offsetV"));
         params->angleV = ToR32(GetValue(root, "angleV"));
@@ -69,6 +77,11 @@ inline void ParsePlantLFFParams(PlantLFFParams* params, EditorElement* root)
         params->windDirectionV = ToR32(GetValue(root, "windDirectionV"));
         
         params->bitmapHash = StringHash(GetValue(root, "imageName"));
+        
+        ParseLFFSeasonParams(params->seasons + Season_Autumn, GetStruct(root, "autumn"));
+        ParseLFFSeasonParams(params->seasons + Season_Winter, GetStruct(root, "winter"));
+        ParseLFFSeasonParams(params->seasons + Season_Spring, GetStruct(root, "spring"));
+        ParseLFFSeasonParams(params->seasons + Season_Summer, GetStruct(root, "summmer"));
     }
 }
 

@@ -2410,6 +2410,8 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
         PlantRenderingParams renderingParams = {};
         renderingParams.lights = lights;
         renderingParams.modulationWithFocusColor = entityC->modulationWithFocusColor;
+        renderingParams.season = worldMode->season;
+        renderingParams.lerpWithFollowingSeason = worldMode->seasonLerp;
         
         UpdateAndRenderPlant(worldMode, group, renderingParams, slot->plantDefinition, entityC->plant, animationP);
         

@@ -431,7 +431,7 @@ struct TaxonomySlot
     Rect3 physicalBounds;
     
     RockDefinition* rockDefinition;
-    PlantDefinition* plantDefinition;
+    struct PlantDefinition* plantDefinition;
     struct ParticleEffectDefinition* particleEffectDefinition;
     struct BoltDefinition* boltEffectDefinition;
     

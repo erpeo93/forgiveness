@@ -585,40 +585,72 @@ inline void UpdatePlant(GameModeWorld* worldMode, PlantDefinition* definition, C
     }
 }
 
+inline PlantLFFSeasonParams* GetSeason(PlantLFFParams* params, WorldSeason season)
+{
+    Assert(season < Season_Count);
+    PlantLFFSeasonParams* result = params->seasons + season;
+    
+    return result;
+}
+
+inline PlantLFFSeasonParams* GetFollowingSeason(PlantLFFParams* params, WorldSeason season)
+{
+    Assert(season < Season_Count);
+    
+    u32 index = (season == Season_Count - 1) ? 0 : season + 1;
+    PlantLFFSeasonParams* result = params->seasons + index;
+    
+    return result;
+}
+
 struct PlantRenderingParams
 {
     Lights lights;
     r32 modulationWithFocusColor;
+    WorldSeason season;
+    r32 lerpWithFollowingSeason;
 };
 
 inline void RenderLFF(RenderGroup* group, ClientPlant* plant, r32 baseScale, Vec3 P, PlantLFFParams* params,LeafFlowerFruit* lff, BitmapId BID, PlantRenderingParams renderingParams, r32 windTime)
 {
-    Vec2 scale = baseScale * params->scale + lff->renderingRandomization * params->scaleV;
-    scale *= lff->dimCoeff;
+    PlantLFFSeasonParams* season = GetSeason(params, renderingParams.season);
+    PlantLFFSeasonParams* followingSeason = GetFollowingSeason(params, renderingParams.season);
     
-    Vec4 aliveColor = params->aliveColor;
-    Vec4 deadColor = params->deadColor;
-    
-    Vec4 referenceColor = Lerp(deadColor, plant->life, aliveColor);
-    Vec4 color = referenceColor + lff->colorRandomization * params->colorV;
-    color = Clamp01(color);
-    
-    
-    ObjectTransform lffTransform = UprightTransform();
-    
-    r32 lffAngle = lff->renderingRandomization * Abs(params->angleV);
-    if(params->angleV < 0 && Cos(DegToRad(lffAngle)) < 0)
+    if(season->present)
     {
-        lffTransform.flipOnYAxis = true;
+        r32 lerp = renderingParams.lerpWithFollowingSeason;
+        
+        Vec2 seasonScale = Lerp(season->scale, lerp, followingSeason->scale);
+        Vec2 seasonScaleV = Lerp(season->scaleV, lerp, followingSeason->scaleV);
+        
+        Vec2 scale = baseScale * seasonScale + lff->renderingRandomization * seasonScaleV;
+        scale *= lff->dimCoeff;
+        
+        Vec4 seasonAliveColor = Lerp(season->aliveColor, lerp, followingSeason->aliveColor);
+        Vec4 seasonDeadColor = Lerp(season->deadColor, lerp, followingSeason->deadColor);
+        Vec4 seasonColorV = Lerp(season->colorV, lerp, followingSeason->colorV);
+        
+        Vec4 referenceColor = Lerp(seasonDeadColor, plant->life, seasonAliveColor);
+        Vec4 color = referenceColor + lff->colorRandomization * seasonColorV;
+        color = Clamp01(color);
+        
+        
+        ObjectTransform lffTransform = UprightTransform();
+        
+        r32 lffAngle = lff->renderingRandomization * Abs(params->angleV);
+        if(params->angleV < 0 && Cos(DegToRad(lffAngle)) < 0)
+        {
+            lffTransform.flipOnYAxis = true;
+        }
+        
+        
+        lffAngle += Sin(windTime + TAU32 * lff->windRandomization) * params->windAngleV;
+        
+        lffTransform.angle = lffAngle;
+        lffTransform.modulationPercentage = renderingParams.modulationWithFocusColor;
+        
+        PushBitmap(group, lffTransform, BID, P, 0, scale, color, renderingParams.lights);
     }
-    
-    
-    lffAngle += Sin(windTime + TAU32 * lff->windRandomization) * params->windAngleV;
-    
-    lffTransform.angle = lffAngle;
-    lffTransform.modulationPercentage = renderingParams.modulationWithFocusColor;
-    
-    PushBitmap(group, lffTransform, BID, P, 0, scale, color, renderingParams.lights);
 }
 
 internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParams, r32 windTime, ClientPlant* plant, PlantDefinition* definition, PlantStem* stem, Vec3 stemP, u8 recursiveLevel, m4x4 originOrientation, r32 startingZ)
