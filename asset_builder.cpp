@@ -1398,7 +1398,7 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                     ass->additionalZOffset = 0;
                     ass->angle = angle;
                     ass->scale = V2(scaleX, scaleY );
-                    ass->alpha = alpha;
+                    ass->color = V4(1, 1, 1, alpha);
                     ass->spin = currentSpin;
                     ass->timeLineIndex = timeLineActive;
                     ass->spriteIndex = definitiveSpriteIndex;

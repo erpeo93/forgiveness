@@ -379,7 +379,8 @@ internal void AddEntitySingleThread(SimRegion* region, u32 taxonomy, Vec3 P, u64
             CreatureComponent* creature = Creature(region, entity);
             creature->maxLifePoints = Max(creature->maxLifePoints, 1.0f);
             creature->lifePoints = creature->maxLifePoints;
-            creature->stamina = 100.0f;
+            creature->stamina = 50.0f;
+            creature->maxStamina = 100.0f;
         }
         
         if(slot_->firstLayout)
@@ -456,235 +457,252 @@ inline u64 AddRandomEntity(SimRegion* region, RandomSequence* sequence, Vec3 P, 
     return result;
 }
 
-internal void BuildSimpleTestWorld(ServerState* server, WorldGeneratorDefinition* generator)
+inline void SpawnFromTileAssociation(SimRegion* region, TaxonomyAssociation* firstAssociation, r32 totalWeight, Vec3 P,  RandomSequence* seq)
 {
-    RegionWorkContext* context = server->threadContext + 0;
-    context->immediateSpawn = true;
-    
+    r32 destWeight = RandomUni(seq) * totalWeight;
+    r32 runningWeight = 0;
+    for(TaxonomyAssociation* ass = firstAssociation; ass; ass = ass->next)
+    {
+        runningWeight += ass->weight;
+        if(destWeight <= runningWeight)
+        {
+            for(SpawnTaxonomy* spawn = ass->firstTaxonomy; spawn; spawn = spawn->next)
+            {
+                for(u32 index = 0; index < spawn->counter; ++index)
+                {
+                    Vec3 entityP = P;
+                    entityP.xy += ass->radious * RandomBilV2(seq);
+                    AddRandomEntity(region, seq, entityP, spawn->taxonomy);
+                }
+            }
+            break;
+        }
+    }
+}
+
+internal void BuildSimpleTestWorld(ServerState* server)
+{
+    if(server->generator)
+    {
+        WorldGeneratorDefinition* generator = server->generator;
+        RegionWorkContext* context = server->threadContext + 0;
+        context->immediateSpawn = true;
+        
 #if 0
 #define GENERATE_ENEMIES 1
 #define GENERATE_ENVIRONMENT 0
 #define GENERATE_OBJECTS 0
-    for(u32 regionY = 0; regionY < SERVER_REGION_SPAN; ++regionY)
-    {
-        for(u32 regionX = 0; regionX < SERVER_REGION_SPAN; ++regionX)
+        for(u32 regionY = 0; regionY < SERVER_REGION_SPAN; ++regionY)
         {
-            SimRegion* region = GetServerRegion(server, regionX, regionY);
-            region->context = context;
-            
-            TaxonomyTable* taxTable = server->activeTable;
-            Vec3 P = V3(0, 0, 0);
-            
-            TaxonomySlot* testSlot = 0;
-            
-            r32 hrs = 0.45f * server->regionSpan;
-            RandomSequence grassSeq = Seed(regionX * regionY + (1 << regionX));
-            
+            for(u32 regionX = 0; regionX < SERVER_REGION_SPAN; ++regionX)
+            {
+                SimRegion* region = GetServerRegion(server, regionX, regionY);
+                region->context = context;
+                
+                TaxonomyTable* taxTable = server->activeTable;
+                Vec3 P = V3(0, 0, 0);
+                
+                TaxonomySlot* testSlot = 0;
+                
+                r32 hrs = 0.45f * server->regionSpan;
+                RandomSequence grassSeq = Seed(regionX * regionY + (1 << regionX));
+                
 #if GENERATE_ENEMIES
-            u32 goblinCount = 10;
-            
-            for(u32 goblinIndex = 0; goblinIndex < goblinCount; ++goblinIndex)
-            {
-                r32 offsetX = RandomRangeFloat(&grassSeq, -hrs, hrs);
-                r32 offsetY = RandomRangeFloat(&grassSeq, -hrs, hrs);
+                u32 goblinCount = 10;
                 
-                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "wolf");
-                AddRandomEntity(region, &region->server->randomSequence, P + V3(offsetX, offsetY, 0.0f), testSlot->taxonomy, NullGenerationData());
-            }
-            
-            for(u32 goblinIndex = 0; goblinIndex < goblinCount; ++goblinIndex)
-            {
-                r32 offsetX = RandomRangeFloat(&grassSeq, -hrs, hrs);
-                r32 offsetY = RandomRangeFloat(&grassSeq, -hrs, hrs);
-                
-                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "warriorgoblin");
-                AddRandomEntity(region, &region->server->randomSequence, P + V3(offsetX, offsetY, 0.0f), testSlot->taxonomy, NullGenerationData());
-            }
-#endif
-            
-#if GENERATE_ENVIRONMENT
-            
-#if FORGIVENESS_INTERNAL
-            u32 treeCount = 2;
-            u32 grassCount = 2;
-            u32 rockCount = 2;
-#else
-            u32 treeCount = 400;
-            u32 grassCount = 800;
-            u32 rockCount = 200;
-#endif
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "pine");
-            AddRandomEntity(region, &region->server->randomSequence, P, testSlot->taxonomy);
-            for(u32 index = 0; index < treeCount; ++index)
-            {
-                r32 offsetX = RandomRangeFloat(&grassSeq, -hrs, hrs);
-                r32 offsetY = RandomRangeFloat(&grassSeq, -hrs, hrs);
-                Vec3 pineP = P + V3(offsetX, offsetY, 0);
-                AddRandomEntity(region, &region->server->randomSequence, pineP, testSlot->taxonomy);
-            }
-            
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "campfire");
-            Vec3 fireP = P + V3(-2.0f, 1.5f, 0.0f);
-            
-            for(u32 campFireIndex = 0; campFireIndex < 3; ++campFireIndex)
-            {
-                Vec3 campFireP = fireP + V3(2.0f * campFireIndex, 0, 0);
-                AddRandomEntity(region, &region->server->randomSequence, campFireP, testSlot->taxonomy);
-            }
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "testGrass");
-            grassSeq = Seed(0);
-            for(u32 index = 0; index < grassCount; ++index)
-            {
-                r32 offsetX = RandomRangeFloat(&grassSeq, -hrs, hrs);
-                r32 offsetY = RandomRangeFloat(&grassSeq, -hrs, hrs);
-                Vec3 grassP = P + V3(offsetX, offsetY, 0);
-                AddRandomEntity(region, &region->server->randomSequence, grassP, testSlot->taxonomy);
-            }
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "testRock");
-            for(u32 index = 0; index < rockCount; ++index)
-            {
-                r32 offsetX = RandomRangeFloat(&grassSeq, -hrs, hrs);
-                r32 offsetY = RandomRangeFloat(&grassSeq, -hrs, hrs);
-                Vec3 rockP = P + V3(offsetX, offsetY, 0);
-                AddRandomEntity(region, &region->server->randomSequence, rockP, testSlot->taxonomy);
-            }
-#endif
-            
-#if GENERATE_OBJECTS
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "standard leather");
-            AddRandomEntity(region, &region->server->randomSequence, P + V3(2, 5, 0), testSlot->taxonomy);
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "standard leather");
-            AddRandomEntity(region, &region->server->randomSequence, P + V3(2, 6, 0), testSlot->taxonomy);
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "special leather");
-            AddRandomEntity(region, &region->server->randomSequence, P + V3(3, 5, 0), testSlot->taxonomy);
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "special leather");
-            AddRandomEntity(region, &region->server->randomSequence, P + V3(3, 6, 0), testSlot->taxonomy);
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "pant");
-            AddRandomEntity(region, &region->server->randomSequence, P + V3(2, 4, 0), testSlot->taxonomy);
-            
-#if 0            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "chest");
-            AddRandomEntity(region, &region->server->randomSequence, P + V3(1, 1, 0), testSlot->taxonomy);
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "bag");
-            AddRandomEntity(region, &region->server->randomSequence, P + V3(2, 3, 0), testSlot->taxonomy);
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "bag");
-            AddRandomEntity(region, &region->server->randomSequence, P + V3(4, 3, 0), testSlot->taxonomy);
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "bag");
-            AddRandomEntity(region, &region->server->randomSequence, P + V3(6, 3, 0), testSlot->taxonomy);
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "apple");
-            AddRandomEntity(region, &region->server->randomSequence, P + V3(4.0f, 0.0f, 0.0f), testSlot->taxonomy);
-            
-            for(u32 appleIndex = 0; appleIndex < 0; ++appleIndex)
-            {
-                r32 offsetX = RandomRangeFloat(&grassSeq, -15.0f, 15.0f);
-                r32 offsetY = RandomRangeFloat(&grassSeq, -15.0f, 15.0f);
-                AddRandomEntity(region, &region->server->randomSequence, P + V3(offsetX, offsetY, 0.0f), testSlot->taxonomy);
-            }
-            
-            
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "smithing tools");
-            AddRandomEntity(region, &region->server->randomSequence, P + V3(4.0f, 0.0f, 0.0f), testSlot->taxonomy);
-            
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "strength");
-            AddRandomEntity(region, &region->server->randomSequence, P + V3(5.0f, 0.0f, 0.0f), testSlot->taxonomy);
-#endif
-            TaxonomySlot* recipeSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "sword");
-            testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "recipe");
-            AddEntity(region, P + V3(4.0f, 0.0f, 0.0f), testSlot->taxonomy, RecipeIndexGenerationData(12), RecipeObject(recipeSlot->taxonomy, I16_MAX));
-            
-#endif
-        }
-        
-    }
-#else
-    
-    u32 entityPerRegion = 1000;
-    for(u32 regionY = 0; regionY < SERVER_REGION_SPAN; ++regionY)
-    {
-        for(u32 regionX = 0; regionX < SERVER_REGION_SPAN; ++regionX)
-        {
-            SimRegion* region = GetServerRegion(server, regionX, regionY);
-            region->context = context;
-            
-            TaxonomyTable* taxTable = server->activeTable;
-            RandomSequence* seq = &server->randomSequence;
-            
-            
-            for(u32 entityIndex = 0; entityIndex < entityPerRegion; ++entityIndex)
-            {
-                Vec3 P = V3(Hadamart(RandomBilV2(seq), V2(server->regionSpan, server->regionSpan)), 0);
-                
-                
-                r32 waterLevel;
-                u32 tileTaxonomy = GetTileTaxonomyFromRegionP(server, region, P, &waterLevel);
-                if(waterLevel > WATER_LEVEL)
+                for(u32 goblinIndex = 0; goblinIndex < goblinCount; ++goblinIndex)
                 {
-                    for(TaxonomyTileAssociations* tileAss = generator->firstAssociation; tileAss; tileAss = tileAss->next)
+                    r32 offsetX = RandomRangeFloat(&grassSeq, -hrs, hrs);
+                    r32 offsetY = RandomRangeFloat(&grassSeq, -hrs, hrs);
+                    
+                    testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "wolf");
+                    AddRandomEntity(region, &region->server->randomSequence, P + V3(offsetX, offsetY, 0.0f), testSlot->taxonomy, NullGenerationData());
+                }
+                
+                for(u32 goblinIndex = 0; goblinIndex < goblinCount; ++goblinIndex)
+                {
+                    r32 offsetX = RandomRangeFloat(&grassSeq, -hrs, hrs);
+                    r32 offsetY = RandomRangeFloat(&grassSeq, -hrs, hrs);
+                    
+                    testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "warriorgoblin");
+                    AddRandomEntity(region, &region->server->randomSequence, P + V3(offsetX, offsetY, 0.0f), testSlot->taxonomy, NullGenerationData());
+                }
+#endif
+                
+#if GENERATE_ENVIRONMENT
+                
+#if FORGIVENESS_INTERNAL
+                u32 treeCount = 2;
+                u32 grassCount = 2;
+                u32 rockCount = 2;
+#else
+                u32 treeCount = 400;
+                u32 grassCount = 800;
+                u32 rockCount = 200;
+#endif
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "pine");
+                AddRandomEntity(region, &region->server->randomSequence, P, testSlot->taxonomy);
+                for(u32 index = 0; index < treeCount; ++index)
+                {
+                    r32 offsetX = RandomRangeFloat(&grassSeq, -hrs, hrs);
+                    r32 offsetY = RandomRangeFloat(&grassSeq, -hrs, hrs);
+                    Vec3 pineP = P + V3(offsetX, offsetY, 0);
+                    AddRandomEntity(region, &region->server->randomSequence, pineP, testSlot->taxonomy);
+                }
+                
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "campfire");
+                Vec3 fireP = P + V3(-2.0f, 1.5f, 0.0f);
+                
+                for(u32 campFireIndex = 0; campFireIndex < 3; ++campFireIndex)
+                {
+                    Vec3 campFireP = fireP + V3(2.0f * campFireIndex, 0, 0);
+                    AddRandomEntity(region, &region->server->randomSequence, campFireP, testSlot->taxonomy);
+                }
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "testGrass");
+                grassSeq = Seed(0);
+                for(u32 index = 0; index < grassCount; ++index)
+                {
+                    r32 offsetX = RandomRangeFloat(&grassSeq, -hrs, hrs);
+                    r32 offsetY = RandomRangeFloat(&grassSeq, -hrs, hrs);
+                    Vec3 grassP = P + V3(offsetX, offsetY, 0);
+                    AddRandomEntity(region, &region->server->randomSequence, grassP, testSlot->taxonomy);
+                }
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "testRock");
+                for(u32 index = 0; index < rockCount; ++index)
+                {
+                    r32 offsetX = RandomRangeFloat(&grassSeq, -hrs, hrs);
+                    r32 offsetY = RandomRangeFloat(&grassSeq, -hrs, hrs);
+                    Vec3 rockP = P + V3(offsetX, offsetY, 0);
+                    AddRandomEntity(region, &region->server->randomSequence, rockP, testSlot->taxonomy);
+                }
+#endif
+                
+#if GENERATE_OBJECTS
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "standard leather");
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(2, 5, 0), testSlot->taxonomy);
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "standard leather");
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(2, 6, 0), testSlot->taxonomy);
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "special leather");
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(3, 5, 0), testSlot->taxonomy);
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "special leather");
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(3, 6, 0), testSlot->taxonomy);
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "pant");
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(2, 4, 0), testSlot->taxonomy);
+                
+#if 0            
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "chest");
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(1, 1, 0), testSlot->taxonomy);
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "bag");
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(2, 3, 0), testSlot->taxonomy);
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "bag");
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(4, 3, 0), testSlot->taxonomy);
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "bag");
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(6, 3, 0), testSlot->taxonomy);
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "apple");
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(4.0f, 0.0f, 0.0f), testSlot->taxonomy);
+                
+                for(u32 appleIndex = 0; appleIndex < 0; ++appleIndex)
+                {
+                    r32 offsetX = RandomRangeFloat(&grassSeq, -15.0f, 15.0f);
+                    r32 offsetY = RandomRangeFloat(&grassSeq, -15.0f, 15.0f);
+                    AddRandomEntity(region, &region->server->randomSequence, P + V3(offsetX, offsetY, 0.0f), testSlot->taxonomy);
+                }
+                
+                
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "smithing tools");
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(4.0f, 0.0f, 0.0f), testSlot->taxonomy);
+                
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "strength");
+                AddRandomEntity(region, &region->server->randomSequence, P + V3(5.0f, 0.0f, 0.0f), testSlot->taxonomy);
+#endif
+                TaxonomySlot* recipeSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "sword");
+                testSlot = NORUNTIMEGetTaxonomySlotByName(taxTable, "recipe");
+                AddEntity(region, P + V3(4.0f, 0.0f, 0.0f), testSlot->taxonomy, RecipeIndexGenerationData(12), RecipeObject(recipeSlot->taxonomy, I16_MAX));
+                
+#endif
+            }
+            
+        }
+#else
+        
+        u32 entityPerRegion = 1000;
+        for(u32 regionY = 0; regionY < SERVER_REGION_SPAN; ++regionY)
+        {
+            for(u32 regionX = 0; regionX < SERVER_REGION_SPAN; ++regionX)
+            {
+                SimRegion* region = GetServerRegion(server, regionX, regionY);
+                region->context = context;
+                
+                TaxonomyTable* taxTable = server->activeTable;
+                RandomSequence* seq = &server->randomSequence;
+                
+                for(u32 entityIndex = 0; entityIndex < entityPerRegion; ++entityIndex)
+                {
+                    Vec3 P = V3(Hadamart(RandomBilV2(seq), V2(server->regionSpan, server->regionSpan)), 0);
+                    
+                    r32 waterLevel;
+                    u32 tileTaxonomy = GetTileTaxonomyFromRegionP(server, region, P, &waterLevel);
+                    if(waterLevel > WATER_LEVEL)
                     {
-                        if(tileAss->taxonomy == tileTaxonomy && tileAss->totalWeight > 0)
+                        for(TaxonomyTileAssociations* tileAss = generator->firstAssociation; tileAss; tileAss = tileAss->next)
                         {
-                            r32 destWeight = RandomUni(seq) * tileAss->totalWeight;
-                            r32 runningWeight = 0;
-                            
-                            for(TaxonomyAssociation* ass = tileAss->firstAssociation; ass; ass = ass->next)
+                            if(tileAss->taxonomy == tileTaxonomy && tileAss->totalWeight > 0)
                             {
-                                runningWeight += ass->weight;
-                                if(destWeight <= runningWeight)
-                                {
-                                    AddRandomEntity(region, seq, P, ass->taxonomy);
-                                    break;
-                                }
+                                SpawnFromTileAssociation(region, tileAss->firstAssociation, tileAss->totalWeight, P, seq);
+                                break;
                             }
-                            
-                            break;
                         }
                     }
                 }
             }
         }
-    }
-    
-    
+        
+        
 #endif
-    context->immediateSpawn = false;
+        context->immediateSpawn = false;
+    }
 }
 
-internal void BuildServerChunks(ServerState* server, WorldGeneratorDefinition* generator)
+internal void BuildServerChunks(ServerState* server)
 {
-    u32 worldSeed = server->worldSeed;
-    i32 offset = SIM_REGION_CHUNK_SPAN;
-    for(i32 Y = -offset; Y < server->lateralChunkSpan + offset; Y++)
+    WorldGeneratorDefinition* generator = server->generator;
+    if(generator)
     {
-        for(i32 X = -offset; X < server->lateralChunkSpan + offset; X++)
+        u32 worldSeed = server->worldSeed;
+        i32 offset = SIM_REGION_CHUNK_SPAN;
+        for(i32 Y = -offset; Y < server->lateralChunkSpan + offset; Y++)
         {
-            Assert(ChunkValid(server->lateralChunkSpan, X, Y));
-            WorldChunk * chunk = GetChunk(server->chunks, ArrayCount(server->chunks), X, Y, &server->worldPool);
-            
-            for(EntityBlock* block = chunk->entities; block; block = block->next)
+            for(i32 X = -offset; X < server->lateralChunkSpan + offset; X++)
             {
-                for(u32 entityIndex = 0; entityIndex < block->countEntity; ++entityIndex)
+                Assert(ChunkValid(server->lateralChunkSpan, X, Y));
+                WorldChunk * chunk = GetChunk(server->chunks, ArrayCount(server->chunks), X, Y, &server->worldPool);
+                
+                for(EntityBlock* block = chunk->entities; block; block = block->next)
                 {
-                    u32 entityID = block->entityIDs[entityIndex];
-                    SimEntity* entity = GetEntity(server, entityID);
-                    DeleteEntityComponents(server, entity, entityID);
+                    for(u32 entityIndex = 0; entityIndex < block->countEntity; ++entityIndex)
+                    {
+                        u32 entityID = block->entityIDs[entityIndex];
+                        SimEntity* entity = GetEntity(server, entityID);
+                        DeleteEntityComponents(server, entity, entityID);
+                    }
                 }
+                
+                FREELIST_FREE(chunk->entities, EntityBlock, server->threadContext[0].firstFreeBlock);
+                BuildChunk(server->activeTable, generator, chunk, X, Y, worldSeed);
             }
-            
-            FREELIST_FREE(chunk->entities, EntityBlock, server->threadContext[0].firstFreeBlock);
-            BuildChunk(server->activeTable, generator, chunk, X, Y, worldSeed);
         }
     }
 }
@@ -784,9 +802,7 @@ internal void BuildWorld(ServerState * server)
         }
     }
     
-    if(generator)
-    {
-        BuildServerChunks(server, generator);
-        //BuildSimpleTestWorld(server, generator);
-    }
+    server->generator = generator;
+    BuildServerChunks(server);
+    BuildSimpleTestWorld(server);
 }

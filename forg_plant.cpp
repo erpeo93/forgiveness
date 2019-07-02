@@ -235,7 +235,7 @@ inline void UpdateLFF(PlantLFFParams* params, LeafFlowerFruit* lff, r32 timeToUp
     lff->offsetCoeff += params->offsetSpeed * timeToUpdate;
     lff->dimCoeff = Min(lff->dimCoeff, 1.0f);
     lff->offsetCoeff = Min(lff->offsetCoeff, 1.0f);
-}z
+}
 
 inline void InitAndUpdateLFF(PlantStem* stem, PlantLFFParams* params, LeafFlowerFruit* lffs, u32 levelCount, r32 allAtStemLength, RandomSequence* seq, r32 timeToUpdate)
 {

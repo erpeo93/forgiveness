@@ -55,7 +55,7 @@ internal PieceAss BlendAss_(PieceAss* p1, r32 lerp, PieceAss* p2)
     
     result.spriteIndex = lerp <= 0.5f ? p1->spriteIndex : p2->spriteIndex;
     result.boneID = p1->boneID;
-    result.alpha = Lerp(p1->alpha, lerp, p2->alpha);
+    result.color = Lerp(p1->color, lerp, p2->color);
     result.spin = p1->spin;
     result.angle = LerpAnglesWithSpin(result.spin, p1->angle, p2->angle, lerp);
     result.scale = Lerp(p1->scale, lerp, p2->scale);
@@ -629,7 +629,7 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
                                     
                                     
                                     
-                                    destAss->alpha = 1.0f;
+                                    destAss->color = V4(1, 1, 1, 1.0f);
                                     
                                     destSprite->pivot = params->pivot;
                                     destSprite->stringHashID = piece->componentHashID;
@@ -823,7 +823,7 @@ inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, Ob
             }
             
             destAss->scale = pieceParams->scale;
-            destAss->alpha = pieceParams->alpha;
+            destAss->color = pieceParams->color;
             
             destSprite->pivot = pieceParams->pivot;
             destSprite->stringHashID = source->componentHashID;
@@ -1388,8 +1388,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     objectTransform.additionalZBias += params->additionalZbias;
                     Vec2 finalScale = Hadamart(pieceParams.scale, ass->scale);
                     
-                    Vec4 color = pieceParams.color;
-                    color.a *=  ass->alpha;
+                    Vec4 color = Hadamart(pieceParams.color, ass->color);
                     
                     for(ClientAnimationEffect* effect = input->firstActiveEffect; effect; effect = effect->next)
                     {
@@ -1590,7 +1589,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                     r32 alpha = GetAssAlphaFade(input->entity->identifier, (u32) spriteInfo->stringHashID,
                                                 input->goOutTime, input->cameInTime, input->entity->status);
                     
-                    equipmentAss->alpha *= alpha;
+                    equipmentAss->color.a *= alpha;
                     
                     AnimationVolatileParams pieceParams = *params;
                     

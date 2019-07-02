@@ -11,6 +11,41 @@ inline void AddTileBucket(Selector* band, char* tileName, r32 temperature)
     }
 }
 
+inline r32 ParseTaxonomyAssociation(TaxonomyAssociation* dest, EditorElement* root)
+{
+    r32 weight = ToR32(GetValue(root, "weight"));
+    r32 radious = ElemR32(root, "radious");
+    
+    dest->radious = radious;
+    dest->weight = weight;
+    
+    EditorElement* spawnTaxonomies = GetList(root, "taxonomies");
+    
+    while(spawnTaxonomies)
+    {
+        char* taxonomyName = GetValue(spawnTaxonomies, "taxonomyName");
+        TaxonomySlot* taxonomySlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName);
+        if(taxonomySlot)
+        {
+            SpawnTaxonomy* spawn;
+            TAXTABLE_ALLOC(spawn, SpawnTaxonomy);
+            
+            u32 counter = ToU32(GetValue(spawnTaxonomies, "counter"), 1);
+            spawn->taxonomy = taxonomySlot->taxonomy;
+            spawn->counter = counter;
+            
+            FREELIST_INSERT(spawn, dest->firstTaxonomy);
+        }
+        else
+        {
+            EditorErrorLog(taxonomyName);
+        }
+        
+        spawnTaxonomies = spawnTaxonomies->next;
+    }
+    
+    return weight;
+}
 
 internal void ImportGeneratorParamsTab(TaxonomySlot* slot, EditorElement* root)
 {
@@ -23,12 +58,33 @@ internal void ImportGeneratorParamsTab(TaxonomySlot* slot, EditorElement* root)
             
             for(TaxonomyAssociation* assToFree = toFree->firstAssociation; assToFree;)
             {
+                FREELIST_FREE(assToFree->firstTaxonomy, SpawnTaxonomy, taxTable_->firstFreeSpawnTaxonomy);
+                
                 TaxonomyAssociation* assNext = assToFree->next;
                 TAXTABLE_DEALLOC(assToFree, TaxonomyAssociation);
                 assToFree = assNext;
             }
             
             TAXTABLE_DEALLOC(toFree, TaxonomyTileAssociations);
+            
+            toFree = next;
+        }
+        
+        for(TaxonomyTileTimerSpawn* toFree = slot->generatorDefinition->firstTimerSpawn; toFree;)
+        {
+            TaxonomyTileTimerSpawn* next = toFree->next;
+            
+            
+            for(TaxonomyAssociation* assToFree = toFree->firstAssociation; assToFree;)
+            {
+                FREELIST_FREE(assToFree->firstTaxonomy, SpawnTaxonomy, taxTable_->firstFreeSpawnTaxonomy);
+                
+                TaxonomyAssociation* assNext = assToFree->next;
+                TAXTABLE_DEALLOC(assToFree, TaxonomyAssociation);
+                assToFree = assNext;
+            }
+            
+            TAXTABLE_DEALLOC(toFree, TaxonomyTileTimerSpawn);
             
             toFree = next;
         }
@@ -118,32 +174,14 @@ internal void ImportGeneratorParamsTab(TaxonomySlot* slot, EditorElement* root)
             EditorElement* taxonomyAssociations = GetList(tileAssociations, "taxonomies");
             while(taxonomyAssociations)
             {
-                char* taxonomyName = GetValue(taxonomyAssociations, "taxonomyName");
-                r32 weight = ToR32(GetValue(taxonomyAssociations, "weight"));
-                
-                TaxonomySlot* taxonomySlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName);
-                
-                if(taxonomySlot)
-                {
-                    TaxonomyAssociation* ass;
-                    TAXTABLE_ALLOC(ass, TaxonomyAssociation);
-                    
-                    ass->taxonomy = taxonomySlot->taxonomy;
-                    ass->weight = weight;
-                    
-                    tileAssoc->totalWeight += weight;
-                    FREELIST_INSERT(ass, tileAssoc->firstAssociation);
-                    
-                }
-                else
-                {
-                    EditorErrorLog(taxonomyName);
-                }
+                TaxonomyAssociation* ass;
+                TAXTABLE_ALLOC(ass, TaxonomyAssociation);
+                r32 weight = ParseTaxonomyAssociation(ass, taxonomyAssociations);
+                tileAssoc->totalWeight += weight;
+                FREELIST_INSERT(ass, tileAssoc->firstAssociation);
                 
                 taxonomyAssociations = taxonomyAssociations->next;
             }
-            
-            
             FREELIST_INSERT(tileAssoc, generator->firstAssociation);
             
         }
@@ -153,5 +191,46 @@ internal void ImportGeneratorParamsTab(TaxonomySlot* slot, EditorElement* root)
         }
         
         tileAssociations = tileAssociations->next;
+    }
+    
+    EditorElement* spawnTimers = GetList(root, "spawnTimers");
+    
+    while(spawnTimers)
+    {
+        char* tileName = GetValue(spawnTimers, "tileType");
+        TaxonomySlot* tileSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, tileName);
+        
+        if(tileSlot)
+        {
+            TaxonomyTileTimerSpawn* tileSpawn;
+            TAXTABLE_ALLOC(tileSpawn, TaxonomyTileTimerSpawn);
+            
+            tileSpawn->taxonomy = tileSlot->taxonomy;
+            tileSpawn->timer = 0;
+            tileSpawn->destTimer = ElemR32(spawnTimers, "timer");
+            tileSpawn->totalWeight = 0;
+            tileSpawn->firstAssociation = 0;
+            
+            
+            EditorElement* taxonomyAssociations = GetList(spawnTimers, "taxonomies");
+            while(taxonomyAssociations)
+            {
+                TaxonomyAssociation* ass;
+                TAXTABLE_ALLOC(ass, TaxonomyAssociation);
+                r32 weight = ParseTaxonomyAssociation(ass, taxonomyAssociations);
+                tileSpawn->totalWeight += weight;
+                FREELIST_INSERT(ass, tileSpawn->firstAssociation);
+                
+                taxonomyAssociations = taxonomyAssociations->next;
+            }
+            FREELIST_INSERT(tileSpawn, generator->firstTimerSpawn);
+            
+        }
+        else
+        {
+            EditorErrorLog(tileName);
+        }
+        
+        spawnTimers = spawnTimers->next;
     }
 }

@@ -136,15 +136,47 @@ inline GenerationMinMax MinMax(r32 min, r32 max)
     return result;
 }
 
+struct SpawnTaxonomy
+{
+    u32 taxonomy;
+    u32 counter;
+    
+    union
+    {
+        SpawnTaxonomy* next;
+        SpawnTaxonomy* nextFree;
+    };
+};
+
 struct TaxonomyAssociation
 {
     r32 weight;
-    u32 taxonomy;
+    r32 radious;
+    
+    SpawnTaxonomy* firstTaxonomy;
     
     union
     {
         TaxonomyAssociation* next;
         TaxonomyAssociation* nextFree;
+    };
+};
+
+struct TaxonomyTileTimerSpawn
+{
+    u32 taxonomy;
+    
+    r32 timer;
+    r32 destTimer;
+    
+    r32 totalWeight;
+    
+    TaxonomyAssociation* firstAssociation;
+    
+    union
+    {
+        TaxonomyTileTimerSpawn* next;
+        TaxonomyTileTimerSpawn* nextFree;
     };
 };
 
@@ -199,6 +231,7 @@ struct WorldGeneratorDefinition
     BiomePyramid biomePyramid;
     
     TaxonomyTileAssociations* firstAssociation;
+    TaxonomyTileTimerSpawn* firstTimerSpawn;
     
     WorldGeneratorDefinition* nextFree;
 };

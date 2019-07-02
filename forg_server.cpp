@@ -1567,6 +1567,46 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         
         
+        // NOTE(Leonardo): spawn new stuff
+        RegionWorkContext* context = server->threadContext + 0;
+        context->immediateSpawn = true;
+        
+        WorldGeneratorDefinition* generator = server->generator;
+        if(generator)
+        {
+            for(TaxonomyTileTimerSpawn* spawn = generator->firstTimerSpawn; spawn; spawn = spawn->next)
+            {
+                spawn->timer += timeToAdvance;
+                if(spawn->timer >= spawn->destTimer)
+                {
+                    spawn->timer = 0;
+                    u32 counter = 0;
+                    
+                    TaxonomyTable* taxTable = server->activeTable;
+                    RandomSequence* seq = &server->randomSequence;
+                    
+                    while(counter < 1000)
+                    {
+                        u32 regionX = RandomChoice(seq, SERVER_REGION_SPAN);
+                        u32 regionY = RandomChoice(seq, SERVER_REGION_SPAN);
+                        SimRegion* region = GetServerRegion(server, regionX, regionY);
+                        region->context = context;
+                        
+                        Vec3 P = V3(Hadamart(RandomBilV2(seq), V2(server->regionSpan, server->regionSpan)), 0);
+                        
+                        r32 waterLevel;
+                        u32 tileTaxonomy = GetTileTaxonomyFromRegionP(server, region, P, &waterLevel);
+                        if(tileTaxonomy == spawn->taxonomy && waterLevel > WATER_LEVEL)
+                        {
+                            SpawnFromTileAssociation(region, spawn->firstAssociation, spawn->totalWeight, P, seq);
+                            break;
+                        }
+                        ++counter;
+                    }
+                }
+            }
+        }
+        
         
         // NOTE(Leonardo): we first simulate all the mirror region, so that we dispatch all the update first, and then we update all the other regions
         u32 realServerRegionSpan = SERVER_REGION_SPAN + 2;
@@ -1631,8 +1671,8 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         for(u32 contextIndex = 0; contextIndex < ArrayCount(server->threadContext); contextIndex++)
         {
-            RegionWorkContext* context = server->threadContext + contextIndex;
-            Assert(!context->used);
+            RegionWorkContext* contextToFree = server->threadContext + contextIndex;
+            Assert(!contextToFree->used);
         }
         
     }

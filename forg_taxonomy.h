@@ -131,6 +131,7 @@ printTable(noPrefix) enum ObjectState
 struct LayoutPieceParams
 {
     b32 valid;
+    Vec4 color;
     Vec3 parentOffset;
     r32 parentAngle;
     Vec2 scale;
@@ -642,8 +643,10 @@ struct TaxonomyTable
     TaxonomyMemBehavior* firstFreeTaxonomyMemBehavior;
     NakedHandReq* firstFreeNakedHandReq;
     
+    struct SpawnTaxonomy* firstFreeSpawnTaxonomy;
     struct TaxonomyAssociation* firstFreeTaxonomyAssociation;
     struct TaxonomyTileAssociations* firstFreeTaxonomyTileAssociations;
+    struct TaxonomyTileTimerSpawn* firstFreeTaxonomyTileTimerSpawn;
     TaxonomyContainerInteraction* firstFreeTaxonomyContainerInteraction;
     
     RandomSequence eventSequence;

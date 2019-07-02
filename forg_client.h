@@ -238,9 +238,17 @@ struct ClientEntity
     r32 generationIntensity;
     
     r32 status;
+    
     r32 lifePoints;
-    r32 stamina;
     r32 maxLifePoints;
+    
+    r32 stamina;
+    r32 maxStamina;
+    
+    b32 showHUD;
+    r32 lifePointsTriggerTime;
+    r32 staminaTriggerTime;
+    
     r32 lightIntensity;
     
     

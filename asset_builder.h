@@ -101,7 +101,7 @@ struct PieceAss
     r32 additionalZOffset;
     r32 angle;
     Vec2 scale;
-    r32 alpha;
+    Vec4 color;
     // NOTE(leonardo): if spin is -1, it means that we have to lerp the angle in the opposite way, means going clockwise instead of counter-clockwise
     i32 spin;
 };

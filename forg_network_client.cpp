@@ -697,14 +697,42 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 Assert(e);
                 
                 EntityAction oldAction = e->action;
-                u32 oldTaxonomy = e->taxonomy;
                 
-                Unpack("llVLLQCLdddddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->recipeTaxonomy, &e->lifePoints, &e->stamina, &e->maxLifePoints, &e->status, &e->generationIntensity, &e->lightIntensity);
+                r32 oldLifePoints = e->lifePoints;
+                r32 oldStamina = e->stamina;
+                
+                Unpack("llVLLQCLddddddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->recipeTaxonomy, &e->lifePoints, &e->maxLifePoints, &e->stamina, &e->maxStamina, &e->status, &e->generationIntensity, &e->lightIntensity);
                 
                 if(e->action != oldAction)
                 {
                     e->actionTime = 0;
                 }
+                
+                if(e->lifePoints != oldLifePoints)
+                {
+                    if(e->lifePointsTriggerTime >= HUD_FADE_TIME)
+                    {
+                        e->lifePointsTriggerTime = 0;
+                    }
+                    else if(e->lifePointsTriggerTime >= HUD_TRIGGER_TIME)
+                    {
+                        e->lifePointsTriggerTime = HUD_TRIGGER_TIME - (HUD_FADE_TIME - e->lifePointsTriggerTime);
+                    }
+                }
+                
+                if(e->stamina != oldStamina)
+                {
+                    if(e->staminaTriggerTime >= HUD_FADE_TIME)
+                    {
+                        e->staminaTriggerTime = 0;
+                    }
+                    else if(e->staminaTriggerTime >= HUD_TRIGGER_TIME)
+                    {
+                        e->staminaTriggerTime = HUD_TRIGGER_TIME - (HUD_FADE_TIME - e->staminaTriggerTime);
+                    }
+                }
+                
+                
                 
                 for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
                 {

@@ -19,7 +19,7 @@ inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, char* componentName, u8
     return dest;
 }
 
-inline void AddLayoutPieceParams(LayoutPiece* piece, ObjectState state, Vec3 parentOffset, r32 parentAngle, Vec2 scale, r32 alpha, Vec2 pivot)
+inline void AddLayoutPieceParams(LayoutPiece* piece, ObjectState state, Vec3 parentOffset, r32 parentAngle, Vec4 color, Vec2 scale, r32 alpha, Vec2 pivot)
 {
     Assert(state < ObjectState_Count);
     LayoutPieceParams* params = piece->params + state;
@@ -29,6 +29,7 @@ inline void AddLayoutPieceParams(LayoutPiece* piece, ObjectState state, Vec3 par
     params->scale = scale;
     params->alpha = alpha;
     params->pivot = pivot;
+    params->color = color;
 }
 
 inline void AddIngredient(LayoutPiece* piece, char* name, u32 quantity)
@@ -106,8 +107,9 @@ internal void ImportLayoutsTab(TaxonomySlot* slot, EditorElement* root)
                 r32 scaleY = ToR32(GetValue(scale, "y"));
                 r32 pieceAlpha = ToR32(GetValue(params, "alpha"));
                 Vec2 pivot = ToV2(GetStruct(params, "pivot"), V2(0.5f, 0.5f));
+                Vec4 color = ToV4Color(GetStruct(params, "color"), V4(1, 1, 1, 1));
                 
-                AddLayoutPieceParams(piece, type, V3(x, y, z), angle, V2(scaleX, scaleY), pieceAlpha, pivot);
+                AddLayoutPieceParams(piece, type, V3(x, y, z), angle, color, V2(scaleX, scaleY), pieceAlpha, pivot);
                 
                 params = params->next;
             }
@@ -162,8 +164,9 @@ internal void ImportLayoutsTab(TaxonomySlot* slot, EditorElement* root)
                     r32 childAlpha = ToR32(GetValue(childParams, "alpha"));
                     
                     Vec2 childPivot = ToV2(GetStruct(childParams, "pivot"), V2(0.5f, 0.5f));
+                    Vec4 childColor = ToV4Color(GetStruct(childParams, "color"), V4(1, 1, 1, 1));
                     
-                    AddLayoutPieceParams(childPiece, childType, V3(childX, childY, childZ), childAngle, V2(childScaleX, childScaleY), childAlpha, childPivot); 
+                    AddLayoutPieceParams(childPiece, childType, V3(childX, childY, childZ), childAngle, childColor, V2(childScaleX, childScaleY), childAlpha, childPivot); 
                     
                     childParams = childParams->next;
                 }

@@ -148,6 +148,9 @@ internal void DeleteEntityClient(GameModeWorld* worldMode, ClientEntity* entity)
     entity->objects.maxObjectCount = 0;
     entity->objects.objectCount = 0;
     
+    entity->lifePointsTriggerTime = 0;
+    entity->staminaTriggerTime = 0;
+    
     
     for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
     {
@@ -1150,8 +1153,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                     overallNearestID = entity->identifier;
                                 }
                                 
+                                entity->showHUD = false;
                                 if(PointInRect(screenBounds, screenMouseP))
                                 {
+                                    entity->showHUD = true;
                                     InsertIntoEntityList(nearestEntities, ArrayCount(nearestEntities), nearestCameraZ, cameraZ, entity);
                                     
                                 }
@@ -1239,6 +1244,89 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 }
                                 
                                 entity->animation.output = RenderEntity(group, worldMode, entity, animationTimeElapsed, params);
+                                
+                                if(IsCreature(worldMode->table, entity->taxonomy))
+                                {
+                                    entity->lifePointsTriggerTime += input->timeToAdvance;
+                                    entity->staminaTriggerTime += input->timeToAdvance;
+                                    
+                                    if(entity->showHUD)
+                                    {
+                                        if(entity->lifePointsTriggerTime >= HUD_FADE_TIME)
+                                        {
+                                            entity->lifePointsTriggerTime = 0.5f * HUD_TRIGGER_TIME;
+                                        }
+                                        
+                                        if(entity->staminaTriggerTime >= HUD_FADE_TIME)
+                                        {
+                                            entity->staminaTriggerTime = 0.5f * HUD_TRIGGER_TIME;
+                                        }
+                                        
+                                        entity->lifePointsTriggerTime = Min(entity->lifePointsTriggerTime, HUD_TRIGGER_TIME);
+                                        entity->staminaTriggerTime = Min(entity->lifePointsTriggerTime, HUD_TRIGGER_TIME);
+                                    }
+                                    
+                                    r32 lifePointAlpha;
+                                    r32 staminaAlpha;
+                                    
+                                    if(entity->lifePointsTriggerTime <= HUD_TRIGGER_TIME)
+                                    {
+                                        lifePointAlpha = Clamp01MapToRange(0.0f, entity->lifePointsTriggerTime, HUD_TRIGGER_TIME);
+                                    }
+                                    else
+                                    {
+                                        lifePointAlpha = 1.0f - Clamp01MapToRange(HUD_TRIGGER_TIME, entity->lifePointsTriggerTime, HUD_FADE_TIME);
+                                    }
+                                    
+                                    if(entity->staminaTriggerTime <= HUD_TRIGGER_TIME)
+                                    {
+                                        staminaAlpha = Clamp01MapToRange(0.0f, entity->staminaTriggerTime, HUD_TRIGGER_TIME);
+                                    }
+                                    else
+                                    {
+                                        staminaAlpha = 1.0f - Clamp01MapToRange(HUD_TRIGGER_TIME, entity->staminaTriggerTime, HUD_FADE_TIME);
+                                    }
+                                    
+                                    
+                                    r32 yOffset = 0.18f;
+                                    r32 maxBarWidth = 1.0f;
+                                    r32 barHeight = 0.05f;
+                                    
+                                    
+                                    ObjectTransform lifePointTransform = UprightTransform();
+                                    lifePointTransform.additionalZBias = 3.0f;
+                                    
+                                    ObjectTransform backTransform = UprightTransform();
+                                    backTransform.additionalZBias = 2.9f;
+                                    
+                                    Vec4 lifeColor = V4(0.5f, 0, 0, lifePointAlpha);
+                                    Vec4 staminaColor = V4(0, 0.5f, 0, staminaAlpha);
+                                    Vec4 backLifeColor = V4(0.2f, 0.2f, 0.2f, lifePointAlpha);
+                                    Vec4 backStaminaColor = V4(0.2f, 0.2f, 0.2f, staminaAlpha);
+                                    
+                                    
+                                    if(entity->maxLifePoints)
+                                    {
+                                        r32 lifePointRatio = entity->lifePoints / entity->maxLifePoints;
+                                        Rect2 lifeRect = RectMinDim(entity->P.xy - V2(0.5f * maxBarWidth, yOffset), V2(lifePointRatio * maxBarWidth, barHeight));
+                                        
+                                        Rect2 backRect = RectMinDim(entity->P.xy - V2(0.5f * maxBarWidth, yOffset), V2(maxBarWidth, barHeight));
+                                        
+                                        PushRect(group, backTransform, backRect, backLifeColor);
+                                        PushRect(group, lifePointTransform, lifeRect, lifeColor);
+                                    }
+                                    
+                                    if(entity->maxStamina)
+                                    {
+                                        r32 staminaRatio = entity->maxStamina ? entity->stamina / entity->maxStamina : 0.0f;
+                                        
+                                        Rect2 staminaRect = RectMinDim(entity->P.xy - V2(0.5f * maxBarWidth, yOffset + 2.0f * barHeight), V2(staminaRatio * maxBarWidth, barHeight));
+                                        Rect2 backRect = RectMinDim(entity->P.xy - V2(0.5f * maxBarWidth, yOffset + 2.0f * barHeight), V2(maxBarWidth, barHeight));
+                                        
+                                        PushRect(group, backTransform, backRect, backStaminaColor);
+                                        PushRect(group, lifePointTransform, staminaRect, staminaColor);
+                                    }
+                                }
                                 
                                 if(entity->animation.output.entityPresent && entity->draggingID)
                                 {

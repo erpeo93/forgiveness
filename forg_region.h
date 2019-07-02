@@ -90,8 +90,11 @@ introspection() struct CreatureComponent
     r32 skillCooldown; 
     r32 strength;
     r32 lifePoints;
-    r32 stamina;
     r32 maxLifePoints;
+    
+    r32 stamina;
+    r32 maxStamina;
+    
     u64 openedContainerID;
     u64 externalDraggingID;
     Vec3 customTargetP;

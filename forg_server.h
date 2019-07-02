@@ -251,6 +251,7 @@ struct ServerState
     
     
     EditorTabStack editorStack;
+    WorldGeneratorDefinition* generator;
     b32 editor;
     b32 gamePaused;
     b32 rebuildWorld;
