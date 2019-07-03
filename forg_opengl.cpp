@@ -1231,6 +1231,37 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
             void* data = (header + 1); 
             switch(header->type)
             {
+                case CommandType_GenerateTextureCommand:
+                {
+                    GenerateTextureCommand* element = (GenerateTextureCommand*) data;
+                    
+                    
+#if 0                    
+                    GLBIndtexture(TEXTURE_ARRAY, element->texture.index);
+                    GLUSEProgram(blueProgram);
+                    GLDrawElements();
+                    GLBindTexture(TEXTURE_ARRAY, 0);
+                    
+                    glBindBuffer(GL_ARRAY_BUFFER, ?);
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ?);
+                    
+                    glViewport(0, 0, texture_dim, texture_dim);
+                    
+                    OpenGLUseProgramBegin(?);
+                    
+                    glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
+                    glDrawElementsBaseVertex(GL_TRIANGLES, 3 * element->triangleCount, GL_UNSIGNED_SHORT, (GLvoid*) (element->indexArrayOffset * sizeof(u16)), element->vertexArrayOffset);
+                    
+                    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+                    OpenGLUseProgramEnd(&program->common);
+#else
+                    OpenGLAllocateTexture(element->texture, element->pixels);
+#endif
+                    
+                    
+                    walkedSize += sizeof(GenerateTextureCommand);
+                } break;
+                
                 case CommandType_BeginPeels:
                 {
                     peelWalkedSize = walkedSize;

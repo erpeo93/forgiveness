@@ -41,12 +41,11 @@ inline void EndDepthPeel(RenderGroup* group)
     PushRenderElement_(group, 0, CommandType_EndPeels);
 }
 
-inline void BeginMultithreadedRendering()
+inline void PushTextureGeneration(RenderGroup* group, RenderTexture texture, void* pixels)
 {
-}
-
-inline void EndMultithreadedRendering()
-{
+    GenerateTextureCommand* command = (GenerateTextureCommand*) PushRenderElement(group, GenerateTextureCommand);
+    command->texture = texture;
+    command->pixels = pixels;
 }
 
 global_variable u32 maxIndexesPerBatch = (U16_MAX - 1);
@@ -432,10 +431,10 @@ inline BitmapDim GetBitmapDim(Bitmap* bitmap, Vec3 P, Vec3 XAxis, Vec3 YAxis, r3
     return result;
 }
 
-inline void PushBitmap__(RenderGroup* group, Bitmap* bitmap, Vec3 P, Vec3 XAxis, Vec3 YAxis, Vec4 color, Lights lights, r32 modulationPercentage, r32 ZBias)
+inline void PushTexture(RenderGroup* group, RenderTexture texture, Vec3 P, Vec3 XAxis = V3(1, 0, 0), Vec3 YAxis = V3(0, 1, 0), Vec4 color = V4(1, 1, 1, 1), Lights lights = {}, r32 modulationPercentage = 0.0f, r32 ZBias = 0.0f)
 {
-    r32 oneTexelU = 1.0f / bitmap->width;
-    r32 oneTexelV = 1.0f / bitmap->height;
+    r32 oneTexelU = 1.0f / texture.width;
+    r32 oneTexelV = 1.0f / texture.height;
     Vec2 minUV = V2(oneTexelU, oneTexelV);
     Vec2 maxUV = V2(1.0f - oneTexelU, 1.0f - oneTexelV);
     
@@ -451,7 +450,7 @@ inline void PushBitmap__(RenderGroup* group, Bitmap* bitmap, Vec3 P, Vec3 XAxis,
     if((XAxis.x >= 0 && YAxis.y >= 0) ||
        (XAxis.x < 0 && YAxis.y < 0))
     {
-        PushQuad(group, bitmap->textureHandle, lights, &vertexes,
+        PushQuad(group, texture, lights, &vertexes,
                  minXminY, V2(minUV.x, minUV.y), colorInt,
                  maxXminY, V2(maxUV.x, minUV.y), colorInt,
                  maxXmaxY, V2(maxUV.x, maxUV.y), colorInt,
@@ -459,13 +458,12 @@ inline void PushBitmap__(RenderGroup* group, Bitmap* bitmap, Vec3 P, Vec3 XAxis,
     }
     else
     {
-        PushQuad(group, bitmap->textureHandle, lights, &vertexes,
+        PushQuad(group, texture, lights, &vertexes,
                  minXminY, V2(minUV.x, minUV.y), colorInt,
                  minXmaxY, V2(minUV.x, maxUV.y), colorInt,
                  maxXmaxY, V2(maxUV.x, maxUV.y), colorInt,
                  maxXminY, V2(maxUV.x, minUV.y), colorInt, modulationPercentage);
     }
-    
 }
 
 inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTransform, Bitmap* bitmap,  Vec3 P, r32 height, Vec2 scale, Vec4 color, Lights lights, Vec2 pivot)
@@ -518,7 +516,7 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTra
         XAxis= XAxis * dim.size.x;
         YAxis = YAxis * dim.size.y;
         
-        PushBitmap__(renderGroup, bitmap, P, XAxis, YAxis, color, lights, objectTransform.modulationPercentage, objectTransform.additionalZBias);
+        PushTexture(renderGroup, bitmap->textureHandle, P, XAxis, YAxis, color, lights, objectTransform.modulationPercentage, objectTransform.additionalZBias);
     }
     
     return result;

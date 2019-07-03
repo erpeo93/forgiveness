@@ -137,9 +137,14 @@ struct Assets
     
     u32 whitePixel;
     u32 nextFreeTextureHandle;
-    u32 maxTextureHandleCount;
+    u32 maxTextureHandleIndex;
+    
+    u32 redPixel;
+    u32 nextFreeSpecialTextureHandle;
+    u32 maxSpecialTextureHandleIndex;
     
     AssetLRULink LRUSentinel;
+    AssetLRULink specialLRUSentinel;
 };
 
 internal void LoadBitmap( Assets* assets, BitmapId ID, b32 immediate );

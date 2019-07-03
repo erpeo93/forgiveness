@@ -34,6 +34,9 @@ struct WorldTile
     Vec4 colorDelta;
     r32 colorRandomness;
     Vec4 borderColor;
+    RenderTexture textureHandle;
+    AssetLRULink LRU;
+    u32 randomTextureColorPixel;
 #endif
 };
 

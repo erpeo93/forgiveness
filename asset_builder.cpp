@@ -2982,7 +2982,7 @@ internal void WriteComponents()
     free(subdir);
 }
 
-internal void WriteBitmapsFromPath(char* path, AssetTypeId assetType, char* pakName)
+internal void WriteBitmapsFromPath(char* path, AssetTypeId assetType, char* pakName, Vec2 pivot = V2(0.5f, 0.0f))
 {
     Assets assets_;
     Assets* assets = &assets_;
@@ -2995,7 +2995,7 @@ internal void WriteBitmapsFromPath(char* path, AssetTypeId assetType, char* pakN
         for(u32 imageIndex = 0; imageIndex < bitmapGroup.fileCount; ++imageIndex)
         {
             PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, path);
-            AddBitmapAsset(path, bitmapHandle.name, 0, 0.5f, 0);
+            AddBitmapAsset(path, bitmapHandle.name, 0, pivot.x, pivot.y);
             Win32CloseHandle(&bitmapHandle);
         }
         
@@ -3141,6 +3141,7 @@ internal void WriteBitmapsAndAnimations()
     WriteBitmapsFromPath("definition/fruits", Asset_fruit, "forgfruits.pak");
     WriteBitmapsFromPath("definition/trunks", Asset_trunk, "forgtrunks.pak");
     WriteBitmapsFromPath("definition/particles", Asset_Particle, "forgparticles.pak");
+    WriteBitmapsFromPath("definition/ground", Asset_ground, "forgground.pak", V2(0.5f, 0.5f));
     WriteMisc();
     WriteUI();
     

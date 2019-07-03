@@ -289,6 +289,7 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
 #endif
         
         
+#if 0        
         if(zeroIsOnLeftSide)
         {
             PushTriangle(group, group->whiteTexture, QSite0->lights, triangleVertexes,  site0PCamera, color0, smooth0From, color0, smooth0To, color0, 0);
@@ -314,6 +315,7 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
             
             PushQuad(group, group->whiteTexture, QSite1->lights, quadVertexes, smooth1To, {}, color1, smooth1From, {}, color1, offsetFromCamera, {}, colorFrom, offsetToCamera, {}, colorTo, 0);
         }
+#endif
         
         
         

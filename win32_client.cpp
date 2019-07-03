@@ -1332,7 +1332,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
         {
             HDC openGLDC = GetDC( window );
             
-            u16 maxTextureCount = MAX_TEXTURE_COUNT;
+            u16 maxTextureCount = MAX_TEXTURE_COUNT + MAX_SPECIAL_TEXTURE_COUNT;
             HGLRC openGLRC = Win32InitOpenGL(openGLDC, maxTextureCount);
             
             Win32ThreadStartup highPriorityStartups[6] = {};

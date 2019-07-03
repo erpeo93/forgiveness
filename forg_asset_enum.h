@@ -80,6 +80,7 @@ printTable(noPrefix) enum AssetTypeId
     
     Asset_AnimationLast,
     
+    Asset_ground,
     Asset_leaf,
     Asset_flower,
     Asset_fruit,

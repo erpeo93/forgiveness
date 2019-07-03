@@ -1566,6 +1566,54 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     ForgVoronoiDiagram* voronoi = worldMode->activeDiagram;
                     if(voronoi)
                     {
+                        TaxonomySlot* testSlot = NORUNTIMEGetTaxonomySlotByName(worldMode->table, "forest");
+                        for(u32 chunkIndex = 0; chunkIndex < ArrayCount(worldMode->chunks); ++chunkIndex)
+                        {
+                            WorldChunk* chunk = worldMode->chunks[chunkIndex];
+                            while(chunk)
+                            {
+                                if(chunk->initialized && !ChunkOutsideWorld(lateralChunkSpan, chunk->worldX, chunk->worldY))
+                                {
+                                    r32 chunkSide = worldMode->chunkSide;
+                                    
+                                    Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - player->universeP.chunkOffset;
+                                    for(u8 Y = 0; Y < 1; ++Y)
+                                    {
+                                        for(u8 X = 0; X < 1; ++X)
+                                        {
+                                            Vec3 tileMin = chunkLowLeftCornerOffset + V3(X * worldMode->voxelSide, Y * worldMode->voxelSide, 0);
+                                            ObjectTransform tileTransform = FlatTransform();
+                                            Rect2 rect = RectMinDim(tileMin.xy, V2(worldMode->voxelSide, worldMode->voxelSide));
+                                            
+                                            WorldTile* tile = GetTile(chunk, X, Y);
+                                            if(IsValid(&tile->textureHandle))
+                                            {
+                                                RefreshSpecialTexture(group->assets, &tile->LRU);
+                                                PushTexture(group, tile->textureHandle, V3(GetCenter(rect), 0.0f), V3(worldMode->voxelSide, 0, 0), V3(0, worldMode->voxelSide, 0), V4(1, 1, 1, 1), tile->lights);
+                                            }
+                                            else
+                                            {
+                                                tile->randomTextureColorPixel = 0xFF0000FF;
+                                                u32 textureIndex = AcquireSpecialTextureHandle(group->assets);
+                                                tile->textureHandle = TextureHandle(textureIndex, 1, 1);
+                                                PushTextureGeneration(group, tile->textureHandle, &tile->randomTextureColorPixel);
+                                                RefreshSpecialTexture(group->assets, &tile->LRU);
+                                            }
+                                            
+                                            if(UI->showGroundOutline)
+                                            {
+                                                PushRectOutline(group, tileTransform, rect, V4(1, 1, 1, 1), 0.1f);
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                chunk = chunk->next;
+                            }
+                        }
+                        
+                        
+                        
                         TempMemory voronoiMemory = BeginTemporaryMemory(worldMode->temporaryPool);
                         BEGIN_BLOCK("voronoi sites");
                         
@@ -1602,10 +1650,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             Vec2 offsetFrom = V2(edge->pos[0].x, edge->pos[0].y);
                             Vec2 offsetTo = V2(edge->pos[1].x, edge->pos[1].y);
                             
-                            if(Length(offsetTo - offsetFrom) > 100.0f)
-                            {
-                                int a = 5;
-                            }
 							if(!edge->tile[0])
 							{
                                 edge->tile[0] = GetTile(worldMode, voronoi->originP, offsetFrom);
@@ -1638,23 +1682,20 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             edge = edge->next;
                             if(++counter == 512 || !edge)
                             {
-                                
-#if 1         
                                 RenderVoronoiWork* work = PushStruct(worldMode->temporaryPool, RenderVoronoiWork);
                                 work->group = group;
                                 work->voronoi = voronoi;
                                 work->edges = toRender;
                                 work->edgeCount = counter;
                                 // NOTE(Leonardo): 2 standard and 2 water
-                                work->triangleVertexes = ReserveTriangles(group, counter * 2 + waterCounter);
+                                work->triangleVertexes = ReserveTriangles(group, waterCounter);
                                 // NOTE(Leonardo): 2 standard
-                                work->quadVertexes = ReserveQuads(group, counter * 2);
+                                //work->quadVertexes = ReserveQuads(group, counter * 2);
                                 
 #if 1                                
                                 platformAPI.PushWork(gameState->renderQueue, RenderVoronoiEdges, work);
 #else
                                 RenderVoronoiEdges(work);
-#endif
 #endif
                                 
                                 toRender = edge;

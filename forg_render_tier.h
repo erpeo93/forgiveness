@@ -1,6 +1,7 @@
 #pragma once
 #define TEXTURE_ARRAY_DIM 256
 #define MAX_TEXTURE_COUNT 256
+#define MAX_SPECIAL_TEXTURE_COUNT 256
 
 struct RenderTexture
 {
@@ -32,6 +33,14 @@ inline RenderTexture TextureHandle(u32 index, u16 width, u16 height)
     result.height = height;
     
     return result;
+}
+
+inline RenderTexture SpecialTextureHandle(u32 index, u16 width, u16 height)
+{
+    RenderTexture result;
+    result.index = MAX_TEXTURE_COUNT + index;
+    result.width = width;
+    result.height = height;
 }
 
 inline void Clear(RenderTexture* texture)

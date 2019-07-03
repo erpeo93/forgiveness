@@ -310,7 +310,7 @@ PLATFORM_WORK_CALLBACK(LoadAssetThreaded)
 inline u32 AcquireTextureHandle(Assets* assets)
 {
     u32 result = 0;
-    if(assets->nextFreeTextureHandle < assets->maxTextureHandleCount)
+    if(assets->nextFreeTextureHandle <= assets->maxTextureHandleIndex)
     {
         result = assets->nextFreeTextureHandle++;
     }
@@ -330,6 +330,37 @@ inline u32 AcquireTextureHandle(Assets* assets)
         {
             FreeAsset(assets, LRU);
         }
+    }
+    
+    return result;
+}
+
+inline void RefreshSpecialTexture(Assets* assets, AssetLRULink* LRU)
+{
+    DLLIST_REMOVE(LRU);
+    DLLIST_INSERT(&assets->specialLRUSentinel, LRU);
+}
+
+inline u32 AcquireSpecialTextureHandle(Assets* assets)
+{
+    u32 result = 0;
+    if(assets->nextFreeSpecialTextureHandle <= assets->maxSpecialTextureHandleIndex)
+    {
+        result = assets->nextFreeSpecialTextureHandle++;
+    }
+    else
+    {
+        AssetLRULink* sentinel = &assets->specialLRUSentinel;
+        Assert(!DLLIST_ISEMPTY(sentinel));
+        
+        AssetLRULink* first = sentinel->next;
+        DLLIST_REMOVE(first);
+        
+        Asset* LRU = (Asset*) first;
+        result = LRU->textureHandle.index;
+        Clear(&LRU->textureHandle);
+        
+        Assert(LRU->state == Asset_unloaded);
     }
     
     return result;
@@ -693,6 +724,7 @@ internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformText
     
     
     DLLIST_INIT(&assets->LRUSentinel);
+    DLLIST_INIT(&assets->specialLRUSentinel);
     
     assets->blockSentinel.prev = &assets->blockSentinel;
     assets->blockSentinel.next = &assets->blockSentinel;
@@ -707,8 +739,18 @@ internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformText
     op.update.data = &assets->whitePixel;
     op.update.texture = TextureHandle(0, 1, 1);
     AddOp(assets->textureQueue, op);
+    
+    assets->redPixel = 0xFF0000FF;
+    TextureOp specialOp = {};
+    op.update.data = &assets->redPixel;
+    op.update.texture = TextureHandle(MAX_TEXTURE_COUNT, 1, 1);
+    AddOp(assets->textureQueue, op);
+    
     assets->nextFreeTextureHandle = 1;
-    assets->maxTextureHandleCount = MAX_TEXTURE_COUNT;
+    assets->maxTextureHandleIndex = MAX_TEXTURE_COUNT - 1;
+    
+    assets->nextFreeSpecialTextureHandle = MAX_TEXTURE_COUNT + 1;
+    assets->maxSpecialTextureHandleIndex = MAX_TEXTURE_COUNT + MAX_SPECIAL_TEXTURE_COUNT - 1;
     
     assets->assetSentinel.next = &assets->assetSentinel;
     assets->assetSentinel.prev = &assets->assetSentinel;

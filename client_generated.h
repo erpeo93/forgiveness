@@ -204,6 +204,7 @@ char* MetaTable_AssetTypeId[] =
 "rolling",
 "protecting",
 "AnimationLast",
+"ground",
 "leaf",
 "flower",
 "fruit",
