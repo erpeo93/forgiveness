@@ -34,9 +34,6 @@ struct WorldTile
     Vec4 colorDelta;
     r32 colorRandomness;
     Vec4 borderColor;
-    RenderTexture textureHandle;
-    AssetLRULink LRU;
-    u32 randomTextureColorPixel;
 #endif
 };
 
@@ -55,15 +52,19 @@ struct TempLight
 
 struct WorldChunk
 {
+#ifndef FORG_SERVER
+    AssetLRULink LRU;
+    Lights lights;
+    RenderTexture textureHandle;
+    u32 pixels[TEXTURE_ARRAY_DIM][TEXTURE_ARRAY_DIM];
+#endif
+    
     b32 initialized;
     
     i32 worldX;
     i32 worldY;
     i32 worldZ;
     
-#ifndef FORG_SERVER
-    Lights lights;
-#endif
     WorldTile tiles[CHUNK_DIM][CHUNK_DIM];
     
     TempLight* firstTempLight;

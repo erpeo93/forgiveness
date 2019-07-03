@@ -356,11 +356,9 @@ inline u32 AcquireSpecialTextureHandle(Assets* assets)
         AssetLRULink* first = sentinel->next;
         DLLIST_REMOVE(first);
         
-        Asset* LRU = (Asset*) first;
+        WorldChunk* LRU = (WorldChunk*) first;
         result = LRU->textureHandle.index;
         Clear(&LRU->textureHandle);
-        
-        Assert(LRU->state == Asset_unloaded);
     }
     
     return result;

@@ -403,6 +403,7 @@ inline Lights GetLights(GameModeWorld* worldMode, Vec3 P)
 #include "forg_UI.cpp"
 #include "forg_cutscene.cpp"
 #include "forg_ground.cpp"
+#include "forg_texture_gen.cpp"
 
 PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 {
@@ -1577,6 +1578,28 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                     r32 chunkSide = worldMode->chunkSide;
                                     
                                     Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - player->universeP.chunkOffset;
+                                    
+                                    Vec3 chunkCenter = chunkLowLeftCornerOffset + 0.5f * V3(chunkSide, chunkSide, 0);
+                                    
+                                    if(IsValid(&chunk->textureHandle))
+                                    {
+                                        Lights lights = GetLights(worldMode, chunkCenter);
+                                        RefreshSpecialTexture(group->assets, &chunk->LRU);
+                                        PushTexture(group, chunk->textureHandle, chunkCenter, V3(chunkSide, 0, 0), V3(0, chunkSide, 0), V4(1, 1, 1, 1), lights);
+                                    }
+                                    else
+                                    {
+                                        if(GenerateChunkTexture(group->assets, worldMode, chunk, (u32*) chunk->pixels, TEXTURE_ARRAY_DIM, TEXTURE_ARRAY_DIM))
+                                        {
+                                            u32 textureIndex = AcquireSpecialTextureHandle(group->assets);
+                                            chunk->textureHandle = TextureHandle(textureIndex, TEXTURE_ARRAY_DIM, TEXTURE_ARRAY_DIM);
+                                            PushTextureGeneration(group, chunk->textureHandle, (u32*) chunk->pixels);
+                                            RefreshSpecialTexture(group->assets, &chunk->LRU);
+                                        }
+                                    }
+                                    
+                                    
+#if 0                                    
                                     for(u8 Y = 0; Y < 1; ++Y)
                                     {
                                         for(u8 X = 0; X < 1; ++X)
@@ -1586,26 +1609,14 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                             Rect2 rect = RectMinDim(tileMin.xy, V2(worldMode->voxelSide, worldMode->voxelSide));
                                             
                                             WorldTile* tile = GetTile(chunk, X, Y);
-                                            if(IsValid(&tile->textureHandle))
-                                            {
-                                                RefreshSpecialTexture(group->assets, &tile->LRU);
-                                                PushTexture(group, tile->textureHandle, V3(GetCenter(rect), 0.0f), V3(worldMode->voxelSide, 0, 0), V3(0, worldMode->voxelSide, 0), V4(1, 1, 1, 1), tile->lights);
-                                            }
-                                            else
-                                            {
-                                                tile->randomTextureColorPixel = 0xFF0000FF;
-                                                u32 textureIndex = AcquireSpecialTextureHandle(group->assets);
-                                                tile->textureHandle = TextureHandle(textureIndex, 1, 1);
-                                                PushTextureGeneration(group, tile->textureHandle, &tile->randomTextureColorPixel);
-                                                RefreshSpecialTexture(group->assets, &tile->LRU);
-                                            }
-                                            
                                             if(UI->showGroundOutline)
                                             {
                                                 PushRectOutline(group, tileTransform, rect, V4(1, 1, 1, 1), 0.1f);
                                             }
                                         }
                                     }
+#endif
+                                    
                                 }
                                 
                                 chunk = chunk->next;

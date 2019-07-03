@@ -3141,7 +3141,14 @@ internal void WriteBitmapsAndAnimations()
     WriteBitmapsFromPath("definition/fruits", Asset_fruit, "forgfruits.pak");
     WriteBitmapsFromPath("definition/trunks", Asset_trunk, "forgtrunks.pak");
     WriteBitmapsFromPath("definition/particles", Asset_Particle, "forgparticles.pak");
-    WriteBitmapsFromPath("definition/ground", Asset_ground, "forgground.pak", V2(0.5f, 0.5f));
+    
+    WriteBitmapsFromPath("definition/ground/forest", Asset_Forest, "forgforest.pak");
+    WriteBitmapsFromPath("definition/ground/forestH", Asset_ForestHeightmap, "forgforestHeight.pak");
+    
+    WriteBitmapsFromPath("definition/ground/desert", Asset_Desert, "forgdesert.pak");
+    WriteBitmapsFromPath("definition/ground/desertH", Asset_DesertHeightmap, "forgdesertHeight.pak");
+    
+    
     WriteMisc();
     WriteUI();
     
