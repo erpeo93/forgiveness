@@ -14,13 +14,9 @@ struct EntityBlock
 
 struct WorldTile
 {
-    r32 height;
-    r32 waterLevel;
-    u32 taxonomy;
-    
 #ifndef FORG_SERVER
-    r32 layoutNoise;
     
+    r32 layoutNoise;
     r32 waterPhase;
     r32 waterSine;
     b32 movingNegative;
@@ -34,7 +30,12 @@ struct WorldTile
     Vec4 colorDelta;
     r32 colorRandomness;
     Vec4 borderColor;
+    
 #endif
+    r32 height;
+    r32 waterLevel;
+    u32 taxonomy;
+    
 };
 
 struct TempLight
@@ -56,7 +57,6 @@ struct WorldChunk
     AssetLRULink LRU;
     Lights lights;
     RenderTexture textureHandle;
-    u32 pixels[TEXTURE_ARRAY_DIM][TEXTURE_ARRAY_DIM];
 #endif
     
     b32 initialized;

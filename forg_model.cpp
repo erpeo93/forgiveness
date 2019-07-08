@@ -258,14 +258,31 @@ internal void GenerateRock(ClientRock* dest, VertexModel* model, MemoryPool* tem
             definitiveFaces[faceIndex] = tempFaces[faceIndex];
         }
     }
-    dest->faceCount = finalFaceCount;
     
+    
+    for(u32 faceIndex = 0; faceIndex < faceCount; ++faceIndex)
+    {
+        ModelFace* face = definitiveFaces + faceIndex;
+        
+        ColoredVertex* v0 = tempVertexes + face->i0;
+        ColoredVertex* v1 = tempVertexes + face->i1;
+        ColoredVertex* v2 = tempVertexes + face->i2;
+        
+        Vec3 N = Normalize(Cross(v1->P - v0->P, v2->P - v1->P));
+        
+        v0->N += N;
+        v1->N += N;
+        v2->N += N;
+    }
+    
+    dest->faceCount = finalFaceCount;
     Assert(vertexCount <= ArrayCount(dest->vertexes));
     ColoredVertex* definitiveVertexes = dest->vertexes;
     dest->vertexCount = vertexCount;
     for(u32 vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex)
     {
         definitiveVertexes[vertexIndex] = tempVertexes[vertexIndex];
+        definitiveVertexes[vertexIndex].N = Normalize(definitiveVertexes[vertexIndex].N);
     }
 }
 

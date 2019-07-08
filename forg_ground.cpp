@@ -247,11 +247,14 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
         b32 zeroIsOnLeftSide = ((probe0 < 0 && outer0 < 0) || 
                                 (probe0 > 0 && outer0 > 0));
         
-        Vec4 site0PCamera = V4(site0P + voronoi->deltaP.xy, QSite0->height, 0);
-        Vec4 site1PCamera = V4(site1P + voronoi->deltaP.xy, QSite1->height, 0);
         
-        Vec4 offsetFromCamera = V4(offsetFrom + voronoi->deltaP.xy, QFrom->height, 0);
-        Vec4 offsetToCamera = V4(offsetTo + voronoi->deltaP.xy, QTo->height, 0);
+        r32 zBias = 0.01f + CHUNK_DIM * 0.08f + CHUNK_DIM * 1.5f * 0.08f;
+        
+        Vec4 site0PCamera = V4(site0P + voronoi->deltaP.xy, QSite0->height, zBias);
+        Vec4 site1PCamera = V4(site1P + voronoi->deltaP.xy, QSite1->height, zBias);
+        
+        Vec4 offsetFromCamera = V4(offsetFrom + voronoi->deltaP.xy, QFrom->height, zBias);
+        Vec4 offsetToCamera = V4(offsetTo + voronoi->deltaP.xy, QTo->height, zBias);
         
         Vec4 smooth0From = Lerp(offsetFromCamera, chunkyness0, site0PCamera);
         Vec4 smooth1From = Lerp(offsetFromCamera, chunkyness1, site1PCamera);

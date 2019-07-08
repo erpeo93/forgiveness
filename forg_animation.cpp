@@ -970,7 +970,7 @@ inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, RenderGroup*
         
         case AnimationEffect_Light:
         {
-            AddLightToGridNextFrame(worldMode, P, effect->lightColor, effect->lightIntensity);
+            AddLightToGridNextFrame(worldMode, P + V3(0, 0, 0.01f), effect->lightColor, effect->lightIntensity);
         } break;
         
         case AnimationEffect_Bolt:
@@ -2166,6 +2166,12 @@ inline Vec4 GetTileColor(WorldTile* tile, b32 uniformColor, RandomSequence* seq)
     color = Clamp01(color);
     color = SRGBLinearize(color);
     return color;
+}
+
+inline Vec4 BlendTilesColor(WorldTile* t0, WorldTile* t1, WorldTile* t2, WorldTile* t3)
+{
+    Vec4 result = V4(t0->baseColor.rgb + t1->baseColor.rgb + t2->baseColor.rgb + t3->baseColor.rgb * (1.0f / 4.0f), 1.0f);
+    return result;
 }
 
 inline Vec4 ComputeWeightedChunkColor(WorldChunk* chunk)

@@ -106,7 +106,7 @@ typedef GLenum type_glCheckFramebufferStatus(GLenum target);
 typedef void type_glDeleteProgram (GLuint program);
 typedef void type_glDeleteShader (GLuint shader);
 typedef void type_glDeleteFramebuffers (GLsizei n, const GLuint *framebuffers);
-
+typedef void type_glFramebufferTextureLayer (GLenum target, GLenum attachment, GLuint texture, GLint level, GLint layer);
 typedef void type_glDrawElementsBaseVertex (GLenum mode, GLsizei count, GLenum type, const void *indices, GLint basevertex);
 
 #define GL_DEBUG_CALLBACK( name ) void WINAPI name( GLenum source,GLenum type,GLuint id,GLenum severity,GLsizei length,const GLchar *message,const void *userParam )
@@ -175,6 +175,7 @@ OpenGLGlobalFunction( glGetStringi );
 OpenGLGlobalFunction( glDeleteProgram );
 OpenGLGlobalFunction( glDeleteShader );
 OpenGLGlobalFunction(glDeleteFramebuffers);
+OpenGLGlobalFunction(glFramebufferTextureLayer);
 
 OpenGLGlobalFunction(glDrawElementsBaseVertex);
 
@@ -433,6 +434,7 @@ internal void Win32LoadWGLExtension()
             GetOpenGLFunction( glDeleteProgram );
             GetOpenGLFunction( glDeleteShader );
             GetOpenGLFunction(glDeleteFramebuffers);
+            GetOpenGLFunction(glFramebufferTextureLayer);
             
             GetOpenGLFunction(glDrawElementsBaseVertex);
             
@@ -1795,14 +1797,14 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         EndTicketMutex( &textureQueue->mutex );
                         
                         
-                        if( firstOp )
+                        if(firstOp)
                         {
-                            Assert( lastOp );
-                            OpenGLManageTextures( firstOp );
-                            BeginTicketMutex( &textureQueue->mutex );
+                            Assert(lastOp);
+                            OpenGLManageTextures(firstOp);
+                            BeginTicketMutex(&textureQueue->mutex);
                             lastOp->next = textureQueue->firstFree;
                             textureQueue->firstFree = firstOp;
-                            EndTicketMutex( &textureQueue->mutex );
+                            EndTicketMutex(&textureQueue->mutex);
                         }
                         
                         Win32UpdateWindow( &highQueue, &renderCommands, deviceContext, drawRegion, dimension.width, dimension.height );

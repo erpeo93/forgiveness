@@ -1,7 +1,6 @@
 #pragma once
-#define TEXTURE_ARRAY_DIM 256
 #define MAX_TEXTURE_COUNT 256
-#define MAX_SPECIAL_TEXTURE_COUNT 256
+#define MAX_SPECIAL_TEXTURE_COUNT 128
 
 struct RenderTexture
 {

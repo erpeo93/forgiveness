@@ -19,5 +19,8 @@ internal void ImportTileParamsTab(TaxonomySlot* slot, EditorElement* root)
     tile->tileBorderColor = ToV4Color(GetElement(root, "borderColor"), V4(0, 0, 0, 0));
     tile->tilePointsLayout = GetValuePreprocessor(TilePointsLayout, GetValue(root, "tileLayout"));
     tile->colorRandomness = ToR32(GetValue(root, "colorRandomness"), 0.0f);
+    tile->priority = ElemR32(root, "priority");
+    tile->textureNameHash = StringHash(GetValue(root, "groundTextureName"));
+    tile->heightmapNameHash = StringHash(GetValue(root, "groundHeightmapName"));
     tile->tileNoise = ParseNoiseParams(GetStruct(root, "noise"));
 }

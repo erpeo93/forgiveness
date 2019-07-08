@@ -22,7 +22,6 @@ struct EnvironmentMap
 
 enum Render_command
 {
-    CommandType_GenerateTextureCommand,
     CommandType_TexturedQuadsCommand,
     CommandType_BeginPeels,
     CommandType_EndPeels,
@@ -45,12 +44,9 @@ struct RenderSetup
     m4x4 proj;
     u32 renderTargetIndex;
     Vec3 ambientLightColor;
-};
-
-struct GenerateTextureCommand
-{
-    RenderTexture texture;
-    void* pixels;
+    Vec3 directionalLightColor;
+    Vec3 directionalLightDir;
+    r32 directionalLightIntensity;
 };
 
 struct TexturedQuadsCommand
@@ -98,8 +94,6 @@ struct RenderGroup
     
     GameRenderCommands* commands;
     Vec2 screenDim;
-    
-    Vec4 ambientLightColor;
     
     RenderTexture whiteTexture;
 };

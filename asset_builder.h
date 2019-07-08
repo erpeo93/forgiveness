@@ -178,6 +178,7 @@ struct ColoredVertex
 {
     Vec3 P;
     Vec4 color;
+    Vec3 N;
 };
 
 struct ModelFace

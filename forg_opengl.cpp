@@ -227,7 +227,7 @@ inline OpenGLFramebuffer OpenGLCreateFramebuffer(u32 flags, u32 width, u32 heigh
         else
         {
             glTexImage2D(slot, 0,
-                         GL_DEPTH_COMPONENT24,
+                         GL_DEPTH_COMPONENT32F,
                          width, height, 0,
                          GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, 0);
         }
@@ -455,7 +455,12 @@ internal void OpenGLUseProgramBegin(ZBiasProgram* prog, RenderSetup* setup, r32 
     glUniform1i(prog->lightSource1ID, 3);
     
     glUniform1f(prog->alphaThreesoldID, alphaThreesold);
+    
     glUniform3fv(prog->ambientLightColorID, 1, setup->ambientLightColor.E);
+    
+    glUniform3fv(prog->directionalLightColorID, 1, setup->directionalLightColor.E);
+    glUniform3fv(prog->directionalLightDirectionID, 1, setup->directionalLightDir.E);
+    glUniform1f(prog->directionalLightIntensityID, setup->directionalLightIntensity);
 }
 
 internal void OpenGLUseProgramBegin(PeelCompositeProgram* prog)
@@ -472,6 +477,11 @@ internal void OpenGLUseProgramBegin(FinalStretchProgram* prog)
 {
     OpenGLUseProgramBegin(&prog->common);
     glUniform1i(prog->textureSamplerID, 0);
+}
+
+internal void OpenGLUseProgramBegin(TextureGenProgram* prog)
+{
+    OpenGLUseProgramBegin(&prog->common);
 }
 
 internal void OpenGLUseProgramEnd(OpenGLProgramCommon* prog)
@@ -691,16 +701,16 @@ in r32 modulationPercentage;
          
          smooth in r32 modulationWithFocusColor;
         uniform Vec3 ambientLightColor;
-        
+        uniform Vec3 directionalLightDir;
+ uniform Vec3 directionalLightColor;
+ uniform r32 directionalLightIntensity;
+ 
+ 
         uniform sampler1D lightSource0;
         uniform sampler1D lightSource1;
         
         void main(void)
          {
-         Vec3 directionalLightColor = V3(1.0f, 1.0f, 0);
-         Vec3 lightDir = normalize(V3(0, 1, -1));
-         
-         
     #if depthPeeling
          r32 clipDepth = texelFetch(depthSampler, ivec2(gl_FragCoord.xy), 0).r;
          r32 fragZ = gl_FragCoord.z;
@@ -721,10 +731,19 @@ in r32 modulationPercentage;
          {
          
          
-         // NOTE(Leonardo): point light test!
-if(fragLightStartingIndex != fragLightEndingIndex)
-{
-   Vec3 modulationLightColor = ambientLightColor;
+         Vec3 modulationLightColor = ambientLightColor;
+         
+         // NOTE(Leonardo): directional light!
+         {
+         Vec3 toLight = -directionalLightDir;
+         r32 cosAngle = Dot(toLight, worldNorm);
+         cosAngle = clamp(cosAngle, 0, 1);
+         
+         r32 lightInfluence = directionalLightIntensity * cosAngle;
+          modulationLightColor += Lerp(V3(0, 0, 0), lightInfluence, directionalLightColor);
+}
+
+
          for(int index = fragLightStartingIndex; index < fragLightEndingIndex; ++index)
 {
  Vec4 lightData0 = texelFetch(lightSource0, index, 0);
@@ -738,35 +757,16 @@ if(fragLightStartingIndex != fragLightEndingIndex)
 Vec3 toLight = lightP - worldPos;
          r32 lightDistance = length(toLight);
          
-         r32 lightInfluence = lightStrength / (lightDistance * lightDistance);
+         toLight *= (1.0f / lightDistance);
+         r32 cosAngle = dot(toLight, worldNorm);
+         
+         r32 lightInfluence = cosAngle *(lightStrength / (lightDistance * lightDistance));
          lightInfluence = clamp(lightInfluence, 0, 1);
          modulationLightColor += lightInfluence * lightColor;
 }
 
 modulationLightColor = clamp(modulationLightColor, 0, 1);
 resultColor.rgb *= modulationLightColor;
-}
-else
-{
-resultColor.rgb *= ambientLightColor;
-}
-
-
-
-
-         // NOTE(Leonardo): directional light!
-         #if 0   
-         {
-         Vec3 toLight = -lightDir;
-         r32 cosAngle = Dot(toLight, worldNorm);
-         cosAngle = clamp(cosAngle, 0, 1);
-         
-         r32 lightInfluence = cosAngle;
-         Vec3 modulationLight = Lerp(V3(1, 1, 1), lightInfluence, directionalLightColor);
-         resultColor.rgb *= modulationLight;
-}
-#endif
-
 
 
 
@@ -849,6 +849,9 @@ resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.7f, 0.7f,
     result->depthSamplerID = glGetUniformLocation(prog, "depthSampler");
     result->alphaThreesoldID = glGetUniformLocation(prog, "alphaThreesold");
     result->ambientLightColorID = glGetUniformLocation(prog, "ambientLightColor");
+    result->directionalLightColorID = glGetUniformLocation(prog, "directionalLightColor");
+    result->directionalLightDirectionID = glGetUniformLocation(prog, "directionalLightDir");
+    result->directionalLightIntensityID = glGetUniformLocation(prog, "directionalLightIntensity");
     result->lightSource0ID = glGetUniformLocation(prog, "lightSource0");
     result->lightSource1ID = glGetUniformLocation(prog, "lightSource1");
     
@@ -972,6 +975,44 @@ void main(void)
     result->textureSamplerID = glGetUniformLocation(prog, "textureSampler");
 }
 
+
+internal void OpenGLCompileTextureGenProgram(TextureGenProgram* result)
+{
+    char defines[4096];
+    FormatString(defines, sizeof(defines),  
+                 "#version 130\n"
+                 "#define shaderSimTexLoadSRGB %d\n"
+                 "#define shaderSimTexWriteSRGB %d\n",
+                 opengl.shaderSimTexLoadSRGB,
+                 opengl.shaderSimTexWriteSRGB);
+    
+    char* vertexCode = R"FOO(
+        in Vec4 vertP;
+        in Vec2 vertUV;
+         smooth out Vec2 fragUV;
+         
+void main(void)
+          {
+          gl_Position = vertP;
+          fragUV = vertUV;
+    }
+    
+   )FOO";
+    
+    char* fragmentCode = R"FOO(
+        //fragment code
+        smooth in Vec2 fragUV;
+        out Vec4 resultColor;
+        
+        void main(void)
+         {
+          resultColor = V4(0, 0, 1, 1);
+         }
+       )FOO";
+    
+    GLuint prog = OpenGLCreateProgram(defines, globalHeaderCode, vertexCode, fragmentCode, &result->common);
+}
+
 internal void OpenGLInit(OpenGLInfo info, b32 frameBufferSupportSRGB)
 {
     opengl.shaderSimTexLoadSRGB = true;
@@ -1055,7 +1096,7 @@ internal void OpenGLInit(OpenGLInfo info, b32 frameBufferSupportSRGB)
     glGenTextures(1, &opengl.textureArray);
     glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
     
-    glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, opengl.defaultSpriteTextureFormat, TEXTURE_ARRAY_DIM, TEXTURE_ARRAY_DIM, opengl.maxTextureCount, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, 0);
+    glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, opengl.defaultSpriteTextureFormat, MAX_IMAGE_DIM, MAX_IMAGE_DIM, opengl.maxTextureCount, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, 0);
     
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);    
@@ -1093,6 +1134,8 @@ internal void FreeProgram(OpenGLProgramCommon* program)
 internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
 {
     FreeFrameBuffer(&opengl.resolveFramebuffer);
+    FreeFrameBuffer(&opengl.textureGenFrameBuffer);
+    
     for(u32 depthPeelIndex = 0; depthPeelIndex < opengl.depthPeelCount; ++depthPeelIndex)
     {
         FreeFrameBuffer(&opengl.depthPeelBuffer[depthPeelIndex]);
@@ -1102,6 +1145,7 @@ internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
     FreeProgram(&opengl.zBiasNoDepthPeel.common);
     FreeProgram(&opengl.peelComposite.common);
     FreeProgram(&opengl.finalStretch.common);
+    FreeProgram(&opengl.testTextureGen.common);
     
     
     glDeleteTextures(1, &opengl.lightSource0);
@@ -1118,9 +1162,12 @@ internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
     OpenGLCompileZBiasProgram(&opengl.zBiasNoDepthPeel, false, true);
     OpenGLCompilePeelComposite(&opengl.peelComposite);
     OpenGLCompileFinalStretch(&opengl.finalStretch);
+    OpenGLCompileTextureGenProgram(&opengl.testTextureGen);
     
     u32 resolveFlags = (OpenGLFramebuffer_linearFilter | OpenGLFramebuffer_hasColor);
     opengl.resolveFramebuffer = OpenGLCreateFramebuffer(resolveFlags, renderWidth, renderHeight);
+    
+    opengl.textureGenFrameBuffer = OpenGLCreateFramebuffer(OpenGLFramebuffer_hasColor, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
     
     opengl.depthPeelCount = settings->depthPeelCount;
     if(opengl.depthPeelCount > ArrayCount(opengl.depthPeelBuffer))
@@ -1158,6 +1205,7 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
 {
     TIMED_FUNCTION();
     
+    
     glDepthMask(GL_TRUE);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDepthFunc(GL_LEQUAL);
@@ -1182,11 +1230,12 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
         OpenGLPrepareForRenderSettings(&commands->settings);
     }
     
+    
+    
+    
     u32 renderWidth = commands->settings.width;
     u32 renderHeight = commands->settings.height;
-    
     u32 maxRenderTargetIndex = opengl.depthPeelCount - 1;
-    
     for(u32 targetIndex = 0; targetIndex <= maxRenderTargetIndex; ++targetIndex)
     {
         OpenGLBindFramebuffer(opengl.depthPeelBuffer + targetIndex, renderWidth, renderHeight);
@@ -1203,11 +1252,41 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
     
+    
+#if 0
+    OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
+    for(u32 textureIndex = MAX_TEXTURE_COUNT; textureIndex < MAX_TEXTURE_COUNT + MAX_SPECIAL_TEXTURE_COUNT; ++textureIndex)
+    {
+        glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, opengl.textureArray, 0, textureIndex);
+        
+        glViewport(0, 0, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
+        glScissor(0, 0, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
+        
+        glClearColor(1, 1, 0, 1);
+        glClear(GL_COLOR_BUFFER_BIT);
+        
+        
+        glViewport(0, 0, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
+        glScissor(0, 0, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
+        
+        glBindBuffer(GL_ARRAY_BUFFER, opengl.screenFillVertexBuffer);
+        OpenGLUseProgramBegin(&opengl.testTextureGen);
+        
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        OpenGLUseProgramEnd(&opengl.testTextureGen.common);
+    }
+    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+#endif
+    
+    
+    
+    
+    
     OpenGLBindFramebuffer(opengl.depthPeelBuffer + 0, renderWidth, renderHeight);
     b32 peeling = false;
     u32 peelIndex = 0;
     u32 peelWalkedSize = 0;
-    GLuint currentRenderTargetIndex = 0xFFFFFFFF;
     
     glBindBuffer(GL_ARRAY_BUFFER, opengl.vertexBuffer);
     glBufferData(GL_ARRAY_BUFFER, commands->vertexCount * sizeof(TexturedVertex), commands->vertexArray, GL_STREAM_DRAW);
@@ -1222,6 +1301,7 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     glBindTexture(GL_TEXTURE_1D, 0);
     
     
+    
     for(u32 walkedSize = 0; walkedSize < commands->usedSize; walkedSize += sizeof(CommandHeader))
     {
         CommandHeader* header = (CommandHeader*) (commands->pushMemory + walkedSize);
@@ -1231,37 +1311,6 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
             void* data = (header + 1); 
             switch(header->type)
             {
-                case CommandType_GenerateTextureCommand:
-                {
-                    GenerateTextureCommand* element = (GenerateTextureCommand*) data;
-                    
-                    
-#if 0                    
-                    GLBIndtexture(TEXTURE_ARRAY, element->texture.index);
-                    GLUSEProgram(blueProgram);
-                    GLDrawElements();
-                    GLBindTexture(TEXTURE_ARRAY, 0);
-                    
-                    glBindBuffer(GL_ARRAY_BUFFER, ?);
-                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ?);
-                    
-                    glViewport(0, 0, texture_dim, texture_dim);
-                    
-                    OpenGLUseProgramBegin(?);
-                    
-                    glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
-                    glDrawElementsBaseVertex(GL_TRIANGLES, 3 * element->triangleCount, GL_UNSIGNED_SHORT, (GLvoid*) (element->indexArrayOffset * sizeof(u16)), element->vertexArrayOffset);
-                    
-                    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-                    OpenGLUseProgramEnd(&program->common);
-#else
-                    OpenGLAllocateTexture(element->texture, element->pixels);
-#endif
-                    
-                    
-                    walkedSize += sizeof(GenerateTextureCommand);
-                } break;
-                
                 case CommandType_BeginPeels:
                 {
                     peelWalkedSize = walkedSize;
@@ -1293,18 +1342,21 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
                     Rect2i clipRect = element->setup.rect;
                     
                     glScissor(clipRect.minX, clipRect.minY, clipRect.maxX - clipRect.minX, clipRect.maxY - clipRect.minY);
+                    
+                    OpenGLProgramCommon* common;
+                    
+                    glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
+                    if(element->setup.renderTargetIndex > 0)
+                    {
+                        OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
+                        glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, opengl.textureArray, 0, element->setup.renderTargetIndex);
+                    }
+                    
                     ZBiasProgram* program = &opengl.zBiasNoDepthPeel;
                     r32 alphaThreesold = 0.0f;
                     if(peeling)
                     {
-                        if(true || peelIndex <= 1)
-                        {
-                            program = &opengl.zBiasDepthPeelLight;
-                        }
-                        else
-                        {
-                            program = &opengl.zBiasDepthPeelNoLight;
-                        }
+                        program = &opengl.zBiasDepthPeelLight;
                         glActiveTexture(GL_TEXTURE1);
                         glBindTexture(GL_TEXTURE_2D, opengl.depthPeelBuffer[peelIndex - 1].depthHandle);
                         glActiveTexture(GL_TEXTURE2);
@@ -1320,16 +1372,22 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
                     }
                     
                     OpenGLUseProgramBegin(program, &element->setup, alphaThreesold);
+                    common = &program->common;
                     
-                    
-                    glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
                     glDrawElementsBaseVertex(GL_TRIANGLES, 3 * element->triangleCount, GL_UNSIGNED_SHORT, (GLvoid*) (element->indexArrayOffset * sizeof(u16)), element->vertexArrayOffset);
                     
                     glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-                    OpenGLUseProgramEnd(&program->common);
+                    OpenGLUseProgramEnd(common);
+                    
+                    
+                    if(element->setup.renderTargetIndex > 0)
+                    {
+                        OpenGLBindFramebuffer(opengl.depthPeelBuffer + 0, renderWidth, renderHeight);
+                    }
                     
                     if(peeling)
                     {
+                        Assert(element->setup.renderTargetIndex == 0);
                         glActiveTexture(GL_TEXTURE1);
                         glBindTexture(GL_TEXTURE_2D, 0);
                         glActiveTexture(GL_TEXTURE0);
@@ -1353,8 +1411,8 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
                       GL_LINEAR);
 #else
     
-    
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, opengl.resolveFramebuffer.handle);
+    
     glViewport(0, 0, renderWidth, renderHeight);
     glScissor(0, 0, renderWidth, renderHeight);
     
@@ -1383,7 +1441,6 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     
     glActiveTexture(GL_TEXTURE0);
     OpenGLUseProgramEnd(&opengl.peelComposite.common);
-    
     
     
     

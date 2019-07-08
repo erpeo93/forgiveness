@@ -804,5 +804,5 @@ internal void BuildWorld(ServerState * server)
     
     server->generator = generator;
     BuildServerChunks(server);
-    BuildSimpleTestWorld(server);
+    //BuildSimpleTestWorld(server);
 }

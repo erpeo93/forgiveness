@@ -329,6 +329,7 @@ struct GameModeWorld
 {
     struct GameState* gameState;
     
+    WorldGeneratorDefinition* generator;
     WorldSeason season;
     r32 seasonLerp;
     

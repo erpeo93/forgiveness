@@ -41,13 +41,6 @@ inline void EndDepthPeel(RenderGroup* group)
     PushRenderElement_(group, 0, CommandType_EndPeels);
 }
 
-inline void PushTextureGeneration(RenderGroup* group, RenderTexture texture, void* pixels)
-{
-    GenerateTextureCommand* command = (GenerateTextureCommand*) PushRenderElement(group, GenerateTextureCommand);
-    command->texture = texture;
-    command->pixels = pixels;
-}
-
 global_variable u32 maxIndexesPerBatch = (U16_MAX - 1);
 inline TexturedQuadsCommand* GetCurrentQuads_(RenderGroup* group, u32 triangleCount)
 {
@@ -163,11 +156,11 @@ inline void PushQuad(RenderGroup* group, RenderTexture texture, Lights lights,
         reservedVertexes->vertIndex += 4;
         reservedVertexes->indexIndex += 6;
         
-        //Vec3 N = Normalize(Cross(P1.xyz - P0.xyz, P2.xyz - P0.xyz));
-        Vec3 N = {};
+        Vec3 N = Normalize(Cross(P1.xyz - P0.xyz, P2.xyz - P0.xyz));
+        //Vec3 N = {};
         u16 textureIndex = (u16) texture.index;
         
-        Vec2 invUV = V2((r32) texture.width / TEXTURE_ARRAY_DIM, (r32) texture.height / TEXTURE_ARRAY_DIM);
+        Vec2 invUV = V2((r32) texture.width / MAX_IMAGE_DIM, (r32) texture.height / MAX_IMAGE_DIM);
         UV0 = Hadamart(UV0, invUV);
         UV1 = Hadamart(UV1, invUV);
         UV2 = Hadamart(UV2, invUV);
@@ -217,7 +210,7 @@ inline void PushTriangle(RenderGroup* group, RenderTexture texture, Lights light
         u16 VI = SafeTruncateToU16(reservedVertexes->vertIndex - reservedVertexes->entry->vertexArrayOffset);reservedVertexes->vertIndex += 3;
         reservedVertexes->indexIndex += 3;        
         
-        Vec3 N = V3(0, 0, 0);//Normalize(Cross(P1.xyz - P0.xyz, P2.xyz - P1.xyz));
+        Vec3 N = Normalize(Cross(P1.xyz - P0.xyz, P2.xyz - P1.xyz));
         u16 textureIndex = (u16) texture.index;
         
         PushVertex(vert + 0, P0, N, V2(0, 0), C0, lights, modulationPercentage, textureIndex);
@@ -738,7 +731,8 @@ inline void PushModel(RenderGroup* group, VertexModel* model, m4x4 rotation, Vec
             Vec4 finalP = V4(P, additionalZBias) + vertFinalP;
             Vec4 vertColor = Hadamart(vert->color, color);
             
-            PushVertex(vertexPtr + vertexIndex, finalP, V3(0, 0, 0), V2(0, 0), RGBAPack8x4(vertColor * 255.0f), lights, modulationPercentage, 0);
+            Vec3 N = vert->N;
+            PushVertex(vertexPtr + vertexIndex, finalP, N, V2(0, 0), RGBAPack8x4(vertColor * 255.0f), lights, modulationPercentage, 0);
         }
     }
     else
@@ -828,28 +822,19 @@ inline void PushClipRect(RenderGroup* renderGroup, Rect2i rect)
     PushSetup(renderGroup, &setup);
 }
 
-#if 0
-inline Rect2i GetClipRect(RenderGroup* renderGroup, Vec3 P, Vec2 dim)
-{
-    Vec2 finalHalfDim = 0.5f * dim;
-    Vec2 min = P.xy - finalHalfDim;
-    Vec2 max = P.xy + finalHalfDim;
-    
-    Rect2i rect = { RoundReal32ToI32(min.x), RoundReal32ToI32(min.y), RoundReal32ToI32(max.x), RoundReal32ToI32(max.y) };
-    return rect;
-}
-#endif
-
 inline void PushClipRect(RenderGroup* renderGroup, Rect2 rect, r32 z = 0)
 {
     Rect2i clipRect = GetClipRect_(renderGroup, V3(GetCenter(rect), z), GetDim(rect));
     PushClipRect(renderGroup, clipRect);
 }
 
-inline void PushAmbientColor(RenderGroup* renderGroup, Vec3 ambientLightColor)
+inline void PushAmbientLighting(RenderGroup* renderGroup, Vec3 ambientLightColor, Vec3 directionalLightColor, Vec3 directionalLightDirection, r32 directionalLightIntensity)
 {
     RenderSetup setup = renderGroup->lastSetup;
     setup.ambientLightColor = ambientLightColor;
+    setup.directionalLightColor = directionalLightColor;
+    setup.directionalLightDir = Normalize(directionalLightDirection);
+    setup.directionalLightIntensity = Clamp01(directionalLightIntensity);
     PushSetup(renderGroup, &setup);
 }
 
@@ -868,7 +853,7 @@ inline u16 PushPointLight(RenderGroup* renderGroup, Vec3 P, Vec3 color, r32 stre
     return result;
 }
 
-inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLength, Vec3 cameraX = V3(1, 0, 0), Vec3 cameraY = V3(0, 1, 0), Vec3 cameraZ = V3(0, 0, 1), Vec3 cameraP = V3(0, 0, 0), Vec2 screenCameraOffset = V2(0, 0))
+inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLength, Vec3 cameraX = V3(1, 0, 0), Vec3 cameraY = V3(0, 1, 0), Vec3 cameraZ = V3(0, 0, 1), Vec3 cameraP = V3(0, 0, 0), Vec2 screenCameraOffset = V2(0, 0), u32 renderTargetIndex = 0)
 {
     b32 orthographic = flags & Camera_Orthographic;
     b32 isDebug = flags & Camera_Debug;
@@ -904,17 +889,17 @@ inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLen
         Vec4 ndc = test * (1.0f / test.w);
         Vec4 clip = ndc * test.w;
         Vec3 world = (transform->proj.backward * clip).xyz;
-        int a = 5;
-        
     }
     
     
     RenderSetup setup;
-    setup.renderTargetIndex = 0;
+    setup.renderTargetIndex = renderTargetIndex;
     setup.proj = transform->proj.forward;
     
     setup.rect = { 0, 0, (i32)renderGroup->commands->settings.width, (i32)renderGroup->commands->settings.height };
     setup.ambientLightColor = V3(1, 1, 1);
+    setup.directionalLightColor = {};
+    setup.directionalLightDir = {};
     PushSetup(renderGroup, &setup);
 }
 

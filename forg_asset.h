@@ -94,6 +94,7 @@ struct Asset
     
     RenderTexture textureHandle;
     
+    u32 lockCounter;
     AssetMemoryHeader* header;
     PakAsset paka;
     u32 fileIndex;
@@ -161,7 +162,7 @@ inline void PrefetchAnimation( Assets* assets, AnimationId ID ) { LoadAnimation(
 u32 GetRandomAsset_( Assets* assets, u32 assetID, RandomSequence* seq );
 inline BitmapId GetRandomBitmap( Assets* assets, u32 assetID, RandomSequence* seq )
 {
-    BitmapId result = { GetRandomAsset_( assets, assetID, seq ) };
+    BitmapId result = { GetRandomAsset_( assets, assetID, seq ), V4(1, 1, 1, 1) };
     return result;
 }
 

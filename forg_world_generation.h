@@ -207,6 +207,11 @@ struct TileDefinition
     r32 chunkynessWithOther;
     u32 tilePointsLayout;
     r32 colorRandomness;
+    
+    r32 priority;
+    u64 textureNameHash;
+    u64 heightmapNameHash;
+    
     NoiseParams tileNoise;
     
     TileDefinition* nextFree;

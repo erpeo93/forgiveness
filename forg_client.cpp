@@ -257,7 +257,6 @@ GetUniversePosQuery TranslateRelativePos(GameModeWorld* worldMode, UniversePos b
     return result;
 }
 
-
 inline WorldTile* GetTile(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
 {
     WorldTile* result = &worldMode->nullTile;
@@ -266,6 +265,60 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
     {
         result = GetTile(query.chunk, query.tileX, query.tileY);
     }
+    return result;
+}
+
+inline WorldTile* GetTile(GameModeWorld* worldMode, WorldChunk* chunk, i32 tileX, i32 tileY)
+{
+    WorldTile* result = 0;
+    
+    i32 chunkX = chunk->worldX;
+    i32 chunkY = chunk->worldY;
+    
+    if(tileX < 0)
+    {
+        Assert(tileX == -1);
+        --chunkX;
+        tileX = CHUNK_DIM - 1;
+    }
+    else if(tileX >= CHUNK_DIM)
+    {
+        Assert(tileX == CHUNK_DIM);
+        ++chunkX;
+        tileX = 0;
+    }
+    
+    
+    if(tileY < 0)
+    {
+        Assert(tileY == -1);
+        --chunkY;
+        tileY = CHUNK_DIM - 1;
+    }
+    else if(tileY >= CHUNK_DIM)
+    {
+        Assert(tileY == CHUNK_DIM);
+        ++chunkY;
+        tileY = 0;
+    }
+    
+    Assert(tileX >= 0 && tileX < CHUNK_DIM);
+    Assert(tileY >= 0 && tileY < CHUNK_DIM);
+    
+    
+    i32 lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
+    chunkX = Wrap(0, chunkX, lateralChunkSpan);
+    chunkY = Wrap(0, chunkY, lateralChunkSpan);
+    
+    
+    WorldChunk* newChunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, worldMode->persistentPool);
+    if(!newChunk->initialized)
+    {
+        BuildChunk(worldMode->table, worldMode->generator, newChunk, chunkX, chunkY, worldMode->worldSeed);
+    }
+    
+    result = GetTile(newChunk, (u32) tileX, (u32) tileY);
+    
     return result;
 }
 
@@ -292,10 +345,9 @@ inline void ResetLightGrid(GameModeWorld* worldMode, b32 nextFrame = false)
 
 #define AddLightToGridCurrentFrame(worldMode, P, lightColor, strength) AddLightToGrid_(worldMode, P, lightColor, strength, false)
 #define AddLightToGridNextFrame(worldMode, P, lightColor, strength) AddLightToGrid_(worldMode, P, lightColor, strength, true)
-inline void AddLightToGrid_(GameModeWorld* worldMode, Vec3 P, Vec3 lightColor, r32 strength, b32 nextFrame)
+inline void AddLightToGrid_(GameModeWorld* worldMode, Vec3 P, Vec3 lightColor, r32 strength, b32 nextFrame, u32 chunkApron = 4)
 {
     r32 chunkSide = VOXEL_SIZE * CHUNK_DIM;
-    u32 chunkApron = 4;
     for(r32 offsetY = -chunkSide * chunkApron; offsetY <= chunkSide * chunkApron; offsetY += chunkSide)
     {
         for(r32 offsetX = -chunkSide * chunkApron; offsetX <= chunkSide * chunkApron; offsetX += chunkSide)
@@ -730,6 +782,11 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     }
 #endif
     
+    
+    
+    
+    
+    
     worldMode->cameraPitch = 0.32f * PI32;
     worldMode->cameraDolly = 0.0f;
     worldMode->cameraOrbit = 0.0f;
@@ -938,14 +995,19 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 //UPDATE AND RENDER
                 //
                 //
+                
+                
                 Clear(group, V4(0.0f, 0.0f, 0.0f, 1.0f));
                 
                 BeginDepthPeel(group);
                 
+                PushTexture(group, TextureHandle(MAX_TEXTURE_COUNT, MAX_IMAGE_DIM, MAX_IMAGE_DIM), V3(0, 0, 1), V3(1.0f, 0, 0), V3(0, 1.0f, 0), V4(1, 1, 1, 1));
+                
                 ResetLightGrid(worldMode);
                 Vec3 ambientLightColor = {};
-                
-                
+                Vec3 directionalLightColor = V3(1.0f, 1.0f, 0);
+                Vec3 directionalLightDirection = V3(1, 1, -1);
+                r32 directionalLightIntensity = 1.0f;
                 
 #if 0                
                 worldMode->currentPhaseTimer += input->timeToAdvance;
@@ -976,7 +1038,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 {
                     case DayPhase_Sunrise:
                     {
-                        ambientLightColor = V3(0.4f, 0.6f, 0.8f);
+                        ambientLightColor = V3(0.0f, 0.01f, 0.5f);
                     } break;
                     
                     case DayPhase_Morning:
@@ -986,7 +1048,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     
                     case DayPhase_Day:
                     {
-                        ambientLightColor = V3(0.85f, 0.7f, 0.85f);
+                        ambientLightColor = V3(0.0f, 0.3f, 0.7f);
                     } break;
                     
                     case DayPhase_Sunset:
@@ -1006,9 +1068,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 }
                 
                 
-                
-                
-                
                 r32 maxOverallDistanceSq = R32_MAX;
                 u64 overallNearestID = 0;
                 r32 overallMinCameraZ = R32_MAX;
@@ -1024,10 +1083,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     {
                         ClientEntity* next = entity->next;
                         if(entity->identifier)
-                        {   
-                            //PushRect(group, FlatTransform(5.0f), RectCenterDim(entity->P.xy, V2(0.1f, 0.1f)), V4(1, 1, 1, 1));
-                            
-                            
+                        {  
                             entity->actionTime += input->timeToAdvance;
                             TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, entity->taxonomy);
                             if(!slot)
@@ -1203,7 +1259,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 SetCameraTransform(group, 0, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal, worldMode->cameraEntityOffset);
                 
                 MoveTowards(worldMode, player, V2(0, 0), V2(0, 0), UI->zoomLevel);
-                PushAmbientColor(group, ambientLightColor);
+                PushAmbientLighting(group, ambientLightColor, directionalLightColor, directionalLightDirection, directionalLightIntensity);
                 
                 for(u32 entityIndex = 0; 
                     entityIndex < ArrayCount(worldMode->entities); 
@@ -1400,19 +1456,18 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 RandomSequence generatorSeq = Seed(seed);
                 u32 generatorTaxonomy = GetRandomChild(worldMode->table, &generatorSeq, worldMode->table->generatorTaxonomy);
                 
-                WorldGeneratorDefinition* generator = 0;
                 if(generatorTaxonomy != worldMode->table->generatorTaxonomy)
                 {
                     TaxonomySlot* newGeneratorSlot =GetSlotForTaxonomy(worldMode->table, generatorTaxonomy);
                     
                     if(newGeneratorSlot)
                     {
-                        generator = newGeneratorSlot->generatorDefinition;
+                        worldMode->generator = newGeneratorSlot->generatorDefinition;
                     }
                 }
                 
                 
-                if(generator)
+                if(worldMode->generator)
                 {
                     for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
                     {
@@ -1428,7 +1483,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                                 if(!chunk->initialized)
                                 {
                                     forceVoronoiRegeneration = true;
-                                    BuildChunk(worldMode->table, generator, chunk, X, Y, seed);
+                                    BuildChunk(worldMode->table, worldMode->generator, chunk, X, Y, seed);
                                 }
                                 
                                 
@@ -1573,42 +1628,82 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             WorldChunk* chunk = worldMode->chunks[chunkIndex];
                             while(chunk)
                             {
-                                if(chunk->initialized && !ChunkOutsideWorld(lateralChunkSpan, chunk->worldX, chunk->worldY))
+                                i32 deltaChunkX = chunk->worldX - player->universeP.chunkX;
+                                i32 deltaChunkY = chunk->worldY - player->universeP.chunkY;
+                                i32 deltaChunk = Max(Abs(deltaChunkX), Abs(deltaChunkY));
+                                
+                                
+                                if(chunk->initialized && !ChunkOutsideWorld(lateralChunkSpan, chunk->worldX, chunk->worldY) &&
+                                   deltaChunk <= (i32) UI->chunkApron)
                                 {
                                     r32 chunkSide = worldMode->chunkSide;
                                     
                                     Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - player->universeP.chunkOffset;
                                     
                                     Vec3 chunkCenter = chunkLowLeftCornerOffset + 0.5f * V3(chunkSide, chunkSide, 0);
+                                    Lights lights = chunk->lights;
                                     
                                     if(IsValid(&chunk->textureHandle))
                                     {
-                                        Lights lights = GetLights(worldMode, chunkCenter);
-                                        RefreshSpecialTexture(group->assets, &chunk->LRU);
-                                        PushTexture(group, chunk->textureHandle, chunkCenter, V3(chunkSide, 0, 0), V3(0, chunkSide, 0), V4(1, 1, 1, 1), lights);
+                                        //PushTexture(group, chunk->textureHandle, chunkCenter, V3(worldMode->chunkSide, 0, 0), V3(0, worldMode->chunkSide, 0), V4(1, 1, 1, 1), lights);
                                     }
                                     else
                                     {
-                                        if(GenerateChunkTexture(group->assets, worldMode, chunk, (u32*) chunk->pixels, TEXTURE_ARRAY_DIM, TEXTURE_ARRAY_DIM))
-                                        {
-                                            u32 textureIndex = AcquireSpecialTextureHandle(group->assets);
-                                            chunk->textureHandle = TextureHandle(textureIndex, TEXTURE_ARRAY_DIM, TEXTURE_ARRAY_DIM);
-                                            PushTextureGeneration(group, chunk->textureHandle, (u32*) chunk->pixels);
-                                            RefreshSpecialTexture(group->assets, &chunk->LRU);
-                                        }
+                                        u32 textureIndex = AcquireSpecialTextureHandle(group->assets);
+                                        chunk->textureHandle = TextureHandle(textureIndex, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
                                     }
                                     
-                                    
 #if 0                                    
-                                    for(u8 Y = 0; Y < 1; ++Y)
+                                    RandomSequence seq = Seed(chunk->worldX * chunk->worldY);
+                                    r32 zBiasBegin = 0.01f;
+                                    r32 zBiasTile = 0.08f;
+                                    for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
                                     {
-                                        for(u8 X = 0; X < 1; ++X)
+                                        for(u8 X = 0; X < CHUNK_DIM; ++X)
                                         {
+                                            r32 zBiasStart = zBiasBegin + X * zBiasTile + Y * 1.5f * zBiasTile;
+                                            r32 zBiasPerBitmap = 0.01f;
+                                            
+                                            
                                             Vec3 tileMin = chunkLowLeftCornerOffset + V3(X * worldMode->voxelSide, Y * worldMode->voxelSide, 0);
                                             ObjectTransform tileTransform = FlatTransform();
                                             Rect2 rect = RectMinDim(tileMin.xy, V2(worldMode->voxelSide, worldMode->voxelSide));
                                             
-                                            WorldTile* tile = GetTile(chunk, X, Y);
+                                            WorldTile* sTiles[9];
+                                            u32 index = 0;
+                                            for(i32 tileY = (i32) Y - 1; tileY <= (i32) Y + 1; ++tileY)
+                                            {
+                                                for(i32 tileX = (i32) X - 1; tileX <= (i32) X + 1; ++tileX)
+                                                {
+                                                    sTiles[index++] = GetTile(worldMode, chunk, tileX, tileY);
+                                                }
+                                            }
+                                            
+                                            
+                                            
+                                            
+                                            Vec4 c0 = BlendTilesColor(sTiles[0], sTiles[1], sTiles[3], sTiles[4]);
+                                            Vec4 c1 = BlendTilesColor(sTiles[1], sTiles[2], sTiles[4], sTiles[5]);
+                                            Vec4 c2 = BlendTilesColor(sTiles[4], sTiles[5], sTiles[7], sTiles[8]);
+                                            Vec4 c3 = BlendTilesColor(sTiles[3], sTiles[4], sTiles[6], sTiles[7]);
+                                            
+                                            PushRect4Colors(group, FlatTransform(), V3(GetCenter(rect), 0), V2(worldMode->voxelSide, worldMode->voxelSide), c0, c1, c2, c3, lights);
+                                            
+                                            for(u32 decorationIndex = 0; decorationIndex < 5; ++decorationIndex)
+                                            {
+                                                ObjectTransform transform = FlatTransform(zBiasStart);
+                                                Vec2 offset = RandomBilV2(&seq) * 0.5f * worldMode->voxelSide;
+                                                transform.angle = RandomUni(&seq) * 360.0f;
+                                                BitmapId groundID = GetRandomBitmap(group->assets, Asset_Ground, &seq);
+                                                
+                                                if(IsValid(groundID))
+                                                {
+                                                    PushBitmap(group, transform, groundID, V3(GetCenter(rect), 0) + V3(offset, 0), RandomRangeFloat(&seq, 1.0f, 1.5f) * worldMode->voxelSide, V2(1, 1), V4(1, 1, 1, 1), lights);
+                                                }
+                                                zBiasStart += zBiasPerBitmap;
+                                            }
+                                            
+                                            
                                             if(UI->showGroundOutline)
                                             {
                                                 PushRectOutline(group, tileTransform, rect, V4(1, 1, 1, 1), 0.1f);
@@ -1817,6 +1912,17 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     }
     
     SendUpdate(inputAcc, targetEntityID, desiredAction, overlappingEntityID);
+    
+    
+    
+#if 1
+    SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / MAX_IMAGE_DIM, 0.0f, 0.0f), V3(0.0f, 2.0f / MAX_IMAGE_DIM, 0.0f), V3( 0, 0, 1), V3(0, 0, 0), V2(0, 0), MAX_TEXTURE_COUNT);
+    
+    PushRect(group, FlatTransform(), V3(0, 0, 0), V2(MAX_IMAGE_DIM, MAX_IMAGE_DIM), V4(1, 0, 0, 1));
+    
+#endif
+    
+    
     
     return result;
 }

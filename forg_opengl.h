@@ -42,6 +42,9 @@ struct ZBiasProgram
     GLuint depthSamplerID;
     GLuint alphaThreesoldID;
     GLuint ambientLightColorID;
+    GLuint directionalLightColorID;
+    GLuint directionalLightDirectionID;
+    GLuint directionalLightIntensityID;
     GLuint lightSource0ID;
     GLuint lightSource1ID;
 };
@@ -57,6 +60,11 @@ struct FinalStretchProgram
 {
     OpenGLProgramCommon common;
     GLuint textureSamplerID;
+};
+
+struct TextureGenProgram
+{
+    OpenGLProgramCommon common;
 };
 
 
@@ -76,13 +84,6 @@ enum OpenGLFramebufferFlags
     OpenGLFramebuffer_hasDepth = (1 << 4 )
 };
 
-enum OpenGLSpecialTextures
-{
-    OpenGLSpecial_GroundTexture,
-    
-    OpenGLSpecial_Count,
-};
-
 struct Opengl
 {
     GameRenderSettings settings;
@@ -91,8 +92,7 @@ struct Opengl
     
     OpenGLFramebuffer depthPeelBuffer[16];
     OpenGLFramebuffer resolveFramebuffer;
-    
-    OpenGLFramebuffer specialTextures[OpenGLSpecial_Count];
+    OpenGLFramebuffer textureGenFrameBuffer;
     
     
     b32 shaderSimTexLoadSRGB;
@@ -114,6 +114,7 @@ struct Opengl
     ZBiasProgram zBiasDepthPeelNoLight;
     PeelCompositeProgram peelComposite;
     FinalStretchProgram finalStretch;
+    TextureGenProgram testTextureGen;
     
     GLuint vertexBuffer;
     GLuint indexBuffer;

@@ -268,7 +268,6 @@ inline WorldTile GenerateTile(TaxonomyTable* table, WorldGeneratorDefinition* ge
         result.chunkynessSame = tile->chunkynessWithSame;
         result.chunkynessOther = tile->chunkynessWithOther;
         result.colorRandomness = tile->colorRandomness;
-        
     }
     result.waterPhase = 0;
     result.movingNegative = false;
@@ -328,7 +327,7 @@ internal void BuildChunk(TaxonomyTable* table, WorldGeneratorDefinition* generat
 {
     Assert(generator);
     
-    Assert(CHUNK_DIM % 4 == 0);
+    Assert(CHUNK_DIM % 2 == 0);
     
     chunk->initialized = true;
     chunk->worldX = chunkX;

@@ -14,6 +14,7 @@
 #define global_variable static
 #define local_persist static
 
+#define MAX_IMAGE_DIM 256
 
 #if _MSC_VER
 inline u32 AtomicCompareExchangeUint32( u32* toCheck, u32 newValue, u32 oldValue )

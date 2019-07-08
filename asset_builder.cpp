@@ -16,7 +16,6 @@
 #include "forg_token.cpp"
 #include "miniz.c"
 
-#define MAX_IMAGE_DIM 256
 
 #define STB_IMAGE_IMPLEMENTATION 1
 #include "stb_image.h"
@@ -1679,6 +1678,8 @@ internal LoadedModel LoadModel(char* path, char* filename)
                             dest->P.y = (r32) R32FromChar(y.text);
                             dest->P.z = (r32) R32FromChar(z.text);
                             
+                            dest->N = {};
+                            
                             if(dest->P.x > max.x)
                             {
                                 max.x = dest->P.x;
@@ -2982,7 +2983,7 @@ internal void WriteComponents()
     free(subdir);
 }
 
-internal void WriteBitmapsFromPath(char* path, AssetTypeId assetType, char* pakName, Vec2 pivot = V2(0.5f, 0.0f))
+internal void WriteBitmapsFromPath(char* path, AssetTypeId assetType, char* pakName, Vec2 pivot = V2(0.5f, 0.0f), char* autocompleteName = 0)
 {
     Assets assets_;
     Assets* assets = &assets_;
@@ -3003,6 +3004,11 @@ internal void WriteBitmapsFromPath(char* path, AssetTypeId assetType, char* pakN
         WritePak(assets, pakName);
     }
     Win32GetAllFilesEnd(&bitmapGroup);
+    
+    if(autocompleteName)
+    {
+        OutputFolderFilesAutocompleteFile(autocompleteName, path, PlatformFile_image);
+    }
 }
 
 internal void WriteMisc()
@@ -3142,12 +3148,7 @@ internal void WriteBitmapsAndAnimations()
     WriteBitmapsFromPath("definition/trunks", Asset_trunk, "forgtrunks.pak");
     WriteBitmapsFromPath("definition/particles", Asset_Particle, "forgparticles.pak");
     
-    WriteBitmapsFromPath("definition/ground/forest", Asset_Forest, "forgforest.pak");
-    WriteBitmapsFromPath("definition/ground/forestH", Asset_ForestHeightmap, "forgforestHeight.pak");
-    
-    WriteBitmapsFromPath("definition/ground/desert", Asset_Desert, "forgdesert.pak");
-    WriteBitmapsFromPath("definition/ground/desertH", Asset_DesertHeightmap, "forgdesertHeight.pak");
-    
+    WriteBitmapsFromPath("definition/ground/patches", Asset_Ground, "forgGround.pak", V2(0.5f, 0.5f), "groundPatches");
     
     WriteMisc();
     WriteUI();

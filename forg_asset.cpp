@@ -184,12 +184,28 @@ internal AssetMemoryBlock* FreeAsset(Assets* assets, Asset* asset)
     return result;
 }
 
+inline void LockAsset(Assets* assets, u32 assetID)
+{
+	BeginAssetLock(assets);
+    Asset* asset = assets->assets + assetID;
+	++asset->lockCounter;
+	EndAssetLock(assets);
+}
+
+inline void UnlockAsset(Assets* assets, u32 assetID)
+{
+	BeginAssetLock(assets);
+    Asset* asset = assets->assets + assetID;
+	Assert(asset->lockCounter > 0);
+	--asset->lockCounter;
+	EndAssetLock(assets);
+}
+
 internal AssetMemoryHeader* AcquireAssetMemory(Assets* assets, u32 size, u32 assetIndex, AssetHeaderType assetType)
 {
     AssetMemoryHeader* result = 0;
     
     BeginAssetLock(assets);
-    
     AssetMemoryBlock* block = FindBlockForSize(assets, size);
     for(;;)
     {
@@ -216,7 +232,7 @@ internal AssetMemoryHeader* AcquireAssetMemory(Assets* assets, u32 size, u32 ass
                 header = header->prev)
             {
                 Asset* asset = assets->assets + header->assetIndex;
-                if(asset->state == Asset_loaded)
+                if(asset->state == Asset_loaded && asset->lockCounter == 0)
                 {
                     block = FreeAsset(assets, asset);
                     break;
@@ -319,10 +335,24 @@ inline u32 AcquireTextureHandle(Assets* assets)
         AssetLRULink* sentinel = &assets->LRUSentinel;
         Assert(!DLLIST_ISEMPTY(sentinel));
         
+        AssetLRULink* free = 0;
         AssetLRULink* first = sentinel->next;
-        DLLIST_REMOVE(first);
+        while(true)
+        {
+            Asset* test = (Asset*) first;
+            if(test->lockCounter > 0)
+            {
+                free = first;
+                break;
+            }
+            
+            first = first->next;
+            Assert(first != sentinel);
+        }
+        Assert(free);
+        DLLIST_REMOVE(free);
         
-        Asset* LRU = (Asset*) first;
+        Asset* LRU = (Asset*) free;
         result = LRU->textureHandle.index;
         Clear(&LRU->textureHandle);
         
@@ -704,6 +734,19 @@ inline b32 IsValid(ModelId ID)
 {
     b32 result = (ID.value != 0);
     return result;
+}
+
+
+inline void LockBitmap(Assets* assets, BitmapId ID)
+{
+    Assert(IsValid(ID));
+    LockAsset(assets, ID.value);
+}
+
+inline void UnlockBitmap(Assets* assets, BitmapId ID)
+{
+    Assert(IsValid(ID));
+    UnlockAsset(assets, ID.value);
 }
 
 internal void CloseAllHandles(Assets* assets)

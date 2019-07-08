@@ -1265,7 +1265,7 @@ internal void ServerCommonInit(PlatformServerMemory* memory, u32 universeIndex)
         context->pool.minimumBlockSize = MegaBytes(32);
     }
     
-#define MAX_COMPONENTS Kilo(10)
+#define MAX_COMPONENTS Kilo(64)
     MemoryPool* pool = &server->worldPool;
     InitComponents(pool, server->components, Effect, MAX_COMPONENTS);
     InitComponents(pool, server->components, Plant, MAX_COMPONENTS);
