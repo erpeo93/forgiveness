@@ -329,6 +329,8 @@ struct GameModeWorld
 {
     struct GameState* gameState;
     
+    b32 firstTimeGeneratingChunks;
+    
     WorldGeneratorDefinition* generator;
     WorldSeason season;
     r32 seasonLerp;
@@ -363,8 +365,8 @@ struct GameModeWorld
     ToDeleteFile* firstFileToDelete;
     ToDeleteFile* firstFreeFileToDelete;
     
-    b32 allDataFilesArrived;
-    b32 justReloadTaxonomies;
+    
+    DataFileSentType dataFileSent;
     
     b32 allPakFilesArrived;
     u32 patchSectionArrived;

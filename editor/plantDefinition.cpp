@@ -29,8 +29,13 @@ inline void ParsePlantLevelParams(PlantLevelParams* destParams, EditorElement* l
         destParams->baseOldColor = ToV4Color(GetStruct(levelParams, "baseOldColor"));
         destParams->topOldColor = ToV4Color(GetStruct(levelParams, "topOldColor"));
         
-        destParams->radiousIncreaseSpeed = ToR32(GetValue(levelParams, "radiousIncreaseSpeed"));
-        destParams->lengthIncreaseSpeed = ToR32(GetValue(levelParams, "lengthIncreaseSpeed"));
+        destParams->radiousIncreaseSpeedBeforeClones = ToR32(GetValue(levelParams, "radiousSpeedBeforeClones"));
+        destParams->lengthIncreaseSpeedBeforeClones = ToR32(GetValue(levelParams, "lengthSpeedBeforeClones"));
+        
+        destParams->radiousIncreaseSpeedAfterClones = ToR32(GetValue(levelParams, "radiousSpeedAfterClones"));
+        destParams->lengthIncreaseSpeedAfterClones = ToR32(GetValue(levelParams, "lengthSpeedAfterClones"));
+        
+        destParams->normClonesSpawnAtLength = Clamp01(ElemR32(levelParams, "normClonesSpawnAtLength"));
         
         destParams->leafCount = Min(MAX_LFF_PER_STEM, ToU8(GetValue(levelParams, "leafCount")));
         destParams->allLeafsAtStemLength = ToR32(GetValue(levelParams, "allLeafsAtStemLength"), 0.5f);

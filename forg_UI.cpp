@@ -123,7 +123,19 @@ inline void UIRenderAutocomplete(UIState* UI, EditorWidget* widget, PlatformInpu
                     
                     UIInteraction autoConfirmInteraction = {};
                     UIAddStandardAction(UI, &autoConfirmInteraction, UI_Trigger, block->names[nameIndex], ColdPointer(UI->keyboardBuffer), ColdPointer(block->names[nameIndex]));
+                    
+                    
+                    if(UI->active)
+                    {
                     AddConfirmActions(UI, widget, &autoConfirmInteraction, UI->active->value, sizeof(UI->active->value), block->names[nameIndex]);
+                        
+                    }
+                    else
+                    {
+                        Assert(UI->activeLabel);
+                        AddConfirmActions(UI, widget, &autoConfirmInteraction, UI->activeLabel->value, sizeof(UI->activeLabel->value), block->names[nameIndex]);
+                    }
+                    
                     
                     UIAddInteraction(UI, input, switchButton, autoInteraction);
                     UIAddInteraction(UI, input, confirmButton, autoConfirmInteraction);
@@ -561,15 +573,25 @@ inline UIAddTabResult UIAddTabValueInteraction(UIState* UI, EditorWidget* widget
                 if(StrEqual(text, "true"))
                 {
                     result.color = V4(1, 0, 1, 1);
+                    UIAddUndoRedoAction(UI, &mouseInteraction, UI_Trigger, UndoRedoString(widget, root->value, sizeof(root->value), root->value, UI->falseString));            
                     UIAddStandardAction_(UI, &mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(root->value), ColdPointer(UI->falseString));
                     UIAddReloadElementAction(UI, &mouseInteraction, UI_Trigger, widget->root);
+                    if(StrEqual(widget->name, "Editing Tabs"))
+                    {
+                        UIAddRequestAction(UI, &mouseInteraction, UI_Trigger, SendDataFileRequest());
+                    }
                     
                 }
                 else if(StrEqual(text, "false"))
                 {
                     result.color = V4(1, 0, 1, 1);
+                    UIAddUndoRedoAction(UI, &mouseInteraction, UI_Trigger, UndoRedoString(widget, root->value, sizeof(root->value), root->value, UI->trueString));            
                     UIAddStandardAction_(UI, &mouseInteraction, UI_Trigger, sizeof(root->value), ColdPointer(root->value), ColdPointer(UI->trueString));
                     UIAddReloadElementAction(UI, &mouseInteraction, UI_Trigger, widget->root);
+                    if(StrEqual(widget->name, "Editing Tabs"))
+                    {
+                        UIAddRequestAction(UI, &mouseInteraction, UI_Trigger, SendDataFileRequest());
+                    }
                 }
                 else
                 {
@@ -1597,18 +1619,41 @@ inline UIRenderTreeResult UIRenderEditorTree(UIState* UI, EditorWidget* widget, 
                                     cancReviveInteraction = SendRequestInteraction(UI, UI_Trigger, ReviveTaxonomyRequest(root->taxonomy));
                                 }
                                 
-                                UIButton deleteButton = UIBtn(UI, startingPos, layout, V4(1, 0, 0, 1), cancText, cancActive, cancReviveInteraction);
+                                UIButton deleteButton = UIBtn(UI, instantiateP, layout, V4(1, 0, 0, 1), cancText, cancActive, cancReviveInteraction);
                                 
                                 DrawButtonResult cancDraw = UIDrawButton(UI, input, &deleteButton);
                                 if(cancDraw.hot)
                                 {
-                                    nameColor = V4(0, 1, 0, 1);
+                                    nameColor = V4(1, 0, 0, 1);
                                 }
                                 result = Union(result, cancDraw.bounds);
                                 
                                 instantiateP = UIFollowingP(&deleteButton, buttonSeparator);
+
+
+
+#if 0                                
+                                b32 copyActive = false;
+								if(root->name[0] != '#')
+								{
+                                    copyActive = true;
+								}
+                                
+                                UIInteraction copyInteraction = SendRequestInteraction(UI, UI_Trigger, CopyTaxonomyRequest(root->taxonomy));
+                               
+                                    char* copyText = "create copy";
+									UIButton copyButton = UIBtn(UI, instantiateP, layout, V4(1, 0, 0, 1), copyText, copyActive, copyInteraction);
+									DrawButtonResult copy = UIDrawButton(UI, input, &copyButton);
+									if(copy.hot)
+									{
+										nameColor = V4(0, 0, 0, 1);
+									}
+									result = Union(result, copy.bounds);
+									instantiateP = UIFollowingP(&copyButton, buttonSeparator);
+                                #endif
+
                             }
-                           
+                          
                             
                             UIInteraction instantiateInteraction = SendRequestInteraction(UI, UI_Click, InstantiateTaxonomyRequest(root->taxonomy, V3(1, 0, 0)));
                             UIAddSetValueAction(UI, &instantiateInteraction, UI_Idle, &UI->instantiatingTaxonomy, root->taxonomy);
@@ -2439,8 +2484,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
         FormatString(UI->showBuffer, sizeof(UI->showBuffer), "%s", UI->keyboardBuffer);
     }
     
-    UI->bufferValid = false;
-    
+    UI->bufferValid = false; 
     if(UI->keyboardBuffer[0] && UI->activeLabel)
     {
         UI->bufferValid = true;
@@ -3435,34 +3479,58 @@ inline void RenderEssence(UIState* UI, RenderGroup* group, TaxonomySlot* slot, V
     }
 }
 
+inline b32 EssenceHasToBeRendered(TaxonomySlot* slot)
+{
+    b32 result = true;
+    return result;
+}
+
 inline void UIOverdrawEssences(UIState* UI, r32 alpha)
 {
     RenderGroup* group = UI->group;
     TaxonomySlot* essencesSlot = NORUNTIMEGetTaxonomySlotByName(UI->table, "essences");
+    
+    u32 totalShowableEssences = 0;
+    for(u32 childIndex = 0; childIndex < essencesSlot->subTaxonomiesCount; ++childIndex)
+    {
+        TaxonomySlot* slot = GetNthChildSlot(UI->table, essencesSlot, childIndex);    
+        if(EssenceHasToBeRendered(slot))
+        {
+            ++totalShowableEssences;
+        }
+    }
     
     r32 additionalZBias = 20.2f;
     
     Vec3 iconPLeft = V3(-8.5f, 0.0f, 0.0f);
     Vec3 iconPRight = V3(8.5f, 0.0f, 0.0f);
     
-    u32 half = essencesSlot->subTaxonomiesCount / 2;
     
     r32 essenceDim = 0.5f;
     r32 totalEssenceYSpace = 3.0f;
-    r32 essenceSpace = totalEssenceYSpace / half;
         
-    for(u32 essenceIndex = 0; essenceIndex < half; ++essenceIndex)
+    u32 half = totalShowableEssences / 2;
+    r32 essenceSpace = totalEssenceYSpace / half;
+    u32 renderedEssences = 0;
+    for(u32 essenceIndex = 0; essenceIndex < essencesSlot->subTaxonomiesCount; ++essenceIndex)
     {
         TaxonomySlot* slot = GetNthChildSlot(UI->table, essencesSlot, essenceIndex);
-        RenderEssence(UI, group, slot, iconPLeft, essenceDim, additionalZBias, alpha);
-        iconPLeft += essenceSpace * group->gameCamera.Y;
-    }
-    
-    for(u32 essenceIndex = half; essenceIndex < essencesSlot->subTaxonomiesCount; ++essenceIndex)
-    {
-        TaxonomySlot* slot = GetNthChildSlot(UI->table, essencesSlot, essenceIndex);
-        RenderEssence(UI, group, slot, iconPRight, essenceDim, additionalZBias, alpha);
-        iconPRight += essenceSpace * group->gameCamera.Y;
+        if(EssenceHasToBeRendered(slot))
+        {
+            Vec3 drawingP;
+            if(renderedEssences++ < half)
+            {
+                drawingP = iconPLeft;
+                iconPLeft += essenceSpace * group->gameCamera.Y;   
+            }
+            else
+            {
+                drawingP = iconPRight;
+                iconPRight += essenceSpace * group->gameCamera.Y;
+            }
+            
+            RenderEssence(UI, group, slot, drawingP, essenceDim, additionalZBias, alpha);   
+        }
     }
 }
 
@@ -3837,6 +3905,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
             UIAddChild(UI, misc->root, EditorElement_Unsigned, "worldSeed", "0");
             UIAddChild(UI, misc->root, EditorElement_String, "dayPhase", "Day");
             UIAddChild(UI, misc->root, EditorElement_Real, "windSpeed", "1.0");
+            UIAddChild(UI, misc->root, EditorElement_Real, "generateEmptyWorld", "false");
             
             
             
@@ -4032,6 +4101,7 @@ inline void ResetUI(UIState* UI, GameModeWorld* worldMode, RenderGroup* group, C
         UIAddAutocompleteFromTaxonomy(UI, "tiles", "tileType");
         UIAddAutocompleteFromTaxonomy(UI, "root", "taxonomyName");
         UIAddAutocompleteFromTaxonomy(UI, "particleEffects", "particleEffectName");
+        UIAddAutocompleteFromTaxonomy(UI, "essences", "essenceName");
     }
     
     if(loadAssetAutocompletes)
@@ -4392,7 +4462,11 @@ inline void UIUpdateSkillBar(UIState* UI, PlatformInput* input)
     }
 }
 
-
+inline b32 TypingWithKeyboard(UIState* UI)
+{
+	b32 result = (UI->activeLabel || UI->active);
+	return result;
+}
 internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, ClientEntity** overlappingEntities, u32 maxOverlappingEntities)
 {
     UIOutput* output = &UI->output;
@@ -4419,18 +4493,23 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
     
     
     UI->movingWithKeyboard = false;
-    if(IsDown(&input->moveLeft) ||
+
+	if(!TypingWithKeyboard(UI))
+	{
+		if(IsDown(&input->moveLeft) ||
        IsDown(&input->moveRight) ||
        IsDown(&input->moveUp) ||
        IsDown(&input->moveDown))
-    {
-        UI->movingWithKeyboard = true;
-    }
-    UIAddInteraction(UI, input, moveLeft, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.x, -1.0f), UIPriority_Standard, &UI->movementGroup);
-    UIAddInteraction(UI, input, moveRight, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.x, 1.0f), UIPriority_Standard, &UI->movementGroup);
-    UIAddInteraction(UI, input, moveDown, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.y, -1.0f), UIPriority_Standard, &UI->movementGroup);
-    UIAddInteraction(UI, input, moveUp, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.y, 1.0f), UIPriority_Standard, &UI->movementGroup);
-    
+		{
+			UI->movingWithKeyboard = true;
+		}
+
+		UIAddInteraction(UI, input, moveLeft, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.x, -1.0f), UIPriority_Standard, &UI->movementGroup);
+		UIAddInteraction(UI, input, moveRight, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.x, 1.0f), UIPriority_Standard, &UI->movementGroup);
+		UIAddInteraction(UI, input, moveDown, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.y, -1.0f), UIPriority_Standard, &UI->movementGroup);
+		UIAddInteraction(UI, input, moveUp, UISetValueInteraction(UI, UI_Idle, &output->inputAcc.y, 1.0f), UIPriority_Standard, &UI->movementGroup);
+	}
+
     r32 slotLerp = 0.0f;
     switch(UI->mode)
     {

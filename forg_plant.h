@@ -119,8 +119,13 @@ struct PlantLevelParams
     Vec4 baseOldColor;
     Vec4 topOldColor;
     
-    r32 lengthIncreaseSpeed;
-    r32 radiousIncreaseSpeed;
+    r32 lengthIncreaseSpeedBeforeClones;
+    r32 radiousIncreaseSpeedBeforeClones;
+    
+    r32 lengthIncreaseSpeedAfterClones;
+    r32 radiousIncreaseSpeedAfterClones;
+    
+    r32 normClonesSpawnAtLength;
     
     u8 leafCount;
     r32 allLeafsAtStemLength;

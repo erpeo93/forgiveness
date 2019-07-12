@@ -685,6 +685,12 @@ inline void SignalAnimationSyncCompleted(AnimationState* animation, u32 action, 
     }
 }
 
+inline void SetLabel(VisualLabel* dest, u64 ID, r32 value)
+{
+    u32 hash = (u32) (ID >> 32);
+    dest->ID = (hash & (LABEL_HASH_COUNT - 1)) + Tag_count;
+    dest->value = value;
+}
 
 internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* table, u32 taxonomy, GenerationData gen)
 {
@@ -716,34 +722,49 @@ internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* tab
                 u32 choosenTaxonomy = GetRandomChild(table, &seq, ingredientTaxonomy);
                 TaxonomySlot* ingredientSlot = GetSlotForTaxonomy(table, choosenTaxonomy);
                 
-                for(VisualLabel* label = ingredientSlot->firstVisualLabel; label; label = label->next)
+                for(TaxonomyEssence* essenceSlot = ingredientSlot->firstEssence; essenceSlot; essenceSlot = essenceSlot->next)
                 {
-                    Assert(visualComponent->labelCount < ArrayCount(visualComponent->labels));
-                    visualComponent->labels[visualComponent->labelCount++] = *label;
+                    EssenceSlot essence = essenceSlot->essence;
+                    essence.quantity *= piece->ingredientQuantities[ingredientIndex];
+                    
+                    TaxonomySlot* essenceS = GetSlotForTaxonomy(table, essence.taxonomy);
+                    u64 labelID = essenceS->stringHashID;
+                    
+                    VisualLabel newLabel;
+                    SetLabel(&newLabel, labelID, (r32) essence.quantity);
+                    
+                    b32 alreadyPresent = false;
+                    for(u32 labelIndex = 0; labelIndex < visualComponent->labelCount; ++labelIndex)
+                    {
+                        VisualLabel* testLabel = visualComponent->labels + labelIndex;
+                        if(testLabel->ID == newLabel.ID)
+                        {
+                            alreadyPresent = true;
+                            testLabel->value += newLabel.value;
+                        }
+                    }
+                    if(!alreadyPresent)
+                    {
+                        VisualLabel* label = visualComponent->labels + visualComponent->labelCount++;
+                        *label = newLabel;
+                    }
                 }
             }
         }
     }
 }
 
-inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 skeletonHashID, u64 skinHashID, ComponentsProperties* properties)
+inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 skeletonSkinHashID, ComponentsProperties* properties)
 {
     BitmapId result = {};
     
     TagVector match = {};
     TagVector weight = {};
     
-    match.E[Tag_skinFirstHalf] = (r32) (skinHashID >> 32);
-    match.E[Tag_skinSecondHalf] = (r32) (skinHashID & 0xFFFFFFFF);
-    weight.E[Tag_skinFirstHalf] = 10.0f;
-    weight.E[Tag_skinSecondHalf] = 10.0f;
-    
-    
-    match.E[Tag_skeletonFirstHalf] = (r32) (skeletonHashID >> 32);
-    match.E[Tag_skeletonSecondHalf] = (r32) (skeletonHashID & 0xFFFFFFFF);
-    weight.E[Tag_skeletonFirstHalf] = 100.0f;
-    weight.E[Tag_skeletonSecondHalf] = 100.0f;
-    
+    match.E[Tag_SkeletonSkinFirstHalf] = (r32) (skeletonSkinHashID >> 32);
+    match.E[Tag_SkeletonSkinSecondHalf] = (r32) (skeletonSkinHashID & 0xFFFFFFFF);
+    weight.E[Tag_SkeletonSkinFirstHalf] = 1.0f;
+    weight.E[Tag_SkeletonSkinSecondHalf] = 1.0f;
     
     u32 assetIndex = Asset_count + (sprite->stringHashID & (HASHED_ASSET_SLOTS - 1));
     
@@ -767,6 +788,8 @@ inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 skeleton
                         labels.values[labelI] = label->value;
                     }
                 }
+                
+                break;
             }
         }
         result = GetMatchingBitmapHashed(group->assets, sprite->stringHashID, &match, &weight, &labels);
@@ -863,7 +886,7 @@ inline Rect2 GetPiecesBound(RenderGroup* group, BlendResult* blended, AnimationV
         
         if(!(sprite->flags & Sprite_Composed))
         {	        
-            BitmapId BID = GetBitmapID(group, sprite, params->skeletonHashID, params->skinHashID, params->properties);
+            BitmapId BID = GetBitmapID(group, sprite, params->skeletonSkinHashID, params->properties);
             Vec2 pivot = sprite->pivot;
             
             if(IsValid(BID))
@@ -1188,7 +1211,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
     }
     else
     {
-        BitmapId BID = GetBitmapID(group, sprite, params->skeletonHashID, params->skinHashID, params->properties);
+        BitmapId BID = GetBitmapID(group, sprite, params->skeletonSkinHashID, params->properties);
         if(sprite->flags & Sprite_Composed)
         {
 #if 0            
@@ -1891,10 +1914,12 @@ inline SkeletonInfo GetSkeletonForTaxonomy(TaxonomyTable* table, TaxonomySlot* s
     {
         if(slot->skeletonHashID)
         {
+            result.skeletonSkinHashID = slot->skeletonSkinHashID;
             result.skeletonHashID = slot->skeletonHashID;
             result.skinHashID = slot->skinHashID;
             result.coloration = slot->defaultColoration;
             result.originOffset = slot->originOffset;
+            result.flippedOnYAxis = slot->flippedOnYAxis;
             break;
         }
         
@@ -1908,10 +1933,12 @@ struct GetAIDResult
 {
     AssetTypeId assetID;
     AnimationId AID;
+    u64 skeletonSkinHashID;
     u64 skinHashID;
     u64 skeletonHashID;
     Vec4 coloration;
     Vec2 originOffset;
+    b32 flippedOnYAxis;
 };
 
 inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy, u32 action,b32 dragging, r32 tileHeight, u64 forcedNameHashID = 0)
@@ -1923,10 +1950,12 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
     
     
     SkeletonInfo skeletonInfo = GetSkeletonForTaxonomy(taxTable, slot);
+    result.skeletonSkinHashID = skeletonInfo.skeletonSkinHashID;
     result.skeletonHashID = skeletonInfo.skeletonHashID;
     result.skinHashID = skeletonInfo.skinHashID;
     result.coloration = skeletonInfo.coloration;
     result.originOffset = skeletonInfo.originOffset;
+    result.flippedOnYAxis = skeletonInfo.flippedOnYAxis;
     
     if(forcedNameHashID)
     {
@@ -1941,9 +1970,9 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
         result.assetID = GetAssetIDForEntity(assets, taxTable, taxonomy, action, dragging, tileHeight);
         Assert(result.assetID);
         
-        if(!result.skeletonHashID)
+        if(!result.skeletonSkinHashID)
         {
-            result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, result.assetID, &result.skinHashID);
+            result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, result.assetID, &result.skeletonHashID);
         }
         else
         {
@@ -2069,8 +2098,12 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
         
         input.defaultColoration = AID.coloration;
         input.combatAnimation = (AID.assetID == Asset_attacking);
-        
         params.cameraOffset.xy += AID.originOffset;
+        
+        if(AID.flippedOnYAxis)
+        {
+            params.flipOnYAxis = !params.flipOnYAxis;
+        }
         
         if(IsValid(AID.AID))
         {
@@ -2081,6 +2114,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
                 
                 r32 quicknessCoeff = 1.0f;
                 timeToAdvance *= quicknessCoeff;
+                params.skeletonSkinHashID = AID.skeletonSkinHashID;
                 params.skeletonHashID = AID.skeletonHashID;
                 params.skinHashID = AID.skinHashID;
                 

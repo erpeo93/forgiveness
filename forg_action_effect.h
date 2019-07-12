@@ -40,6 +40,10 @@ printTable(noPrefix) enum EffectIdentifier
     Effect_NakedHandsDamage,
     Effect_Spawn,
     Effect_RestoreLifePoints,
+    Effect_SpawnRock,
+    Effect_SpawnTree,
+    Effect_SpawnCreature,
+    Effect_SpawnObject,
 };
 
 printTable(noPrefix) enum EffectTargetRangeType

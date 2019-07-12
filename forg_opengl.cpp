@@ -1253,36 +1253,6 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     }
     
     
-#if 0
-    OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
-    glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
-    for(u32 textureIndex = MAX_TEXTURE_COUNT; textureIndex < MAX_TEXTURE_COUNT + MAX_SPECIAL_TEXTURE_COUNT; ++textureIndex)
-    {
-        glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, opengl.textureArray, 0, textureIndex);
-        
-        glViewport(0, 0, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
-        glScissor(0, 0, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
-        
-        glClearColor(1, 1, 0, 1);
-        glClear(GL_COLOR_BUFFER_BIT);
-        
-        
-        glViewport(0, 0, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
-        glScissor(0, 0, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
-        
-        glBindBuffer(GL_ARRAY_BUFFER, opengl.screenFillVertexBuffer);
-        OpenGLUseProgramBegin(&opengl.testTextureGen);
-        
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-        OpenGLUseProgramEnd(&opengl.testTextureGen.common);
-    }
-    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-#endif
-    
-    
-    
-    
-    
     OpenGLBindFramebuffer(opengl.depthPeelBuffer + 0, renderWidth, renderHeight);
     b32 peeling = false;
     u32 peelIndex = 0;
@@ -1322,15 +1292,16 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
                     {
                         walkedSize = peelWalkedSize;
                         ++peelIndex;
-                        OpenGLBindFramebuffer(opengl.depthPeelBuffer + peelIndex, renderWidth, renderHeight);
                         peeling = true;
                     }
                     else
                     {
                         Assert(peelIndex == maxRenderTargetIndex);
-                        OpenGLBindFramebuffer(opengl.depthPeelBuffer + 0, renderWidth, renderHeight);
                         peeling = false;
                     }
+                    
+                    u32 peelFrameBuffer = peelIndex % maxRenderTargetIndex;
+                    OpenGLBindFramebuffer(opengl.depthPeelBuffer + peelFrameBuffer, renderWidth, renderHeight);
                 } break;
                 
                 case CommandType_TexturedQuadsCommand:
@@ -1348,6 +1319,9 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
                     glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
                     if(element->setup.renderTargetIndex > 0)
                     {
+                        glEnable(GL_BLEND);
+                        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+                        
                         OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
                         glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, opengl.textureArray, 0, element->setup.renderTargetIndex);
                     }
@@ -1379,19 +1353,21 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
                     glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
                     OpenGLUseProgramEnd(common);
                     
-                    
-                    if(element->setup.renderTargetIndex > 0)
-                    {
-                        OpenGLBindFramebuffer(opengl.depthPeelBuffer + 0, renderWidth, renderHeight);
-                    }
-                    
                     if(peeling)
                     {
-                        Assert(element->setup.renderTargetIndex == 0);
                         glActiveTexture(GL_TEXTURE1);
                         glBindTexture(GL_TEXTURE_2D, 0);
                         glActiveTexture(GL_TEXTURE0);
                     }
+                    
+                    if(element->setup.renderTargetIndex > 0)
+                    {
+                        glDisable(GL_BLEND);
+                        
+                        u32 peelFrameBuffer = peelIndex % maxRenderTargetIndex;
+                        OpenGLBindFramebuffer(opengl.depthPeelBuffer + peelFrameBuffer, renderWidth, renderHeight);
+                    }
+                    
                     walkedSize += sizeof(TexturedQuadsCommand);
                 } break;
                 

@@ -95,6 +95,10 @@ char* MetaTable_EffectIdentifier[] =
 "NakedHandsDamage",
 "Spawn",
 "RestoreLifePoints",
+"SpawnRock",
+"SpawnTree",
+"SpawnCreature",
+"SpawnObject",
 };
 char* MetaTable_EffectTargetRangeType[] = 
  {
@@ -172,10 +176,8 @@ char* MetaTable_TagId[] =
  {
 "none",
 "direction",
-"skeletonFirstHalf",
-"skeletonSecondHalf",
-"skinFirstHalf",
-"skinSecondHalf",
+"SkeletonSkinFirstHalf",
+"SkeletonSkinSecondHalf",
 "codepoint",
 "shotIndex",
 "layerIndex",

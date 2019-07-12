@@ -152,6 +152,17 @@ internal void Craft(SimRegion* region, SimEntity* dest, u32 taxonomy, Generation
     u32 availableEssenceCount = 0;
     EssenceSlot availableEssences[32];
     
+    TaxonomySlot* slot = GetSlotForTaxonomy(taxTable, taxonomy);
+	for(TaxonomyEssence* defaultEssence = slot->firstDefaultEssence; defaultEssence; defaultEssence = defaultEssence->next)
+	{
+		EssenceSlot essence = defaultEssence->essence;
+        Assert(essence.quantity);
+		Assert(availableEssenceCount < ArrayCount(availableEssences));
+		availableEssences[availableEssenceCount++] = essence;
+        
+        totalAvailableEssences += essence.quantity;
+	}
+    
     for(u32 ingredientIndex = 0; ingredientIndex < ingredients.count; ++ingredientIndex)
     {
         u32 ingredientTaxonomy = ingredients.taxonomies[ingredientIndex];
@@ -159,7 +170,7 @@ internal void Craft(SimRegion* region, SimEntity* dest, u32 taxonomy, Generation
         for(TaxonomyEssence* essenceSlot = ingredientSlot->firstEssence; essenceSlot; essenceSlot = essenceSlot->next)
         {
             EssenceSlot essence = essenceSlot->essence;
-            essence.quantity += ingredients.quantities[ingredientIndex];
+            essence.quantity *= ingredients.quantities[ingredientIndex];
             
             Assert(availableEssenceCount < ArrayCount(availableEssences));
             availableEssences[availableEssenceCount++] = essence;
@@ -171,7 +182,6 @@ internal void Craft(SimRegion* region, SimEntity* dest, u32 taxonomy, Generation
     RandomSequence seq_ = Seed((u32) gen.ingredientSeed);
     RandomSequence* seq = &seq_;
     
-    TaxonomySlot* slot = GetSlotForTaxonomy(taxTable, taxonomy);
     while(availableEssenceCount > 0)
     {
         u32 essenceCount = RandomChoice(seq, MAX_ESSENCES_PER_EFFECT) + 1;

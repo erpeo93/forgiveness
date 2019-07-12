@@ -5,10 +5,10 @@ internal void ImportCraftingEssencesTab(TaxonomySlot* slot, EditorElement* root)
     
     while(essences)
     {
-        char* essenceName = GetValue(essences, "essence");
+        char* essenceName = GetValue(essences, "essenceName");
         char* quantity = GetValue(essences, "quantity");
         
-        AddEssence(slot, essenceName, ToU8(quantity));
+        AddEssence(&slot->firstEssence, essenceName, ToU8(quantity));
         
         essences = essences->next;
     }

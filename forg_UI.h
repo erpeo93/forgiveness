@@ -36,6 +36,7 @@ enum UIRequestType
     UIRequest_Edit,
     UIRequest_EditTab,
     UIRequest_AddTaxonomy,
+    UIRequest_CopyTaxonomy,
     UIRequest_DeleteTaxonomy,
     UIRequest_ReviveTaxonomy,
     UIRequest_InstantiateTaxonomy,

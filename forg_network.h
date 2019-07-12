@@ -216,6 +216,7 @@ enum Packet_Type
     Type_EditTab,
     Type_ReloadEditingSlot,
     Type_AddTaxonomy,
+    Type_CopyTaxonomy,
     Type_DeleteTaxonomy,
     Type_ReviveTaxonomy,
     Type_InstantiateTaxonomy,

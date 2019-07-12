@@ -532,7 +532,7 @@ inline Vec3 ToV3(EditorElement* element, Vec3 default = {})
 
 
 #define ElemU32(root, name) ToU32(GetValue(root, name))
-#define ElemR32(root, name) ToR32(GetValue(root, name))
+#define ElemR32(root, name, ...) ToR32(GetValue(root, name), ##__VA_ARGS__)
 #define StructV3(root, name) ToV3(GetStruct(root, name))
 #define ColorV4(root, name) ToV4Color(GetStruct(root, name))
 
@@ -613,14 +613,14 @@ inline TaxonomyNode* AddToTaxonomyTree(TaxonomyTree* tree, TaxonomySlot* slot)
     return result;
 }
 
-inline void AddEssence(TaxonomySlot* slot, char* name, u32 quantity)
+inline void AddEssence(TaxonomyEssence** firstEssence, char* name, u32 quantity)
 {
+    quantity = Max(quantity, 1);
     TaxonomySlot* essenceSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, name);
-    
     if(essenceSlot)
     {
         b32 found = false;
-        for(TaxonomyEssence* essence = slot->firstEssence; essence; essence = essence->next)
+        for(TaxonomyEssence* essence = *firstEssence; essence; essence = essence->next)
         {
             if(essence->essence.taxonomy == essenceSlot->taxonomy)
             {
@@ -636,7 +636,7 @@ inline void AddEssence(TaxonomySlot* slot, char* name, u32 quantity)
             TAXTABLE_ALLOC(essence, TaxonomyEssence);
             essence->essence.taxonomy = essenceSlot->taxonomy;
             essence->essence.quantity = quantity;
-            FREELIST_INSERT(essence, slot->firstEssence);
+            FREELIST_INSERT(essence, *firstEssence);
         }
     }
     else
@@ -1447,6 +1447,7 @@ inline EditorElement* GetList(EditorElement* element, char* listName)
 #include "editor/equipmentMappings.cpp"
 #include "editor/neededTool.cpp"
 #include "editor/craftingEssences.cpp"
+#include "editor/defaultEssences.cpp"
 #include "editor/container.cpp"
 #include "editor/tileParams.cpp"
 
@@ -1457,7 +1458,7 @@ inline EditorElement* GetList(EditorElement* element, char* listName)
 #include "editor/animationEffects.cpp"
 #include "editor/soundEffects.cpp"
 #include "editor/animationGeneralParams.cpp"
-#include "editor/visualLabels.cpp"
+//#include "editor/visualLabels.cpp"
 #include "editor/boneAlteration.cpp"
 #include "editor/assAlteration.cpp"
 #include "editor/icon.cpp"
@@ -1503,11 +1504,11 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         {
             ImportNeededToolsTab(slot, root);
         }
-#if FORG_SERVER
         else if(StrEqual(name, "craftingEssences"))
         {
             ImportCraftingEssencesTab(slot, root);
         }
+#if FORG_SERVER
         else if(StrEqual(name, "effects"))
         {
             ImportEffectsTab(slot, root);
@@ -1521,6 +1522,10 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
         {
             ImportCraftingEffectsTab(slot, root);
             
+        }
+        else if(StrEqual(name, "defaultEssences"))
+        {
+            ImportDefaultEssencesTab(slot, root);
         }
         else if(StrEqual(name, "attributes"))
         {
@@ -1552,7 +1557,7 @@ internal void Import(TaxonomySlot* slot, EditorElement* root)
 #ifndef FORG_SERVER
         else if(StrEqual(name, "visualLabels"))
         {
-            ImportVisualLabelsTab(slot, root);
+            //ImportVisualLabelsTab(slot, root);
         }
         else if(StrEqual(name, "animationGeneralParams"))
         {
@@ -1961,7 +1966,7 @@ inline void PatchLocalServer(ServerState* server)
     SendPatchDoneMessageToAllPlayers(server);
 }
 
-internal void SendSpecificFile(ServerPlayer* player, char* filename, b32 sendAllDataFilesSentMessage)
+internal void SendSpecificFile(ServerPlayer* player, char* filename)
 {
     char* path = "assets";
     MemoryPool tempPool = {};
@@ -1988,14 +1993,9 @@ internal void SendSpecificFile(ServerPlayer* player, char* filename, b32 sendAll
     }
     platformAPI.GetAllFilesEnd(&definitionGroup);
     EndTemporaryMemory(fileMemory);
-    
-    if(sendAllDataFilesSentMessage)
-    {
-        SendAllDataFileSentMessage(player, true);
-    }
 }
 
-internal void SendAllDataFiles(b32 editorMode, ServerPlayer* player,b32 sendTaxonomyFiles, b32 sendMetaAssetFiles)
+internal void SendAllDataFiles(b32 editorMode, ServerPlayer* player, DataFileSentType sentType)
 {
     char* path = "assets";
     
@@ -2006,7 +2006,7 @@ internal void SendAllDataFiles(b32 editorMode, ServerPlayer* player,b32 sendTaxo
     char* buffer = (char*) PushSize(&tempPool, bufferSize, NoClear());
     
     
-    if(sendTaxonomyFiles)
+    if(sentType == DataFileSent_OnlyTaxonomies || sentType == DataFileSent_Everything)
     {
         PlatformFileGroup definitionGroup = platformAPI.GetAllFilesBegin(PlatformFile_entityDefinition, path);
         for(u32 fileIndex = 0; fileIndex < definitionGroup.fileCount; ++fileIndex)
@@ -2027,7 +2027,7 @@ internal void SendAllDataFiles(b32 editorMode, ServerPlayer* player,b32 sendTaxo
         platformAPI.GetAllFilesEnd(&definitionGroup);
     }
     
-    if(sendMetaAssetFiles)
+    if(sentType == DataFileSent_OnlyAssets || sentType == DataFileSent_Everything)
     {
         if(editorMode)
         {
@@ -2073,9 +2073,7 @@ internal void SendAllDataFiles(b32 editorMode, ServerPlayer* player,b32 sendTaxo
             platformAPI.GetAllFilesEnd(&assetGroup);
         }
     }
-    
     EndTemporaryMemory(fileMemory);
-    SendAllDataFileSentMessage(player, false);
 }
 
 inline b32 TabHasPreemption(char* tabName, u32 roles)

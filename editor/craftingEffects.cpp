@@ -1,7 +1,6 @@
 inline void Requires_(CraftingEffectLink* link, char* essenceName)
 {
     TaxonomySlot* essenceSlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, essenceName);
-    
     if(essenceSlot)
     {
         if(link)
@@ -14,6 +13,8 @@ inline void Requires_(CraftingEffectLink* link, char* essenceName)
                     return;
                 }
             }
+            
+            InvalidCodePath;
         }
     }
     else
@@ -24,6 +25,7 @@ inline void Requires_(CraftingEffectLink* link, char* essenceName)
 
 inline void Requires(CraftingEffectLink* link, char* essenceName, u32 quantity)
 {
+    quantity = Max(quantity, 1);
     for(u32 quantityIndex = 0; quantityIndex < quantity; ++quantityIndex)
     {
         Requires_(link, essenceName);
@@ -33,7 +35,6 @@ inline void Requires(CraftingEffectLink* link, char* essenceName, u32 quantity)
 
 inline CraftingEffectLink* LinkStandard(TaxonomySlot* slot, char* action, char* effectName, char* target)
 {
-    
     CraftingEffectLink* link;
     TAXTABLE_ALLOC(link, CraftingEffectLink);
     link->triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
@@ -53,16 +54,15 @@ internal void ImportCraftingEffectsTab(TaxonomySlot* slot, EditorElement* root)
     while(craftingEffectsList)
     {
         char* action = GetValue(craftingEffectsList, "action");
-        char* id = GetValue(craftingEffectsList, "id");
+        char* id = GetValue(craftingEffectsList, "effectID");
         char* target = GetValue(craftingEffectsList, "target");
         
         CraftingEffectLink* link = LinkStandard(slot, action, id, target);
         
         EditorElement* requirements = GetList(craftingEffectsList, "requirements");
-        Assert(requirements);
         while(requirements)
         {
-            char* ingredient = GetValue(requirements, "name");
+            char* ingredient = GetValue(requirements, "essenceName");
             char* quantity = GetValue(requirements, "quantity");
             
             Requires(link, ingredient, ToU32(quantity));

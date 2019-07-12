@@ -222,10 +222,12 @@ struct AnimationEffect
 
 struct SkeletonInfo
 {
+    u64 skeletonSkinHashID;
     u64 skeletonHashID;
     u64 skinHashID;
     Vec4 coloration;
     Vec2 originOffset;
+    b32 flippedOnYAxis;
 };
 
 struct AnimationDebugParams
@@ -281,6 +283,7 @@ struct AnimationVolatileParams
 {
     b32 flipOnYAxis;
     b32 drawEmptySpaces;
+    u64 skeletonSkinHashID;
     u64 skeletonHashID;
     u64 skinHashID;
     u64 recipeIndex;

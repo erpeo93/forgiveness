@@ -337,6 +337,8 @@ struct RockDefinition
     
     r32 smoothness;
     r32 smoothnessDelta;
+    r32 normalSmoothness;
+    
     u32 iterationCount;
     
     
@@ -419,6 +421,7 @@ struct TaxonomySlot
     
     
     TaxonomyEssence* firstEssence;
+    TaxonomyEssence* firstDefaultEssence;
     CraftingEffectLink* firstCraftingLink;
     TaxonomyEffect* firstEffect;
     
@@ -443,7 +446,7 @@ struct TaxonomySlot
     u64 lightPieceHashID;
     
 #ifndef FORG_SERVER
-    VisualLabel* firstVisualLabel;
+    //VisualLabel* firstVisualLabel;
     AnimationEffect* firstAnimationEffect;
     TaxonomySound* firstSound;
     TaxonomyBoneAlterations* firstBoneAlteration;
@@ -458,10 +461,12 @@ struct TaxonomySlot
     u64 modelTypeID;
     u64 modelNameID;
     
+    u64 skeletonSkinHashID;
     u64 skeletonHashID;
     u64 skinHashID;
     Vec4 defaultColoration;
     Vec2 originOffset;
+    b32 flippedOnYAxis;
     
     
     Vec4 iconColor;

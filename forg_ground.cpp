@@ -248,7 +248,7 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
                                 (probe0 > 0 && outer0 > 0));
         
         
-        r32 zBias = 0.01f + CHUNK_DIM * 0.08f + CHUNK_DIM * 1.5f * 0.08f;
+        r32 zBias = 0.01f;
         
         Vec4 site0PCamera = V4(site0P + voronoi->deltaP.xy, QSite0->height, zBias);
         Vec4 site1PCamera = V4(site1P + voronoi->deltaP.xy, QSite1->height, zBias);

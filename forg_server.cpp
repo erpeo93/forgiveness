@@ -283,14 +283,17 @@ inline void TranslateServerPlayers(ServerState* server, b32 sendOnlyTaxonomiesFi
         {
             TranslatePlayer(server->oldTable, server->activeTable, player);
             
+            DataFileSentType mode = sendOnlyTaxonomiesFile ? DataFileSent_OnlyTaxonomies : DataFileSent_Everything;
             if(sendOnlyTaxonomiesFile)
             {
-                SendSpecificFile(player, "taxonomies.fed", false);
+                SendSpecificFile(player, "taxonomies.fed");
             }
             else
             {
-                SendAllDataFiles(server->editor, player, true, false);
+                SendAllDataFiles(server->editor, player, mode);
             }
+            
+            SendAllDataFileSentMessage(player, mode);
         }
     }
 }
@@ -411,6 +414,26 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 }
 
 
+inline void CreateNewTaxonomy(ServerState* server, char* destPath, char* sourceFile, char* destFile)
+{
+	if(platformAPI.CreateFolder(destPath))
+    {
+		platformAPI.CopyFileOrFolder(sourceFile, destFile);
+		ReloadServerTaxonomies(server);
+        ImportSpecificFile(0xffffffff, !server->editor, destFile);
+        
+		for(u32 playerIndex = 0; playerIndex < MAXIMUM_SERVER_PLAYERS; ++playerIndex)
+		{
+			ServerPlayer* playerToSend = server->players + playerIndex;
+			if(playerToSend->connectionSlot)
+			{
+				SendSpecificFile(playerToSend, destFile);
+                SendAllDataFileSentMessage(playerToSend, DataFileSent_OnlyTaxonomies);
+			}
+		}
+	}
+}
+
 internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* player, unsigned char* packetPtr, u16 dataSize)
 {
     u32 challenge = 1111;
@@ -452,7 +475,8 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
             {
                 if(clientReq.sendDataFiles)
                 {
-                    SendAllDataFiles(server->editor, player, true, true);
+                    SendAllDataFiles(server->editor, player, DataFileSent_Everything);
+                    SendAllDataFileSentMessage(player, DataFileSent_Everything);
                     player->allDataFileSent = true;
                 }
                 
@@ -696,11 +720,12 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
             if(server->editor)
             {
                 u32 worldSeed;
-                packetPtr = unpack(packetPtr, "L", &worldSeed);
+                u32 generateMode;
+                packetPtr = unpack(packetPtr, "LL", &worldSeed, &generateMode);
                 server->worldSeed = worldSeed;
                 
                 CompletePastWritesBeforeFutureWrites;
-                server->rebuildWorld = true;
+                server->generateMode = (GenerateWorldMode) generateMode;
             }
         } break;
         
@@ -721,7 +746,6 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
         {
             if(server->editor)
             {
-                server->reloadingAssets = true;
                 LoadAssetsAsync(server);
             }
         } break;
@@ -767,32 +791,56 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 BuildTaxonomyDataPath(server->activeTable, parentTaxonomy, name, destPath, sizeof(destPath), referenceTaxonomyPath, sizeof(referenceTaxonomyPath));
                 
                 char finalSource[512];
-                FormatString(finalSource, sizeof(finalSource), "%s/reference", referenceTaxonomyPath);
-                
-                char destFilename[64];
-                FormatString(destFilename, sizeof(destFilename), "%s.fed", name);
                 char finalDest[512];
+                char destFilename[64];
+                FormatString(finalSource, sizeof(finalSource), "%s/reference", referenceTaxonomyPath);
+                FormatString(destFilename, sizeof(destFilename), "%s.fed", name);
                 FormatString(finalDest, sizeof(finalDest), "%s/%s", destPath, destFilename);
                 
-                if(platformAPI.CreateFolder(destPath))
-                {
-                    platformAPI.CopyFileOrFolder(finalSource, finalDest);
-                    ReloadServerTaxonomies(server);
-                    ImportSpecificFile(0xffffffff, !server->editor, destFilename);
-                    
-                    for(u32 playerIndex = 0; playerIndex < MAXIMUM_SERVER_PLAYERS; ++playerIndex)
-                    {
-                        ServerPlayer* playerToSend = server->players + playerIndex;
-                        if(playerToSend->connectionSlot)
-                        {
-                            SendSpecificFile(playerToSend, destFilename, true);
-                        }
-                    }
-                }
+				CreateNewTaxonomy(server, destPath, finalSource, destFilename);
             }
             
         } break;
         
+		case Type_CopyTaxonomy:
+		{
+			if(server->editor)
+			{
+				u32 brotherTaxonomy;
+                packetPtr = unpack(packetPtr, "L", &brotherTaxonomy);
+                
+                
+                TaxonomyTable* taxTable = server->activeTable;
+				u32 parentTaxonomy = GetParentTaxonomy(taxTable, brotherTaxonomy);
+                
+                TaxonomySlot* brotherSlot = GetSlotForTaxonomy(taxTable, brotherTaxonomy);
+				char name[64];
+                char newName[64];
+                FormatString(name, sizeof(name), "%s", brotherSlot->name);
+                FormatString(newName, sizeof(newName), "%s_copy", brotherSlot->name);
+                
+                TaxonomySlot* test = NORUNTIMEGetTaxonomySlotByName(taxTable, newName);
+                if(!test)
+                {
+                    char destPath[512];
+                    char sourcePath[512];
+                    char ignoredPath[512];
+                    
+                    BuildTaxonomyDataPath(server->activeTable, parentTaxonomy, newName, destPath, sizeof(destPath), ignoredPath, sizeof(ignoredPath));
+                    BuildTaxonomyDataPath(server->activeTable, parentTaxonomy, name, sourcePath, sizeof(sourcePath), ignoredPath, sizeof(ignoredPath));
+                    
+                    char finalDest[512];
+                    char finalSource[512];
+                    char destFilename[64];
+                    FormatString(finalSource, sizeof(finalSource), "%s/%s.fed", sourcePath, name);
+                    
+                    FormatString(destFilename, sizeof(destFilename), "%s.fed", newName);
+                    FormatString(finalDest, sizeof(finalDest), "%s/%s", destPath, destFilename);
+                    
+                    CreateNewTaxonomy(server, destPath, finalSource, destFilename);
+                }
+			}
+		} break;
         
         case Type_DeleteTaxonomy:
         {
@@ -818,7 +866,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                     ServerPlayer* playerToSend = server->players + playerIndex;
                     if(playerToSend->connectionSlot)
                     {
-                        SendAllDataFileSentMessage(player, true);
+                        SendAllDataFileSentMessage(player, DataFileSent_OnlyTaxonomies);
                     }
                 }
             }
@@ -852,7 +900,8 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                     ServerPlayer* playerToSend = server->players + playerIndex;
                     if(playerToSend->connectionSlot)
                     {
-                        SendSpecificFile(playerToSend, toSendName, true);
+                        SendSpecificFile(playerToSend, toSendName);
+                        SendAllDataFileSentMessage(playerToSend, DataFileSent_OnlyTaxonomies);
                     }
                 }
             }
@@ -986,7 +1035,7 @@ extern "C" SERVER_NETWORK_STUFF(NetworkStuff)
                 ServerPlayer* toReset = server->players + toResetIndex;
                 if(toReset->connectionSlot)
                 {
-                    SendAllDataFiles(server->editor, toReset, false, true);
+                    SendAllDataFiles(server->editor, toReset, DataFileSent_OnlyAssets);
                     
                     toReset->allPakFileSent = false;
                     toReset->pakFileIndex = 0;
@@ -1390,7 +1439,7 @@ extern "C" SERVER_INITIALIZE(InitializeServer)
     
     server->worldSeed = (u32) time(0);
     FillGenerationData(server);
-    BuildWorld(server);
+    BuildWorld(server, GenerateWorld_OnlyChunks);
 }
 
 struct SimulateWorldRegionWork
@@ -1509,10 +1558,10 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     server->simulationStepDone = canAdvance;
 #endif
     
-    if(server->rebuildWorld)
+    if(server->generateMode)
     {
-        server->rebuildWorld = false;
-        BuildWorld(server);
+        BuildWorld(server, server->generateMode);
+        server->generateMode = GenerateWorld_None;
     }
     
     if(canAdvance)

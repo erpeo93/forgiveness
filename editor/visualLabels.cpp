@@ -1,4 +1,3 @@
-
 inline void AddLabel(TaxonomySlot* slot, u64 ID, r32 value)
 {
     VisualLabel* dest;

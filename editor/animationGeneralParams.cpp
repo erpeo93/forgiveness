@@ -1,9 +1,13 @@
-inline void UsesSkeleton(TaxonomySlot* slot, char* skeletonName, char* skinName, Vec4 defaultColoration, Vec2 originOffset)
+inline void UsesSkeleton(TaxonomySlot* slot, char* skeletonName, char* skinName, Vec4 defaultColoration, Vec2 originOffset, b32 flippedOnYAxis)
 {
+    char skeletonSkin[128];
+    FormatString(skeletonSkin, sizeof(skeletonSkin), "%s%s", skeletonName, skinName);
+    slot->skeletonSkinHashID = StringHash(skeletonSkin);
     slot->skeletonHashID = StringHash(skeletonName);
     slot->skinHashID = StringHash(skinName);
     slot->defaultColoration = defaultColoration;
     slot->originOffset = originOffset;
+    slot->flippedOnYAxis = flippedOnYAxis;
 }
 
 internal void ImportAnimationGeneralParamsTab(TaxonomySlot* slot, EditorElement* root)
@@ -20,5 +24,6 @@ internal void ImportAnimationGeneralParamsTab(TaxonomySlot* slot, EditorElement*
     char* skin = GetValue(root, "skinName");
     Vec4 color = ToV4Color(GetStruct(root, "defaultColoration"));
     Vec2 originOffset = ToV2(GetStruct(root, "originOffset"));
-    UsesSkeleton(slot, skeleton, skin, color, originOffset);
+    b32 flippedOnYAxis = ToB32(GetValue(root, "flippedOnYAxis"), false);
+    UsesSkeleton(slot, skeleton, skin, color, originOffset, flippedOnYAxis);
 }

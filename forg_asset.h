@@ -94,12 +94,12 @@ struct Asset
     
     RenderTexture textureHandle;
     
-    u32 lockCounter;
     AssetMemoryHeader* header;
     PakAsset paka;
     u32 fileIndex;
     
     u32 state;
+    b32 locked;
 };
 
 struct AssetMemoryBlock
@@ -140,12 +140,12 @@ struct Assets
     u32 nextFreeTextureHandle;
     u32 maxTextureHandleIndex;
     
-    u32 redPixel;
     u32 nextFreeSpecialTextureHandle;
     u32 maxSpecialTextureHandleIndex;
     
     AssetLRULink LRUSentinel;
     AssetLRULink specialLRUSentinel;
+    AssetLRULink lockedLRUSentinel;
 };
 
 internal void LoadBitmap( Assets* assets, BitmapId ID, b32 immediate );
@@ -153,7 +153,19 @@ internal void LoadFont( Assets* assets, FontId ID, b32 immediate );
 internal void LoadSound( Assets* assets, SoundId ID );
 internal void LoadAnimation( Assets* assets, AnimationId ID );
 
-inline void PrefetchBitmap( Assets* assets, BitmapId ID ) { LoadBitmap( assets, ID, false ); }
+
+inline void PrefetchAllGroundBitmaps(Assets* assets)
+{
+    AssetType* type = assets->types + Asset_Ground;
+    for(u32 assetIndex = type->firstAssetIndex; assetIndex < type->onePastLastAssetIndex; ++assetIndex)
+    {
+        LoadBitmap(assets, {assetIndex}, false);
+    }
+    
+}
+
+
+inline void PrefetchBitmap( Assets* assets, BitmapId ID, b32 immediate = false) { LoadBitmap( assets, ID, immediate); }
 inline void PrefetchFont( Assets* assets, FontId ID ) { LoadFont( assets, ID, false ); }
 inline void PrefetchSound( Assets* assets, SoundId ID ) { LoadSound( assets, ID ); }
 inline void PrefetchAnimation( Assets* assets, AnimationId ID ) { LoadAnimation( assets, ID ); }

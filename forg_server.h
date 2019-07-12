@@ -254,7 +254,7 @@ struct ServerState
     WorldGeneratorDefinition* generator;
     b32 editor;
     b32 gamePaused;
-    b32 rebuildWorld;
+    GenerateWorldMode generateMode;
     
     r32 elapsedTime;
     u8 elapsedMS5x;

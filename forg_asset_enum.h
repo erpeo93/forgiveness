@@ -19,11 +19,9 @@ printTable(noPrefix) enum TagId
     Tag_none,
     
     Tag_direction,
-    Tag_skeletonFirstHalf,
-    Tag_skeletonSecondHalf,
     
-    Tag_skinFirstHalf,
-    Tag_skinSecondHalf,
+    Tag_SkeletonSkinFirstHalf,
+    Tag_SkeletonSkinSecondHalf,
     
     Tag_codepoint,
     

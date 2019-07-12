@@ -284,6 +284,23 @@ internal void GenerateRock(ClientRock* dest, VertexModel* model, MemoryPool* tem
         definitiveVertexes[vertexIndex] = tempVertexes[vertexIndex];
         definitiveVertexes[vertexIndex].N = Normalize(definitiveVertexes[vertexIndex].N);
     }
+    
+    r32 normalLerp = 1.0f - rockDefinition->normalSmoothness;
+    for(u32 faceIndex = 0; faceIndex < faceCount; ++faceIndex)
+    {
+        ModelFace* face = definitiveFaces + faceIndex;
+        
+        ColoredVertex* v0 = definitiveVertexes + face->i0;
+        ColoredVertex* v1 = definitiveVertexes + face->i1;
+        ColoredVertex* v2 = definitiveVertexes + face->i2;
+        
+        Vec3 N = Normalize(Cross(v1->P - v0->P, v2->P - v1->P));
+        
+        v0->N = Lerp(v0->N, normalLerp, N);
+        v1->N = Lerp(v1->N, normalLerp, N);
+        v2->N = Lerp(v2->N, normalLerp, N);
+    }
+    
 }
 
 

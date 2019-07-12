@@ -30,7 +30,6 @@ struct WorldTile
     Vec4 colorDelta;
     r32 colorRandomness;
     Vec4 borderColor;
-    
 #endif
     r32 height;
     r32 waterLevel;

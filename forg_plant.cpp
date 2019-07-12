@@ -198,10 +198,10 @@ inline r32 GetStemMinUpdateTime(PlantDefinition* definition, PlantStem* stem, u8
     PlantLevelParams* levelParams = definition->levelParams + recursiveLevel;
     for(PlantSegment* segment = stem->root; segment; segment = segment->next)
     {
-        if(segment->lengthCoeff < 1.0f)
+        if(segment->lengthCoeff < levelParams->normClonesSpawnAtLength)
         {
             r32 remainingDelta = 1.0f - segment->lengthCoeff;
-            r32 timeToArriveAt1 = remainingDelta / levelParams->lengthIncreaseSpeed;
+            r32 timeToArriveAt1 = remainingDelta / levelParams->lengthIncreaseSpeedBeforeClones;
             result = Min(result, timeToArriveAt1);
         }
         
@@ -300,8 +300,16 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
 		r32 oldZ = segmentBaseZ + segment->lengthCoeff * segmentUnitZ;
         r32 oldLenghtCoeff = segment->lengthCoeff;
         
-        segment->lengthCoeff += levelParams->lengthIncreaseSpeed * timeToUpdate;
-        segment->radiousCoeff += levelParams->radiousIncreaseSpeed * timeToUpdate;
+        if(oldLenghtCoeff < levelParams->normClonesSpawnAtLength)
+        {
+            segment->lengthCoeff += levelParams->lengthIncreaseSpeedBeforeClones * timeToUpdate;
+            segment->radiousCoeff += levelParams->radiousIncreaseSpeedBeforeClones * timeToUpdate;
+        }
+        else
+        {
+            segment->lengthCoeff += levelParams->lengthIncreaseSpeedAfterClones * timeToUpdate;
+            segment->radiousCoeff += levelParams->radiousIncreaseSpeedAfterClones * timeToUpdate;
+        }
         
         segment->lengthCoeff = Min(segment->lengthCoeff, 1.0f);
         segment->radiousCoeff = Min(segment->radiousCoeff, 1.0f);
@@ -324,7 +332,6 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                     
                     r32 offsetChild = parentStemZ * stem->totalLength;
                     r32 trunkLength = trunk->totalLength;
-                    
                     
                     r32 angleY;
                     if(levelParams->downAngleV >= 0)
@@ -380,10 +387,9 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                         childStem->totalLength = lengthChildMax * (stem->totalLength - 0.6f * offsetChild);
                     }
                     
-                    childStem->baseRadious = stem->baseRadious * Pow(childStem->totalLength / stem->totalLength, definition->ratioPower);
+                    childStem->baseRadious = stem->baseRadious * Pow(childStem->totalLength / stem->totalLength, definition->ratioPower) * nextLevelParams->radiousMod;
                     
                     r32 radiousAtOriginatingPoint = GetRadiousAtZ(levelParams->taper, definition->flare, definition->lobeDepth, definition->lobes, stem->totalLength, stem->baseRadious, childStem->parentStemZ);
-                    radiousAtOriginatingPoint *= levelParams->radiousMod;
                     childStem->maxRadious = radiousAtOriginatingPoint;
                     
                     
@@ -421,7 +427,7 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
             
         }
 		
-        if(oldLenghtCoeff < 1.0f && (segment->lengthCoeff >= 1.0f))
+        if(oldLenghtCoeff < levelParams->normClonesSpawnAtLength && (segment->lengthCoeff >= levelParams->normClonesSpawnAtLength))
         {
             if(stem->segmentCount < levelParams->curveRes)
             {

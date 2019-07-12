@@ -406,6 +406,13 @@ inline void SendAddTaxonomyRequest(u32 parentTaxonomy, char* name)
     CloseAndSendReliablePacket();
 }
 
+inline void SendCopyTaxonomyRequest(u32 taxonomy)
+{
+    StartPacket(CopyTaxonomy);
+    Pack("L", taxonomy);
+    CloseAndSendReliablePacket();
+}
+
 inline void SendDeleteTaxonomyRequest(u32 taxonomy)
 {
     StartPacket(DeleteTaxonomy);
@@ -463,10 +470,10 @@ inline void SendPauseToggleMessage()
     CloseAndSendReliablePacket();
 }
 
-inline void SendRegenerateWorldChunksRequest(u32 worldSeed)
+inline void SendRegenerateWorldChunksRequest(u32 worldSeed, GenerateWorldMode generateMode)
 {
     StartPacket(RegenerateWorldChunks);
-    Pack("L", worldSeed);
+    Pack("LL", worldSeed, generateMode);
     CloseAndSendReliablePacket();
 }
 
@@ -1227,8 +1234,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             case Type_AllDataFileSent:
             {
                 CompletePastWritesBeforeFutureWrites;
-                worldMode->allDataFilesArrived = true;
-                Unpack("l", &worldMode->justReloadTaxonomies);
+                Unpack("L", &worldMode->dataFileSent);
             } break;
             
             case Type_AllPakFileSent:

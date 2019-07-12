@@ -1086,6 +1086,7 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                     GetXMLValuef(&currentTag, "pivot_y", &pivot.y );
                     
                     u64 stringHash;
+#if 1
                     u32 namelength = 0;
                     char* point = pieceName;
                     while(*point)
@@ -1098,7 +1099,9 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                         ++point;
                     }
                     stringHash = StringHash(pieceName, namelength);
-                    
+#else
+                    stringHash = StringHash(pieceName);
+#endif
                     
                     tempSprite->stringHashID = stringHash;
                     tempSprite->pivot = pivot;
@@ -1358,7 +1361,7 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
                     ass->boneID = boneID;
                     
                     i32 fileIndex = 0;
-                    GetXMLValuei(&currentTag, "file", &fileIndex );
+                    GetXMLValuei(&currentTag, "file", &fileIndex);
                     i32 folderIndex = 0;
                     GetXMLValuei(&currentTag, "folder", &folderIndex );
                     
@@ -2408,8 +2411,14 @@ internal void AddLabelsFromFile(Tokenizer* tokenizer)
                             
                             while(NextTokenIs(tokenizer, Token_Pound))
                             {
-                                Token ign1 = GetToken(tokenizer);
-                                Token ign2 = GetToken(tokenizer);
+                                Token pound = GetToken(tokenizer);
+                                Token value = GetToken(tokenizer);
+                                
+								if(NextTokenIs(tokenizer, Token_EqualSign))
+								{
+									Token eq = GetToken(tokenizer);
+									Token v = GetToken(tokenizer);
+								}
                             }
                             
                             while(true)
@@ -2521,7 +2530,7 @@ struct BitmapFileHandle
     u64 ID;
 };
 
-internal void WriteBitmaps(char* folder, char* name, char* firstHashTag, char* secondHashTag, PlatformFile* labelsFile)
+internal void WriteBitmaps(char* folder, char* name, u64 skeletonSkinHash, PlatformFile* labelsFile, char* additionalParentFolder = 0)
 {
     Assets assets_;
     Assets* assets = &assets_;
@@ -2538,8 +2547,6 @@ internal void WriteBitmaps(char* folder, char* name, char* firstHashTag, char* s
     }
     
     u64 assetHashID = StringHash(name);
-    
-    
     u32 hashIndex =  assetHashID & (HASHED_ASSET_SLOTS - 1);
     u32 assetIndex = Asset_count + hashIndex;
     PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, completePath);
@@ -2635,7 +2642,6 @@ internal void WriteBitmaps(char* folder, char* name, char* firstHashTag, char* s
             
         }
         
-        Win32GetAllFilesEnd(&sideGroup);
         
         for(u32 additionalAssetIndex = Asset_count; additionalAssetIndex < (Asset_count + HASHED_ASSET_SLOTS); ++additionalAssetIndex)
         {
@@ -2648,33 +2654,32 @@ internal void WriteBitmaps(char* folder, char* name, char* firstHashTag, char* s
                     AddBitmapAsset(subfolderPath, bitmap->name, bitmap->ID);
                     
                     
-                    
-                    if(firstHashTag)
+                    if(skeletonSkinHash)
                     {
-                        u64 firstHashID = StringHash(firstHashTag);
-                        r32 firstHashHalfValue = (r32) (firstHashID >> 32);
-                        r32 secondHashHalfValue = (r32) (firstHashID & 0xFFFFFFFF);
-                        AddTag(Tag_skeletonFirstHalf, firstHashHalfValue);
-                        AddTag(Tag_skeletonSecondHalf, secondHashHalfValue);
-                    }
-                    
-                    if(secondHashTag)
-                    {
-                        u64 secondHashID = StringHash(secondHashTag);
-                        r32 firstHashHalfValue = (r32) (secondHashID >> 32);
-                        r32 secondHashHalfValue = (r32) (secondHashID & 0xFFFFFFFF);
-                        AddTag(Tag_skinFirstHalf, firstHashHalfValue);
-                        AddTag(Tag_skinSecondHalf, secondHashHalfValue);
+                        r32 firstHashHalfValue = (r32) (skeletonSkinHash >> 32);
+                        r32 secondHashHalfValue = (r32) (skeletonSkinHash & 0xFFFFFFFF);
+                        AddTag(Tag_SkeletonSkinFirstHalf, firstHashHalfValue);
+                        AddTag(Tag_SkeletonSkinSecondHalf, secondHashHalfValue);
                     }
                 }
             }
             EndAssetType();
         }
+        
     }
+    Win32GetAllFilesEnd(&sideGroup);
     
     
     char pakName[128];
-    FormatString(pakName, sizeof(pakName), "%sB.pak", name);
+    
+    if(additionalParentFolder)
+    {
+        FormatString(pakName, sizeof(pakName), "%s%sB.pak", additionalParentFolder, name);
+    }
+    else
+    {
+        FormatString(pakName, sizeof(pakName), "%sB.pak", name);
+    }
     WritePak(assets, pakName);
 }
 
@@ -2827,7 +2832,7 @@ inline void AddAssetToFile(char* addHere, char* fileEnd, char* properties, b32 l
     
     if(labeled)
     {
-        FormatString(toAdd, sizeof(toAdd), "{%s, colorations = (#atLeastOneInList #showBitmap #empty = {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#editableLabels #empty = {value = 0.0})} {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#editableLabels #empty = {value = 0.0})}) },", properties);
+		FormatString(toAdd, sizeof(toAdd), "{%s, colorations = (#atLeastOneInList #showBitmap #empty = {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#labelName = \"essenceName\" #editableLabels #empty = {value = 0.0})} {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#editableLabels #empty = {value = 0.0})}) },", properties);
     }
     else
     {
@@ -2975,7 +2980,7 @@ internal void WriteComponents()
         
         if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
         {
-            WriteBitmaps(componentsPath, folderName, 0, 0, &labelsFile);
+            WriteBitmaps(componentsPath, folderName, 0, &labelsFile);
         }
     }
     
@@ -3133,7 +3138,10 @@ inline void WriteAnimationSkinsBitmaps(char* skeletonPath, char* skeletonName)
         
         if(!StrEqual(folderName, ".") && !StrEqual(folderName, "..") && !StrEqual(folderName, "skeleton"))
         {
-            WriteBitmaps(skeletonPath, folderName, skeletonName, folderName, 0);
+            char skeletonSkin[128];
+            FormatString(skeletonSkin, sizeof(skeletonSkin), "%s%s", skeletonName, folderName);
+            u64 skeletonSkinStringHash = StringHash(skeletonSkin);
+            WriteBitmaps(skeletonPath, folderName, skeletonSkinStringHash, 0, skeletonName);
         }
     }
     free(subdir);
@@ -3148,7 +3156,7 @@ internal void WriteBitmapsAndAnimations()
     WriteBitmapsFromPath("definition/trunks", Asset_trunk, "forgtrunks.pak");
     WriteBitmapsFromPath("definition/particles", Asset_Particle, "forgparticles.pak");
     
-    WriteBitmapsFromPath("definition/ground/patches", Asset_Ground, "forgGround.pak", V2(0.5f, 0.5f), "groundPatches");
+    WriteBitmapsFromPath("definition/ground/patches", Asset_Ground, "forgGround.pak", V2(0.5f, 0.5f), "splashName");
     
     WriteMisc();
     WriteUI();
@@ -3477,6 +3485,7 @@ internal void WriteModels()
 
 int main(int argc, char** argv )
 {
+    u64 test = StringHash("3");
 #if 0    
     DeleteAll("assets", "*.fad");
     DeleteAll("assets", "*.pak");

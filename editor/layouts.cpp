@@ -40,7 +40,7 @@ inline void AddIngredient(LayoutPiece* piece, char* name, u32 quantity)
     {
 		u32 ingredientIndex = piece->ingredientCount++;
         piece->ingredientTaxonomies[ingredientIndex] = ingredientSlot->taxonomy;
-		piece->ingredientQuantities[ingredientIndex] = quantity;
+		piece->ingredientQuantities[ingredientIndex] = Max(quantity, 1);
     }
     else
     {

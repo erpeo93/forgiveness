@@ -445,6 +445,15 @@ inline UIRequest AddTaxonomyRequest(u32 parentTaxonomy, char* name)
     return result;
 }
 
+inline UIRequest CopyTaxonomyRequest(u32 taxonomy)
+{
+    UIRequest result = {};
+    result.requestCode = UIRequest_CopyTaxonomy;
+    result.taxonomy = taxonomy;
+    
+    return result;
+}
+
 inline UIRequest DeleteTaxonomyRequest(u32 taxonomy)
 {
     UIRequest result = {};
@@ -848,6 +857,12 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
             UI->canShowTaxonomyTree = false;
         } break;
         
+        case UIRequest_CopyTaxonomy:
+        {
+            SendCopyTaxonomyRequest(request->taxonomy);
+            UI->canShowTaxonomyTree = false;
+        } break;
+        
         case UIRequest_DeleteTaxonomy:
         {
             SendDeleteTaxonomyRequest(request->taxonomy);
@@ -956,7 +971,11 @@ inline void UIHandleRequest(UIState* UI, UIRequest* request)
                 }
             }
             
-            SendRegenerateWorldChunksRequest(newSeed);
+            
+            EditorWidget* widget = UI->widgets + EditorWidget_Misc;
+            b32 emptyWorld = ToB32(GetValue(widget->root, "generateEmptyWorld"));
+            GenerateWorldMode mode = emptyWorld ? GenerateWorld_OnlyChunks : GenerateWorld_Standard;
+            SendRegenerateWorldChunksRequest(newSeed, mode);
             GameAccessRequest(clientNetwork->serverChallenge, false);
         } break;
         

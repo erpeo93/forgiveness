@@ -1,5 +1,13 @@
 #pragma once
 
+enum DataFileSentType
+{
+    DataFileSent_Nothing,
+    DataFileSent_Everything,
+    DataFileSent_OnlyTaxonomies,
+    DataFileSent_OnlyAssets,
+};
+
 enum EditorElementType
 {
 	EditorElement_String,

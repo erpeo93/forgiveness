@@ -29,6 +29,7 @@ internal void ImportRockDefinitionTab(TaxonomySlot* slot, EditorElement* root)
     definition->smoothnessDelta = ToR32(GetValue(root, "smoothnessDelta"));
     definition->scale = ToV3(GetStruct(root, "scale"));
     definition->scaleDelta = ToV3(GetStruct(root, "scaleDelta"));
+    definition->normalSmoothness = Clamp01(ElemR32(root, "normalSmoothness", 0.5f));
     
     definition->percentageOfMineralVertexes = ToR32(GetValue(root, "percentageOfMineralVertexes"));
     definition->mineralCount = 0;

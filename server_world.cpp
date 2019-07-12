@@ -707,7 +707,7 @@ internal void BuildServerChunks(ServerState* server)
     }
 }
 
-internal void BuildWorld(ServerState * server)
+internal void BuildWorld(ServerState * server, GenerateWorldMode mode)
 {
     u32 worldSeed = server->worldSeed;
     
@@ -803,6 +803,10 @@ internal void BuildWorld(ServerState * server)
     }
     
     server->generator = generator;
-    BuildServerChunks(server);
-    //BuildSimpleTestWorld(server);
+	BuildServerChunks(server);
+    
+	if(mode == GenerateWorld_Standard)
+	{
+        BuildSimpleTestWorld(server);	
+	}
 }

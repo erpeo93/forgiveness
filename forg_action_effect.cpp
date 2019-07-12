@@ -123,7 +123,20 @@ inline r32 ComputeSkillPower(TaxonomySlot* skillSlot, u32 level)
     return result;
 }
 
+
+
 inline u64 AddEntity(SimRegion* region, Vec3 P, u32 taxonomy, GenerationData gen, AddEntityAdditionalParams params);
+inline u64 Spawn(SimRegion* region, Vec3 P, Vec3 speed, r32 power, u32 taxonomy)
+{
+    GenerationData gen = NullGenerationData();
+    AddEntityAdditionalParams params = DefaultAddEntityParams();
+    params.speed = speed;
+    params.generationIntensity = power;
+    u32 final =GetRandomChild(region->taxTable, &region->entropy, taxonomy);
+    u64 result = AddEntity(region, P, final, gen, params);
+    return result;
+}
+
 internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region, SimEntity* actor, SimEntity* target, u32 action, Effect* effect, r32 powerMul)
 {
     Assert(Normalized(powerMul));
@@ -178,11 +191,9 @@ internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region
         case Effect_Spawn:
         {
             EffectData* data = &effect->data;
-            
             if(data->taxonomy)
             {
                 u32 counter = 1;
-                
                 if(data->spawnCount)
                 {
                     counter = data->spawnCount;
@@ -191,12 +202,7 @@ internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region
                 for(u32 index = 0; index < counter; ++index)
                 {
                     Vec3 P = referenceP + data->offset + Hadamart(RandomBilV3(&region->entropy), data->offsetV);
-                    GenerationData gen = NullGenerationData();
-                    AddEntityAdditionalParams params = DefaultAddEntityParams();
-                    params.speed = data->speed;
-                    params.generationIntensity = power;
-                    u32 taxonomy =GetRandomChild(region->taxTable, &region->entropy, data->taxonomy);
-                    targetID = AddEntity(region, P, taxonomy, gen, params);
+                    targetID = Spawn(region, P, data->speed, power, data->taxonomy);
                 }
             }
         } break;
@@ -244,6 +250,30 @@ internal void DispatchEffect_(DispatchEffectsContext* context, SimRegion* region
         case Effect_RestoreLifePoints:
         {
             actorCreature->lifePoints += power;
+        } break;
+        
+        case Effect_SpawnRock:
+        {
+            Vec3 P = referenceP + V3(1, 0, 0);
+            targetID = Spawn(region, P, V3(0, 0, 0), 1.0f, region->taxTable->rockTaxonomy);
+        } break;
+        
+        case Effect_SpawnTree:
+        {
+            Vec3 P = referenceP + V3(1, 0, 0);
+            targetID = Spawn(region, P, V3(0, 0, 0), 1.0f, region->taxTable->plantTaxonomy);
+        } break;
+        
+        case Effect_SpawnCreature:
+        {
+            Vec3 P = referenceP + V3(1, 0, 0);
+            targetID = Spawn(region, P, V3(0, 0, 0), 1.0f, region->taxTable->creatureTaxonomy);
+        } break;
+        
+        case Effect_SpawnObject:
+        {
+            Vec3 P = referenceP + V3(1, 0, 0);
+            targetID = Spawn(region, P, V3(0, 0, 0), 1.0f, region->taxTable->objectTaxonomy);
         } break;
     }
     

@@ -19,8 +19,32 @@ internal void ImportTileParamsTab(TaxonomySlot* slot, EditorElement* root)
     tile->tileBorderColor = ToV4Color(GetElement(root, "borderColor"), V4(0, 0, 0, 0));
     tile->tilePointsLayout = GetValuePreprocessor(TilePointsLayout, GetValue(root, "tileLayout"));
     tile->colorRandomness = ToR32(GetValue(root, "colorRandomness"), 0.0f);
-    tile->priority = ElemR32(root, "priority");
-    tile->textureNameHash = StringHash(GetValue(root, "groundTextureName"));
-    tile->heightmapNameHash = StringHash(GetValue(root, "groundHeightmapName"));
     tile->tileNoise = ParseNoiseParams(GetStruct(root, "noise"));
+    
+    tile->textureSplashCount = ToU32(GetValue(root, "textureSplashCount"), 1);
+    tile->splashOffsetV = Clamp01(ElemR32(root, "splashOffsetV", 0.5f));
+    tile->splashAngleV = Clamp01(ElemR32(root, "splashAngleV"));
+    tile->splashMinScale = Clamp01(ElemR32(root, "splashMinScale", 1.0f));
+    tile->splashMaxScale = Clamp01(ElemR32(root, "splashMaxScale", 1.0f));
+    
+    tile->splashCount = 0;
+    EditorElement* splashes = GetList(root, "splashes");
+    while(splashes)
+    {
+        char* name = GetValue(splashes, "splashName");
+        r32 weight = ElemR32(splashes, "weight", 1.0f);
+        if(name)
+        {
+            if(tile->splashCount < ArrayCount(tile->splashes))
+            {
+                TileSplash* splash = tile->splashes + tile->splashCount++;
+                
+                splash->nameHash = StringHash(name);
+                splash->weight = weight;
+                tile->totalWeights += weight;
+            }
+        }
+        
+        splashes = splashes->next;
+    }
 }

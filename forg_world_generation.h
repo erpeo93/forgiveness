@@ -194,6 +194,12 @@ struct TaxonomyTileAssociations
     };
 };
 
+struct TileSplash
+{
+    u64 nameHash;
+    r32 weight;
+};
+
 struct TileDefinition
 {
     
@@ -208,13 +214,26 @@ struct TileDefinition
     u32 tilePointsLayout;
     r32 colorRandomness;
     
-    r32 priority;
-    u64 textureNameHash;
-    u64 heightmapNameHash;
-    
     NoiseParams tileNoise;
     
+    u32 textureSplashCount;
+    r32 splashOffsetV;
+    r32 splashAngleV;
+    r32 splashMinScale;
+    r32 splashMaxScale;
+    
+    r32 totalWeights;
+    u32 splashCount;
+    TileSplash splashes[32];
+    
     TileDefinition* nextFree;
+};
+
+enum GenerateWorldMode
+{
+    GenerateWorld_None,
+    GenerateWorld_OnlyChunks,
+    GenerateWorld_Standard,
 };
 
 struct WorldGeneratorDefinition

@@ -157,7 +157,6 @@ inline void PushQuad(RenderGroup* group, RenderTexture texture, Lights lights,
         reservedVertexes->indexIndex += 6;
         
         Vec3 N = Normalize(Cross(P1.xyz - P0.xyz, P2.xyz - P0.xyz));
-        //Vec3 N = {};
         u16 textureIndex = (u16) texture.index;
         
         Vec2 invUV = V2((r32) texture.width / MAX_IMAGE_DIM, (r32) texture.height / MAX_IMAGE_DIM);
@@ -516,11 +515,14 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTra
 }
 
 
-inline void PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
+inline b32 PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
 {
+    b32 result = false;
+    
     Bitmap* bitmap = GetBitmap(renderGroup->assets, ID);
     if(bitmap)
     {
+        result = true;
         color = Hadamart(color, ID.coloration);
         PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, bitmap->pivot);
     }
@@ -529,6 +531,8 @@ inline void PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTransform
         ++renderGroup->countMissing;
         LoadBitmap(renderGroup->assets, ID, false);
     }
+    
+    return result;
 }
 
 
@@ -866,7 +870,10 @@ inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLen
     transform->P = cameraP;
     transform->screenCameraOffset = screenCameraOffset;
     
-    r32 aspectRatio = SafeRatio1(1.0f * (r32) renderGroup->commands->settings.width, (r32) renderGroup->commands->settings.height);
+    u32 width = renderTargetIndex > 0 ? MAX_IMAGE_DIM : renderGroup->commands->settings.width;
+    u32 height = renderTargetIndex > 0 ? MAX_IMAGE_DIM : renderGroup->commands->settings.height;
+    
+    r32 aspectRatio = SafeRatio1((r32) width, (r32) height);
     m4x4_inv proj;
     if(orthographic)
     {
@@ -896,7 +903,7 @@ inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLen
     setup.renderTargetIndex = renderTargetIndex;
     setup.proj = transform->proj.forward;
     
-    setup.rect = { 0, 0, (i32)renderGroup->commands->settings.width, (i32)renderGroup->commands->settings.height };
+    setup.rect = { 0, 0, (i32) width, (i32) height };
     setup.ambientLightColor = V3(1, 1, 1);
     setup.directionalLightColor = {};
     setup.directionalLightDir = {};

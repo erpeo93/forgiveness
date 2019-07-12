@@ -184,21 +184,36 @@ internal AssetMemoryBlock* FreeAsset(Assets* assets, Asset* asset)
     return result;
 }
 
-inline void LockAsset(Assets* assets, u32 assetID)
+inline void LockAssetForCurrentFrame(Assets* assets, u32 assetID)
 {
 	BeginAssetLock(assets);
     Asset* asset = assets->assets + assetID;
-	++asset->lockCounter;
+    asset->locked = true;
+    DLLIST_REMOVE(&asset->LRU);
+    DLLIST_INSERT_AS_LAST(&assets->lockedLRUSentinel, &asset->LRU);
 	EndAssetLock(assets);
 }
 
-inline void UnlockAsset(Assets* assets, u32 assetID)
+inline void RestoreLockedAssets(Assets* assets)
 {
-	BeginAssetLock(assets);
-    Asset* asset = assets->assets + assetID;
-	Assert(asset->lockCounter > 0);
-	--asset->lockCounter;
-	EndAssetLock(assets);
+    BeginAssetLock(assets);
+    
+    for(AssetLRULink* unlock = assets->lockedLRUSentinel.next; unlock != &assets->lockedLRUSentinel;)
+    {
+        AssetLRULink* next = unlock->next;
+        
+        Asset* asset = (Asset*) unlock;
+        Assert(asset->locked);
+        asset->locked = false;
+        
+        DLLIST_REMOVE(unlock);
+        DLLIST_INSERT_AS_LAST(&assets->LRUSentinel, unlock);
+        
+        unlock = next;
+    }
+    
+    Assert(DLLIST_ISEMPTY(&assets->lockedLRUSentinel));
+    EndAssetLock(assets);
 }
 
 internal AssetMemoryHeader* AcquireAssetMemory(Assets* assets, u32 size, u32 assetIndex, AssetHeaderType assetType)
@@ -232,7 +247,7 @@ internal AssetMemoryHeader* AcquireAssetMemory(Assets* assets, u32 size, u32 ass
                 header = header->prev)
             {
                 Asset* asset = assets->assets + header->assetIndex;
-                if(asset->state == Asset_loaded && asset->lockCounter == 0)
+                if(asset->state == Asset_loaded && !asset->locked)
                 {
                     block = FreeAsset(assets, asset);
                     break;
@@ -335,20 +350,7 @@ inline u32 AcquireTextureHandle(Assets* assets)
         AssetLRULink* sentinel = &assets->LRUSentinel;
         Assert(!DLLIST_ISEMPTY(sentinel));
         
-        AssetLRULink* free = 0;
-        AssetLRULink* first = sentinel->next;
-        while(true)
-        {
-            Asset* test = (Asset*) first;
-            if(test->lockCounter > 0)
-            {
-                free = first;
-                break;
-            }
-            
-            first = first->next;
-            Assert(first != sentinel);
-        }
+        AssetLRULink* free = sentinel->next;
         Assert(free);
         DLLIST_REMOVE(free);
         
@@ -368,7 +370,7 @@ inline u32 AcquireTextureHandle(Assets* assets)
 inline void RefreshSpecialTexture(Assets* assets, AssetLRULink* LRU)
 {
     DLLIST_REMOVE(LRU);
-    DLLIST_INSERT(&assets->specialLRUSentinel, LRU);
+    DLLIST_INSERT_AS_LAST(&assets->specialLRUSentinel, LRU);
 }
 
 inline u32 AcquireSpecialTextureHandle(Assets* assets)
@@ -388,6 +390,7 @@ inline u32 AcquireSpecialTextureHandle(Assets* assets)
         
         WorldChunk* LRU = (WorldChunk*) first;
         result = LRU->textureHandle.index;
+        Assert(result >= MAX_TEXTURE_COUNT);
         Clear(&LRU->textureHandle);
     }
     
@@ -737,16 +740,10 @@ inline b32 IsValid(ModelId ID)
 }
 
 
-inline void LockBitmap(Assets* assets, BitmapId ID)
+inline void LockBitmapForCurrentFrame(Assets* assets, BitmapId ID)
 {
     Assert(IsValid(ID));
-    LockAsset(assets, ID.value);
-}
-
-inline void UnlockBitmap(Assets* assets, BitmapId ID)
-{
-    Assert(IsValid(ID));
-    UnlockAsset(assets, ID.value);
+    LockAssetForCurrentFrame(assets, ID.value);
 }
 
 internal void CloseAllHandles(Assets* assets)
@@ -758,6 +755,8 @@ internal void CloseAllHandles(Assets* assets)
     }
 }
 
+
+
 internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformTextureOpQueue* textureQueue, memory_index size)
 {
     Assets* assets = PushStruct(pool, Assets); 
@@ -766,6 +765,7 @@ internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformText
     
     DLLIST_INIT(&assets->LRUSentinel);
     DLLIST_INIT(&assets->specialLRUSentinel);
+    DLLIST_INIT(&assets->lockedLRUSentinel);
     
     assets->blockSentinel.prev = &assets->blockSentinel;
     assets->blockSentinel.next = &assets->blockSentinel;
@@ -781,16 +781,10 @@ internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformText
     op.update.texture = TextureHandle(0, 1, 1);
     AddOp(assets->textureQueue, op);
     
-    assets->redPixel = 0xFF0000FF;
-    TextureOp specialOp = {};
-    op.update.data = &assets->redPixel;
-    op.update.texture = TextureHandle(MAX_TEXTURE_COUNT, 1, 1);
-    AddOp(assets->textureQueue, op);
-    
     assets->nextFreeTextureHandle = 1;
     assets->maxTextureHandleIndex = MAX_TEXTURE_COUNT - 1;
     
-    assets->nextFreeSpecialTextureHandle = MAX_TEXTURE_COUNT + 1;
+    assets->nextFreeSpecialTextureHandle = MAX_TEXTURE_COUNT;
     assets->maxSpecialTextureHandleIndex = MAX_TEXTURE_COUNT + MAX_SPECIAL_TEXTURE_COUNT - 1;
     
     assets->assetSentinel.next = &assets->assetSentinel;
@@ -1179,7 +1173,7 @@ inline AssetMemoryHeader* GetAsset(Assets* assets, u32 ID, b32 insertAtLRUList =
             if(IsValid(&asset->textureHandle))
             {
                 DLLIST_REMOVE(&asset->LRU);
-                DLLIST_INSERT(&assets->LRUSentinel, &asset->LRU);
+                DLLIST_INSERT_AS_LAST(&assets->LRUSentinel, &asset->LRU);
             }
         }
         
