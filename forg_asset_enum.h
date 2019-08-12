@@ -6,20 +6,8 @@ enum FontType
     Font_debug,
 };
 
-printTable(noPrefix) enum Material
-{
-    Material_None,
-    Material_Standard,
-    Material_Special,
-    Material_Count,
-};
-
 printTable(noPrefix) enum TagId
 {
-    Tag_none,
-    
-    Tag_direction,
-    
     Tag_SkeletonSkinFirstHalf,
     Tag_SkeletonSkinSecondHalf,
     
@@ -30,14 +18,10 @@ printTable(noPrefix) enum TagId
     
     Tag_fontType,
     
-    Tag_dimX,
-    Tag_dimY,
-    Tag_Material,
-    
     Tag_count,
 };
 
-#define LABEL_HASH_COUNT (MegaBytes(1)) // NOTE(Leonardo): has to be a power of 2!
+#define LABEL_HASH_COUNT (Mega(1)) // NOTE(Leonardo): has to be a power of 2!
 
 
 struct VisualLabel
@@ -52,45 +36,40 @@ struct VisualLabel
     };
 };
 
-
-#define HASHED_ASSET_SLOTS 32
-printTable(noPrefix) enum AssetTypeId
+#define HASHED_ASSET_SLOT_COUNT 32
+inline u32 GetAssetIndex(u64 assetHash)
 {
-    Asset_none,
-    Asset_music,
-    
-    Asset_font,
-    Asset_glyph,
-    
-    Asset_openingCutscene = 19,
-    
-    Asset_rig,
-    Asset_standing,
-    Asset_standingDragging,
-    Asset_moving,
-    Asset_movingDragging,
-    Asset_attacking,
-    Asset_eating,
-    Asset_casting,
-    Asset_swimming,
-    Asset_rolling,
-    Asset_protecting,
-    
-    Asset_AnimationLast,
-    
-    Asset_Ground,
-    
-    Asset_leaf,
-    Asset_flower,
-    Asset_fruit,
-    Asset_trunk,
-    Asset_waterRipple,
-    Asset_emptySpace,
-    Asset_scrollUI,
-    Asset_BookPage,
-    Asset_BookElement,
-    Asset_Bookmark,
-    Asset_Particle,
-    
-    Asset_count,
-};
+    u32 hashIndex =  assetHash & (HASHED_ASSET_SLOT_COUNT - 1 );
+    u32 result = hashIndex + 1;
+    Assert(result);
+    return result;
+}
+
+
+#define ASSET_LEAF "asset_leaf"
+#define ASSET_FLOWER "asset_flower"
+#define ASSET_FRUIT "asset_fruit"
+#define ASSET_TRUNK "asset_trunk"
+#define ASSET_GROUND "asset_ground"
+#define ASSET_PARTICLE "asset_particle"
+#define Asset_emptySpace "asset_emptyspace"
+#define Asset_scrollUI "asset_scrollUI"
+#define Asset_BookPage "asset_bookPage"
+#define Asset_BookElement "asset_bookelement"
+#define Asset_Bookmark "asset_bookmark"
+#define Asset_music "asset_music"
+#define Asset_font "asset_font"
+#define Asset_rig "asset_rig"
+#define Asset_standing "asset_standing"
+#define Asset_standingDragging "asset_standingDragging"
+#define Asset_moving "asset_moving"
+#define Asset_movingDragging "asset_movingDragging"
+#define Asset_attacking "asset_attacking"
+#define Asset_eating "asset_eating"
+#define Asset_casting "asset_casting"
+#define Asset_swimming "asset_swimming"
+#define Asset_rolling "asset_rolling"
+#define Asset_protecting "asset_protecting"
+
+#define AssetSpecial_Glyph HASHED_ASSET_SLOT_COUNT
+#define AssetSpecial_Count 2

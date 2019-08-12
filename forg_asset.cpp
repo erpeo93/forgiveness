@@ -861,7 +861,7 @@ internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformText
     // NOTE(Leonardo): zero the null tag!
     ZeroStruct(assets->tags[0]);
     
-    for(u32 destTypeID = 0; destTypeID < Asset_count + HASHED_ASSET_SLOTS; destTypeID++)
+    for(u32 destTypeID = 1; destTypeID < HASHED_ASSET_SLOT_COUNT + AssetSpecial_Count; destTypeID++)
     {
         AssetType* destType = assets->types + destTypeID;
         
@@ -880,7 +880,7 @@ internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformText
                     PakAssetType* sourceType = file->assetTypes + sourceTypeID;
                     if(sourceType->ID == destTypeID)
                     {
-                        if(sourceType->ID == Asset_glyph)
+                        if(sourceType->ID == AssetSpecial_Glyph)
                         {
                             file->fontBitmapsOffsetIndex = assetCount - sourceType->firstAssetIndex;
                         }
@@ -926,31 +926,25 @@ internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformText
     return assets;
 }
 
-inline u32 GetRandomAsset_(Assets* assets, u32 assetID, RandomSequence* seq)
+
+inline u32 GetFirstAsset_(Assets* assets, char* assetName)
 {
-    u32 result = {};
-    AssetType* type = assets->types + assetID;
+    u64 typeHashID = StringHash(assetName);
+    u32 assetIndex = GetAssetIndex(typeHashID);
     
-    u32 range = type->onePastLastAssetIndex - type->firstAssetIndex;
-    if(range > 0)
-    {
-        u32 choice = RandomChoice(seq, range);
-        result = type->firstAssetIndex + choice;
-    }
-    
-    return result;
-}
-
-
-
-inline u32 GetFirstAsset_(Assets* assets, u32 assetID)
-{
     u32 result = 0;
-    AssetType* type = assets->types + assetID;
-    if(type->onePastLastAssetIndex > type->firstAssetIndex)
+    AssetType* type = assets->types + assetIndex;
+    for(u32 index = type->firstAssetIndex; 
+        index < type->onePastLastAssetIndex;
+        index++)
     {
-        result = type->firstAssetIndex;
-    }
+        Asset* asset = assets->assets + index;
+        if(asset->paka.typeHashID == typeHashID)
+        {
+            result = index;
+            break;
+        }
+	}
     
     return result;
 }
@@ -964,14 +958,14 @@ inline b32 IsLabel(u32 ID)
 struct FindAnimationResult
 {
     AnimationId ID;
-    AssetTypeId assetType;
+    u32 assetType;
 };
 
 inline ModelId FindModelByName(Assets* assets, u64 typeHashID, u64 nameHashID)
 {
     ModelId result = {};
     
-    u32 assetID = Asset_count + (typeHashID & (HASHED_ASSET_SLOTS - 1));
+    u32 assetID = GetAssetIndex(typeHashID);
     AssetType* type = assets->types + assetID;
     for(u32 assetIndex = type->firstAssetIndex; 
         assetIndex < type->onePastLastAssetIndex;
@@ -993,7 +987,7 @@ inline FindAnimationResult FindAnimationByName(Assets* assets, u64 skeletonHashI
 {
     FindAnimationResult result = {};
     
-	for(u32 assetType = Asset_rig; assetType < Asset_AnimationLast && !result.assetType; ++assetType)
+	for(u32 assetType = 0; assetType < HASHED_ASSET_SLOT_COUNT && !result.assetType; ++assetType)
 	{
         AssetType* type = assets->types + assetType;
 		for(u32 assetIndex = type->firstAssetIndex; 
@@ -1003,7 +997,7 @@ inline FindAnimationResult FindAnimationByName(Assets* assets, u64 skeletonHashI
 			Asset* asset = assets->assets + assetIndex;
 			if(asset->paka.typeHashID == skeletonHashID && asset->paka.nameHashID == animationNameHashID)
 			{
-                result.assetType = (AssetTypeId) assetType;
+                result.assetType = assetType;
                 result.ID = {assetIndex};
                 break;
 			}
@@ -1017,7 +1011,7 @@ inline SoundId FindSoundByName(Assets* assets, u64 typeHashID, u64 nameHashID)
 {
     SoundId result = {};
     
-    u32 assetID = Asset_count + (typeHashID & (HASHED_ASSET_SLOTS - 1));
+    u32 assetID = GetAssetIndex(typeHashID);
     AssetType* type = assets->types + assetID;
     
     for(u32 assetIndex = type->firstAssetIndex; 
@@ -1065,10 +1059,23 @@ inline BitmapId FindBitmapByName(Assets* assets, u32 assetType, u64 typeHashID, 
 }
 
 
-inline BitmapId FindBitmapByName(Assets* assets, u32 assetID, u64 nameHashID)
+inline BitmapId FindBitmapByName(Assets* assets, char* assetName, u64 typeHashID, u64 nameHashID, u16 colorationIndex)
 {
     BitmapId result = {};
-    result = FindBitmapByName(assets, assetID, 0, nameHashID, 0);
+    
+    u64 assetHashID = StringHash(assetName);
+    u32 assetIndex = GetAssetIndex(assetHashID);
+    result = FindBitmapByName(assets, assetIndex, typeHashID, nameHashID, colorationIndex);
+    return result;
+}
+
+
+inline BitmapId FindBitmapByName(Assets* assets, char* assetName, u64 nameHashID)
+{
+    BitmapId result = {};
+    u64 assetHashID = StringHash(assetName);
+    u32 assetIndex = GetAssetIndex(assetHashID);
+    result = FindBitmapByName(assets, assetIndex, assetHashID, nameHashID, 0);
     return result;
 }
 
@@ -1076,13 +1083,12 @@ inline BitmapId FindBitmapByName(Assets* assets, u64 typeHashID, u64 nameHashID,
 {
     BitmapId result = {};
     
-    u32 assetID = Asset_count + (typeHashID & (HASHED_ASSET_SLOTS - 1));
+    u32 assetID = GetAssetIndex(typeHashID);
     result = FindBitmapByName(assets, assetID, typeHashID, nameHashID, colorationIndex);
     return result;
 }
 
-inline MatchingAssetResult GetMatchingAsset_(Assets* assets, u32 assetID, u64 stringHashID,
-                                             TagVector* values, TagVector* weights, LabelVector* labels)
+inline MatchingAssetResult GetMatchingAsset_(Assets* assets, u32 assetID, u64 stringHashID, TagVector* values, TagVector* weights, LabelVector* labels)
 {
     MatchingAssetResult result = {};
     
@@ -1369,66 +1375,74 @@ inline BitmapId GetBitmapForGlyph(Assets* assets, Font* font, PakFont* info, u32
     
 }
 
-inline AssetTypeId GetAssetIDForEntity(Assets* assets, TaxonomyTable* table, u32 taxonomy, u32 action, b32 dragging, r32 tileHeight)
+
+inline u64 GetAssetHashForEntity(Assets* assets, TaxonomyTable* table, u32 taxonomy, u32 action, b32 dragging, r32 tileHeight)
 {
-    u32 currentTaxonomy = taxonomy;
+    char* resultS = Asset_standing;
+#if 0
+    TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
+    AnimationActionTree* tree = slot->actionTrees + action;
+    if(tree->root)
+    {
+        resultS = TraverseTree(Conditions);
+    }
+#endif
     
-    AssetTypeId result = Asset_standing;
     if(!IsObject(table, taxonomy))
     {
         switch(action)
         {
             case Action_Move:
             {
-                result = Asset_moving;
+                resultS = Asset_moving;
                 
                 if(dragging)
                 {
-                    result = Asset_movingDragging;
+                    resultS = Asset_movingDragging;
                 }
             } break;
             
             case Action_Attack:
             {
-                result = Asset_attacking;
+                resultS = Asset_attacking;
             } break;
             
             case Action_Cast:
             {
-                result = Asset_casting;
+                resultS = Asset_casting;
             } break;
             
             case Action_Eat:
             {
-                result = Asset_eating;
+                resultS = Asset_eating;
             } break;
             
             case Action_Craft:
             {
-                result = Asset_attacking;
+                resultS = Asset_attacking;
             } break;
             
             case Action_Rolling:
             {
-                result = Asset_rolling;
+                resultS = Asset_rolling;
             } break;
             
             case Action_Protecting:
             {
-                result = Asset_protecting;
+                resultS = Asset_protecting;
             } break;
             
             case Action_Drag:
             {
-                result = Asset_standing;
+                resultS = Asset_standing;
             } break;
             
             default:
             {
-                result = Asset_standing;
+                resultS = Asset_standing;
                 if(dragging)
                 {
-                    result = Asset_standingDragging;
+                    resultS = Asset_standingDragging;
                 }
             } break;
         }
@@ -1440,8 +1454,9 @@ inline AssetTypeId GetAssetIDForEntity(Assets* assets, TaxonomyTable* table, u32
     
     if(tileHeight < SWALLOW_WATER_LEVEL)
     {
-        result = Asset_swimming;
+        resultS = Asset_swimming;
     }
     
+    u64 result = StringHash(resultS);
     return result;
 }

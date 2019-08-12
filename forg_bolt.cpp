@@ -116,8 +116,49 @@ internal void UpdateAndRenderBolt(GameModeWorld* worldMode, BoltCache* cache, Re
     EndTemporaryMemory(subdivisionsMemory);
 }
 
+inline void SpawnBolt(GameModeWorld* worldMode, RenderGroup* group, BoltCache* cache, Vec3 startP, Vec3 endP, u32 boltTaxonomy)
+{
+    Bolt* bolt;
+    FREELIST_ALLOC(bolt, cache->firstFreeBolt, PushStruct(cache->pool, Bolt));
+    bolt->taxonomy = boltTaxonomy;
+    bolt->ttl = R32_MAX;
+    bolt->seed = GetNextUInt32(&cache->entropy);
+    bolt->timeSinceLastAnimationTick = R32_MAX;
+    bolt->animationSeq = Seed(bolt->seed);
+    bolt->startP = startP;
+    bolt->endP = endP;
+    
+    FREELIST_INSERT(bolt, cache->firstBolt);
+    
+    
+    TaxonomySlot* boltSlot = GetSlotForTaxonomy(worldMode->table, boltTaxonomy);
+    if(boltSlot && boltSlot->boltEffectDefinition)
+    {
+        SoundEvent* event = GetSoundEvent(worldMode->table, boltSlot->boltEffectDefinition->headerSoundEffect);
+        if(event)
+        {
+            r32 distanceFromPlayer = Length(bolt->endP);
+            u32 labelCount = 0;
+            SoundLabel* labels = 0;
+            PlaySoundEvent(worldMode->soundState, group->assets, event, labelCount, labels, &cache->entropy, distanceFromPlayer);
+        }
+    }
+}
+
 internal void UpdateAndRenderBolts(GameModeWorld* worldMode, BoltCache* cache, r32 timeToUpdate, RenderGroup* group)
 {
+    worldMode->boltTime += timeToUpdate;
+    if(worldMode->boltTime > 3.0f)
+    {
+        worldMode->boltTime = 0;
+        
+        Vec2 random = 10.0f * RandomBilV2(&worldMode->boltSequence);
+        
+        TaxonomySlot* testSlot = NORUNTIMEGetTaxonomySlotByName(worldMode->table, "bolt");
+        SpawnBolt(worldMode, group, worldMode->boltCache, V3(random, 7), V3(random, 0), testSlot->taxonomy);
+    }
+    
+    
     for(Bolt** boltPtr = &cache->firstBolt; *boltPtr;)
     {
         Bolt* bolt = *boltPtr;
@@ -160,34 +201,6 @@ internal void UpdateAndRenderBolts(GameModeWorld* worldMode, BoltCache* cache, r
     }
 }
 
-inline void SpawnBolt(GameModeWorld* worldMode, RenderGroup* group, BoltCache* cache, Vec3 startP, Vec3 endP, u32 boltTaxonomy)
-{
-    Bolt* bolt;
-    FREELIST_ALLOC(bolt, cache->firstFreeBolt, PushStruct(cache->pool, Bolt));
-    bolt->taxonomy = boltTaxonomy;
-    bolt->ttl = R32_MAX;
-    bolt->seed = GetNextUInt32(&cache->entropy);
-    bolt->timeSinceLastAnimationTick = R32_MAX;
-    bolt->animationSeq = Seed(bolt->seed);
-    bolt->startP = startP;
-    bolt->endP = endP;
-    
-    FREELIST_INSERT(bolt, cache->firstBolt);
-    
-    
-    TaxonomySlot* boltSlot = GetSlotForTaxonomy(worldMode->table, boltTaxonomy);
-    if(boltSlot && boltSlot->boltEffectDefinition)
-    {
-        SoundEvent* event = GetSoundEvent(worldMode->table, boltSlot->boltEffectDefinition->headerSoundEffect);
-        if(event)
-        {
-            r32 distanceFromPlayer = Length(bolt->endP);
-            u32 labelCount = 0;
-            SoundLabel* labels = 0;
-            PlaySoundEvent(worldMode->soundState, group->assets, event, labelCount, labels, &cache->entropy, distanceFromPlayer);
-        }
-    }
-}
 
 internal void InitBoltCache(BoltCache* cache, MemoryPool* pool, u32 seed)
 {

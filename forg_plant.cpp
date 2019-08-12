@@ -390,7 +390,8 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
                     childStem->baseRadious = stem->baseRadious * Pow(childStem->totalLength / stem->totalLength, definition->ratioPower) * nextLevelParams->radiousMod;
                     
                     r32 radiousAtOriginatingPoint = GetRadiousAtZ(levelParams->taper, definition->flare, definition->lobeDepth, definition->lobes, stem->totalLength, stem->baseRadious, childStem->parentStemZ);
-                    childStem->maxRadious = radiousAtOriginatingPoint;
+                    
+                    childStem->maxRadious = radiousAtOriginatingPoint * 0.8f;
                     
                     
                     
@@ -695,7 +696,7 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
         
         if(IsValid(plant->trunkBitmap))
         {
-            PushTrunkatedPyramid(group, plant->trunkBitmap, segmentBaseP, topP, 4, bottomXAxis, bottomYAxis, bottomZAxis, topXAxis, topYAxis, topZAxis, baseRadious, topRadious, length, baseColor, topColor, renderingParams.lights, renderingParams.modulationWithFocusColor, drawBase, drawTop);
+            PushTrunkatedPyramid(group, plant->trunkBitmap, segmentBaseP, topP, definition->trunkSubdivision, bottomXAxis, bottomYAxis, bottomZAxis, topXAxis, topYAxis, topZAxis, baseRadious, topRadious, length, baseColor, topColor, renderingParams.lights, renderingParams.modulationWithFocusColor, drawBase, drawTop);
         }
         
         for(PlantStem* child = segment->childs; child; child = child->next)
@@ -915,10 +916,12 @@ internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group,
             m4x4 rotation = ZRotation(DegToRad(angleZ));
             
             
+            r32 windTime = 0;
             for(PlantStem* trunk = plant->plant.firstTrunk; trunk; trunk = trunk->next)
             {
-                RenderStem(group, renderingParams, worldMode->windTime, plant, definition, trunk, finalPlantP, 0, rotation, 0);
+                RenderStem(group, renderingParams, windTime, plant, definition, trunk, finalPlantP, 0, rotation, 0);
             }
         }
     }
 }
+

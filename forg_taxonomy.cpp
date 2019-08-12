@@ -751,6 +751,7 @@ inline void TranslatePlayer(TaxonomyTable* oldTable, TaxonomyTable* newTable, Se
 #endif
 
 #ifndef FORG_SERVER
+
 inline void TranslateClientEntity(TaxonomyTable* oldTable, TaxonomyTable* newTable,ClientEntity* entity)
 {
     entity->taxonomy = TranslateTaxonomy(oldTable, newTable, entity->taxonomy);

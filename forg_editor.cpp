@@ -58,6 +58,19 @@ inline void InitTaxonomyReadWrite(TaxonomyTable* table)
     taxPool_ = &table->pool;
 }
 
+#ifndef FORG_SERVER
+
+inline void SwapTables(GameModeWorld* worldMode)
+{
+    TaxonomyTable* old = worldMode->oldTable;
+    Clear(&old->pool);
+    ZeroStruct(*old);
+    worldMode->oldTable = worldMode->table;
+    worldMode->table = old;
+    InitTaxonomyReadWrite(worldMode->table);
+}
+#else
+#endif
 
 
 global_variable u32 stackShortcutCount = 0;

@@ -68,7 +68,7 @@ inline void ParseLFFSeasonParams(PlantLFFSeasonParams* params, EditorElement* ro
     }
 }
 
-inline void ParsePlantLFFParams(PlantLFFParams* params, EditorElement* root)
+inline void ParsePlantLFFParams(PlantLFFParams* params, EditorElement* root, char* imageTagName)
 {
     if(root)
     {
@@ -81,7 +81,7 @@ inline void ParsePlantLFFParams(PlantLFFParams* params, EditorElement* root)
         params->windAngleV = ToR32(GetValue(root, "windAngleV"));
         params->windDirectionV = ToR32(GetValue(root, "windDirectionV"));
         
-        params->bitmapHash = StringHash(GetValue(root, "imageName"));
+        params->bitmapHash = StringHash(GetValue(root, imageTagName));
         
         ParseLFFSeasonParams(params->seasons + Season_Autumn, GetStruct(root, "autumn"));
         ParseLFFSeasonParams(params->seasons + Season_Winter, GetStruct(root, "winter"));
@@ -127,11 +127,12 @@ internal void ImportPlantDefinitionTab(TaxonomySlot* slot, EditorElement* root)
     ParsePlantLevelParams(plant->levelParams + 2, GetStruct(root, "level2"));
     ParsePlantLevelParams(plant->levelParams + 3, GetStruct(root, "level3"));
     
-    ParsePlantLFFParams(&plant->leafParams, GetStruct(root, "leaf"));
-    ParsePlantLFFParams(&plant->flowerParams, GetStruct(root, "flower"));
-    ParsePlantLFFParams(&plant->fruitParams, GetStruct(root, "fruit"));
+    ParsePlantLFFParams(&plant->leafParams, GetStruct(root, "leaf"), "leafName");
+    ParsePlantLFFParams(&plant->flowerParams, GetStruct(root, "flower"), "flowerName");
+    ParsePlantLFFParams(&plant->fruitParams, GetStruct(root, "fruit"), "fruitName");
     
     plant->trunkColorV = ToV4Color(GetStruct(root, "trunkColorV"));
+    plant->trunkSubdivision = ToU32(GetValue(root, "subdivisions"), 4);
     plant->lobeDepth = ToR32(GetValue(root, "lobeDepth"));
     plant->lobes = ToR32(GetValue(root, "lobes"));
     plant->trunkStringHash = StringHash(GetValue(root, "trunkName"));

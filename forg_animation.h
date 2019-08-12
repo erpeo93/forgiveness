@@ -90,7 +90,7 @@ struct PieceResult
     r32 angle;
     Vec2 scale;
     r32 alpha;
-    AssetTypeId assetType;
+    u32 assetIndex;
     r32 tags[Tag_count];
 };
 

@@ -93,7 +93,6 @@ inline UniversePos GetUniverseP(SimRegion* region, Vec3 p)
 #include "forg_world_generation.cpp"
 #include "forg_consideration.cpp"
 #include "forg_network_server.cpp"
-#include "forg_ast.cpp"
 #include "forg_editor.cpp"
 #include "forg_inventory.cpp"
 #include "forg_memory.cpp"
@@ -414,12 +413,16 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 }
 
 
-inline void CreateNewTaxonomy(ServerState* server, char* destPath, char* sourceFile, char* destFile)
+inline void CreateNewTaxonomy(ServerState* server, char* destPath, char* sourceFile, char* destFile, char* destFileName)
 {
 	if(platformAPI.CreateFolder(destPath))
     {
 		platformAPI.CopyFileOrFolder(sourceFile, destFile);
 		ReloadServerTaxonomies(server);
+        
+        char assetFileName[128];
+        FormatString(assetFileName, sizeof(assetFileName), "assets/%s", destFileName);
+        platformAPI.CopyFileOrFolder(destFile, assetFileName);
         ImportSpecificFile(0xffffffff, !server->editor, destFile);
         
 		for(u32 playerIndex = 0; playerIndex < MAXIMUM_SERVER_PLAYERS; ++playerIndex)
@@ -427,7 +430,7 @@ inline void CreateNewTaxonomy(ServerState* server, char* destPath, char* sourceF
 			ServerPlayer* playerToSend = server->players + playerIndex;
 			if(playerToSend->connectionSlot)
 			{
-				SendSpecificFile(playerToSend, destFile);
+				SendSpecificFile(playerToSend, destFileName);
                 SendAllDataFileSentMessage(playerToSend, DataFileSent_OnlyTaxonomies);
 			}
 		}
@@ -797,7 +800,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 FormatString(destFilename, sizeof(destFilename), "%s.fed", name);
                 FormatString(finalDest, sizeof(finalDest), "%s/%s", destPath, destFilename);
                 
-				CreateNewTaxonomy(server, destPath, finalSource, destFilename);
+				CreateNewTaxonomy(server, destPath, finalSource, finalDest, destFilename);
             }
             
         } break;
@@ -837,7 +840,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                     FormatString(destFilename, sizeof(destFilename), "%s.fed", newName);
                     FormatString(finalDest, sizeof(finalDest), "%s/%s", destPath, destFilename);
                     
-                    CreateNewTaxonomy(server, destPath, finalSource, destFilename);
+                    CreateNewTaxonomy(server, destPath, finalSource, finalDest, destFilename);
                 }
 			}
 		} break;
@@ -857,9 +860,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
                 
                 PoundToNameAndFedFileRecursively(path, toDeleteSlot->name, true);
                 
-                
                 ReloadServerTaxonomies(server);
-                
                 
                 for(u32 playerIndex = 0; playerIndex < MAXIMUM_SERVER_PLAYERS; ++playerIndex)
                 {

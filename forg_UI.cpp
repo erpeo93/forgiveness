@@ -497,9 +497,7 @@ inline b32 SpecialHandling(char* name)
 {
     b32 result = false;
     
-    if(StrEqual(name, "imageName") ||
-       StrEqual(name, "trunkName") ||
-       StrEqual(name, "particleName") ||
+       if(StrEqual(name, "particleName") ||
        StrEqual(name, "name") ||
        StrEqual(name, "animationPieceName"))
     {
@@ -2876,7 +2874,7 @@ inline void UIRenderEditor(UIState* UI, PlatformInput* input)
                     {
                         UI->worldMode->currentPhase = (ForgDayPhase) GetValuePreprocessor(ForgDayPhase, GetValue(widget->root, "dayPhase"));
                         
-                        UI->worldMode->windSpeed = ToR32(GetValue(widget->root, "windSpeed"));
+                        //UI->worldMode->windSpeed = ToR32(GetValue(widget->root, "windSpeed"));
                     } break;
                     
                     case EditorWidget_WidgetSelection:
@@ -3202,7 +3200,9 @@ inline void UIRenderTooltip(UIState* UI)
         if(UI->prefix || UI->suffix)
         {
             BitmapId ID = UI->scrollIconID;
-            r32 prefixHeight = 20.0f;
+            if(IsValid(ID))
+            {
+                         r32 prefixHeight = 20.0f;
             
             Vec2 prefixP = centerTooltipP + V2(0, 28.0f);
             
@@ -3215,7 +3215,8 @@ inline void UIRenderTooltip(UIState* UI)
             suffixTransform.angle = 180;
             
             PushBitmap(group, suffixTransform, ID, V3(suffixP, tooltipZ), prefixHeight, V2( 1.0f, 1.0f ), V4(0.0f, 0.0f, 0.0f, 1.0f));
-            PushBitmap(group, suffixTransform, ID, V3(suffixP, tooltipZ), prefixHeight, V2( 1.0f, 1.0f ), V4(1, 1, 1, 1));
+            PushBitmap(group, suffixTransform, ID, V3(suffixP, tooltipZ), prefixHeight, V2( 1.0f, 1.0f ), V4(1, 1, 1, 1));   
+            }
         }
     }
 }
@@ -3244,8 +3245,10 @@ inline Rect2 OverdrawInventoryEntity(RenderGroup* group, GameModeWorld* worldMod
     return result;
 }
 
-inline void UIOverdrawInventoryView(UIState* UI)
+inline void UIOverdrawInventoryOverlay(UIState* UI)
 {
+    if(UI->mode == UIMode_Equipment || UI->mode == UIMode_Loot)
+    {
     RenderGroup* group = UI->group;
     GameModeWorld* worldMode = UI->worldMode;
     
@@ -3294,7 +3297,9 @@ inline void UIOverdrawInventoryView(UIState* UI)
         Vec3 objectP = UI->worldMouseP;
 
         RenderEntity(UI->group, UI->worldMode, &UI->draggingEntity, objectP, draggingObjectDim, UI->worldMode->cameraWorldOffset.z - 0.1f);
+    }        
     }
+
 }
 
 inline void UIOverdrawSkillSlots(UIState* UI, r32 modulationAlpha, PlatformInput* input, r32 lerp)
@@ -5251,4 +5256,32 @@ internal void UIHandle(UIState* UI, PlatformInput* input, Vec2 screenMouseP, Cli
             }
         }
     }
+    
+    
+    
+    
+                r32 focusZoom = UI->zoomLevel;
+                if(ActionRequiresZooming(player->action, &focusZoom))
+                {
+                    ClientEntity* entityC = GetEntityClient(worldMode, output->targetEntityID);
+                    if(entityC)
+                    {
+                        MoveCameraTowards(worldMode, entityC, V2(0, 0), V2(0, 0), focusZoom);
+                    }
+                }
+                
+                if(UI->mode == UIMode_Loot)
+                {
+                    ClientEntity* lootingEntity = GetEntityClient(worldMode, UI->myPlayer->openedContainerID);
+                    if(lootingEntity)
+                    {
+                        r32 additionalZoomCoeff = Max(1.0f, lootingEntity->animation.output.additionalZoomCoeff);
+                        MoveCameraTowards(worldMode, lootingEntity, V2(0, 0), V2(0, 0),additionalZoomCoeff);
+                    }
+                }
+ 
+    
+    
+
+                
 }

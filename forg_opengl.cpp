@@ -732,7 +732,6 @@ in r32 modulationPercentage;
          
          
          Vec3 modulationLightColor = ambientLightColor;
-         
          // NOTE(Leonardo): directional light!
          {
          Vec3 toLight = -directionalLightDir;
@@ -742,7 +741,6 @@ in r32 modulationPercentage;
          r32 lightInfluence = directionalLightIntensity * cosAngle;
           modulationLightColor += Lerp(V3(0, 0, 0), lightInfluence, directionalLightColor);
 }
-
 
          for(int index = fragLightStartingIndex; index < fragLightEndingIndex; ++index)
 {

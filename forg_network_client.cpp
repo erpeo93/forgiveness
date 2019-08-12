@@ -1,3 +1,16 @@
+PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
+{
+    ReceiveNetworkPacketWork* work = (ReceiveNetworkPacketWork*) param;
+    
+    while(true)
+    {
+        if(*work->network)
+        {
+            work->ReceiveData(*work->network);
+        }
+    }
+}
+
 internal void SendUnreliableData(void* data, u16 size)
 {
     NetworkSendParams params = {};
@@ -749,30 +762,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 if(e->flags & Flag_deleted)
                 {
                     InvalidCodePath;
-                }
-                
-                
-                i32 lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
-                if(e->identifier == worldMode->player.identifier && ChunkOutsideWorld(lateralChunkSpan, P.chunkX, P.chunkY))
-                {
-                    worldMode->player.changedWorld = true;
-                    if(P.chunkX < 0)
-                    {
-                        worldMode->player.changedWorldDeltaX += lateralChunkSpan;
-                    }
-                    else if(P.chunkX >= lateralChunkSpan)
-                    {
-                        worldMode->player.changedWorldDeltaX -= lateralChunkSpan;
-                    }
-                    
-                    if(P.chunkY < 0)
-                    {
-                        worldMode->player.changedWorldDeltaY += lateralChunkSpan;
-                    }
-                    else if(P.chunkY >= lateralChunkSpan)
-                    {
-                        worldMode->player.changedWorldDeltaY -= lateralChunkSpan;
-                    }
                 }
                 
                 

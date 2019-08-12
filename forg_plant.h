@@ -243,6 +243,7 @@ struct PlantDefinition
     PlantLFFParams fruitParams;
     
     Vec4 trunkColorV;
+    u32 trunkSubdivision;
     
     r32 lobeDepth;
     r32 lobes;

@@ -165,59 +165,14 @@ char* MetaTable_SoundContainerType[] =
 "Labeled",
 "Sequence",
 };
-char* MetaTable_Material[] = 
- {
-"None",
-"Standard",
-"Special",
-"Count",
-};
 char* MetaTable_TagId[] = 
  {
-"none",
-"direction",
 "SkeletonSkinFirstHalf",
 "SkeletonSkinSecondHalf",
 "codepoint",
 "shotIndex",
 "layerIndex",
 "fontType",
-"dimX",
-"dimY",
-"Material",
-"count",
-};
-char* MetaTable_AssetTypeId[] = 
- {
-"none",
-"music",
-"font",
-"glyph",
-"openingCutscene",
-"rig",
-"standing",
-"standingDragging",
-"moving",
-"movingDragging",
-"attacking",
-"eating",
-"casting",
-"swimming",
-"rolling",
-"protecting",
-"AnimationLast",
-"Ground",
-"leaf",
-"flower",
-"fruit",
-"trunk",
-"waterRipple",
-"emptySpace",
-"scrollUI",
-"BookPage",
-"BookElement",
-"Bookmark",
-"Particle",
 "count",
 };
 MetaFlag MetaFlags_EditorRole[] = 

@@ -5,7 +5,7 @@
 #define HASH_UPDATE_COUNT 4096
 
 #define VOXEL_SIZE 2.0f
-#define CHUNK_DIM 4
+#define CHUNK_DIM 8
 #define SERVER_REGION_SPAN 4
 #define SIM_REGION_CHUNK_SPAN 8
 #define UNIVERSE_DIM 1

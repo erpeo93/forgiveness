@@ -358,6 +358,22 @@ internal void InitParticleCache(ParticleCache* particleCache, Assets* assets, Me
 
 internal void UpdateAndRenderParticleEffects(GameModeWorld* worldMode, ParticleCache* particleCache, r32 dt, RenderGroup* group)
 {
+    TaxonomySlot* particleEffects = GetSlotForTaxonomy(worldMode->table, worldMode->table->particleEffectsTaxonomy);
+    for(u32 childIndex = 0; childIndex < particleEffects->subTaxonomiesCount; ++childIndex)
+    {
+        TaxonomySlot* effect = GetNthChildSlot(worldMode->table, particleEffects, childIndex);
+        
+        if(effect->particleEffectDefinition)
+        {
+            for(u32 phaseIndex = 0; phaseIndex < effect->particleEffectDefinition->phaseCount; ++phaseIndex)
+            {
+                ParticlePhase* phase = effect->particleEffectDefinition->phases + phaseIndex;
+                phase->updater.bitmapID = FindBitmapByName(group->assets, ASSET_PARTICLE, phase->updater.particleHashID);
+            }
+        }
+    }
+    
+    
     Vec3 frameDisplacement = particleCache->deltaParticleP;
     for(ParticleEffect** effectPtr = &particleCache->firstActiveEffect; *effectPtr;)
     {

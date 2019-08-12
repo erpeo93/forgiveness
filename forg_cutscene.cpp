@@ -1,5 +1,7 @@
 internal void RenderLayeredScene( Assets* assets, RenderGroup* group, LayeredScene* scene, r32 tNormal )
 {
+    
+#if 0    
     Vec3 cameraPosition = Lerp( scene->cameraStart, tNormal, scene->cameraEnd );
     
     TagVector match = {};
@@ -71,6 +73,8 @@ internal void RenderLayeredScene( Assets* assets, RenderGroup* group, LayeredSce
             PrefetchBitmap( assets, BID );
         }
     }
+#endif
+    
 }
 
 

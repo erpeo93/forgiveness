@@ -10,7 +10,6 @@
 #include "forg_math.h"
 #include "forg_simd.h"
 #include "forg_random.h"
-#include "forg_ast.h"
 #include "forg_asset_enum.h"
 #include "forg_file_formats.h"
 #include "asset_builder.h"
@@ -102,10 +101,6 @@ struct ClientNetworkInterface
 struct ClientPlayer
 {
     b32 spawnAsh;
-    
-    b32 changedWorld;
-    i32 changedWorldDeltaX;
-    i32 changedWorldDeltaY;
     
     u64 identifier;
     UniversePos universeP;
@@ -229,8 +224,6 @@ struct ClientEntity
     // NOTE(Leonardo): from server
     u64 identifier; // NOTE(Leonardo): 8 bytes
     
-    TaxonomySlot* slot;
-    
     b32 beingDeleted;
     u32 flags;
     u32 taxonomy; // NOTE(Leonardo): 4 bytes
@@ -304,6 +297,23 @@ struct ClientEntity
     ClientEntity* next;
 };
 
+inline void AddFlags(ClientEntity* entity, u32 flags)
+{
+    entity->flags |= flags;
+}
+
+inline b32 IsSet(ClientEntity* entity, i32 flag)
+{
+    b32 result = (entity->flags & flag);
+    return result;
+}
+
+inline void ClearFlags(ClientEntity* entity, i32 flags)
+{
+    entity->flags &= ~flags;
+}
+
+
 #include "forg_UI.h"
 
 struct ForgVoronoiDiagram
@@ -329,14 +339,13 @@ struct GameModeWorld
 {
     struct GameState* gameState;
     
-    b32 firstTimeGeneratingChunks;
+    ClientEntity* nearestEntities[8];
+    r32 nearestCameraZ[8];
     
     WorldGeneratorDefinition* generator;
     WorldSeason season;
     r32 seasonLerp;
     
-    r32 windTime;
-    r32 windSpeed;
     
     u32 worldSeed;
     
@@ -425,7 +434,6 @@ struct GameModeWorld
     b32 canAdvance;
 #endif
     
-    Vec2 lastMouseP;
     Vec3 worldMouseP;
     
     

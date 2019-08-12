@@ -113,7 +113,7 @@ struct AssetMemoryBlock
 // NOTE(Leonardo): for every action, we store the corresponding animation asset 
 struct AssetMappings
 {
-    AssetTypeId assetID[Action_Count];
+    u32 assetID[Action_Count];
 };
 
 struct Assets
@@ -134,7 +134,7 @@ struct Assets
     
     Asset* assets;
     
-    AssetType types[Asset_count + HASHED_ASSET_SLOTS];
+    AssetType types[HASHED_ASSET_SLOT_COUNT + AssetSpecial_Count];
     
     u32 whitePixel;
     u32 nextFreeTextureHandle;
@@ -154,12 +154,18 @@ internal void LoadSound( Assets* assets, SoundId ID );
 internal void LoadAnimation( Assets* assets, AnimationId ID );
 
 
-inline void PrefetchAllGroundBitmaps(Assets* assets)
+inline void PrefetchAllGroundBitmaps(Assets* assets, b32 immediate)
 {
-    AssetType* type = assets->types + Asset_Ground;
+    u64 assetHashID = StringHash(ASSET_GROUND);
+    u32 assetI = GetAssetIndex(assetHashID);
+    AssetType* type = assets->types + assetI;
     for(u32 assetIndex = type->firstAssetIndex; assetIndex < type->onePastLastAssetIndex; ++assetIndex)
     {
-        LoadBitmap(assets, {assetIndex}, false);
+		Asset* asset = assets->assets + assetIndex;
+        if(asset->paka.typeHashID == assetHashID)
+		{
+			LoadBitmap(assets, {assetIndex}, immediate);
+		}
     }
     
 }
@@ -171,35 +177,22 @@ inline void PrefetchSound( Assets* assets, SoundId ID ) { LoadSound( assets, ID 
 inline void PrefetchAnimation( Assets* assets, AnimationId ID ) { LoadAnimation( assets, ID ); }
 
 
-u32 GetRandomAsset_( Assets* assets, u32 assetID, RandomSequence* seq );
-inline BitmapId GetRandomBitmap( Assets* assets, u32 assetID, RandomSequence* seq )
+u32 GetFirstAsset_( Assets* assets, char* assetName);
+inline BitmapId GetFirstBitmap( Assets* assets, char* assetName)
 {
-    BitmapId result = { GetRandomAsset_( assets, assetID, seq ), V4(1, 1, 1, 1) };
+    BitmapId result = { GetFirstAsset_(assets, assetName), V4(1, 1, 1, 1)};
     return result;
 }
 
-inline SoundId GetRandomSound( Assets* assets, u32 assetID, RandomSequence* seq )
+inline SoundId GetFirstSound(Assets* assets, char* assetName)
 {
-    SoundId result = { GetRandomAsset_( assets, assetID, seq ) };
+    SoundId result = {GetFirstAsset_(assets, assetName)};
     return result;
 }
 
-u32 GetFirstAsset_( Assets* assets, u32 assetID );
-inline BitmapId GetFirstBitmap( Assets* assets, u32 assetID )
+inline ModelId GetFirstModel(Assets* assets, char* assetName)
 {
-    BitmapId result = { GetFirstAsset_( assets, assetID ), V4(1, 1, 1, 1)};
-    return result;
-}
-
-inline SoundId GetFirstSound( Assets* assets, u32 assetID )
-{
-    SoundId result = { GetFirstAsset_( assets, assetID ) };
-    return result;
-}
-
-inline ModelId GetFirstModel(Assets* assets, u32 assetID)
-{
-    ModelId result = {GetFirstAsset_(assets, assetID)};
+    ModelId result = {GetFirstAsset_(assets, assetName)};
     
     return result;
 }
@@ -216,8 +209,8 @@ struct MatchingAssetResult
 MatchingAssetResult GetMatchingAsset_( Assets* assets, u32 assetID, u64 stringHashID,
                                       TagVector* values, TagVector* weights, LabelVector* labels);
 
-inline BitmapId GetMatchingBitmap_( Assets* assets, u32 assetID, u64 stringHashID,
-                                   TagVector* values, TagVector* weights, LabelVector* labels = 0)
+inline BitmapId GetMatchingBitmap(Assets* assets, u32 assetID, u64 stringHashID,
+                                  TagVector* values, TagVector* weights, LabelVector* labels = 0)
 {
     MatchingAssetResult matching = GetMatchingAsset_( assets, assetID, stringHashID, values, weights, labels );
     
@@ -231,23 +224,21 @@ inline BitmapId GetMatchingBitmap_( Assets* assets, u32 assetID, u64 stringHashI
     return result;
 }
 
-inline BitmapId GetMatchingBitmap(Assets* assets, u32 assetIndex, TagVector* values, TagVector* weights, LabelVector* labels = 0)
+inline BitmapId GetMatchingBitmap(Assets* assets, char* assetName, TagVector* values, TagVector* weights, LabelVector* labels = 0)
 {
-    BitmapId result = GetMatchingBitmap_(assets, assetIndex, 0, values, weights, labels);
+    u64 stringHashID = StringHash(assetName);
+    u32 assetID = GetAssetIndex(stringHashID);
+    
+    BitmapId result = GetMatchingBitmap(assets, assetID, stringHashID, values, weights, labels);
     return result;
 }
 
-inline BitmapId GetMatchingBitmapHashed(Assets* assets, u64 stringHashID, TagVector* values, TagVector* weights, LabelVector* labels = 0)
+inline FontId GetMatchingFont( Assets* assets, char* fontName, TagVector* values, TagVector* weights, LabelVector* labels = 0)
 {
-    u32 assetIndex = Asset_count + (stringHashID & (HASHED_ASSET_SLOTS - 1));
-    BitmapId result = GetMatchingBitmap_(assets, assetIndex, stringHashID, values, weights, labels);
-    return result;
-}
-
-inline FontId GetMatchingFont( Assets* assets, u32 assetID, 
-                              TagVector* values, TagVector* weights, LabelVector* labels = 0)
-{
-    FontId result = {GetMatchingAsset_( assets, assetID, 0, values, weights, labels).assetIndex};
+    u64 stringHashID = StringHash(fontName);
+    u32 assetID = GetAssetIndex(stringHashID);
+    
+    FontId result = {GetMatchingAsset_( assets, assetID, stringHashID, values, weights, labels).assetIndex};
     return result;
 }
 
@@ -258,9 +249,10 @@ inline SoundId GetMatchingSound( Assets* assets, u32 assetID, u64 stringHashID,
     return result;
 }
 
-inline AnimationId GetMatchingAnimation( Assets* assets, u32 assetID, u64 stringHashID,
+inline AnimationId GetMatchingAnimation( Assets* assets, u64 assetNameHash, u64 stringHashID,
                                         TagVector* values, TagVector* weights, LabelVector* labels = 0)
 {
+    u32 assetID = GetAssetIndex(assetNameHash);
     AnimationId result = {GetMatchingAsset_( assets, assetID, stringHashID, values, weights, labels).assetIndex};
     return result;
 }

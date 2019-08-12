@@ -41,7 +41,7 @@ struct Assets
     PakTag tags[EVEN_BIGGER_NUMBER];
     
     u32 countAssetType;
-    PakAssetType types[Asset_count + HASHED_ASSET_SLOTS];
+    PakAssetType types[HASHED_ASSET_SLOT_COUNT + AssetSpecial_Count];
     
     u32 countAssets;
     AssetSource assetSources[VERY_LARGE_NUMBER];
@@ -1746,7 +1746,7 @@ internal LoadedModel LoadModel(char* path, char* filename)
 }
 
 FILE* out;
-internal void BeginAssetType(Assets* assets, u32 type )
+internal void BeginAssetType(Assets* assets, u32 type)
 {
     Assert(assets->DEBUGAssetType == 0 );
     assets->DEBUGAssetType = assets->types + type;
@@ -1756,6 +1756,15 @@ internal void BeginAssetType(Assets* assets, u32 type )
     assets->currentStringHashID = 0;
     
     currentAssets_ = assets;
+}
+
+inline u64 BeginAssetType(Assets* assets, char* assetName)
+{
+    u64 hashID = StringHash(assetName);
+    u32 assetIndex = GetAssetIndex(hashID);
+    BeginAssetType(assets, assetIndex);
+    
+    return hashID;
 }
 
 struct AddedAsset
@@ -1782,8 +1791,9 @@ internal AddedAsset AddAsset(Assets* assets)
     
 }
 
-internal BitmapId AddBitmapAsset(char* path, char* filename, u64 stringHash = 0, r32 alignX = 0.5f, r32 alignY = 0.5f)
+internal BitmapId AddBitmapAsset(char* path, char* filename, u64 stringHash, r32 alignX = 0.5f, r32 alignY = 0.5f)
 {
+    Assert(stringHash);
     Assets* assets = currentAssets_;
     AddedAsset asset = AddAsset(assets);
     asset.source->type = Pak_bitmap;
@@ -1858,7 +1868,7 @@ internal BitmapId AddCharacterAsset(LoadedFont* font, u32 codePoint )
     return result;
 }
 
-internal FontId AddFontAsset(LoadedFont* font )
+internal FontId AddFontAsset(LoadedFont* font)
 {
     Assets* assets = currentAssets_;
     AddedAsset asset = AddAsset(assets );
@@ -1866,7 +1876,7 @@ internal FontId AddFontAsset(LoadedFont* font )
     asset.source->type = Pak_font;
     asset.source->font.font = font;
     
-    asset.dest->typeHashID = 0;
+    asset.dest->typeHashID = StringHash(Asset_font);
     asset.dest->nameHashID = 0;
     asset.dest->offsetFromOriginalOffset = 0;
     asset.dest->font.glyphsCount = font->glyphsCount;
@@ -1880,7 +1890,7 @@ internal FontId AddFontAsset(LoadedFont* font )
 }
 
 
-internal AnimationId AddAnimationAsset(char* path, char* filename, u32 animationIndex, u64 stringHashID = 0)
+internal AnimationId AddAnimationAsset(char* path, char* filename, u32 animationIndex, u64 stringHashID)
 {
     Assets* assets = currentAssets_;
     AddedAsset asset = AddAsset(assets );
@@ -1898,30 +1908,35 @@ internal AnimationId AddAnimationAsset(char* path, char* filename, u32 animation
     return result;
 }
 
-internal void AddEveryAnimationThatStartsWith(char* path, u64 hashID, char* animName)
+internal void AddEveryAnimationThatStartsWith(char* path, u64 hashID, char* animName, char* assetName, u32 currentAssetIndex)
 {
-    PlatformFileGroup fileGroup = Win32GetAllFilesBegin(PlatformFile_animation, path);
-    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex )
+    u64 animationNameHash = StringHash(assetName);
+    u32 assetIndex = GetAssetIndex(animationNameHash);
+    if(assetIndex == currentAssetIndex)
     {
-        PlatformFileHandle handle = Win32OpenNextFile(&fileGroup, path);
-        char* fileName = handle.name;
-        
-        if(!ContainsSubString(fileName, "autosave"))
+        PlatformFileGroup fileGroup = Win32GetAllFilesBegin(PlatformFile_animation, path);
+        for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex )
         {
-            u32 animationCount = CountAnimationInFile(path, fileName);
-            for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
+            PlatformFileHandle handle = Win32OpenNextFile(&fileGroup, path);
+            char* fileName = handle.name;
+            
+            if(!ContainsSubString(fileName, "autosave"))
             {
-                char animationName[32];
-                GetAnimationName(path, fileName, animationIndex, animationName, sizeof(animationName));
-                if(StrEqual(StrLen(animName), animationName, animName))
+                u32 animationCount = CountAnimationInFile(path, fileName);
+                for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
                 {
-                    AddAnimationAsset(path, fileName, animationIndex, hashID);
+                    char animationName[32];
+                    GetAnimationName(path, fileName, animationIndex, animationName, sizeof(animationName));
+                    if(StrEqual(StrLen(animName), animationName, animName))
+                    {
+                        AddAnimationAsset(path, fileName, animationIndex, hashID);
+                    }
                 }
             }
+            Win32CloseHandle(&handle);
         }
-        Win32CloseHandle(&handle);
+        Win32GetAllFilesEnd(&fileGroup);
     }
-    Win32GetAllFilesEnd(&fileGroup);
 }
 
 internal SoundId AddSoundAsset(char* filename, u64 stringHash, i32 firstSampleIndex = 0, i32 sampleCount = 0)
@@ -2010,7 +2025,7 @@ internal void WritePak(Assets* assets, char* fileName_)
             header.version = PAK_VERSION;
             
             header.tagCount = assets->countTags;
-            header.assetTypeCount = Asset_count + HASHED_ASSET_SLOTS;
+            header.assetTypeCount = HASHED_ASSET_SLOT_COUNT + AssetSpecial_Count;
             header.assetcount = assets->countAssets;
             
             u32 tagArraySize = header.tagCount * sizeof(PakTag );
@@ -2204,7 +2219,7 @@ internal void WritePak(Assets* assets, char* fileName_)
     }
 }
 
-internal void InitializeAssets(Assets* assets )
+internal void InitializeAssets(Assets* assets)
 {
     assets->countTags = 1;
     assets->countAssetType = 0;
@@ -2214,7 +2229,7 @@ internal void InitializeAssets(Assets* assets )
     
     assets->tags[0] = {};
     
-    for(u32 assetType = 0; assetType < Asset_count + HASHED_ASSET_SLOTS; assetType++ )
+    for(u32 assetType = 0; assetType < (HASHED_ASSET_SLOT_COUNT + AssetSpecial_Count); assetType++ )
     {
         PakAssetType* type = assets->types + assetType;
         type->ID = 0;
@@ -2269,8 +2284,7 @@ internal void AddEveryFileWithAssetIndex(char* path, PlatformFileHandle handle, 
                     }
                     
                     u64 hashID = StringHash(fileName, fileNameLength );
-                    u32 hashIndex =  hashID & (HASHED_ASSET_SLOTS - 1 );
-                    u32 assetIndex = Asset_count + hashIndex;
+                    u32 assetIndex = GetAssetIndex(hashID);
                     
                     Vec2 pivot;
                     GetXMLValuef(&currentTag, "pivot_x", &pivot.x );
@@ -2547,8 +2561,7 @@ internal void WriteBitmaps(char* folder, char* name, u64 skeletonSkinHash, Platf
     }
     
     u64 assetHashID = StringHash(name);
-    u32 hashIndex =  assetHashID & (HASHED_ASSET_SLOTS - 1);
-    u32 assetIndex = Asset_count + hashIndex;
+    u32 assetIndex = GetAssetIndex(assetHashID);
     PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, completePath);
     if(bitmapGroup.fileCount)
     {
@@ -2636,14 +2649,15 @@ internal void WriteBitmaps(char* folder, char* name, u64 skeletonSkinHash, Platf
             
             FormatString(bitmap->name, sizeof(bitmap->name), "%s", limbName);
             
-            bitmap->ID = StringHash(nameWithoutPoint);
-            u32 limbIndex =  bitmap->ID & (HASHED_ASSET_SLOTS - 1);
-            bitmap->assetIndex = Asset_count + limbIndex;
+            u64 bitmapHashID = StringHash(nameWithoutPoint);
+            u32 bitmapAssetIndex = GetAssetIndex(bitmapHashID);
+            bitmap->ID = bitmapHashID;
+            bitmap->assetIndex = bitmapAssetIndex;
             
         }
         
         
-        for(u32 additionalAssetIndex = Asset_count; additionalAssetIndex < (Asset_count + HASHED_ASSET_SLOTS); ++additionalAssetIndex)
+        for(u32 additionalAssetIndex = 0; additionalAssetIndex < (HASHED_ASSET_SLOT_COUNT + AssetSpecial_Count); ++additionalAssetIndex)
         {
             BeginAssetType(assets, additionalAssetIndex);
             for(u32 fileIndex = 0; fileIndex < sideGroup.fileCount; ++fileIndex)
@@ -2693,59 +2707,29 @@ internal void WriteAnimations(char* folder, char* name)
     
     char completePath[128];
     FormatString(completePath, sizeof(completePath), "%s/%s/skeleton/side", folder, name);
-    
     u64 hashID = StringHash(name);
     
-    BeginAssetType(assets, Asset_rig);
-    AddEveryAnimationThatStartsWith(completePath, hashID, "rig");
-    EndAssetType();
-    
-    
-    BeginAssetType(assets, Asset_standing);
-    AddEveryAnimationThatStartsWith(completePath, hashID, "idle");
-    EndAssetType();
-    
-    BeginAssetType(assets, Asset_standingDragging);
-    AddEveryAnimationThatStartsWith(completePath, hashID, "idle_drag");
-    EndAssetType();
-    
-    
-    BeginAssetType(assets, Asset_moving);
-    AddEveryAnimationThatStartsWith(completePath, hashID, "walk");
-    AddEveryAnimationThatStartsWith(completePath, hashID, "run");
-    AddEveryAnimationThatStartsWith(completePath, hashID, "move");
-    AddEveryAnimationThatStartsWith(completePath, hashID, "fly");
-    EndAssetType();
-    
-    BeginAssetType(assets, Asset_movingDragging);
-    AddEveryAnimationThatStartsWith(completePath, hashID, "idle_drag");
-    EndAssetType();
-    
-    
-    BeginAssetType(assets, Asset_attacking);
-    AddEveryAnimationThatStartsWith(completePath, hashID, "attack");
-    EndAssetType();
-    
-    BeginAssetType(assets, Asset_eating);
-    AddEveryAnimationThatStartsWith(completePath, hashID, "eat");
-    EndAssetType();
-    
-    
-    BeginAssetType(assets, Asset_casting);
-    AddEveryAnimationThatStartsWith(completePath, hashID, "cast");
-    EndAssetType();
-    
-    BeginAssetType(assets, Asset_swimming);
-    AddEveryAnimationThatStartsWith(completePath, hashID, "swim");
-    EndAssetType();
-    
-    BeginAssetType(assets, Asset_rolling);
-    AddEveryAnimationThatStartsWith(completePath, hashID, "roll");
-    EndAssetType();
-    
-    BeginAssetType(assets, Asset_protecting);
-    AddEveryAnimationThatStartsWith(completePath, hashID, "defend");
-    EndAssetType();
+    for(u32 assetIndex = 1; assetIndex < HASHED_ASSET_SLOT_COUNT + 1; ++assetIndex)
+    {
+        BeginAssetType(assets, assetIndex);
+        
+        AddEveryAnimationThatStartsWith(completePath, hashID, "rig", Asset_rig, assetIndex);
+        AddEveryAnimationThatStartsWith(completePath, hashID, "idle", Asset_standing, assetIndex);
+        AddEveryAnimationThatStartsWith(completePath, hashID, "idle_drag", Asset_standingDragging, assetIndex);
+        AddEveryAnimationThatStartsWith(completePath, hashID, "walk", Asset_moving, assetIndex);
+        AddEveryAnimationThatStartsWith(completePath, hashID, "run", Asset_moving, assetIndex);
+        AddEveryAnimationThatStartsWith(completePath, hashID, "move", Asset_moving, assetIndex);
+        AddEveryAnimationThatStartsWith(completePath, hashID, "fly", Asset_moving, assetIndex);
+        AddEveryAnimationThatStartsWith(completePath, hashID, "idle_drag", Asset_movingDragging, assetIndex);
+        AddEveryAnimationThatStartsWith(completePath, hashID, "attack", Asset_attacking, assetIndex);
+        AddEveryAnimationThatStartsWith(completePath, hashID, "eat", Asset_eating, assetIndex);
+        AddEveryAnimationThatStartsWith(completePath, hashID, "cast", Asset_casting, assetIndex);
+        AddEveryAnimationThatStartsWith(completePath, hashID, "swim", Asset_swimming, assetIndex);
+        AddEveryAnimationThatStartsWith(completePath, hashID, "roll", Asset_rolling, assetIndex);
+        AddEveryAnimationThatStartsWith(completePath, hashID, "defend", Asset_protecting, assetIndex);
+        
+        EndAssetType();
+    }
     
     
     
@@ -2988,20 +2972,23 @@ internal void WriteComponents()
     free(subdir);
 }
 
-internal void WriteBitmapsFromPath(char* path, AssetTypeId assetType, char* pakName, Vec2 pivot = V2(0.5f, 0.0f), char* autocompleteName = 0)
+internal void WriteBitmapsFromPath(char* path, char* assetType, char* pakName, Vec2 pivot = V2(0.5f, 0.0f), char* autocompleteName = 0)
 {
     Assets assets_;
     Assets* assets = &assets_;
     InitializeAssets(assets);
     
+    u64 assetHashID = StringHash(assetType);
+    u32 assetIndex = GetAssetIndex(assetHashID);
+    
     PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, path);
     if(bitmapGroup.fileCount)
     {
-        BeginAssetType(assets, assetType);
+        BeginAssetType(assets, assetIndex);
         for(u32 imageIndex = 0; imageIndex < bitmapGroup.fileCount; ++imageIndex)
         {
             PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, path);
-            AddBitmapAsset(path, bitmapHandle.name, 0, pivot.x, pivot.y);
+            AddBitmapAsset(path, bitmapHandle.name, assetHashID, pivot.x, pivot.y);
             Win32CloseHandle(&bitmapHandle);
         }
         
@@ -3016,21 +3003,6 @@ internal void WriteBitmapsFromPath(char* path, AssetTypeId assetType, char* pakN
     }
 }
 
-internal void WriteMisc()
-{
-    char* miscPath = "definition/misc";
-    
-    Assets assets_;
-    Assets* assets = &assets_;
-    InitializeAssets(assets);
-    
-    BeginAssetType(assets, Asset_waterRipple);
-    AddBitmapAsset(miscPath, "ripple.png");
-    EndAssetType();
-    
-    WritePak(assets, "forgmisc.pak" );
-}
-
 
 internal void WriteUI()
 {
@@ -3040,20 +3012,20 @@ internal void WriteUI()
     Assets* assets = &assets_;
     InitializeAssets(assets);
     
-    BeginAssetType(assets, Asset_scrollUI);
-    AddBitmapAsset(UIPath, "scrollicon.png", 0, 0.5f, 0.5f);
+    u64 hashID = BeginAssetType(assets, Asset_scrollUI);
+    AddBitmapAsset(UIPath, "scrollicon.png", hashID, 0.5f, 0.5f);
     EndAssetType();
     
-    BeginAssetType(assets, Asset_BookPage);
-    AddBitmapAsset(UIPath, "bookpage.png", 0, 0.5f, 0.5f);
+    hashID = BeginAssetType(assets, Asset_BookPage);
+    AddBitmapAsset(UIPath, "bookpage.png", hashID, 0.5f, 0.5f);
     EndAssetType();
     
-    BeginAssetType(assets, Asset_BookElement);
-    AddBitmapAsset(UIPath, "element.png");
+    hashID = BeginAssetType(assets, Asset_BookElement);
+    AddBitmapAsset(UIPath, "element.png", hashID);
     EndAssetType();
     
-    BeginAssetType(assets, Asset_Bookmark);
-    AddBitmapAsset(UIPath, "bookmark.png");
+    hashID = BeginAssetType(assets, Asset_Bookmark);
+    AddBitmapAsset(UIPath, "bookmark.png", hashID);
     EndAssetType();
     
     WritePak(assets, "forgUI.pak");
@@ -3150,15 +3122,14 @@ inline void WriteAnimationSkinsBitmaps(char* skeletonPath, char* skeletonName)
 internal void WriteBitmapsAndAnimations()
 {
     WriteComponents();
-    WriteBitmapsFromPath("definition/leafs", Asset_leaf, "forgleafs.pak");
-    WriteBitmapsFromPath("definition/flowers", Asset_flower, "forgflowers.pak");
-    WriteBitmapsFromPath("definition/fruits", Asset_fruit, "forgfruits.pak");
-    WriteBitmapsFromPath("definition/trunks", Asset_trunk, "forgtrunks.pak");
-    WriteBitmapsFromPath("definition/particles", Asset_Particle, "forgparticles.pak");
+    WriteBitmapsFromPath("definition/leafs", ASSET_LEAF, "forgleafs.pak", V2(0.5f, 0.0f), "leafName");
+    WriteBitmapsFromPath("definition/flowers", ASSET_FLOWER, "forgflowers.pak", V2(0.5f, 0.0f), "flowerName");
+    WriteBitmapsFromPath("definition/fruits", ASSET_FRUIT, "forgfruits.pak", V2(0.5f, 0.0f), "fruitName");
+    WriteBitmapsFromPath("definition/trunks", ASSET_TRUNK, "forgtrunks.pak", V2(0.5f, 0.0f), "trunkName");
+    WriteBitmapsFromPath("definition/particles", ASSET_PARTICLE, "forgparticles.pak");
     
-    WriteBitmapsFromPath("definition/ground/patches", Asset_Ground, "forgGround.pak", V2(0.5f, 0.5f), "splashName");
+    WriteBitmapsFromPath("definition/ground/patches", ASSET_GROUND, "forgGround.pak", V2(0.5f, 0.5f), "splashName");
     
-    WriteMisc();
     WriteUI();
     
     char* animationPath = "definition/animation";
@@ -3208,9 +3179,7 @@ internal void WriteSounds(PlatformFile labelsFile, char* folder, char* name)
     
     
     u64 hashID = StringHash(name);
-    
-    u32 hashIndex =  hashID & (HASHED_ASSET_SLOTS - 1);
-    u32 assetIndex = Asset_count + hashIndex;
+    u32 assetIndex = GetAssetIndex(hashID);
     PlatformFileGroup soundGroup = Win32GetAllFilesBegin(PlatformFile_sound, completePath);
     if(soundGroup.fileCount)
     {
@@ -3368,7 +3337,7 @@ internal void WriteFonts()
         //LoadFont("c:/windows/fonts/courier.ttf", "Courier New", 64 ),
     };
     
-    BeginAssetType(assets, Asset_glyph );
+    BeginAssetType(assets, AssetSpecial_Glyph);
     
     for(u32 fontIndex = 0;
         fontIndex < ArrayCount(fonts);
@@ -3389,7 +3358,6 @@ internal void WriteFonts()
     AddTag(Tag_fontType, (r32) Font_default);
     AddFontAsset(fonts + 1);
     AddTag(Tag_fontType, (r32) Font_debug);
-    
     EndAssetType();
     
     WritePak(assets, "forgivenessF.pak" );
@@ -3412,10 +3380,8 @@ internal void WriteModels(char* folder, char* name, PlatformFile* labelsFile)
     }
     
     u64 assetHashID = StringHash(name);
+    u32 assetIndex = GetAssetIndex(assetHashID);
     
-    
-    u32 hashIndex =  assetHashID & (HASHED_ASSET_SLOTS - 1);
-    u32 assetIndex = Asset_count + hashIndex;
     PlatformFileGroup modelsGroup = Win32GetAllFilesBegin(PlatformFile_model, completePath);
     if(modelsGroup.fileCount)
     {

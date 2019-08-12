@@ -153,6 +153,9 @@ inline u32 Win32GetNonBlockingSockedDescriptorClient(char* serverHost, char* ser
             {
                 InvalidCodePath;
             }
+
+			int iSetOption = 1;
+			setsockopt(result, SOL_SOCKET, SO_REUSEADDR, (char*)&iSetOption, sizeof(iSetOption));
             
             
             u_long nonblocking_enabled = TRUE;

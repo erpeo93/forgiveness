@@ -766,7 +766,7 @@ inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 skeleton
     weight.E[Tag_SkeletonSkinFirstHalf] = 1.0f;
     weight.E[Tag_SkeletonSkinSecondHalf] = 1.0f;
     
-    u32 assetIndex = Asset_count + (sprite->stringHashID & (HASHED_ASSET_SLOTS - 1));
+    u32 assetIndex = GetAssetIndex(sprite->stringHashID);
     
     if(properties && properties->componentCount)
     {
@@ -792,12 +792,12 @@ inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 skeleton
                 break;
             }
         }
-        result = GetMatchingBitmapHashed(group->assets, sprite->stringHashID, &match, &weight, &labels);
+        result = GetMatchingBitmap(group->assets, assetIndex, sprite->stringHashID, &match, &weight, &labels);
         
     }
     else
     {
-        result = GetMatchingBitmapHashed(group->assets, sprite->stringHashID, &match, &weight, 0);
+        result = GetMatchingBitmap(group->assets, assetIndex, sprite->stringHashID, &match, &weight, 0);
     }
     
     return result;
@@ -1666,20 +1666,13 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
 }
 
 
-inline AnimationId GetAnimationRecursive(Assets* assets, TaxonomyTable* table, u32 taxonomy, AssetTypeId assetID, u64* stringHashID)
+inline AnimationId GetAnimationRecursive(Assets* assets, TaxonomyTable* table, u32 taxonomy, u64 animationTypeHash, u64* stringHashID)
 {
+    u32 assetID = GetAssetIndex(animationTypeHash);
     AnimationId result = {};
     
     TagVector match = {};
     TagVector weight = {};
-    weight.E[Tag_direction] = 1.0f;
-    match.E[Tag_direction] = 0;
-    
-    
-#if 0    
-    weight.E[Tag_ObjectState] = 10000.0f;
-    match.E[Tag_ObjectState] = (r32) state;
-#endif
     
     u32 currentTaxonomy = taxonomy;
     do
@@ -1931,7 +1924,6 @@ inline SkeletonInfo GetSkeletonForTaxonomy(TaxonomyTable* table, TaxonomySlot* s
 
 struct GetAIDResult
 {
-    AssetTypeId assetID;
     AnimationId AID;
     u64 skeletonSkinHashID;
     u64 skinHashID;
@@ -1960,29 +1952,26 @@ inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy
     if(forcedNameHashID)
     {
         FindAnimationResult find = FindAnimationByName(assets, result.skeletonHashID, forcedNameHashID);
-        result.assetID = find.assetType;
+        //result.assetID = find.assetType;
         result.AID = find.ID;	
     }
     else
     {
         
-        AssetTypeId fallbackID = Asset_rig;
-        result.assetID = GetAssetIDForEntity(assets, taxTable, taxonomy, action, dragging, tileHeight);
-        Assert(result.assetID);
-        
+        u64 animationNameHash = GetAssetHashForEntity(assets, taxTable, taxonomy, action, dragging, tileHeight);
         if(!result.skeletonSkinHashID)
         {
-            result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, result.assetID, &result.skeletonHashID);
+            result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, animationNameHash, &result.skeletonHashID);
         }
         else
         {
             TagVector match = {};
             TagVector weight = {};
-            result.AID = GetMatchingAnimation(assets, result.assetID, result.skeletonHashID, &match, &weight);
+            result.AID = GetMatchingAnimation(assets, animationNameHash, result.skeletonHashID, &match, &weight);
             
             if(!IsValid(result.AID))
             {
-                result.AID = GetMatchingAnimation(assets, fallbackID, result.skeletonHashID, &match, &weight);
+                result.AID = GetMatchingAnimation(assets, StringHash(Asset_rig), result.skeletonHashID, &match, &weight);
                 result.coloration = V4(0, 0, 0, 1);
             }
             
@@ -2097,7 +2086,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
         GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, dragging, tileHeight,  debugParams.forcedNameHashID);
         
         input.defaultColoration = AID.coloration;
-        input.combatAnimation = (AID.assetID == Asset_attacking);
+        //input.combatAnimation = (AID.assetID == Asset_attacking);
         params.cameraOffset.xy += AID.originOffset;
         
         if(AID.flippedOnYAxis)
@@ -2438,12 +2427,12 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             plant->sequence = Seed((u32)entityC->identifier);
         }
         
-        entityC->plant->leafBitmap = FindBitmapByName(group->assets, Asset_leaf, slot->plantDefinition->leafParams.bitmapHash);
+        entityC->plant->leafBitmap = FindBitmapByName(group->assets, ASSET_LEAF, slot->plantDefinition->leafParams.bitmapHash);
         
-        entityC->plant->flowerBitmap = FindBitmapByName(group->assets, Asset_flower, slot->plantDefinition->flowerParams.bitmapHash);
+        entityC->plant->flowerBitmap = FindBitmapByName(group->assets, ASSET_FLOWER, slot->plantDefinition->flowerParams.bitmapHash);
         
-        entityC->plant->fruitBitmap = FindBitmapByName(group->assets, Asset_fruit, slot->plantDefinition->fruitParams.bitmapHash);
-        entityC->plant->trunkBitmap = FindBitmapByName(group->assets, Asset_trunk, slot->plantDefinition->trunkStringHash);
+        entityC->plant->fruitBitmap = FindBitmapByName(group->assets, ASSET_FRUIT, slot->plantDefinition->fruitParams.bitmapHash);
+        entityC->plant->trunkBitmap = FindBitmapByName(group->assets, ASSET_TRUNK, slot->plantDefinition->trunkStringHash);
         
         
         PlantRenderingParams renderingParams = {};
