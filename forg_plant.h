@@ -271,3 +271,33 @@ inline r32 GetPlantStandardTrunkRadious(PlantDefinition* definition)
     
     return result;
 }
+
+struct Plant
+{
+    b32 canRender;
+    
+    RandomSequence sequence;
+    
+    r32 cloneAccumulatedError[MAX_LEVELS];
+    
+    r32 scale;
+    r32 lengthBase;
+    
+    PlantInstance plant;
+    
+    r32 age;
+    r32 serverAge;
+    
+    r32 life;
+    
+    r32 leafDensity;
+    r32 flowerDensity;
+    r32 fruitDensity;
+    
+    BitmapId leafBitmap;
+    BitmapId flowerBitmap;
+    BitmapId fruitBitmap;
+    BitmapId trunkBitmap;
+    
+    Plant* nextFree;
+};

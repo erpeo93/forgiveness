@@ -1,4 +1,3 @@
-
 inline SoundContainer* AddSoundEvent(char* eventName)
 {
     Assert(taxTable_->eventCount < ArrayCount(taxTable_->events));
@@ -21,8 +20,8 @@ inline LabeledSound* AddSoundToContainer(SoundContainer* container, char* soundT
 {
     ++container->soundCount;
     
-    LabeledSound* sound;
-    TAXTABLE_ALLOC(sound, LabeledSound);
+    // TODO(Leonardo): make it's own pool here!
+    LabeledSound* sound = PushStruct(&taxTable_->pool_, LabeledSound);
     
     sound->typeHash = StringHash(soundType);
     sound->nameHash = StringHash(soundName);
@@ -42,8 +41,8 @@ inline SoundContainer* AddChildContainer(SoundContainer* container)
 {
     ++container->containerCount;
     
-    SoundContainer* newContainer;
-    TAXTABLE_ALLOC(newContainer, SoundContainer);
+    // TODO(Leonardo): make this use a special pool
+    SoundContainer* newContainer = PushStruct(&taxTable_->pool_, SoundContainer);
     
     newContainer->soundCount = 0;
     newContainer->firstSound = 0;
@@ -79,24 +78,6 @@ inline void AddSoundLabel(LabeledSound* sound, char* labelName, char* labelValue
     Assert(sound->labelCount < ArrayCount(sound->labels));
     SoundLabel* label = sound->labels + sound->labelCount++;
     SetLabel(label, labelName, labelValue);
-}
-
-
-
-inline SoundEvent* GetSoundEvent(TaxonomyTable* table, u64 eventHash)
-{
-    SoundEvent* result = 0;
-    for(u32 eventIndex = 0; eventIndex < table->eventCount; ++eventIndex)
-    {
-        SoundEvent* event = table->events + eventIndex;
-        if(event->eventNameHash == eventHash)
-        {
-            result = event;
-            break;
-        }
-    }
-    
-    return result;
 }
 
 inline void AddSoundAndChildContainersRecursively(SoundContainer* rootContainer, EditorElement* root)

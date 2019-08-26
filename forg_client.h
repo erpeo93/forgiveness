@@ -1,10 +1,8 @@
 #pragma once
-
 #include "forg_basic_types.h"
-#include "net.h"
+#include "ll_net.h"
 #include "forg_platform.h"
 #include "forg_shared.h"
-
 #include "forg_token.h"
 #include "forg_intrinsics.h"
 #include "forg_math.h"
@@ -15,50 +13,40 @@
 #include "asset_builder.h"
 #include "forg_render_tier.h"
 #include "forg_render.h"
-#include "forg_rule.h"
-#include "forg_model.h"
+#include "forg_mesh.h"
+#include "forg_animation.h"
+#include "forg_bound.h"
+#include "forg_sound.h"
+#include "forg_taxonomy.h"
+#include "forg_entity.h"
+#include "forg_object.h"
 #include "forg_crafting.h"
 #include "forg_inventory.h"
-#include "forg_fluid.h"
-#include "forg_animation.h"
 #include "forg_action_effect.h"
-#include "forg_consideration.h"
 #include "forg_AI.h"
-#include "forg_taxonomy.h"
 #include "forg_editor.h"
+#include "forg_asset.h"
+#include "forg_world.h"
 #include "forg_memory.h"
 #include "forg_physics.h"
-#include "forg_region.h"
-#include "forg_asset.h"
 #include "forg_network.h"
+#include "forg_network_client.h"
 #include "forg_world_generation.h"
-#include "forg_world.h"
-#include "forg_sound.h"
 #include "forg_particles.h"
 #include "forg_bolt.h"
 #include "forg_book.h"
 #include "forg_meta.h"
 #include "forg_cutscene.h"
 #include "forg_plant.h"
+#include "forg_rock.h"
+#include "forg_essence.h"
+#include "forg_skill.h"
+#include "forg_ground.h"
+#include "forg_region.h"
 
-printTable(noPrefix) enum GroundViewMode
-{
-    GroundView_Voronoi,
-    GroundView_Tile,
-    GroundView_Chunk,
-};
 
-printTable(noPrefix) enum TilePointsLayout
-{
-    TilePoints_Random,
-    TilePoints_StraightLine,
-    TilePoints_Pound,
-};
+global_variable PlatformAPI platformAPI;
 
-#define JC_VORONOI_IMPLEMENTATION
-#undef internal
-#include "jc_voronoi.h"
-#define internal static
 
 printTable(noPrefix) enum ForgDayPhase
 {
@@ -75,27 +63,6 @@ struct DayPhase
     r32 duration;
     Vec3 ambientLightColor;
     ForgDayPhase next;
-};
-
-struct ReceiveNetworkPacketWork
-{
-    NetworkInterface** network;
-    network_platform_receive_data* ReceiveData;
-};
-
-
-global_variable PlatformAPI platformAPI;
-
-struct ClientNetworkInterface
-{
-    u32 serverChallenge;
-    ForgNetworkReceiver receiver;
-    ForgNetworkApplicationData nextSendUnreliableApplicationData;
-    ForgNetworkApplicationData nextSendReliableApplicationData;
-    
-    r32 serverFPS;
-    r32 networkTimeElapsed;
-    NetworkInterface* network;
 };
 
 struct ClientPlayer
@@ -121,73 +88,6 @@ struct ClientPlayer
     
     u32 essenceCount;
     EssenceSlot essences[MAX_DIFFERENT_ESSENCES];
-    
-    EditorTabStack editorStack;
-};
-
-struct ClientPlant
-{
-    b32 canRender;
-    
-    RandomSequence sequence;
-    
-    r32 cloneAccumulatedError[MAX_LEVELS];
-    
-    r32 scale;
-    r32 lengthBase;
-    
-    PlantInstance plant;
-    
-    r32 age;
-    r32 serverAge;
-    
-    r32 life;
-    
-    r32 leafDensity;
-    r32 flowerDensity;
-    r32 fruitDensity;
-    
-    BitmapId leafBitmap;
-    BitmapId flowerBitmap;
-    BitmapId fruitBitmap;
-    BitmapId trunkBitmap;
-    
-    ClientPlant* nextFree;
-};
-
-struct ClientRock
-{
-    Vec3 dim;
-    
-    u32 vertexCount;
-    ColoredVertex vertexes[1024];
-    
-    u32 faceCount;
-    ModelFace faces[1024];
-    
-    
-    ClientRock* nextFree;
-};
-
-enum PredictionType
-{
-    Prediction_None,
-    Prediction_EquipmentRemoved,
-    Prediction_EquipmentAdded,
-    Prediction_ActionBegan,
-};
-
-struct ClientPrediction
-{
-    PredictionType type;
-    
-    r32 timeLeft;
-    EquipInfo slot;
-    EntityAction action;
-    
-    u32 taxonomy;
-    GenerationData gen;
-    u64 identifier;
 };
 
 
@@ -200,24 +100,6 @@ struct ClientPrediction
 
 
 
-
-struct ClientAnimationEffect
-{
-    SlotName referenceSlot;
-    AnimationEffect effect;
-    
-    union
-    {
-        ParticleEffect* particleRef;
-        r32 boltTimer;
-    };
-    
-    union
-    {
-        ClientAnimationEffect* next;
-        ClientAnimationEffect* nextFree;
-    };
-};
 
 struct ClientEntity
 {
@@ -287,8 +169,8 @@ struct ClientEntity
     
     ClientAnimationEffect* firstActiveEffect;
     
-    ClientRock* rock;
-    ClientPlant* plant;
+    Rock* rock;
+    Plant* plant;
     
     
     ClientPrediction prediction;
@@ -312,16 +194,6 @@ inline void ClearFlags(ClientEntity* entity, i32 flags)
 {
     entity->flags &= ~flags;
 }
-
-
-#include "forg_UI.h"
-
-struct ForgVoronoiDiagram
-{
-    jcv_diagram diagram;
-    UniversePos originP;
-	Vec3 deltaP;
-};
 
 struct ToDeleteFile
 {
@@ -361,15 +233,6 @@ struct GameModeWorld
     struct DataFileArrived* currentFile;
     
     
-    EditorElement* firstFreeEditorElement;
-    EditorTextBlock* firstFreeEditorText;
-    
-    EditorElement* soundNamesRoot;
-    EditorElement* soundEventsRoot;
-    EditorElement* componentsRoot;
-    EditorElement* oldComponentsRoot;
-    
-    
     MemoryPool deletedFilesPool;
     ToDeleteFile* firstFileToDelete;
     ToDeleteFile* firstFreeFileToDelete;
@@ -377,6 +240,7 @@ struct GameModeWorld
     
     DataFileSentType dataFileSent;
     
+    b32 patchingLocalServer;
     b32 allPakFilesArrived;
     u32 patchSectionArrived;
     
@@ -407,8 +271,8 @@ struct GameModeWorld
     TicketMutex plantMutex;
     PlantSegment* firstFreePlantSegment;
     PlantStem* firstFreePlantStem;
-    ClientPlant* firstFreePlant;
-    ClientRock* firstFreeRock;
+    Plant* firstFreePlant;
+    Rock* firstFreeRock;
     ClientAnimationEffect* firstFreeEffect;
     
     RandomSequence leafFlowerFruitSequence;
@@ -421,7 +285,6 @@ struct GameModeWorld
     
     TaxonomyTable* table;
     TaxonomyTable* oldTable;
-    UIState* UI;
     
     ClientPlayer player;
     
@@ -435,6 +298,7 @@ struct GameModeWorld
 #endif
     
     Vec3 worldMouseP;
+    Vec2 relativeScreenMouseP;
     
     
     
@@ -442,8 +306,8 @@ struct GameModeWorld
     b32 voronoiValid;
     b32 generatingVoronoi;
     
-    ForgVoronoiDiagram voronoiPingPong[2];
-    ForgVoronoiDiagram* activeDiagram;
+    VoronoiDiagram voronoiPingPong[2];
+    VoronoiDiagram* activeDiagram;
     WorldTile nullTile;
     
     
@@ -489,6 +353,7 @@ struct GameState
     MemoryPool framePool;
     MemoryPool persistentPool;
     MemoryPool visualEffectsPool;
+    MemoryPool assetsPool;
     
     GameMode mode;
     union
@@ -505,14 +370,9 @@ struct GameState
     u32 editorRoles;
     
     Assets* assets;
-    u32 assetsIndex;
-    Assets* pingPongAssets[2];
-    MemoryPool assetsPool[2];
-    
     
     ReceiveNetworkPacketWork receiveNetworkPackets;
     ClientNetworkInterface networkInterface;
-    
     
     PlatformWorkQueue* renderQueue;
     PlatformWorkQueue* slowQueue;
@@ -524,5 +384,5 @@ struct GameState
     SoundState soundState;
 };
 
-internal void SetGameMode(GameState* gameState, GameMode mode);
 internal void PlayGame(GameState* gameState, PlatformInput* input);
+internal void SetGameMode(GameState* gameState, GameMode mode);

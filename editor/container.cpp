@@ -16,12 +16,10 @@ internal void ImportContainerTab(TaxonomySlot* slot, EditorElement* root)
     InventorySpace(width, height);
     
 #if FORG_SERVER
-    FREELIST_FREE(currentSlot_->firstInsideInteraction, TaxonomyContainerInteraction, taxTable_->firstFreeTaxonomyContainerInteraction);
     EditorElement* insideInteractions = GetList(root, "interactions");
     while(insideInteractions)
     {
-        TaxonomyContainerInteraction* interaction;
-        TAXTABLE_ALLOC(interaction, TaxonomyContainerInteraction);
+        TaxonomyContainerInteraction* interaction = PushStruct(&currentSlot_->pool, TaxonomyContainerInteraction);
         
         interaction->targetTime = ToR32(GetValue(root, "time"));
         

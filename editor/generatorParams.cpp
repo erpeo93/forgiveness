@@ -27,8 +27,7 @@ inline r32 ParseTaxonomyAssociation(TaxonomyAssociation* dest, EditorElement* ro
         TaxonomySlot* taxonomySlot = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomyName);
         if(taxonomySlot)
         {
-            SpawnTaxonomy* spawn;
-            TAXTABLE_ALLOC(spawn, SpawnTaxonomy);
+            SpawnTaxonomy* spawn = PushStruct(&currentSlot_->pool, SpawnTaxonomy);
             
             u32 counter = ToU32(GetValue(spawnTaxonomies, "counter"), 1);
             spawn->taxonomy = taxonomySlot->taxonomy;
@@ -49,51 +48,7 @@ inline r32 ParseTaxonomyAssociation(TaxonomyAssociation* dest, EditorElement* ro
 
 internal void ImportGeneratorParamsTab(TaxonomySlot* slot, EditorElement* root)
 {
-    if(slot->generatorDefinition)
-    {
-        for(TaxonomyTileAssociations* toFree = slot->generatorDefinition->firstAssociation; toFree;)
-        {
-            TaxonomyTileAssociations* next = toFree->next;
-            
-            
-            for(TaxonomyAssociation* assToFree = toFree->firstAssociation; assToFree;)
-            {
-                FREELIST_FREE(assToFree->firstTaxonomy, SpawnTaxonomy, taxTable_->firstFreeSpawnTaxonomy);
-                
-                TaxonomyAssociation* assNext = assToFree->next;
-                TAXTABLE_DEALLOC(assToFree, TaxonomyAssociation);
-                assToFree = assNext;
-            }
-            
-            TAXTABLE_DEALLOC(toFree, TaxonomyTileAssociations);
-            
-            toFree = next;
-        }
-        
-        for(TaxonomyTileTimerSpawn* toFree = slot->generatorDefinition->firstTimerSpawn; toFree;)
-        {
-            TaxonomyTileTimerSpawn* next = toFree->next;
-            
-            
-            for(TaxonomyAssociation* assToFree = toFree->firstAssociation; assToFree;)
-            {
-                FREELIST_FREE(assToFree->firstTaxonomy, SpawnTaxonomy, taxTable_->firstFreeSpawnTaxonomy);
-                
-                TaxonomyAssociation* assNext = assToFree->next;
-                TAXTABLE_DEALLOC(assToFree, TaxonomyAssociation);
-                assToFree = assNext;
-            }
-            
-            TAXTABLE_DEALLOC(toFree, TaxonomyTileTimerSpawn);
-            
-            toFree = next;
-        }
-        
-        
-        TAXTABLE_DEALLOC(slot->generatorDefinition, WorldGeneratorDefinition);
-        slot->generatorDefinition = 0;
-    }
-    TAXTABLE_ALLOC(slot->generatorDefinition, WorldGeneratorDefinition);
+    slot->generatorDefinition = PushStruct(&currentSlot_->pool, WorldGeneratorDefinition);
     WorldGeneratorDefinition* generator = slot->generatorDefinition;
     
     
@@ -163,8 +118,7 @@ internal void ImportGeneratorParamsTab(TaxonomySlot* slot, EditorElement* root)
         
         if(tileSlot)
         {
-            TaxonomyTileAssociations* tileAssoc;
-            TAXTABLE_ALLOC(tileAssoc, TaxonomyTileAssociations);
+            TaxonomyTileAssociations* tileAssoc = PushStruct(&currentSlot_->pool, TaxonomyTileAssociations);
             
             tileAssoc->taxonomy = tileSlot->taxonomy;
             tileAssoc->totalWeight = 0;
@@ -174,8 +128,7 @@ internal void ImportGeneratorParamsTab(TaxonomySlot* slot, EditorElement* root)
             EditorElement* taxonomyAssociations = GetList(tileAssociations, "taxonomies");
             while(taxonomyAssociations)
             {
-                TaxonomyAssociation* ass;
-                TAXTABLE_ALLOC(ass, TaxonomyAssociation);
+                TaxonomyAssociation* ass = PushStruct(&currentSlot_->pool, TaxonomyAssociation);
                 r32 weight = ParseTaxonomyAssociation(ass, taxonomyAssociations);
                 tileAssoc->totalWeight += weight;
                 FREELIST_INSERT(ass, tileAssoc->firstAssociation);
@@ -202,8 +155,7 @@ internal void ImportGeneratorParamsTab(TaxonomySlot* slot, EditorElement* root)
         
         if(tileSlot)
         {
-            TaxonomyTileTimerSpawn* tileSpawn;
-            TAXTABLE_ALLOC(tileSpawn, TaxonomyTileTimerSpawn);
+            TaxonomyTileTimerSpawn* tileSpawn = PushStruct(&currentSlot_->pool, TaxonomyTileTimerSpawn);
             
             tileSpawn->taxonomy = tileSlot->taxonomy;
             tileSpawn->timer = 0;
@@ -215,8 +167,7 @@ internal void ImportGeneratorParamsTab(TaxonomySlot* slot, EditorElement* root)
             EditorElement* taxonomyAssociations = GetList(spawnTimers, "taxonomies");
             while(taxonomyAssociations)
             {
-                TaxonomyAssociation* ass;
-                TAXTABLE_ALLOC(ass, TaxonomyAssociation);
+                TaxonomyAssociation* ass = PushStruct(&currentSlot_->pool, TaxonomyAssociation);
                 r32 weight = ParseTaxonomyAssociation(ass, taxonomyAssociations);
                 tileSpawn->totalWeight += weight;
                 FREELIST_INSERT(ass, tileSpawn->firstAssociation);

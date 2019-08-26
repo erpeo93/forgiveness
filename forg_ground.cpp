@@ -1,11 +1,16 @@
+#define JC_VORONOI_IMPLEMENTATION
+#undef internal
+#include "jc_voronoi.h"
+#define internal static
+
 struct GenerateVoronoiWork
 {
     TaskWithMemory* task;
     u32 pointCount;
     jcv_point* points;
     jcv_rect rect;
-    ForgVoronoiDiagram* diagram;
-    ForgVoronoiDiagram** activeDiagramPtr;
+    VoronoiDiagram* diagram;
+    VoronoiDiagram** activeDiagramPtr;
     GameModeWorld* worldMode;
 };
 
@@ -31,7 +36,7 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
     if(task)
     {
         worldMode->generatingVoronoi = true;
-        ForgVoronoiDiagram* diagram = worldMode->voronoiPingPong + 0;
+        VoronoiDiagram* diagram = worldMode->voronoiPingPong + 0;
         if(diagram == worldMode->activeDiagram)
         {
             diagram = worldMode->voronoiPingPong + 1;
@@ -102,6 +107,15 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
                                 pointsPerTile = Min(maxPointsPerTile, pointsPerTile);
                                 r32 tileLayoutNoise = tile->layoutNoise;
                                 
+#if 1
+                                for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
+                                {
+                                    points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
+                                    points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
+                                    
+                                    ++pointCount;
+                                }
+#else
                                 switch(tileDef->tilePointsLayout)
                                 {
                                     case TilePoints_StraightLine:
@@ -148,6 +162,8 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
                                         }
                                     } break;
                                 }
+#endif
+                                
                             }
                             
                         }
@@ -180,7 +196,7 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
 struct RenderVoronoiWork
 {
     RenderGroup* group;
-    ForgVoronoiDiagram* voronoi;
+    VoronoiDiagram* voronoi;
     jcv_edge* edges;
     u32 edgeCount;
     
@@ -193,7 +209,7 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
     RenderVoronoiWork* work = (RenderVoronoiWork*) param;
     
     RenderGroup* group = work->group;
-    ForgVoronoiDiagram* voronoi = work->voronoi;
+    VoronoiDiagram* voronoi = work->voronoi;
     
     u32 counter = 0;
     jcv_edge* edge = work->edges;
@@ -366,7 +382,7 @@ internal void UpdateAndRenderGround(GameState* gameState, GameModeWorld* worldMo
     b32 changedChunk = (voronoiP.chunkX != myPlayer->oldVoronoiP.chunkX || voronoiP.chunkY != myPlayer->oldVoronoiP.chunkY);
     myPlayer->oldVoronoiP = voronoiP;
     
-    i32 lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
+    i32 lateralChunkSpan = WORLD_REGION_SPAN * REGION_CHUNK_SPAN;
     i32 originChunkX = voronoiP.chunkX;
     i32 originChunkY = voronoiP.chunkY;
     
@@ -702,7 +718,7 @@ internal void UpdateAndRenderGround(GameState* gameState, GameModeWorld* worldMo
         }
         
         
-        ForgVoronoiDiagram* voronoi = worldMode->activeDiagram;
+        VoronoiDiagram* voronoi = worldMode->activeDiagram;
         if(voronoi)
         {
             TempMemory voronoiMemory = BeginTemporaryMemory(worldMode->temporaryPool);

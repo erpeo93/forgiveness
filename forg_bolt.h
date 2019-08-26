@@ -1,36 +1,4 @@
 #pragma once
-
-struct BoltDefinition
-{
-    r32 animationTick;
-    r32 fadeinTime;
-    r32 fadeoutTime;
-    r32 ttl;
-    r32 ttlV;
-    Vec4 color;
-    r32 thickness;
-    r32 thicknessV;
-    r32 magnitudoStructure;
-    r32 magnitudoAnimation;
-    
-    u32 subdivisions;
-    u32 subdivisionsV;
-    
-    Vec3 lightColor;
-    r32 lightIntensity;
-    r32 lightStartTime;
-    r32 lightEndTime;
-    
-    u64 trailerSoundEffect;
-    u64 headerSoundEffect;
-    u64 inFlightSoundEffect;
-    union
-    {
-        BoltDefinition* next;
-        BoltDefinition* nextFree;
-    };
-};
-
 #define MAX_BOLT_SUBDIVISIONS 32
 struct Bolt
 {
@@ -59,4 +27,30 @@ struct BoltCache
     
     MemoryPool* pool;
     Bolt* firstFreeBolt;
+};
+
+struct BoltDefinition
+{
+    r32 animationTick;
+    r32 fadeinTime;
+    r32 fadeoutTime;
+    r32 ttl;
+    r32 ttlV;
+    Vec4 color;
+    r32 thickness;
+    r32 thicknessV;
+    r32 magnitudoStructure;
+    r32 magnitudoAnimation;
+    
+    u32 subdivisions;
+    u32 subdivisionsV;
+    
+    Vec3 lightColor;
+    r32 lightIntensity;
+    r32 lightStartTime;
+    r32 lightEndTime;
+    
+    u64 trailerSoundEffect;
+    u64 headerSoundEffect;
+    u64 inFlightSoundEffect;
 };

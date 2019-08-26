@@ -227,12 +227,11 @@ internal void DrawRectangle( Bitmap* buffer, Vec2 min, Vec2 max, Vec4 color, Rec
 
 
 
+#if 0
 internal void DrawRectangleSlowly( Bitmap* buffer, Bitmap* texture, 
                                   Vec2 origin, Vec2 XAxis, Vec2 YAxis, Vec4 color,
                                   Bitmap* normalMap,
-                                  EnvironmentMap* bottom, 
-                                  EnvironmentMap* middle, 
-                                  EnvironmentMap* top, r32 meterForPixel )
+                                  r32 meterForPixel )
 {
     r32 XAxisLength = Length( XAxis );
     r32 YAxisLength = Length( YAxis );
@@ -777,6 +776,7 @@ void DrawRectangleQuickly( Bitmap * buffer, Bitmap* texture,
         }
     }
 }
+#endif
 
 inline void RenderCommands( GameRenderCommands* commands, Bitmap* dest, Rect2i baseClip )
 {

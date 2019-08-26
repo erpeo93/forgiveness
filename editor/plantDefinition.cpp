@@ -92,11 +92,7 @@ inline void ParsePlantLFFParams(PlantLFFParams* params, EditorElement* root, cha
 
 internal void ImportPlantDefinitionTab(TaxonomySlot* slot, EditorElement* root)
 {
-    if(slot->plantDefinition)
-    {
-        TAXTABLE_DEALLOC(slot->plantDefinition, PlantDefinition);
-    }
-    TAXTABLE_ALLOC(slot->plantDefinition, PlantDefinition);
+    slot->plantDefinition = PushStruct(&slot->pool, PlantDefinition);
     PlantDefinition* plant = slot->plantDefinition;
     
     plant->collides = ToB32(GetValue(root, "collides"));

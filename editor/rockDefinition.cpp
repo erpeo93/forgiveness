@@ -1,17 +1,6 @@
 internal void ImportRockDefinitionTab(TaxonomySlot* slot, EditorElement* root)
 {
-    if(slot->rockDefinition)
-    {
-        if(slot->rockDefinition->firstPossibleMineral)
-        {
-            FREELIST_FREE(slot->rockDefinition->firstPossibleMineral, RockMineral,  taxTable_->firstFreeRockMineral);
-        }
-        
-        FREELIST_DEALLOC(slot->rockDefinition, taxTable_->firstFreeRockDefinition);
-        slot->rockDefinition = 0;
-    }
-    
-    TAXTABLE_ALLOC(slot->rockDefinition, RockDefinition);
+    slot->rockDefinition = PushStruct(&slot->pool, RockDefinition);
     RockDefinition* definition = slot->rockDefinition;
     
     definition->collides = ToB32(GetValue(root, "collides"));
@@ -36,9 +25,7 @@ internal void ImportRockDefinitionTab(TaxonomySlot* slot, EditorElement* root)
     EditorElement* minerals = GetList(root, "minerals");
     while(minerals)
     {
-        RockMineral* mineral;
-        TAXTABLE_ALLOC(mineral, RockMineral);
-        
+        RockMineral* mineral = PushStruct(&slot->pool, RockMineral);
         mineral->lerp = ToR32(GetValue(minerals, "lerp"));
         mineral->lerpDelta = ToR32(GetValue(minerals, "lerpDelta"));
         mineral->color = ToV4Color(GetStruct(minerals, "color"));

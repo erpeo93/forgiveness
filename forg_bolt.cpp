@@ -132,9 +132,9 @@ inline void SpawnBolt(GameModeWorld* worldMode, RenderGroup* group, BoltCache* c
     
     
     TaxonomySlot* boltSlot = GetSlotForTaxonomy(worldMode->table, boltTaxonomy);
-    if(boltSlot && boltSlot->boltEffectDefinition)
+    if(boltSlot)
     {
-        SoundEvent* event = GetSoundEvent(worldMode->table, boltSlot->boltEffectDefinition->headerSoundEffect);
+        SoundContainer* event = GetSoundEvent(worldMode->table, boltSlot->boltEffectDefinition->headerSoundEffect);
         if(event)
         {
             r32 distanceFromPlayer = Length(bolt->endP);
@@ -169,9 +169,9 @@ internal void UpdateAndRenderBolts(GameModeWorld* worldMode, BoltCache* cache, r
         if(bolt->ttl <= 0.0f)
         {
             TaxonomySlot* boltSlot = GetSlotForTaxonomy(worldMode->table, bolt->taxonomy);
-            if(boltSlot && boltSlot->boltEffectDefinition)
+            if(boltSlot)
             {
-                SoundEvent* event = GetSoundEvent(worldMode->table, boltSlot->boltEffectDefinition->trailerSoundEffect);
+                SoundContainer* event = GetSoundEvent(worldMode->table, boltSlot->boltEffectDefinition->trailerSoundEffect);
                 if(event)
                 {
                     r32 distanceFromPlayer = Length(bolt->endP);
@@ -191,7 +191,7 @@ internal void UpdateAndRenderBolts(GameModeWorld* worldMode, BoltCache* cache, r
             bolt->endP += cache->deltaP;
             
             TaxonomySlot* boltSlot = GetSlotForTaxonomy(worldMode->table, bolt->taxonomy);
-            if(boltSlot && boltSlot->boltEffectDefinition)
+            if(boltSlot)
             {
                 UpdateAndRenderBolt(worldMode, cache, group, boltSlot->boltEffectDefinition, bolt, timeToUpdate);
             }

@@ -1,106 +1,23 @@
-#ifdef FORG_SERVER
-inline b32 OwnedByOthers(SimEntity* entity, u64 id)
-{
-    b32 result = true;
-    if(!entity->ownerID || (entity->ownerID == id))
-    {
-        result = false;
-    }
-    
-    return result;
-}
-
-inline b32 RequiresOwnership(EntityAction action)
-{
-    b32 result = (action == Action_Open ||
-                  action == Action_Pick ||
-                  action == Action_Equip);
-    
-    return result;
-}
-
-inline b32 Owned(SimEntity* entity, u64 myID)
-{
-    b32 result = false;
-    if(!OwnedByOthers(entity, myID))
-    {
-        entity->ownerID = myID;
-        result = true;
-    }
-    
-    return result;
-}
-
-inline void ReleaseOwnership(SimEntity* entity)
-{
-    entity->ownerID = 0;
-}
-
-inline void ObjectToEntity(TaxonomyTable* table, Object* object, SimEntity* entity)
-{
-    if(IsRecipe(object))
-    {
-        entity->taxonomy = table->recipeTaxonomy;
-        entity->recipeTaxonomy = object->taxonomy;
-        entity->gen = object->gen;
-    }
-    else
-    {
-        entity->taxonomy = object->taxonomy;
-        entity->gen = object->gen;
-        
-        entity->recipeTaxonomy = 0;
-        
-        entity->quantity = (r32) object->quantity;
-        if(object->quantity == 1)
-        {
-            entity->quantity = 0;
-        }
-    }
-    entity->status = (r32) object->status;
-}
-
-inline void EntityToObject(SimEntity* entity, Object* object)
-{
-    if(entity->recipeTaxonomy)
-    {
-        object->taxonomy = entity->recipeTaxonomy;
-        object->gen = entity->gen;
-        object->quantity = 0xffff;
-    }
-    else
-    {
-        object->taxonomy = entity->taxonomy;
-        object->gen = entity->gen;
-        object->quantity = (u16) entity->quantity;
-        if(!object->quantity)
-        {
-            object->quantity = 1;
-        }
-    }
-    object->status = (i16) entity->status;
-    
-    
-    AddFlags(entity, Flag_deleted);
-}
-#endif
-
 inline EquipmentMapping InventorySlotPresent(TaxonomyTable* table, u32 entityTaxonomy, u32 objectTaxonomy)
 {
     EquipmentMapping result = {};
     
     TaxonomySlot* slot = GetSlotForTaxonomy(table, entityTaxonomy);
     TaxonomyNode* node = FindInTaxonomyTree(table, slot->equipmentMappings.root, objectTaxonomy);
+    
+#if RESTRUCTURING    
     if(node && node->data.equipmentMapping)
     {
         result = *(node->data.equipmentMapping);
     }
+#endif
+    
     return result;
 }
 
-inline EquipInfo PossibleToEquip_(TaxonomyTable* table, u32 entityTaxonomy, EquipmentSlot* equipment, u32 objectTaxonomy, i16 status)
+inline SlotName PossibleToEquip_(TaxonomyTable* table, u32 entityTaxonomy, EquipmentSlot* equipment, u32 objectTaxonomy, i16 status)
 {
-    EquipInfo result = {};
+    SlotName result = {};
     
     // NOTE(Leonardo): otherwise it means it's not completed
     if(status >= 0)
@@ -108,12 +25,12 @@ inline EquipInfo PossibleToEquip_(TaxonomyTable* table, u32 entityTaxonomy, Equi
         EquipmentMapping slotPresent = InventorySlotPresent(table, entityTaxonomy, objectTaxonomy);
         for(EquipmentLayout* layout = slotPresent.firstEquipmentLayout; layout; layout = layout->next)
         {
-            if(!equipment[layout->slot.slot].ID)
+            if(!equipment[layout->slot].ID)
             {
                 result = layout->slot;
             }
             
-#if 0            
+#if RESTRUCTURING            
             if(true)
             {
             }
@@ -142,14 +59,14 @@ inline EquipInfo PossibleToEquip_(TaxonomyTable* table, u32 entityTaxonomy, Equi
     return result;
 }
 
-inline void MarkAllSlotsAsOccupied(EquipmentSlot* slots, EquipInfo info, u64 ID)
+inline void MarkAllSlotsAsOccupied(EquipmentSlot* slots, SlotName slot, u64 ID)
 {
-    slots[info.slot].ID = ID;
+    slots[slot].ID = ID;
 }
 
-inline void MarkAllSlotsAsNull(EquipmentSlot* slots, EquipInfo info)
+inline void MarkAllSlotsAsNull(EquipmentSlot* slots, SlotName info)
 {
-    slots[info.slot].ID = 0;
+    slots[info].ID = 0;
 }
 
 inline void MarkAsNullAllSlots(EquipmentSlot* slots, u64 ID)
@@ -164,21 +81,14 @@ inline void MarkAsNullAllSlots(EquipmentSlot* slots, u64 ID)
     }
 }
 
-inline EntityAction CanConsume(TaxonomyTable* table, u32 taxonomy, u32 objectTaxonomy)
-{
-    EntityAction result = Action_None;
-    // TODO(Leonardo): search into target action tree
-    return result;
-}
-
 #if FORG_SERVER
-inline EquipInfo PossibleToEquip(SimRegion* region, SimEntity* entity, Object* object)
+inline SlotName PossibleToEquip(SimRegion* region, SimEntity* entity, Object* object)
 {
     Assert(entity->IDs[Component_Creature]);
     
     CreatureComponent* creature = Creature(region, entity);
     u32 objectTaxonomy = GetObjectTaxonomy(region->taxTable, object);
-    EquipInfo result = PossibleToEquip_(region->taxTable, entity->taxonomy, creature->equipment, objectTaxonomy, object->status);
+    SlotName result = PossibleToEquip_(region->taxTable, entity->taxonomy, creature->equipment, objectTaxonomy, object->status);
     return result;
 }
 
@@ -200,6 +110,7 @@ inline void SendObjectRemoveUpdate(ServerPlayer* player, u8 objectIndex);
 inline void SendObjectAddUpdate(ServerPlayer* player, u8 objectIndex, Object* object);
 inline void SendCompleteContainerInfo(SimRegion* region, ServerPlayer* player, SimEntity* container);
 
+inline SimEntity* GetRegionEntityByID( SimRegion* region, u64 ID );
 inline void RemoveFromContainer(SimRegion* region, u64 ownerID, SimEntity* entity, u8 objectIndex)
 {
     Assert(entity);
@@ -336,13 +247,13 @@ internal b32 EquipObject(SimRegion* region, SimEntity* actor, SimEntity* object)
 {
     b32 result = false;
     CreatureComponent* creature = Creature(region, actor);
-    EquipInfo info = PossibleToEquip_(region->taxTable, actor->taxonomy, creature->equipment, object->taxonomy, (i16) object->status);
-    if(IsValid(info))
+    SlotName slot = PossibleToEquip_(region->taxTable, actor->taxonomy, creature->equipment, object->taxonomy, (i16) object->status);
+    if(IsValid(slot))
     {
         AddFlags(object, Flag_Attached);
         object->velocity = {};
         
-        EquipmentSlot* equipmentSlot = creature->equipment + info.slot;
+        EquipmentSlot* equipmentSlot = creature->equipment + slot;
         equipmentSlot->ID = object->identifier;
         
         if(actor->playerID)

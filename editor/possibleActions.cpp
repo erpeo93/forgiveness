@@ -1,8 +1,6 @@
 inline PossibleAction* BeginPossibleAction(TaxonomySlot* slot, char* action, char* distance)
 {
-    PossibleAction* possibleAction;
-    TAXTABLE_ALLOC(possibleAction, PossibleAction);
-    
+    PossibleAction* possibleAction = PushStruct(&currentSlot_->pool, PossibleAction);
     u8 actionInt = SafeTruncateToU8(GetValuePreprocessor(EntityAction, action));
     possibleAction->action = (EntityAction) actionInt;
     possibleAction->distance = ToR32(distance, 1.0f);
@@ -38,17 +36,6 @@ inline void AddActor(PossibleAction* action, char* name, char* requiredTime)
 
 internal void ImportPossibleActionsTab(TaxonomySlot* slot, EditorElement* root)
 {
-    
-    for(PossibleAction* action = slot->firstPossibleAction; action; action = action->next)
-    {
-        if(action->tree.root)
-        {
-            FreeActionTree(taxTable_, action->tree.root);
-        }
-    }
-    
-    FREELIST_FREE(slot->firstPossibleAction, PossibleAction, taxTable_->firstFreePossibleAction);
-    
     EditorElement* actions = root->firstInList;
     while(actions)
     {

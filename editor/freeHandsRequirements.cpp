@@ -1,8 +1,7 @@
 
 inline void AddFreeHandReq(TaxonomySlot* slot, char* slotName, char* taxonomy)
 {
-    NakedHandReq* req;
-    TAXTABLE_ALLOC(req, NakedHandReq);
+    NakedHandReq* req = PushStruct(&currentSlot_->pool, NakedHandReq);
     TaxonomySlot* taxonomyslot = NORUNTIMEGetTaxonomySlotByName(taxTable_, taxonomy);
     
     if(taxonomyslot)
@@ -22,8 +21,6 @@ inline void AddFreeHandReq(TaxonomySlot* slot, char* slotName, char* taxonomy)
 
 internal void ImportFreeHandsRequirementsTab(TaxonomySlot* slot, EditorElement* root)
 {
-    
-    FREELIST_FREE(slot->firstNakedHandReq, NakedHandReq, taxTable_->firstFreeNakedHandReq);
     EditorElement* freeHandsReq = root->firstInList;
     while(freeHandsReq)
     {

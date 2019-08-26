@@ -2,9 +2,7 @@ inline LayoutPiece* AddLayoutPiece(ObjectLayout* layout, char* componentName, u8
 {
     u64 componentHashID = StringHash(componentName);
     
-    LayoutPiece* dest;
-    TAXTABLE_ALLOC(dest, LayoutPiece);
-    
+    LayoutPiece* dest = PushStruct(&currentSlot_->pool, LayoutPiece);
     dest->componentHashID = componentHashID;
 	dest->index = index;
     
@@ -51,21 +49,10 @@ inline void AddIngredient(LayoutPiece* piece, char* name, u32 quantity)
 
 internal void ImportLayoutsTab(TaxonomySlot* slot, EditorElement* root)
 {
-    
-    for(ObjectLayout* toDelete = slot->firstLayout; toDelete; toDelete = toDelete->next)
-    {
-        FREELIST_FREE(toDelete->firstPiece, LayoutPiece, taxTable_->firstFreeLayoutPiece);
-    }
-    FREELIST_FREE(slot->firstLayout, ObjectLayout, taxTable_->firstFreeObjectLayout);
-    slot->layoutCount = 0;
-    
-    
-    
     EditorElement* layouts = root->firstInList;
     while(layouts)
     {
-        ObjectLayout* newLayout;
-        TAXTABLE_ALLOC(newLayout, ObjectLayout);
+        ObjectLayout* newLayout = PushStruct(&currentSlot_->pool, ObjectLayout);
         
         newLayout->nameHashID = StringHash(layouts->name);
         FormatString(newLayout->name, sizeof(newLayout->name), "%s", layouts->name);

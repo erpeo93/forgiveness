@@ -1,6 +1,4 @@
 #pragma once
-
-
 inline u64 StringHash( char* string, u32 length = U32_MAX )
 {
     u64 result = 0;
@@ -22,18 +20,8 @@ inline u64 StringHash( char* string, u32 length = U32_MAX )
 #include "meow_hash.h"
 inline u64 DataHash(char* buffer, u64 length)
 {
-    u64 result = 0;
-    
-#if 1
     meow_hash hash = MeowHash_Accelerated(0, length, buffer);
-    result = MeowU64From(hash, 0);
-#else
-    for(u64 index = 0; index < length; ++index)
-    {
-        char c = buffer[index];
-        result = 65599 * result + c;
-    }
-#endif
+    u64 result = MeowU64From(hash, 0);
     
     return result;
 }
@@ -158,6 +146,22 @@ inline b32 ContainsSubString(char* reference, char* substring)
     }
     
     return result;
+}
+
+inline void RemoveExtension(char* dest, u32 destLength, char* source)
+{
+    Assert(StrLen(source) < destLength);
+    char* toCopy = source;
+    while(*toCopy )
+    {
+        if(*toCopy == '.' )
+        {
+            break;
+        }
+        
+        *dest++ = *toCopy++;
+    }
+    *dest++ = 0;
 }
 
 internal i32 I32FromCharInternal( char** string )

@@ -1,12 +1,6 @@
 internal void ImportTileParamsTab(TaxonomySlot* slot, EditorElement* root)
 {
-    if(slot->tileDefinition)
-    {
-        FREELIST_DEALLOC(slot->tileDefinition, taxTable_->firstFreeTileDefinition);
-        slot->tileDefinition = 0;
-    }
-    
-    TAXTABLE_ALLOC(slot->tileDefinition, TileDefinition);
+    slot->tileDefinition = PushStruct(&currentSlot_->pool, TileDefinition);
     TileDefinition* tile = slot->tileDefinition;
     
     tile->groundPointMaxOffset = ToR32(GetValue(root, "groundPointMaxOffset"));

@@ -1,5 +1,4 @@
 #pragma once
-
 enum ForgTokenType
 {
     Token_Unknown,

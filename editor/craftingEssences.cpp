@@ -1,6 +1,5 @@
 internal void ImportCraftingEssencesTab(TaxonomySlot* slot, EditorElement* root)
 {
-    FREELIST_FREE(slot->firstEssence, TaxonomyEssence, taxTable_->firstFreeTaxonomyEssence);
     EditorElement* essences = root->firstInList;
     
     while(essences)

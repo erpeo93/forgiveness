@@ -9,7 +9,9 @@
 #include <time.h>
 #include "sqlite3.h"
 #include "forg_basic_types.h"
-#include "win32_net.h"
+
+#define LL_NET_IMPLEMENTATION
+#include "ll_net.h"
 
 #pragma comment( lib, "wsock32.lib" )
 #include "forg_platform.h"
@@ -397,12 +399,6 @@ int main( int argc, char* argv[] )
             
             clock_t end = clock();
             r32 MSecondElapsed = (r32) (((end - start) * 1000.0f )  / CLOCKS_PER_SEC);
-#if 0     
-            if(MSecondElapsed > SERVER_MIN_MSEC_PER_FRAME)
-            {
-                InvalidCodePath;
-            }
-#endif
             
             while(MSecondElapsed <  SERVER_MIN_MSEC_PER_FRAME)
             {

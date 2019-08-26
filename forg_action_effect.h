@@ -1,10 +1,4 @@
 #pragma once
-
-struct MemoryNewNodeParams
-{
-    b32 valid;
-};
-
 printTable(noPrefix) enum EntityAction
 {
     Action_None,
@@ -108,6 +102,7 @@ struct Effect
 };
 
 
+
 #define MAX_CONTAINER_INTERACTION_REQUIRED 6
 #define MAX_CONTAINER_INTERACTION_EFFECTS 4
 struct ContainerInteraction
@@ -123,4 +118,25 @@ struct ContainerInteraction
     
     u32 effectCount;
     Effect effects[MAX_CONTAINER_INTERACTION_EFFECTS];
+};
+
+
+printFlags(noPrefix) enum CanDoActionFlags
+{
+    CanDoAction_Own = (1 << 1),
+    CanDoAction_EquipmentSlot = (1 << 2),
+    CanDoAction_Empty = (1 << 3),
+};
+
+struct PossibleActionData
+{
+    r32 requiredTime;
+};
+
+struct PossibleAction
+{
+    EntityAction action;
+    u32 flags;
+    struct TaxonomyTree* tree;
+    r32 distance;
 };

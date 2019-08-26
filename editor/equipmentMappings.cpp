@@ -7,8 +7,7 @@ inline EquipmentMapping* AddEquipmentMapping(char* equipmentName)
     EquipmentMapping* result = 0;
     if(target)
     {
-        EquipmentMapping* mapping;
-        TAXTABLE_ALLOC(mapping, EquipmentMapping);
+        EquipmentMapping* mapping = PushStruct(&currentSlot_->pool, EquipmentMapping);
         
         TaxonomyNode* node = AddToTaxonomyTree(&currentSlot_->equipmentMappings, target);
         node->data.equipmentMapping = mapping;
@@ -26,8 +25,7 @@ inline EquipmentMapping* AddEquipmentMapping(char* equipmentName)
 
 inline void AddPiece(EquipmentLayout* equipmentLayout, u32 assIndex, char* pieceName, u8 index, Vec2 assOffset, r32 zOffset, r32 angle, Vec2 scale)
 {
-    EquipmentAss* equipmentAss;
-    TAXTABLE_ALLOC(equipmentAss, EquipmentAss);
+    EquipmentAss* equipmentAss = PushStruct(&currentSlot_->pool, EquipmentAss);
     
     equipmentAss->assIndex = assIndex;
     equipmentAss->stringHashID = StringHash(pieceName);
@@ -42,42 +40,8 @@ inline void AddPiece(EquipmentLayout* equipmentLayout, u32 assIndex, char* piece
     FREELIST_INSERT(equipmentAss, equipmentLayout->firstEquipmentAss);
 }
 
-
-internal void FreeEquipmentTreeNodeRecursive(TaxonomyNode* root)
-{
-    if(root)
-    {
-        for(TaxonomyNode* child = root->firstChild; child;)
-        {
-            TaxonomyNode* next = child->next;
-            FreeEquipmentTreeNodeRecursive(child);
-            child = next;
-        }
-        root->firstChild = 0;
-        
-        if(root->data.equipmentMapping)
-        {
-            for(EquipmentLayout* layout = root->data.equipmentMapping->firstEquipmentLayout; layout; layout = layout->next)
-            {
-                FREELIST_FREE(layout->firstEquipmentAss, EquipmentAss, taxTable_->firstFreeEquipmentAss);
-                layout->firstEquipmentAss = 0;
-            }
-            
-            
-            FREELIST_FREE(root->data.equipmentMapping->firstEquipmentLayout, EquipmentLayout,  taxTable_->firstFreeEquipmentLayout);
-            root->data.equipmentMapping->firstEquipmentLayout = 0;
-            
-            FREELIST_DEALLOC(root->data.equipmentMapping, taxTable_->firstFreeEquipmentMapping);
-        }
-        root->data.equipmentMapping = 0;
-        
-        FREELIST_DEALLOC(root, taxTable_->firstFreeTaxonomyNode);
-    }
-}
-
 internal void ImportEquipmentMappingsTab(TaxonomySlot* slot, EditorElement* root)
 {
-    FreeEquipmentTreeNodeRecursive(slot->equipmentMappings.root);
     slot->equipmentMappings.root = 0;
     
     EditorElement* singleSlot = root->firstInList;
@@ -92,8 +56,7 @@ internal void ImportEquipmentMappingsTab(TaxonomySlot* slot, EditorElement* root
             char* layoutName = GetValue(layouts, "layoutName");
             char* slotName = GetValue(layouts, "slot");
             
-            EquipmentLayout* equipmentLayout;
-            TAXTABLE_ALLOC(equipmentLayout, EquipmentLayout);
+            EquipmentLayout* equipmentLayout = PushStruct(&slot->pool, EquipmentLayout);
             equipmentLayout->layoutHashID = StringHash(layoutName);
             equipmentLayout->slot = {(SlotName) GetValuePreprocessor(SlotName, slotName)};
             

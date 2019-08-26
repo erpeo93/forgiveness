@@ -1,8 +1,7 @@
 
-inline void AddAssAlteration(TaxonomySlot* slot, char* assIndex, char* scaleX, char* scaleY, char* offsetX, char* offsetY, b32 specialColoration, Vec4 color)
+inline void AddAssAlteration(AssAlterations* slot, char* assIndex, char* scaleX, char* scaleY, char* offsetX, char* offsetY, b32 specialColoration, Vec4 color)
 {
-    TaxonomyAssAlterations* alt;
-    TAXTABLE_ALLOC(alt, TaxonomyAssAlterations);
+    EditorAssAlteration* alt = PushStruct(&currentSlot_->pool, EditorAssAlteration);
     
     alt->assIndex = ToU32(assIndex);
     
@@ -20,11 +19,8 @@ inline void AddAssAlteration(TaxonomySlot* slot, char* assIndex, char* scaleX, c
     FREELIST_INSERT(alt, slot->firstAssAlteration);
 }
 
-internal void ImportAssAlterationsTab(TaxonomySlot* slot, EditorElement* root)
+internal void ImportAssAlterationsTab(AssAlterations* slot, EditorElement* root)
 {
-    
-    FREELIST_FREE(slot->firstAssAlteration, TaxonomyAssAlterations, taxTable_->firstFreeTaxonomyAssAlterations);
-    
     EditorElement* alterations = root->firstInList;
     while(alterations)
     {

@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "forg_basic_types.h"
-#include "net.h"
+#include "ll_net.h"
 #include "forg_platform.h"
 #include "forg_shared.h"
 #include "forg_token.h"
@@ -10,7 +10,6 @@
 #include "forg_intrinsics.h"
 #include "forg_math.h"
 #include "forg_meta.h"
-#include "client_generated.h"
 #include "asset_builder.h"
 #include "win32_file.cpp"
 #include "forg_token.cpp"
@@ -3127,7 +3126,6 @@ internal void WriteBitmapsAndAnimations()
     WriteBitmapsFromPath("definition/fruits", ASSET_FRUIT, "forgfruits.pak", V2(0.5f, 0.0f), "fruitName");
     WriteBitmapsFromPath("definition/trunks", ASSET_TRUNK, "forgtrunks.pak", V2(0.5f, 0.0f), "trunkName");
     WriteBitmapsFromPath("definition/particles", ASSET_PARTICLE, "forgparticles.pak");
-    
     WriteBitmapsFromPath("definition/ground/patches", ASSET_GROUND, "forgGround.pak", V2(0.5f, 0.5f), "splashName");
     
     WriteUI();
@@ -3451,13 +3449,6 @@ internal void WriteModels()
 
 int main(int argc, char** argv )
 {
-    u64 test = StringHash("3");
-#if 0    
-    DeleteAll("assets", "*.fad");
-    DeleteAll("assets", "*.pak");
-    DeleteAll("assets", "*.autocomplete");
-#endif
-    
     WriteModels();
     WriteBitmapsAndAnimations();
     WriteMusic();

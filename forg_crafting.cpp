@@ -1,29 +1,3 @@
-struct RecipeIngredients
-{
-    u32 count;
-    u32 taxonomies[16];
-    u32 quantities[16];
-};
-
-inline ObjectLayout* GetLayout(TaxonomyTable* table, u32 taxonomy)
-{
-    ObjectLayout* result = 0;
-    
-    u32 testTaxonomy = taxonomy;
-    while(testTaxonomy)
-    {
-        TaxonomySlot* slot = GetSlotForTaxonomy(table, testTaxonomy);
-        if(slot->firstLayout)
-        {
-            result = slot->firstLayout;
-            break;
-        }
-        testTaxonomy = GetParentTaxonomy(table, testTaxonomy);
-    }
-    
-    return result;
-}
-
 internal void GetRecipeIngredients(RecipeIngredients* output, TaxonomyTable* table, u32 taxonomy, GenerationData gen)
 {
     TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
@@ -78,39 +52,7 @@ internal void GetRecipeIngredients(RecipeIngredients* output, TaxonomyTable* tab
     
 }
 
-
-inline b32 HasEssences(EssenceSlot* essenceSlots, TaxonomyEssence* firstEssence)
-{
-    b32 result = true;
-    for(TaxonomyEssence* essence = firstEssence; essence; essence = essence->next)
-    {
-        EssenceSlot* slot = &essence->essence;
-        result = false;
-        for(u32 testIndex = 0; testIndex < MAX_DIFFERENT_ESSENCES; ++testIndex)
-        {
-            EssenceSlot* test = essenceSlots + testIndex;
-            if(slot->taxonomy == test->taxonomy && slot->quantity <= test->quantity)
-            {
-                result = true;
-                break;
-            }
-        }
-    }
-    return result;
-}
-
 #if FORG_SERVER
-inline void RemoveEssences(SimRegion* region, SimEntity* entity, TaxonomyEssence* firstEssence)
-{
-    for(TaxonomyEssence* essence = firstEssence; essence; essence = essence->next)
-    {
-        EssenceSlot* slot = &essence->essence;
-        
-        i16 delta = -(i16) slot->quantity;
-        EssenceDelta(region, entity, slot->taxonomy, delta);
-    }
-}
-
 inline void AddEffectByLink(SimRegion* region, SimEntity* entity, CraftingEffectLink* link)
 {
     EffectComponent* effects = Effects(region, entity);

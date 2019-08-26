@@ -1,20 +1,6 @@
-TRANSLATION_FUNCTION(translate0To1)
+inline void AddAnimationEffect(AnimationEffects* effects, AnimationEffect effect, u32 flags, u32 triggerAction, char* triggerEffect, r32 timer, r32 fadeTime, char* pieceName)
 {
-    DoStuff(root);
-}
-
-
-translate_editor_tab* animationEffectTranslations[] = 
-{
-    noTranslation,
-    translate0To1,
-};
-
-
-inline void AddAnimationEffect(TaxonomySlot* slot, AnimationEffect effect, u32 flags, u32 triggerAction, char* triggerEffect, r32 timer, r32 fadeTime, char* pieceName)
-{
-    AnimationEffect* dest;
-    TAXTABLE_ALLOC(dest, AnimationEffect);
+    AnimationEffect* dest = PushStruct(&currentSlot_->pool, AnimationEffect);
     *dest = effect;
     
     dest->flags = flags;
@@ -57,7 +43,7 @@ inline void AddAnimationEffect(TaxonomySlot* slot, AnimationEffect effect, u32 f
         }   
     }
     
-    FREELIST_INSERT(dest, slot->firstAnimationEffect);
+    FREELIST_INSERT(dest, effects->firstAnimationEffect);
 }
 
 
@@ -119,20 +105,16 @@ inline AnimationEffect BoltEffect(char* boltEffectName, r32 timer)
 }
 
 
-internal void ImportAnimationEffectsTab(TaxonomySlot* slot, EditorElement* root)
+internal void ImportAnimationEffectsTab(AnimationEffects* effects, EditorElement* root)
 {
-    Translate(animationEffectTranslations, root);
-    
-    
-    FREELIST_FREE(slot->firstAnimationEffect, AnimationEffect, taxTable_->firstFreeAnimationEffect);
-    EditorElement* effects = root->firstInList;
-    while(effects)
+    EditorElement* eff = root->firstInList;
+    while(eff)
     {
-        AnimationEffectType type = (AnimationEffectType) GetValuePreprocessor(AnimationEffectType, GetValue(effects, "animationEffectType"));
+        AnimationEffectType type = (AnimationEffectType) GetValuePreprocessor(AnimationEffectType, GetValue(eff, "animationEffectType"));
         AnimationEffect effect = {};
         u32 flags = 0;
         
-        EditorElement* flagElem = GetList(effects, "flags");
+        EditorElement* flagElem = GetList(eff, "flags");
         
         while(flagElem)
         {
@@ -144,46 +126,46 @@ internal void ImportAnimationEffectsTab(TaxonomySlot* slot, EditorElement* root)
         }
         
         
-        EntityAction action = (EntityAction) GetValuePreprocessor(EntityAction, GetValue(effects, "action"));
-        char* triggerEffect = GetValue(effects, "triggerEffect");
-        char* pieceName = GetValue(effects, "animationPieceName");
-        r32 timer = ElemR32(effects, "timer");
-        r32 fadeTime = ElemR32(effects, "fadeInTimer");
+        EntityAction action = (EntityAction) GetValuePreprocessor(EntityAction, GetValue(eff, "action"));
+        char* triggerEffect = GetValue(eff, "triggerEffect");
+        char* pieceName = GetValue(eff, "animationPieceName");
+        r32 timer = ElemR32(eff, "timer");
+        r32 fadeTime = ElemR32(eff, "fadeInTimer");
         
         switch(type)
         {
             case AnimationEffect_ChangeColor:
             {
-                Vec4 color = ColorV4(effects, "color");
+                Vec4 color = ColorV4(eff, "color");
                 effect = ColorationEffect(color);       
             } break;
             
             case AnimationEffect_SpawnParticles:
             {
-                char* effectName = GetValue(effects, "particleEffectName");
+                char* effectName = GetValue(eff, "particleEffectName");
                 effect = SpawnParticlesEffect(effectName);       
             } break;
             
             case AnimationEffect_Light:
             {
-                Vec4 color = ColorV4(effects, "color");
-                r32 intensity = ElemR32(effects, "lightIntensity");
+                Vec4 color = ColorV4(eff, "color");
+                r32 intensity = ElemR32(eff, "lightIntensity");
                 effect = LightEffect(color.rgb, intensity);     
             } break;
             
             case AnimationEffect_Bolt:
             {
-                char* boltName = GetValue(effects, "boltName");
-                r32 boltTimer = ElemR32(effects, "boltTimer");
+                char* boltName = GetValue(eff, "boltName");
+                r32 boltTimer = ElemR32(eff, "boltTimer");
                 effect = BoltEffect(boltName, boltTimer);
             } break;
         }
         
         if(effect.type)
         {
-            AddAnimationEffect(slot, effect, flags, action, triggerEffect, timer, fadeTime, pieceName);
+            AddAnimationEffect(effects, effect, flags, action, triggerEffect, timer, fadeTime, pieceName);
         }
         
-        effects = effects->next;
+        eff = eff->next;
     }
 }

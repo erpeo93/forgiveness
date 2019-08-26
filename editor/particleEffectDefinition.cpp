@@ -1,10 +1,6 @@
 internal void ImportParticleEffectDefinitionTab(TaxonomySlot* slot, EditorElement* root)
 {
-    if(slot->particleEffectDefinition)
-    {
-        TAXTABLE_DEALLOC(slot->particleEffectDefinition, ParticleEffectDefinition);
-    }
-    TAXTABLE_ALLOC(slot->particleEffectDefinition, ParticleEffectDefinition);
+    slot->particleEffectDefinition = PushStruct(&slot->pool, ParticleEffectDefinition);
     ParticleEffectDefinition* definition = slot->particleEffectDefinition;
     
     definition->dAngleSineUpdaters = ElemR32(root, "dAngleSineUpdaters");

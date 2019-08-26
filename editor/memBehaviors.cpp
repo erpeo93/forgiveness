@@ -4,14 +4,6 @@ inline void BeginMemoryBehavior(char* behaviorName)
     
     if(slot)
     {
-        FREELIST_FREE(slot->criteriaDefinition, MemCriteria, taxTable_->firstFreeMemCriteria);
-        
-        for(MemSynthesisRule* rule = slot->firstSynthRule; rule; rule = rule->next)
-        {
-            FreeMemSynthRuleTree(taxTable_, rule->tree.root);
-        }
-        FREELIST_FREE(slot->firstSynthRule, MemSynthesisRule, taxTable_->firstFreeMemSynthesisRule);
-        
         Assert(IsBehavior(taxTable_, slot->taxonomy));
         currentSlot_ = slot;
     }
@@ -27,8 +19,7 @@ inline MemCriteria* AddCriteria(char* criteriaName)
     TaxonomySlot* criteriaTax = NORUNTIMEGetTaxonomySlotByName(taxTable_, criteriaName);
     if(criteriaTax)
     {
-        MemCriteria* newCriteria;
-        TAXTABLE_ALLOC(newCriteria, MemCriteria);
+        MemCriteria* newCriteria = PushStruct(&currentSlot_->pool, MemCriteria);
         newCriteria->taxonomy = criteriaTax->taxonomy;
         
         FREELIST_INSERT(newCriteria, currentSlot_->criteriaDefinition);
@@ -61,8 +52,7 @@ inline void AddMemConsideration(MemCriteria* criteria, char* requiredConceptName
 
 inline MemSynthesisRule* AddSynthesisRule(TaxonomySlot* slot, EntityAction action)
 {
-    MemSynthesisRule* rule;
-    TAXTABLE_ALLOC(rule, MemSynthesisRule);
+    MemSynthesisRule* rule = PushStruct(&currentSlot_->pool, MemSynthesisRule);
     rule->action = action;
     
     FREELIST_INSERT(rule, slot->firstSynthRule);
@@ -94,8 +84,7 @@ inline MemSynthOption* AddOption(TaxonomyNode* node, char* conceptName, u32 last
     
     if(conceptSlot)
     {
-        MemSynthOption* option;
-        TAXTABLE_ALLOC(option, MemSynthOption);
+        MemSynthOption* option = PushStruct(&currentSlot_->pool, MemSynthOption);
         option->lastingtimeUnits = SafeTruncateToU16(lastingtimeUnits);
         option->refreshTimeUnits = SafeTruncateToU16(refreshTimeUnits);
         option->outputConcept = conceptSlot->taxonomy;
@@ -129,8 +118,7 @@ inline void AddMemBehavior(char* behaviorName)
     
     if(behaviorSlot)
     {
-        TaxonomyMemBehavior* newBehavior;
-        TAXTABLE_ALLOC(newBehavior, TaxonomyMemBehavior);
+        TaxonomyMemBehavior* newBehavior = PushStruct(&currentSlot_->pool, TaxonomyMemBehavior);
         newBehavior->taxonomy = behaviorSlot->taxonomy;
         
         FREELIST_INSERT(newBehavior, currentSlot_->firstMemBehavior);
@@ -198,8 +186,6 @@ internal void ReadSynthesisRules()
 
 internal void ImportMemBehaviorsTab(TaxonomySlot* slot, EditorElement* root)
 {
-    
-    FREELIST_FREE(slot->firstMemBehavior, TaxonomyMemBehavior, taxTable_->firstFreeTaxonomyMemBehavior);
     EditorElement* behaviors = root->firstInList;
     while(behaviors)
     {

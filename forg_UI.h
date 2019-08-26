@@ -2,12 +2,6 @@
 #define HUD_TRIGGER_TIME 0.5f
 #define HUD_FADE_TIME 2.0f * HUD_TRIGGER_TIME
 
-enum TextOperation
-{
-    TextOp_draw,
-    TextOp_getSize,
-};
-
 enum UIMode
 {
     UIMode_None,
@@ -783,14 +777,6 @@ struct UIAutocomplete
 };
 
 
-struct UIFont
-{
-    r32 fontScale;
-    FontId fontId;
-    Font* font;
-    PakFont* fontInfo;
-    b32 drawShadow;
-};
 
 enum UISoundType
 {

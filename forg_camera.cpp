@@ -25,7 +25,6 @@ inline void MoveCameraTowards(GameModeWorld* worldMode, ClientEntity* entityC, V
 
 internal void UpdateAndSetupGameCamera(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
-    UIState* UI = worldMode->UI;
 #if 0
     if(input->altDown && IsDown(&input->mouseLeft))
     {
@@ -44,10 +43,10 @@ internal void UpdateAndSetupGameCamera(GameModeWorld* worldMode, RenderGroup* gr
     worldMode->cameraDolly = 0.0f;
     worldMode->cameraOrbit = 0.0f;
     
-    Vec2 finalXYOffset = worldMode->cameraWorldOffset.xy + UI->cameraOffset.xy;
+    Vec2 finalXYOffset = worldMode->cameraWorldOffset.xy;
     
     m4x4 cameraO = ZRotation(worldMode->cameraOrbit) * XRotation(worldMode->cameraPitch);
-    Vec3 cameraOffsetFinal = cameraO * V3(worldMode->cameraEntityOffset, worldMode->cameraWorldOffset.z + worldMode->cameraDolly + UI->cameraOffset.z) + V3(finalXYOffset, 0);
+    Vec3 cameraOffsetFinal = cameraO * V3(worldMode->cameraEntityOffset, worldMode->cameraWorldOffset.z + worldMode->cameraDolly) + V3(finalXYOffset, 0);
     
     SetCameraTransform(group, 0, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal, worldMode->cameraEntityOffset);
     

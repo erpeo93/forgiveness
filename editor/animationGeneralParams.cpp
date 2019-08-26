@@ -1,4 +1,4 @@
-inline void UsesSkeleton(TaxonomySlot* slot, char* skeletonName, char* skinName, Vec4 defaultColoration, Vec2 originOffset, b32 flippedOnYAxis)
+inline void UsesSkeleton(AnimationGeneralParams* slot, char* skeletonName, char* skinName, Vec4 defaultColoration, Vec2 originOffset, b32 flippedOnYAxis)
 {
     char skeletonSkin[128];
     FormatString(skeletonSkin, sizeof(skeletonSkin), "%s%s", skeletonName, skinName);
@@ -10,7 +10,7 @@ inline void UsesSkeleton(TaxonomySlot* slot, char* skeletonName, char* skinName,
     slot->flippedOnYAxis = flippedOnYAxis;
 }
 
-internal void ImportAnimationGeneralParamsTab(TaxonomySlot* slot, EditorElement* root)
+internal void ImportAnimationGeneralParamsTab(AnimationGeneralParams* slot, EditorElement* root)
 {
     slot->animationIn3d = ToB32(GetValue(root, "animationIn3d"));        
     slot->animationFollowsVelocity = ToB32(GetValue(root, "animationFollowsVelocity"));        

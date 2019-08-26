@@ -1,8 +1,8 @@
 
 #include "forg_client.h"
-global_variable ClientNetworkInterface* clientNetwork; 
 #include "client_generated.h"
-#include "forg_sort.cpp"
+global_variable ClientNetworkInterface* clientNetwork; 
+
 #include "forg_token.cpp"
 #include "forg_meta.cpp"
 #include "forg_pool.cpp"
@@ -13,24 +13,62 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_world_generation.cpp"
 #include "forg_editor.cpp"
 #include "forg_inventory.cpp"
-#include "forg_rule.cpp"
-#include "forg_tilemap.cpp"
 #include "forg_asset.cpp"
 #include "forg_render.cpp"
 #include "forg_camera.cpp"
 #include "forg_light.cpp"
 #include "forg_network_client.cpp"
 #include "forg_plant.cpp"
-#include "forg_model.cpp"
+#include "forg_mesh.cpp"
+#include "forg_rock.cpp"
+#include "forg_object.cpp"
 #include "forg_crafting.cpp"
-#include "forg_audio.cpp"
+#include "forg_sound.cpp"
 #include "forg_particles.cpp"
 #include "forg_bolt.cpp"
+#include "forg_bound.cpp"
 #include "forg_animation.cpp"
-#include "forg_UI.cpp"
 #include "forg_cutscene.cpp"
 #include "forg_ground.cpp"
-#include "forg_texture_gen.cpp"
+#include "forg_UIcommon.cpp"
+
+inline void MarkAllPakFilesAsToDelete(GameModeWorld* worldMode, char* path)
+{
+    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, path);
+    
+    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex)
+    {
+        PlatformFileHandle handle = platformAPI.OpenNextFile(&fileGroup, path);
+        
+        ToDeleteFile* toDelete;
+        FREELIST_ALLOC(toDelete, worldMode->firstFreeFileToDelete, PushStruct(&worldMode->deletedFilesPool, ToDeleteFile));
+        
+        toDelete->toDelete = true;
+        RemoveExtension(toDelete->filename, sizeof(toDelete->filename), handle.name);
+        
+        FREELIST_INSERT(toDelete, worldMode->firstFileToDelete);
+        
+        platformAPI.CloseHandle(&handle);
+    }
+    
+    platformAPI.GetAllFilesEnd(&fileGroup);
+}
+
+inline void DeleteAllFilesNotArrived(GameModeWorld* worldMode, char* path)
+{
+    for(ToDeleteFile* file = worldMode->firstFileToDelete; file; file = file->next)
+    {
+        if(file->toDelete)
+        {
+            char toDeleteWildcard[128];
+            FormatString(toDeleteWildcard, sizeof(toDeleteWildcard), "%s.*", file->filename);
+            platformAPI.DeleteFileWildcards(path, toDeleteWildcard);
+        }
+    }
+    
+    worldMode->firstFileToDelete = 0;
+    Clear(&worldMode->deletedFilesPool);
+}
 
 internal void PlayGame(GameState* gameState, PlatformInput* input)
 {
@@ -77,9 +115,6 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->oneOverVoxelSide = 1.0f / result->voxelSide;
     result->oneOverChunkSide = 1.0f / result->chunkSide;
     
-    
-    result->UI = PushStruct(&gameState->modePool, UIState);
-    result->UI->pool = &gameState->modePool;
     
     result->particleCache = PushStruct(&gameState->modePool, ParticleCache, AlignClear(16));
     InitParticleCache(result->particleCache, gameState->assets, &gameState->visualEffectsPool);
@@ -182,8 +217,6 @@ internal Vec3 HandleDaynightCycle(GameModeWorld* worldMode, PlatformInput* input
 
 internal void RenderEntities(GameModeWorld* worldMode, RenderGroup* group, ClientPlayer* myPlayer, r32 timeToAdvance)
 {
-    UIState* UI = worldMode->UI;
-    
     for(u32 entityIndex = 0; 
         entityIndex < ArrayCount(worldMode->entities); 
         entityIndex++)
@@ -201,6 +234,7 @@ internal void RenderEntities(GameModeWorld* worldMode, RenderGroup* group, Clien
                 }
                 
                 
+#if RESTRUCTURING                
                 if(UI->mode == UIMode_Loot && entity->identifier == myPlayer->identifier)
                 {
                     ClientEntity* container = GetEntityClient(worldMode, myPlayer->openedContainerID);
@@ -209,6 +243,7 @@ internal void RenderEntities(GameModeWorld* worldMode, RenderGroup* group, Clien
                         params.transparent = true;
                     }
                 }
+#endif
                 
                 entity->animation.output = RenderEntity(group, worldMode, entity, timeToAdvance, params);
                 
@@ -217,6 +252,8 @@ internal void RenderEntities(GameModeWorld* worldMode, RenderGroup* group, Clien
                     entity->lifePointsTriggerTime += timeToAdvance;
                     entity->staminaTriggerTime += timeToAdvance;
                     
+                    r32 HUD_FADE_TIME = 2.0f;
+                    r32 HUD_TRIGGER_TIME = 2.0f;
                     if(entity->showHUD)
                     {
                         if(entity->lifePointsTriggerTime >= HUD_FADE_TIME)
@@ -551,7 +588,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     b32 result = false;
     
     ClientPlayer* myPlayer = &worldMode->player;
-    UIState* UI = worldMode->UI;
     ReceiveNetworkPackets(gameState, worldMode);
     
     worldMode->originalTimeToAdvance = input->timeToAdvance;
@@ -583,6 +619,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     
     Vec3 groundMouseP = ProjectOnGround(unprojectedWorldMouseP, group->gameCamera.P);
     worldMode->worldMouseP = groundMouseP;
+    worldMode->relativeScreenMouseP = V2(input->relativeMouseX, input->relativeMouseY);
     
     
     b32 reloadTaxonomyAutocompletes = false;
@@ -598,6 +635,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 ++worldMode->patchSectionArrived;
                 
                 
+#if RESTRUCTURING                
                 WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstDataFileArrived, false);
                 switch(worldMode->dataFileSent)
                 {
@@ -609,7 +647,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         
                         for(DataFileArrived* file = worldMode->firstDataFileArrived; file; file = file->next)
                         {
-                            ImportAllFiles(worldMode->editorRoles, false, file->name);
+                            ImportAllFiles(worldMode->editorRoles, file->name);
                         }
                     } break;
                     
@@ -624,12 +662,13 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         SwapTables(worldMode);
                         ReadTaxonomiesFromFile();
                         
-                        ImportAllFiles(worldMode->editorRoles, false, 0);
+                        ImportAllFiles(worldMode->editorRoles, 0);
                         ImportAllAssetFiles(worldMode, filePath, &worldMode->filePool);
                         
                         platformAPI.DEBUGWriteFile("editorErrors", worldMode->table->errors, sizeof(worldMode->table->errors[0]) * worldMode->table->errorCount);
                     } break;
                 }
+#endif
                 
                 worldMode->firstDataFileArrived = 0;
                 TranslateParticleEffects(worldMode->particleCache, worldMode->oldTable, worldMode->table);
@@ -645,12 +684,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 }
                 
                 TranslateClientPlayer(worldMode->oldTable, worldMode->table, myPlayer);
-                TranslateUI(worldMode->oldTable, worldMode->table, worldMode->UI);
-                UI->editorTaxonomyTree = 0;
-                UI->editingTaxonomy = 0;
                 TaxonomySlot* rootSlot = &worldMode->table->root;
-                UI->editorTaxonomyTree = BuildEditorTaxonomyTree(worldMode->editorRoles, worldMode->table, rootSlot);
-                UI->canShowTaxonomyTree = true;
                 
                 reloadTaxonomyAutocompletes = true;
                 
@@ -666,6 +700,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 CloseAllHandles(gameState->assets);
                 
                 
+#if RESTRUCTURING                
                 for(DataFileArrived* file = worldMode->firstPakFileArrived; file; file = file->next)
                 {
                     MarkFileAsArrived(worldMode, file->name);
@@ -687,10 +722,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 Clear(&worldMode->filePool);
                 worldMode->currentFile = 0;
-                worldMode->UI->gameFont = {};
-                worldMode->UI->editorFont = {};
                 
                 
+#endif
                 
                 // TODO(Leonardo): this should not be here!
 #if 0
@@ -705,7 +739,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 reloadAssetAutocompletes = true;
                 MarkAllPakFilesAsToDelete(worldMode, "assets");
                 worldMode->allPakFilesArrived = false;
-                worldMode->UI->reloadingAssets = false;
             }
             
             
@@ -715,22 +748,15 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             player->identifier = myPlayer->identifier;
             player->P = V3(0, 0, 0);
             
-            UI->output = {};
-            UI->output.desiredAction = Action_Idle;
-            
             b32 canRender = (worldMode->patchSectionArrived >= 2);
             if(canRender)
             {
-                
-                ResetUI(UI, worldMode, group, player, input, worldMode->cameraWorldOffset.z / worldMode->defaultCameraZ, reloadTaxonomyAutocompletes, reloadAssetAutocompletes);
-                
                 Clear(group, V4(0.0f, 0.0f, 0.0f, 1.0f));
                 ResetLightGrid(worldMode);
                 
-                MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), UI->zoomLevel);
-                UIHandle(UI, input, screenMouseP, worldMode->nearestEntities, ArrayCount(worldMode->nearestEntities));
-                UIOutput output = UI->output;
+                MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), 1.0f);
                 
+#if RESTRUCTURING                
                 if(!TooFarForAction(myPlayer, output.desiredAction, output.targetEntityID))
                 {
                     b32 resetAcceleration = false;
@@ -743,15 +769,23 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         }
                     }
                 }
+                ClientEntity* target = GetEntityClient(worldMode, output.targetEntityID);
+                if(target)
+                {
+                    player->animation.flipOnYAxis = (target->P.x < 0);
+                }
                 myPlayer->acceleration = output.inputAcc;
+                u64 overallNearestID = DetectNearestEntities(worldMode, group, screenMouseP);
+                if(!output.overlappingEntityID && overallNearestID != player->identifier)
+                {
+                    output.overlappingEntityID = overallNearestID;
+                }
+                
+#endif
+                
                 UpdateAndSetupGameCamera(worldMode, group, input);
                 
-                
-                u64 overallNearestID = DetectNearestEntities(worldMode, group, screenMouseP);
                 UpdateEntities(worldMode, input->timeToAdvance, player, myPlayer);
-                
-                
-                
                 
                 BeginDepthPeel(group);
                 
@@ -769,7 +803,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 myPlayer->universeP = player->universeP;
                 Vec3 deltaP = -Subtract(myPlayer->universeP, myPlayer->oldUniverseP);
-                UI->deltaMouseP += deltaP;
                 
                 
                 for(u32 voronoiIndex = 0; voronoiIndex < ArrayCount(worldMode->voronoiPingPong); ++voronoiIndex)
@@ -777,7 +810,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     worldMode->voronoiPingPong[voronoiIndex].deltaP += deltaP;
                 }
                 
-                UpdateAndRenderGround(gameState, worldMode, group, myPlayer, UI->chunkApron, input->timeToAdvance);
+                u32 chunkApron = 2;
+                UpdateAndRenderGround(gameState, worldMode, group, myPlayer, chunkApron, input->timeToAdvance);
                 
                 worldMode->particleCache->deltaParticleP = deltaP;
                 UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
@@ -785,33 +819,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 worldMode->boltCache->deltaP = deltaP;
                 UpdateAndRenderBolts(worldMode, worldMode->boltCache, input->timeToAdvance, group);
                 
-                UIOverdrawInventoryOverlay(UI);
-                
                 EndDepthPeel(group);
                 
-                
-                
-                if(!output.overlappingEntityID)
-                {
-                    if(overallNearestID != player->identifier)
-                    {
-                        output.overlappingEntityID = overallNearestID;
-                    }
-                }
-                
-                if(output.targetEntityID)
-                {
-                    ClientEntity* target = GetEntityClient(worldMode, output.targetEntityID);
-                    if(target)
-                    {
-                        player->animation.flipOnYAxis = (target->P.x < 0);
-                    }
-                }
-                
-                inputAcc = output.inputAcc;
-                targetEntityID = output.targetEntityID;
-                desiredAction = output.desiredAction;
-                overlappingEntityID = output.overlappingEntityID;
                 myPlayer->oldUniverseP = myPlayer->universeP;
                 
 #if 0
@@ -983,8 +992,8 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
 
 inline void FreeGameMode(GameModeWorld* worldMode)
 {
-    Clear(&worldMode->oldTable->pool);
-    Clear(&worldMode->table->pool);
+    Clear(&worldMode->oldTable->pool_);
+    Clear(&worldMode->table->pool_);
 }
 
 #if FORGIVENESS_INTERNAL
@@ -1046,10 +1055,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         gameState->slowQueue = memory->lowPriorityQueue;
         gameState->textureQueue = &memory->textureQueue;
         
-        gameState->assetsIndex = 0;
-        MemoryPool* pool = gameState->assetsPool + 0;
-        gameState->pingPongAssets[0] = InitAssets(gameState, pool, gameState->textureQueue, MegaBytes(256));
-        gameState->assets = gameState->pingPongAssets[0];
+        MemoryPool* pool = &gameState->assetsPool;
+        gameState->assets = InitAssets(gameState, pool, gameState->textureQueue, MegaBytes(256));
         
         
         InitializeSoundState(&gameState->soundState, &gameState->audioPool);

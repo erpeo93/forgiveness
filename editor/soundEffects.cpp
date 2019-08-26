@@ -4,8 +4,7 @@ inline TaxonomySound* AddSoundEffect(TaxonomySlot* slot, char* animationName, ch
     u64 animationHash = StringHash(animationName);
     u64 eventHash = StringHash(eventName);
     
-    TaxonomySound* dest;
-    TAXTABLE_ALLOC(dest, TaxonomySound);
+    TaxonomySound* dest = PushStruct(&currentSlot_->pool, TaxonomySound);
     
     dest->animationNameHash = animationHash;
     dest->threesold = threesold;
@@ -20,7 +19,6 @@ inline TaxonomySound* AddSoundEffect(TaxonomySlot* slot, char* animationName, ch
 internal void ImportSoundEffectsTab(TaxonomySlot* slot, EditorElement* root)
 {
     
-    FREELIST_FREE(slot->firstSound, TaxonomySound, taxTable_->firstFreeTaxonomySound);
     EditorElement* effects = root->firstInList;
     while(effects)
     {

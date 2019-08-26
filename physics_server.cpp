@@ -28,131 +28,6 @@ internal void HandleCollision(SimEntity* entity, SimEntity* entityToCheck)
     
 }
 
-struct OverlappingSurfaceResult
-{
-    u32 X;
-    u32 Y;
-};
-
-inline OverlappingSurfaceResult OverlappingSurfaceIndex(SimRegion* region, SpacePartition* partition, Vec3 P)
-{
-    OverlappingSurfaceResult result = {};
-    result.X = TruncateReal32ToU32((P.x + region->halfGridDim) * partition->oneOverSurfaceDim);
-    result.Y = TruncateReal32ToU32((P.y + region->halfGridDim) * partition->oneOverSurfaceDim);
-    return result;
-}
-
-inline u32 GetOverlappingSurfaces(SimRegion* region, SpacePartition* partition, Vec3 P, Vec3 deltaP, Rect3 bounds, u32* outputSpaceIndexes, u32 maxOutputCount)
-{
-    Rect3 boundsHere = Offset(bounds, P);
-    Rect3 boundsDelta = Offset(boundsHere, deltaP);
-    
-    Vec3 minDelta = bounds.min;
-    Vec3 maxDelta = bounds.max;
-    
-    Vec3 points[4];
-    points[0] = boundsHere.min;
-    points[1] = boundsHere.max;
-    points[2] = boundsDelta.min;
-    points[3] = boundsDelta.max;
-    
-    u32 minX = U32_MAX;
-    u32 minY = U32_MAX;
-    u32 maxX = 0;
-    u32 maxY = 0;
-    
-    for(u32 pIndex = 0; pIndex < ArrayCount(points); ++pIndex)
-    {
-        OverlappingSurfaceResult surface = OverlappingSurfaceIndex(region, partition, points[pIndex]);
-        minX = Min(minX, surface.X);
-        minY = Min(minY, surface.Y);
-        
-        maxX = Max(maxX, surface.X);
-        maxY = Max(maxY, surface.Y);
-    }
-    
-    maxX = Min(maxX, partition->partitionSurfaceDim - 1);
-    maxY = Min(maxY, partition->partitionSurfaceDim - 1);
-    
-    u32 outputCount = 0;
-    for(u32 Y = minY; Y <= maxY; ++Y)
-    {
-        for(u32 X = minX; X <= maxX; ++X)
-        {
-            Assert(outputCount < maxOutputCount);
-            u32 surfaceIndex = (Y * partition->partitionSurfaceDim) + X;
-            outputSpaceIndexes[outputCount++] = surfaceIndex;
-        }
-    }
-    
-    return outputCount;
-}
-
-inline void AddToPartitionBlock(MemoryPool* pool, PartitionSurfaceEntityBlock** firstPtr, PartitionSurfaceEntityBlock* block, CollisionData collider)
-{
-    if(!block || (block->entityCount == ArrayCount(block->colliders)))
-    {
-        PartitionSurfaceEntityBlock* newBlock = PushStruct(pool, PartitionSurfaceEntityBlock);
-        newBlock->next = block;
-        *firstPtr = newBlock;
-        block = newBlock;
-    }
-    
-    Assert(block->entityCount < ArrayCount(block->colliders));
-    block->colliders[block->entityCount++] = collider;
-}
-
-
-
-inline void AddToSpacePartition(SimRegion* region, SpacePartition* partition, MemoryPool* tempPool, Vec3 P, Rect3 bounds, CollisionData collider)
-{
-    u32 surfaces[256];
-    u32 addedTo = GetOverlappingSurfaces(region, partition, P, V3(0, 0, 0), bounds, surfaces, ArrayCount(surfaces));
-    
-    for(u32 index = 0; index < addedTo; ++index)
-    {
-        u32 surfaceIndex = surfaces[index];
-        Assert(surfaceIndex < (u32) Squarei(partition->partitionSurfaceDim));
-        RegionPartitionSurface* surface = partition->partitionSurfaces + surfaceIndex;
-        
-        PartitionSurfaceEntityBlock* addHere = surface->first;
-        AddToPartitionBlock(tempPool, &surface->first, addHere, collider);
-    }
-}
-
-inline RegionPartitionQueryResult QuerySpacePartition(SimRegion* region, SpacePartition* partition, Vec3 P, Vec3 deltaP, Rect3 bounds)
-{
-    RegionPartitionQueryResult result = {};
-    
-    u32 surfaces[64];
-    u32 overlapping = GetOverlappingSurfaces(region, partition, P, deltaP, bounds, surfaces, ArrayCount(surfaces));
-    
-    Assert(overlapping <= ArrayCount(result.surfaceIndexes));
-    
-    for(u32 overlappingIndex = 0; overlappingIndex < overlapping; ++overlappingIndex)
-    {
-        result.surfaceIndexes[overlappingIndex] = surfaces[overlappingIndex];
-    }
-    
-    return result;
-}
-
-inline RegionPartitionQueryResult QuerySpacePartitionRadious(SimRegion* region, SpacePartition* partition, Vec3 P, Vec3 radious)
-{
-    RegionPartitionQueryResult result = QuerySpacePartition(region, partition, P, V3(0, 0, 0), RectCenterDim(V3(0, 0, 0), radious));
-    return result;
-}
-
-
-inline PartitionSurfaceEntityBlock* QuerySpacePartitionPoint(SimRegion* region, SpacePartition* partition, Vec3 P)
-{
-    OverlappingSurfaceResult overlapping = OverlappingSurfaceIndex(region, partition, P);
-    RegionPartitionSurface* surface  = partition->partitionSurfaces + (overlapping.Y * partition->partitionSurfaceDim) + overlapping.X;
-    PartitionSurfaceEntityBlock* result = surface->first;
-    
-    return result;
-}
-
 inline r32 CalculateCollisionRadiousSq(Rect3 bounds)
 {
     Vec3 boundRadious = 0.5f * GetDim(bounds);
@@ -160,6 +35,7 @@ inline r32 CalculateCollisionRadiousSq(Rect3 bounds)
     return result;
 }
 
+inline SimEntity* GetRegionEntity(SimRegion* region, u32 index);
 internal r32 CheckCollisions(SimRegion* region, SimEntity* entity, 
                              Vec3 deltaP, r32 tRemaining, Vec3* wallNormalMin, CheckCollisionCurrent* hitMin)
 {
@@ -206,31 +82,6 @@ internal r32 CheckCollisions(SimRegion* region, SimEntity* entity,
                 block = block->next;
             }
         }
-        
-#if 0        
-        for( u32 tileIndex = 0; tileIndex < ArrayCount( region->tiles ); ++tileIndex )
-        {
-            RegionTile* tile = region->tiles + tileIndex;
-            if( ShouldCollide( entity, tile ) )
-            {
-                CollVolume testVolume_ = {};
-                testVolume_.offset = V3( 0.0f, 0.0f, -0.5f * tile->P.z );
-                testVolume_.dim = V3( VOXEL_SIZE, VOXEL_SIZE, tile->P.z );
-                
-                CollVolume* testVolume = &testVolume_;
-                
-                
-                CheckCollisionCurrent test = {};
-                test.isEntity = false;
-                test.tile = tile;
-                test = HandleVolumeCollision( entity->P, volume, deltaP, tile->P, testVolume, &tMin, &wallNormalMin, test );
-                if( test.tile )
-                {
-                    hitMin = test;
-                }
-            }
-        }
-#endif
     }
     
     return result;
@@ -290,7 +141,7 @@ internal void MoveEntityServer(SimRegion* region, SimEntity* entity, MoveSpec mo
         Vec3 initialAcc = entity->acceleration;
         Vec3 acceleration = ComputeAcceleration(initialAcc, entity->velocity, moveSpec);
         
-        if(!IsSet( entity, Flag_floating))
+        if(!IsSet(entity, Flag_floating))
         {
             acceleration.z += -9.8f;
         }

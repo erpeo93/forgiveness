@@ -869,7 +869,7 @@ internal void DebugDrawElement( Layout* layout, DebugTree* tree, DebugElement* i
             
             MakeElementSizable( layout, &layoutElement );
             EndElement( &layoutElement );
-            PushRect( &debugState->renderGroup, DefaultOverDrawTransform( -300.0f ), layoutElement.bounds, V4( 0.0f, 0.0f, 0.0f, 0.7f ) );
+            PushRect( &debugState->renderGroup, FlatTransform( -300.0f ), layoutElement.bounds, V4( 0.0f, 0.0f, 0.0f, 0.7f ) );
             
             TransientClipRect(renderGroup, GetClipRect(&debugState->renderGroup, layoutElement.bounds, 0.0f));
             
@@ -1017,7 +1017,7 @@ internal void DrawTrees( DebugState* debugState, DebugCollationState* collation,
         moveInteraction.P = &tree->P;
         
         Rect2 sizeBounds = RectCenterDim( tree->P - V2( 10.0f, 10.0f ), V2( 4.0f, 4.0f ) );
-        PushRect(renderGroup, DefaultOverDrawTransform(), sizeBounds, InteractionIsHot( collation, moveInteraction ) ? V4( 1.0f, 1.0f, 0.0f, 1.0f ) : V4( 1.0f, 1.0f, 1.0f, 1.0f ) ); 
+        PushRect(renderGroup, FlatTransform(), sizeBounds, InteractionIsHot( collation, moveInteraction ) ? V4( 1.0f, 1.0f, 0.0f, 1.0f ) : V4( 1.0f, 1.0f, 1.0f, 1.0f ) ); 
         
         if( PointInRect( sizeBounds, mouseP ) )
         {
@@ -1517,19 +1517,6 @@ internal DebugElement* GetElementFromEvent( DebugState* debugState, DebugCollati
         
         result->type = ( DebugType ) event->type;
         result->originalGUID = event->GUID;
-        
-        
-#if 0        
-        if( isServer )
-        {
-            AddString( "server" );
-        }
-        else
-        {
-            AddString( "client" );
-        }
-#endif
-        
         result->GUID = PushString( &debugState->debugPool, event->GUID );
         result->fileNameCount = parsedName.fileNameCount;
         result->name = PushString( &debugState->debugPool, parsedName.name );
@@ -1700,94 +1687,6 @@ internal void CollateDebugEvents( DebugState* debugState, DebugCollationState* c
             }
         }
     }
-}
-
-internal void DumpStruct( DebugState* debugState, void* structPtr, MemberDefinition* members, u32 memberCount, u32 indentLevel = 0 )
-{
-    NotImplemented;
-    
-#if 0    
-    for( u32 memberIndex = 0; memberIndex < memberCount;
-        ++memberIndex )
-    {
-        char textBufferBase[4096];
-        textBufferBase[0] = 0;
-        
-        char* textBuffer = textBufferBase;
-        
-        for( u32 indentIndex = 0; indentIndex < indentLevel; ++indentIndex )
-        {
-            *textBuffer++ = ' ';
-            *textBuffer++ = ' ';
-            *textBuffer++ = ' ';
-            *textBuffer++ = ' ';
-        }
-        
-        size_t textBufferLeft = sizeof( textBufferBase ) - ( textBuffer - textBufferBase );
-        
-        MemberDefinition* member = members + memberIndex;
-        void* memberPtr = ( ( u8* ) structPtr ) + member->offset;
-        
-        if( member->flags & MetaFlag_Pointer )
-        {
-            memberPtr = *( void** ) memberPtr;
-        }
-        
-        if( memberPtr )
-        {
-            switch( member->type )
-            {
-                case MetaType_u32:
-                {
-                    FormatString( textBuffer, textBufferLeft, "%s: %u", member->name, 
-                                 *( u32* ) memberPtr );
-                } break;
-                
-                case MetaType_i32:
-                {
-                    FormatString( textBuffer, textBufferLeft, "%s: %d", member->name, 
-                                 *( i32* ) memberPtr );
-                } break;
-                
-                case MetaType_b32:
-                {
-                    FormatString( textBuffer, textBufferLeft, "%s: %d", member->name, 
-                                 *( b32* ) memberPtr );
-                } break;
-                
-                case MetaType_r32:
-                {
-                    FormatString( textBuffer, textBufferLeft, "%s: %f", member->name, 
-                                 *( r32* ) memberPtr );
-                } break;
-                
-                case MetaType_Vec2:
-                {
-                    FormatString( textBuffer, textBufferLeft, "%s: {%f, %f}", member->name,
-                                 ( r32 ) ( ( Vec2* ) memberPtr )->x, ( r32 ) ( ( Vec2* ) memberPtr )->y );
-                } break;
-                
-                case MetaType_Vec3:
-                {
-                    FormatString( textBuffer, textBufferLeft, "%s: {%f, %f, %f}", 
-                                 member->name,
-                                 ( r32 ) ( ( Vec3* ) memberPtr )->x, 
-                                 ( r32 ) ( ( Vec3* ) memberPtr )->y,
-                                 ( r32 ) ( ( Vec3* ) memberPtr )->z );
-                } break;
-                
-                //META_HANDLE_TYPE_DUMP( memberPtr, indentLevel + 1 );
-            }
-        }
-        
-        if( textBuffer[0] )
-        {
-            //DEBUGTextLine( debugState, textBufferBase );
-        }
-        
-    }
-#endif
-    
 }
 
 internal void DEBUGOverlay( DebugState* debugState, DebugCollationState* collation, PlatformInput* input, Vec2 mouseP )

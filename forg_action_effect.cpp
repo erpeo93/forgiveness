@@ -1,3 +1,14 @@
+
+inline b32 RequiresOwnership(EntityAction action)
+{
+    b32 result = (action == Action_Open ||
+                  action == Action_Pick ||
+                  action == Action_Equip);
+    
+    return result;
+}
+
+
 inline b32 Ignored(ServerPlayer* player, EntityAction action)
 {
     b32 result = false;
@@ -46,52 +57,6 @@ inline void DealDamage(DispatchEffectsContext* context, SimRegion* region, SimEn
     if(creature->lifePoints <= 0)
     {
         creature->lifePoints = 0;
-    }
-}
-
-inline void EssenceDelta(SimRegion* region, SimEntity* entity, u32 essenceTaxonomy, i16 delta)
-{
-    CreatureComponent* creature = Creature(region, entity);
-    EssenceSlot* firstFree = 0;
-    b32 present = false;
-    for(u32 testIndex = 0; testIndex < MAX_DIFFERENT_ESSENCES; ++testIndex)
-    {
-        EssenceSlot* test = creature->essences + testIndex;
-        if(!test->taxonomy)
-        {
-            firstFree = test;
-        }
-        else if(essenceTaxonomy == test->taxonomy)
-        {
-            if(delta > 0)
-            {
-                test->quantity += (u32) delta;
-            }
-            else
-            {
-                u32 diff = (u32) -delta;
-                Assert(test->quantity >= diff);
-                test->quantity -= diff;
-            }
-            
-            present = true;
-            break;
-        }
-    }
-    
-    if(!present)
-    {
-        Assert(firstFree);
-        Assert(delta > 0);
-        EssenceSlot* newEssence = firstFree;
-        newEssence->taxonomy = essenceTaxonomy;
-        newEssence->quantity = (u32) delta;
-    }
-    
-    if(entity->playerID)
-    {
-        ServerPlayer* player = region->server->players + entity->playerID;
-        SendEssenceDelta(player, essenceTaxonomy, delta);
     }
 }
 
@@ -468,9 +433,11 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
         
         case Action_Cast:
         {
+            
             SkillSlot* skillSlot = actorCreature->skills + actorCreature->activeSkillIndex;
             Assert(skillSlot->taxonomy);
             TaxonomySlot* spellSlot = GetSlotForTaxonomy(region->taxTable, skillSlot->taxonomy);r32 skillPower = ComputeSkillPower(spellSlot, skillSlot->level);
+#if RESTRUCTURING            
             for(TaxonomyEffect* effectSlot = spellSlot->firstEffect; effectSlot; effectSlot = effectSlot->next)
             {
                 Effect* effect = &effectSlot->effect;
@@ -479,6 +446,8 @@ internal void DispatchStandardEffects(DispatchEffectsContext* context, SimRegion
                     DispatchEffect(context, region, actor, target, action, effect, skillPower);
                 }
             }
+#endif
+            
             actorCreature->skillCooldown = spellSlot->cooldown;
             
             
@@ -619,6 +588,8 @@ inline void DispatchPassiveEffects(SimRegion* region, SimEntity* entity)
 inline PossibleAction* GetPossibleAction(TaxonomySlot* slot, EntityAction action)
 {
     PossibleAction* result = 0;
+    
+#if RESTRUCTURING    
     PossibleAction* test = slot->firstPossibleAction;
     while(test)
     {
@@ -630,6 +601,8 @@ inline PossibleAction* GetPossibleAction(TaxonomySlot* slot, EntityAction action
         
         test = test->next;
     }
+#endif
+    
     return result;
 }
 
@@ -703,8 +676,8 @@ inline b32 EntityCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* tar
             if(possibleAction->flags & CanDoAction_EquipmentSlot)
             {
                 CreatureComponent* creature = Creature(region, actor);
-                EquipInfo info = PossibleToEquip_(taxTable, actor->taxonomy, creature->equipment, targetSlot->taxonomy, (i16) target->status);
-                if(!IsValid(info))
+                SlotName slot = PossibleToEquip_(taxTable, actor->taxonomy, creature->equipment, targetSlot->taxonomy, (i16) target->status);
+                if(!IsValid(slot))
                 {
                     canDoAction = false;
                 }
@@ -724,6 +697,9 @@ inline b32 EntityCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* tar
             
             if(canDoAction)
             {
+                canDoAction = false;
+                
+#if RESTRUCTURING
                 TaxonomyNode* node = FindInTaxonomyTree(taxTable, possibleAction->tree.root, actorSlot->taxonomy);
                 if(node)
                 {
@@ -733,6 +709,8 @@ inline b32 EntityCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* tar
                 {
                     canDoAction = false;
                 }
+#endif
+                
             }
         }
         else
@@ -785,6 +763,9 @@ inline r32 GetActionTargetTime(SimRegion* region, SimEntity* actor, SimEntity* t
                 TaxonomySlot* targetSlot = GetSlotForTaxonomy(region->taxTable, target->taxonomy);
                 PossibleAction* possibleAction = GetPossibleAction(targetSlot, action);
                 
+                result = 1.0f;
+                
+#if RESTRUCTURING                
                 if(possibleAction)
                 {
                     TaxonomyNode* node = FindInTaxonomyTree(region->taxTable, possibleAction->tree.root, actor->taxonomy);
@@ -794,6 +775,8 @@ inline r32 GetActionTargetTime(SimRegion* region, SimEntity* actor, SimEntity* t
                 {
                     InvalidCodePath;
                 }
+#endif
+                
             }
         } break;
     }
@@ -825,14 +808,11 @@ internal void HandleAction(SimRegion* region, SimEntity* entity)
         if(entity->actionTime > targetTime)
         {
             DispatchEffectsContext dispatch = DispatchEffects(region, entity, destEntity, consideringAction);
-            if(region->border != Border_Mirror && IsSet(entity, Flag_insideRegion))
-            {
-                CreatureComponent* creature = Creature(region, entity);
-                creature->completedAction = SafeTruncateToU8(consideringAction);
-                creature->completedActionTarget = entity->targetID;    
-                entity->actionTime = 0;
-                entity->action = dispatch.followingAction;
-            }
+            CreatureComponent* creature = Creature(region, entity);
+            creature->completedAction = SafeTruncateToU8(consideringAction);
+            creature->completedActionTarget = entity->targetID;    
+            entity->actionTime = 0;
+            entity->action = dispatch.followingAction;
         }
     }
 }

@@ -116,7 +116,7 @@ extern DebugEvent* DEBUGGlobalEditEvent;
 inline void DEBUGValueSetEventData( DebugEvent* event, typeInit ignored, void* value )\
 {\
     event->type = DebugType_##typeInit;\
-    if( globalDebugTable->editEvent.GUID == event->GUID )\
+    if(globalDebugTable->editEvent.GUID == event->GUID)\
     {\
         *( typeInit * ) value = globalDebugTable->editEvent.Value_##typeInit;\
     }\
@@ -136,11 +136,11 @@ DEBUGValueSetEventData_( SoundId );
 DEBUGValueSetEventData_( FontId );
 
 
-#define UniqueFileLineCounterString__( file, line, counter, name ) file "|" #line "|" #counter //"|" name
-#define UniqueFileLineCounterString_( file, line, counter, name ) UniqueFileLineCounterString__( file, line, counter, name )
-#define DEBUG_NAME( name ) UniqueFileLineCounterString_( __FILE__, __LINE__, __COUNTER__, name )
+#define UniqueFileLineCounterString__(file, line, counter, name) file "|" #line "|" #counter //"|" name
+#define UniqueFileLineCounterString_(file, line, counter, name) UniqueFileLineCounterString__( file, line, counter, name )
+#define DEBUG_NAME(name) UniqueFileLineCounterString_(__FILE__, __LINE__, __COUNTER__, name)
 
-#define DEBUGSetEventRecording( enabled ) globalDebugTable->recordIncrement = ( enabled ) ? 1 : 0
+#define DEBUGSetEventRecording(enabled) globalDebugTable->recordIncrement = ( enabled ) ? 1 : 0
 
 #define RecordDebugEvent( typeInit, guid, nameInit )\
 u64 arrayIndex_eventIndex =AtomicIncrementU64( &globalDebugTable->eventArrayIndex_EventIndex, globalDebugTable->recordIncrement );\
@@ -174,13 +174,13 @@ struct DebugDataBlock
 }
 
 inline void DebugEditEvent( char* GUID, DebugEvent* event );
-#define DEBUG_VALUE( value ) \
+#define DEBUG_VALUE(value) \
 {\
     RecordDebugEvent( DebugType_unknown, DEBUG_NAME( #value ), #value );\
     DEBUGValueSetEventData( event, value, &value );\
 }
 
-#define DEBUG_B32( value ) \
+#define DEBUG_B32(value) \
 {\
     RecordDebugEvent( DebugType_unknown, DEBUG_NAME( #value ), #value );\
     DEBUGValueSetEventData( event, ( i32 ) 0, &value );\

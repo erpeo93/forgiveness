@@ -1,36 +1,3 @@
-
-#define _GET_NTH_ARG(_1, _2, _3, _4, _5, N, ...) N
-#define _fe_0(_call, ...)
-#define _fe_1(_call, x) _call(x)
-#define _fe_2(_call, x, ...) _call(x) _fe_1(_call, __VA_ARGS__)
-#define _fe_3(_call, x, ...) _call(x) _fe_2(_call, __VA_ARGS__)
-#define _fe_4(_call, x, ...) _call(x) _fe_3(_call, __VA_ARGS__)
-
-#define CALL_MACRO_X_FOR_EACH(x, ...) \
-_GET_NTH_ARG("ignored", ##__VA_ARGS__, _fe_4, _fe_3, _fe_2, _fe_1, _fe_0)(x, ##__VA_ARGS__)
-#define BUCKET_DISTR(type, ...) BucketDistr({ CALL_MACRO_X_FOR_EACH(PRINT_BUCKET, type) })
-#if 0
-BucketDistr({ Tree_Palm, 30, Tree_Oak, 30, Tree_Pine, 40 });
-#endif
-
-
-
-
-
-
-
-inline RandomSequence GetChunkSeed(i32 worldX, i32 worldY, i32 universeX, i32 universeY)
-{
-    Assert(universeX >= 0);
-    Assert(universeX < UNIVERSE_DIM);
-    Assert(universeY >= 0);
-    Assert(universeY < UNIVERSE_DIM);
-    
-    RandomSequence result = Seed(worldX * 17 + worldY * 19 + universeX * 13 + universeY + 14);
-    return result;
-}
-
-
 inline r32 NormalizedNoise(r32 dx, r32 dy, r32 frequency, u32 seed)
 {
     r32 noiseValue  = noise(dx * frequency, dy * frequency, 0.0f, seed);
@@ -333,7 +300,7 @@ internal void BuildChunk(TaxonomyTable* table, WorldGeneratorDefinition* generat
     chunk->worldX = chunkX;
     chunk->worldY = chunkY;
     
-    i32 lateralChunkSpan = SERVER_REGION_SPAN * SIM_REGION_CHUNK_SPAN;
+    i32 lateralChunkSpan = WORLD_REGION_SPAN * REGION_CHUNK_SPAN;
     
     chunkX = Wrap(0, chunkX, lateralChunkSpan);
     chunkY = Wrap(0, chunkY, lateralChunkSpan);

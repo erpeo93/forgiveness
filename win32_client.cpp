@@ -10,12 +10,13 @@
 #include <Tlhelp32.h>
 #include <winbase.h>
 #include <DbgHelp.h>
-
+#include <time.h>
 #include <math.h>
 
 
 #include "forg_basic_types.h"
-#include "win32_net.h"
+#define LL_NET_IMPLEMENTATION
+#include "ll_net.h"
 #include "forg_platform.h"
 global_variable PlatformAPI platform;
 #include "forg_token.h"
@@ -1767,7 +1768,6 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         BEGIN_BLOCK( "sleep" );
                         if(secElapsed < targetSecPerFrame)
                         {
-                            OutputDebugString("yay");
                             while(secElapsed < targetSecPerFrame)
                             {
                                 if( sleepIsGranular )

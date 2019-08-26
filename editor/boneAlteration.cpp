@@ -1,7 +1,6 @@
-inline void AddBoneAlteration(TaxonomySlot* slot, char* boneIndex, char* scaleX, char* scaleY)
+inline void AddBoneAlteration(BoneAlterations* slot, char* boneIndex, char* scaleX, char* scaleY)
 {
-    TaxonomyBoneAlterations* alt;
-    TAXTABLE_ALLOC(alt, TaxonomyBoneAlterations);
+    EditorBoneAlteration* alt = PushStruct(&currentSlot_->pool, EditorBoneAlteration);
     
     alt->boneIndex = ToU32(boneIndex);
     
@@ -13,10 +12,8 @@ inline void AddBoneAlteration(TaxonomySlot* slot, char* boneIndex, char* scaleX,
     FREELIST_INSERT(alt, slot->firstBoneAlteration);
 }
 
-internal void ImportBoneAlterationsTab(TaxonomySlot* slot, EditorElement* root)
+internal void ImportBoneAlterationsTab(BoneAlterations* slot, EditorElement* root)
 {
-    
-    FREELIST_FREE(slot->firstBoneAlteration, TaxonomyBoneAlterations, taxTable_->firstFreeTaxonomyBoneAlterations);
     EditorElement* alterations = root->firstInList;
     while(alterations)
     {

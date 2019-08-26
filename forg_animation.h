@@ -5,19 +5,13 @@
 #define MIN_STATUS_ALPHA -20.0f
 #define MAX_STATUS_ALPHA 20.0f
 
-#define bodyDead V4(0.02f, 0.02f, 0.02f, 1)
-#define bodyAlive V4(1, 1, 1, 1)
-
-#define ashDead V4(0.0f, 0.0f, 0.0f, 1.0f)
-#define ashAlive V4(1, 0, 0, 1)
-
-struct BoneAlterations
+struct BoneAlteration
 {
     b32 valid;
     Vec2 scale;
 };
 
-struct AssAlterations
+struct AssAlteration
 {
     b32 valid;
     Vec2 scale;
@@ -28,28 +22,13 @@ struct AssAlterations
 };
 
 
-struct VisualComponent
-{
-    u64 stringHashID;
-    u8 index;
-    
-    u32 labelCount;
-    VisualLabel labels[8];
-};
-
-struct ComponentsProperties
-{
-    u32 componentCount;
-    VisualComponent components[8];
-};
-
 struct EquipmentAnimationPiece
 {
     PieceAss ass;
     SpriteInfo sprite;
     
     b32 drawModulated;
-    EquipInfo slot;
+    u32 slot;
     
     i16 status;
     struct ComponentsProperties* properties;
@@ -58,13 +37,13 @@ struct EquipmentAnimationPiece
 struct BlendedBone
 {
     Bone bone;
-    BoneAlterations alterations;
+    BoneAlteration alterations;
 };
 
 struct BlendedAss
 {
     PieceAss ass;
-    AssAlterations alterations;
+    AssAlteration alterations;
     SpriteInfo sprite;
     
     u32 equipmentAssCount;
@@ -94,6 +73,21 @@ struct PieceResult
     r32 tags[Tag_count];
 };
 
+struct VisualComponent
+{
+    u64 stringHashID;
+    u8 index;
+    
+    u32 labelCount;
+    VisualLabel labels[8];
+};
+
+struct ComponentsProperties
+{
+    u32 componentCount;
+    VisualComponent components[8];
+};
+
 struct EquipmentAnimationSlot
 {
     u64 ID;
@@ -101,7 +95,7 @@ struct EquipmentAnimationSlot
     u32 taxonomy;
     i16 status;
     ComponentsProperties properties;
-    EquipInfo slot;
+    u32 slot;
     b32 drawModulated;
     b32 isOpen;
 };
@@ -111,7 +105,7 @@ struct AnimationOutput
     u64 playedAnimationNameHash;
     
     i16 nearestAss;
-    EquipInfo focusSlots;
+    u32 focusSlots;
     
     i32 focusObjectIndex;
     r32 additionalZoomCoeff;
@@ -135,7 +129,7 @@ enum AnimationSyncState
 struct AnimationState
 {
     AnimationOutput output;
-    EquipInfo nearestCompatibleSlotForDragging;
+    u32 nearestCompatibleSlotForDragging;
     
     AnimationSyncState syncState;
     r32 waitingForSyncTimer;
@@ -256,7 +250,7 @@ struct AnimationFixedParams
     r32 defaultModulatonWithFocusColor;
     
     u8 objectCount;
-    Object* objects;
+    struct Object* objects;
     
     u8 objectGridDimX;
     u8 objectGridDimY;
@@ -273,7 +267,7 @@ struct AnimationFixedParams
     struct ClientEntity* entity;
     struct ClientEntity* draggingEntity;
     
-    EquipmentAnimationSlot equipment[Slot_Count];
+    EquipmentAnimationSlot equipment[64];
     Vec4 defaultColoration;
     
     AnimationOutput* output;
@@ -329,4 +323,85 @@ inline AnimationEntityParams ContainerEntityParams(b32 onTop = false)
 struct TileAnimationData
 {
     Lights lights;
+};
+
+struct AnimationSoundEvent
+{
+    r32 threesold;
+    u64 animationNameHash;
+    u64 eventNameHash;
+};
+
+
+struct ClientAnimationEffect
+{
+    u32 referenceSlot;
+    AnimationEffect effect;
+    
+    union
+    {
+        struct ParticleEffect* particleRef;
+        r32 boltTimer;
+    };
+    
+    union
+    {
+        ClientAnimationEffect* next;
+        ClientAnimationEffect* nextFree;
+    };
+};
+
+struct AnimationEffects
+{
+    AnimationEffect* firstAnimationEffect;
+};
+
+struct AnimationGeneralParams
+{
+    u64 skeletonSkinHashID;
+    u64 skeletonHashID;
+    u64 skinHashID;
+    Vec4 defaultColoration;
+    Vec2 originOffset;
+    b32 flippedOnYAxis;
+    
+    b32 animationIn3d;
+    b32 animationFollowsVelocity;
+    Vec3 modelOffset;
+    Vec4 modelColoration;
+    Vec3 modelScale;
+    u64 modelTypeID;
+    u64 modelNameID;
+};
+
+struct EditorBoneAlteration
+{
+    u32 boneIndex;
+    BoneAlteration alt;
+    union
+    {
+        EditorBoneAlteration* next;
+        EditorBoneAlteration* nextFree;
+    };
+};
+
+struct EditorAssAlteration
+{
+    u32 assIndex;
+    AssAlteration alt;
+    union
+    {
+        EditorAssAlteration* next;
+        EditorAssAlteration* nextFree;
+    };
+};
+
+struct AssAlterations
+{
+    EditorAssAlteration* firstAssAlteration;
+};
+
+struct BoneAlterations
+{
+    EditorBoneAlteration* firstBoneAlteration;
 };

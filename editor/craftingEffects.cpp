@@ -35,8 +35,7 @@ inline void Requires(CraftingEffectLink* link, char* essenceName, u32 quantity)
 
 inline CraftingEffectLink* LinkStandard(TaxonomySlot* slot, char* action, char* effectName, char* target)
 {
-    CraftingEffectLink* link;
-    TAXTABLE_ALLOC(link, CraftingEffectLink);
+    CraftingEffectLink* link = PushStruct(&currentSlot_->pool, CraftingEffectLink);
     link->triggerAction = (EntityAction) GetValuePreprocessor(EntityAction, action);
     link->target = target ? ToB32(target) : false;
     link->effectID = (EffectIdentifier) GetValuePreprocessor(EffectIdentifier, effectName);
@@ -48,8 +47,6 @@ inline CraftingEffectLink* LinkStandard(TaxonomySlot* slot, char* action, char* 
 
 internal void ImportCraftingEffectsTab(TaxonomySlot* slot, EditorElement* root)
 {
-    
-    FREELIST_FREE(slot->firstCraftingLink, CraftingEffectLink, taxTable_->firstFreeCraftingEffectLink);
     EditorElement* craftingEffectsList = root->firstInList;
     while(craftingEffectsList)
     {

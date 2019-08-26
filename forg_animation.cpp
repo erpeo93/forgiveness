@@ -261,7 +261,7 @@ inline Vec3 AssOriginOffset(Bone* parentBone, PieceAss* ass, r32 zOffset, Vec2 s
     return originOffset;
 }
 
-inline b32 RequiresSync(EntityAction action)
+inline b32 RequiresAnimationSync(EntityAction action)
 {
     b32 result = (action == Action_Cast ||
                   action == Action_Rolling);
@@ -277,7 +277,7 @@ inline void StartNextAction(AnimationState* state)
     state->action = state->nextAction;
     state->lastSyncronizedAction = Action_None;
     
-    if(RequiresSync((EntityAction) state->action))
+    if(RequiresAnimationSync((EntityAction) state->action))
     {
         state->syncState = AnimationSync_Preparing;
     }
@@ -381,7 +381,8 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
     
     
     TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, input->entity->taxonomy);
-    for(TaxonomyBoneAlterations* boneAlt = slot->firstBoneAlteration; boneAlt; boneAlt = boneAlt->next)
+    BoneAlterations* boneAlterations = GetSlotData(slot, boneAlterations);
+    for(EditorBoneAlteration* boneAlt = boneAlterations->firstBoneAlteration; boneAlt; boneAlt = boneAlt->next)
     {
         if(boneAlt->boneIndex < blended->boneCount)
         {
@@ -390,7 +391,8 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
         }
     }
     
-    for(TaxonomyAssAlterations* assAlt = slot->firstAssAlteration; assAlt; assAlt = assAlt->next)
+    AssAlterations* assAlterations = GetSlotData(slot, assAlterations);
+    for(EditorAssAlteration* assAlt = assAlterations->firstAssAlteration; assAlt; assAlt = assAlt->next)
     {
         if(assAlt->assIndex < blended->assCount)
         {
@@ -404,7 +406,7 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
         BlendedBone* blendedBone = blended->bones + boneIndex;
         
         Bone* bone = &blendedBone->bone;
-        BoneAlterations* boneAlt = &blendedBone->alterations;
+        BoneAlteration* boneAlt = &blendedBone->alterations;
         
         if(bone->parentID != -1)
         {
@@ -431,7 +433,7 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
     
     r32 waitingForSyncThreesold = 0.8f;
     
-    if(timeline >= header->durationMS || (state->stopAtNextBarrier && !RequiresSync((EntityAction) state->action)) || state->waitingForSyncTimer >= waitingForSyncThreesold)
+    if(timeline >= header->durationMS || (state->stopAtNextBarrier && !RequiresAnimationSync((EntityAction) state->action)) || state->waitingForSyncTimer >= waitingForSyncThreesold)
     {
         StartNextAction(state);
     }
@@ -516,6 +518,8 @@ inline SpriteInfo* GetSprite(BlendResult* blended, u32 spriteIndex)
 
 internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, TaxonomyTree* equipmentMappings, EquipmentAnimationSlot* slots)
 {
+    
+#if RESTRUCTURING    
     u64 inserted[Slot_Count] = {};
     for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
     {
@@ -649,6 +653,8 @@ internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, Tax
             }
         }
     }
+#endif
+    
 }
 
 
@@ -661,7 +667,7 @@ inline void SignalAnimationSyncCompleted(AnimationState* animation, u32 action, 
         StartNextAction(animation);
     }
     
-    if(RequiresSync((EntityAction) action))
+    if(RequiresAnimationSync((EntityAction) action))
     {
         switch(state)
         {
@@ -803,7 +809,7 @@ inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 skeleton
     return result;
 }
 
-inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, ObjectLayout* layout, AnimationVolatileParams* params, ObjectState state)
+inline void GetLayoutAnimationPieces(AnimationFixedParams* input, BlendResult* output, ObjectLayout* layout, AnimationVolatileParams* params, ObjectState state)
 {
     output->boneCount = 1;
     output->bones = PushArray(input->tempPool, BlendedBone, output->boneCount);
@@ -827,7 +833,7 @@ inline void GetLayoutPieces(AnimationFixedParams* input, BlendResult* output, Ob
             
             ass->equipmentAssCount = 0;
             
-            AssAlterations* destAlt = &ass->alterations;
+            AssAlteration* destAlt = &ass->alterations;
             destAlt->valid = false;
             
             SpriteInfo* destSprite = &ass->sprite;
@@ -916,7 +922,7 @@ inline Rect2 GetPiecesBound(RenderGroup* group, BlendResult* blended, AnimationV
 inline Rect2 GetLayoutBounds(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, AnimationVolatileParams* params, ObjectState state)
 {
     BlendResult blended;
-    GetLayoutPieces(input, &blended, layout, params, state);
+    GetLayoutAnimationPieces(input, &blended, layout, params, state);
     Rect2 result = GetPiecesBound(group, &blended, params);
     
     return result;
@@ -1049,7 +1055,8 @@ inline void AddAnimationEffectToEntity(GameModeWorld* worldMode, ClientEntity* e
 inline void AddSkillAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, u32 skillTaxonomy, u64 targetID, u32 animationEffectFlags)
 {
     TaxonomySlot* skillSlot = GetSlotForTaxonomy(worldMode->table, skillTaxonomy);
-    for(AnimationEffect* effect = skillSlot->firstAnimationEffect; effect; effect = effect->next)
+    AnimationEffects* effects = GetSlotData(skillSlot, animationEffects);
+    for(AnimationEffect* effect = effects->firstAnimationEffect; effect; effect = effect->next)
     {
         if((effect->flags & animationEffectFlags) == animationEffectFlags)
         {
@@ -1064,7 +1071,8 @@ inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, 
     while(currentTaxonomy)
     {
         TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, currentTaxonomy);
-        for(AnimationEffect* effect = slot->firstAnimationEffect; effect; effect = effect->next)
+        AnimationEffects* effects = GetSlotData(slot, animationEffects);
+        for(AnimationEffect* effect = effects->firstAnimationEffect; effect; effect = effect->next)
         {
             if((effect->triggerAction == Action_Count ||
                 effect->triggerAction == (u32) action) && 
@@ -1085,7 +1093,8 @@ inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, 
         if(object)
         {
             TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, object->taxonomy);
-            for(AnimationEffect* effect = slot->firstAnimationEffect; effect; effect = effect->next)
+            AnimationEffects* effects = GetSlotData(slot, animationEffects);
+            for(AnimationEffect* effect = effects->firstAnimationEffect; effect; effect = effect->next)
             {
                 if((effect->triggerAction == Action_Count ||
                     effect->triggerAction == (u32) action) && 
@@ -1295,7 +1304,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                             else
                             {
                                 r32 ratio = Clamp01MapToRange(0, (r32) object->status, (r32) I16_MAX);
-                                Vec4 statusColor = Lerp(bodyDead, ratio, V4(1, 1, 1, 1));
+                                Vec4 statusColor = V4(1, 1, 1, 1);
                                 objectColor = statusColor;
                             }
                             
@@ -1415,7 +1424,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     
                     for(ClientAnimationEffect* effect = input->firstActiveEffect; effect; effect = effect->next)
                     {
-                        if(effect->referenceSlot == spriteReferenceSlot)
+                        if(effect->referenceSlot == (u32) spriteReferenceSlot)
                         {
                             if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
                             {
@@ -1428,7 +1437,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     {
                         for(ClientAnimationEffect* effect = input->firstActiveEquipmentLightEffect; effect; effect = effect->next)
                         {
-                            if(effect->referenceSlot == spriteReferenceSlot)
+                            if(effect->referenceSlot == (u32) spriteReferenceSlot)
                             {
                                 if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
                                 {
@@ -1532,7 +1541,7 @@ enum CycleAssOperation
 };
 
 
-inline void ApplyAssAlterations(PieceAss* ass, AssAlterations* assAlt, Bone* parentBone, Vec4* proceduralColor)
+inline void ApplyAssAlterations(PieceAss* ass, AssAlteration* assAlt, Bone* parentBone, Vec4* proceduralColor)
 {
     if(assAlt->valid)
     {
@@ -1558,7 +1567,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         BlendedAss* blendedAss = blended->ass + assIndex;
         PieceAss currentAss = *(GetAss(blended, assIndex));
         
-        AssAlterations* assAlt = &blendedAss->alterations;
+        AssAlteration* assAlt = &blendedAss->alterations;
         Bone* parentBone = GetBone(blended, currentAss.boneID);
         SpriteInfo* sprite = GetSprite(blended, assIndex);
         
@@ -1617,7 +1626,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                     AnimationVolatileParams pieceParams = *params;
                     
                     r32 ratio = Clamp01MapToRange(0, (r32) status, (r32) I16_MAX);
-                    Vec4 statusColor = Lerp(bodyDead, ratio, V4(1, 1, 1, 1));
+                    Vec4 statusColor = V4(1, 1, 1, 1);
                     pieceParams.color = statusColor;
                     
                     pieceParams.properties = properties;
@@ -1627,7 +1636,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                         pieceParams.modulationWithFocusColor = input->defaultModulatonWithFocusColor;
                     }
                     
-                    if(RenderPieceAss_(input, group, P, spriteInfo, (SlotName) equipment->slot.slot, parentBone, equipmentAss, &pieceParams, false, true).onFocus)
+                    if(RenderPieceAss_(input, group, P, spriteInfo, (SlotName) equipment->slot, parentBone, equipmentAss, &pieceParams, false, true).onFocus)
                     {
                         input->output->focusSlots = equipment->slot;
                     }
@@ -1645,7 +1654,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
     {
         BlendedAss* blendedAss = blended->ass + hotAssIndex;
         PieceAss currentAss = *(GetAss(blended, hotAssIndex));
-        AssAlterations* assAlt = &blendedAss->alterations;
+        AssAlteration* assAlt = &blendedAss->alterations;
         Bone* parentBone = GetBone(blended, currentAss.boneID);
         SpriteInfo* sprite = GetSprite(blended, hotAssIndex);
         
@@ -1750,7 +1759,7 @@ internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup*
 internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, Vec3 P, AnimationVolatileParams* params, ObjectState state)
 {
     BlendResult blended;
-    GetLayoutPieces(input, &blended, layout, params, state);
+    GetLayoutAnimationPieces(input, &blended, layout, params, state);
     
     if(!input->debug.hideBitmaps)
     {
@@ -1778,7 +1787,7 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
     input->minHotAssDistanceSq = Square(hotAssMaxDistance);
     
     input->mousePOnGround = worldMode->worldMouseP;
-    input->relativeScreenMouseP = worldMode->UI->relativeScreenMouse;
+    input->relativeScreenMouseP = worldMode->relativeScreenMouseP;
     
     
     
@@ -1812,7 +1821,7 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
                 dest->status = I16_MAX;
                 GetVisualProperties(&dest->properties, worldMode->table, objectEntity->taxonomy, objectEntity->gen);
                 
-                dest->slot.slot = (SlotName) slotIndex;
+                dest->slot = (SlotName) slotIndex;
             }
         }
         else
@@ -1824,7 +1833,9 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
                 
                 if(objectEntityID == 0xffffffffffffffff - 1)
                 {
-                    objectEntity = &worldMode->UI->draggingEntity;
+                    InvalidCodePath;
+                    objectEntity = 0;
+                    //objectEntity = &worldMode->UI->draggingEntity;
                 }
                 else
                 {
@@ -1865,17 +1876,21 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
                     dest->taxonomy = taxonomy;
                     dest->status = (i16) objectEntity->status;
                     GetVisualProperties(&dest->properties, worldMode->table, taxonomy, gen);
-                    dest->slot.slot = (SlotName) slotIndex;
+                    dest->slot = (SlotName) slotIndex;
                     
-                    dest->drawModulated = (AreEqual(dest->slot, entityC->animation.output.focusSlots) ||
-                                           AreEqual(dest->slot, entityC->animation.nearestCompatibleSlotForDragging));
+                    dest->drawModulated = (dest->slot == entityC->animation.output.focusSlots ||
+                                           dest->slot == entityC->animation.nearestCompatibleSlotForDragging);
                     
                     dest->isOpen = false;
+                    
+#if 0                    
                     if(worldMode->UI->mode == UIMode_Equipment)
                     {
                         dest->isOpen = (objectEntityID == worldMode->UI->lockedInventoryID1 ||
                                         objectEntityID == worldMode->UI->lockedInventoryID2);
                     }
+#endif
+                    
                 }
             }
         }
@@ -1888,7 +1903,7 @@ inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPo
     input->objectGridDimX = slot->gridDimX;
     input->objectGridDimY = slot->gridDimY;
     
-    input->draggingEntity = &worldMode->UI->draggingEntity;
+    //input->draggingEntity = &worldMode->UI->draggingEntity;
     
     
     input->output = output;
@@ -1905,14 +1920,15 @@ inline SkeletonInfo GetSkeletonForTaxonomy(TaxonomyTable* table, TaxonomySlot* s
     SkeletonInfo result = {};
     while(slot->taxonomy)
     {
-        if(slot->skeletonHashID)
+        AnimationGeneralParams* params = GetSlotData(slot, animationGeneralParams);
+        if(params->skeletonHashID)
         {
-            result.skeletonSkinHashID = slot->skeletonSkinHashID;
-            result.skeletonHashID = slot->skeletonHashID;
-            result.skinHashID = slot->skinHashID;
-            result.coloration = slot->defaultColoration;
-            result.originOffset = slot->originOffset;
-            result.flippedOnYAxis = slot->flippedOnYAxis;
+            result.skeletonSkinHashID = params->skeletonSkinHashID;
+            result.skeletonHashID = params->skeletonHashID;
+            result.skinHashID = params->skinHashID;
+            result.coloration = params->defaultColoration;
+            result.originOffset = params->originOffset;
+            result.flippedOnYAxis = params->flippedOnYAxis;
             break;
         }
         
@@ -2011,13 +2027,14 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
     params.properties = 0;
     
     TaxonomySlot* entitySlot = GetSlotForTaxonomy(worldMode->table, entityC->taxonomy);
+    AnimationGeneralParams* animParams = GetSlotData(entitySlot, animationGeneralParams);
     
-    if(entitySlot->animationIn3d)
+    if(animParams->animationIn3d)
     {
-        ModelId MID = FindModelByName(group->assets, entitySlot->modelTypeID, entitySlot->modelNameID);
+        ModelId MID = FindModelByName(group->assets, animParams->modelTypeID, animParams->modelNameID);
         
         PakModel* modelInfo = GetModelInfo(group->assets, MID);
-        Vec3 modelScale = Hadamart(modelInfo->dim, entitySlot->modelScale);
+        Vec3 modelScale = Hadamart(modelInfo->dim, animParams->modelScale);
         
         if(entityC->boundType)
         {
@@ -2029,7 +2046,7 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
             
         }
         
-        PushModel(group, MID, Identity(), P + entitySlot->modelOffset, lights, modelScale, entitySlot->modelColoration, entityC->modulationWithFocusColor);
+        PushModel(group, MID, Identity(), P + animParams->modelOffset, lights, modelScale, animParams->modelColoration, entityC->modulationWithFocusColor);
     }
     else if(IsObject(worldMode->table, entityC->taxonomy))
     {
@@ -2282,6 +2299,8 @@ inline Vec4 GetWaterColor(WorldTile* tile)
 
 inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, TaxonomySlot* slot, u64 nameHash, r32 oldSoundTime, r32 soundTime)
 {
+    
+#if RESTRUCTURING    
     SoundState* soundState = worldMode->soundState;
     u32 soundTaxonomy = slot->taxonomy;
     b32 found = false;
@@ -2337,10 +2356,19 @@ inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, Taxo
         
         soundTaxonomy = GetParentTaxonomy(worldMode->table, soundTaxonomy);
     }
+#endif
+    
 }
 
-internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToUpdate, AnimationEntityParams params = StandardEntityParams())
+JOB_DEFINITION(InitAnimation)
 {
+    
+    Vec4 ashAlive = {};
+    Vec4 bodyAlive = {};
+    
+    Vec4 ashDead = {};
+    Vec4 bodyDead = {};
+    
     Vec3 animationP = entityC->P;
     WorldTile* tile = GetTile(worldMode, worldMode->player.universeP, entityC->P.xy);
     if(tile->waterLevel <= WATER_LEVEL)
@@ -2406,52 +2434,96 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
     Rect3 bounds = InvertedInfinityRect3();
     GetPhysicalProperties(worldMode->table, entityC->taxonomy, entityC->identifier, &entityC->boundType, &bounds, entityC->generationIntensity);
     entityC->bounds = Offset(bounds, animationP);
-    
-    if(IsPlant(worldMode->table, entityC->taxonomy) && slot->plantDefinition)
+}
+
+JOB_DEFINITION(Render2dAnimation)
+{
+    oldSoundTime = entityC->animation.normalizedTime;
+    Vec2 animationScale = params.scale * V2(0.33f, 0.33f);
+    r32 additionalZbias = params.additionalZbias;
+    if(params.onTop)
     {
-        if(!entityC->plant)
-        {
-            ClientPlant* newPlant = worldMode->firstFreePlant;
-            if(!newPlant)
-            {
-                newPlant = PushStruct(worldMode->persistentPool, ClientPlant);
-            }
-            else
-            {
-                worldMode->firstFreePlant = newPlant->nextFree;
-            }
-            entityC->plant = newPlant;
-            
-            ClientPlant* plant = entityC->plant;
-            *plant = {};
-            plant->sequence = Seed((u32)entityC->identifier);
-        }
-        
-        entityC->plant->leafBitmap = FindBitmapByName(group->assets, ASSET_LEAF, slot->plantDefinition->leafParams.bitmapHash);
-        
-        entityC->plant->flowerBitmap = FindBitmapByName(group->assets, ASSET_FLOWER, slot->plantDefinition->flowerParams.bitmapHash);
-        
-        entityC->plant->fruitBitmap = FindBitmapByName(group->assets, ASSET_FRUIT, slot->plantDefinition->fruitParams.bitmapHash);
-        entityC->plant->trunkBitmap = FindBitmapByName(group->assets, ASSET_TRUNK, slot->plantDefinition->trunkStringHash);
-        
-        
-        PlantRenderingParams renderingParams = {};
-        renderingParams.lights = lights;
-        renderingParams.modulationWithFocusColor = entityC->modulationWithFocusColor;
-        renderingParams.season = worldMode->season;
-        renderingParams.lerpWithFollowingSeason = worldMode->seasonLerp;
-        
-        UpdateAndRenderPlant(worldMode, group, renderingParams, slot->plantDefinition, entityC->plant, animationP);
-        
-        for(u32 plantIndex = 0; plantIndex < entityC->plant->plant.plantCount; ++plantIndex)
-        {
-            Vec3 P = animationP + V3(entityC->plant->plant.offsets[plantIndex], 0);
-            
-            Rect3 plantBounds = Offset(bounds, P);
-            entityC->bounds = Union(entityC->bounds, plantBounds);
-        }
+        additionalZbias = 5.0f;
     }
-    else if(IsRock(worldMode->table, entityC->taxonomy) && slot->rockDefinition)
+    
+    additionalZbias += 0.4f * GetDim(entityC->animation.bounds).y;
+    
+    SlotName dragging = (SlotName) entityC->animation.nearestCompatibleSlotForDragging;
+    
+#if 0        
+    if(IsValid(dragging) && worldMode->UI->animationGhostAllowed)
+    {
+        u64 ID = worldMode->UI->draggingEntity.identifier;
+        MarkAllSlotsAsOccupied(entityC->equipment, dragging, ID);
+    }
+#endif
+    
+    AnimationGeneralParams* animParams = GetSlotData(slot, animationGeneralParams);
+    if(animParams->animationFollowsVelocity)
+    {
+        r32 velocityAngle = AArm2(entityC->velocity.xy);
+        params.angle += RadToDeg(velocityAngle);
+    }
+    result = PlayAndDrawEntity(worldMode, group, lights, entityC, animationP, animationScale, params.angle, params.offset, timeToUpdate, bodyColor, params.drawOpened, params.onTop, params.bounds, additionalZbias);
+    
+    if(IsValid(dragging))
+    {
+        MarkAllSlotsAsNull(entityC->equipment, dragging);
+    }
+    
+    soundAction = (EntityAction) entityC->animation.action;
+    soundTime = entityC->animation.normalizedTime;
+}
+
+
+JOB_DEFINITION(RenderPlant)
+{
+    if(!entityC->plant)
+    {
+        Plant* newPlant = worldMode->firstFreePlant;
+        if(!newPlant)
+        {
+            newPlant = PushStruct(worldMode->persistentPool, Plant);
+        }
+        else
+        {
+            worldMode->firstFreePlant = newPlant->nextFree;
+        }
+        entityC->plant = newPlant;
+        
+        Plant* plant = entityC->plant;
+        *plant = {};
+        plant->sequence = Seed((u32)entityC->identifier);
+    }
+    
+    entityC->plant->leafBitmap = FindBitmapByName(group->assets, ASSET_LEAF, slot->plantDefinition->leafParams.bitmapHash);
+    
+    entityC->plant->flowerBitmap = FindBitmapByName(group->assets, ASSET_FLOWER, slot->plantDefinition->flowerParams.bitmapHash);
+    
+    entityC->plant->fruitBitmap = FindBitmapByName(group->assets, ASSET_FRUIT, slot->plantDefinition->fruitParams.bitmapHash);
+    entityC->plant->trunkBitmap = FindBitmapByName(group->assets, ASSET_TRUNK, slot->plantDefinition->trunkStringHash);
+    
+    
+    PlantRenderingParams renderingParams = {};
+    renderingParams.lights = lights;
+    renderingParams.modulationWithFocusColor = entityC->modulationWithFocusColor;
+    renderingParams.season = worldMode->season;
+    renderingParams.lerpWithFollowingSeason = worldMode->seasonLerp;
+    
+    UpdateAndRenderPlant(worldMode, group, renderingParams, slot->plantDefinition, entityC->plant, animationP);
+    
+    for(u32 plantIndex = 0; plantIndex < entityC->plant->plant.plantCount; ++plantIndex)
+    {
+        Vec3 P = animationP + V3(entityC->plant->plant.offsets[plantIndex], 0);
+        
+        Rect3 plantBounds = Offset(bounds, P);
+        entityC->bounds = Union(entityC->bounds, plantBounds);
+    }
+}
+
+JOB_DEFINITION(RenderRocks)
+{
+    for(every rock component)
     {
         RockDefinition* rockDefinition = slot->rockDefinition;
         if(!entityC->rock)
@@ -2460,10 +2532,10 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             VertexModel* tetraModel = GetModel(group->assets, ID);
             if(tetraModel)
             {
-                ClientRock* newRock = worldMode->firstFreeRock;
+                Rock* newRock = worldMode->firstFreeRock;
                 if(!newRock)
                 {
-                    newRock = PushStruct(worldMode->persistentPool, ClientRock);
+                    newRock = PushStruct(worldMode->persistentPool, Rock);
                 }
                 else
                 {
@@ -2486,7 +2558,7 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             }
         }
         
-        ClientRock* rock = entityC->rock;
+        Rock* rock = entityC->rock;
         if(rock)
         {
             VertexModel onTheFly;
@@ -2512,46 +2584,11 @@ internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMo
             }
         }
     }
-    else
-    {
-        oldSoundTime = entityC->animation.normalizedTime;
-        Vec2 animationScale = params.scale * V2(0.33f, 0.33f);
-        r32 additionalZbias = params.additionalZbias;
-        if(params.onTop)
-        {
-            additionalZbias = 5.0f;
-        }
-        
-        additionalZbias += 0.4f * GetDim(entityC->animation.bounds).y;
-        
-        EquipInfo dragging = entityC->animation.nearestCompatibleSlotForDragging;
-        if(IsValid(dragging) && worldMode->UI->animationGhostAllowed)
-        {
-            u64 ID = worldMode->UI->draggingEntity.identifier;
-            MarkAllSlotsAsOccupied(entityC->equipment, dragging, ID);
-        }
-        
-        if(slot->animationFollowsVelocity)
-        {
-            r32 velocityAngle = AArm2(entityC->velocity.xy);
-            params.angle += RadToDeg(velocityAngle);
-        }
-        result = PlayAndDrawEntity(worldMode, group, lights, entityC, animationP, animationScale, params.angle, params.offset, timeToUpdate, bodyColor, params.drawOpened, params.onTop, params.bounds, additionalZbias);
-        
-        if(IsValid(dragging))
-        {
-            MarkAllSlotsAsNull(entityC->equipment, dragging);
-        }
-        
-        soundAction = (EntityAction) entityC->animation.action;
-        soundTime = entityC->animation.normalizedTime;
-    }
-    
-    //PushCubeOutline(group, entityC->bounds, V4(1, 1, 1, 1), 0.05f);
-    
+}
+
+JOB_DEFINITION(PlaysoundForAnimation)
+{
     PlaySoundForAnimation(worldMode, group->assets, slot, result.playedAnimationNameHash, oldSoundTime, soundTime);
-    
-    return result;
 }
 
 
@@ -2594,7 +2631,8 @@ inline b32 AnimatedIn3d(TaxonomyTable* table, u32 taxonomy)
 {
     TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
     
-    b32 result = slot->animationIn3d;
+    AnimationGeneralParams* params = GetSlotData(slot, animationGeneralParams);
+    b32 result = params->animationIn3d;
     return result;
 }
 

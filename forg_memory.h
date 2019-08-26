@@ -126,8 +126,6 @@ struct MemSynthOption
     u32 outputConcept;
     
     u32 considerationCount;
-    Consideration considerations[4];
-    
     union
     {
         MemSynthOption* next;

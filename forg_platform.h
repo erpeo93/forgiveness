@@ -3,6 +3,7 @@
 #define introspection(...)
 #define printTable(...)
 #define printFlags(...)
+#define PRE_ANNOTATIONS(...)
 
 #include <float.h>
 #include <limits.h>
@@ -114,13 +115,13 @@ struct ModelId
 
 #pragma pack( pop )
 
-introspection("hello param") struct Rect2
+introspection() struct Rect2
 {
     Vec2 min;
     Vec2 max;
 };
 
-introspection("hello param") struct Rect3
+introspection() struct Rect3
 {
     Vec3 min;
     Vec3 max;

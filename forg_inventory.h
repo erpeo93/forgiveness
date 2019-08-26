@@ -1,24 +1,5 @@
 #pragma once
 
-enum RarityType
-{
-    Rarity_Common,
-    Rarity_UnCommon,
-    Rarity_Rare,
-    Rarity_VeryRare,
-    Rarity_Legendary,
-    Rarity_Unique,
-    
-    Rarity_Count,
-};
-
-struct Object
-{
-    u32 taxonomy;
-    GenerationData gen;
-    u16 quantity;
-    i16 status;
-};
 
 printTable(noPrefix) enum SlotName
 {
@@ -39,26 +20,9 @@ struct EquipmentSlot
     u64 ID;
 };
 
-struct EquipInfo
+inline b32 IsValid(SlotName info)
 {
-    SlotName slot;
-};
-
-inline b32 IsValid(EquipInfo info)
-{
-    b32 result = (info.slot != Slot_None);
-    return result;
-}
-
-inline b32 AreEqual(EquipInfo i1, EquipInfo i2)
-{
-    b32 result = (i1.slot == i2.slot);
-    return result;
-}
-
-inline SlotName GetMainSlot(EquipInfo info)
-{
-    SlotName result = info.slot;
+    b32 result = (info != Slot_None);
     return result;
 }
 
@@ -75,9 +39,47 @@ struct ObjectReference
     u8 objectIndex;
 };
 
-inline b32 IsRecipe(Object* object)
-{
-    b32 result = (object->quantity == 0xffff);
-    return result;
-}
 
+struct EquipmentAss
+{
+    u64 stringHashID;
+    u8 index;
+    
+    u32 assIndex;
+    
+    Vec2 assOffset;
+    r32 zOffset;
+    r32 angle;
+    Vec2 scale;
+    
+    union
+    {
+        EquipmentAss* next;
+        EquipmentAss* nextFree;
+    };
+};
+
+struct EquipmentLayout
+{
+    u64 layoutHashID;
+    SlotName slot;
+    
+    EquipmentAss* firstEquipmentAss;
+    
+    union
+    {
+        EquipmentLayout* next;
+        EquipmentLayout* nextFree;
+    };
+};
+
+struct EquipmentMapping
+{
+    EquipmentLayout* firstEquipmentLayout;
+    
+    union
+    {
+        EquipmentMapping* next;
+        EquipmentMapping* nextFree;
+    };
+};

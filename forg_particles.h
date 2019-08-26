@@ -151,10 +151,4 @@ struct ParticleEffectDefinition
     r32 dAngleSineUpdaters;
     u32 phaseCount;
     ParticlePhase phases[MAX_PHASE_COUNT];
-    
-    union
-    {
-        ParticleEffectDefinition* next;
-        ParticleEffectDefinition* nextFree;
-    };
 };

@@ -55,7 +55,6 @@ struct ContainerHeader
 };
 
 #pragma pack(pop)
-
 struct ForgNetworkPacket
 {
     u16 size;
@@ -150,10 +149,8 @@ inline u16 ForgEndPacket_(unsigned char* original, unsigned char* current)
 enum Packet_Type
 {
     Type_invalid,
-    
     Type_login,
     Type_gameAccess,
-    Type_serverInfo,
     Type_worldInfo,
     
     
@@ -231,8 +228,6 @@ enum Packet_Type
     Type_PatchCheck,
     Type_SaveAssetFadFile,
     Type_RegenerateWorldChunks,
-    
-    Type_EditorP,
     
 #if FORGIVENESS_INTERNAL
     Type_debugEvent,
@@ -326,51 +321,6 @@ struct ConsumeRequest
     u32 objectIndex;
 };
 
-struct SetActiveRequest
-{
-    u32 taxonomy;
-};
-
-struct PassiveSkillRequest
-{
-    u32 taxonomy;
-};
-
-struct UnlockCategoryRequest
-{
-    u32 taxonomy;
-};
-
-struct LevelUpRequest
-{
-    u32 taxonomy;
-};
-
-struct InstantiateRequest
-{
-    u32 taxonomy;
-    Vec3 offset;
-    r32 generationIntensity;
-};
-
-struct InstantiateRecipeRequest
-{
-    u32 taxonomy;
-    GenerationData gen;
-    Vec3 offset;
-};
-
-struct TileUpdate
-{
-    u32 chunkX;
-    u32 chunkY;
-    
-    u32 tileX;
-    u32 tileY;
-    
-    r32 waterAmount;
-};
-
 struct EntityUpdate
 {
     Vec3 relativePos;
@@ -402,104 +352,6 @@ struct PlantUpdate
     r32 leafDensity;
 };
 
-#if 0
-enum EntityUpdateType
-{
-    PlayerEntityUpdate_Standard,
-    PartialUpdate_Standard,
-    PartialUpdate_Objects,
-    CompleteUpdate_Standard,
-    CompleteUpdate_Object,
-    CompleteUpdate_Recipe,
-    COmpleteUpdate_Plant,
-    CompleteUpdate_Objects,
-};
-
-struct PlayerEntityUpdate
-{
-    u64 openedContainerID;
-    ObjectsDelta;
-    essencesDelta;
-};
-
-struct PartialEntityUpdate
-{
-    u64 identifier;
-    Vec3 P;
-    EntityAction action;
-    u8 effectCount;
-    // NOTE(Leonardo): additional data: _effectCount_ effects to add
-};
-
-struct PartialObjectsUpdate
-{
-    u64 identifier;
-    u8 objectsDelta;
-    // NOTE(Leonardo): additional data: objectCount to add
-}
-
-struct CompleteEntityUpdateStandard
-{
-    u64 identifier; // NOTE(Leonardo): 8 bytes
-    u32 taxonomy; // NOTE(Leonardo): 4 bytes
-    Vec3 P;
-    u8 action;
-    
-    u32 effectCount;
-    u32 equipmentCount;
-};
-
-
-struct CompleteEntityUpdateObject
-{
-    u64 identifier; // NOTE(Leonardo): 8 bytes
-    u32 taxonomy; // NOTE(Leonardo): 4 bytes
-    u64 recipeIndex;
-    Vec3 P;
-};
-
-
-struct CompleteEntityUpdateRecipe
-{
-    u64 identifier; // NOTE(Leonardo): 8 bytes
-    u32 recipeTaxonomy; // NOTE(Leonardo): 4 bytes
-    u64 recipeRecipeIndex; // NOTE(Leonardo): 8 bytes
-    Vec3 P;
-};
-
-struct CompleteEntityUpdatePlant
-{
-    u64 identifier; // NOTE(Leonardo): 8 bytes
-    u32 taxonomy; // NOTE(Leonardo): 4 bytes
-    
-    // TODO(Leonardo): encode P in 6 bytes total when sending complete update
-    // TODO(Leonardo): encode P in 3 bytes total when sending intra-frame update
-    Vec3 P;
-    
-    r32 plantTotalAge;// TODO(Leonardo): 16 bits
-    r32 plantStatusPercentage;// TODO(Leonardo): 13 bits
-    PlantLifeStatus plantStatus; // TODO(Leonardo): 3 bits?
-    u32 effectCount;
-};
-
-// NOTE(Leonardo): this is sent when player loots
-struct CompleteEntityUpdateObjects
-{
-    u64 identifier;
-    u32 objectCount;
-    // NOTE(Leonardo): this contains all the objects of the entity
-};
-#endif
-
-#ifdef FORG_SERVER
-struct HashEntityUpdate
-{
-    b32 valid;
-    u64 identifier;
-    SimEntity entity;
-};
-#endif
-
 struct EntityPossibleActions
 {
     u64 identifier;
@@ -530,47 +382,3 @@ struct UpdateAck
     UniversePos p;
     u32 sequenceNumber;
 };
-
-struct ServerInfo
-{
-    u16 port;
-    u16 userPort;
-    //TODO(leonardo):IP!
-};
-
-struct CompletedSpawning
-{
-    u64 identifier;
-};
-
-
-
-
-
-#if FORGIVENESS_INTERNAL
-struct EditorModeRequest
-{
-    UniversePos p;
-    i32 delta;
-};
-
-struct DebugEventVariableChanged
-{
-    u32 debugVariableIndex;
-    u64 overNetwork[2];
-};
-
-struct DebugChangedAttributes
-{
-    u32 globalID;
-    i32 worldID;
-    u32 attributeIndex;
-    r32 value;
-};
-
-struct DebugSpawnRequest
-{
-    u32 taxonomy;
-    Vec2 offsetFromPlayer;
-};
-#endif

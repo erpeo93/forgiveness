@@ -283,86 +283,6 @@ internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
     CloseAndSendReliablePacket();
 }
 
-inline void SendPopMessage(b32 list, b32 pop = true)
-{
-    StartPacket(PopEditorElement);
-    Pack("ll", list, pop);
-    CloseAndSendReliablePacket();
-}
-
-
-internal void SendEditorElements(EditorElement* root)
-{
-    StartPacket(EditorElement);
-    Pack("sLLL", root->name, root->type, root->flags, root->versionNumber);
-    if(root->type < EditorElement_List)
-    {
-        Pack("s", root->value);
-    }
-    else
-    {
-        if(root->type == EditorElement_Text)
-        {
-            Pack("s", root->text->text);
-        }
-        
-        if(root->type == EditorElement_List)
-        {
-            Pack("ss", root->elementName, root->labelName);
-        }
-    }
-    CloseAndSendReliablePacket();
-    
-	switch(root->type)
-	{
-        case EditorElement_Struct:
-		{
-            if(root->firstValue)
-            {
-                SendEditorElements(root->firstValue);
-                SendPopMessage(false);
-            }
-            else
-            {
-                SendPopMessage(false, false);
-            }
-        } break;
-        
-		case EditorElement_List:
-		{
-            
-            if(root->emptyElement)
-            {
-                SendEditorElements(root->emptyElement);
-                SendPopMessage(true);
-			}
-            
-            if(root->firstInList)
-            {
-                SendEditorElements(root->firstInList);
-                SendPopMessage(false);
-            }
-            else
-            {
-                SendPopMessage(false, false);
-            }
-        } break;
-        
-        case EditorElement_String:
-        case EditorElement_Real:
-        case EditorElement_Signed:
-        case EditorElement_Unsigned:
-        {
-            
-        } break;
-	}
-    
-	if(root->next)
-	{
-		SendEditorElements(root->next);
-	}
-}
-
 
 inline void SendNewTabMessage()
 {
@@ -370,15 +290,6 @@ inline void SendNewTabMessage()
     CloseAndSendReliablePacket();
 }
 
-inline void SendSaveAssetDefinitionFile(char* fileName, EditorElement* root)
-{
-    SendNewTabMessage();
-    SendEditorElements(root);
-    
-    StartPacket(SaveAssetFadFile);
-    Pack("s", fileName);
-    CloseAndSendReliablePacket();
-}
 
 inline void SendReloadAssetsRequest()
 {
@@ -524,85 +435,6 @@ inline SavedNameSlot* GetNameSlot( DebugTable* debugTable, u64 pointer )
 }
 #endif
 
-inline void AddToElementBlock(UIState* UI, BookMode* mode, BookElement element)
-{
-    element.hot = false;
-    BookElementsBlock* block = mode->elements;
-    if(!block || block->elementCount == ArrayCount(block->elements))
-    {
-        BookElementsBlock* newBlock = PushStruct(UI->pool, BookElementsBlock);
-        newBlock->next = block;
-        mode->elements = newBlock;
-        block = newBlock;
-    }
-    
-    Assert(block->elementCount < ArrayCount(block->elements));
-    block->elements[block->elementCount++] = element;
-}
-
-inline void AddToRecipeBlock(UIState* UI, Recipe recipe)
-{
-    BookElement element = {};
-    element.type = Book_Recipe;
-    element.taxonomy = recipe.taxonomy;
-    element.gen = recipe.gen;
-    
-    AddToElementBlock(UI, UI->bookModes + UIBook_Recipes, element);
-}
-
-inline void AddToRecipeCategoryBlock(UIState* UI, u32 recipeCategory)
-{
-    BookElement element = {};
-    element.type = Book_RecipeCategory;
-    element.taxonomy = recipeCategory;
-    
-    AddToElementBlock(UI, UI->bookModes + UIBook_Recipes, element);
-}
-
-inline void AddToSkillBlock(UIState* UI, SkillSlot skill)
-{
-    BookElement element = {};
-    element.type = Book_Skill;
-    element.taxonomy = skill.taxonomy;
-    element.skillLevel = skill.level;
-    
-    AddToElementBlock(UI, UI->bookModes + UIBook_Skills, element);
-}
-
-
-inline void AddToSkillCategoryBlock(UIState* UI, SkillCategory skillCategory)
-{
-    BookElement element = {};
-    element.type = Book_SkillCategory;
-    element.taxonomy = skillCategory.taxonomy;
-    element.unlocked = skillCategory.unlocked;
-    
-    AddToElementBlock(UI, UI->bookModes + UIBook_Skills, element);
-}
-
-
-inline void MarkAllPakFilesAsToDelete(GameModeWorld* worldMode, char* path)
-{
-    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, path);
-    
-    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex)
-    {
-        PlatformFileHandle handle = platformAPI.OpenNextFile(&fileGroup, path);
-        
-        ToDeleteFile* toDelete;
-        FREELIST_ALLOC(toDelete, worldMode->firstFreeFileToDelete, PushStruct(&worldMode->deletedFilesPool, ToDeleteFile));
-        
-        toDelete->toDelete = true;
-        GetNameWithoutPoint(toDelete->filename, sizeof(toDelete->filename), handle.name);
-        
-        FREELIST_INSERT(toDelete, worldMode->firstFileToDelete);
-        
-        platformAPI.CloseHandle(&handle);
-    }
-    
-    platformAPI.GetAllFilesEnd(&fileGroup);
-}
-
 inline void MarkFileAsArrived(GameModeWorld* worldMode, char* filename)
 {
     for(ToDeleteFile* file = worldMode->firstFileToDelete; file; file = file->next)
@@ -615,28 +447,11 @@ inline void MarkFileAsArrived(GameModeWorld* worldMode, char* filename)
     }
 }
 
-inline void DeleteAllFilesNotArrived(GameModeWorld* worldMode, char* path)
-{
-    for(ToDeleteFile* file = worldMode->firstFileToDelete; file; file = file->next)
-    {
-        if(file->toDelete)
-        {
-            char toDeleteWildcard[128];
-            FormatString(toDeleteWildcard, sizeof(toDeleteWildcard), "%s.*", file->filename);
-            platformAPI.DeleteFileWildcards(path, toDeleteWildcard);
-        }
-    }
-    
-    worldMode->firstFileToDelete = 0;
-    Clear(&worldMode->deletedFilesPool);
-}
-
 inline void SignalAnimationSyncCompleted(AnimationState* animation, u32 action, AnimationSyncState state);
 inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, EntityAction action, u64 targetID, u32 animationEffectFlags);
 inline void AddSkillAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, u32 skillTaxonomy, u64 targetID, u32 animationEffectFlags);
 internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
-    UIState* UI = worldMode->UI;
     ClientEntity* currentEntity = 0;
     ClientEntity* currentContainer = 0;
     u16 readSize = 0;
@@ -728,27 +543,29 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     e->actionTime = 0;
                 }
                 
+                r32 fadeTime = 2.0f;
+                r32 triggerTime = 2.0f;
                 if(e->lifePoints != oldLifePoints)
                 {
-                    if(e->lifePointsTriggerTime >= HUD_FADE_TIME)
+                    if(e->lifePointsTriggerTime >= fadeTime)
                     {
                         e->lifePointsTriggerTime = 0;
                     }
-                    else if(e->lifePointsTriggerTime >= HUD_TRIGGER_TIME)
+                    else if(e->lifePointsTriggerTime >= triggerTime)
                     {
-                        e->lifePointsTriggerTime = HUD_TRIGGER_TIME - (HUD_FADE_TIME - e->lifePointsTriggerTime);
+                        e->lifePointsTriggerTime = triggerTime - (fadeTime - e->lifePointsTriggerTime);
                     }
                 }
                 
                 if(e->stamina != oldStamina)
                 {
-                    if(e->staminaTriggerTime >= HUD_FADE_TIME)
+                    if(e->staminaTriggerTime >= fadeTime)
                     {
                         e->staminaTriggerTime = 0;
                     }
-                    else if(e->staminaTriggerTime >= HUD_TRIGGER_TIME)
+                    else if(e->staminaTriggerTime >= triggerTime)
                     {
-                        e->staminaTriggerTime = HUD_TRIGGER_TIME - (HUD_FADE_TIME - e->staminaTriggerTime);
+                        e->staminaTriggerTime = triggerTime - (fadeTime - e->staminaTriggerTime);
                     }
                 }
                 
@@ -795,7 +612,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 
                 Unpack("ddddd", &age, &life, &leafDensity, &flowerDensity, &fruitDensity);
-                ClientPlant* plant = currentEntity->plant;
+                Plant* plant = currentEntity->plant;
                 if(plant)
                 {
                     plant->serverAge = age;
@@ -930,7 +747,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     while(currentTaxonomy && !found)
                     {
                         TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, currentTaxonomy);
-                        for(AnimationEffect* effect = slot->firstAnimationEffect; effect; effect = effect->next)
+                        AnimationEffects* effects = &slot->animationEffects;
+                        for(AnimationEffect* effect = effects->firstAnimationEffect; effect; effect = effect->next)
                         {
                             if(effect->triggerEffectTaxonomy == effectTaxonomy)
                             {
@@ -991,7 +809,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             
             case Type_AvailableRecipes:
             {
-                BookMode* mode = UI->bookModes + UIBook_Recipes;
+                
+                //BookMode* mode = UI->bookModes + UIBook_Recipes;
                 
                 u32 categoryCount;
                 Unpack("L", &categoryCount);
@@ -1003,12 +822,12 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     
                     if(categoryIndex == 0)
                     {
-                        mode->rootTaxonomy = taxonomy;
-                        mode->filterTaxonomy = taxonomy;
+                        //mode->rootTaxonomy = taxonomy;
+                        //mode->filterTaxonomy = taxonomy;
                     }
                     else
                     {
-                        AddToRecipeCategoryBlock(UI, taxonomy);
+                        //AddToRecipeCategoryBlock(UI, taxonomy);
                     }
                 }
             } break;
@@ -1018,12 +837,12 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 Recipe recipe;
                 Unpack("LQ", &recipe.taxonomy, &recipe.gen);
                 
-                AddToRecipeBlock(UI, recipe);
+                //AddToRecipeBlock(UI, recipe);
             } break;
             
             case Type_SkillCategories:
             {
-                BookMode* mode = UI->bookModes + UIBook_Skills;
+                //BookMode* mode = UI->bookModes + UIBook_Skills;
                 
                 u32 categoryCount;
                 Unpack("L", &categoryCount);
@@ -1034,12 +853,12 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     
                     if(categoryIndex == 0)
                     {
-                        mode->rootTaxonomy = skillCategory.taxonomy;
-                        mode->filterTaxonomy = skillCategory.taxonomy;
+                        //mode->rootTaxonomy = skillCategory.taxonomy;
+                        //mode->filterTaxonomy = skillCategory.taxonomy;
                     }
                     else
                     {
-                        AddToSkillCategoryBlock(UI, skillCategory);
+                        //AddToSkillCategoryBlock(UI, skillCategory);
                     }
                 }
             } break;
@@ -1049,6 +868,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 u32 taxonomy;
                 Unpack("L", &taxonomy);
                 
+                
+#if RESTRUCTURING                
                 BookElementsBlock* block = UI->bookModes[UIBook_Skills].elements;
                 
                 b32 found = false;
@@ -1067,6 +888,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     
                     block = block->next;
                 }
+#endif
+                
             } break;
             
             case Type_SkillLevel:
@@ -1077,6 +900,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 Unpack("lLLl", &levelUp, &skill.taxonomy, &skill.level, &isPassive);
                 
+                
+#if RESTRUCTURING                
                 if(levelUp)
                 {
                     BookElementsBlock* block = UI->bookModes[UIBook_Skills].elements;
@@ -1103,6 +928,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 {
                     AddToSkillBlock(UI, skill);
                 }
+#endif
+                
             } break;
             
             case Type_StartedAction:
@@ -1127,14 +954,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     currentEntity->animation.flipOnYAxis = (relative.x < 0);
                     currentEntity->actionID = target;
                 }
-                
-                if((target == worldMode->player.identifier && action == Action_Attack) ||
-                   (currentEntity->identifier == worldMode->player.identifier && action == Action_Attack))
-                {
-                    worldMode->UI->nextMode = UIMode_Combat;
-                    worldMode->UI->modeTimer = 10.0f;
-                }
-                
                 
                 AddAnimationEffects(worldMode, currentEntity, (EntityAction) action, target, AnimationEffect_ActionStart);
             } break;
@@ -1234,7 +1053,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             
             case Type_PatchLocalServer:
             {
-                worldMode->UI->patchingLocalServer = false;
+                worldMode->patchingLocalServer = false;
             } break;
             
 #if FORGIVENESS_INTERNAL
@@ -1360,5 +1179,47 @@ internal void ReceiveNetworkPackets(GameState* gameState, GameModeWorld* worldMo
                 DispatchApplicationPacket(gameState, worldMode, packetPtr, packet.dataSize - sizeof(ForgNetworkApplicationData));
             }
         }
+    }
+}
+
+
+internal void HandleClientPrediction(ClientEntity* entity, r32 timeToUpdate)
+{
+    ClientPrediction* prediction = &entity->prediction;
+    prediction->timeLeft -= timeToUpdate;
+    if(prediction->timeLeft <= 0)
+    {
+        prediction->type = Prediction_None;
+    }
+    switch(prediction->type)
+    {
+        case Prediction_None:
+        {
+            
+        } break;
+        
+        case Prediction_EquipmentRemoved:
+        {
+            entity->equipment[prediction->slot].ID = 0;
+        } break;
+        
+        case Prediction_EquipmentAdded:
+        {
+            u64 ID = prediction->identifier;
+            entity->equipment[prediction->slot].ID = ID;
+        } break;
+        
+        case Prediction_ActionBegan:
+        {
+            EntityAction currentAction = entity->action;
+            if((currentAction == prediction->action) || (currentAction <= Action_Idle))
+            {
+                entity->action = prediction->action;
+            }
+            else
+            {
+                prediction->type = Prediction_None;
+            }
+        } break;
     }
 }

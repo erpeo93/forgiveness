@@ -263,7 +263,7 @@ inline void InitAndUpdateLFF(PlantStem* stem, PlantLFFParams* params, LeafFlower
 }
 
 
-inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantDefinition* definition, PlantStem* trunk, PlantStem* stem, u8 recursiveLevel, m4x4 originOrientation, r32 startingZ, r32 timeToUpdate)
+inline void UpdatePlantStem(GameModeWorld* worldMode, Plant* plant, PlantDefinition* definition, PlantStem* trunk, PlantStem* stem, u8 recursiveLevel, m4x4 originOrientation, r32 startingZ, r32 timeToUpdate)
 {
     PlantLevelParams* levelParams = definition->levelParams + recursiveLevel;
     PlantLevelParams* nextLevelParams = levelParams;
@@ -585,7 +585,7 @@ inline void UpdatePlantStem(GameModeWorld* worldMode, ClientPlant* plant, PlantD
     InitAndUpdateLFF(stem, &definition->fruitParams, stem->fruits, levelParams->fruitCount, levelParams->allFruitsAtStemLength, &worldMode->leafFlowerFruitSequence, timeToUpdate);
 }
 
-inline void UpdatePlant(GameModeWorld* worldMode, PlantDefinition* definition, ClientPlant* plant, r32 timeToUpdate)
+inline void UpdatePlant(GameModeWorld* worldMode, PlantDefinition* definition, Plant* plant, r32 timeToUpdate)
 {
     for(PlantStem* trunk = plant->plant.firstTrunk; trunk; trunk = trunk->next)
     {
@@ -601,7 +601,7 @@ struct PlantRenderingParams
     r32 lerpWithFollowingSeason;
 };
 
-inline void RenderLFF(RenderGroup* group, ClientPlant* plant, Vec3 P, PlantLFFParams* params,LeafFlowerFruit* lff, BitmapId BID, PlantRenderingParams renderingParams, r32 windTime)
+inline void RenderLFF(RenderGroup* group, Plant* plant, Vec3 P, PlantLFFParams* params,LeafFlowerFruit* lff, BitmapId BID, PlantRenderingParams renderingParams, r32 windTime)
 {
     PlantLFFSeasonParams* season = GetSeason(params, renderingParams.season);
     PlantLFFSeasonParams* followingSeason = GetFollowingSeason(params, renderingParams.season);
@@ -640,7 +640,7 @@ inline void RenderLFF(RenderGroup* group, ClientPlant* plant, Vec3 P, PlantLFFPa
     PushBitmap(group, lffTransform, BID, P, 0, scale, color, renderingParams.lights);
 }
 
-internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParams, r32 windTime, ClientPlant* plant, PlantDefinition* definition, PlantStem* stem, Vec3 stemP, u8 recursiveLevel, m4x4 originOrientation, r32 startingZ)
+internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParams, r32 windTime, Plant* plant, PlantDefinition* definition, PlantStem* stem, Vec3 stemP, u8 recursiveLevel, m4x4 originOrientation, r32 startingZ)
 {
     m4x4 baseOrientation = originOrientation * stem->orientation;
     
@@ -765,7 +765,7 @@ internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParam
 }
 
 
-internal void SyncPlantWithServer(GameModeWorld* worldMode, PlantDefinition* definition, ClientPlant* plant)
+internal void SyncPlantWithServer(GameModeWorld* worldMode, PlantDefinition* definition, Plant* plant)
 {
     r32 targetUpdateTime = 1.0f;
     r32 longUpdateTime = 10.0f;
@@ -816,7 +816,7 @@ struct SyncPlantWork
 {
     GameModeWorld* worldMode;
     PlantDefinition* definition;
-    ClientPlant* plant;
+    Plant* plant;
     TaskWithMemory* task;
 };
 
@@ -833,7 +833,7 @@ PLATFORM_WORK_CALLBACK(SyncPlantCallback)
 }
 
 
-internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group, PlantRenderingParams renderingParams, PlantDefinition* definition, ClientPlant* plant, Vec3 plantP)
+internal void UpdateAndRenderPlant(GameModeWorld* worldMode, RenderGroup* group, PlantRenderingParams renderingParams, PlantDefinition* definition, Plant* plant, Vec3 plantP)
 {
     if(!plant->plant.trunkCount)
     {
