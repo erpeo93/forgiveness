@@ -6,68 +6,68 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_token.cpp"
 #include "forg_meta.cpp"
 #include "forg_pool.cpp"
-#include "forg_taxonomy.cpp"
 #include "forg_physics.cpp"
 #include "forg_world.cpp"
-#include "forg_world_client.cpp"
+//#include "forg_world_client.cpp"
 #include "forg_world_generation.cpp"
 #include "forg_editor.cpp"
-#include "forg_inventory.cpp"
 #include "forg_asset.cpp"
 #include "forg_render.cpp"
 #include "forg_camera.cpp"
-#include "forg_light.cpp"
+//#include "forg_light.cpp"
 #include "forg_network_client.cpp"
 #include "forg_plant.cpp"
 #include "forg_mesh.cpp"
 #include "forg_rock.cpp"
 #include "forg_object.cpp"
-#include "forg_crafting.cpp"
+//#include "forg_crafting.cpp"
 #include "forg_sound.cpp"
 #include "forg_particles.cpp"
-#include "forg_bolt.cpp"
-#include "forg_bound.cpp"
-#include "forg_animation.cpp"
+//#include "forg_bolt.cpp"
+//#include "forg_bound.cpp"
+//#include "forg_animation.cpp"
 #include "forg_cutscene.cpp"
 #include "forg_ground.cpp"
 #include "forg_UIcommon.cpp"
 
-inline void MarkAllPakFilesAsToDelete(GameModeWorld* worldMode, char* path)
+inline ClientEntity* GetEntityClient(GameModeWorld* worldMode, u64 identifier, b32 allocate = false)
 {
-    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, path);
-    
-    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex)
+    ClientEntity* result = 0;
+    if(identifier)
     {
-        PlatformFileHandle handle = platformAPI.OpenNextFile(&fileGroup, path);
+        u32 index = identifier & (ArrayCount(worldMode->entities) - 1);
         
-        ToDeleteFile* toDelete;
-        FREELIST_ALLOC(toDelete, worldMode->firstFreeFileToDelete, PushStruct(&worldMode->deletedFilesPool, ToDeleteFile));
+        ClientEntity* entity = worldMode->entities[index];
+        ClientEntity* firstFree = 0;
         
-        toDelete->toDelete = true;
-        RemoveExtension(toDelete->filename, sizeof(toDelete->filename), handle.name);
-        
-        FREELIST_INSERT(toDelete, worldMode->firstFileToDelete);
-        
-        platformAPI.CloseHandle(&handle);
-    }
-    
-    platformAPI.GetAllFilesEnd(&fileGroup);
-}
-
-inline void DeleteAllFilesNotArrived(GameModeWorld* worldMode, char* path)
-{
-    for(ToDeleteFile* file = worldMode->firstFileToDelete; file; file = file->next)
-    {
-        if(file->toDelete)
+        while(entity)
         {
-            char toDeleteWildcard[128];
-            FormatString(toDeleteWildcard, sizeof(toDeleteWildcard), "%s.*", file->filename);
-            platformAPI.DeleteFileWildcards(path, toDeleteWildcard);
+            Assert(entity->identifier);
+            if(entity->identifier == identifier)
+            {
+                result = entity;
+                break;
+            }
+            
+            entity = entity->next;
+        }
+        
+        if(!result && allocate)
+        {
+            if(firstFree)
+            {
+                result = firstFree;
+            }
+            else
+            {
+                result = PushStruct(worldMode->persistentPool, ClientEntity);
+                result->next = worldMode->entities[index];
+                worldMode->entities[index] = result;
+            }
         }
     }
     
-    worldMode->firstFileToDelete = 0;
-    Clear(&worldMode->deletedFilesPool);
+    return result;
 }
 
 internal void PlayGame(GameState* gameState, PlatformInput* input)
@@ -87,8 +87,6 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     char* loginServer = "127.0.0.1";
 #endif
     
-    MarkAllPakFilesAsToDelete(result, "assets");
-    
     clientNetwork->nextSendUnreliableApplicationData = {};
     clientNetwork->nextSendReliableApplicationData = {};
     ResetReceiver(&clientNetwork->receiver);
@@ -104,23 +102,15 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->temporaryPool = &gameState->framePool;
     result->persistentPool = &gameState->persistentPool;
     
-    result->table = PushStruct(&gameState->modePool, TaxonomyTable);
-    result->oldTable = PushStruct(&gameState->modePool, TaxonomyTable);
-    
-    result->chunkDim = CHUNK_DIM;
-    Assert(result->chunkDim % 2 == 0);
-    u8 halfChunkDim = result->chunkDim / 2;
-    result->voxelSide = VOXEL_SIZE;
-    result->chunkSide = result->voxelSide * result->chunkDim;
-    result->oneOverVoxelSide = 1.0f / result->voxelSide;
-    result->oneOverChunkSide = 1.0f / result->chunkSide;
-    
     
     result->particleCache = PushStruct(&gameState->modePool, ParticleCache, AlignClear(16));
     InitParticleCache(result->particleCache, gameState->assets, &gameState->visualEffectsPool);
     
+    
+#if 0    
     result->boltCache = PushStruct(&gameState->modePool, BoltCache);
     InitBoltCache(result->boltCache, &gameState->visualEffectsPool, 11111);
+#endif
     
     
     gameState->world = result;
@@ -147,7 +137,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->dayPhases[DayPhase_Night].next = DayPhase_Day;
 #endif
     
-    result->currentPhase = DayPhase_Day;
+    //result->currentPhase = DayPhase_Day;
     result->soundState = &gameState->soundState;
     
 }
@@ -178,7 +168,6 @@ internal Vec3 HandleDaynightCycle(GameModeWorld* worldMode, PlatformInput* input
     {
         ambientLightColor = currentPhase->ambientLightColor;
     }
-#endif
     switch(worldMode->currentPhase)
     {
         case DayPhase_Sunrise:
@@ -211,12 +200,24 @@ internal Vec3 HandleDaynightCycle(GameModeWorld* worldMode, PlatformInput* input
             ambientLightColor = V3(0.02f, 0.02f, 0.1f);
         } break;
     }
-    
+#endif
     return ambientLightColor;
 }
 
 internal void RenderEntities(GameModeWorld* worldMode, RenderGroup* group, ClientPlayer* myPlayer, r32 timeToAdvance)
 {
+    for(u32 entityIndex = 0; entityIndex < ArrayCount(worldMode->entities); ++entityIndex)
+    {
+        ClientEntity* entity = worldMode->entities[entityIndex];
+        while(entity)
+        {
+            Vec3 P = GetRelativeP(worldMode, entity);
+            PushRect(group, UprightTransform(), P, V2(0.5f, 0.5f), V4(1, 0, 0, 1));
+            entity = entity->next;
+        }
+    }
+    
+#if 0    
     for(u32 entityIndex = 0; 
         entityIndex < ArrayCount(worldMode->entities); 
         entityIndex++)
@@ -352,10 +353,14 @@ internal void RenderEntities(GameModeWorld* worldMode, RenderGroup* group, Clien
             entity = next;
         }
     }
+#endif
+    
 }
 
 internal void AddEntityLights(GameModeWorld* worldMode)
 {
+    
+#if 0    
     for(u32 entityIndex = 0; 
         entityIndex < ArrayCount(worldMode->entities); 
         entityIndex++)
@@ -378,11 +383,16 @@ internal void AddEntityLights(GameModeWorld* worldMode)
             entity = entity->next;
         }
     }
+#endif
+    
 }
 
 internal u64 DetectNearestEntities(GameModeWorld* worldMode, RenderGroup* group, Vec2 screenMouseP)
 {
+    
     u64 result = 0;
+    
+#if 0    
     for(u32 index = 0; index < ArrayCount(worldMode->nearestCameraZ); ++index)
     {
         worldMode->nearestCameraZ[index] = R32_MAX;
@@ -470,109 +480,18 @@ internal u64 DetectNearestEntities(GameModeWorld* worldMode, RenderGroup* group,
             entity = entity->next;
         }
     }
+#endif
     
     return result;
 }
 
 internal void UpdateEntities(GameModeWorld* worldMode, r32 timeToAdvance, ClientEntity* player, ClientPlayer* myPlayer)
 {
-    for(u32 entityIndex = 0; 
-        entityIndex < ArrayCount(worldMode->entities); 
-        entityIndex++)
+    for(u32 entityIndex = 0; entityIndex < ArrayCount(worldMode->entities); ++entityIndex)
     {
         ClientEntity* entity = worldMode->entities[entityIndex];
         while(entity)
         {
-            ClientEntity* next = entity->next;
-            if(entity->identifier)
-            {  
-                entity->actionTime += timeToAdvance;
-                
-                
-                entity->P = Subtract(entity->universeP, myPlayer->universeP);
-                entity->timeFromLastUpdate += timeToAdvance;
-                
-                if(entity->beingDeleted)
-                {
-                    entity->animation.goOutTime += timeToAdvance;
-                }
-                
-                if(entity->timeFromLastUpdate >= 3.0f || entity->animation.goOutTime >= ALPHA_GO_OUT_SECONDS)
-                {
-                    DeleteEntityClient(worldMode, entity);
-                }
-                
-                Vec3 offset = {};
-                if(entity->identifier == myPlayer->identifier)
-                {
-                    r32 maxDistanceForAccPrediction = 0.3f;
-                    if(myPlayer->distanceCoeffFromServerP < maxDistanceForAccPrediction && timeToAdvance > 0)
-                    {
-                        r32 accelerationCoeff = 1.0f;
-                        Vec3 acc = ComputeAcceleration(myPlayer->acceleration, myPlayer->velocity, DefaultMoveSpec(accelerationCoeff));
-                        myPlayer->velocity += acc * timeToAdvance;
-                        
-                        Vec3 velocity;
-                        if(myPlayer->distanceCoeffFromServerP < 0.15f && player->action <= Action_Idle)
-                        {
-                            velocity = myPlayer->velocity;
-                        }
-                        else
-                        {
-                            r32 lerp = Clamp01MapToRange(0.0f, myPlayer->distanceCoeffFromServerP, maxDistanceForAccPrediction);
-                            velocity = Lerp(myPlayer->velocity, lerp, entity->velocity);
-                        }
-                        
-                        if(Abs(myPlayer->acceleration.x) > 0.1f)
-                        {
-                            entity->animation.flipOnYAxis = (myPlayer->acceleration.x < 0);
-                        }
-                        
-                        if(myPlayer->distanceCoeffFromServerP < 0.15f)
-                        {
-                            offset = MoveEntityClient(worldMode, entity, timeToAdvance, acc, velocity, &myPlayer->velocity);
-                            
-                            if(LengthSq(myPlayer->acceleration) > Square(0.1f))
-                            {
-                                entity->action = Action_Move;
-                            }
-                        }
-                        else
-                        {
-                            offset = timeToAdvance * velocity;
-                            if(LengthSq(velocity) > Square(0.1f))
-                            {
-                                entity->action = Action_Move;
-                            }
-                            
-                        }
-                    }
-                    else
-                    {
-                        offset = timeToAdvance * entity->velocity;
-                        if(entity->action == Action_Move && Abs(entity->velocity.x) > 0.1f)
-                        {
-                            entity->animation.flipOnYAxis = (offset.x < 0);
-                        }
-                    }
-                }
-                else
-                {
-                    offset = timeToAdvance * entity->velocity;
-                    if(entity->action == Action_Move && Abs(entity->velocity.x) > 0.1f)
-                    {
-                        entity->animation.flipOnYAxis = (offset.x < 0);
-                    }
-                }
-                
-                entity->universeP = Offset(entity->universeP, offset.xy);
-                
-                entity->modulationWithFocusColor = 0;
-                HandleClientPrediction(entity, timeToAdvance);
-                SetEquipmentReferenceAction(worldMode, entity);
-                UpdateAnimationEffects(worldMode, entity, timeToAdvance);
-            }
-            
             entity = entity->next;
         }
     }
@@ -629,168 +548,50 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         ClientEntity* player = GetEntityClient(worldMode, myPlayer->identifier);
         if(player)
         {
-            char* filePath = "assets";
-            if(worldMode->dataFileSent)
+            if(IsDown(&input->moveLeft))
             {
-                ++worldMode->patchSectionArrived;
-                
-                
-#if RESTRUCTURING                
-                WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstDataFileArrived, false);
-                switch(worldMode->dataFileSent)
-                {
-                    case DataFileSent_OnlyTaxonomies:
-                    {
-                        SwapTables(worldMode);
-                        ReadTaxonomiesFromFile();
-                        CopyAndLoadTabsFromOldTable(worldMode->oldTable);
-                        
-                        for(DataFileArrived* file = worldMode->firstDataFileArrived; file; file = file->next)
-                        {
-                            ImportAllFiles(worldMode->editorRoles, file->name);
-                        }
-                    } break;
-                    
-                    case DataFileSent_OnlyAssets:
-                    {
-                        CopyAndLoadTabsFromOldTable(worldMode->oldTable);
-                        ImportAllAssetFiles(worldMode, filePath, &worldMode->filePool);
-                    } break;
-                    
-                    case DataFileSent_Everything:
-                    {
-                        SwapTables(worldMode);
-                        ReadTaxonomiesFromFile();
-                        
-                        ImportAllFiles(worldMode->editorRoles, 0);
-                        ImportAllAssetFiles(worldMode, filePath, &worldMode->filePool);
-                        
-                        platformAPI.DEBUGWriteFile("editorErrors", worldMode->table->errors, sizeof(worldMode->table->errors[0]) * worldMode->table->errorCount);
-                    } break;
-                }
-#endif
-                
-                worldMode->firstDataFileArrived = 0;
-                TranslateParticleEffects(worldMode->particleCache, worldMode->oldTable, worldMode->table);
-                
-                for(u32 entityIndex = 0; entityIndex < ArrayCount(worldMode->entities); ++entityIndex)
-                {
-                    ClientEntity* entity = worldMode->entities[entityIndex];
-                    while(entity)
-                    {
-                        TranslateClientEntity(worldMode->oldTable, worldMode->table, entity);
-                        entity = entity->next;
-                    }
-                }
-                
-                TranslateClientPlayer(worldMode->oldTable, worldMode->table, myPlayer);
-                TaxonomySlot* rootSlot = &worldMode->table->root;
-                
-                reloadTaxonomyAutocompletes = true;
-                
-                
-                
-                
-                worldMode->dataFileSent = DataFileSent_Nothing;
+                inputAcc.x = -1.0f;
             }
             
-            if(worldMode->allPakFilesArrived)
+            if(IsDown(&input->moveRight))
             {
-                ++worldMode->patchSectionArrived;
-                CloseAllHandles(gameState->assets);
-                
-                
-#if RESTRUCTURING                
-                for(DataFileArrived* file = worldMode->firstPakFileArrived; file; file = file->next)
-                {
-                    MarkFileAsArrived(worldMode, file->name);
-                }
-                
-                
-                WriteAllFiles(&worldMode->filePool, filePath, worldMode->firstPakFileArrived, true);
-                DeleteAllFilesNotArrived(worldMode, "assets");
-                
-                worldMode->firstPakFileArrived = 0;
-                
-                i32 destIndex = (gameState->assetsIndex) ? 0 : 1;
-                MemoryPool* toFree = gameState->assetsPool + destIndex;
-                Clear(toFree);
-                gameState->pingPongAssets[destIndex] = InitAssets(gameState, toFree, gameState->textureQueue, MegaBytes(256));
-                
-                gameState->assets = gameState->pingPongAssets[destIndex];
-                gameState->assetsIndex = destIndex;
-                
-                Clear(&worldMode->filePool);
-                worldMode->currentFile = 0;
-                
-                
-#endif
-                
-                // TODO(Leonardo): this should not be here!
+                inputAcc.x = 1.0f;
+            }
+            
+            if(IsDown(&input->moveDown))
+            {
+                inputAcc.y = -1.0f;
+            }
+            if(IsDown(&input->moveUp))
+            {
+                inputAcc.y = 1.0f;
+            }
+            
+            
+            // TODO(Leonardo): this should not be here!
 #if 0
-                if(!gameState->music)
-                {
-                    RandomSequence seq = Seed(worldMode->worldSeed);
-                    gameState->music = PlaySound(&gameState->soundState, gameState->assets, GetRandomSound(gameState->assets, Asset_music, &seq), 0.0f);
-                }
-#endif
-                
-                
-                reloadAssetAutocompletes = true;
-                MarkAllPakFilesAsToDelete(worldMode, "assets");
-                worldMode->allPakFilesArrived = false;
+            if(!gameState->music)
+            {
+                RandomSequence seq = Seed(worldMode->worldSeed);
+                gameState->music = PlaySound(&gameState->soundState, gameState->assets, GetRandomSound(gameState->assets, Asset_music, &seq), 0.0f);
             }
-            
-            
-            
-            
+#endif
             group->assets = gameState->assets;
             player->identifier = myPlayer->identifier;
-            player->P = V3(0, 0, 0);
             
-            b32 canRender = (worldMode->patchSectionArrived >= 2);
-            if(canRender)
+            if(true)
             {
                 Clear(group, V4(0.0f, 0.0f, 0.0f, 1.0f));
-                ResetLightGrid(worldMode);
+                //ResetLightGrid(worldMode);
                 
                 MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), 1.0f);
-                
-#if RESTRUCTURING                
-                if(!TooFarForAction(myPlayer, output.desiredAction, output.targetEntityID))
-                {
-                    b32 resetAcceleration = false;
-                    if(NearEnoughForAction(myPlayer, output.desiredAction, output.targetEntityID, &resetAcceleration))
-                    {
-                        player->action = (EntityAction) output.desiredAction;
-                        if(resetAcceleration)
-                        {
-                            output.inputAcc = {};
-                        }
-                    }
-                }
-                ClientEntity* target = GetEntityClient(worldMode, output.targetEntityID);
-                if(target)
-                {
-                    player->animation.flipOnYAxis = (target->P.x < 0);
-                }
-                myPlayer->acceleration = output.inputAcc;
-                u64 overallNearestID = DetectNearestEntities(worldMode, group, screenMouseP);
-                if(!output.overlappingEntityID && overallNearestID != player->identifier)
-                {
-                    output.overlappingEntityID = overallNearestID;
-                }
-                
-#endif
-                
                 UpdateAndSetupGameCamera(worldMode, group, input);
-                
                 UpdateEntities(worldMode, input->timeToAdvance, player, myPlayer);
                 
                 BeginDepthPeel(group);
                 
                 AddEntityLights(worldMode);
-                FinalizeLightGrid(worldMode, group);
+                //FinalizeLightGrid(worldMode, group);
                 
                 Vec3 directionalLightColor = V3(1, 1, 1);
                 Vec3 directionalLightDirection = V3(0, 0, -1);
@@ -810,14 +611,12 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     worldMode->voronoiPingPong[voronoiIndex].deltaP += deltaP;
                 }
                 
-                u32 chunkApron = 2;
-                UpdateAndRenderGround(gameState, worldMode, group, myPlayer, chunkApron, input->timeToAdvance);
+                UpdateAndRenderGround(worldMode, group, myPlayer->universeP);
                 
                 worldMode->particleCache->deltaParticleP = deltaP;
                 UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
-                
-                worldMode->boltCache->deltaP = deltaP;
-                UpdateAndRenderBolts(worldMode, worldMode->boltCache, input->timeToAdvance, group);
+                //worldMode->boltCache->deltaP = deltaP;
+                //UpdateAndRenderBolts(worldMode, worldMode->boltCache, input->timeToAdvance, group);
                 
                 EndDepthPeel(group);
                 
@@ -833,7 +632,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         
     }
     
-    SendUpdate(inputAcc, targetEntityID, desiredAction, overlappingEntityID);
+    SendUpdate(inputAcc);
     
     
     return result;
@@ -990,12 +789,6 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
     return 0;
 }
 
-inline void FreeGameMode(GameModeWorld* worldMode)
-{
-    Clear(&worldMode->oldTable->pool_);
-    Clear(&worldMode->table->pool_);
-}
-
 #if FORGIVENESS_INTERNAL
 PlatformClientMemory* debugGlobalMemory;
 DebugTable *globalDebugTable;
@@ -1107,8 +900,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 rerun = UpdateAndRenderGame(gameState, gameState->world, &group, input);
                 if(input->allowedToQuit && input->altDown && Pressed(&input->exitButton))
                 {
-                    FreeGameMode(gameState->world);
-                    
                     if(gameState->music)
                     {
                         ChangeVolume(&gameState->soundState, gameState->music, 1.0f, V2(0.0f, 0.0f));

@@ -311,19 +311,14 @@ int main( int argc, char** argv )
 {
     char* fileNames[] =
     {
-        "forg_region.h",
         "forg_platform.h",
         "forg_math.h",
         "forg_action_effect.h",
         "forg_plant.h",
         "forg_inventory.h",
-        "forg_taxonomy.h",
         "forg_world_generation.cpp",
         "forg_AI.cpp",
         "forg_AI.h",
-        "forg_memory.h",
-        "forg_asset_enum.h",
-        "forg_taxonomy.cpp",
         "forg_editor.h",
         "forg_client.h",
         "forg_animation.h",

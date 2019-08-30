@@ -35,7 +35,7 @@ inline r32 CalculateCollisionRadiousSq(Rect3 bounds)
     return result;
 }
 
-inline SimEntity* GetRegionEntity(SimRegion* region, u32 index);
+
 internal r32 CheckCollisions(SimRegion* region, SimEntity* entity, 
                              Vec3 deltaP, r32 tRemaining, Vec3* wallNormalMin, CheckCollisionCurrent* hitMin)
 {

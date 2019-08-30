@@ -99,7 +99,7 @@ internal void* PushSize_( MemoryPool* pool, memory_index size, PushParams params
         
         totalSize = size;
         memory_index blockSize = Max( totalSize, pool->minimumBlockSize );
-        PlatformMemoryBlock* newBlock = platformAPI.AllocateMemory( blockSize, pool->allocationFlags );
+        PlatformMemoryBlock* newBlock = platformAPI.AllocateMemory(blockSize, pool->allocationFlags);
         
         newBlock->poolPrev = pool->currentBlock;
         pool->currentBlock = newBlock;
@@ -162,7 +162,7 @@ inline b32 FreeLastBlock( MemoryPool* pool )
         result = true;
     }
     
-    platformAPI.DeallocateMemory( free );
+    platformAPI.DeallocateMemory(free);
     
     return result;
 }

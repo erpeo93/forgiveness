@@ -16,8 +16,11 @@ inline r32 NormalizeCoordinate(r32 offset, r32 chunkSide, r32 oneOverChunkSide, 
     return result;
 }
 
-inline UniversePos NormalizePosition(UniversePos pos, r32 chunkSide, r32 oneOverChunkSide)
+inline UniversePos NormalizePosition(UniversePos pos)
 {
+    r32 chunkSide = VOXEL_SIZE * CHUNK_DIM;
+    r32 oneOverChunkSide = 1.0f / chunkSide;
+    
     UniversePos result = pos;
     result.chunkOffset.x = NormalizeCoordinate(result.chunkOffset.x, chunkSide, oneOverChunkSide, &result.chunkX);
     result.chunkOffset.y = NormalizeCoordinate(result.chunkOffset.y, chunkSide, oneOverChunkSide, &result.chunkY);
@@ -27,20 +30,18 @@ inline UniversePos NormalizePosition(UniversePos pos, r32 chunkSide, r32 oneOver
 
 inline UniversePos Offset(UniversePos pos, Vec2 offset)
 {
-    r32 chunkSide = VOXEL_SIZE * CHUNK_DIM;
-    
     pos.chunkOffset.x += offset.x;
     pos.chunkOffset.y += offset.y;
-    UniversePos result = NormalizePosition(pos, chunkSide, 1.0f / chunkSide);
+    UniversePos result = NormalizePosition(pos);
     
     return result;
     
 }
 
-inline b32 ChunkOutsideWorld(i32 lateralChunkSpan, i32 chunkX, i32 chunkY)
+inline b32 ChunkOutsideWorld(i32 chunkX, i32 chunkY)
 {
     b32 result = false;
-    if(chunkX < 0 || chunkY < 0 || chunkX >= lateralChunkSpan || chunkY >= lateralChunkSpan)
+    if(chunkX < 0 || chunkY < 0 || chunkX >= WORLD_CHUNK_SPAN || chunkY >= WORLD_CHUNK_SPAN)
     {
         result = true;
     }
@@ -77,9 +78,9 @@ internal WorldChunk* GetChunk(WorldChunk** chunks, u32 chunkCount, i32 worldX, i
     return result;
 }
 
-inline b32 PositionInsideWorld(i32 lateralChunkSpan, UniversePos* pos)
+inline b32 PositionInsideWorld(UniversePos* pos)
 {
-    b32 result = (!ChunkOutsideWorld(lateralChunkSpan, pos->chunkX, pos->chunkY));
+    b32 result = (!ChunkOutsideWorld(pos->chunkX, pos->chunkY));
     return result;
 }
 
@@ -95,6 +96,8 @@ inline Vec3 Subtract(UniversePos A, UniversePos B)
 
 #ifdef FORG_SERVER
 #else
+
+#if 0
 struct GetUniversePosQuery
 {
     WorldChunk* chunk;
@@ -103,6 +106,7 @@ struct GetUniversePosQuery
     
     Vec2 chunkOffset;
 };
+
 
 GetUniversePosQuery TranslateRelativePos(GameModeWorld* worldMode, UniversePos baseP, Vec2 relativeP)
 {
@@ -184,7 +188,7 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, WorldChunk* chunk, i32 tileX
     Assert(tileY >= 0 && tileY < CHUNK_DIM);
     
     
-    i32 lateralChunkSpan = WORLD_REGION_SPAN * REGION_CHUNK_SPAN;
+    i32 lateralChunkSpan = WORLD_CHUNK_SPAN;
     chunkX = Wrap(0, chunkX, lateralChunkSpan);
     chunkY = Wrap(0, chunkY, lateralChunkSpan);
     
@@ -199,5 +203,6 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, WorldChunk* chunk, i32 tileX
     
     return result;
 }
+#endif
 
 #endif

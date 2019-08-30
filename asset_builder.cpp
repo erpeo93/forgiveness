@@ -1,20 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include "forg_basic_types.h"
-#include "ll_net.h"
-#include "forg_platform.h"
-#include "forg_shared.h"
-#include "forg_token.h"
-#include "forg_asset_enum.h"
-#include "forg_file_formats.h"
-#include "forg_intrinsics.h"
-#include "forg_math.h"
-#include "forg_meta.h"
-#include "asset_builder.h"
-#include "win32_file.cpp"
-#include "forg_token.cpp"
 #include "miniz.c"
-
 
 #define STB_IMAGE_IMPLEMENTATION 1
 #include "stb_image.h"
@@ -31,27 +15,6 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 #endif
-
-#define VERY_LARGE_NUMBER 256
-#define EVEN_BIGGER_NUMBER 1024
-struct Assets
-{
-    u32 countTags;
-    PakTag tags[EVEN_BIGGER_NUMBER];
-    
-    u32 countAssetType;
-    PakAssetType types[HASHED_ASSET_SLOT_COUNT + AssetSpecial_Count];
-    
-    u32 countAssets;
-    AssetSource assetSources[VERY_LARGE_NUMBER];
-    PakAsset assets[VERY_LARGE_NUMBER];
-    
-    PakAssetType* DEBUGAssetType;
-    
-    u32 assetIndex;
-    u64 currentStringHashID;
-};
-global_variable Assets* currentAssets_;
 
 #pragma pack( push, 1 )
 struct BitmapHeader
@@ -117,32 +80,6 @@ enum WAVE_ChunkID
 #pragma pack( pop )
 
 
-struct EntireFile
-{
-    u32 size;
-    void* content;
-};
-
-EntireFile ReadFile( char* filename )
-{
-    EntireFile result = {};
-    
-    FILE* in = fopen(filename, "rb");
-    
-    if(in)
-    {
-        fseek( in, 0, SEEK_END );
-        result.size = ftell( in );
-        fseek( in, 0, SEEK_SET );
-        result.content = malloc(result.size + 1);
-        fread(result.content, result.size, 1, in);
-        char* contentString = (char*) result.content;
-        contentString[result.size] = 0;
-        fclose(in);
-    }
-    return result;
-};
-
 global_variable HDC globalFontDC;
 global_variable VOID* Bits;
 
@@ -151,7 +88,7 @@ global_variable VOID* Bits;
 
 #define MAX_FONT_GLYPHS 0x10ffff
 
-internal LoadedFont LoadFont( char* filename, char* fontName, int height )
+internal LoadedFont LoadFont(char* filename, char* fontName, int height)
 {
     AddFontResourceExA(filename, FR_PRIVATE, 0);
     LoadedFont font = {};
@@ -214,18 +151,14 @@ internal LoadedFont LoadFont( char* filename, char* fontName, int height )
     font.glyphsCount = 1;
     font.glyphs[0].unicodeCodePoint = 0;
     font.glyphs[0].bitmapId.value = 0;
-    return font;
-}
-
-internal void FinalizeFontKernings( LoadedFont* font )
-{
-    SelectObject(globalFontDC, font->win32Font );
+    
+    SelectObject(globalFontDC, font->win32Font);
     
     DWORD kerningPairsCount = GetKerningPairsW( globalFontDC, 0, 0 );
     KERNINGPAIR* pairs = ( KERNINGPAIR* ) malloc( sizeof( KERNINGPAIR ) * kerningPairsCount );
     GetKerningPairsW( globalFontDC, kerningPairsCount, pairs );
     
-    for( DWORD pairIndex = 0; pairIndex < kerningPairsCount; pairIndex++ )
+    for(DWORD pairIndex = 0; pairIndex < kerningPairsCount; pairIndex++)
     {
         KERNINGPAIR* pair = pairs + pairIndex;
         if( pair->wFirst < font->maximumGlyphsCount &&
@@ -241,20 +174,13 @@ internal void FinalizeFontKernings( LoadedFont* font )
         }
     }
     
-    free( pairs );
+    free(pairs);
+    
+    return font;
 }
 
-internal void FreeFont( LoadedFont* font )
-{
-    if( font )
-    {
-        free( font->glyphs );
-        free( font->horizontalAdvancement );
-        free( font->glyphIndexForCodePoint );
-    }
-}
 
-internal LoadedBitmap LoadGlyph( LoadedFont* font, u32 codePoint, PakAsset* asset )
+internal LoadedBitmap LoadGlyph(LoadedFont* font, u32 codePoint, PakAsset* asset)
 {
     LoadedBitmap result = {};
     
@@ -454,7 +380,7 @@ internal LoadedBitmap LoadGlyph( LoadedFont* font, u32 codePoint, PakAsset* asse
     return result;
 }
 
-internal LoadedBitmap LoadBitmap( char* path, char* filename, b32 loadPixels )
+internal LoadedBitmap LoadImage(char* path, char* filename)
 {
     LoadedBitmap result = {};
     char completeName[256];
@@ -624,61 +550,11 @@ inline u32 GetChunkDataSize( RiffIter iter )
     return result;
 }
 
-internal u32 GetSoundSampleCount(char* filename)
-{
-    u32 result = {};
-    u32 channelCount = 0;
-    
-    EntireFile sound = ReadFile(filename);
-    Assert(sound.content);
-    if( sound.content )
-    {
-        WAVEHeader* header = (WAVEHeader*) sound.content;
-        Assert(header->id == WAVE_IDriff);
-        Assert(header->waveID == WAVE_IDwave);
-        
-        void* samplesLeft = 0;
-        void* samplesRight = 0;
-        
-        for(RiffIter iter = ParseChunkAt(header + 1, ( u8* ) ( header + 1) + header->size - 4 ); IsValid( iter ); iter = NextChunk(iter))
-        {
-            switch(GetType(iter))
-            {
-                case WAVE_IDfmt:
-                {
-                    WAVEFormat* format = ( WAVEFormat* ) GetChunkData(iter); 
-                    
-                    Assert(format->format == 1 );
-                    Assert(format->blocksPerSec = 48000);
-                    Assert(format->bitsPerSample == 16 );
-                    Assert(format->channels == 2);
-                    Assert(format->blockSize == format->channels * 2);
-                    
-                    
-                    channelCount = format->channels;
-                } break;
-                
-                case WAVE_IDdata:
-                {
-                    result = GetChunkDataSize(iter) /(channelCount * sizeof(i16));
-                } break;
-            }
-        }
-        
-        free(sound.content);
-    }
-    
-    return result;
-}
-
 
 internal LoadedSound LoadWAV(char* filename)
 {
     LoadedSound result = {};
     
-    
-    
-#if 1    
     EntireFile sound = ReadFile( filename );
     Assert( sound.content );
     if( sound.content )
@@ -758,34 +634,6 @@ internal LoadedSound LoadWAV(char* filename)
             }
         }
     }
-#else
-    cs_loaded_sound_t csSound = cs_load_wav(filename);
-    
-    result.countChannels = 1;
-    result.countSamples = csSound.sample_count;
-    result.samples[0] = (i16*) csSound.channels[0];
-    result.samples[1] = (i16*) csSound.channels[1];
-    
-    
-    Assert(result.countChannels == 1);
-    i16* leftChannel = result.samples[0];
-    i16 maxSampleValue = I16_MIN;
-    for( u32 sampleIndex = 0; sampleIndex < result.countSamples / 2; sampleIndex++ )
-    {
-        leftChannel[sampleIndex] = leftChannel[2 * sampleIndex];
-        i16 sampleValue = leftChannel[sampleIndex];
-        
-        if(sampleValue > maxSampleValue)
-        {
-            maxSampleValue = sampleValue;
-        }
-    }
-    
-    
-    Assert(maxSampleValue > 0);
-    result.maxSampleValue = maxSampleValue;
-    result.decibelLevel = 20 * Log10((r32) maxSampleValue / (r32) I16_MAX);
-#endif
     
     return result;
 }
@@ -971,7 +819,7 @@ char* AdvanceToLastSlash( char* name )
 }
 
 
-internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animationIndex)
+internal LoadedSkeleton LoadSkeleton(char* path, char* filename, u32 animationIndex)
 {
     u32 currentIndex = 0;
     LoadedAnimation result = {};
@@ -1522,88 +1370,6 @@ internal LoadedAnimation LoadAnimation(char* path, char* filename, u32 animation
     return result;
 }
 
-internal u32 CountAnimationInFile(char* path, char* filename )
-{
-    u32 result = 0;
-    char completeName[256];
-    sprintf(completeName, "%s/%s", path, filename );
-    EntireFile animation = ReadFile(completeName );
-    //Assert(animation.content );
-    if(animation.content )
-    {
-        // TODO(Leonardo ): robustness!
-        i32 startOffset = 134;
-        char* start = (char* ) animation.content + startOffset;
-        
-        b32 mainLineActive = false;
-        b32 loading = false;
-        b32 ended = false;
-        i32 timeLineActive = 0;
-        
-        i32 frameCount = 0;
-        TempFrame* tempFrame = 0;
-        i32 realFrameIndex = 0;
-        i32 currentSpin = 0;
-        
-        while(start != 0 && !ended )
-        {
-            XMLTag currentTag = {};
-            start = ReadXMLTag(start, &currentTag );
-            
-            if(StrEqual(currentTag.title, "animation" ) )
-            {
-                ++result;
-            }
-        }
-    }
-    
-    free(animation.content );
-    return result;
-}
-
-internal void GetAnimationName(char* path, char* filename, u32 animationIndex, char* output, u32 outputLength )
-{
-    u32 currentIndex = 0;
-    char completeName[256];
-    sprintf(completeName, "%s/%s", path, filename );
-    EntireFile animation = ReadFile(completeName );
-    //Assert(animation.content);
-    if(animation.content )
-    {
-        // TODO(Leonardo ): robustness!
-        i32 startOffset = 134;
-        char* start = (char* ) animation.content + startOffset;
-        
-        b32 mainLineActive = false;
-        b32 loading = false;
-        b32 ended = false;
-        i32 timeLineActive = 0;
-        
-        i32 frameCount = 0;
-        TempFrame* tempFrame = 0;
-        i32 realFrameIndex = 0;
-        i32 currentSpin = 0;
-        
-        while(start != 0 && !ended )
-        {
-            XMLTag currentTag = {};
-            start = ReadXMLTag(start, &currentTag );
-            
-            if(StrEqual(currentTag.title, "animation" ) )
-            {
-                if(currentIndex++ == animationIndex)
-                {
-                    char* name = GetXMLValue(&currentTag, "name" );
-                    Assert(StrLen(name ) < outputLength );
-                    StrCpy(name, StrLen(name ), output );
-                }
-            }
-        }
-    }
-    
-    free(animation.content );
-}
-
 
 struct FaceVertexData
 {
@@ -1744,334 +1510,98 @@ internal LoadedModel LoadModel(char* path, char* filename)
     return result;
 }
 
-FILE* out;
-internal void BeginAssetType(Assets* assets, u32 type)
-{
-    Assert(assets->DEBUGAssetType == 0 );
-    assets->DEBUGAssetType = assets->types + type;
-    assets->DEBUGAssetType->ID = type;
-    assets->DEBUGAssetType->firstAssetIndex = assets->countAssets;
-    assets->DEBUGAssetType->onePastLastAssetIndex = assets->countAssets;
-    assets->currentStringHashID = 0;
-    
-    currentAssets_ = assets;
-}
-
-inline u64 BeginAssetType(Assets* assets, char* assetName)
-{
-    u64 hashID = StringHash(assetName);
-    u32 assetIndex = GetAssetIndex(hashID);
-    BeginAssetType(assets, assetIndex);
-    
-    return hashID;
-}
-
-struct AddedAsset
-{
-    u32 ID;
-    AssetSource* source;
-    PakAsset* dest;
-};
-
-internal AddedAsset AddAsset(Assets* assets)
-{
-    AddedAsset result = {};
-    result.ID = assets->countAssets++;
-    u32 assetIndex = assets->DEBUGAssetType->onePastLastAssetIndex++;
-    result.source = assets->assetSources + assetIndex;
-    
-    result.dest = assets->assets + assetIndex;
-    *result.dest = {};
-    result.dest->firstTagIndex = assets->countTags;
-    result.dest->onePastLastTagIndex = assets->countTags;
-    assets->assetIndex = result.ID;
-    
-    return result;
-    
-}
-
-internal BitmapId AddBitmapAsset(char* path, char* filename, u64 stringHash, r32 alignX = 0.5f, r32 alignY = 0.5f)
-{
-    Assert(stringHash);
-    Assets* assets = currentAssets_;
-    AddedAsset asset = AddAsset(assets);
-    asset.source->type = Pak_bitmap;
-    StrCpy(filename, StrLen(filename ), asset.source->bitmap.filename, ArrayCount(asset.source->bitmap.filename ) );
-    StrCpy(path, StrLen(path), asset.source->bitmap.path, ArrayCount(asset.source->bitmap.path ) );
-    
-    asset.dest->bitmap.align[0] = alignX;
-    asset.dest->bitmap.align[1] = alignY;
-    asset.dest->typeHashID = stringHash;
-    asset.dest->nameHashID = StringHash(filename);
-    
-    asset.dest->offsetFromOriginalOffset = 0;
-    
-    LoadedBitmap bitmap = LoadBitmap(path, filename, false);
-    asset.dest->bitmap.nativeHeight = bitmap.downsampleFactor * bitmap.height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
-    free(bitmap.free );
-    
-    
-    BitmapId result = { asset.ID };
-    return result;
-}
-
-internal BitmapId AddColorationAsset(char* path, char* filename, u64 stringHash, u16 colorationIndex, Vec4 coloration)
-{
-    Assets* assets = currentAssets_;
-    AddedAsset asset = AddAsset(assets);
-    asset.source->type = Pak_coloration;
-    
-    asset.dest->bitmap.align[0] = 0;
-    asset.dest->bitmap.align[1] = 0;
-    asset.dest->typeHashID = stringHash;
-    asset.dest->nameHashID = StringHash(filename);
-    
-    asset.dest->offsetFromOriginalOffset = colorationIndex;
-    asset.dest->coloration.coloration = coloration;
-    
-    BitmapId result = {asset.ID};
-    return result;
-}
-
-internal BitmapId AddCharacterAsset(LoadedFont* font, u32 codePoint )
-{
-    Assets* assets = currentAssets_;
-    AddedAsset asset = AddAsset(assets );
-    
-    asset.source->type = Pak_fontGlyph;
-    asset.source->glyph.codePoint = codePoint;
-    asset.source->glyph.font = font;
-    
-    // NOTE(Leonardo ): alignment is set later!
-    asset.dest->typeHashID = 0;
-    asset.dest->nameHashID = 0;
-    asset.dest->offsetFromOriginalOffset = 0;
-    asset.dest->bitmap.align[0] = 0.0f;
-    asset.dest->bitmap.align[1] = 0.0f;
-    asset.dest->bitmap.nativeHeight = 0.0f;
-    
-    BitmapId result = {asset.ID, V4(1, 1, 1, 1)};
-    
-    u32 glyphIndex = font->glyphsCount++;
-    Assert(font->glyphsCount < font->maximumGlyphsCount );
-    PakGlyph* glyph = font->glyphs + glyphIndex;
-    glyph->unicodeCodePoint = codePoint;
-    glyph->bitmapId = result;
-    
-    font->glyphIndexForCodePoint[codePoint] = glyphIndex;
-    
-    if(codePoint >= font->onePastHighestCodePoint )
-    {
-        font->onePastHighestCodePoint = codePoint + 1;
-    }
-    return result;
-}
-
-internal FontId AddFontAsset(LoadedFont* font)
-{
-    Assets* assets = currentAssets_;
-    AddedAsset asset = AddAsset(assets );
-    
-    asset.source->type = Pak_font;
-    asset.source->font.font = font;
-    
-    asset.dest->typeHashID = StringHash(Asset_font);
-    asset.dest->nameHashID = 0;
-    asset.dest->offsetFromOriginalOffset = 0;
-    asset.dest->font.glyphsCount = font->glyphsCount;
-    asset.dest->font.ascenderHeight = font->ascenderHeight;
-    asset.dest->font.descenderHeight = font->descenderHeight;
-    asset.dest->font.externalLeading = font->externalLeading;
-    asset.dest->font.onePastHighestCodePoint = font->onePastHighestCodePoint;
-    
-    FontId result = { asset.ID };
-    return result;
-}
 
 
-internal AnimationId AddAnimationAsset(char* path, char* filename, u32 animationIndex, u64 stringHashID)
-{
-    Assets* assets = currentAssets_;
-    AddedAsset asset = AddAsset(assets );
-    
-    asset.source->type = Pak_animation;
-    asset.source->animation.header = {};
-    asset.dest->typeHashID = stringHashID;
-    asset.dest->nameHashID = stringHashID;
-    asset.dest->offsetFromOriginalOffset = 0;
-    StrCpy(path, StrLen(path ), asset.source->animation.path, ArrayCount(asset.source->animation.path ) );
-    StrCpy(filename, StrLen(filename ), asset.source->animation.filename, ArrayCount(asset.source->animation.filename ) );
-    asset.source->animation.animationIndex = animationIndex;
-    
-    AnimationId result = { asset.ID };
-    return result;
-}
-
-internal void AddEveryAnimationThatStartsWith(char* path, u64 hashID, char* animName, char* assetName, u32 currentAssetIndex)
-{
-    u64 animationNameHash = StringHash(assetName);
-    u32 assetIndex = GetAssetIndex(animationNameHash);
-    if(assetIndex == currentAssetIndex)
-    {
-        PlatformFileGroup fileGroup = Win32GetAllFilesBegin(PlatformFile_animation, path);
-        for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex )
-        {
-            PlatformFileHandle handle = Win32OpenNextFile(&fileGroup, path);
-            char* fileName = handle.name;
-            
-            if(!ContainsSubString(fileName, "autosave"))
-            {
-                u32 animationCount = CountAnimationInFile(path, fileName);
-                for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
-                {
-                    char animationName[32];
-                    GetAnimationName(path, fileName, animationIndex, animationName, sizeof(animationName));
-                    if(StrEqual(StrLen(animName), animationName, animName))
-                    {
-                        AddAnimationAsset(path, fileName, animationIndex, hashID);
-                    }
-                }
-            }
-            Win32CloseHandle(&handle);
-        }
-        Win32GetAllFilesEnd(&fileGroup);
-    }
-}
-
-internal SoundId AddSoundAsset(char* filename, u64 stringHash, i32 firstSampleIndex = 0, i32 sampleCount = 0)
-{
-    char* soundName = AdvanceToLastSlash(filename);
-    
-    Assets* assets = currentAssets_;
-    AddedAsset asset = AddAsset(assets );
-    
-    asset.source->type = Pak_sound;
-    asset.source->sound.firstSampleIndex = firstSampleIndex;
-    StrCpy(filename, StrLen(filename), asset.source->sound.filename, ArrayCount(asset.source->bitmap.filename));
-    asset.dest->typeHashID = stringHash;
-    asset.dest->nameHashID = StringHash(soundName);
-    asset.dest->offsetFromOriginalOffset = 0;
-    
-    asset.dest->sound.sampleCount = sampleCount;
-    asset.dest->sound.chain = Chain_none;
-    
-    SoundId result = {asset.ID};
-    return result;
-}
-
-
-internal ModelId AddModelAsset(char* path, char* filename, u64 typeHashID)
-{
-    Assets* assets = currentAssets_;
-    AddedAsset asset = AddAsset(assets);
-    
-    asset.source->type = Pak_model;
-    asset.dest->typeHashID = typeHashID;
-    asset.dest->nameHashID = StringHash(filename);
-    asset.dest->offsetFromOriginalOffset = 0;
-    
-    StrCpy(filename, StrLen(filename ), asset.source->model.filename, ArrayCount(asset.source->model.filename ) );
-    StrCpy(path, StrLen(path), asset.source->model.path, ArrayCount(asset.source->model.path ) );
-    
-    ModelId result = {asset.ID};
-    return result;
-}
-
-inline void EndAssetType()
-{
-    Assets* assets = currentAssets_;
-    Assert(assets->DEBUGAssetType );
-    assets->countAssets = assets->DEBUGAssetType->onePastLastAssetIndex;
-    assets->DEBUGAssetType = 0;
-    
-    currentAssets_ = 0;
-}
-
-inline void AddTag(u32 ID, r32 value )
-{
-    Assets* assets = currentAssets_;
-    Assert(assets->assetIndex );
-    
-    PakAsset* dest = assets->assets + assets->assetIndex;
-    dest->onePastLastTagIndex++;
-    
-    PakTag* tag = assets->tags + assets->countTags++;
-    tag->ID = ID;
-    tag->value = value;
-}
-
-inline void AddLabel(char* label, u32 labelLength, r32 value)
-{
-    u32 hash = (u32) (StringHash(label, labelLength) >> 32);
-    u32 hashIndex = (hash & (LABEL_HASH_COUNT - 1)) + Tag_count;
-    
-    AddTag(hashIndex, value);
-}
-
-internal void WritePak(Assets* assets, char* fileName_)
+internal void WritePak(AssetType type, AssetSubtype subtype, char* outputFilename)
 {
     char outputpak[128];
     FormatString(outputpak, sizeof(outputpak), "assets/%s", fileName_);
     
-    if(assets->countAssets > 1)
     {
-        out = fopen(outputpak, "wb");
-        
-        if(out )
+        FILE* out = fopen(outputpak, "wb");
+        if(out)
         {
             PAKHeader header = {};
             header.magicValue = PAK_MAGIC_NUMBER;
             header.version = PAK_VERSION;
             
-            header.tagCount = assets->countTags;
-            header.assetTypeCount = HASHED_ASSET_SLOT_COUNT + AssetSpecial_Count;
-            header.assetcount = assets->countAssets;
+            header.type = type;
+            header.subtype = subtype;
+            header.assetcount = assets->assetCount;
             
-            u32 tagArraySize = header.tagCount * sizeof(PakTag );
-            u32 assetArrayTypeSize = header.assetTypeCount * sizeof(PakAssetType );
-            u32 assetArraySize = header.assetcount * sizeof(PakAsset ) ;
+            u32 assetArraySize = header.assetcount * sizeof(PakAsset);
             
-            header.tagOffset = sizeof(PAKHeader) + sizeof(u64);
-            header.assetTypeOffset = header.tagOffset + tagArraySize;
-            header.assetOffset = header.assetTypeOffset + assetArrayTypeSize;
-            
-            u64 fakeDataHash = 0;
-            fwrite(&fakeDataHash, sizeof(fakeDataHash), 1, out);
+            header.assetOffset = sizeof(PAKHeader);
             fwrite(&header, sizeof(PAKHeader), 1, out);
-            fwrite(&assets->tags, tagArraySize, 1, out);
-            fwrite(&assets->types, assetArrayTypeSize, 1, out);
             
+            fseek(out, assetArraySize, SEEK_CUR);
             
-            fseek(out, assetArraySize, SEEK_CUR );
-            
-            for(u32 assetIndex = 1; assetIndex < header.assetcount; assetIndex++ )
+            for(eachFileInFolder)
             {
                 AssetSource* source = assets->assetSources + assetIndex;
                 PakAsset* dest = assets->assets + assetIndex;
                 dest->dataOffset = ftell(out );
                 
-                switch(source->type )
+                switch(sources->type)
                 {
-                    case Pak_bitmap:
+                    case Bitmap:
                     {
-                        LoadedBitmap bitmap = LoadBitmap(source->bitmap.path, source->bitmap.filename, true );
+                        LoadedBitmap bitmap = LoadBitmap(source->path, source->bitmap.filename);
+                        
+                        Assert(stringHash);
+                        Assets* assets = currentAssets_;
+                        AddedAsset asset = AddAsset(assets);
+                        asset.source->type = Pak_bitmap;
+                        StrCpy(filename, StrLen(filename ), asset.source->bitmap.filename, ArrayCount(asset.source->bitmap.filename ) );
+                        StrCpy(path, StrLen(path), asset.source->bitmap.path, ArrayCount(asset.source->bitmap.path ) );
+                        
+                        asset.dest->bitmap.align[0] = alignX;
+                        asset.dest->bitmap.align[1] = alignY;
+                        asset.dest->typeHashID = stringHash;
+                        asset.dest->nameHashID = StringHash(filename);
+                        
+                        asset.dest->offsetFromOriginalOffset = 0;
+                        
+                        LoadedBitmap bitmap = LoadBitmap(path, filename, false);
+                        asset.dest->bitmap.nativeHeight = bitmap.downsampleFactor * bitmap.height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
+                        free(bitmap.free );
+                        
+                        
+                        BitmapId result = { asset.ID };
+                        
                         dest->bitmap.dimension[0] = bitmap.width;
                         dest->bitmap.dimension[1] = bitmap.height;
                         
                         fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out);
-                        free(bitmap.free );
+                        free(bitmap.free);
                     } break;
                     
-                    case Pak_coloration:
+                    case Font:
                     {
+                        asset.source->type = Pak_font;
+                        asset.source->font.font = font;
                         
-                    } break;
-                    
-                    case Pak_font:
-                    {
-                        LoadedFont* font = source->font.font;
+                        asset.dest->typeHashID = StringHash(Asset_font);
+                        asset.dest->nameHashID = 0;
+                        asset.dest->offsetFromOriginalOffset = 0;
+                        asset.dest->font.glyphsCount = font->glyphsCount;
+                        asset.dest->font.ascenderHeight = font->ascenderHeight;
+                        asset.dest->font.descenderHeight = font->descenderHeight;
+                        asset.dest->font.externalLeading = font->externalLeading;
+                        asset.dest->font.onePastHighestCodePoint = font->onePastHighestCodePoint;
                         
-                        FinalizeFontKernings(font);
+                        
+                        FontId result = { asset.ID };
+                        
+                        LoadedFont font = LoadFont();
+                        FinalizeFontKernings(&font);
+                        
+                        for(u32 codePoint = ' ';
+                            codePoint < '~';
+                            codePoint++ )
+                        {
+                            AddCharacterAsset(fonts + fontIndex, codePoint);
+                        }
                         
                         u32 glyphsSize = font->glyphsCount * sizeof(PakGlyph );
                         fwrite(font->glyphs, glyphsSize, 1, out);
@@ -2085,23 +1615,56 @@ internal void WritePak(Assets* assets, char* fileName_)
                             horizontalAdvancePtr += sizeof(r32 ) * font->maximumGlyphsCount;
                         }
                         
-                        FreeFont(font );
-                    } break;
-                    
-                    case Pak_fontGlyph:
-                    {
-                        LoadedBitmap bitmap = LoadGlyph(source->glyph.font, source->glyph.codePoint, dest );
+                        free(font->glyphs);
+                        free(font->horizontalAdvancement);
+                        free(font->glyphIndexForCodePoint);
                         
-                        dest->bitmap.dimension[0] = bitmap.width;
-                        dest->bitmap.dimension[1] = bitmap.height;
-                        fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32), 1, out);
+                        
+                        for(every character)
+                        {
+                            Assets* assets = currentAssets_;
+                            AddedAsset asset = AddAsset(assets );
+                            
+                            asset.source->type = Pak_fontGlyph;
+                            asset.source->glyph.codePoint = codePoint;
+                            asset.source->glyph.font = font;
+                            
+                            // NOTE(Leonardo ): alignment is set later!
+                            asset.dest->typeHashID = 0;
+                            asset.dest->nameHashID = 0;
+                            asset.dest->offsetFromOriginalOffset = 0;
+                            asset.dest->bitmap.align[0] = 0.0f;
+                            asset.dest->bitmap.align[1] = 0.0f;
+                            asset.dest->bitmap.nativeHeight = 0.0f;
+                            
+                            BitmapId result = {asset.ID, V4(1, 1, 1, 1)};
+                            
+                            u32 glyphIndex = font->glyphsCount++;
+                            Assert(font->glyphsCount < font->maximumGlyphsCount );
+                            PakGlyph* glyph = font->glyphs + glyphIndex;
+                            glyph->unicodeCodePoint = codePoint;
+                            glyph->bitmapId = result;
+                            
+                            font->glyphIndexForCodePoint[codePoint] = glyphIndex;
+                            
+                            if(codePoint >= font->onePastHighestCodePoint )
+                            {
+                                font->onePastHighestCodePoint = codePoint + 1;
+                            }
+                            
+                            LoadedBitmap bitmap = LoadGlyph(source->glyph.font, source->glyph.codePoint, dest);
+                            
+                            dest->bitmap.dimension[0] = bitmap.width;
+                            dest->bitmap.dimension[1] = bitmap.height;
+                            fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32), 1, out);
+                        }
                         
                         free(bitmap.free );
                     } break;
                     
-                    case Pak_sound:
+                    case Sound:
                     {
-                        LoadedSound sound = LoadWAV(source->sound.filename);
+                        LoadedSound sound = LoadWAV(filename);
                         dest->sound.sampleCount = sound.countSamples;
                         dest->sound.channelCount = sound.countChannels;
                         dest->sound.maxSampleValue = sound.maxSampleValue;
@@ -2112,12 +1675,12 @@ internal void WritePak(Assets* assets, char* fileName_)
                             fwrite(sound.samples[channelIndex], sound.countSamples * sizeof(i16), 1, out); 
                         }
                         
-                        free(sound.free );
+                        free(sound.free);
                     } break;
                     
-                    case Pak_animation:
+                    case Skeleton:
                     {
-                        LoadedAnimation animation = LoadAnimation(source->animation.path, source->animation.filename, source->animation.animationIndex);
+                        LoadedSkeleton skeleton = LoadSkeleton(source->animation.path);
                         
                         u32 countTotalBones = 0;
                         u32 countTotalAss = 0;
@@ -2158,9 +1721,9 @@ internal void WritePak(Assets* assets, char* fileName_)
                         free(animation.free);
                     } break;
                     
-                    case Pak_model:
+                    case model:
                     {
-                        LoadedModel model = LoadModel(source->model.path, source->model.filename);
+                        LoadedModel model = LoadModel(source->model.name);
                         
                         dest->model.vertexCount = model.vertexCount;
                         dest->model.faceCount = model.faceCount;
@@ -2171,45 +1734,21 @@ internal void WritePak(Assets* assets, char* fileName_)
                         free(model.vertexes);
                         free(model.faces);
                     } break;
+                    
+                    case Data:
+                    {
+                        ???
+                    } break;
+                    
                     InvalidDefaultCase;
                 }
             }
             
-            fseek(out, (u32 ) header.assetOffset, SEEK_SET );
+            fseek(out, (u32) header.assetOffset, SEEK_SET);
             fwrite(&assets->assets, header.assetcount * sizeof(PakAsset), 1, out);
             
             fseek(out, 0, SEEK_END);
             fclose(out);
-            
-			PlatformFile uncompressed = DEBUGWin32ReadFile(outputpak);
-            u64 dataHash = DataHash((char*) uncompressed.content, uncompressed.size);
-            
-            //printf("%s: %llu\n", outputpak, dataHash);
-            *((u64*) uncompressed.content) = dataHash;
-            
-            uLong uncompressedSize = (uLong) uncompressed.size;
-            uLong compressedLen = compressBound(uncompressedSize);
-            
-            u8* compressed = (u8*) malloc((size_t) compressedLen + 4);
-            
-            Assert(uncompressedSize <= 0xffffffff);
-            *((u32*) compressed) = uncompressedSize;
-            
-            int cmp_status = compress(compressed + 4, &compressedLen, (const unsigned char *) uncompressed.content, uncompressedSize);
-            if(cmp_status == Z_OK)
-            {
-                
-            }
-            else
-            {
-                printf("ERROR!! Please check %s\n", outputpak);
-                getchar();
-            }
-            
-            
-            DEBUGWin32FreeFile(&uncompressed);
-            DEBUGWin32WriteFile(outputpak, compressed, compressedLen + 4);
-            free(compressed);
         }
         else
         {
@@ -2218,1242 +1757,41 @@ internal void WritePak(Assets* assets, char* fileName_)
     }
 }
 
-internal void InitializeAssets(Assets* assets)
+
+
+
+internal void BuildAssetSubtype()
 {
-    assets->countTags = 1;
-    assets->countAssetType = 0;
-    assets->DEBUGAssetType = 0;
-    assets->countAssets = 1;
-    assets->assetIndex = 0;
+    GetAllfiles();
+    AssetSubtype subtype = ?;
+    WritePak(type, subtype, assets);
+}
+
+internal void BuildAssetType()
+{
+    GetAllSubdirectories();
     
-    assets->tags[0] = {};
     
-    for(u32 assetType = 0; assetType < (HASHED_ASSET_SLOT_COUNT + AssetSpecial_Count); assetType++ )
+    assetType type = getType();
+    for(each subdirectory)
     {
-        PakAssetType* type = assets->types + assetType;
-        type->ID = 0;
-        type->firstAssetIndex = 0;
-        type->onePastLastAssetIndex = 0;
+        BuildAssetSubtype(type);
     }
 }
 
-internal void AddEveryFileWithAssetIndex(char* path, PlatformFileHandle handle, u32 additionalAssetIndex)
+internal void BuildAssets(char* path)
 {
-    char completeName[256];
-    sprintf(completeName, "%s/%s", path, handle.name );
-    EntireFile animation = ReadFile(completeName );
-    //Assert(animation.content );
-    if(animation.content )
+    
+    LoadFont("definition/fonts/MorrisRoman-Black.ttf", "Morris Roman Black", 64);
+    LoadFont("c:/windows/fonts/arial.ttf", "Arial", 64);
+    //LoadFont("definition/fonts/dum1.ttf", "Dumbledor 1", 64),
+    //LoadFont("c:/windows/fonts/courier.ttf", "Courier New", 64 ),
+    
+    GetAllSubdirectories(path);
+    for(eachSubdirectory)
     {
-        // TODO(Leonardo ): robustness!
-        i32 startOffset = 134;
-        char* start = (char* ) animation.content + startOffset;
-        
-        b32 mainLineActive = false;
-        b32 loading = false;
-        b32 ended = false;
-        i32 timeLineActive = 0;
-        
-        i32 frameCount = 0;
-        TempFrame* tempFrame = 0;
-        i32 realFrameIndex = 0;
-        i32 currentSpin = 0;
-        
-        while(start != 0 && !ended )
-        {
-            XMLTag currentTag = {};
-            start = ReadXMLTag(start, &currentTag );
-            
-            if(StrEqual(currentTag.title, "file" ) )
-            {
-                char* fileName = GetXMLValues(&currentTag, "name" );
-                char* slash = AdvanceToLastSlash(fileName);
-                
-                // NOTE(Leonardo): we add only the character "pieces"
-                if(slash == fileName)
-                {
-                    u32 fileNameLength = 0;
-                    for(char* test = fileName; *test; ++test )
-                    {
-                        if(*test == '.' )
-                        {
-                            break;
-                        }
-                        ++fileNameLength;
-                    }
-                    
-                    u64 hashID = StringHash(fileName, fileNameLength );
-                    u32 assetIndex = GetAssetIndex(hashID);
-                    
-                    Vec2 pivot;
-                    GetXMLValuef(&currentTag, "pivot_x", &pivot.x );
-                    GetXMLValuef(&currentTag, "pivot_y", &pivot.y );
-                    
-                    if(assetIndex == additionalAssetIndex )
-                    {
-                        AddBitmapAsset("objects", fileName, hashID, pivot.x, pivot.y );
-                    }
-                }
-            }
-        }
+        BuildAssetType();
     }
-    
-    free(animation.content );
-}
-
-inline void GetNameWithoutPoint(char* dest, u32 destLength, char* source)
-{
-    Assert(StrLen(source) < destLength);
-    char* toCopy = source;
-    while(*toCopy )
-    {
-        if(*toCopy == '.' )
-        {
-            break;
-        }
-        
-        *dest++ = *toCopy++;
-    }
-    *dest++ = 0;
-}
-
-inline char* StringPresentInFile(char* file, char* token, b32 limitToSingleList)
-{
-    char* result = 0;
-    Tokenizer tokenizer = {};
-    tokenizer.at = (char*) file;
-    
-    b32 parsing = true;
-    i32 level = 0;
-    
-    while(parsing)
-    {
-        Token t = GetToken(&tokenizer);
-        switch(t.type)
-        {
-            case Token_Identifier:
-            {
-                if(TokenEquals(t, token))
-                {
-                    if(RequireToken(&tokenizer, Token_EqualSign))
-                    {
-                        if(RequireToken(&tokenizer, Token_OpenParen))
-                        {
-                            result = tokenizer.at;
-                        }
-                    }
-                    parsing = false;
-                }
-            } break;
-            
-            case Token_String:
-            {
-                Token string = Stringize(t);
-                if(TokenEquals(string, token))
-                {
-                    result = tokenizer.at;
-                    if(RequireToken(&tokenizer, Token_EqualSign))
-                    {
-                        if(RequireToken(&tokenizer, Token_OpenParen))
-                        {
-                            result = tokenizer.at;
-                        }
-                    }
-                    parsing = false;
-                }
-            } break;
-            
-            case Token_OpenParen:
-            {
-                ++level;
-            } break;
-            
-            case Token_CloseParen:
-            {
-                --level;
-                if(limitToSingleList && level < 0)
-                {
-                    parsing = false;
-                }
-            } break;
-            
-            case Token_EndOfFile:
-            {
-                parsing = false;
-            } break;
-        }
-    }
-    
-    return result;
-}
-
-
-internal char* GetAssetFilePtr(PlatformFile* file, char* folderName, char* assetName)
-{
-    char* folder = StringPresentInFile((char*) file->content, folderName, false);
-    Assert(folder);
-    char* ptr = StringPresentInFile(folder, assetName, true);
-    Assert(ptr);
-    return ptr;
-}
-
-internal void AddLabelsFromFile(Tokenizer* tokenizer)
-{
-    b32 parsing = true;
-    while(parsing)
-    {
-        Token t = GetToken(tokenizer);
-        
-        switch(t.type)
-        {
-            case Token_String:
-            case Token_Identifier:
-            {
-                if(t.type == Token_String)
-                {
-                    t = Stringize(t);
-                }
-                
-                if(TokenEquals(t, "labels"))
-                {
-                    if(RequireToken(tokenizer, Token_EqualSign))
-                    {
-                        if(RequireToken(tokenizer, Token_OpenParen))
-                        {
-                            AdvanceToNextToken(tokenizer, Token_CloseBraces);
-                            
-                            while(NextTokenIs(tokenizer, Token_Pound))
-                            {
-                                Token pound = GetToken(tokenizer);
-                                Token value = GetToken(tokenizer);
-                                
-								if(NextTokenIs(tokenizer, Token_EqualSign))
-								{
-									Token eq = GetToken(tokenizer);
-									Token v = GetToken(tokenizer);
-								}
-                            }
-                            
-                            while(true)
-                            {
-                                Token labelToken = GetToken(tokenizer);
-                                if(labelToken.type == Token_CloseParen)
-                                {
-                                    break;
-                                }
-                                else
-                                {
-                                    if(RequireToken(tokenizer, Token_EqualSign) &&
-                                       RequireToken(tokenizer, Token_OpenBraces))
-                                    {
-                                        if(RequireToken(tokenizer, Token_String) &&
-                                           RequireToken(tokenizer, Token_EqualSign))
-                                        {
-                                            Token labelValue = GetToken(tokenizer);
-                                            
-                                            if(labelToken.type == Token_String)
-                                            {
-                                                labelToken = Stringize(labelToken);
-                                            }
-                                            
-                                            AddLabel(labelToken.text, labelToken.textLength, R32FromChar(labelValue.text));
-                                        }
-                                    }
-                                    
-                                    AdvanceToNextToken(tokenizer, Token_CloseBraces);
-                                }
-                            }
-                        }
-                    }
-                    parsing = false;
-                } break;
-            }
-        }
-    }
-}
-
-
-inline r32 ParseR32WithName(Tokenizer* tokenizer)
-{
-    r32 result = 0;
-    
-    Token name = GetToken(tokenizer);
-    if(RequireToken(tokenizer, Token_EqualSign))
-    {
-        Token value = GetToken(tokenizer);
-        result = R32FromChar(value.text);
-    }
-    else
-    {
-        InvalidCodePath;
-    }
-    
-    return result;
-}
-
-inline Vec4 ParseV4(Tokenizer* tokenizer)
-{
-    Vec4 result = {};
-    if(RequireToken(tokenizer, Token_OpenBraces))
-    {
-        result.r = ParseR32WithName(tokenizer);
-        
-        if(RequireToken(tokenizer, Token_Comma))
-        {
-            result.g = ParseR32WithName(tokenizer);
-            
-            if(RequireToken(tokenizer, Token_Comma))
-            {
-                result.b = ParseR32WithName(tokenizer);
-                
-                if(RequireToken(tokenizer, Token_Comma))
-                {
-                    result.a = ParseR32WithName(tokenizer);
-                }
-                else
-                {
-                    InvalidCodePath;
-                }
-            }
-            else
-            {
-                InvalidCodePath;
-            }
-        }
-        else
-        {
-            InvalidCodePath;
-        }
-        
-    }
-    else
-    {
-        InvalidCodePath;
-    }
-    
-    return result;
-}
-
-
-
-struct BitmapFileHandle
-{
-    char name[64];
-    u32 assetIndex;
-    u64 ID;
-};
-
-internal void WriteBitmaps(char* folder, char* name, u64 skeletonSkinHash, PlatformFile* labelsFile, char* additionalParentFolder = 0)
-{
-    Assets assets_;
-    Assets* assets = &assets_;
-    InitializeAssets(assets);
-    
-    char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s", folder, name);
-    
-    
-    char* hashName = name;
-    if(hashName[0] == '#')
-    {
-        ++hashName;
-    }
-    
-    u64 assetHashID = StringHash(name);
-    u32 assetIndex = GetAssetIndex(assetHashID);
-    PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, completePath);
-    if(bitmapGroup.fileCount)
-    {
-        BeginAssetType(assets, assetIndex);
-        for(u32 imageIndex = 0; imageIndex < bitmapGroup.fileCount; ++imageIndex)
-        {
-            PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, completePath);
-            AddBitmapAsset(completePath, bitmapHandle.name, assetHashID);
-            
-            if(labelsFile)
-            {
-                char* assetPtr = GetAssetFilePtr(labelsFile, name, bitmapHandle.name);
-                Tokenizer tokenizer = {};
-                tokenizer.at = assetPtr;
-                
-                // NOTE(Leonardo): jump the empty coloration!
-                AdvanceToNextToken(&tokenizer, "coloration");
-                u16 colorationIndex = 1;
-                while(true)
-                {
-                    AdvanceToNextToken(&tokenizer, "coloration");
-                    
-                    Token t = GetToken(&tokenizer);
-                    
-                    if(t.type == Token_EqualSign)
-                    {
-                        Vec4 color = ParseV4(&tokenizer);
-                        AddColorationAsset(completePath, bitmapHandle.name, assetHashID, colorationIndex++, color);
-                        AddLabelsFromFile(&tokenizer);
-                    }
-                    else
-                    {
-                        break;
-                    }
-                    
-                    if(RequireToken(&tokenizer, Token_CloseBraces))
-                    {
-                        if(NextTokenIs(&tokenizer, Token_Comma))
-                        {
-                            Token comma = GetToken(&tokenizer);
-                            if(NextTokenIs(&tokenizer, Token_OpenBraces))
-                            {
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        InvalidCodePath;
-                    }
-                }
-            }
-            
-            Win32CloseHandle(&bitmapHandle);
-        }
-        EndAssetType();
-    }
-    
-    Win32GetAllFilesEnd(&bitmapGroup);
-    
-    
-    char subfolderPath[128];
-    FormatString(subfolderPath, sizeof(subfolderPath), "%s/side", completePath);
-    PlatformFileGroup sideGroup = Win32GetAllFilesBegin(PlatformFile_image, subfolderPath);
-    
-    if(sideGroup.fileCount)
-    {
-        BitmapFileHandle* handles = (BitmapFileHandle*) malloc(sizeof(BitmapFileHandle) * sideGroup.fileCount);
-        
-        for(u32 fileIndex = 0; fileIndex < sideGroup.fileCount; ++fileIndex)
-        {
-            PlatformFileHandle handle = Win32OpenNextFile(&sideGroup, subfolderPath);
-            BitmapFileHandle* bitmap = handles + fileIndex;
-            
-            char* limbName = handle.name;
-            char nameWithoutPoint[64];
-            GetNameWithoutPoint(nameWithoutPoint, ArrayCount(nameWithoutPoint), limbName);
-            
-            FormatString(bitmap->name, sizeof(bitmap->name), "%s", limbName);
-            
-            u64 bitmapHashID = StringHash(nameWithoutPoint);
-            u32 bitmapAssetIndex = GetAssetIndex(bitmapHashID);
-            bitmap->ID = bitmapHashID;
-            bitmap->assetIndex = bitmapAssetIndex;
-            
-        }
-        
-        
-        for(u32 additionalAssetIndex = 0; additionalAssetIndex < (HASHED_ASSET_SLOT_COUNT + AssetSpecial_Count); ++additionalAssetIndex)
-        {
-            BeginAssetType(assets, additionalAssetIndex);
-            for(u32 fileIndex = 0; fileIndex < sideGroup.fileCount; ++fileIndex)
-            {
-                BitmapFileHandle* bitmap = handles + fileIndex;
-                if(bitmap->assetIndex == additionalAssetIndex)
-                {
-                    AddBitmapAsset(subfolderPath, bitmap->name, bitmap->ID);
-                    
-                    
-                    if(skeletonSkinHash)
-                    {
-                        r32 firstHashHalfValue = (r32) (skeletonSkinHash >> 32);
-                        r32 secondHashHalfValue = (r32) (skeletonSkinHash & 0xFFFFFFFF);
-                        AddTag(Tag_SkeletonSkinFirstHalf, firstHashHalfValue);
-                        AddTag(Tag_SkeletonSkinSecondHalf, secondHashHalfValue);
-                    }
-                }
-            }
-            EndAssetType();
-        }
-        
-    }
-    Win32GetAllFilesEnd(&sideGroup);
-    
-    
-    char pakName[128];
-    
-    if(additionalParentFolder)
-    {
-        FormatString(pakName, sizeof(pakName), "%s%sB.pak", additionalParentFolder, name);
-    }
-    else
-    {
-        FormatString(pakName, sizeof(pakName), "%sB.pak", name);
-    }
-    WritePak(assets, pakName);
-}
-
-
-internal void WriteAnimations(char* folder, char* name)
-{
-    Assets assets_;
-    Assets* assets = &assets_;
-    InitializeAssets(assets);
-    
-    
-    char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s/skeleton/side", folder, name);
-    u64 hashID = StringHash(name);
-    
-    for(u32 assetIndex = 1; assetIndex < HASHED_ASSET_SLOT_COUNT + 1; ++assetIndex)
-    {
-        BeginAssetType(assets, assetIndex);
-        
-        AddEveryAnimationThatStartsWith(completePath, hashID, "rig", Asset_rig, assetIndex);
-        AddEveryAnimationThatStartsWith(completePath, hashID, "idle", Asset_standing, assetIndex);
-        AddEveryAnimationThatStartsWith(completePath, hashID, "idle_drag", Asset_standingDragging, assetIndex);
-        AddEveryAnimationThatStartsWith(completePath, hashID, "walk", Asset_moving, assetIndex);
-        AddEveryAnimationThatStartsWith(completePath, hashID, "run", Asset_moving, assetIndex);
-        AddEveryAnimationThatStartsWith(completePath, hashID, "move", Asset_moving, assetIndex);
-        AddEveryAnimationThatStartsWith(completePath, hashID, "fly", Asset_moving, assetIndex);
-        AddEveryAnimationThatStartsWith(completePath, hashID, "idle_drag", Asset_movingDragging, assetIndex);
-        AddEveryAnimationThatStartsWith(completePath, hashID, "attack", Asset_attacking, assetIndex);
-        AddEveryAnimationThatStartsWith(completePath, hashID, "eat", Asset_eating, assetIndex);
-        AddEveryAnimationThatStartsWith(completePath, hashID, "cast", Asset_casting, assetIndex);
-        AddEveryAnimationThatStartsWith(completePath, hashID, "swim", Asset_swimming, assetIndex);
-        AddEveryAnimationThatStartsWith(completePath, hashID, "roll", Asset_rolling, assetIndex);
-        AddEveryAnimationThatStartsWith(completePath, hashID, "defend", Asset_protecting, assetIndex);
-        
-        EndAssetType();
-    }
-    
-    
-    
-    
-    char pakName[128];
-    FormatString(pakName, sizeof(pakName), "%sA.pak", name);
-    WritePak(assets, pakName);
-}
-
-
-internal void OutputFoldersAutocompleteFile(char* autocompleteName, char* path)
-{
-    char* outputPath = "assets";
-    char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s.autocomplete", outputPath, autocompleteName);
-    
-    
-    char* buffer = (char*) malloc(MegaBytes(2));
-    buffer[0] = 0;
-    char* writeHere = buffer;
-    
-    PlatformSubdirNames* subdir = (PlatformSubdirNames* ) malloc(sizeof(PlatformSubdirNames));
-    Win32GetAllSubdirectoriesName(subdir, path);
-    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
-    {
-        char* folderName = subdir->subdirs[subdirIndex];
-        if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
-        {
-            writeHere += sprintf(writeHere, "\"%s\",", folderName);
-        }
-    }
-    free(subdir);
-    
-    DEBUGWin32WriteFile(completePath, buffer, StrLen(buffer));
-    
-    free(buffer);
-}
-
-internal void OutputFolderFilesAutocompleteFile(char* autocompleteName, char* path, PlatformFileType type)
-{
-    char* outputPath = "assets";
-    char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s.autocomplete", outputPath, autocompleteName);
-    
-    
-    char* buffer = (char*) malloc(MegaBytes(2));
-    buffer[0] = 0;
-    char* writeHere = buffer;
-    
-    PlatformFileGroup fileGroup = Win32GetAllFilesBegin(type, path);
-    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; ++fileIndex)
-    {
-        PlatformFileHandle fileHandle = Win32OpenNextFile(&fileGroup, path);
-        writeHere += sprintf(writeHere, "\"%s\",", fileHandle.name);
-        Win32CloseHandle(&fileHandle);
-    }
-    Win32GetAllFilesEnd(&fileGroup);
-    
-    DEBUGWin32WriteFile(completePath, buffer, StrLen(buffer));
-    free(buffer);
-}
-
-inline char* AddFolderToFile(char* addHere, char* fileEnd, char* folder, char* params)
-{
-    u32 sizeToEnd = (u32) (fileEnd - addHere);
-    char toAdd[128];
-    FormatString(toAdd, sizeof(toAdd), "\"%s\" = (%s),", folder, params);
-    
-    u32 roomToMake = StrLen(toAdd);
-    Assert(roomToMake <= sizeToEnd);
-    
-    memcpy(addHere + roomToMake, addHere, sizeToEnd);
-    memcpy(addHere, toAdd, roomToMake);
-    
-    char* result = addHere + roomToMake - 2;
-    return result;
-}
-
-inline void AddAssetToFile(char* addHere, char* fileEnd, char* properties, b32 labeled)
-{
-    u32 sizeToEnd = (u32) (fileEnd - addHere);
-    
-    char toAdd[1024];
-    
-    if(labeled)
-    {
-		FormatString(toAdd, sizeof(toAdd), "{%s, colorations = (#atLeastOneInList #showBitmap #empty = {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#labelName = \"essenceName\" #editableLabels #empty = {value = 0.0})} {coloration = {r = 1.0, g = 1.0, b = 1.0, a = 1.0}, labels = (#editableLabels #empty = {value = 0.0})}) },", properties);
-    }
-    else
-    {
-        FormatString(toAdd, sizeof(toAdd), "{%s},", properties);
-    }
-    u32 roomToMake = StrLen(toAdd);
-    Assert(roomToMake <= sizeToEnd);
-    
-    memcpy(addHere + roomToMake, addHere, sizeToEnd);
-    memcpy(addHere, toAdd, roomToMake);
-}
-
-internal void WriteAssetDefinitionFile(char* path, char* filename, char* definitionParams, b32 useOldFile)
-{
-    char* assetPath = "assets";
-    
-    char assetDest[512];
-    FormatString(assetDest, sizeof(assetDest), "%s/%s", assetPath, filename);
-    
-    char oldPath[512];
-    FormatString(oldPath, sizeof(oldPath), "%s/%s", path, filename);
-    
-    
-    u32 newFileSize = MegaBytes(4);
-    char* newFile = (char*) malloc(newFileSize);
-    memset(newFile, 0, newFileSize);
-    char* endFile = newFile + newFileSize;
-    
-    if(useOldFile)
-    {
-        PlatformFile oldFile = DEBUGWin32ReadFile(oldPath);
-        if(oldFile.content && oldFile.size <= newFileSize)
-        {
-            memcpy(newFile, oldFile.content, oldFile.size);
-            DEBUGWin32FreeFile(&oldFile);
-        }
-    }
-    
-    PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
-    Win32GetAllSubdirectoriesName(subdir, path);
-    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
-    {
-        char* folderName = subdir->subdirs[subdirIndex];
-        if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
-        {
-            char* folderPtr = StringPresentInFile(newFile, folderName, false);
-            
-            if(!folderPtr)
-            {
-                folderPtr = AddFolderToFile(newFile, endFile, folderName, definitionParams);
-            }
-            else
-            {
-                Tokenizer paramT = {};
-                paramT.at = folderPtr;
-                
-                while(true)
-                {
-                    Token p = GetToken(&paramT);
-                    if(p.type == Token_Pound)
-                    {
-                        Token value = GetToken(&paramT);
-                        folderPtr = paramT.at + 1;
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-            }
-            
-            
-            char folderPath[512];
-            FormatString(folderPath, sizeof(folderPath), "%s/%s", path, folderName);
-            
-            PlatformFileGroup soundGroup = Win32GetAllFilesBegin(PlatformFile_sound, folderPath);
-            for(u32 soundIndex = 0; soundIndex < soundGroup.fileCount; ++soundIndex)
-            {
-                PlatformFileHandle soundHandle = Win32OpenNextFile(&soundGroup, folderPath);
-                
-                if(!StringPresentInFile(folderPtr, soundHandle.name, true))
-                {
-                    char completePath[512];
-                    FormatString(completePath, sizeof(completePath), "%s/%s", folderPath, soundHandle.name);
-                    LoadedSound sound = LoadWAV(completePath);
-                    r32 decibel = sound.decibelLevel;
-                    
-                    free(sound.free);
-                    
-                    char properties[1024];
-                    FormatString(properties, sizeof(properties), "%s = \"%s\", decibels = \"%f\" ", "soundName", soundHandle.name, decibel);
-                    AddAssetToFile(folderPtr, endFile, properties, false);
-                }
-                
-                Win32CloseHandle(&soundHandle);
-            }
-            Win32GetAllFilesEnd(&soundGroup);
-            
-            
-            
-            PlatformFileGroup imageGroup = Win32GetAllFilesBegin(PlatformFile_image, folderPath);
-            for(u32 imageIndex = 0; imageIndex < imageGroup.fileCount; ++imageIndex)
-            {
-                PlatformFileHandle imageHandle = Win32OpenNextFile(&imageGroup, folderPath);
-                
-                if(!StringPresentInFile(folderPtr, imageHandle.name, true))
-                {
-                    char properties[1024];
-                    FormatString(properties, sizeof(properties), "%s = \"%s\"", "componentName", imageHandle.name);
-                    AddAssetToFile(folderPtr, endFile, properties, true);
-                }
-                
-                Win32CloseHandle(&imageHandle);
-            }
-            Win32GetAllFilesEnd(&imageGroup);
-        }
-        
-    }
-    free(subdir);
-    DEBUGWin32WriteFile(assetDest, newFile, StrLen(newFile));
-}
-
-internal void WriteComponents()
-{
-    char* componentsPath = "definition/components";
-    char* assetFile = "components.fad";
-    char* assetOldFile = "componentvanilla.fad";
-    char* definitionParams = "#cantBeDeleted";
-    
-    WriteAssetDefinitionFile(componentsPath, assetFile, definitionParams, true);
-    WriteAssetDefinitionFile(componentsPath, assetOldFile, 0, false);
-    OutputFoldersAutocompleteFile("component", componentsPath);
-    
-    PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
-    Win32GetAllSubdirectoriesName(subdir, componentsPath);
-    
-    char labelsPath[64];
-    FormatString(labelsPath, sizeof(labelsPath), "assets/%s", assetFile);
-    PlatformFile labelsFile = DEBUGWin32ReadFile(labelsPath);
-    Assert(labelsFile.content);
-    
-    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
-    {
-        char* folderName = subdir->subdirs[subdirIndex];
-        
-        if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
-        {
-            WriteBitmaps(componentsPath, folderName, 0, &labelsFile);
-        }
-    }
-    
-    DEBUGWin32FreeFile(&labelsFile);
-    free(subdir);
-}
-
-internal void WriteBitmapsFromPath(char* path, char* assetType, char* pakName, Vec2 pivot = V2(0.5f, 0.0f), char* autocompleteName = 0)
-{
-    Assets assets_;
-    Assets* assets = &assets_;
-    InitializeAssets(assets);
-    
-    u64 assetHashID = StringHash(assetType);
-    u32 assetIndex = GetAssetIndex(assetHashID);
-    
-    PlatformFileGroup bitmapGroup = Win32GetAllFilesBegin(PlatformFile_image, path);
-    if(bitmapGroup.fileCount)
-    {
-        BeginAssetType(assets, assetIndex);
-        for(u32 imageIndex = 0; imageIndex < bitmapGroup.fileCount; ++imageIndex)
-        {
-            PlatformFileHandle bitmapHandle = Win32OpenNextFile(&bitmapGroup, path);
-            AddBitmapAsset(path, bitmapHandle.name, assetHashID, pivot.x, pivot.y);
-            Win32CloseHandle(&bitmapHandle);
-        }
-        
-        EndAssetType();
-        WritePak(assets, pakName);
-    }
-    Win32GetAllFilesEnd(&bitmapGroup);
-    
-    if(autocompleteName)
-    {
-        OutputFolderFilesAutocompleteFile(autocompleteName, path, PlatformFile_image);
-    }
-}
-
-
-internal void WriteUI()
-{
-    char* UIPath = "definition/UI";
-    
-    Assets assets_;
-    Assets* assets = &assets_;
-    InitializeAssets(assets);
-    
-    u64 hashID = BeginAssetType(assets, Asset_scrollUI);
-    AddBitmapAsset(UIPath, "scrollicon.png", hashID, 0.5f, 0.5f);
-    EndAssetType();
-    
-    hashID = BeginAssetType(assets, Asset_BookPage);
-    AddBitmapAsset(UIPath, "bookpage.png", hashID, 0.5f, 0.5f);
-    EndAssetType();
-    
-    hashID = BeginAssetType(assets, Asset_BookElement);
-    AddBitmapAsset(UIPath, "element.png", hashID);
-    EndAssetType();
-    
-    hashID = BeginAssetType(assets, Asset_Bookmark);
-    AddBitmapAsset(UIPath, "bookmark.png", hashID);
-    EndAssetType();
-    
-    WritePak(assets, "forgUI.pak");
-}
-
-internal void WriteAnimationAutocompleteFile(char* path, char* skeletonName)
-{
-    char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s/skeleton/side", path, skeletonName);
-    
-    char* outputPath = "assets";
-    
-    char output[128];
-    FormatString(output, sizeof(output), "%s/A_%s.autocomplete", outputPath, skeletonName);
-    
-    
-    char* buffer = (char*) malloc(MegaBytes(2));
-    char* writeHere = buffer;
-    
-    
-    PlatformFileGroup animationGroup = Win32GetAllFilesBegin(PlatformFile_animation, completePath);
-    for(u32 fileIndex = 0; fileIndex < animationGroup.fileCount; ++fileIndex)
-    {
-        PlatformFileHandle fileHandle = Win32OpenNextFile(&animationGroup, completePath);
-        char* fileName = fileHandle.name;
-        u32 animationCount = CountAnimationInFile(completePath, fileName);
-        for(u32 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
-        {
-            char animationName[32];
-            GetAnimationName(completePath, fileName, animationIndex, animationName, sizeof(animationName));
-            writeHere += sprintf(writeHere, "\"%s\",", animationName);
-        }
-        Win32CloseHandle(&fileHandle);
-    }
-    
-    Win32GetAllFilesEnd(&animationGroup);
-    
-    
-    DEBUGWin32WriteFile(output, buffer, StrLen(buffer));
-    free(buffer);
-}
-
-internal void WriteSkinsAutocompleteFile(char* path, char* skeletonName)
-{
-    char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s", path, skeletonName);
-    
-    char* outputPath = "assets";
-    char* buffer = (char*) malloc(MegaBytes(2));
-    char* writeHere = buffer;
-    
-    char output[128];
-    FormatString(output, sizeof(output), "%s/S_%s.autocomplete", outputPath, skeletonName);
-    
-    
-    PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
-    Win32GetAllSubdirectoriesName(subdir, completePath);
-    
-    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
-    {
-        char* folderName = subdir->subdirs[subdirIndex];
-        
-        if(!StrEqual(folderName, ".") && !StrEqual(folderName, "..") && !StrEqual(folderName, "skeleton"))
-        {
-            writeHere += sprintf(writeHere, "\"%s\",", folderName);
-            DEBUGWin32WriteFile(output, buffer, StrLen(buffer));
-        }
-    }
-    
-    free(buffer);
-    free(subdir);
-}
-
-inline void WriteAnimationSkinsBitmaps(char* skeletonPath, char* skeletonName)
-{
-    PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
-    Win32GetAllSubdirectoriesName(subdir, skeletonPath);
-    
-    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
-    {
-        char* folderName = subdir->subdirs[subdirIndex];
-        
-        if(!StrEqual(folderName, ".") && !StrEqual(folderName, "..") && !StrEqual(folderName, "skeleton"))
-        {
-            char skeletonSkin[128];
-            FormatString(skeletonSkin, sizeof(skeletonSkin), "%s%s", skeletonName, folderName);
-            u64 skeletonSkinStringHash = StringHash(skeletonSkin);
-            WriteBitmaps(skeletonPath, folderName, skeletonSkinStringHash, 0, skeletonName);
-        }
-    }
-    free(subdir);
-}
-
-internal void WriteBitmapsAndAnimations()
-{
-    WriteComponents();
-    WriteBitmapsFromPath("definition/leafs", ASSET_LEAF, "forgleafs.pak", V2(0.5f, 0.0f), "leafName");
-    WriteBitmapsFromPath("definition/flowers", ASSET_FLOWER, "forgflowers.pak", V2(0.5f, 0.0f), "flowerName");
-    WriteBitmapsFromPath("definition/fruits", ASSET_FRUIT, "forgfruits.pak", V2(0.5f, 0.0f), "fruitName");
-    WriteBitmapsFromPath("definition/trunks", ASSET_TRUNK, "forgtrunks.pak", V2(0.5f, 0.0f), "trunkName");
-    WriteBitmapsFromPath("definition/particles", ASSET_PARTICLE, "forgparticles.pak");
-    WriteBitmapsFromPath("definition/ground/patches", ASSET_GROUND, "forgGround.pak", V2(0.5f, 0.5f), "splashName");
-    
-    WriteUI();
-    
-    char* animationPath = "definition/animation";
-    PlatformSubdirNames* subdir = (PlatformSubdirNames* ) malloc(sizeof(PlatformSubdirNames ) );
-    Win32GetAllSubdirectoriesName(subdir, animationPath);
-    
-    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
-    {
-        char* skeletonName = subdir->subdirs[subdirIndex];
-        if(!StrEqual(skeletonName, ".") && !StrEqual(skeletonName, ".."))
-        {
-            WriteAnimations(animationPath, skeletonName);
-            WriteAnimationAutocompleteFile(animationPath, skeletonName);
-            WriteSkinsAutocompleteFile(animationPath, skeletonName);
-            
-            char completeBitmapPath[128];
-            sprintf(completeBitmapPath, "%s/%s", animationPath, skeletonName);
-            WriteAnimationSkinsBitmaps(completeBitmapPath, skeletonName);
-        }
-    }
-    
-    
-    OutputFoldersAutocompleteFile("skeletonName", animationPath);
-    free(subdir);
-}
-
-
-
-
-internal void WriteSounds(PlatformFile labelsFile, char* folder, char* name)
-{
-    Assets assets_;
-    Assets* assets = &assets_;
-    InitializeAssets(assets);
-    
-    char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s", folder, name);
-    
-    
-    char* outputPath = "assets";
-    char autocompletePath[128];
-    FormatString(autocompletePath, sizeof(autocompletePath), "%s/%s.autocomplete", outputPath, name);
-    
-    
-    char* buffer = (char*) malloc(MegaBytes(2));
-    char* writeHere = buffer;
-    
-    
-    u64 hashID = StringHash(name);
-    u32 assetIndex = GetAssetIndex(hashID);
-    PlatformFileGroup soundGroup = Win32GetAllFilesBegin(PlatformFile_sound, completePath);
-    if(soundGroup.fileCount)
-    {
-        BeginAssetType(assets, assetIndex);
-        for(u32 soundIndex = 0; soundIndex < soundGroup.fileCount; ++soundIndex)
-        {
-            PlatformFileHandle soundHandle = Win32OpenNextFile(&soundGroup, completePath);
-            
-            char completeSoundName[256];
-            FormatString(completeSoundName, sizeof(completeSoundName), "%s/%s", completePath, soundHandle.name);
-            
-            
-            AddSoundAsset(completeSoundName, hashID);
-            //AddLabelsFromFile(labelsFile, soundHandle.name);
-            
-            writeHere += sprintf(writeHere, "\"%s\",", soundHandle.name);
-            
-            Win32CloseHandle(&soundHandle);
-        }
-        EndAssetType();
-    }
-    Win32GetAllFilesEnd(&soundGroup);
-    
-    DEBUGWin32WriteFile(autocompletePath, buffer, StrLen(buffer));
-    free(buffer);
-    
-    char pakName[128];
-    FormatString(pakName, sizeof(pakName), "%sS.pak", name);
-    WritePak(assets, pakName);
-}
-
-
-internal void RecursiveWriteSounds(PlatformFile labelsFile, char* path)
-{
-    PlatformSubdirNames* subdir = (PlatformSubdirNames* ) malloc(sizeof(PlatformSubdirNames ) );
-    Win32GetAllSubdirectoriesName(subdir, path);
-    
-    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
-    {
-        char* folderName = subdir->subdirs[subdirIndex];
-        char nextPath[256];
-        FormatString(nextPath, sizeof(nextPath), "%s/%s", path, folderName);
-        
-        
-        if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
-        {
-            WriteSounds(labelsFile, path, folderName);
-            RecursiveWriteSounds(labelsFile, nextPath);
-        }
-    }
-    free(subdir);
-}
-
-internal void WriteMusic()
-{
-    Assets assets_;
-    Assets* assets = &assets_;
-    InitializeAssets(assets );
-    
-    u32 oneSecond = 48000;
-    u32 tenSeconds = oneSecond * 10;
-    char* musicPath = "definition/music";
-    
-    
-    BeginAssetType(assets, Asset_music);
-    
-    PlatformFileGroup soundGroup = Win32GetAllFilesBegin(PlatformFile_sound, musicPath);
-    for(u32 soundIndex = 0; soundIndex < soundGroup.fileCount; ++soundIndex)
-    {
-        PlatformFileHandle soundHandle = Win32OpenNextFile(&soundGroup, musicPath);
-        
-        char completeSoundName[256];
-        FormatString(completeSoundName, sizeof(completeSoundName), "%s/%s", musicPath, soundHandle.name);
-        
-#if 0        
-        u32 totalSamples = GetSoundSampleCount(completeSoundName);
-        
-        SoundId lastMusic = {};
-        for(u32 firstSampleIndex = 0; 
-            firstSampleIndex < totalSamples; 
-            firstSampleIndex += tenSeconds)
-        {
-            u32 lastSampleIndex = tenSeconds;
-            u32 remainingSamples = totalSamples - firstSampleIndex;
-            if(remainingSamples < tenSeconds)
-            {
-                lastSampleIndex = remainingSamples;
-            }
-            SoundId thisMusic = AddSoundAsset(completeSoundName, 0, firstSampleIndex, lastSampleIndex);
-            if(lastMusic.value)
-            {
-                assets->assets[lastMusic.value].sound.chain = Chain_next;
-            }
-            
-            lastMusic = thisMusic;
-        }
-#else
-        AddSoundAsset(completeSoundName, 0);
-#endif
-        
-        
-        Win32CloseHandle(&soundHandle);
-    }
-    Win32GetAllFilesEnd(&soundGroup);
-    
-    
-    EndAssetType();
-    WritePak(assets, "musicS.pak" );
-    
-}
-
-
-
-internal void WriteSounds()
-{
-    char* assetFile = "sound.fad";
-    char* soundPath = "definition/sound";
-    char databaseFile[512];
-    FormatString(databaseFile, sizeof(databaseFile), "%s/%s", soundPath, assetFile);
-    
-    OutputFoldersAutocompleteFile("soundType", soundPath);
-    
-    char* definitionParams = "#cantBeDeleted #playSound";
-    WriteAssetDefinitionFile(soundPath, assetFile, definitionParams, true);
-    
-    PlatformFile database = DEBUGWin32ReadFile(databaseFile);
-    RecursiveWriteSounds(database, soundPath);
-    DEBUGWin32FreeFile(&database);
-    
-    char* eventFile = "soundEvents.fad";
-    char* eventPath = "definition/soundEvents";
-    char* eventDestPath = "assets";
-    
-    char eventSourceCompletePath[128];
-    FormatString(eventSourceCompletePath, sizeof(eventSourceCompletePath), "%s/%s", eventPath, eventFile);
-    char eventDestCompletePath[128];
-    FormatString(eventDestCompletePath, sizeof(eventDestCompletePath), "%s/%s", eventDestPath, eventFile);
-    
-    PlatformFile events = DEBUGWin32ReadFile(eventSourceCompletePath);
-    DEBUGWin32WriteFile(eventDestCompletePath, events.content, events.size);
-    DEBUGWin32FreeFile(&events);
-}
-
-
-internal void WriteFonts()
-{
-    Assets assets_;
-    Assets* assets = &assets_;
-    InitializeAssets(assets );
-    
-    LoadedFont fonts[2] = {
-        LoadFont("definition/fonts/MorrisRoman-Black.ttf", "Morris Roman Black", 64),
-        LoadFont("c:/windows/fonts/arial.ttf", "Arial", 64),
-        //LoadFont("definition/fonts/dum1.ttf", "Dumbledor 1", 64),
-        //LoadFont("c:/windows/fonts/courier.ttf", "Courier New", 64 ),
-    };
-    
-    BeginAssetType(assets, AssetSpecial_Glyph);
-    
-    for(u32 fontIndex = 0;
-        fontIndex < ArrayCount(fonts);
-        fontIndex++ )
-    {
-        for(u32 codePoint = ' ';
-            codePoint < '~';
-            codePoint++ )
-        {
-            AddCharacterAsset(fonts + fontIndex, codePoint);
-        }
-    }
-    EndAssetType();
-    
-    
-    BeginAssetType(assets, Asset_font);
-    AddFontAsset(fonts + 0);
-    AddTag(Tag_fontType, (r32) Font_default);
-    AddFontAsset(fonts + 1);
-    AddTag(Tag_fontType, (r32) Font_debug);
-    EndAssetType();
-    
-    WritePak(assets, "forgivenessF.pak" );
-}
-
-internal void WriteModels(char* folder, char* name, PlatformFile* labelsFile)
-{
-    Assets assets_;
-    Assets* assets = &assets_;
-    InitializeAssets(assets);
-    
-    char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s/%s", folder, name);
-    
-    
-    char* hashName = name;
-    if(hashName[0] == '#')
-    {
-        ++hashName;
-    }
-    
-    u64 assetHashID = StringHash(name);
-    u32 assetIndex = GetAssetIndex(assetHashID);
-    
-    PlatformFileGroup modelsGroup = Win32GetAllFilesBegin(PlatformFile_model, completePath);
-    if(modelsGroup.fileCount)
-    {
-        BeginAssetType(assets, assetIndex);
-        for(u32 modelIndex = 0; modelIndex < modelsGroup.fileCount; ++modelIndex)
-        {
-            PlatformFileHandle modelHandle = Win32OpenNextFile(&modelsGroup, completePath);
-            AddModelAsset(completePath, modelHandle.name, assetHashID);
-            
-            if(labelsFile)
-            {
-                char* assetPtr = GetAssetFilePtr(labelsFile, name, modelHandle.name);
-                Tokenizer tokenizer = {};
-                tokenizer.at = assetPtr;
-                AddLabelsFromFile(&tokenizer);
-            }
-            
-            Win32CloseHandle(&modelHandle);
-        }
-        EndAssetType();
-    }
-    
-    Win32GetAllFilesEnd(&modelsGroup);
-    
-    
-    char pakName[128];
-    FormatString(pakName, sizeof(pakName), "%sM.pak", name);
-    WritePak(assets, pakName);
-}
-
-internal void WriteModels()
-{
-    char* modelsPath = "definition/models";
-    char* assetFile = "models.fad";
-    char* assetOldFile = "modelsvanilla.fad";
-    char* definitionParams = "#cantBeDeleted";
-    
-    WriteAssetDefinitionFile(modelsPath, assetFile, definitionParams, true);
-    WriteAssetDefinitionFile(modelsPath, assetOldFile, 0, false);
-    OutputFoldersAutocompleteFile("modelType", modelsPath);
-    
-    PlatformSubdirNames* subdir = (PlatformSubdirNames*) malloc(sizeof(PlatformSubdirNames));
-    Win32GetAllSubdirectoriesName(subdir, modelsPath);
-    
-    char labelsPath[64];
-    FormatString(labelsPath, sizeof(labelsPath), "assets/%s", assetFile);
-    PlatformFile labelsFile = DEBUGWin32ReadFile(labelsPath);
-    Assert(labelsFile.content);
-    
-    for(u32 subdirIndex = 0; subdirIndex < subdir->subDirectoryCount; ++subdirIndex)
-    {
-        char* folderName = subdir->subdirs[subdirIndex];
-        
-        if(!StrEqual(folderName, ".") && !StrEqual(folderName, ".."))
-        {
-            WriteModels(modelsPath, folderName, 0);
-            
-            char completePath[128];
-            sprintf(completePath, "%s/%s", modelsPath, folderName);
-            OutputFolderFilesAutocompleteFile(folderName, completePath, PlatformFile_model);
-        }
-    }
-    
-    DEBUGWin32FreeFile(&labelsFile);
-    free(subdir);
-}
-
-int main(int argc, char** argv )
-{
-    WriteModels();
-    WriteBitmapsAndAnimations();
-    WriteMusic();
-    WriteSounds();
-    WriteFonts();
 }
 
 

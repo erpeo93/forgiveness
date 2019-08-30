@@ -1,17 +1,4 @@
 #pragma once
-
-
-enum Asset_Type
-{
-    Pak_bitmap,
-    Pak_coloration,
-    Pak_sound,
-    Pak_animation,
-    Pak_font,
-    Pak_fontGlyph,
-    Pak_model,
-};
-
 struct LoadedBitmap
 {
     void* pixels;
@@ -25,7 +12,6 @@ struct LoadedBitmap
     r32 widthOverHeight;
     r32 downsampleFactor;
     
-    Vec4 coloration;
     void* free;
 };
 
@@ -61,16 +47,12 @@ struct LoadedSound
     i16 maxSampleValue;
     r32 decibelLevel;
     
-    SoundId nextToPlay;
-    
     void* free;
 };
 
 
 struct AnimationHeader
 {
-    u64 nameHash;
-    
     u16 durationMS;
     u16 preparationThreesoldMS;
     u16 syncThreesoldMS;
@@ -125,10 +107,8 @@ struct FrameData
 {
     u32 firstBoneIndex;
     u8 countBones;
-    
     u32 firstAssIndex;
     u8 countAss;
-    
     u16 timelineMS;
 };
 
@@ -154,6 +134,13 @@ struct Animation
     PieceAss* ass;
 };
 
+struct Skeleton
+{
+    u32 animationCount;
+    Animation* animations;
+};
+
+
 struct LoadedAnimation
 {
     u64 stringHashID;
@@ -173,6 +160,10 @@ struct LoadedAnimation
     void* free;
 };
 
+struct LoadedSkeleton
+{
+    
+};
 
 struct ColoredVertex
 {
@@ -208,57 +199,4 @@ struct VertexModel
     
     ColoredVertex* vertexes;
     ModelFace* faces;
-};
-
-struct AssetBitmapSource
-{
-    char filename[64];
-    char path[256];
-};
-
-struct AssetSoundSource
-{
-    char filename[64];
-    u32 firstSampleIndex;
-};
-
-struct AssetAnimationSource
-{
-    char path[64];
-    char filename[64];
-    u32 animationIndex;
-    
-    AnimationHeader header;
-};
-
-struct AssetFontSource
-{
-    LoadedFont* font;
-};
-
-struct AssetGlyphSource
-{
-    LoadedFont* font;
-    u32 codePoint;
-};
-
-struct AssetModelSource
-{
-    char filename[64];
-    char path[256];
-};
-
-struct AssetSource
-{
-    
-    u32 type;
-    union
-    {
-        AssetBitmapSource bitmap;
-        AssetSoundSource sound;
-        AssetAnimationSource animation;
-        AssetFontSource font;
-        AssetGlyphSource glyph;
-        AssetModelSource model;
-    };
 };

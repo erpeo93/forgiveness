@@ -211,20 +211,20 @@ inline WorldTile GenerateTile(TaxonomyTable* table, WorldGeneratorDefinition* ge
     result.waterLevel = elevation;
     
     
+    
     if(elevation >= (WATER_LEVEL - generator->beachThreesold) && elevation < (WATER_LEVEL + generator->beachThreesold) && generator->beachTaxonomy)
     {
-        biome = GetSlotForTaxonomy(table, generator->beachTaxonomy)->taxonomy;
+        //biome = GetSlotForTaxonomy(table, generator->beachTaxonomy)->taxonomy;
     }
     
     
     result.height = finalHeight;
-    result.taxonomy = biome;
-    Assert(result.taxonomy);
     
     
 #ifndef FORG_SERVER
-    TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, biome);
     
+#if 0    
+    TaxonomySlot* tileSlot = GetSlotForTaxonomy(table, biome);
     TileDefinition* tile = tileSlot->tileDefinition;
     if(tile)
     {
@@ -240,6 +240,7 @@ inline WorldTile GenerateTile(TaxonomyTable* table, WorldGeneratorDefinition* ge
     result.movingNegative = false;
     result.waterSine = 0;
     
+#endif
     
     result.waterSeq = Seed((i32) (tileNormX * 1000.24f) + (i32)(tileNormY * 1223424.0f));
 #endif
@@ -250,9 +251,11 @@ inline WorldTile GenerateTile(TaxonomyTable* table, WorldGeneratorDefinition* ge
 
 inline WorldTile OceanTile(TaxonomyTable* table, WorldGeneratorDefinition* generator, r32 tileNormX, r32 tileNormY, u32 seed)
 {
-    Assert(generator);
     
     WorldTile result = {};
+#if 0    
+    Assert(generator);
+    
     
     r32 finalHeight = 0;
     u32 biome = GetSlotForTaxonomy(table, generator->beachTaxonomy)->taxonomy;
@@ -285,6 +288,7 @@ inline WorldTile OceanTile(TaxonomyTable* table, WorldGeneratorDefinition* gener
     
     result.waterSeq = Seed((i32) (tileNormX * 1000.24f) + (i32)(tileNormY * 1223424.0f));
 #endif
+#endif
     
     return result;
 }
@@ -300,7 +304,7 @@ internal void BuildChunk(TaxonomyTable* table, WorldGeneratorDefinition* generat
     chunk->worldX = chunkX;
     chunk->worldY = chunkY;
     
-    i32 lateralChunkSpan = WORLD_REGION_SPAN * REGION_CHUNK_SPAN;
+    i32 lateralChunkSpan = WORLD_CHUNK_SPAN;
     
     chunkX = Wrap(0, chunkX, lateralChunkSpan);
     chunkY = Wrap(0, chunkY, lateralChunkSpan);
@@ -308,7 +312,7 @@ internal void BuildChunk(TaxonomyTable* table, WorldGeneratorDefinition* generat
     u32 baseTileX = chunkX * CHUNK_DIM;
     u32 baseTileY = chunkY * CHUNK_DIM;
     
-    b32 chunkOutsideWorld = ChunkOutsideWorld(lateralChunkSpan, chunkX, chunkY);
+    b32 chunkOutsideWorld = ChunkOutsideWorld(chunkX, chunkY);
     
     
     for(u8 tileY = 0; tileY < CHUNK_DIM; ++tileY)

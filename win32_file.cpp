@@ -128,23 +128,13 @@ internal PLATFORM_GET_ALL_FILE_BEGIN(Win32GetAllFilesBegin)
             extension = "*.fsav";
         } break;
         
-        case PlatformFile_entityDefinition:
-        {
-            extension = "*.fed";
-        } break;
-        
-        case PlatformFile_assetDefinition:
-        {
-            extension = "*.fad";
-        } break;
-        
         case PlatformFile_image:
         {
             extension = "*.png";
             
         } break;
         
-        case PlatformFile_animation:
+        case PlatformFile_skeleton:
         {
             extension = "*.scml";
             
@@ -156,21 +146,11 @@ internal PLATFORM_GET_ALL_FILE_BEGIN(Win32GetAllFilesBegin)
             
         } break;
         
-        case PlatformFile_autocomplete:
-        {
-            extension = "*.autocomplete";
-            
-        } break;
-        
         case PlatformFile_model:
         {
             extension = "*.obj";
         } break;
         
-        case PlatformFile_all:
-        {
-            extension = "*.*";
-        } break;
         InvalidDefaultCase;
     }
     

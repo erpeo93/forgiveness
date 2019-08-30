@@ -1,13 +1,3 @@
-inline Vec3 ComputeAcceleration(Vec3 inputAcc, Vec3 inputVel, MoveSpec moveSpec)
-{
-    Vec3 acceleration = Normalize(inputAcc);
-    acceleration.z = 0.0f;
-    acceleration.xy *= moveSpec.acceleration;
-    acceleration.xy += moveSpec.drag * inputVel.xy;
-    
-    return acceleration;
-}
-
 internal b32 ShouldCollide(u64 id1, ForgBoundType b1, u64 id2, ForgBoundType b2)
 {
     b32 result = false;

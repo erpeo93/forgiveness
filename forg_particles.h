@@ -41,7 +41,7 @@ struct ParticleUpdater
     ParticleUpdaterType type;
     ParticleUpdaterEndPosition destPType;
     
-    BitmapId bitmapID;
+    AssetID bitmapID;
     u64 particleHashID;
     r32 startDrawingFollowingBitmapAt;
     Vec3 startOffset;
@@ -120,7 +120,7 @@ struct ParticleEffect
     
     ParticleEffectData data;
     r32 spawnParticlesLeftOff;
-    ParticleEffectDefinition* definition;
+    struct ParticleEffectDefinition* definition;
     
     u32 particle4xCount;
     Particle_4x* firstParticle;

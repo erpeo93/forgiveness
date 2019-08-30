@@ -522,7 +522,7 @@ struct RandomSequence
     u32 currentTableIndex;
 };
 
-inline RandomSequence Seed( i32 seed )
+inline RandomSequence Seed(i32 seed)
 {
     RandomSequence result = {};
     result.currentTableIndex = seed % ArrayCount( randomNumberTable );

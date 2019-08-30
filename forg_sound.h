@@ -1,7 +1,7 @@
 #pragma once
 struct PlayingSound
 {
-    SoundId ID;
+    AssetID ID;
     r32 playingIndex;
     Vec2 currentVolume;
     Vec2 targetVolume;

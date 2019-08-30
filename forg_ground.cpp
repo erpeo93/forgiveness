@@ -1,3 +1,4 @@
+#if 0
 #define JC_VORONOI_IMPLEMENTATION
 #undef internal
 #include "jc_voronoi.h"
@@ -45,9 +46,9 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
         diagram->deltaP = {};
         diagram->originP = originP;
         
-        r32 voxelSide = worldMode->voxelSide;
-        r32 chunkSide = worldMode->chunkSide;
-        u8 chunkDim = worldMode->chunkDim;
+        r32 voxelSide = VOXEL_SIZE;
+        r32 chunkSide = voxelSide * CHUNK_DIM;
+        u8 chunkDim = CHUNK_DIM;
         
         jcv_rect rect;
         r32 dim = (chunkApron + 4.0f) * chunkSide;
@@ -57,7 +58,7 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
         rect.max.y = dim;
         
         u32 maxPointsPerTile = 16;
-        u32 maxPointCount = Squarei(worldMode->chunkDim) * Squarei(2 * chunkApron + 1) * maxPointsPerTile;
+        u32 maxPointCount = Squarei(chunkDim) * Squarei(2 * chunkApron + 1) * maxPointsPerTile;
         
         
         jcv_point* points = PushArray(&task->pool, jcv_point, maxPointCount, NoClear());
@@ -69,12 +70,9 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
                 Vec3 chunkLowLeftCornerOffset = V3(V2i(X - originChunkX, Y - originChunkY), 0.0f) * chunkSide - originP.chunkOffset;
                 Rect2 chunkRect = RectMinDim(chunkLowLeftCornerOffset.xy, V2(chunkSide, chunkSide));
                 
-                i32 chunkX = Wrap(0, X, lateralChunkSpan);
-                i32 chunkY = Wrap(0, Y, lateralChunkSpan);
-                
-                if(ChunkValid(lateralChunkSpan, X, Y))
+                if(!ChunkOutsideWorld(X, Y))
                 {	
-                    RandomSequence seq = Seed((chunkX + 10) * (chunkY + 10));
+                    RandomSequence seq = Seed((X + 10) * (Y + 10));
                     WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
                     
                     if(!chunk->initialized)
@@ -85,24 +83,27 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
                     Assert(X == chunk->worldX);
                     Assert(Y == chunk->worldY);
                     
-                    for(u8 tileY = 0; tileY < worldMode->chunkDim; tileY++)
+                    for(u8 tileY = 0; tileY < chunkDim; tileY++)
                     {
-                        for(u8 tileX = 0; tileX < worldMode->chunkDim; tileX++)
+                        for(u8 tileX = 0; tileX < chunkDim; tileX++)
                         {
-                            Vec2 tileCenter = worldMode->voxelSide * V2(tileX + 0.5f, tileY + 0.5f);
+                            Vec2 tileCenter = voxelSide * V2(tileX + 0.5f, tileY + 0.5f);
                             Vec2 destP2D = chunkLowLeftCornerOffset.xy + tileCenter;
                             
                             
                             WorldTile* tile = &chunk->tiles[tileY][tileX];
                             
-                            TaxonomySlot* tileSlot = GetSlotForTaxonomy(worldMode->table, tile->taxonomy);
-                            TileDefinition* tileDef = tileSlot->tileDefinition;
                             
-                            if(tileDef)
+                            if(true)
                             {
-                                r32 pointMaxOffset = Min(0.5f * voxelSide, tileDef->groundPointMaxOffset);
                                 
-                                u32 pointsPerTile = RoundReal32ToU32(tileDef->groundPointPerTile + RandomBil(&seq) * tileDef->groundPointPerTileV);
+                                r32 groundPointMaxOffset = 0.5f;
+                                u32 groundPointPerTile = 4;
+                                r32 groundPointPerTileV = 1.0f;
+                                
+                                r32 pointMaxOffset = Min(0.5f * voxelSide, groundPointMaxOffset);
+                                
+                                u32 pointsPerTile = RoundReal32ToU32(groundPointPerTile + RandomBil(&seq) * groundPointPerTileV);
                                 
                                 pointsPerTile = Min(maxPointsPerTile, pointsPerTile);
                                 r32 tileLayoutNoise = tile->layoutNoise;
@@ -192,6 +193,109 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
     }
 }
 
+inline r32 GetChunkyness(WorldTile* t0, WorldTile* t1)
+{
+    r32 result = (t0->taxonomy == t1->taxonomy) ? t0->chunkynessSame : t0->chunkynessOther;
+    return result;
+}
+
+
+inline Vec3 GetTileColorDelta(WorldTile* tile, RandomSequence* seq)
+{
+    Vec4 delta = tile->colorDelta;
+    r32 noiseBilateral = (tile->layoutNoise - 0.5f) * 2.0f;
+    
+    Vec3 noisy;
+    noisy.r = delta.r * noiseBilateral;
+    noisy.g = delta.g * noiseBilateral;
+    noisy.b = delta.b * noiseBilateral;
+    
+    
+    Vec3 random;
+    random.r = delta.r * RandomBil(seq);
+    random.g = delta.g * RandomBil(seq);
+    random.b = delta.b * RandomBil(seq);
+    
+    
+    Vec3 result = Lerp(noisy, tile->colorRandomness, random);
+    
+    return result;
+}
+
+inline Vec4 GetTileColor(WorldTile* tile, b32 uniformColor, RandomSequence* seq)
+{
+    Vec4 color = tile->baseColor;
+    if(!uniformColor)
+    {
+        color.rgb += GetTileColorDelta(tile, seq);
+    }
+    
+    color = Clamp01(color);
+    color = SRGBLinearize(color);
+    return color;
+}
+
+inline Vec4 GetWaterColor(WorldTile* tile)
+{
+    Vec4 waterColor = {};
+    if(tile->waterLevel < WATER_LEVEL)
+    {
+        r32 maxColorDisplacement = 0.4f * WATER_LEVEL;
+        r32 maxAlphaDisplacement = 0.3f * WATER_LEVEL;
+        
+        Vec3 minColorDeep = V3(0.0f, 0.03f, 0.05f);
+        Vec3 maxColorDeep = V3(0.0f, 0.08f, 0.4f);
+        
+        r32 maxAlphaDeep = 1.0f;
+        r32 minAlphaDeep = 0.7f;
+        
+        Vec3 minColorSwallow = V3(0.0f, 0.1f, 0.78f);
+        Vec3 maxColorSwallow = V3(0.65f, 0.75f, 1.0f);
+        
+        r32 maxAlphaSwallow = 1.0f;
+        r32 minAlphaSwallow = 0.0f;
+        
+        r32 sineWaterLevel = Clamp01MapToRange(0.85f * WATER_LEVEL, tile->waterLevel, WATER_LEVEL);
+        r32 normalizedWaterLevel = Clamp01MapToRange(0, tile->waterLevel, 0.95f * WATER_LEVEL);
+        normalizedWaterLevel = Pow(normalizedWaterLevel, 15.0f);
+        
+        Vec3 minColor = Lerp(minColorDeep, normalizedWaterLevel, minColorSwallow);
+        Vec3 maxColor = Lerp(maxColorDeep, normalizedWaterLevel, maxColorSwallow);
+        
+        r32 minAlpha = Lerp(minAlphaDeep, normalizedWaterLevel, minAlphaSwallow);
+        r32 maxAlpha = Lerp(maxAlphaDeep, normalizedWaterLevel, maxAlphaSwallow);
+        
+        r32 blueNoise = tile->blueNoise;
+        r32 alphaNoise = tile->alphaNoise;
+        
+        r32 sine = Sin(DegToRad(tile->waterSine));
+        r32 blueSine = sine;
+        r32 alphaSine = sine;
+        
+        
+        r32 blueNoiseSine = Lerp(blueNoise, sineWaterLevel, blueSine);
+        r32 alphaNoiseSine = Lerp(alphaNoise, sineWaterLevel, alphaSine);
+        
+        
+        r32 blueDisplacement = blueNoiseSine * maxColorDisplacement;
+        r32 alphaDisplacement = alphaNoiseSine * maxAlphaDisplacement;
+        
+        
+        r32 blueLerp = Clamp01MapToRange(0, tile->waterLevel + blueDisplacement, WATER_LEVEL);
+        
+        r32 alphaLevel = tile->waterLevel + alphaDisplacement;
+        
+        r32 alphaLerp = Clamp01MapToRange(0, alphaLevel, WATER_LEVEL);
+        alphaLerp = Pow(alphaLerp, 2.2f);
+        
+        Vec3 color = Lerp(minColor, blueLerp, maxColor);
+        r32 alpha = Lerp(maxAlpha, alphaLerp, minAlpha);
+        
+        waterColor = V4(color, alpha);
+    }
+    
+    return waterColor;
+}
 
 struct RenderVoronoiWork
 {
@@ -382,38 +486,25 @@ internal void UpdateAndRenderGround(GameState* gameState, GameModeWorld* worldMo
     b32 changedChunk = (voronoiP.chunkX != myPlayer->oldVoronoiP.chunkX || voronoiP.chunkY != myPlayer->oldVoronoiP.chunkY);
     myPlayer->oldVoronoiP = voronoiP;
     
-    i32 lateralChunkSpan = WORLD_REGION_SPAN * REGION_CHUNK_SPAN;
+    i32 lateralChunkSpan = WORLD_CHUNK_SPAN;
     i32 originChunkX = voronoiP.chunkX;
     i32 originChunkY = voronoiP.chunkY;
     
-    u32 seed = worldMode->worldSeed;
+    u64 seed = worldMode->worldSeed;
     
     
     
-    RandomSequence generatorSeq = Seed(seed);
-    u32 generatorTaxonomy = GetRandomChild(worldMode->table, &generatorSeq, worldMode->table->generatorTaxonomy);
+    RandomSequence generatorSeq = Seed((i32)seed);
     
-    if(generatorTaxonomy != worldMode->table->generatorTaxonomy)
-    {
-        TaxonomySlot* newGeneratorSlot =GetSlotForTaxonomy(worldMode->table, generatorTaxonomy);
-        
-        if(newGeneratorSlot)
-        {
-            worldMode->generator = newGeneratorSlot->generatorDefinition;
-        }
-    }
-    
+    // NOTE(Leonardo): animate water
     b32 forceVoronoiRegeneration = false;
-    if(worldMode->generator)
+    if(true)
     {
         for(i32 Y = originChunkY - chunkApron - 1; Y <= originChunkY + chunkApron + 1; Y++)
         {
             for(i32 X = originChunkX - chunkApron - 1; X <= originChunkX + chunkApron + 1; X++)
             {
-                i32 chunkX = Wrap(0, X, lateralChunkSpan);
-                i32 chunkY = Wrap(0, Y, lateralChunkSpan);
-                
-                if(ChunkValid(lateralChunkSpan, X, Y))
+                if(ChunkValid(X, Y))
                 {	
                     WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
                     
@@ -558,7 +649,6 @@ internal void UpdateAndRenderGround(GameState* gameState, GameModeWorld* worldMo
         r32 ripplesLifetime = 3.0f;
         
         PrefetchAllGroundBitmaps(group->assets, true);
-        
         for(u32 chunkIndex = 0; chunkIndex < ArrayCount(worldMode->chunks); ++chunkIndex)
         {
             WorldChunk* chunk = worldMode->chunks[chunkIndex];
@@ -817,6 +907,93 @@ internal void UpdateAndRenderGround(GameState* gameState, GameModeWorld* worldMo
             platformAPI.CompleteQueueWork(gameState->renderQueue);
             EndTemporaryMemory(voronoiMemory);
             END_BLOCK();
+        }
+    }
+}
+#endif
+
+
+inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, UniversePos origin)
+{
+    i32 originChunkX = origin.chunkX;
+    i32 originChunkY = origin.chunkY;
+    i32 chunkApron = 2;
+    
+    for(i32 Y = originChunkY - chunkApron - 1; Y <= originChunkY + chunkApron + 1; Y++)
+    {
+        for(i32 X = originChunkX - chunkApron - 1; X <= originChunkX + chunkApron + 1; X++)
+        {
+            if(!ChunkOutsideWorld(X, Y))
+            {	
+                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
+                
+                if(!chunk->initialized)
+                {
+                    chunk->initialized = true;
+                    chunk->worldX = X;
+                    chunk->worldY = Y;
+                    //InvalidCodePath;
+                    //BuildChunk(worldMode->table, worldMode->generator, chunk, X, Y, seed);
+                }
+            }
+        }
+    }
+    
+    for(u32 chunkIndex = 0; chunkIndex < ArrayCount(worldMode->chunks); ++chunkIndex)
+    {
+        WorldChunk* chunk = worldMode->chunks[chunkIndex];
+        while(chunk)
+        {
+            if(chunk->initialized && !ChunkOutsideWorld(chunk->worldX, chunk->worldY))
+            {
+                r32 chunkSide = CHUNK_DIM * VOXEL_SIZE;
+                r32 voxelSide = VOXEL_SIZE;
+                
+                Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - origin.chunkOffset;
+                
+                RandomSequence seq = Seed(chunk->worldX * chunk->worldY);
+                
+                for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
+                {
+                    for(u8 X = 0; X < CHUNK_DIM; ++X)
+                    {
+                        Vec3 tileMin = chunkLowLeftCornerOffset + V3(X * voxelSide, Y * voxelSide, 0);
+                        ObjectTransform tileTransform = FlatTransform();
+                        Rect2 rect = RectMinDim(tileMin.xy, V2(voxelSide, voxelSide));
+                        
+                        
+#if 0                        
+                        AssetLabels labels = {};
+                        TileDefinition* tileDef = GetAsset(group->assets, Asset_TileDefinition, TileDefinition_Generic, &labels);
+                        
+                        Vec4 tileColor = tileDef->color;
+                        
+                        
+                        PushRect(group, tileTransform, rect, tileColor);
+#endif
+                        Vec4 tileColor = V4(0, 1, 0, 1);
+                        
+                        //if(UI->showGroundOutline)
+                        {
+                            PushRectOutline(group, tileTransform, rect, V4(1, 1, 1, 1), 0.1f);
+                        }
+                        
+                        
+                        
+#if 0                        
+                        r32 waterLevel = tile->waterLevel;
+                        if(waterLevel < WATER_LEVEL)
+                        {
+                            Vec4 waterColor = V4(0, 0, waterLevel, 1 - waterLevel);
+                            PushRect(group, tileTransform, rect, waterColor);
+                        }
+#endif
+                        
+                    }
+                }
+            }
+            
+            chunk = chunk->next;
         }
     }
 }

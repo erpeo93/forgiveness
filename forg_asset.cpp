@@ -9,7 +9,7 @@ inline void BeginAssetLock(Assets* assets)
 {
     for(;;)
     {
-        if(AtomicCompareExchangeUint32(&assets->gameState->lock, 1, 0) == 0)
+        if(AtomicCompareExchangeUint32(&assets->lock, 1, 0) == 0)
         {
             break;
         }
@@ -19,7 +19,7 @@ inline void BeginAssetLock(Assets* assets)
 inline void EndAssetLock(Assets* assets)
 {
     CompletePastWritesBeforeFutureWrites;
-    assets->gameState->lock = 0;
+    assets->lock = 0;
 }
 
 inline AssetFile* GetFile(Assets* assets, u32 fileIndex)
@@ -176,6 +176,7 @@ internal AssetMemoryBlock* FreeAsset(Assets* assets, Asset* asset)
     {
         result = result->prev;
     }
+    
     MergeIfPossible(assets, result, result->next);
     
     asset->state = Asset_unloaded;
@@ -184,11 +185,21 @@ internal AssetMemoryBlock* FreeAsset(Assets* assets, Asset* asset)
     return result;
 }
 
-inline void LockAssetForCurrentFrame(Assets* assets, u32 assetID)
+
+inline Asset* GetAssetRaw(Assets* assets, AssetID ID)
+{
+    AssetArray* array = assets->assets + ID.type;
+    AssetSubtypeArray* subtype = array->subtypes + ID.subtype;
+    Asset* asset = subtype->assets + ID.index;
+    
+    return asset;
+}
+
+inline void LockAssetForCurrentFrame(Assets* assets, AssetID ID)
 {
 	BeginAssetLock(assets);
-    Asset* asset = assets->assets + assetID;
-    asset->locked = true;
+    Asset* asset = GetAssetRaw(assets, ID);
+    asset->state = Asset_locked;
     DLLIST_REMOVE(&asset->LRU);
     DLLIST_INSERT_AS_LAST(&assets->lockedLRUSentinel, &asset->LRU);
 	EndAssetLock(assets);
@@ -203,8 +214,8 @@ inline void RestoreLockedAssets(Assets* assets)
         AssetLRULink* next = unlock->next;
         
         Asset* asset = (Asset*) unlock;
-        Assert(asset->locked);
-        asset->locked = false;
+        Assert(asset->state == Asset_locked);
+        asset->state = Asset_loaded;
         
         DLLIST_REMOVE(unlock);
         DLLIST_INSERT_AS_LAST(&assets->LRUSentinel, unlock);
@@ -216,7 +227,7 @@ inline void RestoreLockedAssets(Assets* assets)
     EndAssetLock(assets);
 }
 
-internal AssetMemoryHeader* AcquireAssetMemory(Assets* assets, u32 size, u32 assetIndex, AssetHeaderType assetType)
+internal AssetMemoryHeader* AcquireAssetMemory(Assets* assets, u32 size, AssetID ID)
 {
     AssetMemoryHeader* result = 0;
     
@@ -246,8 +257,8 @@ internal AssetMemoryHeader* AcquireAssetMemory(Assets* assets, u32 size, u32 ass
                 header != &assets->assetSentinel;
                 header = header->prev)
             {
-                Asset* asset = assets->assets + header->assetIndex;
-                if(asset->state == Asset_loaded && !asset->locked)
+                Asset* asset = GetAssetRaw(assets, header->ID);
+                if(asset->state == Asset_loaded)
                 {
                     block = FreeAsset(assets, asset);
                     break;
@@ -257,14 +268,49 @@ internal AssetMemoryHeader* AcquireAssetMemory(Assets* assets, u32 size, u32 ass
     }
     
     Assert(result);
-    result->assetIndex = assetIndex;
-    result->assetType = assetType;
+    result->ID = ID;
     result->totalSize = size;
     AddHeaderInFront(assets, result);
     
     EndAssetLock(assets);
     
     return result;
+}
+
+
+struct LoadDataWork
+{
+    PlatformFileHandle* handle;
+    u64 dataOffset;
+    u32 memorySize;
+    
+    void** dest;
+    
+    Asset* asset;
+    u32 finalState;
+    TaskWithMemory* task;
+};
+
+internal void LoadDataDirectly(LoadDataWork* work)
+{
+    void* temp = AllocateTempMemory(work->memorySize);
+    platformAPI.ReadFromFile(work->handle, work->dataOffset, work->memorySize, temp);
+    if(PlatformNoFileErrors(work->handle))
+    {
+        u32 size = ParseStruct(tempAllocator, temp);
+        void* memory = AcquireAssetMemory(size);
+        Copy();
+        *work->dest = memory;
+    }
+}
+
+
+PLATFORM_WORK_CALLBACK(LoadDataThreaded)
+{
+    TIMED_FUNCTION();
+    LoadDataWork* work = (LoadDataWork*) param;
+    LoadDataDirectly(work);
+    EndTaskWithMemory(work->task);
 }
 
 struct LoadAssetWork
@@ -281,6 +327,7 @@ struct LoadAssetWork
     
     PlatformTextureOpQueue* textureQueue;
 };
+
 
 internal void LoadAssetDirectly(LoadAssetWork* work)
 {
@@ -300,16 +347,13 @@ internal void LoadAssetDirectly(LoadAssetWork* work)
                 Font* font = &asset->header->font;
                 PakFont* info = &asset->paka.font;
                 
-                
                 for(u32 glyphIndex = 0; glyphIndex < info->glyphsCount; glyphIndex++)
                 {
                     PakGlyph* glyph = font->glyphs + glyphIndex;
-                    
                     Assert((u16) glyphIndex == glyphIndex);
                     Assert(glyph->unicodeCodePoint < info->onePastHighestCodePoint);
                     font->unicodeMap[glyph->unicodeCodePoint] = (u16) glyphIndex;
                 }
-                
             } break;
             
             case Finalize_Bitmap:
@@ -485,7 +529,6 @@ internal void LoadFont(Assets* assets, FontId ID, b32 immediate)
             if(task || immediate)
             {
                 PakFont* info = &asset->paka.font;
-                
                 u32 glyphsSize = info->glyphsCount * sizeof(PakGlyph);
                 u32 horizontalAdvanceSize = sizeof(r32) * info->glyphsCount * info->glyphsCount; 
                 AssetMemorySize size = {};
@@ -596,7 +639,7 @@ void LoadSound(Assets* assets, SoundId ID)
     }
 }
 
-void LoadAnimation(Assets* assets, AnimationId ID)
+void LoadSkeleton(Assets* assets, AnimationId ID)
 {
     if(ID.value)
     {
@@ -654,7 +697,6 @@ void LoadAnimation(Assets* assets, AnimationId ID)
     }
 }
 
-
 void LoadModel(Assets* assets, ModelId ID)
 {
     if(ID.value)
@@ -709,42 +751,67 @@ void LoadModel(Assets* assets, ModelId ID)
     }
 }
 
-inline b32 IsValid(BitmapId ID)
+void LoadDataFile(Assets* assets, AssetID ID)
 {
-    b32 result = (ID.value != 0);
+    if(IsValid(ID))
+    {
+        Asset* asset = GetAssetRaw(assets, ID);
+        TaskWithMemory* task = BeginTaskWithMemory(assets->tasks, ArrayCount(assets->tasks), false);
+        if(task)
+        {
+            if(AtomicCompareExchangeUint32((u32*) &asset->state, Asset_queued, 
+                                           Asset_unloaded) == Asset_unloaded)
+            {
+                PakData* info = &asset->paka.data;
+                
+                AssetMemorySize size = {};
+                size.data = vertexCount * sizeof(ColoredVertex) + faceCount * sizeof(ModelFace);
+                size.total = size.data + sizeof(AssetMemoryHeader);
+                
+                asset->header = AcquireAssetMemory(assets, size.total, ID.value, AssetType_None);
+                void* memory = asset->header + 1;
+                u8* base = (u8*) memory;
+                
+                VertexModel* model = &asset->header->model;
+                
+                model->vertexCount = vertexCount;
+                model->faceCount = faceCount;
+                model->dim = info->dim;
+                model->vertexes = (ColoredVertex*) base;
+                model->faces = (ModelFace*) (base + vertexCount * sizeof(ColoredVertex));
+                
+                LoadDataWork* work = PushStruct(&task->pool, LoadDataWork);
+                
+                work->handle = GetHandleFor(assets, asset->fileIndex);
+                work->dest = memory;
+                work->memorySize = size.data;
+                work->dataOffset = asset->paka.dataOffset;
+                work->asset = asset;
+                work->finalState = Asset_loaded;
+                work->task = task;
+                
+                platformAPI.PushWork(assets->slowQueue, LoadAssetThreaded, work);
+            }
+            else
+            {
+                EndTaskWithMemory(task);
+            }
+        }
+    }
+}
+
+inline b32 IsValid(AssetID ID)
+{
+    b32 result = true;
     return result;
 }
 
-inline b32 IsValid(FontId ID)
-{
-    b32 result = (ID.value != 0);
-    return result;
-}
-
-inline b32 IsValid(SoundId ID)
-{
-    b32 result = (ID.value != 0);
-    return result;
-}
-
-inline b32 IsValid(AnimationId ID)
-{
-    b32 result = (ID.value != 0);
-    return result;
-}
-
-inline b32 IsValid(ModelId ID)
-{
-    b32 result = (ID.value != 0);
-    return result;
-}
-
-
-inline void LockBitmapForCurrentFrame(Assets* assets, BitmapId ID)
+inline void LockBitmapForCurrentFrame(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
     LockAssetForCurrentFrame(assets, ID.value);
 }
+
 
 internal void CloseAllHandles(Assets* assets)
 {
@@ -760,8 +827,6 @@ internal void CloseAllHandles(Assets* assets)
 internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformTextureOpQueue* textureQueue, memory_index size)
 {
     Assets* assets = PushStruct(pool, Assets); 
-    assets->gameState = gameState;
-    
     
     DLLIST_INIT(&assets->LRUSentinel);
     DLLIST_INIT(&assets->specialLRUSentinel);
@@ -797,24 +862,21 @@ internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformText
     assets->fileCount = fileGroup.fileCount;
     assets->files = PushArray(pool, AssetFile, assets->fileCount);
     
-    assets->tagCount = 1;
-    assets->assetCount = 1;
+    
+    for(u32 assetTypeIndex = 0; assetTypeIndex < AssetType_Count; ++assetTypeIndex)
+    {
+        AllocateSubtypes(based on preprocessor generated data);
+    }
+    
     
     for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; fileIndex++)
     {
         AssetFile* file = assets->files + fileIndex;
-        file->fontBitmapsOffsetIndex = 0;
-        
-        file->tagBase = assets->tagCount;
         
         file->handle = platformAPI.OpenNextFile(&fileGroup, assetPath);
         ZeroStruct(file->header);
         platformAPI.ReadFromFile(&file->handle, sizeof(u64), sizeof(file->header), &file->header);
         
-        u32 assetTypeArraySize = file->header.assetTypeCount * sizeof(PakAssetType);
-        file->assetTypes = (PakAssetType*) PushSize(pool, assetTypeArraySize);
-        
-        platformAPI.ReadFromFile(&file->handle, file->header.assetTypeOffset, assetTypeArraySize, file->assetTypes);
         if(file->header.magicValue != PAK_MAGIC_NUMBER)
         {
             platformAPI.FileError(&file->handle, "magic number not valid");
@@ -827,9 +889,36 @@ internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformText
         
         if(PlatformNoFileErrors(&file->handle))
         {
-            assets->tagCount += (file->header.tagCount - 1);
-            // NOTE(Leonardo): take into account the null asset!
-            assets->assetCount += (file->header.assetcount - 1);
+            TempMemory assetMemory = BeginTemporaryMemory(pool);
+            
+            u32 assetCountForType = sourceType->onePastLastAssetIndex - sourceType->firstAssetIndex;
+            u32 assetArraySize = assetCountForType * sizeof(PakAsset);
+            
+            u64 assetOffset = file->header.assetOffset + sourceType->firstAssetIndex * sizeof(PakAsset);
+            PakAsset* pakAssetArray = (PakAsset*) PushSize(pool, assetArraySize, NoClear());
+            platformAPI.ReadFromFile(&file->handle, assetOffset, assetArraySize, pakAssetArray);
+            
+            for(u32 assetIndex = 0; assetIndex < assetCountForType; assetIndex++)
+            {
+                Assert(assetCount < assets->assetCount);
+                Asset* dest = assets->assets + assetCount++;
+                PakAsset* source = pakAssetArray + assetIndex;
+                
+                dest->paka = *source;
+                
+                if(dest->paka.firstTagIndex == 0)
+                {
+                    dest->paka.onePastLastTagIndex = 0;
+                }
+                else
+                {
+                    dest->paka.firstTagIndex += (file->tagBase - 1);
+                    dest->paka.onePastLastTagIndex += (file->tagBase - 1);
+                }
+                dest->fileIndex = fileIndex;
+            }
+            
+            EndTemporaryMemory(assetMemory);
         }
         else
         {
@@ -837,337 +926,22 @@ internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformText
             InvalidCodePath;
         }
     }
-    
     platformAPI.GetAllFilesEnd(&fileGroup);
-    
-    assets->tags = PushArray(pool, PakTag, assets->tagCount);
-    assets->assets = PushArray(pool, Asset, assets->assetCount);
-    
-    // NOTE(Leonardo): rebase the tags!
-    for(u32 fileIndex = 0; fileIndex < assets->fileCount; fileIndex++)
-    {
-        AssetFile* file = assets->files + fileIndex;
-        
-        // NOTE(Leonardo): account for the null tag!
-        u32 tagArraySize = (file->header.tagCount - 1) * sizeof(PakTag);
-        platformAPI.ReadFromFile(&file->handle, file->header.tagOffset + sizeof(PakTag), 
-                                 tagArraySize, assets->tags + file->tagBase);
-    }
-    
-    // NOTE(Leonardo): zero the null asset!
-    ZeroStruct(assets->assets[0]);
-    u32 assetCount = 1;
-    
-    // NOTE(Leonardo): zero the null tag!
-    ZeroStruct(assets->tags[0]);
-    
-    for(u32 destTypeID = 1; destTypeID < HASHED_ASSET_SLOT_COUNT + AssetSpecial_Count; destTypeID++)
-    {
-        AssetType* destType = assets->types + destTypeID;
-        
-        destType->firstAssetIndex = assetCount;
-        
-        for(u32 fileIndex = 0; fileIndex < assets->fileCount; fileIndex++)
-        {
-            AssetFile* file = assets->files + fileIndex;
-            
-            if(PlatformNoFileErrors(&file->handle))
-            {
-                for(u32 sourceTypeID = 0; 
-                    sourceTypeID < file->header.assetTypeCount; 
-                    sourceTypeID++)
-                {
-                    PakAssetType* sourceType = file->assetTypes + sourceTypeID;
-                    if(sourceType->ID == destTypeID)
-                    {
-                        if(sourceType->ID == AssetSpecial_Glyph)
-                        {
-                            file->fontBitmapsOffsetIndex = assetCount - sourceType->firstAssetIndex;
-                        }
-                        TempMemory assetMemory = BeginTemporaryMemory(pool);
-                        
-                        u32 assetCountForType = sourceType->onePastLastAssetIndex - sourceType->firstAssetIndex;
-                        u32 assetArraySize = assetCountForType * sizeof(PakAsset);
-                        
-                        u64 assetOffset = file->header.assetOffset + sourceType->firstAssetIndex * sizeof(PakAsset);
-                        PakAsset* pakAssetArray = (PakAsset*) PushSize(pool, assetArraySize, NoClear());
-                        
-                        platformAPI.ReadFromFile(&file->handle, assetOffset, assetArraySize, pakAssetArray);
-                        
-                        for(u32 assetIndex = 0; assetIndex < assetCountForType; assetIndex++)
-                        {
-                            Assert(assetCount < assets->assetCount);
-                            Asset* dest = assets->assets + assetCount++;
-                            PakAsset* source = pakAssetArray + assetIndex;
-                            
-                            dest->paka = *source;
-                            
-                            if(dest->paka.firstTagIndex == 0)
-                            {
-                                dest->paka.onePastLastTagIndex = 0;
-                            }
-                            else
-                            {
-                                dest->paka.firstTagIndex += (file->tagBase - 1);
-                                dest->paka.onePastLastTagIndex += (file->tagBase - 1);
-                            }
-                            dest->fileIndex = fileIndex;
-                        }
-                        
-                        EndTemporaryMemory(assetMemory);
-                    }
-                }
-            }
-        }
-        destType->onePastLastAssetIndex = assetCount;
-    }
-    Assert(assetCount == assets->assetCount);
     
     return assets;
 }
 
-
-inline u32 GetFirstAsset_(Assets* assets, char* assetName)
+internal AssetID QueryAssets(u32 type, u32 subtype, Labels)
 {
-    u64 typeHashID = StringHash(assetName);
-    u32 assetIndex = GetAssetIndex(typeHashID);
-    
-    u32 result = 0;
-    AssetType* type = assets->types + assetIndex;
-    for(u32 index = type->firstAssetIndex; 
-        index < type->onePastLastAssetIndex;
-        index++)
-    {
-        Asset* asset = assets->assets + index;
-        if(asset->paka.typeHashID == typeHashID)
-        {
-            result = index;
-            break;
-        }
-	}
-    
-    return result;
+    AssetID result = {};
+    ???;
 }
 
-inline b32 IsLabel(u32 ID)
-{
-    b32 result = (ID >= Tag_count);
-    return result;
-}
-
-struct FindAnimationResult
-{
-    AnimationId ID;
-    u32 assetType;
-};
-
-inline ModelId FindModelByName(Assets* assets, u64 typeHashID, u64 nameHashID)
-{
-    ModelId result = {};
-    
-    u32 assetID = GetAssetIndex(typeHashID);
-    AssetType* type = assets->types + assetID;
-    for(u32 assetIndex = type->firstAssetIndex; 
-        assetIndex < type->onePastLastAssetIndex;
-        assetIndex++)
-    {
-        Asset* asset = assets->assets + assetIndex;
-        if(asset->paka.typeHashID == typeHashID && asset->paka.nameHashID == nameHashID)
-        {
-            result.value = assetIndex;
-            break;
-        }
-	}
-    
-    
-    return result;
-}
-
-inline FindAnimationResult FindAnimationByName(Assets* assets, u64 skeletonHashID, u64 animationNameHashID)
-{
-    FindAnimationResult result = {};
-    
-	for(u32 assetType = 0; assetType < HASHED_ASSET_SLOT_COUNT && !result.assetType; ++assetType)
-	{
-        AssetType* type = assets->types + assetType;
-		for(u32 assetIndex = type->firstAssetIndex; 
-            assetIndex < type->onePastLastAssetIndex;
-            assetIndex++)
-		{
-			Asset* asset = assets->assets + assetIndex;
-			if(asset->paka.typeHashID == skeletonHashID && asset->paka.nameHashID == animationNameHashID)
-			{
-                result.assetType = assetType;
-                result.ID = {assetIndex};
-                break;
-			}
-		}
-	}
-    
-    return result;
-}
-
-inline SoundId FindSoundByName(Assets* assets, u64 typeHashID, u64 nameHashID)
-{
-    SoundId result = {};
-    
-    u32 assetID = GetAssetIndex(typeHashID);
-    AssetType* type = assets->types + assetID;
-    
-    for(u32 assetIndex = type->firstAssetIndex; 
-        assetIndex < type->onePastLastAssetIndex;
-        assetIndex++)
-    {
-        Asset* asset = assets->assets + assetIndex;
-        if(asset->paka.typeHashID == typeHashID && asset->paka.nameHashID == nameHashID)
-        {
-            result = {assetIndex};
-            break;
-        }
-	}
-    
-    return result;
-}
-
-inline BitmapId FindBitmapByName(Assets* assets, u32 assetType, u64 typeHashID, u64 nameHashID, u16 colorationIndex)
-{
-    BitmapId result = {};
-    
-    AssetType* type = assets->types + assetType;
-    for(u32 assetIndex = type->firstAssetIndex; 
-        assetIndex < type->onePastLastAssetIndex;
-        assetIndex++)
-    {
-        Asset* asset = assets->assets + assetIndex;
-        if(asset->paka.typeHashID == typeHashID && asset->paka.nameHashID == nameHashID && asset->paka.offsetFromOriginalOffset == colorationIndex)
-        {
-            result.coloration = V4(1, 1, 1, 1);
-            result.value = assetIndex;
-            
-            u16 clonedOffset = asset->paka.offsetFromOriginalOffset;
-            if(clonedOffset)
-            {
-                result.value = assetIndex - (u32) clonedOffset;
-                result.coloration = asset->paka.coloration.coloration;
-            }
-            break;
-        }
-	}
-    
-    
-    return result;
-}
-
-
-inline BitmapId FindBitmapByName(Assets* assets, char* assetName, u64 typeHashID, u64 nameHashID, u16 colorationIndex)
-{
-    BitmapId result = {};
-    
-    u64 assetHashID = StringHash(assetName);
-    u32 assetIndex = GetAssetIndex(assetHashID);
-    result = FindBitmapByName(assets, assetIndex, typeHashID, nameHashID, colorationIndex);
-    return result;
-}
-
-
-inline BitmapId FindBitmapByName(Assets* assets, char* assetName, u64 nameHashID)
-{
-    BitmapId result = {};
-    u64 assetHashID = StringHash(assetName);
-    u32 assetIndex = GetAssetIndex(assetHashID);
-    result = FindBitmapByName(assets, assetIndex, assetHashID, nameHashID, 0);
-    return result;
-}
-
-inline BitmapId FindBitmapByName(Assets* assets, u64 typeHashID, u64 nameHashID, u16 colorationIndex)
-{
-    BitmapId result = {};
-    
-    u32 assetID = GetAssetIndex(typeHashID);
-    result = FindBitmapByName(assets, assetID, typeHashID, nameHashID, colorationIndex);
-    return result;
-}
-
-inline MatchingAssetResult GetMatchingAsset_(Assets* assets, u32 assetID, u64 stringHashID, TagVector* values, TagVector* weights, LabelVector* labels)
-{
-    MatchingAssetResult result = {};
-    
-    r32 bestDiff = R32_MAX;
-    AssetType* type = assets->types + assetID;
-    u32 bestAsset = 0;
-    
-    for(u32 assetIndex = type->firstAssetIndex; 
-        assetIndex < type->onePastLastAssetIndex;
-        assetIndex++)
-    {
-        Asset* asset = assets->assets + assetIndex;
-        if(asset->paka.typeHashID == stringHashID)
-        {
-            r32 currentDiff = 0.0f;
-            for(u32 tagIndex = asset->paka.firstTagIndex; 
-                tagIndex < asset->paka.onePastLastTagIndex;
-                tagIndex++)
-            {
-                PakTag* tag = assets->tags + tagIndex;
-                if(!IsLabel(tag->ID))
-                {
-                    r32 tagDiff = Abs(tag->value - values->E[tag->ID]) * weights->E[tag->ID];
-                    currentDiff += tagDiff;
-                }
-            }
-            
-            
-            if(labels)
-            {
-                for(u32 labelIndex = 0; labelIndex - labels->labelCount; ++labelIndex)
-                {
-                    u32 searchingID = labels->IDs[labelIndex];
-                    r32 tagDiff = labels->values[labelIndex];
-                    
-                    for(u32 tagIndex = asset->paka.firstTagIndex; 
-                        tagIndex < asset->paka.onePastLastTagIndex;
-                        tagIndex++)
-                    {
-                        PakTag* tag = assets->tags + tagIndex;
-                        if(IsLabel(tag->ID) && tag->ID == searchingID)
-                        {
-                            tagDiff = Abs(labels->values[labelIndex] - tag->value);
-                            break;
-                        }
-                        
-                    }
-                    
-                    currentDiff += tagDiff;
-                }
-                
-            }
-            
-            if(currentDiff < bestDiff)
-            {
-                bestDiff = currentDiff;
-                
-                u16 clonedOffset = asset->paka.offsetFromOriginalOffset;
-                if(clonedOffset)
-                {
-                    result.cloned = true;
-                    result.clonedColoration = asset->paka.coloration.coloration;
-                }
-                result.assetIndex = assetIndex - (u32) clonedOffset;
-                Assert(result.assetIndex > 0);
-            }
-        }
-    }
-    
-    return result;
-}
-
-
-inline AssetMemoryHeader* GetAsset(Assets* assets, u32 ID, b32 insertAtLRUList = false)
+inline AssetMemoryHeader* GetAsset(Assets* assets, AssetID ID, b32 insertAtLRUList = false)
 {
     AssetMemoryHeader* result = 0;
     
-    Assert(ID < assets->assetCount);
-    Asset* asset = assets->assets + ID;
+    Asset* asset = GetAssetRaw(assets, ID);
     
     BeginAssetLock(assets);
     if(asset->state == Asset_loaded)
@@ -1199,12 +973,7 @@ inline Bitmap* GetBitmap(Assets* assets, BitmapId ID)
     Assert(IsValid(ID));
     
     AssetMemoryHeader* header = GetAsset(assets, ID.value, true);
-    Bitmap* result = 0;
-    
-    if(header)
-    {
-        result = &header->bitmap;
-    }
+    Bitmap* result = header ? &header->bitmap : 0;
     
     return result;
 }
@@ -1214,12 +983,8 @@ inline Font* GetFont(Assets* assets, FontId ID)
     Assert(IsValid(ID));
     
     AssetMemoryHeader* header = GetAsset(assets, ID.value);
-    Font* result = 0;
+    Font* result = header ? &header->font : 0;
     
-    if(header)
-    {
-        result = &header->font;
-    }
     return result;
 }
 
@@ -1228,27 +993,22 @@ inline Sound* GetSound(Assets* assets, SoundId ID)
     Assert(IsValid(ID));
     
     AssetMemoryHeader* header = GetAsset(assets, ID.value);
-    Sound* result = 0;
-    
-    if(header)
-    {
-        result = &header->sound;
-    }
+    Sound* result = header ? &header->sound : 0;
     
     return result;
 }
 
 inline Animation* GetAnimation(Assets* assets, AnimationId ID)
 {
+    
+}
+
+inline Skeleton* GetSkeleton(Assets* assets, SkeletonId ID)
+{
     Assert(IsValid(ID));
     
     AssetMemoryHeader* header = GetAsset(assets, ID.value);
-    Animation* result = 0;
-    
-    if(header)
-    {
-        result = &header->animation;
-    }
+    Skeleton* result = header ? &header->skeleton : 0;
     
     return result;
 }
@@ -1258,15 +1018,12 @@ inline VertexModel* GetModel(Assets* assets, ModelId ID)
     Assert(IsValid(ID));
     
     AssetMemoryHeader* header = GetAsset(assets, ID.value);
-    VertexModel* result = 0;
-    
-    if(header)
-    {
-        result = &header->model;
-    }
+    VertexModel* result = header ? &header->model : 0;
     
     return result;
 }
+
+
 
 inline PakBitmap* GetBitmapInfo(Assets* assets, BitmapId ID)
 {
@@ -1289,7 +1046,7 @@ inline PakSound* GetSoundInfo(Assets* assets, SoundId ID)
     return result;
 }
 
-inline PakAnimation* GetAnimationInfo(Assets* assets, AnimationId ID)
+inline PakAnimation* GetSkeletonInfo(Assets* assets, SkeletonId ID)
 {
     Assert(IsValid(ID));
     PakAnimation* result = &assets->assets[ID.value].paka.animation;
@@ -1303,31 +1060,7 @@ inline PakModel* GetModelInfo(Assets* assets, ModelId ID)
     return result;
 }
 
-inline SoundId GetNextSoundInChain(Assets* assets, SoundId ID)
-{
-    SoundId result = {};
-    PakSound* info = GetSoundInfo(assets, ID);
-    switch(info->chain)
-    {
-        case Chain_none:
-        {
-            
-        } break;
-        
-        case Chain_loop:
-        {
-            InvalidCodePath;
-            result = ID;
-        } break;
-        
-        case Chain_next:
-        {
-            result = { ID.value + 1 };
-        }
-    }
-    
-    return result;
-}
+
 
 inline u32 GetGlyphFromCodePoint(Font* font, PakFont* info, u32 desired)
 {
@@ -1375,88 +1108,7 @@ inline BitmapId GetBitmapForGlyph(Assets* assets, Font* font, PakFont* info, u32
     
 }
 
-
-inline u64 GetAssetHashForEntity(Assets* assets, TaxonomyTable* table, u32 taxonomy, u32 action, b32 dragging, r32 tileHeight)
+inline AnimationId GetAnimationForSkeleton(Assets* assets, Skeleton* skeleton, PakSkeleton* info, u32 animationIndex)
 {
-    char* resultS = Asset_standing;
-#if 0
-    TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
-    AnimationActionTree* tree = slot->actionTrees + action;
-    if(tree->root)
-    {
-        resultS = TraverseTree(Conditions);
-    }
-#endif
     
-    if(!IsObject(table, taxonomy))
-    {
-        switch(action)
-        {
-            case Action_Move:
-            {
-                resultS = Asset_moving;
-                
-                if(dragging)
-                {
-                    resultS = Asset_movingDragging;
-                }
-            } break;
-            
-            case Action_Attack:
-            {
-                resultS = Asset_attacking;
-            } break;
-            
-            case Action_Cast:
-            {
-                resultS = Asset_casting;
-            } break;
-            
-            case Action_Eat:
-            {
-                resultS = Asset_eating;
-            } break;
-            
-            case Action_Craft:
-            {
-                resultS = Asset_attacking;
-            } break;
-            
-            case Action_Rolling:
-            {
-                resultS = Asset_rolling;
-            } break;
-            
-            case Action_Protecting:
-            {
-                resultS = Asset_protecting;
-            } break;
-            
-            case Action_Drag:
-            {
-                resultS = Asset_standing;
-            } break;
-            
-            default:
-            {
-                resultS = Asset_standing;
-                if(dragging)
-                {
-                    resultS = Asset_standingDragging;
-                }
-            } break;
-        }
-    }
-    else
-    {
-        InvalidCodePath;
-    }
-    
-    if(tileHeight < SWALLOW_WATER_LEVEL)
-    {
-        resultS = Asset_swimming;
-    }
-    
-    u64 result = StringHash(resultS);
-    return result;
 }

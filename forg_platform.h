@@ -83,37 +83,7 @@ inline void EndTicketMutex(TicketMutex* mutex)
 
 #define U32FromPointer( pointer ) ( ( u32 ) ( memory_index ) ( pointer ) )
 #define PointerFromU32( type, value ) ( type* ) ( ( memory_index ) value )
-
 #define OffsetOf( type, name ) ( u32 ) ( &( ( type* ) 0 )->name )
-
-#pragma pack( push, 1 )
-struct BitmapId
-{
-    u32 value;
-    Vec4 coloration;
-};
-
-struct FontId
-{
-    u32 value;
-};
-
-struct AnimationId
-{
-    u32 value;
-};
-
-struct SoundId
-{
-    u32 value;
-};
-
-struct ModelId
-{
-    u32 value;
-};
-
-#pragma pack( pop )
 
 introspection() struct Rect2
 {
@@ -570,13 +540,9 @@ typedef enum PlatformFileType
     PlatformFile_uncompressedAsset,
     PlatformFile_savedGame,
     PlatformFile_image,
-    PlatformFile_animation,
+    PlatformFile_skeleton,
     PlatformFile_sound,
     PlatformFile_model,
-    PlatformFile_entityDefinition,
-    PlatformFile_assetDefinition,
-    PlatformFile_autocomplete,
-    PlatformFile_all,
     
     PlatformFile_count,
 } PlatformFileType;
@@ -767,6 +733,9 @@ struct PlatformServerMemory
 #endif
     
     PlatformAPI api;
+    
+    PlatformWorkQueue* fastQueue;
+    PlatformWorkQueue* slowQueue;
 };
 
 struct PlatformClientMemory

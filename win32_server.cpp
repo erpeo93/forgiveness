@@ -21,6 +21,7 @@
 #include "forg_server.h"
 #include "win32_file.cpp"
 #include "win32_process.cpp"
+#include "win32_thread.cpp"
 
 global_variable Win32MemoryBlock globalMemorySentinel;
 global_variable TicketMutex memoryMutex;
@@ -235,8 +236,6 @@ struct ServerFunctions
 {
     HMODULE serverDLL;
     FILETIME lastWriteTime;
-    server_network_stuff* NetworkStuff;
-    server_initialize* InitializeServer;
     server_simulate_worlds* SimulateWorlds;
     server_frame_end* ServerFrameEnd;
 };
@@ -246,8 +245,6 @@ internal void FreeServerCode( ServerFunctions* functions )
     FreeLibrary(functions->serverDLL);
     functions->serverDLL = {};
     
-    functions->NetworkStuff = 0;
-    functions->InitializeServer = 0;
     functions->SimulateWorlds = 0;
     functions->ServerFrameEnd = 0;
 }
@@ -275,8 +272,6 @@ ServerFunctions LoadServerCode( char* DLLName, char* tempDLLName, char* lockName
         if(serverDLL)
         {
             result.serverDLL = serverDLL;
-            result.NetworkStuff = ( server_network_stuff* ) GetProcAddress( serverDLL, "NetworkStuff" );
-            result.InitializeServer =( server_initialize* ) GetProcAddress( serverDLL, "InitializeServer" );
             result.SimulateWorlds = ( server_simulate_worlds* ) GetProcAddress( serverDLL, "SimulateWorlds" );
             result.ServerFrameEnd = ( server_frame_end* ) GetProcAddress( serverDLL, "ServerFrameEnd" );
         }
@@ -293,6 +288,14 @@ DebugTable* globalDebugTable = &globalDebugTable_;
 int main( int argc, char* argv[] )
 {
     SetUnhandledExceptionFilter((LPTOP_LEVEL_EXCEPTION_FILTER) CreateMiniDump);
+    
+    Win32ThreadStartup fastStartups[5] = {};
+    PlatformWorkQueue fastQueue = {};
+    Win32MakeQueue(&fastQueue, ArrayCount(fastStartups), fastStartups);
+    
+    Win32ThreadStartup slowStartups[1] = {};
+    PlatformWorkQueue slowQueue = {};
+    Win32MakeQueue(&slowQueue, ArrayCount(slowStartups), slowStartups);
     
     globalMemorySentinel.next = &globalMemorySentinel;
     globalMemorySentinel.prev = &globalMemorySentinel;
@@ -332,6 +335,12 @@ int main( int argc, char* argv[] )
     
     memory.api.net = Win32NetworkAPI;
     
+    memory.api.CompleteQueueWork = Win32CompleteQueueWork;
+    memory.api.PushWork = Win32PushWork;
+    
+    memory.fastQueue = &fastQueue;
+    memory.slowQueue = &slowQueue;
+    
     char* DLLName = "forg_server.dll";
     char* tempDLLName = "forg_server_temp.dll";
     char* lockName = "lockS.tmp";
@@ -359,11 +368,8 @@ int main( int argc, char* argv[] )
     
     if(Win32InitNetwork())
     {
-        functions.InitializeServer(&memory, universeIndex, editor);
         clock_t start = clock();
         r32 secondElapsed = 0;
-        
-        ServerState* server = memory.server;
         
         while(true)
         {
@@ -385,11 +391,6 @@ int main( int argc, char* argv[] )
             }
 #endif
             
-            if(functions.NetworkStuff)
-            {
-                functions.NetworkStuff(&memory, secondElapsed);
-            }
-            
             if(functions.SimulateWorlds)
             {
                 functions.SimulateWorlds(&memory, secondElapsed);
@@ -407,7 +408,6 @@ int main( int argc, char* argv[] )
             }
             start = end;
             secondElapsed = MSecondElapsed / 1000.0f;
-            server->elapsedMS5x = (u8) (MSecondElapsed / 5);
             
             
             FRAME_MARKER(secondElapsed);

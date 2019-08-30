@@ -118,6 +118,8 @@ internal void UpdateAndRenderBolt(GameModeWorld* worldMode, BoltCache* cache, Re
 
 inline void SpawnBolt(GameModeWorld* worldMode, RenderGroup* group, BoltCache* cache, Vec3 startP, Vec3 endP, u32 boltTaxonomy)
 {
+    
+#if 0    
     Bolt* bolt;
     FREELIST_ALLOC(bolt, cache->firstFreeBolt, PushStruct(cache->pool, Bolt));
     bolt->taxonomy = boltTaxonomy;
@@ -143,10 +145,14 @@ inline void SpawnBolt(GameModeWorld* worldMode, RenderGroup* group, BoltCache* c
             PlaySoundEvent(worldMode->soundState, group->assets, event, labelCount, labels, &cache->entropy, distanceFromPlayer);
         }
     }
+#endif
+    
 }
 
 internal void UpdateAndRenderBolts(GameModeWorld* worldMode, BoltCache* cache, r32 timeToUpdate, RenderGroup* group)
 {
+    
+#if 0    
     worldMode->boltTime += timeToUpdate;
     if(worldMode->boltTime > 3.0f)
     {
@@ -199,6 +205,8 @@ internal void UpdateAndRenderBolts(GameModeWorld* worldMode, BoltCache* cache, r
             boltPtr = &bolt->next;
         }
     }
+#endif
+    
 }
 
 

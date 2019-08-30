@@ -358,6 +358,8 @@ internal void InitParticleCache(ParticleCache* particleCache, Assets* assets, Me
 
 internal void UpdateAndRenderParticleEffects(GameModeWorld* worldMode, ParticleCache* particleCache, r32 dt, RenderGroup* group)
 {
+    
+#if 0    
     TaxonomySlot* particleEffects = GetSlotForTaxonomy(worldMode->table, worldMode->table->particleEffectsTaxonomy);
     for(u32 childIndex = 0; childIndex < particleEffects->subTaxonomiesCount; ++childIndex)
     {
@@ -389,4 +391,6 @@ internal void UpdateAndRenderParticleEffects(GameModeWorld* worldMode, ParticleC
             effectPtr = &effect->next;
         }
     }
+#endif
+    
 }

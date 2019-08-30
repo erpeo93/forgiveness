@@ -2,12 +2,6 @@
 
 #define MAX_ESSENCES_PER_EFFECT 3
 #define MAX_DIFFERENT_ESSENCES 32
-struct Recipe
-{
-    u32 taxonomy;
-    GenerationData gen;
-};
-
 struct RecipeIngredients
 {
     u32 count;

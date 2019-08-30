@@ -28,9 +28,9 @@ internal Rect2 UIOrthoTextOp(RenderGroup* group, Font* font, PakFont* info, char
             {
                 BitmapId ID = GetBitmapForGlyph( group->assets, font, info, codePoint );
                 
-                if( IsValid( ID ) )
+                if(IsValid(ID))
                 {
-                    PakBitmap* glyphInfo = GetBitmapInfo( group->assets, ID );
+                    PakBitmap* glyphInfo = GetBitmapInfo(group->assets, ID);
                     r32 glyphHeight = fontScale * glyphInfo->dimension[1];
                     if( op == TextOp_draw )
                     {

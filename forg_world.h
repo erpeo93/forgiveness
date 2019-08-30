@@ -1,7 +1,12 @@
 #pragma once
-#define WORLD_DIM 200.0f
 #define WORLD_CHUNK_SPAN 8
+#define CHUNK_DIM 8
 #define VOXEL_SIZE 2.0f
+
+struct GenerationData
+{
+    u64 generic;
+};
 
 struct UniversePos
 {
@@ -19,6 +24,7 @@ struct WorldTile
     r32 waterSine;
     b32 movingNegative;
     RandomSequence waterSeq;
+    
     r32 blueNoise;
     r32 alphaNoise;
     Lights lights;
@@ -31,8 +37,6 @@ struct WorldTile
 #endif
     r32 height;
     r32 waterLevel;
-    
-    u64 tileDefinitionHash;
 };
 
 struct TempLight

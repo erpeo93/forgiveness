@@ -37,16 +37,8 @@ struct ClientPrediction
     EntityAction action;
     
     u32 taxonomy;
-    GenerationData gen;
+    //GenerationData gen;
     u64 identifier;
-};
-
-enum DataFileSentType
-{
-    DataFileSent_Nothing,
-    DataFileSent_Everything,
-    DataFileSent_OnlyTaxonomies,
-    DataFileSent_OnlyAssets,
 };
 
 #define MAX_DATA_FILE_NAME_LENGTH 64

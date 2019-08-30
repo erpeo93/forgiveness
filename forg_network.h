@@ -212,15 +212,7 @@ enum Packet_Type
     Type_PopEditorElement,
     Type_EditTab,
     Type_ReloadEditingSlot,
-    Type_AddTaxonomy,
-    Type_CopyTaxonomy,
-    Type_DeleteTaxonomy,
-    Type_ReviveTaxonomy,
-    Type_InstantiateTaxonomy,
     Type_MovePlayerInOtherRegion,
-    Type_InstantiateRecipe,
-    Type_DeleteEntity,
-    Type_ImpersonateEntity,
     Type_PauseToggle,
     Type_ReloadAssets,
     Type_SaveSlotTabToFile,
@@ -240,25 +232,6 @@ struct SkillCategory
 {
     b32 unlocked;
     u32 taxonomy;
-};
-
-struct ActionRequest
-{
-    u32 sequenceNumber;
-    
-    Vec3 acceleration;
-    u32 desiredAction;
-    u64 targetEntityID;
-    u64 overlappingEntityID;
-};
-
-struct MoveRequest
-{
-    u64 sourceContainerID;
-    u8 sourceObjectIndex;
-    
-    u64 destContainerID;
-    u8 destObjectIndex;
 };
 
 struct EquipRequest
@@ -297,11 +270,6 @@ struct EquipDraggingRequest
     u32 slotIndex;
 };
 
-struct CraftRequest
-{
-    u32 taxonomy;
-    GenerationData gen;
-};
 
 struct CraftFromInventoryRequest
 {
@@ -374,7 +342,6 @@ struct LoginRequest
 struct GameAccessRequest
 {
     u32 challenge;
-    b32 sendDataFiles;
 };
 
 struct UpdateAck

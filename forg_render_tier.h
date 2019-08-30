@@ -12,12 +12,10 @@ struct RenderTexture
 struct Bitmap
 {
     void* pixels;
-    
     u16 width;
     u16 height;
     
     Vec2 pivot;
-    
     r32 nativeHeight;
     r32 widthOverHeight;
     

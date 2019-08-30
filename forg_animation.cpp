@@ -380,6 +380,7 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
     
     
     
+#if 0    
     TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, input->entity->taxonomy);
     BoneAlterations* boneAlterations = GetSlotData(slot, boneAlterations);
     for(EditorBoneAlteration* boneAlt = boneAlterations->firstBoneAlteration; boneAlt; boneAlt = boneAlt->next)
@@ -400,6 +401,7 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
             ass->alterations = assAlt->alt;
         }
     }
+#endif
     
     for(u32 boneIndex = 0; boneIndex < blended->boneCount; boneIndex++)
     {
@@ -698,6 +700,8 @@ inline void SetLabel(VisualLabel* dest, u64 ID, r32 value)
     dest->value = value;
 }
 
+
+#if 0
 internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* table, u32 taxonomy, GenerationData gen)
 {
     dest->componentCount = 0;
@@ -759,6 +763,7 @@ internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* tab
         }
     }
 }
+#endif
 
 inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 skeletonSkinHashID, ComponentsProperties* properties)
 {
@@ -809,6 +814,8 @@ inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 skeleton
     return result;
 }
 
+
+#if 0
 inline void GetLayoutAnimationPieces(AnimationFixedParams* input, BlendResult* output, ObjectLayout* layout, AnimationVolatileParams* params, ObjectState state)
 {
     output->boneCount = 1;
@@ -861,6 +868,7 @@ inline void GetLayoutAnimationPieces(AnimationFixedParams* input, BlendResult* o
         }
     }
 }
+#endif
 
 inline Rect2 GetBitmapRect(Bitmap* bitmap, Vec2 pivot, Vec3 originOffset, r32 angle, b32 flipOnYAxis, Vec2 scale)
 {
@@ -919,6 +927,8 @@ inline Rect2 GetPiecesBound(RenderGroup* group, BlendResult* blended, AnimationV
     return result;
 }
 
+
+#if 0
 inline Rect2 GetLayoutBounds(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, AnimationVolatileParams* params, ObjectState state)
 {
     BlendResult blended;
@@ -961,7 +971,10 @@ inline b32 DrawModularPiece(AnimationFixedParams* input, RenderGroup* group, Vec
     
     return result;
 }
+#endif
 
+
+#if 0
 inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, RenderGroup* group,  ClientAnimationEffect* clientEffect, ClientEntity* entity, Vec3 P,Vec4* colorIn, r32 timeToAdvance)
 {
     AnimationEffect* effect = &clientEffect->effect;
@@ -979,6 +992,7 @@ inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, RenderGroup*
         
         case AnimationEffect_SpawnParticles:
         {
+            
             ParticleEffect* particleEffect = clientEffect->particleRef;
             if(!particleEffect)
             {
@@ -1180,6 +1194,7 @@ internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* ent
         }
     }
 }
+#endif
 
 inline r32 ArrangeObjects(u8 gridDimX,u8 gridDimY, Vec3 originalGridDim)
 {
@@ -1194,7 +1209,7 @@ struct RenderAssResult
     r32 distanceFromAssCenter;
 };
 
-inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, SlotName spriteReferenceSlot, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender, b32 isEquipmentAss, Vec4 proceduralColor = V4(1, 1, 1, 1))
+inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, u32 spriteReferenceSlot, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender, b32 isEquipmentAss, Vec4 proceduralColor = V4(1, 1, 1, 1))
 {
     RenderAssResult result = {};
     
@@ -1287,6 +1302,8 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                         PushRect(group, debugCell, cellDebugRect, V4(0, 0, 0, 0.7f));
                     }
                     
+                    
+#if 0                    
                     for(u8 Y = 0; Y < gridDimY; ++Y)
                     {
                         for(u8 X = 0; X < gridDimX; ++X)
@@ -1389,6 +1406,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                             }
                         }
                     }
+#endif
                 }
                 else
                 {
@@ -1422,6 +1440,8 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                     
                     Vec4 color = Hadamart(pieceParams.color, ass->color);
                     
+                    
+#if 0                    
                     for(ClientAnimationEffect* effect = input->firstActiveEffect; effect; effect = effect->next)
                     {
                         if(effect->referenceSlot == (u32) spriteReferenceSlot)
@@ -1446,6 +1466,7 @@ inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup*
                             }
                         }
                     }
+#endif
                     
                     Vec2 pivot = sprite->pivot;
                     BitmapDim dim = PushBitmapWithPivot(group, objectTransform, BID, P, pivot, 0, finalScale, color, pieceParams.lights);
@@ -1581,7 +1602,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                                             input->goOutTime, input->cameInTime, input->entity->status);
                 proceduralColor.a *= alpha;
                 
-                RenderAssResult render = RenderPieceAss_(input, group, P, sprite, Slot_None, parentBone, &currentAss, params, false, true,  proceduralColor);
+                RenderAssResult render = RenderPieceAss_(input, group, P, sprite, 0, parentBone, &currentAss, params, false, true,  proceduralColor);
                 
                 if(render.onFocus)
                 {
@@ -1636,7 +1657,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
                         pieceParams.modulationWithFocusColor = input->defaultModulatonWithFocusColor;
                     }
                     
-                    if(RenderPieceAss_(input, group, P, spriteInfo, (SlotName) equipment->slot, parentBone, equipmentAss, &pieceParams, false, true).onFocus)
+                    if(RenderPieceAss_(input, group, P, spriteInfo, equipment->slot, parentBone, equipmentAss, &pieceParams, false, true).onFocus)
                     {
                         input->output->focusSlots = equipment->slot;
                     }
@@ -1661,7 +1682,7 @@ inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* g
         Vec4 proceduralColor = input->defaultColoration;
         ApplyAssAlterations(&currentAss, assAlt, parentBone, &proceduralColor);
         
-        RenderPieceAss_(input, group, P, sprite, Slot_None, parentBone, &currentAss, params, false, false, Hadamart(proceduralColor, V4(0.1f, 0.1f, 0.1f, 1)));
+        RenderPieceAss_(input, group, P, sprite, 0, parentBone, &currentAss, params, false, false, Hadamart(proceduralColor, V4(0.1f, 0.1f, 0.1f, 1)));
         
         if(input->debug.showPivots)
         {
@@ -2167,47 +2188,6 @@ internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup
     return result;
 }
 
-inline r32 GetChunkyness(WorldTile* t0, WorldTile* t1)
-{
-    r32 result = (t0->taxonomy == t1->taxonomy) ? t0->chunkynessSame : t0->chunkynessOther;
-    return result;
-}
-
-inline Vec3 GetTileColorDelta(WorldTile* tile, RandomSequence* seq)
-{
-    Vec4 delta = tile->colorDelta;
-    r32 noiseBilateral = (tile->layoutNoise - 0.5f) * 2.0f;
-    
-    Vec3 noisy;
-    noisy.r = delta.r * noiseBilateral;
-    noisy.g = delta.g * noiseBilateral;
-    noisy.b = delta.b * noiseBilateral;
-    
-    
-    Vec3 random;
-    random.r = delta.r * RandomBil(seq);
-    random.g = delta.g * RandomBil(seq);
-    random.b = delta.b * RandomBil(seq);
-    
-    
-    Vec3 result = Lerp(noisy, tile->colorRandomness, random);
-    
-    return result;
-}
-
-inline Vec4 GetTileColor(WorldTile* tile, b32 uniformColor, RandomSequence* seq)
-{
-    Vec4 color = tile->baseColor;
-    if(!uniformColor)
-    {
-        color.rgb += GetTileColorDelta(tile, seq);
-    }
-    
-    color = Clamp01(color);
-    color = SRGBLinearize(color);
-    return color;
-}
-
 inline Vec4 BlendTilesColor(WorldTile* t0, WorldTile* t1, WorldTile* t2, WorldTile* t3)
 {
     Vec4 result = V4(t0->baseColor.rgb + t1->baseColor.rgb + t2->baseColor.rgb + t3->baseColor.rgb * (1.0f / 4.0f), 1.0f);
@@ -2234,67 +2214,6 @@ inline Vec4 ComputeWeightedChunkColor(WorldChunk* chunk)
 
 
 
-inline Vec4 GetWaterColor(WorldTile* tile)
-{
-    Vec4 waterColor = {};
-    if(tile->waterLevel < WATER_LEVEL)
-    {
-        r32 maxColorDisplacement = 0.4f * WATER_LEVEL;
-        r32 maxAlphaDisplacement = 0.3f * WATER_LEVEL;
-        
-        Vec3 minColorDeep = V3(0.0f, 0.03f, 0.05f);
-        Vec3 maxColorDeep = V3(0.0f, 0.08f, 0.4f);
-        
-        r32 maxAlphaDeep = 1.0f;
-        r32 minAlphaDeep = 0.7f;
-        
-        Vec3 minColorSwallow = V3(0.0f, 0.1f, 0.78f);
-        Vec3 maxColorSwallow = V3(0.65f, 0.75f, 1.0f);
-        
-        r32 maxAlphaSwallow = 1.0f;
-        r32 minAlphaSwallow = 0.0f;
-        
-        r32 sineWaterLevel = Clamp01MapToRange(0.85f * WATER_LEVEL, tile->waterLevel, WATER_LEVEL);
-        r32 normalizedWaterLevel = Clamp01MapToRange(0, tile->waterLevel, 0.95f * WATER_LEVEL);
-        normalizedWaterLevel = Pow(normalizedWaterLevel, 15.0f);
-        
-        Vec3 minColor = Lerp(minColorDeep, normalizedWaterLevel, minColorSwallow);
-        Vec3 maxColor = Lerp(maxColorDeep, normalizedWaterLevel, maxColorSwallow);
-        
-        r32 minAlpha = Lerp(minAlphaDeep, normalizedWaterLevel, minAlphaSwallow);
-        r32 maxAlpha = Lerp(maxAlphaDeep, normalizedWaterLevel, maxAlphaSwallow);
-        
-        r32 blueNoise = tile->blueNoise;
-        r32 alphaNoise = tile->alphaNoise;
-        
-        r32 sine = Sin(DegToRad(tile->waterSine));
-        r32 blueSine = sine;
-        r32 alphaSine = sine;
-        
-        
-        r32 blueNoiseSine = Lerp(blueNoise, sineWaterLevel, blueSine);
-        r32 alphaNoiseSine = Lerp(alphaNoise, sineWaterLevel, alphaSine);
-        
-        
-        r32 blueDisplacement = blueNoiseSine * maxColorDisplacement;
-        r32 alphaDisplacement = alphaNoiseSine * maxAlphaDisplacement;
-        
-        
-        r32 blueLerp = Clamp01MapToRange(0, tile->waterLevel + blueDisplacement, WATER_LEVEL);
-        
-        r32 alphaLevel = tile->waterLevel + alphaDisplacement;
-        
-        r32 alphaLerp = Clamp01MapToRange(0, alphaLevel, WATER_LEVEL);
-        alphaLerp = Pow(alphaLerp, 2.2f);
-        
-        Vec3 color = Lerp(minColor, blueLerp, maxColor);
-        r32 alpha = Lerp(maxAlpha, alphaLerp, minAlpha);
-        
-        waterColor = V4(color, alpha);
-    }
-    
-    return waterColor;
-}
 
 
 inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, TaxonomySlot* slot, u64 nameHash, r32 oldSoundTime, r32 soundTime)

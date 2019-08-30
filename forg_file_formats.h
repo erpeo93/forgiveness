@@ -1,38 +1,21 @@
 #pragma once
+#pragma pack(push, 1)
 
-#pragma pack( push, 1 )
+#define PAK_CODE( a, b, c, d ) ((u32) ( ( a ) << 0 ) | ( u32 ) ( ( b ) << 8 ) | ( u32 ) ( ( c ) << 16 ) | ( u32 ) ( ( d ) << 24 ) ) 
 
-#define PAK_CODE( a, b, c, d ) ( ( u32 ) ( ( a ) << 0 ) | ( u32 ) ( ( b ) << 8 ) | ( u32 ) ( ( c ) << 16 ) | ( u32 ) ( ( d ) << 24 ) ) 
-
-#define PAK_MAGIC_NUMBER PAK_CODE( 'h', 'h', 'a', 'f' )
+#define PAK_MAGIC_NUMBER PAK_CODE('h', 'h', 'a', 'f')
 #define PAK_VERSION 0
-
 
 struct PAKHeader
 {
     u32 magicValue;
     u32 version;
     
-    u32 tagCount;
-    u32 assetTypeCount;
+    u32 assetType;
+    u32 assetSubType;
     u32 assetcount;
     
-    u64 tagOffset;
-    u64 assetTypeOffset;
     u64 assetOffset;
-};
-
-struct PakAssetType
-{
-    u32 ID;
-    u32 firstAssetIndex;
-    u32 onePastLastAssetIndex;
-};
-
-struct PakTag
-{
-    u32 ID;
-    r32 value;
 };
 
 struct PakBitmap
@@ -50,7 +33,6 @@ struct PakBitmap
 struct PakGlyph
 {
     u32 unicodeCodePoint;
-    BitmapId bitmapId;
 };
 
 struct PakFont
@@ -59,7 +41,6 @@ struct PakFont
     r32 ascenderHeight;
     r32 descenderHeight;
     r32 externalLeading;
-    
     u32 onePastHighestCodePoint;
     
     // NOTE( Leonardo ): data is:
@@ -67,13 +48,6 @@ struct PakFont
     PakGlyph codePoints[glyphsCount];
     r32* horizintalAdvance[glyphsCount][glyphsCount];
     */
-};
-
-enum SoundChain
-{
-    Chain_none,
-    Chain_loop,
-    Chain_next,
 };
 
 struct PakSound
@@ -91,16 +65,17 @@ struct PakSound
     */
 };
 
-struct PakAnimation
+struct PakSkeleton
 {
-    u32 spriteCount;
-    u32 frameCount;
-    u32 boneCount;
-    u32 assCount;
+    u32 animationCount;
     
     // NOTE( Leonardo ): data is:
     /*
-    AnimationHeader header;
+    u32 spriteCount[animationCount];
+    u32 frameCount[animationCount];
+    u32 boneCount[animationCount];
+    u32 assCount[animationCount];
+    AnimationHeader header[animationCount];
     FrameData* frames;
     Bone* bones;
     PieceAss* ass;
@@ -118,34 +93,29 @@ struct PakModel
     //ModelFace* faces;
 };
 
-struct PakColoration
+
+struct PakDataFile
 {
-    Vec4 coloration;
+    u32 colorCount;
     
-    // NOTE(Leonardo): data is: 
-    //nothing!
+    // NOTE(Leonardo): data is:
+    //Vec3* colors;
 };
 
 struct PakAsset
 {
     u64 dataOffset;
-    u32 firstTagIndex;
-    u32 onePastLastTagIndex;
-    u16 offsetFromOriginalOffset;
-    u64 typeHashID;
-    u64 nameHashID;
-    
     union
     {
         PakBitmap bitmap;
         PakSound sound;
-        PakAnimation animation;
+        PakSkeleton skeleton;
         PakFont font;
-        PakColoration coloration;
         PakModel model;
+        PakDataFile data;
     };
 };
 
-#pragma pack( pop )
+#pragma pack(pop)
 
 

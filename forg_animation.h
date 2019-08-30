@@ -70,7 +70,6 @@ struct PieceResult
     Vec2 scale;
     r32 alpha;
     u32 assetIndex;
-    r32 tags[Tag_count];
 };
 
 struct VisualComponent
@@ -79,7 +78,6 @@ struct VisualComponent
     u8 index;
     
     u32 labelCount;
-    VisualLabel labels[8];
 };
 
 struct ComponentsProperties

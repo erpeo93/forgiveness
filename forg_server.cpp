@@ -8,14 +8,13 @@
 #include "forg_token.cpp"
 #include "forg_pool.cpp"
 #include "forg_meta.cpp"
-#include "forg_taxonomy.cpp"
-#include "forg_entity.cpp"
 #include "forg_physics.cpp"
-#include "physics_server.cpp"
-#include "forg_bound.cpp"
-#include "forg_object.cpp"
+
+#if 0
+//#include "physics_server.cpp"
+//#include "forg_bound.cpp"
+//#include "forg_object.cpp"
 #include "forg_crafting.cpp"
-#include "forg_world.cpp"
 #include "forg_world_generation.cpp"
 #include "forg_world_server.cpp"
 #include "forg_network_server.cpp"
@@ -26,10 +25,16 @@
 #include "forg_AI.cpp"
 #include "forg_action_effect.cpp"
 #include "forg_essence.cpp"
-#include "forg_region.cpp"
 #include "miniz.c"
+#endif
+
+#include "forg_network_server.cpp"
+#include "forg_world.cpp"
+#include "forg_world_server.cpp"
 
 #pragma comment(lib, "wsock32.lib")
+
+#include "asset_builder.cpp"
 
 #if FORGIVENESS_INTERNAL
 DebugTable* globalDebugTable;
@@ -86,6 +91,8 @@ inline ForgFile* FindFile(ServerState* server, ForgFile** firstFilePtr, char* fi
     return result;
 }
 
+
+#if 0
 inline void AddAllPakFileHashes(ServerState* server)
 {
     char* pakPath = "assets";
@@ -151,6 +158,8 @@ inline void ReloadServer(ServerState* server)
     WriteDataFiles(server->activeTable);
     ImportAllFiles();
 }
+#endif
+
 
 PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 {
@@ -162,7 +171,7 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
     }
 }
 
-internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* player, unsigned char* packetPtr, u16 dataSize)
+internal void DispatchApplicationPacket(ServerState* server, Player* player, u32 playerID,  unsigned char* packetPtr, u16 dataSize)
 {
     u32 challenge = 1111;
     
@@ -172,20 +181,13 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
     packetPtr = ForgUnpackHeader(packetPtr, &header);
     switch(header.packetType)
     {
-        // TODO( Leonardo ): type_register, type_activate and type_selectHero
         case Type_login:
         {
-            // TODO( Leonardo ): get these from the client!
             char* username = "leo";
             char* password = "1234";
-            
-            if(true)//SQLCheckPassword( server->conn, username, password ) )
+            if(true)
             {
-                // TODO( Leonardo ): send message to correct server so that it can add the serverPlayer! in this case WE ARE ALWAYS the correct server.
-                //ResetSecureSeeds(newC, &server->playerSeedSequence); 
-                // TODO( Leonardo ): change login port whit whatever port 
-                //the player is in
-                b32 editingEnabled = server->editor;
+                b32 editingEnabled = false;
                 SendLoginResponse(player, LOGIN_PORT, challenge, editingEnabled);
             }
             else
@@ -198,41 +200,18 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
         case Type_gameAccess:
         {
             GameAccessRequest clientReq;
-            unpack(packetPtr, "Ll", &clientReq.challenge, &clientReq.sendDataFiles); 
+            unpack(packetPtr, "L", &clientReq.challenge); 
             if(challenge == clientReq.challenge)
             {
-                if(clientReq.sendDataFiles)
-                {
-                    InvalidCodePath;
-                    
-#if RESTRUCTURING                    
-                    SendAllDataFiles(server->editor, player, DataFileSent_Everything);
-                    SendAllDataFileSentMessage(player, DataFileSent_Everything);
-                    player->allDataFileSent = true;
-#endif
-                    
-                }
+                UniversePos P = {};
+                P.chunkX = 1;
+                P.chunkY = 1;
                 
-                PlayerPermanent* permanent = &server->editorPlayerPermanent;
-                SimRegion* region = GetServerRegion( server, permanent->regionX, permanent->regionY);
-                Vec3 P = permanent->P;
+                u32 ID = AddEntity(server, P, playerID);
+                SendGameAccessConfirm(player, server->worldSeed, ID);
                 
-                TaxonomySlot* slot = NORUNTIMEGetTaxonomySlotByName( region->taxTable, "centaur" );
-                u64 identifier = AddEntity(region, P, slot->taxonomy, NullGenerationData(), PlayerAddEntityParams(player->playerID));
-                
-                
-                TaxonomySlot* testSlot = NORUNTIMEGetTaxonomySlotByName(region->taxTable, "strength");
-                AddEntity(region, P + V3( 10.0f, 0.0f, 0.0f ), testSlot->taxonomy, NullGenerationData(), EntityFromObject(identifier, 0, 0));
-                
-                
-                SendGameAccessConfirm(player, server->worldSeed, identifier, 0, server->elapsedMS5x);
-                
-#if FORGIVENESS_INTERNAL
-                if(!server->debugPlayer)
-                {
-                    server->debugPlayer = player;
-                }
-#endif
+                P.chunkOffset.x = 1.0f;
+                AddEntity(server, P, 0);
             }
             else
             {
@@ -241,6 +220,7 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
         } break;
         
         
+#if 0        
         case Type_RegenerateWorldChunks:
         {
             if(server->editor)
@@ -294,21 +274,6 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
             }
         } break;
         
-        case Type_InstantiateTaxonomy:
-        case Type_InstantiateRecipe:
-        case Type_DeleteEntity:
-        {
-            if(server->editor)
-            {
-                if(player->requestCount < ArrayCount(player->requests))
-                {
-                    PlayerRequest* request = player->requests + player->requestCount++;
-                    Assert(dataSize < ArrayCount(request->data));
-                    Copy(dataSize, request->data, original);
-                }
-            }
-        } break;
-        
         case Type_PauseToggle:
         {
             if(server->editor)
@@ -325,10 +290,11 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
             ForgFile* file = FindFile(server, &player->files, filename);
             file->hash = hash;
         } break;
+#endif
         
         default:
         {
-            if(!server->gamePaused && player->requestCount < ArrayCount(player->requests))
+            if(player->requestCount < ArrayCount(player->requests))
             {
                 PlayerRequest* request = player->requests + player->requestCount++;
                 Assert(dataSize < ArrayCount(request->data));
@@ -338,14 +304,15 @@ internal void DispatchApplicationPacket(ServerState* server, ServerPlayer* playe
     }
 }
 
-internal void DispatchPlayerMessages()
+internal void DispatchPlayerMessages(ServerState* server)
 {
     server->elapsedTime = 0.1f;
     for( u32 playerIndex = 0; 
         playerIndex < MAXIMUM_SERVER_PLAYERS; 
         playerIndex++ )
     {
-        ServerPlayer* player = server->players + playerIndex;
+        u32 playerID = playerIndex;
+        Player* player = server->players + playerIndex;
         if(player->connectionSlot)
         {
             b32 allPacketSent = QueueAndFlushAllPackets(server, player, server->elapsedTime);
@@ -355,7 +322,7 @@ internal void DispatchPlayerMessages()
                 {
                     platformAPI.net.CloseConnection(&server->clientInterface, player->connectionSlot);
                     player->connectionSlot = 0;
-                    RecyclePlayer(server, player);
+                    //RecyclePlayer(server, player);
                 }
             }
             else
@@ -399,7 +366,7 @@ internal void DispatchPlayerMessages()
                             NetworkPacketReceived* test = receiver->orderedWindow + index;
                             if(test->dataSize)
                             {
-                                DispatchApplicationPacket(server, player, test->data + sizeof(ForgNetworkApplicationData), test->dataSize - sizeof(ForgNetworkApplicationData));
+                                DispatchApplicationPacket(server, player, playerID, test->data + sizeof(ForgNetworkApplicationData), test->dataSize - sizeof(ForgNetworkApplicationData));
                                 test->dataSize = 0;
                                 ++dispatched;
                             }
@@ -417,7 +384,7 @@ internal void DispatchPlayerMessages()
                         if(ApplicationIndexGreater(applicationData, receiver->unorderedBiggestReceived))
                         {
                             receiver->unorderedBiggestReceived = applicationData;
-                            DispatchApplicationPacket(server, player, packetPtr, received.dataSize - sizeof(ForgNetworkApplicationData));
+                            DispatchApplicationPacket(server, player, playerID, packetPtr, received.dataSize - sizeof(ForgNetworkApplicationData));
                         }
                     }
                 }
@@ -427,47 +394,13 @@ internal void DispatchPlayerMessages()
 }
 
 
-internal ServerPlayer* FirstFreePlayer(ServerState* server)
+internal Player* FirstFreePlayer(ServerState* server)
 {
-    ServerPlayer* result = server->firstFree;
-    if(!result)
-    {
-        Assert(server->currentPlayerIndex < (MAXIMUM_SERVER_PLAYERS - 1));
-        u32 index = ++server->currentPlayerIndex;
-        
-        result = server->players + index;
-        result->playerID = index;
-        
-        result->standardPacketQueue = {};
-        result->reliablePacketQueue = {};
-    }
-    
-    result->standardPacketQueue.nextSendApplicationData = {};
-    result->reliablePacketQueue.nextSendApplicationData = {};
-    
-    Assert(!result->standardPacketQueue.firstPacket);
-    Assert(!result->standardPacketQueue.lastPacket);
-    
-    Assert(!result->reliablePacketQueue.firstPacket);
-    Assert(!result->reliablePacketQueue.lastPacket);
-    
-    result->connectionClosed = false;
-    result->overlappingEntityID = 0;
-    result->requestCount = 0;
-    result->ignoredActionCount = 0;
-    result->draggingEntity = {};
-    result->unlockedCategoryCount = 0;
-    result->recipeCount = 0;
-    result->allDataFileSent = false;
-    result->allPakFileSent = false;
-    result->pakFileIndex = 0;
-    result->pakFileOffset = 0;
-    
-    
+    Assert(server->playerCount < ArrayCount(server->players));
+    Player* result = server->players + server->playerCount++;
+    *result = {};
     ResetReceiver(&result->receiver);
     
-    server->firstFree = result->next;
-    result->next = 0;
     return result;
 }
 
@@ -483,23 +416,18 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         server = memory->server = BootstrapPushStruct(ServerState, worldPool);
         // NOTE(Leonardo): sqlite test!
         
-        Win32ThreadStartup fastStartups[5] = {};
-        Win32MakeQueue(&server->fastQueue, ArrayCount(fastStartups), fastStartups);
+        server->fastQueue = memory->fastQueue;
+        server->slowQueue = memory->slowQueue;
         
-        Win32ThreadStartup slowStartups[1] = {};
-        Win32MakeQueue(&server->slowQueue, ArrayCount(slowStartups), slowStartups);
-        
-        for( u32 taskIndex = 0; 
-            taskIndex < ArrayCount( server->tasks ); 
-            taskIndex++ )
+        for(u32 taskIndex = 0; 
+            taskIndex < ArrayCount(server->tasks); 
+            taskIndex++)
         {
             TaskWithMemory* task = server->tasks + taskIndex;
             task->beingUsed = false;
         }
         
-        
         server->networkPool.allocationFlags = PlatformMemory_NotRestored;
-        server->players = PushArray(&server->networkPool, ServerPlayer, MAXIMUM_SERVER_PLAYERS);
         
         u16 maxConnectionCount = 2;
         NetworkConnection* connections = PushArray(&server->networkPool, NetworkConnection, maxConnectionCount);
@@ -509,19 +437,29 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         server->receivePacketWork.network = &server->clientInterface;
         server->receivePacketWork.ReceiveData = platformAPI.net.ReceiveData;
-        Win32PushWork(&server->slowQueue, ReceiveNetworkPackets, &server->receivePacketWork);
+        platformAPI.PushWork(server->slowQueue, ReceiveNetworkPackets, &server->receivePacketWork);
         
         server->worldSeed = (u32) time(0);
         
+        server->playerCount = 1;
+        server->entityCount = 1;
+#if 0   
+        if(editor)
+        {
+            BuildAssets();
+        }
         
-        platformAPI.DeleteFileWildcards("assets", "*");
-        
-        BuildAssetsSync(server);
-        WriteDataFiles(server->activeTable);
         AddAllPakFileHashes(server);
-        ImportAllFiles();
+        Assets* assets = InitAssets(JustEntityDefinitionFiles);
+        
+        if(editor)
+        {
+            AddReloadAssetsWatch();
+        }
         
         BuildWorld(server, GenerateWorld_OnlyChunks);
+#endif
+        
     }
     
     
@@ -532,14 +470,13 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     for(u32 newConnectionIndex = 0; newConnectionIndex < accepted; ++newConnectionIndex)
     {
         u16 connectionSlot = newConnections[newConnectionIndex];
-        ServerPlayer* player = FirstFreePlayer(server);
+        Player* player = FirstFreePlayer(server);
         player->connectionSlot = connectionSlot;
     }
     
-    DispatchPlayerMessages();
-    UpdateSeasonTimer();
-    MoveEntities();
-    SendEntityUpdates();
+    DispatchPlayerMessages(server);
+    HandlePlayersRequest(server);
+    MoveEntitiesAndSendUpdates(server);
 }
 
 

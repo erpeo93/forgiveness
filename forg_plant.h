@@ -294,10 +294,10 @@ struct Plant
     r32 flowerDensity;
     r32 fruitDensity;
     
-    BitmapId leafBitmap;
-    BitmapId flowerBitmap;
-    BitmapId fruitBitmap;
-    BitmapId trunkBitmap;
+    AssetID leafBitmap;
+    AssetID flowerBitmap;
+    AssetID fruitBitmap;
+    AssetID trunkBitmap;
     
     Plant* nextFree;
 };

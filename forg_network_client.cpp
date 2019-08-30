@@ -78,10 +78,10 @@ internal void LoginRequest(i32 password)
     CloseAndSendReliablePacket();
 }
 
-internal void GameAccessRequest(u32 challenge, b32 requestDataFiles)
+internal void GameAccessRequest(u32 challenge)
 {
     StartPacket(gameAccess);
-    Pack("Ll", challenge, requestDataFiles);
+    Pack("L", challenge);
     CloseAndSendReliablePacket();
 }
 
@@ -132,10 +132,10 @@ internal void TrackUpdate( ClientPlayer* player, Vec3 acceleration, Vec3 velocit
     
 }
 
-internal void SendUpdate(Vec3 acceleration, u64 targetEntityID, u32 desiredAction, u64 overlappingEntityID)
+internal void SendUpdate(Vec3 acceleration)
 {
     StartPacket(ActionRequest);
-    Pack("LVLQQ", 0, acceleration, desiredAction, targetEntityID, overlappingEntityID);
+    Pack("V", acceleration);
     CloseAndSendStandardPacket();
 }
 
@@ -323,68 +323,10 @@ inline void SendReloadEditingMessage(u32 taxonomy, u32 tabIndex)
     CloseAndSendReliablePacket();
 }
 
-inline void SendAddTaxonomyRequest(u32 parentTaxonomy, char* name)
-{
-    StartPacket(AddTaxonomy);
-    Pack("Ls", parentTaxonomy, name);
-    CloseAndSendReliablePacket();
-}
-
-inline void SendCopyTaxonomyRequest(u32 taxonomy)
-{
-    StartPacket(CopyTaxonomy);
-    Pack("L", taxonomy);
-    CloseAndSendReliablePacket();
-}
-
-inline void SendDeleteTaxonomyRequest(u32 taxonomy)
-{
-    StartPacket(DeleteTaxonomy);
-    Pack("L", taxonomy);
-    CloseAndSendReliablePacket();
-}
-
-inline void SendReviveTaxonomyRequest(u32 taxonomy)
-{
-    StartPacket(ReviveTaxonomy);
-    Pack("L", taxonomy);
-    CloseAndSendReliablePacket();
-}
-
-inline void SendInstantiateRecipeRequest(u32 taxonomy, u64 recipeIndex, Vec3 offset)
-{
-    StartPacket(InstantiateRecipe);
-    Pack("LQV", taxonomy, recipeIndex, offset);
-    CloseAndSendReliablePacket();
-}
-
-
-inline void SendInstantiateTaxonomyRequest(u32 taxonomy, Vec3 offset, r32 generationIntensity)
-{
-    generationIntensity = Clamp01(generationIntensity);
-    StartPacket(InstantiateTaxonomy);
-    Pack("LVd", taxonomy, offset, generationIntensity);
-    CloseAndSendReliablePacket();
-}
-
 inline void SendMovePlayerRequest(Vec3 offset)
 {
     StartPacket(MovePlayerInOtherRegion);
     Pack("V", offset);
-    CloseAndSendReliablePacket();
-}
-
-inline void SendDeleteRequest(u64 identifier)
-{
-    StartPacket(DeleteEntity);
-    Pack("Q", identifier);
-    CloseAndSendReliablePacket();
-}
-
-inline void SendImpersonateRequest(u64 identifier)
-{
-    StartPacket(ImpersonateEntity);
-    Pack("Q", identifier);
     CloseAndSendReliablePacket();
 }
 
@@ -435,18 +377,7 @@ inline SavedNameSlot* GetNameSlot( DebugTable* debugTable, u64 pointer )
 }
 #endif
 
-inline void MarkFileAsArrived(GameModeWorld* worldMode, char* filename)
-{
-    for(ToDeleteFile* file = worldMode->firstFileToDelete; file; file = file->next)
-    {
-        if(StrEqual(StrLen(file->filename), file->filename, filename))
-        {
-            file->toDelete = false;
-            break;
-        }
-    }
-}
-
+inline ClientEntity* GetEntityClient(GameModeWorld* worldMode, u64 ID, b32 canAllocate);
 inline void SignalAnimationSyncCompleted(AnimationState* animation, u32 action, AnimationSyncState state);
 inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, EntityAction action, u64 targetID, u32 animationEffectFlags);
 inline void AddSkillAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, u32 skillTaxonomy, u64 targetID, u32 animationEffectFlags);
@@ -484,6 +415,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 clientNetwork->nextSendUnreliableApplicationData = {};
                 clientNetwork->nextSendReliableApplicationData = {};
                 
+                
+#if 0                
                 for(u32 fileIndex = 0; fileIndex < gameState->assets->fileCount; fileIndex++)
                 {
                     AssetFile* file = gameState->assets->files + fileIndex;
@@ -495,19 +428,15 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         SendFileHash(handle->name, hash);
                     }
                 }
+#endif
                 
                 clientNetwork->serverChallenge = login.challenge;
-                GameAccessRequest(clientNetwork->serverChallenge, true);
+                GameAccessRequest(clientNetwork->serverChallenge);
             } break;
             
             case Type_gameAccess:
             {
-                u8 serverMS5x;
-                
-                Unpack("LQQC", &worldMode->worldSeed, &worldMode->player.identifier, &worldMode->player.openedContainerID, &serverMS5x);
-                
-                r32 lastFrameFPS = 1000.0f / (serverMS5x * 5.0f);
-                clientNetwork->serverFPS = Lerp(clientNetwork->serverFPS, 0.8f, lastFrameFPS);
+                Unpack("QL", &worldMode->worldSeed, &worldMode->player.identifier);
             } break;
             
             case Type_worldInfo:
@@ -517,8 +446,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             
             case Type_entityHeader:
             {
-                u64 identifier;
-                Unpack("Q", &identifier);
+                u32 identifier;
+                Unpack("L", &identifier);
                 
                 currentEntity = GetEntityClient(worldMode, identifier, true);
                 currentEntity->identifier = identifier;
@@ -531,61 +460,12 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 ClientEntity* e = currentEntity;
                 Assert(e);
                 
-                EntityAction oldAction = e->action;
-                
-                r32 oldLifePoints = e->lifePoints;
-                r32 oldStamina = e->stamina;
-                
-                Unpack("llVLLQCLddddddd", &P.chunkX, &P.chunkY, &P.chunkOffset, &e->flags, &e->taxonomy, &e->gen, &e->action, &e->recipeTaxonomy, &e->lifePoints, &e->maxLifePoints, &e->stamina, &e->maxStamina, &e->status, &e->generationIntensity, &e->lightIntensity);
-                
-                if(e->action != oldAction)
-                {
-                    e->actionTime = 0;
-                }
-                
-                r32 fadeTime = 2.0f;
-                r32 triggerTime = 2.0f;
-                if(e->lifePoints != oldLifePoints)
-                {
-                    if(e->lifePointsTriggerTime >= fadeTime)
-                    {
-                        e->lifePointsTriggerTime = 0;
-                    }
-                    else if(e->lifePointsTriggerTime >= triggerTime)
-                    {
-                        e->lifePointsTriggerTime = triggerTime - (fadeTime - e->lifePointsTriggerTime);
-                    }
-                }
-                
-                if(e->stamina != oldStamina)
-                {
-                    if(e->staminaTriggerTime >= fadeTime)
-                    {
-                        e->staminaTriggerTime = 0;
-                    }
-                    else if(e->staminaTriggerTime >= triggerTime)
-                    {
-                        e->staminaTriggerTime = triggerTime - (fadeTime - e->staminaTriggerTime);
-                    }
-                }
-                
-                
-                
-                for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
-                {
-                    e->equipment[slotIndex].ID = 0;
-                }
-                
-                if(e->flags & Flag_deleted)
-                {
-                    InvalidCodePath;
-                }
-                
+                Unpack("llV", &P.chunkX, &P.chunkY, &P.chunkOffset);
                 
                 r32 maxDistancePrediction = 2.5f;
                 Vec3 deltaP = Subtract(P, e->universeP);
                 r32 deltaLength = Length(deltaP);
-                if(deltaLength >= maxDistancePrediction || (e->flags & Flag_Attached))
+                if(true)
                 {
                     e->universeP = P;
                     e->velocity = {};
@@ -598,10 +478,18 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         worldMode->player.distanceCoeffFromServerP = deltaLength / maxDistancePrediction;
                     }
                 }
+                
+                if(e->identifier == worldMode->player.identifier)
+                {
+                    worldMode->player.universeP = P;
+                }
             } break;
             
             case Type_plantUpdate:
             {
+                InvalidCodePath;
+                
+#if 0                
                 r32 age;
                 r32 life;
                 
@@ -621,8 +509,12 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     plant->flowerDensity = flowerDensity;
                     plant->fruitDensity = fruitDensity;
                 }
+#endif
+                
             } break;
             
+            
+#if 0            
             case Type_equipmentSlot:
             {
                 u8 slotIndex;
@@ -1055,6 +947,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             {
                 worldMode->patchingLocalServer = false;
             } break;
+#endif
             
 #if FORGIVENESS_INTERNAL
             case Type_InputRecording:
@@ -1183,6 +1076,7 @@ internal void ReceiveNetworkPackets(GameState* gameState, GameModeWorld* worldMo
 }
 
 
+#if 0
 internal void HandleClientPrediction(ClientEntity* entity, r32 timeToUpdate)
 {
     ClientPrediction* prediction = &entity->prediction;
@@ -1223,3 +1117,4 @@ internal void HandleClientPrediction(ClientEntity* entity, r32 timeToUpdate)
         } break;
     }
 }
+#endif

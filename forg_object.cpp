@@ -1,3 +1,5 @@
+#if 0
+
 inline ObjectLayout* GetLayout(TaxonomyTable* table, u32 taxonomy)
 {
     ObjectLayout* result = 0;
@@ -16,6 +18,7 @@ inline ObjectLayout* GetLayout(TaxonomyTable* table, u32 taxonomy)
     
     return result;
 }
+#endif
 
 #ifdef FORG_SERVER
 inline b32 OwnedByOthers(SimEntity* entity, u64 id)

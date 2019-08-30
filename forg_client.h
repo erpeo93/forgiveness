@@ -8,26 +8,19 @@
 #include "forg_math.h"
 #include "forg_simd.h"
 #include "forg_random.h"
-#include "forg_asset_enum.h"
 #include "forg_file_formats.h"
 #include "asset_builder.h"
 #include "forg_render_tier.h"
 #include "forg_render.h"
 #include "forg_mesh.h"
 #include "forg_animation.h"
+#include "forg_asset.h"
 #include "forg_bound.h"
 #include "forg_sound.h"
-#include "forg_taxonomy.h"
-#include "forg_entity.h"
-#include "forg_object.h"
-#include "forg_crafting.h"
-#include "forg_inventory.h"
 #include "forg_action_effect.h"
 #include "forg_AI.h"
 #include "forg_editor.h"
-#include "forg_asset.h"
 #include "forg_world.h"
-#include "forg_memory.h"
 #include "forg_physics.h"
 #include "forg_network.h"
 #include "forg_network_client.h"
@@ -42,7 +35,6 @@
 #include "forg_essence.h"
 #include "forg_skill.h"
 #include "forg_ground.h"
-#include "forg_region.h"
 
 
 global_variable PlatformAPI platformAPI;
@@ -67,9 +59,7 @@ struct DayPhase
 
 struct ClientPlayer
 {
-    b32 spawnAsh;
-    
-    u64 identifier;
+    u32 identifier;
     UniversePos universeP;
     UniversePos oldUniverseP;
     UniversePos oldVoronoiP;
@@ -85,9 +75,6 @@ struct ClientPlayer
     PossibleActionType overlappingPossibleActions[Action_Count];
     
     u64 openedContainerID;
-    
-    u32 essenceCount;
-    EssenceSlot essences[MAX_DIFFERENT_ESSENCES];
 };
 
 
@@ -103,97 +90,14 @@ struct ClientPlayer
 
 struct ClientEntity
 {
-    // NOTE(Leonardo): from server
-    u64 identifier; // NOTE(Leonardo): 8 bytes
-    
-    b32 beingDeleted;
-    u32 flags;
-    u32 taxonomy; // NOTE(Leonardo): 4 bytes
-    GenerationData gen; // NOTE(Leonardo): 8 bytes
-    r32 generationIntensity;
-    
-    r32 status;
-    
-    r32 lifePoints;
-    r32 maxLifePoints;
-    
-    r32 stamina;
-    r32 maxStamina;
-    
-    b32 showHUD;
-    r32 lifePointsTriggerTime;
-    r32 staminaTriggerTime;
-    
-    r32 lightIntensity;
-    
-    
-    // TODO(Leonardo): encode P in 6 bytes total when sending complete update
-    // TODO(Leonardo): encode P in 3 bytes total when sending intra-frame update
+    u32 identifier;
     UniversePos universeP;
     Vec3 velocity;
-    Vec3 P;
     
-    ForgBoundType boundType;
-    Rect3 bounds;
-    
-    // TODO(Leonardo): encode this as a single byte
-    EntityAction action;
-    r32 actionTime;
-    u64 actionID;
-    u64 draggingID;
-    
-    
-    EntityAction ownerAction;
-    SlotName ownerSlot;
-    
-    // TODO(Leonardo): send these only when sending a recipe entity
-    u32 recipeTaxonomy;
-    GenerationData recipeGen;
-    
-    
-    
-    
-    u32 effectCount;
-    Effect effects[16];
-    ContainedObjects objects;
-    EquipmentSlot equipment[Slot_Count];
-    
-    
-    
-    // NOTE(Leonardo): internal to client
-    AnimationState animation;
-    r32 modulationWithFocusColor;
     r32 timeFromLastUpdate;
-    
-    u32 effectReferenceAction;
-    
-    ClientAnimationEffect* firstActiveEffect;
-    
-    Rock* rock;
-    Plant* plant;
-    
-    
-    ClientPrediction prediction;
-    
     
     ClientEntity* next;
 };
-
-inline void AddFlags(ClientEntity* entity, u32 flags)
-{
-    entity->flags |= flags;
-}
-
-inline b32 IsSet(ClientEntity* entity, i32 flag)
-{
-    b32 result = (entity->flags & flag);
-    return result;
-}
-
-inline void ClearFlags(ClientEntity* entity, i32 flags)
-{
-    entity->flags &= ~flags;
-}
 
 struct ToDeleteFile
 {
@@ -219,7 +123,7 @@ struct GameModeWorld
     r32 seasonLerp;
     
     
-    u32 worldSeed;
+    u64 worldSeed;
     
     b32 editingEnabled;
     u32 editorRoles;
@@ -227,43 +131,10 @@ struct GameModeWorld
     b32 gamePaused;
     r32 originalTimeToAdvance;
     
-    MemoryPool filePool;
-    struct DataFileArrived* firstDataFileArrived;
-    struct DataFileArrived* firstPakFileArrived;
-    struct DataFileArrived* currentFile;
-    
-    
-    MemoryPool deletedFilesPool;
-    ToDeleteFile* firstFileToDelete;
-    ToDeleteFile* firstFreeFileToDelete;
-    
-    
-    DataFileSentType dataFileSent;
-    
-    b32 patchingLocalServer;
-    b32 allPakFilesArrived;
-    u32 patchSectionArrived;
-    
-    
-    r32 currentPhaseTimer;
-    ForgDayPhase currentPhase;
-    
-    TempLight* firstFreeTempLight;
-    
-    
-    b32 forceVoronoiRegeneration;
-    u8 chunkDim;
-    r32 voxelSide;
-    r32 oneOverVoxelSide;
-    r32 chunkSide;
-    r32 oneOverChunkSide;
-    
     MemoryPool* persistentPool;
     MemoryPool* temporaryPool;
     
-    TicketMutex entityMutex;
     ClientEntity* entities[1024];
-    
     
     WorldChunk* chunks[1024];
     
@@ -331,10 +202,7 @@ struct GameModeWorld
     r32 cameraPitch;
     r32 cameraDolly;
     
-    
-    
     SoundState* soundState;
-    
 };
 
 enum GameMode
@@ -363,9 +231,6 @@ struct GameState
         GameModeWorld* world;
     };
     
-    
-    r32 timeCoeff;
-    u32 lock;
     
     u32 editorRoles;
     

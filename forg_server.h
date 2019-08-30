@@ -1,4 +1,5 @@
 #pragma once
+
 #define SERVER_MAX_FPS 10
 #define SERVER_MIN_MSEC_PER_FRAME 1000.0f / (r32) (SERVER_MAX_FPS)
 #include "forg_basic_types.h"
@@ -8,30 +9,31 @@
 #include "forg_token.h"
 #include "forg_intrinsics.h"
 #include "forg_math.h"
+#include "forg_file_formats.h"
+#include "asset_builder.h"
+#include "forg_asset.h"
 #include "forg_random.h"
-#include "forg_asset_enum.h"
 #include "forg_physics.h"
 #include "forg_bound.h"
-#include "forg_taxonomy.h"
 #include "forg_action_effect.h"
 #include "forg_object.h"
-#include "forg_inventory.h"
+//#include "forg_inventory.h"
 #include "forg_AI.h"
 #include "forg_essence.h"
 #include "forg_skill.h"
 #include "forg_crafting.h"
-#include "forg_entity.h"
+//#include "forg_entity.h"
 #include "forg_editor.h"
-#include "forg_memory.h"
+//#include "forg_memory.h"
 #include "forg_world.h"
 #include "forg_world_generation.h"
-#include "forg_region.h"
 #include "forg_plant.h"
 #include "forg_rock.h"
 #include "forg_network.h"
 #include "forg_meta.h"
 #include "client_generated.h"
-#include "win32_thread.cpp"
+
+PlatformAPI platformAPI;
 struct PlayerRequest
 {
     u8 data[512];
@@ -49,7 +51,7 @@ struct ForgFile
     };
 };
 
-struct PlayerComponent
+struct Player
 {
     b32 connectionClosed;
     u16 connectionSlot;
@@ -64,8 +66,6 @@ struct PlayerComponent
     
     ForgNetworkReceiver receiver;
     
-    u32 playerID;
-    
     u32 requestCount;
     PlayerRequest requests[8];
 };
@@ -78,13 +78,16 @@ struct ReceiveNetworkPacketWork
 
 struct Entity
 {
-    u32 chunkX;
-    u32 chunkY;
-    Vec3 pos;
+    u32 ID;
+    UniversePos P;
+    
     Vec3 speed;
     Vec3 acc;
+    
+    u32 playerID;
 };
 
+#define MAXIMUM_SERVER_PLAYERS 0xff
 struct ServerState
 {
     WorldSeason season;
@@ -95,14 +98,17 @@ struct ServerState
     u32 worldSeed;
     
     TaskWithMemory tasks[6];
-    PlatformWorkQueue fastQueue;
-    PlatformWorkQueue slowQueue;
+    PlatformWorkQueue* fastQueue;
+    PlatformWorkQueue* slowQueue;
+    
+    u32 playerCount;
+    Player players[MAXIMUM_SERVER_PLAYERS];
     
     u32 entityCount;
     Entity entities[0xffff];
     
-    SpacePartition collisionPartition;
-    SpacePartition playerPartition;
+    //SpacePartition collisionPartition;
+    //SpacePartition playerPartition;
     
     MemoryPool worldPool;
     MemoryPool networkPool;
