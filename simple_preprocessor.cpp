@@ -41,6 +41,7 @@ void ParseIntrospectParam( Tokenizer* tokenizer )
 }
 
 char memberDefaultValues[KiloBytes(16)] = {};
+char* memberDefaultValuePtr = memberDefaultValues;
 
 void ParseMember(Tokenizer* tokenizer, Token structToken, Token memberNameToken, u32 memberIndex)
 {
@@ -48,6 +49,7 @@ void ParseMember(Tokenizer* tokenizer, Token structToken, Token memberNameToken,
     bool isPointer = false;
     bool nameParsed = false;
     Token defaultValue = {};
+    bool hasDefault = false;
     
     while( parsing )
     {
@@ -65,6 +67,7 @@ void ParseMember(Tokenizer* tokenizer, Token structToken, Token memberNameToken,
                 {
                     if(RequireToken(tokenizer, Token_OpenParen))
                     {
+                        hasDefault = true;
                         defaultValue = Stringize(GetToken(tokenizer));
                     }
                 }
@@ -73,11 +76,12 @@ void ParseMember(Tokenizer* tokenizer, Token structToken, Token memberNameToken,
                     if(!nameParsed)
                     {
                         
-                        printf("{%s, MetaType_%.*s, \"%.*s\", \"%.*s\", (u32) (&((%.*s*)0)->%.*s), {}}, \n",isPointer ? "MetaFlag_Pointer" : "0", 
+                        printf("{%s, MetaType_%.*s, \"%.*s\", \"%.*s\", (u32) (&((%.*s*)0)->%.*s), {}, sizeof(%.*s)}, \n",isPointer ? "MetaFlag_Pointer" : "0", 
                                memberNameToken.textLength, memberNameToken.text, memberNameToken.textLength, memberNameToken.text,
                                token.textLength, token.text, 
                                structToken.textLength, structToken.text, 
-                               token.textLength, token.text);
+                               token.textLength, token.text,
+                               memberNameToken.textLength, memberNameToken.text);
                         nameParsed = true;
                     }
                 }
@@ -90,8 +94,10 @@ void ParseMember(Tokenizer* tokenizer, Token structToken, Token memberNameToken,
         }
     }
     
-    sprintf(memberDefaultValues, "memberDefinitionOf%.*s[%d].def.def_%.*s = %.*s;\\", structToken.textLength, structToken.text, memberIndex, memberNameToken.textLength, memberNameToken.text, defaultValue.textLength, defaultValue.text);
-    
+    if(hasDefault)
+    {
+        memberDefaultValuePtr += sprintf(memberDefaultValuePtr, "memberDefinitionOf%.*s[%d].def.def_%.*s =%.*s;", structToken.textLength, structToken.text, memberIndex, memberNameToken.textLength, memberNameToken.text, defaultValue.textLength, defaultValue.text);
+    }
 }
 
 struct MetaStruct

@@ -15,7 +15,9 @@ enum MetaType
     MetaType_Vec3,
     MetaType_Vec4,
     MetaType_r32,
-    MetaType_b32
+    MetaType_b32,
+    
+    MetaType_GroundColorationArrayTest
 };
 
 enum MemberMetaFlags
@@ -46,12 +48,10 @@ struct MemberDefinition
     u32 flags;
     MetaType type;
     char typeName[64];
-    
     char* name;
-    
     u32 offset;
-    
     DefaultMemberValue def;
+    u32 size;
 };
 
 struct StructDefinition

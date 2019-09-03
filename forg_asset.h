@@ -29,7 +29,7 @@ struct AssetID
 {
     u16 type;
     u16 subtype;
-    u32 index;
+    u16 index;
 };
 
 typedef AssetID BitmapId;
@@ -172,9 +172,20 @@ struct DataFile
     u32 rawSize;
 };
 
+
+#define EDITOR_COUNTER_STRING "array_counter"
+introspection() struct GroundColorationArrayTest
+{
+    u32 p1 MetaDefault("2");
+    u32 p2 MetaDefault("3");
+};
+
 introspection() struct ground_coloration
 {
     Vec4 color MetaDefault("V4(1, 0, 1, 1)");
+    
+    u32 array_counter_a1;
+    GroundColorationArrayTest* a1;
 };
 
 
@@ -263,7 +274,8 @@ struct Asset
 
 struct AssetSubtypeArray
 {
-    u32 assetCount;
+    u16 standardAssetCount;
+    u16 derivedAssetCount;
     Asset* assets;
     
 };

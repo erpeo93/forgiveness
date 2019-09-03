@@ -697,6 +697,8 @@ inline u32 FindFirstInString(char* string, char c)
             result = current;
             break;
         }
+        
+        ++current;
     }
     
     return result;
@@ -707,7 +709,7 @@ inline void TrimToFirstCharacter(char* buffer, u32 bufferSize, char* string, cha
     u32 find = FindFirstInString(string, trimHere);
     if(find)
     {
-        FormatString(buffer, bufferSize, "%.*s", find - 1, string);
+        FormatString(buffer, bufferSize, "%.*s", find, string);
     }
 }
 

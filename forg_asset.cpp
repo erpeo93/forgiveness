@@ -105,7 +105,7 @@ inline Asset* GetAssetRaw(Assets* assets, AssetID ID)
     Assert(ID.subtype < array->subtypeCount);
     AssetSubtypeArray* subtype = array->subtypes + ID.subtype;
     
-    Assert(ID.index < (subtype->assetCount));
+    Assert(ID.index < (subtype->standardAssetCount + subtype->derivedAssetCount));
     Asset* asset = subtype->assets + ID.index;
     
     return asset;
@@ -382,6 +382,8 @@ internal AssetBoilerplate BeginAssetBoilerplate(Assets* assets, AssetID ID)
             if(result.task)
             {
                 result.asset = asset;
+                asset->data = 0;
+                asset->dataSize = 0;
             }
             else
             {
@@ -409,6 +411,8 @@ internal void EndAssetBoilerplate(Assets* assets, AssetBoilerplate boilerplate, 
     
     ++assets->threadsReading;
     work->threadsReading = &assets->threadsReading;
+    
+    work->textureQueue = assets->textureQueue;
     
     work->task = task;
     
@@ -629,7 +633,9 @@ internal void LoadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, Asse
 internal void ReloadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, MemoryPool* pool)
 {
     AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, &file->header);
-    for(u32 assetIndex = 0; assetIndex < assetSubtypeArray->assetCount; ++assetIndex)
+    
+    u16 assetCount = (assetSubtypeArray->standardAssetCount + assetSubtypeArray->derivedAssetCount);
+    for(u32 assetIndex = 0; assetIndex < assetCount; ++assetIndex)
     {
         Asset* asset = assetSubtypeArray->assets + assetIndex;
         FreeAsset(assets, asset);
@@ -762,7 +768,8 @@ internal void WritebackAssetFileToFileSystem(Assets* assets, AssetFile* file, ch
     
     Buffer metaDataBuffer = PushBuffer(&tempPool, MegaBytes(1));
     
-    for(u32 assetIndex = 0; assetIndex < assetSubtypeArray->assetCount; ++assetIndex)
+    u16 assetCount = (assetSubtypeArray->standardAssetCount + assetSubtypeArray->derivedAssetCount);
+    for(u32 assetIndex = 0; assetIndex < assetCount; ++assetIndex)
     {
         Asset* asset = assetSubtypeArray->assets + assetIndex;
         
@@ -876,7 +883,8 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
         {
             u16 assetCount = (header->standardAssetCount + header->derivedAssetCount);
             AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, header);
-            assetSubtypeArray->assetCount = assetCount;
+            assetSubtypeArray->standardAssetCount = header->standardAssetCount;
+            assetSubtypeArray->derivedAssetCount = header->derivedAssetCount;
             assetSubtypeArray->assets = PushArray(pool, Asset, assetCount, NoClear());
             
             LoadAssetFile(assets, file, fileIndex, assetSubtypeArray, pool);
@@ -927,7 +935,7 @@ inline b32 MatchesLabels(Asset* asset, AssetLabels* labels)
     return result;
 }
 
-internal AssetID QueryAssets(Assets* assets, AssetType type, u32 subtype, RandomSequence* seq, AssetLabels* labels, u32 startingIndex = 0, u32 endingIndex = 0)
+internal AssetID QueryAssets(Assets* assets, AssetType type, u32 subtype, RandomSequence* seq, AssetLabels* labels, u16 startingIndex = 0, u16 endingIndex = 0)
 {
     AssetID result = {};
     if(type)
@@ -938,18 +946,20 @@ internal AssetID QueryAssets(Assets* assets, AssetType type, u32 subtype, Random
         {
             AssetSubtypeArray* subtypeArray = array->subtypes + subtype;
             
-            if(subtypeArray->assetCount > 0)
+            if(subtypeArray->standardAssetCount > 0)
             {
-                u32 matching = 0;
-                u32 matchingAssets[32];
+                u16 matching = 0;
+                u16 matchingAssets[32];
                 
                 if(!endingIndex)
                 {
-                    endingIndex = subtypeArray->assetCount;
+                    endingIndex = subtypeArray->standardAssetCount;
                 }
+                endingIndex = Min(endingIndex, subtypeArray->standardAssetCount);
+                
                 Assert(startingIndex <= endingIndex);
                 
-                for(u32 assetIndex = startingIndex; assetIndex < endingIndex; ++assetIndex)
+                for(u16 assetIndex = startingIndex; assetIndex < endingIndex; ++assetIndex)
                 {
                     Asset* asset = subtypeArray->assets + assetIndex;
                     if(MatchesLabels(asset, labels))
@@ -999,19 +1009,34 @@ inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
     asset->data = AcquireAssetMemory(assets, finalSize, asset, ID);
     
     tokenizer.at = (char*) tempBuffer.b;
-    ParseBufferIntoStruct(structName, &tokenizer, asset->data);
+    ParseBufferIntoStruct(structName, &tokenizer, asset->data, finalSize);
+    
+    
+    Buffer test = PushBuffer(&tempPool, sourceBuffer.size + 1000);
+    Buffer outBuffer = test;
+    
+    DumpStructToBuffer(structName, &outBuffer, asset->data);
+    
     
     asset->state = Asset_loaded;
     
     Clear(&tempPool);
 }
 
-inline Asset* GetGameAsset(Assets* assets, AssetID ID, b32 insertAtLRUList = false)
+struct GetGameAssetResult
 {
-    Asset* result = 0;
+    Asset* asset;
+    PAKAsset* info;
+};
+
+inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID, b32 insertAtLRUList = false)
+{
+    GetGameAssetResult result = {};
     Asset* asset = GetAssetRaw(assets, ID);
     if(asset)
     {
+        result.info = &asset->paka;
+        
         if(asset->state == Asset_preloaded)
         {
             Assert(IsDataFile((AssetType)ID.type));
@@ -1021,7 +1046,7 @@ inline Asset* GetGameAsset(Assets* assets, AssetID ID, b32 insertAtLRUList = fal
         
         if(asset->state == Asset_loaded)
         {
-            result = asset;
+            result.asset = asset;
             if(insertAtLRUList)
             {
                 if(IsValid(&asset->textureHandle))
@@ -1031,7 +1056,7 @@ inline Asset* GetGameAsset(Assets* assets, AssetID ID, b32 insertAtLRUList = fal
                 }
             }
             
-            DLLIST_INSERT(&assets->assetSentinel, result);
+            DLLIST_INSERT(&assets->assetSentinel, asset);
             
             CompletePastWritesBeforeFutureWrites;
         }
@@ -1045,8 +1070,8 @@ inline Bitmap* GetBitmap(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
     
-    Asset* asset = GetGameAsset(assets, ID, true);
-    Bitmap* result = asset ? &asset->bitmap : 0;
+    GetGameAssetResult get = GetGameAsset(assets, ID, true);
+    Bitmap* result = get.asset ? &get.asset->bitmap : 0;
     
     return result;
 }
@@ -1055,8 +1080,8 @@ inline Font* GetFont(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
     
-    Asset* asset = GetGameAsset(assets, ID);
-    Font* result = asset ? &asset->font : 0;
+    GetGameAssetResult get = GetGameAsset(assets, ID);
+    Font* result = get.asset ? &get.asset->font : 0;
     
     return result;
 }
@@ -1065,8 +1090,8 @@ inline Sound* GetSound(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
     
-    Asset* asset = GetGameAsset(assets, ID);
-    Sound* result = asset ? &asset->sound : 0;
+    GetGameAssetResult get = GetGameAsset(assets, ID);
+    Sound* result = get.asset ? &get.asset->sound : 0;
     
     return result;
 }
@@ -1075,8 +1100,8 @@ inline Skeleton* GetSkeleton(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
     
-    Asset* asset = GetGameAsset(assets, ID);
-    Skeleton* result = asset ? &asset->skeleton : 0;
+    GetGameAssetResult get = GetGameAsset(assets, ID);
+    Skeleton* result = get.asset ? &get.asset->skeleton : 0;
     
     return result;
 }
@@ -1085,8 +1110,8 @@ inline Animation* GetAnimation(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
     
-    Asset* asset = GetGameAsset(assets, ID);
-    Animation* result = asset ? &asset->animation : 0;
+    GetGameAssetResult get = GetGameAsset(assets, ID);
+    Animation* result = get.asset ? &get.asset->animation : 0;
     
     return result;
 }
@@ -1095,8 +1120,8 @@ inline VertexModel* GetModel(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
     
-    Asset* asset = GetGameAsset(assets, ID);
-    VertexModel* result = asset ? &asset->model : 0;
+    GetGameAssetResult get = GetGameAsset(assets, ID);
+    VertexModel* result = get.asset ? &get.asset->model : 0;
     
     return result;
 }
@@ -1107,8 +1132,8 @@ inline void* GetDataDefinition_(Assets* assets, AssetType type, AssetID ID)
     Assert(type == ID.type);
     Assert(IsValid(ID));
     
-    Asset* asset = GetGameAsset(assets, ID);
-    void* result = asset ? asset->data : 0;
+    GetGameAssetResult get = GetGameAsset(assets, ID);
+    void* result = get.asset ? get.asset->data : 0;
     
     return result;
 }
@@ -1116,11 +1141,8 @@ inline void* GetDataDefinition_(Assets* assets, AssetType type, AssetID ID)
 inline PAKAsset* GetPakAsset(Assets* assets, AssetID ID, b32 insertAtLRUList = false)
 {
     PAKAsset* result = 0;
-    Asset* asset = GetGameAsset(assets, ID, insertAtLRUList);
-    if(asset)
-    {
-        result = &asset->paka;
-    }
+    GetGameAssetResult get = GetGameAsset(assets, ID, insertAtLRUList);
+    result = get.info;
     
     return result;
 }
@@ -1168,7 +1190,7 @@ inline PAKModel* GetModelInfo(Assets* assets, AssetID ID)
 
 
 
-inline u32 GetGlyphFromCodePoint(Font* font, PAKFont* info, u32 desired)
+inline u32 GetGlyphIndexForCodePoint(Font* font, PAKFont* info, u32 desired)
 {
     u32 result = 0;
     if(desired < info->onePastHighestCodePoint)
@@ -1181,9 +1203,8 @@ inline u32 GetGlyphFromCodePoint(Font* font, PAKFont* info, u32 desired)
 
 internal r32 GetHorizontalAdvanceForPair(Font* font, PAKFont* info, u32 desiredPrevCodePoint, u32 desiredCodePoint)
 {
-    u32 glyph = GetGlyphFromCodePoint(font, info, desiredCodePoint);
-    u32 prevGlyph = GetGlyphFromCodePoint(font, info, desiredPrevCodePoint);
-    
+    u32 glyph = GetGlyphIndexForCodePoint(font, info, desiredCodePoint);
+    u32 prevGlyph = GetGlyphIndexForCodePoint(font, info, desiredPrevCodePoint);
     r32 result = font->horizontalAdvance[prevGlyph * info->glyphCount + glyph];
     return result;
 }
@@ -1211,11 +1232,12 @@ inline AssetID GetBitmapForGlyph(Assets* assets, AssetID fontID, u32 desiredCode
         PAKFont* info = GetFontInfo(assets, fontID);
         Asset* asset = GetAssetRaw(assets, fontID);
         
-        u16 index = SafeTruncateToU16(GetGlyphFromCodePoint(font, info, desiredCodePoint));
+        u16 index = SafeTruncateToU16(GetGlyphIndexForCodePoint(font, info, desiredCodePoint));
+        Assert(index);
         
         result.type = fontID.type;
         result.subtype = fontID.subtype;
-        result.index = info->glyphAssetsFirstIndex + index;
+        result.index = info->glyphAssetsFirstIndex + index - 1;
     }
     
     return result;
@@ -1231,8 +1253,8 @@ inline AssetID GetMatchingAnimationForSkeleton(Assets* assets, AssetID skeletonI
     if(asset)
     {
         PAKSkeleton* info = GetSkeletonInfo(assets, skeletonID);
-        u32 startingIndex = info->animationAssetsFirstIndex;
-        u32 endingIndex = startingIndex + info->animationCount;
+        u16 startingIndex = info->animationAssetsFirstIndex;
+        u16 endingIndex = startingIndex + info->animationCount;
         
         result = QueryAssets(assets, (AssetType) skeletonID.type, skeletonID.subtype, seq, labels, startingIndex,endingIndex);
     }

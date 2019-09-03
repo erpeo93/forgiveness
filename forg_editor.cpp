@@ -163,12 +163,15 @@ internal unm OutputToBuffer(Buffer* output, char* format, ...)
     va_end( argList );
     
     output->b += result;
-    output->size -= SafeTruncateUInt64ToU32(result);
+    
+    u32 size = SafeTruncateUInt64ToU32(result);
+    Assert(size <= output->size);
+    output->size -= size;
     
     return result;
 }
 
-internal u32 U32Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Buffer* output)
+internal u32 U32Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Buffer* output, b32 isInArray)
 {
     u32 size = sizeof(u32);
     u32 value = field->def.def_u32;
@@ -190,10 +193,18 @@ internal u32 U32Operation(MemberDefinition* field, FieldOperationType operation,
         
         case FieldOperation_Dump:
         {
-            u32 structValue = *(u32*) ptr;
-            if(value != field->def.def_u32)
+            value = *(u32*) ptr;
+            
+            if(isInArray)
             {
-                OutputToBuffer(output, "%s=%d,", field->name, structValue);
+                OutputToBuffer(output, "%d", value);
+            }
+            else
+            {
+                if(value != field->def.def_u32)
+                {
+                    OutputToBuffer(output, "%s=%d;", field->name, value);
+                }
             }
         } break;
     }
@@ -213,7 +224,7 @@ internal r32 Parser32(Tokenizer* tokenizer, r32 defaultVal)
     return result;
 }
 
-internal u32 R32Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Buffer* output)
+internal u32 R32Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Buffer* output, b32 isInArray)
 {
     u32 size = sizeof(r32);
     r32 value = field->def.def_r32;
@@ -235,10 +246,18 @@ internal u32 R32Operation(MemberDefinition* field, FieldOperationType operation,
         
         case FieldOperation_Dump:
         {
-            r32 structValue = *(r32*) ptr;
-            if(value != field->def.def_r32)
+            value = *(r32*) ptr;
+            
+            if(isInArray)
             {
-                OutputToBuffer(output, "%s=%f,", field->name, structValue);
+                OutputToBuffer(output, "%f", value);
+            }
+            else
+            {
+                if(value != field->def.def_r32)
+                {
+                    OutputToBuffer(output, "%s=%f;", field->name, value);
+                }
             }
         } break;
     }
@@ -282,7 +301,7 @@ internal Vec2 ParseVec2(Tokenizer* tokenizer, Vec2 defaultVal)
     return result;
 }
 
-internal u32 Vec2Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Buffer* output)
+internal u32 Vec2Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Buffer* output, b32 isInArray)
 {
     u32 size = sizeof(Vec2);
     Vec2 value = field->def.def_Vec2;
@@ -290,6 +309,7 @@ internal u32 Vec2Operation(MemberDefinition* field, FieldOperationType operation
     {
         value = ParseVec2(tokenizer, value);
     }
+    
     switch(operation)
     {
         case FieldOperation_GetSize:
@@ -303,21 +323,42 @@ internal u32 Vec2Operation(MemberDefinition* field, FieldOperationType operation
         
         case FieldOperation_Dump:
         {
-            Vec2 structValue = *(Vec2*) ptr;
-            if(value != field->def.def_Vec2)
+            value = *(Vec2*) ptr;
+            
+            
+            if(isInArray)
             {
-                OutputToBuffer(output, "%s={", field->name);
-                
-                if(structValue.x != field->def.def_Vec2.x)
+                OutputToBuffer(output, "{");
+                if(value != field->def.def_Vec2)
                 {
-                    OutputToBuffer(output, "x=%f,", structValue.x);
+                    if(value.x != field->def.def_Vec2.x)
+                    {
+                        OutputToBuffer(output, "x=%f;", value.x);
+                    }
+                    
+                    if(value.y != field->def.def_Vec2.y)
+                    {
+                        OutputToBuffer(output, "y=%f;", value.y);
+                    }
                 }
-                
-                if(structValue.y != field->def.def_Vec2.y)
+                OutputToBuffer(output, "}");
+            }
+            else
+            {
+                if(value != field->def.def_Vec2)
                 {
-                    OutputToBuffer(output, "y=%f,", structValue.y);
+                    OutputToBuffer(output, "%s={", field->name);
+                    if(value.x != field->def.def_Vec2.x)
+                    {
+                        OutputToBuffer(output, "x=%f;", value.x);
+                    }
+                    
+                    if(value.y != field->def.def_Vec2.y)
+                    {
+                        OutputToBuffer(output, "y=%f;", value.y);
+                    }
+                    OutputToBuffer(output, "};");
                 }
-                OutputToBuffer(output, "},");
             }
         } break;
     }
@@ -363,7 +404,7 @@ internal Vec3 ParseVec3(Tokenizer* tokenizer, Vec3 defaultVal)
 }
 
 
-internal u32 Vec3Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Buffer* output)
+internal u32 Vec3Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Buffer* output, b32 isInArray)
 {
     u32 size = sizeof(Vec3);
     Vec3 value = field->def.def_Vec3;
@@ -385,26 +426,52 @@ internal u32 Vec3Operation(MemberDefinition* field, FieldOperationType operation
         
         case FieldOperation_Dump:
         {
-            Vec3 structValue = *(Vec3*) ptr;
-            if(value != field->def.def_Vec3)
+            value = *(Vec3*) ptr;
+            
+            if(isInArray)
             {
-                OutputToBuffer(output, "%s={", field->name);
-                
-                if(structValue.x != field->def.def_Vec3.x)
+                OutputToBuffer(output, "{");
+                if(value != field->def.def_Vec3)
                 {
-                    OutputToBuffer(output, "x=%f,", structValue.x);
+                    if(value.x != field->def.def_Vec3.x)
+                    {
+                        OutputToBuffer(output, "x=%f;", value.x);
+                    }
+                    
+                    if(value.y != field->def.def_Vec3.y)
+                    {
+                        OutputToBuffer(output, "y=%f;", value.y);
+                    }
+                    
+                    if(value.z != field->def.def_Vec3.z)
+                    {
+                        OutputToBuffer(output, "z=%f;", value.z);
+                    }
                 }
-                
-                if(structValue.y != field->def.def_Vec3.y)
+                OutputToBuffer(output, "}");
+            }
+            else
+            {
+                if(value != field->def.def_Vec3)
                 {
-                    OutputToBuffer(output, "y=%f,", structValue.y);
+                    OutputToBuffer(output, "%s={", field->name);
+                    
+                    if(value.x != field->def.def_Vec3.x)
+                    {
+                        OutputToBuffer(output, "x=%f;", value.x);
+                    }
+                    
+                    if(value.y != field->def.def_Vec3.y)
+                    {
+                        OutputToBuffer(output, "y=%f;", value.y);
+                    }
+                    
+                    if(value.z != field->def.def_Vec3.z)
+                    {
+                        OutputToBuffer(output, "z=%f;", value.z);
+                    }
+                    OutputToBuffer(output, "};");
                 }
-                
-                if(structValue.z != field->def.def_Vec3.z)
-                {
-                    OutputToBuffer(output, "y=%f,", structValue.z);
-                }
-                OutputToBuffer(output, "},");
             }
         } break;
     }
@@ -448,7 +515,7 @@ internal Vec4 ParseVec4(Tokenizer* tokenizer, Vec4 defaultVal)
     return result;
 }
 
-internal u32 Vec4Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Buffer* output)
+internal u32 Vec4Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Buffer* output, b32 isInArray)
 {
     u32 size = sizeof(Vec4);
     Vec4 value = field->def.def_Vec4;
@@ -470,31 +537,62 @@ internal u32 Vec4Operation(MemberDefinition* field, FieldOperationType operation
         
         case FieldOperation_Dump:
         {
-            Vec4 structValue = *(Vec4*) ptr;
-            if(structValue != field->def.def_Vec4)
+            value = *(Vec4*) ptr;
+            
+            
+            if(isInArray)
             {
-                OutputToBuffer(output, "%s={", field->name);
-                
-                if(structValue.x != field->def.def_Vec4.x)
+                OutputToBuffer(output, "{");
+                if(value != field->def.def_Vec4)
                 {
-                    OutputToBuffer(output, "x=%f,", structValue.x);
+                    if(value.x != field->def.def_Vec4.x)
+                    {
+                        OutputToBuffer(output, "x=%f;", value.x);
+                    }
+                    
+                    if(value.y != field->def.def_Vec4.y)
+                    {
+                        OutputToBuffer(output, "y=%f;", value.y);
+                    }
+                    
+                    if(value.z != field->def.def_Vec4.z)
+                    {
+                        OutputToBuffer(output, "z=%f;", value.z);
+                    }
+                    if(value.w != field->def.def_Vec4.w)
+                    {
+                        OutputToBuffer(output, "w=%f;", value.w);
+                    }
                 }
-                
-                if(structValue.y != field->def.def_Vec4.y)
+                OutputToBuffer(output, "}");
+            }
+            else
+            {
+                if(value != field->def.def_Vec4)
                 {
-                    OutputToBuffer(output, "y=%f,", structValue.y);
+                    OutputToBuffer(output, "%s={", field->name);
+                    
+                    if(value.x != field->def.def_Vec4.x)
+                    {
+                        OutputToBuffer(output, "x=%f;", value.x);
+                    }
+                    
+                    if(value.y != field->def.def_Vec4.y)
+                    {
+                        OutputToBuffer(output, "y=%f;", value.y);
+                    }
+                    
+                    if(value.z != field->def.def_Vec4.z)
+                    {
+                        OutputToBuffer(output, "z=%f;", value.z);
+                    }
+                    
+                    if(value.w != field->def.def_Vec4.w)
+                    {
+                        OutputToBuffer(output, "w=%f;", value.w);
+                    }
+                    OutputToBuffer(output, "};");
                 }
-                
-                if(structValue.z != field->def.def_Vec4.z)
-                {
-                    OutputToBuffer(output, "y=%f,", structValue.z);
-                }
-                
-                if(structValue.w != field->def.def_Vec4.w)
-                {
-                    OutputToBuffer(output, "y=%f,", structValue.w);
-                }
-                OutputToBuffer(output, "},");
             }
         } break;
     }
@@ -502,71 +600,134 @@ internal u32 Vec4Operation(MemberDefinition* field, FieldOperationType operation
     return size;
 }
 
+struct ReservedSpace
+{
+    void* ptr;
+    u32 size;
+};
+
+internal void* ReserveSpace(ReservedSpace* space, u32 size)
+{
+    Assert(size <= space->size);
+    void* result = space->ptr;
+    space->ptr = (void*) ((u8*) space->ptr + size);
+    space->size -= size;
+    
+    return result;
+}
 
 
-internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Buffer* output, b32 printName);
-internal u32 FieldOperation(MemberDefinition* field, FieldOperationType operation, void* fieldPtr, Tokenizer* tokenizer, Buffer* output)
+
+internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Buffer* output, ReservedSpace* reserved);
+internal u32 FieldOperation(MemberDefinition* field, FieldOperationType operation, void* fieldPtr, Tokenizer* tokenizer, Buffer* output, ReservedSpace* reserved, u32* elementCount)
 {
     u32 result = 0;
-    b32 pointer = (field->flags & pointer);
+    b32 pointer = (field->flags & MetaFlag_Pointer);
+    u32 elements = 0;
+    
+    if(pointer && operation == FieldOperation_Dump)
+    {
+        Assert(*elementCount);
+        OutputToBuffer(output, "%s=", field->name);
+    }
     
     while(true)
     {
+        ++elements;
         u32 fieldSize = 0;
         switch(field->type)
         {
             case MetaType_u32:
             {
-                fieldSize = U32Operation(field, operation, fieldPtr, tokenizer, output);
+                fieldSize = U32Operation(field, operation, fieldPtr, tokenizer, output, pointer);
             } break;
             
             case MetaType_r32:
             {
-                fieldSize = R32Operation(field, operation, fieldPtr, tokenizer, output);
+                fieldSize = R32Operation(field, operation, fieldPtr, tokenizer, output, pointer);
             } break;
             
             case MetaType_Vec2:
             {
-                fieldSize = Vec2Operation(field, operation, fieldPtr, tokenizer, output);
+                fieldSize = Vec2Operation(field, operation, fieldPtr, tokenizer, output, pointer);
             } break;
             
             case MetaType_Vec3:
             {
-                fieldSize = Vec3Operation(field, operation, fieldPtr, tokenizer, output);
+                fieldSize = Vec3Operation(field, operation, fieldPtr, tokenizer, output, pointer);
             } break;
             
             case MetaType_Vec4:
             {
-                fieldSize = Vec4Operation(field, operation, fieldPtr, tokenizer, output);
+                fieldSize = Vec4Operation(field, operation, fieldPtr, tokenizer, output, pointer);
             } break;
             
             default:
             {
+                if(pointer && operation == FieldOperation_Dump)
+                {
+                    OutputToBuffer(output, "{");
+                }
+                
                 String structName = {};
                 structName.b = (u8*) field->typeName;
                 structName.size = StrLen(field->typeName);
-                StructOperation(structName, tokenizer, fieldPtr, operation, output, true);
+                fieldSize = StructOperation(structName, tokenizer, fieldPtr, operation, output, reserved);
+                
+                if(pointer && operation == FieldOperation_Dump)
+                {
+                    OutputToBuffer(output, "}");
+                }
             } break;
         }
         
         if(pointer)
         {
-            result += fieldSize;
-            Token t = GetToken(tokenizer);
-            if(t.type == Token_Comma)
+            if(operation == FieldOperation_Dump)
             {
-                // NOTE(Leonardo): continue operating on the array!
+                if(elements == *elementCount)
+                {
+                    break;
+                }
+                else
+                {
+                    OutputToBuffer(output, ",");
+                    fieldPtr = (void*) ((u8*) fieldPtr + field->size);
+                }
             }
             else
             {
-                Assert(t.type == Token_SemiColon);
-                break;
+                result += fieldSize;
+                Token t = GetToken(tokenizer);
+                if(t.type == Token_Comma)
+                {
+                    // NOTE(Leonardo): advance in the array and continue!
+                    if(operation == FieldOperation_Parse)
+                    {
+                        fieldPtr = (void*) ((u8*) fieldPtr + field->size);
+                    }
+                }
+                else
+                {
+                    Assert(t.type == Token_SemiColon);
+                    break;
+                }
             }
         }
         else
         {
             break;
         }
+    }
+    
+    if(operation == FieldOperation_GetSize)
+    {
+        *elementCount = elements;
+    }
+    
+    if(pointer && operation == FieldOperation_Dump)
+    {
+        OutputToBuffer(output, ";");
     }
     
     return result;
@@ -636,7 +797,22 @@ internal void CopyDefaultValue(MemberDefinition* member, void* ptr)
     }
 }
 
-internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Buffer* output, b32 printName = true)
+internal u32* GetMetaPtrElementCountForArray(StructDefinition* definition, MemberDefinition* arrayField, void* structPtr)
+{
+    Token counter = {};
+    char counterName[128];
+    counter.text = counterName;
+    counter.textLength =(u32) FormatString(counterName, sizeof(counterName),"%s_%s", EDITOR_COUNTER_STRING, arrayField->name);
+    
+    MemberDefinition* counterDefinition = FindMetaField(definition, counter);
+    Assert(counterDefinition->type == MetaType_u32);
+    void* counterPtr = (void*) ((u8*) structPtr + counterDefinition->offset);
+    
+    u32* result = (u32*) counterPtr;
+    return result;
+}
+
+internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Buffer* output, ReservedSpace* reserved)
 {
     u32 result = 0;
     StructDefinition* definition = GetMetaStructDefinition(structName);
@@ -658,25 +834,27 @@ internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* data
     
     if(operation == FieldOperation_Dump || operation == FieldOperation_Edit)
     {
-        if(operation == FieldOperation_Dump)
-        {
-            OutputToBuffer(output, "%.*s%s{", 
-                           printName ? structName.size : 0, 
-                           structName.b,
-                           printName ? "=" : "");
-        }
-        
         for(u32 fieldIndex = 0; fieldIndex < definition->memberCount; ++fieldIndex)
         {
             MemberDefinition* member = definition->members + fieldIndex;
-            void* fieldPtr = (void*) ((u8*) dataPtr + member->offset);
-            result += FieldOperation(member, operation, fieldPtr, tokenizer, output);
             
-        }
-        
-        if(operation == FieldOperation_Dump)
-        {
-            OutputToBuffer(output, "},");
+            // NOTE(Leonardo): we can't dump nor edit counters!
+            if(!StrEqual(StrLen(EDITOR_COUNTER_STRING), EDITOR_COUNTER_STRING, member->name))
+            {
+                void* fieldPtr = (void*) ((u8*) dataPtr + member->offset);
+                u32 elementCount = 1;
+                if(member->flags & MetaFlag_Pointer)
+                {
+                    elementCount = *GetMetaPtrElementCountForArray(definition, member, dataPtr);
+                    Assert(sizeof(u64) == sizeof(void*));
+                    fieldPtr = (void*) (*(u64*)fieldPtr);
+                }
+                
+                if(elementCount)
+                {
+                    result += FieldOperation(member, operation, fieldPtr, tokenizer, output, reserved, &elementCount);
+                }
+            }
         }
     }
     else
@@ -690,7 +868,7 @@ internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* data
             {
                 break;
             }
-            else if(t.type == Token_Comma)
+            else if(t.type == Token_SemiColon)
             {
             }
             else if(t.type == Token_EndOfFile)
@@ -701,10 +879,33 @@ internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* data
             {
                 Token fieldName = Stringize(t);
                 MemberDefinition* field = FindMetaField(definition, fieldName);
+                if(StrEqual(StrLen(EDITOR_COUNTER_STRING), EDITOR_COUNTER_STRING, field->name))
+                {
+                    InvalidCodePath;
+                }
+                
                 if(RequireToken(tokenizer, Token_EqualSign))
                 {
                     void* fieldPtr = (void*) ((u8*) dataPtr + field->offset);
-                    result += FieldOperation(field, operation, fieldPtr, tokenizer, output);
+                    
+                    if(operation == FieldOperation_Parse && field->flags & MetaFlag_Pointer)
+                    {
+                        Tokenizer fake = {};
+                        fake.at = tokenizer->at;
+                        
+                        u32 elementCount;
+                        FieldOperation(field, FieldOperation_GetSize, fieldPtr, &fake, output, reserved, &elementCount);
+                        u32* counterPtr = GetMetaPtrElementCountForArray(definition, field, dataPtr);
+                        *counterPtr = elementCount;
+                        void* arrayPtr = ReserveSpace(reserved, elementCount * field->size);
+                        
+                        Assert(sizeof(u64) == sizeof(void*));
+                        *(u64*) fieldPtr = (u64) arrayPtr;
+                        
+                        fieldPtr = arrayPtr;
+                    }
+                    u32 ignored;
+                    result += FieldOperation(field, operation, fieldPtr, tokenizer, output, reserved, &ignored);
                 }
                 else
                 {
@@ -720,18 +921,29 @@ internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* data
 
 internal u32 GetStructSize(String structName, Tokenizer* tokenizer)
 {
-    u32 result = StructOperation(structName, tokenizer, 0, FieldOperation_GetSize, 0, false);
+    ReservedSpace ignored = {};
+    u32 result = StructOperation(structName, tokenizer, 0, FieldOperation_GetSize, 0, &ignored);
     return result;
 }
 
-internal void ParseBufferIntoStruct(String structName, Tokenizer* tokenizer, void* structPtr)
+internal void ParseBufferIntoStruct(String structName, Tokenizer* tokenizer, void* structPtr, u32 reservedSize)
 {
-    StructOperation(structName, tokenizer, structPtr, FieldOperation_Parse, 0, false);
+    ReservedSpace reserved = {};
+    StructDefinition* definition = GetMetaStructDefinition(structName);
+    reserved.ptr = (void*) ((u8*) structPtr + definition->size);
+    reserved.size = reservedSize - definition->size;
+    
+    StructOperation(structName, tokenizer, structPtr, FieldOperation_Parse, 0, &reserved);
+    
+    Assert(reserved.size == 0);
 }
 
 internal void DumpStructToBuffer(String structName, Buffer* dest, void* structPtr)
 {
-    StructOperation(structName, 0, structPtr, FieldOperation_Dump, dest, false);
+    ReservedSpace ignored = {};
+    OutputToBuffer(dest, "{");
+    StructOperation(structName, 0, structPtr, FieldOperation_Dump, dest, &ignored);
+    OutputToBuffer(dest, "}");
 }
 
 #if 0

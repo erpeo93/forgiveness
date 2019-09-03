@@ -13,7 +13,7 @@ struct UIFont
     b32 drawShadow;
 };
 
-internal Rect2 UIOrthoTextOp(RenderGroup* group, AssetID fontID, Font* font, PAKFont* info, char* string, r32 fontScale, Vec3 P, TextOperation op, Vec4 color, b32 drawShadow)
+internal Rect2 UIOrthoTextOp(RenderGroup* group, FontId fontID, Font* font, PAKFont* info, char* string, r32 fontScale, Vec3 P, TextOperation op, Vec4 color, b32 drawShadow)
 {
     Rect2 result = InvertedInfinityRect2();
     
@@ -23,11 +23,10 @@ internal Rect2 UIOrthoTextOp(RenderGroup* group, AssetID fontID, Font* font, PAK
         for( char* at = string; *at; at++)
         {
             u8 codePoint = *at;
-            P.x += fontScale * GetHorizontalAdvanceForPair( font, info, prevCodePoint, codePoint );
+            P.x += fontScale * GetHorizontalAdvanceForPair(font, info, prevCodePoint, codePoint);
             if( codePoint != ' ' )
             {
                 BitmapId ID = GetBitmapForGlyph(group->assets, fontID, codePoint);
-                
                 if(IsValid(ID))
                 {
                     PAKBitmap* glyphInfo = GetBitmapInfo(group->assets, ID);
@@ -36,21 +35,24 @@ internal Rect2 UIOrthoTextOp(RenderGroup* group, AssetID fontID, Font* font, PAK
                     {
                         if(drawShadow)
                         {
-                            PushBitmap( group, FlatTransform(), ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight, V2( 1.0f, 1.0f ), V4( 0.0f, 0.0f, 0.0f, 1.0f ) );
+                            PushBitmap(group, FlatTransform(), ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight, V2( 1.0f, 1.0f ), V4( 0.0f, 0.0f, 0.0f, 1.0f ) );
                         }
                         
-                        PushBitmap( group, FlatTransform(), ID, P, glyphHeight, V2( 1.0f, 1.0f ), color );
+                        PushBitmap(group, FlatTransform(), ID, P, glyphHeight, V2(1.0f, 1.0f), color);
                     }
                     else
                     {
                         Assert( op == TextOp_getSize );
-                        Bitmap* bitmap = GetBitmap( group->assets, ID);
-                        if( bitmap )
+                        Bitmap* bitmap = GetBitmap(group->assets, ID);
+                        if(bitmap)
                         {
                             BitmapDim dim = GetBitmapDim( bitmap, P, V3( 1.0f, 0.0f, 0.0f ), V3( 0.0f, 1.0f, 0.0f ), glyphHeight );
                             Rect2 glyphRect = RectMinDim(dim.P.xy, dim.size);
                             result = Union(result, glyphRect);
-                            
+                        }
+                        else
+                        {
+                            LoadBitmap(group->assets, ID);
                         }
                     }
                 }
@@ -59,6 +61,22 @@ internal Rect2 UIOrthoTextOp(RenderGroup* group, AssetID fontID, Font* font, PAK
             prevCodePoint = codePoint;
         }
         
+    }
+    
+    return result;
+}
+
+
+internal Rect2 UIOrthoTextOp(RenderGroup* group, FontId fontID, char* string, r32 fontScale, Vec3 P, TextOperation op, Vec4 color, b32 drawShadow)
+{
+    Rect2 result = InvertedInfinityRect2();
+    
+    PushFont(group, fontID);
+    Font* font = GetFont(group->assets, fontID);
+    if(font)
+    {
+        PAKFont* info = GetFontInfo(group->assets, fontID);
+        result = UIOrthoTextOp(group, fontID, font, info, string, fontScale, P, op, color, drawShadow);
     }
     
     return result;

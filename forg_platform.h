@@ -14,13 +14,6 @@ struct TexturedVertex
     u16 textureIndex;
 };
 
-
-struct HardwareRenderingSettings
-{
-    u32 renderWidth;
-    u32 renderHeight;
-};
-
 struct GameRenderSettings
 {
     u32 depthPeelCount;

@@ -149,9 +149,17 @@ char* MetaTable_ParticleUpdaterEndPosition[] =
 "DestPos",
 };
 
+MemberDefinition memberDefinitionOfGroundColorationArrayTest[] = 
+ {
+{0, MetaType_u32, "u32", "p1", (u32) (&((GroundColorationArrayTest*)0)->p1), {}, sizeof(u32)}, 
+{0, MetaType_u32, "u32", "p2", (u32) (&((GroundColorationArrayTest*)0)->p2), {}, sizeof(u32)}, 
+};
+
 MemberDefinition memberDefinitionOfground_coloration[] = 
  {
-{0, MetaType_Vec4, "Vec4", "color", (u32) (&((ground_coloration*)0)->color), {}}, 
+{0, MetaType_Vec4, "Vec4", "color", (u32) (&((ground_coloration*)0)->color), {}, sizeof(Vec4)}, 
+{0, MetaType_u32, "u32", "array_counter_a1", (u32) (&((ground_coloration*)0)->array_counter_a1), {}, sizeof(u32)}, 
+{MetaFlag_Pointer, MetaType_GroundColorationArrayTest, "GroundColorationArrayTest", "a1", (u32) (&((ground_coloration*)0)->a1), {}, sizeof(GroundColorationArrayTest)}, 
 };
 
 char* MetaLabels_Label_Test[] = 
@@ -161,11 +169,12 @@ char* MetaLabels_Label_Test[] =
 };
 
 #define META_HANDLE_ADD_TO_DEFINITION_HASH()\
-AddToMetaDefinitions(ground_coloration, memberDefinitionOfground_coloration);
+AddToMetaDefinitions(ground_coloration, memberDefinitionOfground_coloration);\
+AddToMetaDefinitions(GroundColorationArrayTest, memberDefinitionOfGroundColorationArrayTest);
 
 #define META_LABELS_ADD()\
 AddToMetaLabels(Label_Test, MetaLabels_Label_Test);
 
 #define META_DEFAULT_VALUES_CPP_SUCKS()\
-memberDefinitionOfground_coloration[0].def.def_Vec4 = V4(1, 0, 1, 1);\
+memberDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;memberDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;memberDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);
 ;

@@ -146,7 +146,8 @@ internal LoadedFont LoadFont(char* path, char* filename, char* fontName, int hei
     memset(result.glyphIndexForCodePoint, 0, glyphsTableSize);
     
     result.glyphs = (u32*) malloc(sizeof(u32) * result.maximumGlyphsCount);
-    result.glyphsCount = 0;
+    result.glyphs[0] = 0;
+    result.glyphsCount = 1;
     
     for(u32 codePoint = startingCodePoint; codePoint <= endingCodePoint; ++codePoint)
     {
@@ -193,7 +194,7 @@ internal LoadedFont LoadFont(char* path, char* filename, char* fontName, int hei
 }
 
 
-internal LoadedBitmap LoadGlyph(LoadedFont* font, u32 codePoint, PAKAsset* asset)
+internal LoadedBitmap LoadGlyph(LoadedFont* font, u32 codePoint)
 {
     LoadedBitmap result = {};
     
@@ -325,8 +326,8 @@ internal LoadedBitmap LoadGlyph(LoadedFont* font, u32 codePoint, PAKAsset* asset
             SourceRow -= MaxWidth;
         }
         
-        asset->bitmap.align[0] = 1.0f / (r32)result.width;
-        asset->bitmap.align[1] = (1.0f + (MaxY - (BoundHeight - font->metrics.tmDescent))) / (r32)result.height;
+        result.pivot.x = 1.0f / (r32)result.width;
+        result.pivot.y = (1.0f + (MaxY - (BoundHeight - font->metrics.tmDescent))) / (r32)result.height;
         
         kerningChange = ( r32 ) ( MinX - preStepX );
     }
@@ -334,14 +335,13 @@ internal LoadedBitmap LoadGlyph(LoadedFont* font, u32 codePoint, PAKAsset* asset
     ABC abc;
     GetCharABCWidthsW( globalFontDC, codePoint, codePoint, &abc );
     r32 charAdvance = ( r32 ) ( abc.abcA + abc.abcB + abc.abcC );
-    
     for( u32 otherGlyphIndex = 0;
         otherGlyphIndex < font->maximumGlyphsCount;
         otherGlyphIndex++ )
     {
         font->horizontalAdvancement[glyphIndex * font->maximumGlyphsCount + otherGlyphIndex] += charAdvance - kerningChange;
         
-        if(otherGlyphIndex != 0 )
+        if(otherGlyphIndex != 0)
         {
             font->horizontalAdvancement[otherGlyphIndex * font->maximumGlyphsCount + glyphIndex] += kerningChange;
         }
@@ -1532,20 +1532,21 @@ internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* as
                     {
                         continue;
                     }
+                    else if(p.type == Token_EndOfFile)
+                    {
+                        break;
+                    }
+                    else if(p.type == Token_SemiColon)
+                    {
+                        break;
+                    }
                     else
                     {
-                        if(p.type == Token_SemiColon)
+                        Token propertyName = p;
+                        if(RequireToken(&tokenizer, Token_EqualSign))
                         {
-                            break;
-                        }
-                        else
-                        {
-                            Token propertyName = p;
-                            if(RequireToken(&tokenizer, Token_EqualSign))
-                            {
-                                Token value = GetToken(&tokenizer);
-                                FillPAKProperty(asset, p, value);
-                            }
+                            Token value = GetToken(&tokenizer);
+                            FillPAKProperty(asset, p, value);
                         }
                     }
                 }
@@ -1556,6 +1557,8 @@ internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* as
 
 internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char* outputPath)
 {
+    MemoryPool tempPool = {};
+    
     u32 type = GetMetaAssetType(sourceDir);
     u32 subtype = GetMetaAssetSubtype(type, sourceSubdir);
     
@@ -1624,7 +1627,6 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
     u16 standardAssetCount = 0;
     u16 derivedAssetCount = 0;
     
-    MemoryPool tempPool = {};
     for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
     {
         TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
@@ -1670,7 +1672,7 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
             
             PAKAsset* pakAssets = PushArray(&tempPool, PAKAsset, assetCount, NoClear());
             
-            u16 runningDerivedAssetIndex = derivedAssetCount ? assetCount : 0;
+            u16 runningDerivedAssetIndex = derivedAssetCount ? header.standardAssetCount : 0;
             u16 runningAssetIndex = 0;
             
             PlatformFileGroup markupFiles = platformAPI.GetAllFilesBegin(PlatformFile_markup, source);
@@ -1748,9 +1750,22 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
                         dest->font.descenderHeight = font.descenderHeight;
                         dest->font.externalLeading = font.externalLeading;
                         dest->font.onePastHighestCodePoint = font.onePastHighestCodePoint;
+                        dest->font.glyphAssetsFirstIndex = runningDerivedAssetIndex;
                         
                         u32 glyphsSize = font.glyphsCount * sizeof(u32);
                         fwrite(font.glyphs, glyphsSize, 1, out);
+                        
+                        
+                        LoadedBitmap* glyphBitmaps = (LoadedBitmap*) malloc(sizeof(LoadedBitmap) * font.glyphsCount);
+                        
+                        for(u32 glyphIndex = 0; glyphIndex < font.glyphsCount; ++glyphIndex)
+                        {
+                            u32 codePoint = font.glyphs[glyphIndex];
+                            if(codePoint)
+                            {
+                                glyphBitmaps[glyphIndex] = LoadGlyph(&font, codePoint);
+                            }
+                        }
                         
                         u8* horizontalAdvancePtr = (u8*) font.horizontalAdvancement;
                         for(u32 glyphIndex = 0; glyphIndex < font.glyphsCount; glyphIndex++ )
@@ -1760,23 +1775,27 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
                             horizontalAdvancePtr += sizeof(r32) * font.maximumGlyphsCount;
                         }
                         
-                        dest->font.glyphAssetsFirstIndex = runningDerivedAssetIndex;
                         for(u32 glyphIndex = 0; glyphIndex < font.glyphsCount; ++glyphIndex)
                         {
-                            PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;
-                            FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, "ignored", &markupFiles);
-                            
                             u32 codePoint = font.glyphs[glyphIndex];
-                            LoadedBitmap bitmap = LoadGlyph(&font, codePoint, derivedAsset);
-                            derivedAsset->bitmap.dimension[0] = bitmap.width;
-                            derivedAsset->bitmap.dimension[1] = bitmap.height;
-                            derivedAsset->bitmap.nativeHeight = 0;
-                            
-                            fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32), 1, out);
-                            free(bitmap.free);
+                            if(codePoint)
+                            {
+                                LoadedBitmap* bitmap = glyphBitmaps + glyphIndex;
+                                PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;
+                                FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, "ignored", &markupFiles);
+                                derivedAsset->bitmap.align[0] = bitmap->pivot.x;
+                                derivedAsset->bitmap.align[1] = bitmap->pivot.y;
+                                derivedAsset->bitmap.dimension[0] = bitmap->width;
+                                derivedAsset->bitmap.dimension[1] = bitmap->height;
+                                derivedAsset->bitmap.nativeHeight = 0;
+                                
+                                fwrite(bitmap->pixels, bitmap->width * bitmap->height * sizeof(u32), 1, out);
+                                free(bitmap->free);
+                            }
                         }
                         
                         
+                        free(glyphBitmaps);
                         free(font.glyphs);
                         free(font.horizontalAdvancement);
                         free(font.glyphIndexForCodePoint);
@@ -1856,6 +1875,8 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
             InvalidCodePath;
         }
     }
+    
+    Clear(&tempPool);
 }
 
 
