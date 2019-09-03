@@ -523,13 +523,13 @@ inline b32 PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTransform,
     if(bitmap)
     {
         result = true;
-        color = Hadamart(color, ID.coloration);
+        //color = Hadamart(color, ID.coloration);
         PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, bitmap->pivot);
     }
     else
     {
         ++renderGroup->countMissing;
-        LoadBitmap(renderGroup->assets, ID, false);
+        LoadBitmap(renderGroup->assets, ID);
     }
     
     return result;
@@ -552,13 +552,13 @@ inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform o
     Bitmap* bitmap = GetBitmap(renderGroup->assets, ID);
     if(bitmap)
     {
-        color = Hadamart(color, ID.coloration);
+        //color = Hadamart(color, ID.coloration);
         result = PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, pivot);
     }
     else
     {
         ++renderGroup->countMissing;
-        LoadBitmap(renderGroup->assets, ID, false);
+        LoadBitmap(renderGroup->assets, ID);
     }
     
     return result;
@@ -617,7 +617,7 @@ inline void PushTexturedCube(RenderGroup* group, Vec3 P, r32 height, r32 width, 
     }
     else
     {
-        LoadBitmap(group->assets, ID, false);
+        LoadBitmap(group->assets, ID);
     }
 }
 
@@ -694,14 +694,14 @@ inline void PushTrunkatedPyramid(RenderGroup* group, BitmapId BID, Vec3 P, Vec3 
     Bitmap* bitmap = GetBitmap(group->assets, BID);
     if(bitmap)
     {
-        baseColor = Hadamart(baseColor, BID.coloration);
-        topColor = Hadamart(topColor, BID.coloration);
+        //baseColor = Hadamart(baseColor, BID.coloration);
+        //topColor = Hadamart(topColor, BID.coloration);
         PushTrunkatedPyramid(group, bitmap->textureHandle, P, topP, subdivisions, XAxisBottom, YAxisBottom, ZAxisBottom, XAxisTop, YAxisTop, ZAxisTop, radiousBottom, radiousTop, height, baseColor, topColor, lights,modulationPercentage, drawBase, drawTop);
     }
     else
     {
         ++group->countMissing;
-        LoadBitmap(group->assets, BID, false);
+        LoadBitmap(group->assets, BID);
     }
 }
 
@@ -770,7 +770,7 @@ inline Font* PushFont(RenderGroup* renderGroup, FontId ID)
     else
     {
         ++renderGroup->countMissing;
-        LoadFont(renderGroup->assets, ID, false);
+        LoadFont(renderGroup->assets, ID);
     }
     
     return font;

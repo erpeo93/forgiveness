@@ -25,6 +25,8 @@ internal void InitializeSoundState( SoundState* soundState, MemoryPool* pool )
     soundState->masterVolume = V2(1.0f, 1.0f);
 }
 
+
+#if 0
 inline r32 LabelsDelta(u32 referenceLabelCount, SoundLabel* referenceLabels, u32 myLabelCount, SoundLabel* myLabels)
 {
     r32 result = 0;
@@ -195,6 +197,7 @@ inline PickSoundResult PickSoundFromEvent(Assets* assets, SoundContainer* event,
     PickSoundResult result = PickSoundFromContainer(assets, event, labelCount, labels, sequence);
     return result;
 }
+#endif
 
 internal PlayingSound* PlaySound(SoundState* soundState, Assets* assets, SoundId ID, r32 distanceFromPlayer, r32 decibelOffset = 0, r32 frequency = 1.0, r32 delay = 0.0f, r32 toleranceDistance = 1.0f,r32 distanceFalloffCoeff = 1.0f)
 {
@@ -203,7 +206,7 @@ internal PlayingSound* PlaySound(SoundState* soundState, Assets* assets, SoundId
         soundState->firstFreeSound = PushStruct(soundState->pool, PlayingSound);
         soundState->firstFreeSound;
     }
-    PakSound* info = GetSoundInfo(assets, ID);
+    PAKSound* info = GetSoundInfo(assets, ID);
     r32 decibel = Min(info->decibelLevel + decibelOffset, 0);
     
     if(distanceFromPlayer > toleranceDistance)
@@ -253,6 +256,7 @@ inline SoundContainer* GetSoundEvent(TaxonomyTable* table, u64 eventHash)
     return result;
 }
 
+#if 0
 inline void PlaySoundEvent(SoundState* soundState, Assets* assets, SoundContainer* event, u32 labelCount, SoundLabel* labels, RandomSequence* sequence, r32 distanceFromPlayer)
 {
     PickSoundResult pick = PickSoundFromEvent(assets, event, labelCount, labels, sequence);
@@ -272,6 +276,7 @@ inline void PlaySoundEvent(SoundState* soundState, Assets* assets, SoundContaine
         }
     }
 }
+#endif
 
 internal void ChangeVolume(SoundState* soundState, PlayingSound* sound, r32 fadeDuration, Vec2 targetVolume)
 {
@@ -334,8 +339,11 @@ internal void PlayMixedAudio(SoundState* soundState, r32 timeToAdvance, Platform
                 Sound*LoadedSound = GetSound(assets, PlayingSound->ID);
                 if(LoadedSound)
                 {
+                    
+#if 0                    
                     SoundId nextID = GetNextSoundInChain( assets, PlayingSound->ID );
                     PrefetchSound(assets, nextID);
+#endif
                     
                     Vec2 Volume = PlayingSound->currentVolume;
                     Vec2 dVolume = SecondsPerSample*PlayingSound->dVolume;
@@ -462,6 +470,7 @@ internal void PlayMixedAudio(SoundState* soundState, r32 timeToAdvance, Platform
                     
                     if(ChunksToMix == ChunksRemainingInSound)
                     {
+#if 0
                         if(IsValid(nextID))
                         {
                             PlayingSound->ID = nextID;                           
@@ -475,6 +484,9 @@ internal void PlayMixedAudio(SoundState* soundState, r32 timeToAdvance, Platform
                         {
                             SoundFinished = true;
                         }
+#else
+                        SoundFinished = true;
+#endif
                     }
                 }
                 else

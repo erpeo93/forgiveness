@@ -6,113 +6,128 @@
 #define PAK_MAGIC_NUMBER PAK_CODE('h', 'h', 'a', 'f')
 #define PAK_VERSION 0
 
-struct PAKHeader
+struct PAKFileHeader
 {
     u32 magicValue;
     u32 version;
     
-    u32 assetType;
-    u32 assetSubType;
-    u32 assetcount;
+    u16 assetType;
+    u16 assetSubType;
     
-    u64 assetOffset;
+    u16 standardAssetCount;
+    u16 derivedAssetCount;
 };
 
-struct PakBitmap
+#define MAX_LABEL_PER_ASSET 8
+struct PAKLabel
+{
+    u16 label;
+    u16 value;
+};
+
+struct PAKBitmap
 {
     u32 dimension[2];
     r32 align[2];
     r32 nativeHeight;
-    
     // NOTE( Leonardo ): data is:
     /*
     u32* pixels;
     */
 };
 
-struct PakGlyph
+struct PAKFont
 {
-    u32 unicodeCodePoint;
-};
-
-struct PakFont
-{
-    u32 glyphsCount;
+    u32 glyphCount;
     r32 ascenderHeight;
     r32 descenderHeight;
     r32 externalLeading;
     u32 onePastHighestCodePoint;
-    
+    u16 glyphAssetsFirstIndex;
     // NOTE( Leonardo ): data is:
     /*
-    PakGlyph codePoints[glyphsCount];
-    r32* horizintalAdvance[glyphsCount][glyphsCount];
+     u32 codePoints[glyphsCount];
+    r32 horizintalAdvance[glyphsCount][glyphsCount];
     */
 };
 
-struct PakSound
+struct PAKSound
 {
     u32 sampleCount;
     u32 channelCount;
-    u32 chain;
     
     i16 maxSampleValue;
     r32 decibelLevel;
-    
     // NOTE( Leonardo ): data is:
     /*
     i16* samples[2];
     */
 };
 
-struct PakSkeleton
+struct PAKAnimation
 {
-    u32 animationCount;
+    u32 spriteCount;
+    u32 frameCount;
+    u32 boneCount;
+    u32 assCount;
+    
+    u16 durationMS;
+    
+    
+    u16 preparationThreesoldMS;
+    u16 syncThreesoldMS;
     
     // NOTE( Leonardo ): data is:
     /*
-    u32 spriteCount[animationCount];
-    u32 frameCount[animationCount];
-    u32 boneCount[animationCount];
-    u32 assCount[animationCount];
-    AnimationHeader header[animationCount];
-    FrameData* frames;
-    Bone* bones;
-    PieceAss* ass;
+    SpriteInfo sprites[spriteCount]
+    FrameData frames[frameCount];
+    Bone bones[boneCount];
+    PieceAss ass[assCount];
     */
 };
 
-struct PakModel
+struct PAKSkeleton
+{
+    u16 animationCount;
+    u16 animationAssetsFirstIndex;
+};
+
+struct PAKModel
 {
     u32 vertexCount;
     u32 faceCount;
     Vec3 dim;
     
     // NOTE(Leonardo): data is:
-    //ColoredVertex* vertexes;
-    //ModelFace* faces;
+    //ColoredVertex vertexes[vertexCount];
+    //ModelFace faces[faceCount];
 };
 
 
-struct PakDataFile
+struct PAKDataFile
 {
-    u32 colorCount;
-    
-    // NOTE(Leonardo): data is:
-    //Vec3* colors;
+    u32 rawSize;
+    // NOTE( Leonardo ): data is:
+    /*
+    u8 data[rawSize];
+    */
 };
 
-struct PakAsset
+struct PAKAsset
 {
+    char name[32];
     u64 dataOffset;
+    PAKLabel labels[MAX_LABEL_PER_ASSET];
+    
     union
     {
-        PakBitmap bitmap;
-        PakSound sound;
-        PakSkeleton skeleton;
-        PakFont font;
-        PakModel model;
-        PakDataFile data;
+        PAKBitmap bitmap;
+        PAKSound sound;
+        PAKSkeleton skeleton;
+        PAKAnimation animation;
+        PAKFont font;
+        PAKModel model;
+        PAKDataFile dataFile;
     };
 };
 

@@ -1,9 +1,13 @@
 #pragma once
 
 struct DebugTable;
-
 #define GAME_FRAME_END( name ) void name( PlatformClientMemory* memory, PlatformInput* input, GameRenderCommands* commands )
 typedef GAME_FRAME_END( game_frame_end );
+
+#if FORGIVENESS_INTERNAL
+#define SERVER_FRAME_END( name ) DebugTable* name( PlatformServerMemory* memory )
+typedef SERVER_FRAME_END( server_frame_end );
+#endif
 
 struct DebugID
 {

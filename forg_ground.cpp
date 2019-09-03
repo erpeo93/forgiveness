@@ -962,22 +962,30 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                         Rect2 rect = RectMinDim(tileMin.xy, V2(voxelSide, voxelSide));
                         
                         
-#if 0                        
+                        Vec4 tileColor = V4(0, 1, 0, 1);
                         AssetLabels labels = {};
-                        TileDefinition* tileDef = GetAsset(group->assets, Asset_TileDefinition, TileDefinition_Generic, &labels);
                         
-                        Vec4 tileColor = tileDef->color;
+                        AssetID ID = QueryAssets(group->assets, AssetType_ground_coloration, 0, &seq, &labels);
+                        if(IsValid(ID))
+                        {
+                            ground_coloration* groundColoration = GetData(ground_coloration, group->assets, ID);
+                            if(groundColoration)
+                            {
+                                tileColor = groundColoration->color;
+                            }
+                            else
+                            {
+                                LoadDataFile(group->assets, ID);
+                            }
+                        }
                         
                         
                         PushRect(group, tileTransform, rect, tileColor);
-#endif
-                        Vec4 tileColor = V4(0, 1, 0, 1);
                         
                         //if(UI->showGroundOutline)
                         {
                             PushRectOutline(group, tileTransform, rect, V4(1, 1, 1, 1), 0.1f);
                         }
-                        
                         
                         
 #if 0                        

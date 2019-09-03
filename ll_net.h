@@ -1,101 +1,7 @@
-#pragma once
-#include <stdint.h>
-
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef int8_t i8;
-typedef int16_t i16;
-typedef int32_t i32;
-typedef int64_t i64;
-
-typedef float r32;
-typedef double r64;
-
-typedef i32 b32;
-
-typedef size_t memory_index;
-typedef uintptr_t unm;
-typedef intptr_t snm;
-
-
-#define KiloBytes( value ) ( ( value ) * 1024 )
-#define MegaBytes( value ) ( ( value ) * 1024 * 1024 )
-#define GigaBytes( value ) ( ( value ) * 1024 * 1024 * 1024 )
-#define TeraBytes( value ) ( ( value ) * 1024 * 1024 * 1024 * 1024 )
-
-#define Max( A , B ) ( ( ( A ) > ( B ) ) ? ( A ) : ( B ) )
-#define Min( A , B ) ( ( ( A ) < ( B ) ) ? ( A ) : ( B ) )
-
 #define pack754_32(f) (pack754((f), 32, 8))
 #define pack754_64(f) (pack754((f), 64, 11))
 #define unpack754_32(i) (unpack754((i), 32, 8))
 #define unpack754_64(i) (unpack754((i), 64, 11))
-
-struct NetMutex
-{
-    u64 volatile ticket;
-    u64 volatile serving;
-};
-
-inline u64 NetAtomicIncrementU64(u64 volatile* value, u64 addend)
-{
-    // NOTE( Leonardo ): return the value that was there _Before_ the add!
-    u64 result = (InterlockedExchangeAdd64(( __int64* ) value, addend));
-    return result;
-}
-
-inline void BeginNetMutex(NetMutex* mutex)
-{
-    u64 ticket = NetAtomicIncrementU64(&mutex->ticket, 1);
-    while(ticket != mutex->serving);{_mm_pause();}
-}
-
-inline void EndNetMutex(NetMutex* mutex)
-{
-    NetAtomicIncrementU64(&mutex->serving, 1);
-}
-
-#define NETDLLIST_INSERT( sentinel, element ) \
-(element)->next = (sentinel)->next; \
-(element)->prev = (sentinel); \
-(element)->prev->next = (element); \
-(element)->next->prev = (element);
-
-#define NETDLLIST_REMOVE(element) \
-if((element)->next)\
-{\
-    (element)->prev->next = (element)->next; \
-    (element)->next->prev = (element)->prev;\
-    (element)->next = 0;\
-    (element)->prev = 0;\
-}
-
-#define NETDLLIST_ISEMPTY(sentinel) ((sentinel)->next == (sentinel))
-
-#define NETDLLIST_INSERT_AS_LAST( sentinel, element ) \
-(element)->next = (sentinel); \
-(element)->prev = (sentinel)->prev; \
-(element)->prev->next = (element); \
-(element)->next->prev = (element);
-
-
-#define NETDLLIST_INIT( sentinel ) \
-(sentinel)->next = ( sentinel );\
-(sentinel)->prev = ( sentinel );
-
-#define NETFREELIST_ALLOC( result, firstFreePtr, allocationCode ) if( ( result ) = ( firstFreePtr ) ) { ( firstFreePtr ) = ( result )->nextFree; } else{ ( result ) = allocationCode; } Assert( ( result ) != ( firstFreePtr ) ); 
-#define NETFREELIST_DEALLOC( result, firstFreePtr ) Assert( ( result ) != ( firstFreePtr ) ); if( ( result ) ) { ( result )->nextFree = ( firstFreePtr ); ( firstFreePtr ) = ( result ); Assert( ( firstFreePtr )->next != ( result ) ); }
-#define NETFREELIST_INSERT( newFirst, firstPtr ) Assert( ( firstPtr ) != ( newFirst ) ); ( newFirst )->next = ( firstPtr ); ( firstPtr ) = ( newFirst );
-
-#define NETFREELIST_INSERT_AS_LAST(newLast, firstPtr, lastPtr) \
-if(lastPtr){(lastPtr)->next = newLast; lastPtr = newLast;} else{ (firstPtr) = (lastPtr) = dest; }
-
-
-#define NETFREELIST_FREE( listPtr, type, firstFreePtr ) for( type* element = ( listPtr ); element; ) { Assert( element != element->next ); type* nextElement = element->next; NETFREELIST_DEALLOC( element, firstFreePtr ); element = nextElement; } ( listPtr ) = 0;
-#define NETFREELIST_COPY( destList, type, toCopy, firstFree, pool, ... ){ type* currentElement_ = ( toCopy ); while( currentElement_ ) { type* elementToCopy_; NETFREELIST_ALLOC( elementToCopy_, ( firstFree ), PushStruct( ( pool ), type ) ); ##__VA_ARGS__; *elementToCopy_ = *currentElement_; NETFREELIST_INSERT( elementToCopy_, ( destList ) ); currentElement_ = currentElement_->next; } }
 
 inline u64 pack754(long double f, unsigned bits, unsigned expbits)
 {
@@ -821,7 +727,7 @@ struct NetworkConnection
     NetworkBufferedPacket* firstFreePacket;
     
     
-    NetMutex mutex;
+    TicketMutex mutex;
     NetworkBufferedAck* firstQueuedAck;
     NetworkBufferedAck* firstFreeAck;
     
@@ -854,7 +760,7 @@ struct NetworkInterface
     u16 newConnectionCount;
     NetworkNewConnection newConnections[128];
     
-    NetMutex connectionMutex;
+    TicketMutex connectionMutex;
     u16 nextConnectionIndex;
     NetworkConnection* firstFreeConnection;
     
@@ -1236,10 +1142,10 @@ inline u32 GetBandwidth(NetworkConnection* connection, r32 elapsedTime)
 
 inline void DispatchQueuedAcks(NetworkConnection* connection)
 {
-    BeginNetMutex(&connection->mutex);
+    BeginTicketMutex(&connection->mutex);
     NetworkBufferedAck* firstToDispatch = connection->firstQueuedAck;
     connection->firstQueuedAck = 0;
-    EndNetMutex(&connection->mutex);
+    EndTicketMutex(&connection->mutex);
     
     if(firstToDispatch)
     {
@@ -1259,11 +1165,11 @@ inline void DispatchQueuedAcks(NetworkConnection* connection)
                         connection->lastSent = packet->prev;
                     }
                     
-                    NETDLLIST_REMOVE(packet);
+                    DLLIST_REMOVE(packet);
                     
-                    BeginNetMutex(&connection->mutex);
-                    NETFREELIST_DEALLOC(packet, connection->firstFreePacket);
-                    EndNetMutex(&connection->mutex);
+                    BeginTicketMutex(&connection->mutex);
+                    FREELIST_DEALLOC(packet, connection->firstFreePacket);
+                    EndTicketMutex(&connection->mutex);
                 }
                 
                 packet = next;
@@ -1272,20 +1178,20 @@ inline void DispatchQueuedAcks(NetworkConnection* connection)
             lastDispatched = toDispatch;
         }
         
-        BeginNetMutex(&connection->mutex);
+        BeginTicketMutex(&connection->mutex);
         lastDispatched->nextFree = connection->firstFreeAck;
         connection->firstFreeAck = firstToDispatch;
-        EndNetMutex(&connection->mutex);
+        EndTicketMutex(&connection->mutex);
     }
 }
 
 inline void QueueAck(NetworkConnection* connection, u16 ackedIndex, AckedBits bits)
 {
     NetworkBufferedAck* ack;
-    NETFREELIST_ALLOC(ack, connection->firstFreeAck, (NetworkBufferedAck*) malloc(sizeof(NetworkAck)));
+    FREELIST_ALLOC(ack, connection->firstFreeAck, (NetworkBufferedAck*) malloc(sizeof(NetworkAck)));
     ack->ack.progressiveIndex = ackedIndex;
     ack->ack.bits = bits;
-    NETFREELIST_INSERT(ack, connection->firstQueuedAck);
+    FREELIST_INSERT(ack, connection->firstQueuedAck);
 }
 
 inline PacketData* GetPacketData(NetworkConnection* connection, u16 packetIndex)
@@ -1376,9 +1282,9 @@ inline void SignalReceivedPacket(NetworkConnection* connection, u16 packetIndex)
             }
         }
 		
-		BeginNetMutex(&connection->mutex);
+		BeginTicketMutex(&connection->mutex);
 		connection->ackToInclude = newAckToInclude;
-		EndNetMutex(&connection->mutex);
+		EndTicketMutex(&connection->mutex);
     }
 }
 
@@ -1387,9 +1293,9 @@ NETWORK_QUEUE_PACKET(Win32QueuePacket)
     NetworkConnection* connection = network->connections + connectionSlot;
     
     NetworkBufferedPacket* newPacket;
-    BeginNetMutex(&connection->mutex);
-    NETFREELIST_ALLOC(newPacket, connection->firstFreePacket, (NetworkBufferedPacket*) malloc(sizeof(NetworkBufferedPacket)));
-    EndNetMutex(&connection->mutex);
+    BeginTicketMutex(&connection->mutex);
+    FREELIST_ALLOC(newPacket, connection->firstFreePacket, (NetworkBufferedPacket*) malloc(sizeof(NetworkBufferedPacket)));
+    EndTicketMutex(&connection->mutex);
     
     newPacket->progressiveIndex = connection->nextProgressiveIndex++;
     
@@ -1414,7 +1320,7 @@ NETWORK_QUEUE_PACKET(Win32QueuePacket)
     newPacket->resendTimer = 0;
     newPacket->lostTimer = 0;
     
-    NETDLLIST_INSERT_AS_LAST(&connection->sendQueueSentinel, newPacket);
+    DLLIST_INSERT_AS_LAST(&connection->sendQueueSentinel, newPacket);
 }
 
 NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
@@ -1469,26 +1375,26 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
                     connection->lastSent = packet->prev;
                 }
                 
-                NETDLLIST_REMOVE(packet);
+                DLLIST_REMOVE(packet);
                 if(guaranteedDelivery && connection->salt)
                 {
                     packet->progressiveIndex = connection->nextProgressiveIndex++;
-                    NETDLLIST_INSERT_AS_LAST(&connection->sendQueueSentinel, packet);
+                    DLLIST_INSERT_AS_LAST(&connection->sendQueueSentinel, packet);
                 }
                 else
                 {
-                    BeginNetMutex(&connection->mutex);
-                    NETFREELIST_INSERT(packet, connection->firstFreePacket);
-                    EndNetMutex(&connection->mutex);
+                    BeginTicketMutex(&connection->mutex);
+                    FREELIST_INSERT(packet, connection->firstFreePacket);
+                    EndTicketMutex(&connection->mutex);
                 }
             }
             else
             {
                 if(sendPackets && dataToSend > 0)
                 {
-                    BeginNetMutex(&connection->mutex);
+                    BeginTicketMutex(&connection->mutex);
                     NetworkAck ackToInclude = connection->ackToInclude;
-                    EndNetMutex(&connection->mutex);
+                    EndTicketMutex(&connection->mutex);
                     
                     unsigned char buff_[2048];
                     
@@ -1522,7 +1428,7 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
             packet = next;
         }
         
-        result = NETDLLIST_ISEMPTY(&connection->sendQueueSentinel);
+        result = DLLIST_ISEMPTY(&connection->sendQueueSentinel);
     }
     
     return result;
@@ -1535,29 +1441,29 @@ inline void Win32FreeConnection(NetworkInterface* network, NetworkConnection* co
     connection->ackToInclude = {};
     connection->ackToInclude.progressiveIndex = 0xffff;
     
-    if(!NETDLLIST_ISEMPTY(&connection->sendQueueSentinel))
+    if(!DLLIST_ISEMPTY(&connection->sendQueueSentinel))
     {
         connection->sendQueueSentinel.prev ->next = connection->firstFreePacket;
         connection->firstFreePacket = connection->sendQueueSentinel.next;
-        NETDLLIST_INIT(&connection->sendQueueSentinel);
+        DLLIST_INIT(&connection->sendQueueSentinel);
     }
     
-    if(!NETDLLIST_ISEMPTY(&connection->recvQueueSentinel))
+    if(!DLLIST_ISEMPTY(&connection->recvQueueSentinel))
     {
         connection->recvQueueSentinel.prev ->next = connection->firstFreePacket;
         connection->firstFreePacket = connection->recvQueueSentinel.next;
-        NETDLLIST_INIT(&connection->recvQueueSentinel);
+        DLLIST_INIT(&connection->recvQueueSentinel);
     }
     
-    NETFREELIST_FREE(connection->firstQueuedAck, NetworkBufferedAck, connection->firstFreeAck);
+    FREELIST_FREE(connection->firstQueuedAck, NetworkBufferedAck, connection->firstFreeAck);
     
-    Assert(NETDLLIST_ISEMPTY(&connection->sendQueueSentinel));
-    Assert(NETDLLIST_ISEMPTY(&connection->recvQueueSentinel));
+    Assert(DLLIST_ISEMPTY(&connection->sendQueueSentinel));
+    Assert(DLLIST_ISEMPTY(&connection->recvQueueSentinel));
     
-    BeginNetMutex(&network->connectionMutex);
+    BeginTicketMutex(&network->connectionMutex);
     connection->nextFree = network->firstFreeConnection;
     network->firstFreeConnection = connection;
-    EndNetMutex(&network->connectionMutex);
+    EndTicketMutex(&network->connectionMutex);
 }
 
 NETWORK_CLOSE_CONNECTION(Win32CloseConnection)
@@ -1586,9 +1492,9 @@ NETWORK_CLOSE_CONNECTION(Win32CloseConnection)
             }
         }
         
-        BeginNetMutex(&connection->mutex);
+        BeginTicketMutex(&connection->mutex);
         connection->salt = 0;
-        EndNetMutex(&connection->mutex);
+        EndTicketMutex(&connection->mutex);
         
         Win32FreeConnection(network, connection);
     }
@@ -1621,36 +1527,36 @@ NETWORK_OPEN_CONNECTION(Win32OpenConnection)
     connection->nextProgressiveIndex = 0;
     connection->lastSent = &connection->sendQueueSentinel;
     
-    BeginNetMutex(&connection->mutex);
+    BeginTicketMutex(&connection->mutex);
     
     
     if(connection->sendQueueSentinel.next)
     {
-        if(!NETDLLIST_ISEMPTY(&connection->sendQueueSentinel))
+        if(!DLLIST_ISEMPTY(&connection->sendQueueSentinel))
         {
             connection->sendQueueSentinel.prev ->next = connection->firstFreePacket;
             connection->firstFreePacket = connection->sendQueueSentinel.next;
         }
     }
-    NETDLLIST_INIT(&connection->sendQueueSentinel);
+    DLLIST_INIT(&connection->sendQueueSentinel);
     
     if(connection->recvQueueSentinel.next)
     {
-        if(!NETDLLIST_ISEMPTY(&connection->recvQueueSentinel))
+        if(!DLLIST_ISEMPTY(&connection->recvQueueSentinel))
         {
             connection->recvQueueSentinel.prev ->next = connection->firstFreePacket;
             connection->firstFreePacket = connection->recvQueueSentinel.next;
         }
     }
-    NETDLLIST_INIT(&connection->recvQueueSentinel);
+    DLLIST_INIT(&connection->recvQueueSentinel);
     
     
-    NETFREELIST_FREE(connection->firstQueuedAck, NetworkBufferedAck, connection->firstFreeAck);
+    FREELIST_FREE(connection->firstQueuedAck, NetworkBufferedAck, connection->firstFreeAck);
     
     connection->ackToInclude = {};
     connection->ackToInclude.progressiveIndex = 0xffff;
     
-    EndNetMutex(&connection->mutex);
+    EndTicketMutex(&connection->mutex);
     
     while(true)
     {
@@ -1694,7 +1600,7 @@ NETWORK_GET_PACKET(Win32GetPacket)
     NetworkPacketReceived result = {};
     
     NetworkConnection* connection = network->connections + connectionSlot;
-	BeginNetMutex(&connection->mutex);
+	BeginTicketMutex(&connection->mutex);
     NetworkBufferedPacket* firstToReceive = connection->recvQueueSentinel.next;
     
     result.disconnected = (connection->salt == 0);
@@ -1703,11 +1609,11 @@ NETWORK_GET_PACKET(Win32GetPacket)
         result.dataSize = firstToReceive->dataSize;
         memcpy(result.data, firstToReceive->data, firstToReceive->dataSize);
         
-        NETDLLIST_REMOVE(firstToReceive);
-        NETFREELIST_DEALLOC(firstToReceive, connection->firstFreePacket);
+        DLLIST_REMOVE(firstToReceive);
+        FREELIST_DEALLOC(firstToReceive, connection->firstFreePacket);
     }
     
-	EndNetMutex(&connection->mutex);
+	EndTicketMutex(&connection->mutex);
     return result;
 }
 
@@ -1795,7 +1701,7 @@ NETWORK_RECEIVE_DATA(Win32ReceiveData)
                                 unpack(start, "H", &salt);
                                 saltToSendBack = salt;
                                 
-                                BeginNetMutex(&network->connectionMutex);
+                                BeginTicketMutex(&network->connectionMutex);
                                 NetworkConnection* connection = network->firstFreeConnection;
                                 if(!connection)
                                 {
@@ -1807,7 +1713,7 @@ NETWORK_RECEIVE_DATA(Win32ReceiveData)
                                     connectionSlot = (u16) (connection - network->connections);
                                     network->firstFreeConnection = connection->nextFree;
                                 }
-                                EndNetMutex(&network->connectionMutex);
+                                EndTicketMutex(&network->connectionMutex);
                                 
                                 connection->salt = salt;
                                 
@@ -1815,8 +1721,8 @@ NETWORK_RECEIVE_DATA(Win32ReceiveData)
                                 connection->nextProgressiveIndex = 0;
                                 connection->lastSent = &connection->sendQueueSentinel;
                                 
-                                NETDLLIST_INIT(&connection->sendQueueSentinel);
-                                NETDLLIST_INIT(&connection->recvQueueSentinel);
+                                DLLIST_INIT(&connection->sendQueueSentinel);
+                                DLLIST_INIT(&connection->recvQueueSentinel);
                                 
                                 Assert(!connection->firstQueuedAck);
                                 connection->ackToInclude = {};
@@ -1858,20 +1764,20 @@ NETWORK_RECEIVE_DATA(Win32ReceiveData)
                                 NetworkConnection* connection = network->connections + header.connectionSlot;
                                 SignalReceivedPacket(connection, header.progressiveIndex);
                                 
-                                BeginNetMutex(&connection->mutex);
+                                BeginTicketMutex(&connection->mutex);
                                 if(connection->salt == header.salt)
                                 {
                                     QueueAck(connection, header.acked, header.ackedBits);
                                     NetworkBufferedPacket* recv;
-                                    NETFREELIST_ALLOC(recv, connection->firstFreePacket, (NetworkBufferedPacket*) malloc(sizeof(NetworkBufferedPacket)));
+                                    FREELIST_ALLOC(recv, connection->firstFreePacket, (NetworkBufferedPacket*) malloc(sizeof(NetworkBufferedPacket)));
                                     recv->flags = header.flags;
                                     recv->progressiveIndex = header.progressiveIndex;
                                     recv->dataSize = header.dataSize;
                                     memcpy(recv->data, start, header.dataSize);
                                     
-                                    NETDLLIST_INSERT_AS_LAST(&connection->recvQueueSentinel, recv);
+                                    DLLIST_INSERT_AS_LAST(&connection->recvQueueSentinel, recv);
                                 }
-                                EndNetMutex(&connection->mutex);
+                                EndTicketMutex(&connection->mutex);
                             }
                         }
                     }

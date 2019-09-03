@@ -1,3 +1,4 @@
+// NOTE(Leonardo): all the functions here can be called just by the main thread!
 inline Assets* DEBUGGetGameAssets(PlatformClientMemory* memory)
 {
     GameState* gameState = (GameState*) memory->gameState;
@@ -5,64 +6,25 @@ inline Assets* DEBUGGetGameAssets(PlatformClientMemory* memory)
     return result;
 }
 
-inline void BeginAssetLock(Assets* assets)
-{
-    for(;;)
-    {
-        if(AtomicCompareExchangeUint32(&assets->lock, 1, 0) == 0)
-        {
-            break;
-        }
-    }
-}
-
-inline void EndAssetLock(Assets* assets)
-{
-    CompletePastWritesBeforeFutureWrites;
-    assets->lock = 0;
-}
-
-inline AssetFile* GetFile(Assets* assets, u32 fileIndex)
-{
-    AssetFile* file = assets->files + fileIndex;
-    return file;
-}
-
 inline PlatformFileHandle* GetHandleFor(Assets* assets, u32 fileIndex)
 {
     Assert(fileIndex < assets->fileCount);
-    PlatformFileHandle* result = &GetFile(assets, fileIndex)->handle;
+    AssetFile* file = assets->files + fileIndex;
+    PlatformFileHandle* result = &file->handle;
     
     return result;
 }
 
-struct AssetMemorySize
+internal void CloseAllHandles(Assets* assets)
 {
-    u32 data;
-    u32 total;
-};
-
-inline void AddHeaderInFront(Assets* assets, AssetMemoryHeader* header)
-{
-    AssetMemoryHeader* sentinel = &assets->assetSentinel;
-    
-    header->next = sentinel->next;
-    header->prev = sentinel;
-    
-    header->next->prev = header;
-    header->prev->next = header;
+    while(assets->threadsReading){}
+    for(u32 fileIndex = 0; fileIndex < assets->fileCount; ++fileIndex)
+    {
+        AssetFile* file = assets->files + fileIndex;
+        platformAPI.CloseFile(&file->handle);
+    }
+    assets->fileCount = 0;
 }
-
-inline void RemoveHeaderFromList(AssetMemoryHeader* header)
-{
-    header->next->prev = header->prev;
-    header->prev->next = header->next;
-    
-    header->next = 0;
-    header->prev = 0;
-}
-
-
 
 enum AssetBlockState
 {
@@ -86,26 +48,6 @@ internal AssetMemoryBlock* InsertBlock(AssetMemoryBlock* prev, u64 size, void* m
     block->flags = 0;
     
     return block;
-}
-
-internal AssetMemoryBlock* FindBlockForSize(Assets* assets, u64 size)
-{
-    AssetMemoryBlock* result = 0;
-    for(AssetMemoryBlock* current = assets->blockSentinel.next;
-        current != &assets->blockSentinel;
-        current = current->next)
-    {
-        if(!(current->flags & AssetBlock_used))
-        {
-            if(size <= current->size)
-            {
-                result = current;
-                break;
-            }
-        }
-    }
-    
-    return result;
 }
 
 internal b32 MergeIfPossible(Assets* assets, AssetMemoryBlock* first, AssetMemoryBlock* second)
@@ -133,43 +75,12 @@ internal b32 MergeIfPossible(Assets* assets, AssetMemoryBlock* first, AssetMemor
     return result;
 }
 
-
-enum FinalizeAssetOperation
-{
-    Finalize_none,
-    Finalize_font,
-    Finalize_Bitmap,
-};
-
-internal void AddOp(PlatformTextureOpQueue* queue, TextureOp source)
-{
-    BeginTicketMutex(&queue->mutex);
-    
-    Assert(queue->firstFree);
-    TextureOp* dest = queue->firstFree;
-    queue->firstFree = dest->next;
-    *dest = source;
-    Assert(dest->next == 0);
-    
-    if(queue->last)
-    {
-        queue->last = queue->last->next = dest;
-    }
-    else
-    {
-        queue->first = queue->last = dest;
-    }
-    
-    EndTicketMutex(&queue->mutex);
-}
-
 internal AssetMemoryBlock* FreeAsset(Assets* assets, Asset* asset)
 {
-    AssetMemoryHeader* header = asset->header;
-    Assert(asset->state == Asset_loaded);
-    RemoveHeaderFromList(header);
+    Assert(asset->state == Asset_loaded || asset->state == Asset_preloaded);
+    DLLIST_REMOVE(asset);
     
-    AssetMemoryBlock* result = (AssetMemoryBlock*) asset->header - 1;
+    AssetMemoryBlock* result = (AssetMemoryBlock*) ((u8*) asset->data - sizeof(AssetMemoryBlock));
     result->flags &= ~AssetBlock_used;
     
     if(MergeIfPossible(assets, result->prev, result))
@@ -180,16 +91,21 @@ internal AssetMemoryBlock* FreeAsset(Assets* assets, Asset* asset)
     MergeIfPossible(assets, result, result->next);
     
     asset->state = Asset_unloaded;
-    asset->header = 0;
+    asset->data = 0;
     
     return result;
 }
 
-
 inline Asset* GetAssetRaw(Assets* assets, AssetID ID)
 {
+    Assert(ID.type);
+    Assert(ID.type < AssetType_Count);
     AssetArray* array = assets->assets + ID.type;
+    
+    Assert(ID.subtype < array->subtypeCount);
     AssetSubtypeArray* subtype = array->subtypes + ID.subtype;
+    
+    Assert(ID.index < (subtype->assetCount));
     Asset* asset = subtype->assets + ID.index;
     
     return asset;
@@ -197,18 +113,14 @@ inline Asset* GetAssetRaw(Assets* assets, AssetID ID)
 
 inline void LockAssetForCurrentFrame(Assets* assets, AssetID ID)
 {
-	BeginAssetLock(assets);
     Asset* asset = GetAssetRaw(assets, ID);
     asset->state = Asset_locked;
     DLLIST_REMOVE(&asset->LRU);
     DLLIST_INSERT_AS_LAST(&assets->lockedLRUSentinel, &asset->LRU);
-	EndAssetLock(assets);
 }
 
-inline void RestoreLockedAssets(Assets* assets)
+inline void UnlockLockedAssets(Assets* assets)
 {
-    BeginAssetLock(assets);
-    
     for(AssetLRULink* unlock = assets->lockedLRUSentinel.next; unlock != &assets->lockedLRUSentinel;)
     {
         AssetLRULink* next = unlock->next;
@@ -224,22 +136,36 @@ inline void RestoreLockedAssets(Assets* assets)
     }
     
     Assert(DLLIST_ISEMPTY(&assets->lockedLRUSentinel));
-    EndAssetLock(assets);
 }
 
-internal AssetMemoryHeader* AcquireAssetMemory(Assets* assets, u32 size, AssetID ID)
+internal void* AcquireAssetMemory(Assets* assets, u32 size, Asset* destAsset, AssetID ID)
 {
-    AssetMemoryHeader* result = 0;
+    Assert(destAsset->data == 0);
     
-    BeginAssetLock(assets);
-    AssetMemoryBlock* block = FindBlockForSize(assets, size);
+    void* result = 0;
+    
+    AssetMemoryBlock* block = 0;
+    for(AssetMemoryBlock* current = assets->blockSentinel.next;
+        current != &assets->blockSentinel;
+        current = current->next)
+    {
+        if(!(current->flags & AssetBlock_used))
+        {
+            if(size <= current->size)
+            {
+                block = current;
+                break;
+            }
+        }
+    }
+    
     for(;;)
     {
         if(block && size <= block->size)
         {
             block->flags |= AssetBlock_used;
             
-            result = (AssetMemoryHeader*) (block + 1);
+            result = (void*) (block + 1);
             u64 remainingSize = block->size - size;
             
             u64 splitThreshold = KiloBytes(4);
@@ -253,11 +179,10 @@ internal AssetMemoryHeader* AcquireAssetMemory(Assets* assets, u32 size, AssetID
         }
         else
         {
-            for(AssetMemoryHeader* header = assets->assetSentinel.prev;
-                header != &assets->assetSentinel;
-                header = header->prev)
+            for(Asset* asset = assets->assetSentinel.prev;
+                asset != &assets->assetSentinel;
+                asset = asset->prev)
             {
-                Asset* asset = GetAssetRaw(assets, header->ID);
                 if(asset->state == Asset_loaded)
                 {
                     block = FreeAsset(assets, asset);
@@ -268,54 +193,17 @@ internal AssetMemoryHeader* AcquireAssetMemory(Assets* assets, u32 size, AssetID
     }
     
     Assert(result);
-    result->ID = ID;
-    result->totalSize = size;
-    AddHeaderInFront(assets, result);
     
-    EndAssetLock(assets);
+    destAsset->ID = ID;
+    destAsset->dataSize = size;
+    
+    DLLIST_INSERT(&assets->assetSentinel, destAsset);
     
     return result;
 }
 
-
-struct LoadDataWork
-{
-    PlatformFileHandle* handle;
-    u64 dataOffset;
-    u32 memorySize;
-    
-    void** dest;
-    
-    Asset* asset;
-    u32 finalState;
-    TaskWithMemory* task;
-};
-
-internal void LoadDataDirectly(LoadDataWork* work)
-{
-    void* temp = AllocateTempMemory(work->memorySize);
-    platformAPI.ReadFromFile(work->handle, work->dataOffset, work->memorySize, temp);
-    if(PlatformNoFileErrors(work->handle))
-    {
-        u32 size = ParseStruct(tempAllocator, temp);
-        void* memory = AcquireAssetMemory(size);
-        Copy();
-        *work->dest = memory;
-    }
-}
-
-
-PLATFORM_WORK_CALLBACK(LoadDataThreaded)
-{
-    TIMED_FUNCTION();
-    LoadDataWork* work = (LoadDataWork*) param;
-    LoadDataDirectly(work);
-    EndTaskWithMemory(work->task);
-}
-
 struct LoadAssetWork
 {
-    u32 finalizeOperation;
     PlatformFileHandle* handle;
     u32 memorySize;
     void* dest;
@@ -323,13 +211,44 @@ struct LoadAssetWork
     
     Asset* asset;
     u32 finalState;
-    TaskWithMemory* task;
     
+    u32 finalizeOperation;
     PlatformTextureOpQueue* textureQueue;
+    
+    u32* threadsReading;
+    
+    TaskWithMemory* task;
 };
 
 
-internal void LoadAssetDirectly(LoadAssetWork* work)
+enum FinalizeAssetOperation
+{
+    Finalize_none,
+    Finalize_font,
+    Finalize_Bitmap,
+};
+
+inline void AddOp(PlatformTextureOpQueue* queue, TextureOp op)
+{
+    BeginTicketMutex(&queue->mutex);
+    Assert(queue->firstFree);
+    TextureOp* dest = queue->firstFree;
+    queue->firstFree = dest->next;
+    *dest = op;
+    Assert(dest->next == 0);
+    
+    if(queue->last)
+    {
+        queue->last = queue->last->next = dest;
+    }
+    else
+    {
+        queue->first = queue->last = dest;
+    }
+    EndTicketMutex(&queue->mutex);
+}
+
+internal void LoadAsset(LoadAssetWork* work)
 {
     platformAPI.ReadFromFile(work->handle, work->dataOffset, work->memorySize, work->dest);
     if(PlatformNoFileErrors(work->handle))
@@ -344,25 +263,27 @@ internal void LoadAssetDirectly(LoadAssetWork* work)
             case Finalize_font:
             {
                 Asset* asset = work->asset;
-                Font* font = &asset->header->font;
-                PakFont* info = &asset->paka.font;
+                Font* font = &asset->font;
+                PAKFont* info = &asset->paka.font;
                 
-                for(u32 glyphIndex = 0; glyphIndex < info->glyphsCount; glyphIndex++)
+                for(u32 glyphIndex = 0; glyphIndex < info->glyphCount; glyphIndex++)
                 {
-                    PakGlyph* glyph = font->glyphs + glyphIndex;
+                    u32 codePoint = font->codepoints[glyphIndex];
                     Assert((u16) glyphIndex == glyphIndex);
-                    Assert(glyph->unicodeCodePoint < info->onePastHighestCodePoint);
-                    font->unicodeMap[glyph->unicodeCodePoint] = (u16) glyphIndex;
+                    Assert(codePoint < info->onePastHighestCodePoint);
+                    font->unicodeMap[codePoint] = (u16) glyphIndex;
                 }
             } break;
             
             case Finalize_Bitmap:
             {
-                Bitmap* bitmap = &work->asset->header->bitmap;
+                Asset* asset = work->asset;
+                Bitmap* bitmap = &asset->bitmap;
                 TextureOp op = {};
                 op.update.data = bitmap->pixels;
                 op.update.texture = work->asset->textureHandle;
-                AddOp(work->textureQueue, op);
+                PlatformTextureOpQueue* queue = work->textureQueue;
+                AddOp(queue, op);
             } break;
             
             InvalidCodePath;
@@ -372,13 +293,15 @@ internal void LoadAssetDirectly(LoadAssetWork* work)
         work->asset->state = work->finalState;
     }
     
+    CompletePastWritesBeforeFutureWrites;
+    *work->threadsReading = *work->threadsReading - 1;
 }
 
 PLATFORM_WORK_CALLBACK(LoadAssetThreaded)
 {
     TIMED_FUNCTION();
     LoadAssetWork* work = (LoadAssetWork*) param;
-    LoadAssetDirectly(work);
+    LoadAsset(work);
     EndTaskWithMemory(work->task);
 }
 
@@ -411,12 +334,6 @@ inline u32 AcquireTextureHandle(Assets* assets)
     return result;
 }
 
-inline void RefreshSpecialTexture(Assets* assets, AssetLRULink* LRU)
-{
-    DLLIST_REMOVE(LRU);
-    DLLIST_INSERT_AS_LAST(&assets->specialLRUSentinel, LRU);
-}
-
 inline u32 AcquireSpecialTextureHandle(Assets* assets)
 {
     u32 result = 0;
@@ -432,7 +349,7 @@ inline u32 AcquireSpecialTextureHandle(Assets* assets)
         AssetLRULink* first = sentinel->next;
         DLLIST_REMOVE(first);
         
-        WorldChunk* LRU = (WorldChunk*) first;
+        SpecialTexture* LRU = (SpecialTexture*) first;
         result = LRU->textureHandle.index;
         Assert(result >= MAX_TEXTURE_COUNT);
         Clear(&LRU->textureHandle);
@@ -441,390 +358,452 @@ inline u32 AcquireSpecialTextureHandle(Assets* assets)
     return result;
 }
 
-void LoadBitmap(Assets* assets, BitmapId ID, b32 immediate)
+inline void RefreshSpecialTexture(Assets* assets, AssetLRULink* LRU)
 {
-    if(ID.value)
+    DLLIST_REMOVE(LRU);
+    DLLIST_INSERT_AS_LAST(&assets->specialLRUSentinel, LRU);
+}
+
+struct AssetBoilerplate
+{
+    TaskWithMemory* task;
+    Asset* asset;
+};
+
+internal AssetBoilerplate BeginAssetBoilerplate(Assets* assets, AssetID ID)
+{
+    AssetBoilerplate result = {};
+    Asset* asset = GetAssetRaw(assets, ID);
+    if(asset && asset->fileIndex < assets->fileCount)
     {
-        Asset* asset = assets->assets + ID.value;
         if(AtomicCompareExchangeUint32((u32*) &asset->state, Asset_queued, Asset_unloaded) == Asset_unloaded)
         {
-            TaskWithMemory* task = 0;
-            if(!immediate)
+            result.task = BeginTaskWithMemory(assets->tasks, assets->taskCount, false);
+            if(result.task)
             {
-                task = BeginTaskWithMemory(assets->gameState->tasks, ArrayCount(assets->gameState->tasks), false);
-            }
-            
-            if(task || immediate)
-            {
-                PakBitmap* info = &asset->paka.bitmap;
-                AssetMemorySize size = {};
-                size.data = info->dimension[0] * info->dimension[1] * 4;
-                size.total = size.data + sizeof(AssetMemoryHeader);
-                
-                asset->header = AcquireAssetMemory(assets, size.total, ID.value, AssetType_Bitmap);
-                Bitmap* bitmap = &asset->header->bitmap;
-                
-                bitmap->width = SafeTruncateToU16(info->dimension[0]);
-                bitmap->height = SafeTruncateToU16(info->dimension[1]);
-                bitmap->nativeHeight = info->nativeHeight;
-                bitmap->pivot = V2(info->align[0], info->align[1]);
-                bitmap->widthOverHeight = (r32) bitmap->width / (r32) bitmap->height;
-                bitmap->pixels = asset->header + 1;
-                
-                u32 textureHandle = AcquireTextureHandle(assets);
-                asset->textureHandle = TextureHandle(textureHandle, bitmap->width, bitmap->height);
-                bitmap->textureHandle = asset->textureHandle;
-                
-                LoadAssetWork work = {};
-                work.handle = GetHandleFor(assets, asset->fileIndex);
-                work.dest = asset->header + 1;
-                work.memorySize = size.data;
-                work.dataOffset = asset->paka.dataOffset;
-                work.asset = asset;
-                work.finalState = Asset_loaded;
-                work.task = task;
-                work.finalizeOperation = Finalize_Bitmap;
-                work.textureQueue = assets->textureQueue;
-                
-                if(!immediate)
-                {
-                    Assert(work.task);
-                    LoadAssetWork* assetWork = PushStruct(&task->pool, LoadAssetWork);
-                    *assetWork = work;
-                    platformAPI.PushWork(assets->gameState->slowQueue, LoadAssetThreaded, assetWork);
-                }
-                else
-                {
-                    LoadAssetDirectly(&work);
-                }
+                result.asset = asset;
             }
             else
             {
                 asset->state = Asset_unloaded;
             }
         }
-        else if(immediate)
-        {
-            u32 volatile* state = (u32 volatile*) &asset->state;
-            while(*state == Asset_queued) {}
-        }
     }
+    
+    return result;
 }
 
-internal void LoadFont(Assets* assets, FontId ID, b32 immediate)
+internal void EndAssetBoilerplate(Assets* assets, AssetBoilerplate boilerplate, u32 size, AssetState state = Asset_loaded, FinalizeAssetOperation finalize = Finalize_none)
 {
-    if(ID.value)
-    {
-        Asset* asset = assets->assets + ID.value;
-        if(AtomicCompareExchangeUint32((u32*) &asset->state, Asset_queued, 
-                                       Asset_unloaded) == Asset_unloaded)
-        {
-            TaskWithMemory* task = 0;
-            if(!immediate)
-            {
-                task = BeginTaskWithMemory(assets->gameState->tasks,
-                                           ArrayCount(assets->gameState->tasks), false);
-            }
-            
-            if(task || immediate)
-            {
-                PakFont* info = &asset->paka.font;
-                u32 glyphsSize = info->glyphsCount * sizeof(PakGlyph);
-                u32 horizontalAdvanceSize = sizeof(r32) * info->glyphsCount * info->glyphsCount; 
-                AssetMemorySize size = {};
-                
-                u32 unicodeMapSize = sizeof(u16) * info->onePastHighestCodePoint;
-                size.data = glyphsSize + horizontalAdvanceSize;
-                size.total = size.data + unicodeMapSize + sizeof(AssetMemoryHeader);
-                
-                asset->header = AcquireAssetMemory(assets, size.total, ID.value, AssetType_None);
-                Font* font = &asset->header->font;
-                
-                AssetFile* file = GetFile(assets, asset->fileIndex);
-                
-                font->offsetRebaseGlyphs = file->fontBitmapsOffsetIndex;
-                
-                font->glyphs = (PakGlyph*) (asset->header + 1);
-                font->horizontalAdvance = (r32*) ((u8*) font->glyphs + glyphsSize);
-                font->unicodeMap = (u16*) ((u8*) font->horizontalAdvance + horizontalAdvanceSize);
-                ZeroSize(unicodeMapSize, font->unicodeMap);
-                
-                LoadAssetWork work = {};
-                work.handle = GetHandleFor(assets, asset->fileIndex);
-                work.dest = asset->header + 1;
-                work.memorySize = size.data;
-                work.dataOffset = asset->paka.dataOffset;
-                work.asset = asset;
-                work.finalState = Asset_loaded;
-                work.finalizeOperation = Finalize_font;
-                
-                work.task = task;
-                
-                if(!immediate)
-                {
-                    Assert(work.task);
-                    LoadAssetWork* assetWork = PushStruct(&task->pool, LoadAssetWork);
-                    *assetWork = work;
-                    platformAPI.PushWork(assets->gameState->slowQueue, 
-                                         LoadAssetThreaded, assetWork);
-                }
-                else
-                {
-                    LoadAssetDirectly(&work);
-                }
-            }
-            else
-            {
-                asset->state = Asset_unloaded;
-            }
-        }
-        else if(immediate)
-        {
-            u32 volatile* state = (u32 volatile*) &asset->state;
-            while(*state == Asset_queued) {}
-        }
-    }
+    TaskWithMemory* task = boilerplate.task;
+    Asset* asset = boilerplate.asset;
+    
+    LoadAssetWork* work = PushStruct(&task->pool, LoadAssetWork);
+    work->handle = GetHandleFor(assets, asset->fileIndex);
+    work->dest = asset->data;
+    work->memorySize = size;
+    work->dataOffset = asset->paka.dataOffset;
+    work->asset = asset;
+    work->finalState = state;
+    work->finalizeOperation = finalize;
+    
+    ++assets->threadsReading;
+    work->threadsReading = &assets->threadsReading;
+    
+    work->task = task;
+    
+    
+    platformAPI.PushWork(assets->loadQueue, LoadAssetThreaded, work);
 }
 
 
-void LoadSound(Assets* assets, SoundId ID)
+void LoadBitmap(Assets* assets, AssetID ID)
 {
-    if(ID.value)
+    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID);
+    if(boilerplate.task)
     {
-        Asset* asset = assets->assets + ID.value;
-        TaskWithMemory* task = BeginTaskWithMemory(assets->gameState->tasks,
-                                                   ArrayCount(assets->gameState->tasks), false);
-        if(task)
-        {
-            if(AtomicCompareExchangeUint32((u32*) &asset->state, Asset_queued, 
-                                           Asset_unloaded) == Asset_unloaded)
-            {
-                PakSound* info = &asset->paka.sound;
-                
-                AssetMemorySize size = {};
-                size.data = info->channelCount * info->sampleCount * sizeof(i16);
-                size.total = size.data + sizeof(AssetMemoryHeader);
-                
-                asset->header = AcquireAssetMemory(assets, size.total, ID.value, AssetType_None);
-                void* memory = asset->header + 1;
-                
-                Sound* sound = &asset->header->sound;
-                sound->countChannels = info->channelCount;
-                sound->countSamples = info->sampleCount;
-                Assert(info->channelCount <= ArrayCount(sound->samples));
-                
-                u8* sampleStart = (u8*) memory;
-                for(u32 channelIndex = 0; channelIndex < sound->countChannels; channelIndex++)
-                {
-                    sound->samples[channelIndex] = (i16*) sampleStart;
-                    sampleStart += sizeof(i16) * sound->countSamples;
-                }
-                
-                LoadAssetWork* work = PushStruct(&task->pool, LoadAssetWork);
-                work->handle = GetHandleFor(assets, asset->fileIndex);
-                work->dest = memory;
-                work->memorySize = size.data;
-                work->dataOffset = asset->paka.dataOffset;
-                work->asset = asset;
-                work->finalState = Asset_loaded;
-                work->task = task;
-                
-                platformAPI.PushWork(assets->gameState->slowQueue, LoadAssetThreaded, work);
-            }
-            else
-            {
-                EndTaskWithMemory(task);
-            }
-        }
+        Asset* asset = boilerplate.asset;
+        PAKBitmap* info = &asset->paka.bitmap;
+        u32 size = info->dimension[0] * info->dimension[1] * 4;
+        
+        asset->data = AcquireAssetMemory(assets, size, asset, ID);
+        Bitmap* bitmap = &asset->bitmap;
+        
+        bitmap->width = SafeTruncateToU16(info->dimension[0]);
+        bitmap->height = SafeTruncateToU16(info->dimension[1]);
+        bitmap->nativeHeight = info->nativeHeight;
+        bitmap->pivot = V2(info->align[0], info->align[1]);
+        bitmap->widthOverHeight = (r32) bitmap->width / (r32) bitmap->height;
+        bitmap->pixels = asset->data;
+        
+        u32 textureHandle = AcquireTextureHandle(assets);
+        asset->textureHandle = TextureHandle(textureHandle, bitmap->width, bitmap->height);
+        bitmap->textureHandle = asset->textureHandle;
+        
+        EndAssetBoilerplate(assets, boilerplate, size, Asset_loaded, Finalize_Bitmap);
     }
 }
 
-void LoadSkeleton(Assets* assets, AnimationId ID)
+internal void LoadFont(Assets* assets, AssetID ID)
 {
-    if(ID.value)
+    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID);
+    if(boilerplate.task)
     {
-        Asset* asset = assets->assets + ID.value;
-        TaskWithMemory* task = BeginTaskWithMemory(assets->gameState->tasks, ArrayCount(assets->gameState->tasks), false);
-        if(task)
-        {
-            if(AtomicCompareExchangeUint32((u32*) &asset->state, Asset_queued, 
-                                           Asset_unloaded) == Asset_unloaded)
-            {
-                PakAnimation* info = &asset->paka.animation;
-                
-                u32 countBones = info->boneCount;
-                u32 countAss = info->assCount;
-                u32 frameCount = info->frameCount;
-                u32 spriteCount = info->spriteCount;
-                
-                AssetMemorySize size = {};
-                size.data = sizeof(AnimationHeader) + spriteCount * sizeof(SpriteInfo) + frameCount * sizeof(FrameData) + countAss * sizeof(PieceAss) + countBones * sizeof(Bone);
-                size.total = size.data + sizeof(AssetMemoryHeader);
-                
-                asset->header = AcquireAssetMemory(assets, size.total, ID.value, AssetType_None);
-                void* memory = asset->header + 1;
-                u8* base = (u8*) memory;
-                
-                Animation* animation = &asset->header->animation;
-                animation->header = (AnimationHeader*) base;
-                
-                
-                animation->spriteInfoCount = spriteCount;
-                animation->frameCount = frameCount;
-                animation->spriteInfos = (SpriteInfo*) (base + sizeof(AnimationHeader));
-                animation->frames = (FrameData*) (base + sizeof(AnimationHeader) + spriteCount * sizeof(SpriteInfo));
-                animation->bones = (Bone*) (base + sizeof(AnimationHeader) + frameCount * sizeof(FrameData) + spriteCount * sizeof(SpriteInfo));
-                animation->ass = (PieceAss*) (base + sizeof(AnimationHeader) + frameCount * sizeof(FrameData) + spriteCount * sizeof(SpriteInfo) + countBones * sizeof(Bone));
-                
-                LoadAssetWork* work = PushStruct(&task->pool, LoadAssetWork);
-                
-                work->handle = GetHandleFor(assets, asset->fileIndex);
-                work->dest = memory;
-                work->memorySize = size.data;
-                work->dataOffset = asset->paka.dataOffset;
-                work->asset = asset;
-                work->finalState = Asset_loaded;
-                work->task = task;
-                
-                
-                platformAPI.PushWork(assets->gameState->slowQueue, LoadAssetThreaded, work);
-            }
-            else
-            {
-                EndTaskWithMemory(task);
-            }
-        }
+        Asset* asset = boilerplate.asset;
+        PAKFont* info = &asset->paka.font;
+        
+        u32 glyphsSize = info->glyphCount * sizeof(u32);
+        u32 horizontalAdvanceSize = sizeof(r32) * info->glyphCount * info->glyphCount; 
+        u32 unicodeMapSize = sizeof(u16) * info->onePastHighestCodePoint;
+        
+        u32 size = glyphsSize + horizontalAdvanceSize + unicodeMapSize;
+        
+        asset->data = AcquireAssetMemory(assets, size, asset, ID);
+        Font* font = &asset->font;
+        
+        font->codepoints = (u32*) (asset->data);
+        font->horizontalAdvance = (r32*) ((u8*) font->codepoints + glyphsSize);
+        font->unicodeMap = (u16*) ((u8*) font->horizontalAdvance + horizontalAdvanceSize);
+        ZeroSize(unicodeMapSize, font->unicodeMap);
+        
+        EndAssetBoilerplate(assets, boilerplate, size, Asset_loaded, Finalize_font);
     }
 }
 
-void LoadModel(Assets* assets, ModelId ID)
+
+void LoadSound(Assets* assets, AssetID ID)
 {
-    if(ID.value)
+    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID);
+    if(boilerplate.task)
     {
-        Asset* asset = assets->assets + ID.value;
-        TaskWithMemory* task = BeginTaskWithMemory(assets->gameState->tasks, ArrayCount(assets->gameState->tasks), false);
-        if(task)
+        Asset* asset = boilerplate.asset;
+        PAKSound* info = &asset->paka.sound;
+        
+        u32 size = info->channelCount * info->sampleCount * sizeof(i16);
+        asset->data = AcquireAssetMemory(assets, size, asset, ID);
+        
+        Sound* sound = &asset->sound;
+        sound->countChannels = info->channelCount;
+        sound->countSamples = info->sampleCount;
+        Assert(info->channelCount <= ArrayCount(sound->samples));
+        
+        u8* sampleStart = (u8*) asset->data;
+        for(u32 channelIndex = 0; channelIndex < sound->countChannels; channelIndex++)
         {
-            if(AtomicCompareExchangeUint32((u32*) &asset->state, Asset_queued, 
-                                           Asset_unloaded) == Asset_unloaded)
-            {
-                PakModel* info = &asset->paka.model;
-                
-                u32 vertexCount = info->vertexCount;
-                u32 faceCount = info->faceCount;
-                
-                AssetMemorySize size = {};
-                size.data = vertexCount * sizeof(ColoredVertex) + faceCount * sizeof(ModelFace);
-                size.total = size.data + sizeof(AssetMemoryHeader);
-                
-                asset->header = AcquireAssetMemory(assets, size.total, ID.value, AssetType_None);
-                void* memory = asset->header + 1;
-                u8* base = (u8*) memory;
-                
-                VertexModel* model = &asset->header->model;
-                
-                model->vertexCount = vertexCount;
-                model->faceCount = faceCount;
-                
-                model->dim = info->dim;
-                
-                model->vertexes = (ColoredVertex*) base;
-                model->faces = (ModelFace*) (base + vertexCount * sizeof(ColoredVertex));
-                
-                LoadAssetWork* work = PushStruct(&task->pool, LoadAssetWork);
-                
-                work->handle = GetHandleFor(assets, asset->fileIndex);
-                work->dest = memory;
-                work->memorySize = size.data;
-                work->dataOffset = asset->paka.dataOffset;
-                work->asset = asset;
-                work->finalState = Asset_loaded;
-                work->task = task;
-                
-                platformAPI.PushWork(assets->gameState->slowQueue, LoadAssetThreaded, work);
-            }
-            else
-            {
-                EndTaskWithMemory(task);
-            }
+            sound->samples[channelIndex] = (i16*) sampleStart;
+            sampleStart += sizeof(i16) * sound->countSamples;
         }
+        
+        EndAssetBoilerplate(assets, boilerplate, size);
     }
+}
+
+void LoadAnimation(Assets* assets, AssetID ID)
+{
+    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID);
+    if(boilerplate.task)
+    {
+        Asset* asset = boilerplate.asset;
+        PAKAnimation* info = &asset->paka.animation;
+        
+        u32 countBones = info->boneCount;
+        u32 countAss = info->assCount;
+        u32 frameCount = info->frameCount;
+        u32 spriteCount = info->spriteCount;
+        
+        u32 size =spriteCount * sizeof(SpriteInfo) + frameCount * sizeof(FrameData) + countAss * sizeof(PieceAss) + countBones * sizeof(Bone);
+        
+        asset->data = AcquireAssetMemory(assets, size, asset, ID);
+        u8* base = (u8*) asset->data;
+        
+        Animation* animation = &asset->animation;
+        
+        animation->spriteInfoCount = spriteCount;
+        animation->frameCount = frameCount;
+        
+        animation->spriteInfos = (SpriteInfo*) (base);
+        animation->frames = (FrameData*) (base + spriteCount * sizeof(SpriteInfo));
+        animation->bones = (Bone*) (base + frameCount * sizeof(FrameData) + spriteCount * sizeof(SpriteInfo));
+        animation->ass = (PieceAss*) (base + frameCount * sizeof(FrameData) + spriteCount * sizeof(SpriteInfo) + countBones * sizeof(Bone));
+        
+        EndAssetBoilerplate(assets, boilerplate, size);
+    }
+}
+
+
+void LoadSkeleton(Assets* assets, AssetID ID)
+{
+    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID);
+    if(boilerplate.task)
+    {
+        Asset* asset = boilerplate.asset;
+        PAKSkeleton* info = &asset->paka.skeleton;
+        
+        asset->skeleton.animationCount = info->animationCount;
+        
+        asset->state = Asset_loaded;
+        EndTaskWithMemory(boilerplate.task);
+    }
+}
+
+void LoadModel(Assets* assets, AssetID ID)
+{
+    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID);
+    if(boilerplate.task)
+    {
+        Asset* asset = boilerplate.asset;
+        PAKModel* info = &asset->paka.model;
+        
+        u32 vertexCount = info->vertexCount;
+        u32 faceCount = info->faceCount;
+        
+        u32 size = vertexCount * sizeof(ColoredVertex) + faceCount * sizeof(ModelFace);
+        
+        asset->data = AcquireAssetMemory(assets, size, asset, ID);
+        void* memory = asset->data;
+        u8* base = (u8*) memory;
+        
+        VertexModel* model = &asset->model;
+        
+        model->vertexCount = vertexCount;
+        model->faceCount = faceCount;
+        
+        model->dim = info->dim;
+        
+        model->vertexes = (ColoredVertex*) base;
+        model->faces = (ModelFace*) (base + vertexCount * sizeof(ColoredVertex));
+        
+        EndAssetBoilerplate(assets, boilerplate, size);
+    }
+    
 }
 
 void LoadDataFile(Assets* assets, AssetID ID)
 {
-    if(IsValid(ID))
+    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID);
+    if(boilerplate.task)
     {
-        Asset* asset = GetAssetRaw(assets, ID);
-        TaskWithMemory* task = BeginTaskWithMemory(assets->tasks, ArrayCount(assets->tasks), false);
-        if(task)
+        Asset* asset = boilerplate.asset;
+        u32 size = asset->paka.dataFile.rawSize;
+        asset->data = AcquireAssetMemory(assets, size, asset, ID);
+        EndAssetBoilerplate(assets, boilerplate, size, Asset_preloaded);
+    }
+}
+
+
+internal AssetSubtypeArray* GetAssetSubtypeForFile(Assets* assets, PAKFileHeader* header)
+{
+    Assert(header->assetType < AssetType_Count);
+    AssetArray* assetTypeArray = assets->assets + header->assetType;
+    
+    Assert(header->assetSubType < assetTypeArray->subtypeCount);
+    AssetSubtypeArray* assetSubtypeArray = assetTypeArray->subtypes + header->assetSubType;
+    
+    return assetSubtypeArray;
+}
+
+internal void LoadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, AssetSubtypeArray* assetSubtypeArray, MemoryPool* pool)
+{
+    TempMemory assetMemory = BeginTemporaryMemory(pool);
+    
+    u16 assetCount = file->header.standardAssetCount + file->header.derivedAssetCount;
+    u32 pakAssetArraySize = sizeof(PAKAsset) * assetCount;
+    PAKAsset* pakAssetArray = (PAKAsset*) PushSize(pool, pakAssetArraySize, NoClear());
+    
+    u64 assetOffset = sizeof(PAKFileHeader);
+    platformAPI.ReadFromFile(&file->handle, assetOffset, pakAssetArraySize, pakAssetArray);
+    
+    
+    for(u32 assetIndex = 0; assetIndex < assetCount; assetIndex++)
+    {
+        Asset* dest = assetSubtypeArray->assets + assetIndex;
+        dest->paka = pakAssetArray[assetIndex];
+        dest->fileIndex = fileIndex;
+        dest->state = Asset_unloaded;
+    }
+    
+    EndTemporaryMemory(assetMemory);
+}
+
+
+internal void ReloadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, MemoryPool* pool)
+{
+    AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, &file->header);
+    for(u32 assetIndex = 0; assetIndex < assetSubtypeArray->assetCount; ++assetIndex)
+    {
+        Asset* asset = assetSubtypeArray->assets + assetIndex;
+        FreeAsset(assets, asset);
+    }
+    
+    LoadAssetFile(assets, file, fileIndex, assetSubtypeArray, pool);
+}
+
+internal void ReplaceChangedAssetFiles(Assets* assets)
+{
+    PlatformFileGroup changed = platformAPI.GetAllFilesBegin(PlatformFile_reloadedAsset, ASSETS_PATH);
+    if(changed.fileCount)
+    {
+        for(u32 fileIndex = 0; fileIndex < changed.fileCount; ++fileIndex)
         {
-            if(AtomicCompareExchangeUint32((u32*) &asset->state, Asset_queued, 
-                                           Asset_unloaded) == Asset_unloaded)
+            InvalidCodePath;
+#if 0            
+            GetCorrenspondingFileHandle();
+            CloseHandle();
+            file->handle = thisNewHandle;
+            char assetName[128];
+            platformAPI.substituteFileContentAtomically(assetName, fg.name);
+            assets->file.fileIndex = fgFile;
+            ReloadAssetFile(assets, fg);
+#endif
+            
+        }
+    }
+    platformAPI.GetAllFilesEnd(&changed);
+    platformAPI.DeleteFiles(PlatformFile_reloadedAsset, ASSETS_PATH);
+}
+
+internal void ComputeAssetFilePath(AssetFile* file, char* basePath, char* buffer, u32 bufferSize)
+{
+    char* assetType = GetAssetTypeName(file->header.assetType);
+    char* assetSubtype = GetAssetSubtypeName(file->header.assetType, file->header.assetSubType);
+    
+    FormatString(buffer, bufferSize, "%s/%s/%s", basePath, assetType, assetSubtype);
+}
+
+internal void WriteAssetLabelsToBuffer(Buffer* buffer, AssetType type, PAKAsset* asset, b32 derivedAsset)
+{
+    unm rollbackSize = OutputToBuffer(buffer, "%s:", asset->name);
+    u32 nameSize = SafeTruncateUInt64ToU32(rollbackSize);
+    
+    b32 nothingWrote = true;
+    
+    for(u32 labelIndex = 0; labelIndex < ArrayCount(asset->labels); ++labelIndex)
+    {
+        PAKLabel* label = asset->labels + labelIndex;
+        if(label->label)
+        {
+            char* labelType = GetMetaLabelTypeName(label->label);
+            char* labelValue = GetMetaLabelValueName(label->label, label->value);
+            
+            if(labelType && labelValue)
             {
-                PakData* info = &asset->paka.data;
-                
-                AssetMemorySize size = {};
-                size.data = vertexCount * sizeof(ColoredVertex) + faceCount * sizeof(ModelFace);
-                size.total = size.data + sizeof(AssetMemoryHeader);
-                
-                asset->header = AcquireAssetMemory(assets, size.total, ID.value, AssetType_None);
-                void* memory = asset->header + 1;
-                u8* base = (u8*) memory;
-                
-                VertexModel* model = &asset->header->model;
-                
-                model->vertexCount = vertexCount;
-                model->faceCount = faceCount;
-                model->dim = info->dim;
-                model->vertexes = (ColoredVertex*) base;
-                model->faces = (ModelFace*) (base + vertexCount * sizeof(ColoredVertex));
-                
-                LoadDataWork* work = PushStruct(&task->pool, LoadDataWork);
-                
-                work->handle = GetHandleFor(assets, asset->fileIndex);
-                work->dest = memory;
-                work->memorySize = size.data;
-                work->dataOffset = asset->paka.dataOffset;
-                work->asset = asset;
-                work->finalState = Asset_loaded;
-                work->task = task;
-                
-                platformAPI.PushWork(assets->slowQueue, LoadAssetThreaded, work);
-            }
-            else
-            {
-                EndTaskWithMemory(task);
+                OutputToBuffer(buffer, "%s=%s,", labelType, labelValue);
+                nothingWrote = false;
             }
         }
     }
-}
-
-inline b32 IsValid(AssetID ID)
-{
-    b32 result = true;
-    return result;
-}
-
-inline void LockBitmapForCurrentFrame(Assets* assets, AssetID ID)
-{
-    Assert(IsValid(ID));
-    LockAssetForCurrentFrame(assets, ID.value);
-}
-
-
-internal void CloseAllHandles(Assets* assets)
-{
-    for(u32 fileIndex = 0; fileIndex < assets->fileCount; ++fileIndex)
+    
+    switch(type)
     {
-        AssetFile* file = assets->files + fileIndex;
-        platformAPI.CloseHandle(&file->handle);
+        case AssetType_Image:
+        {
+            if(asset->bitmap.align[0] != 0)
+            {
+                OutputToBuffer(buffer, "%s=%f,", IMAGE_PROPERTY_ALIGN_X, asset->bitmap.align[0]);
+                nothingWrote = false;
+            }
+            if(asset->bitmap.align[1] != 0)
+            {
+                OutputToBuffer(buffer, "%s=%f,", IMAGE_PROPERTY_ALIGN_Y, asset->bitmap.align[1]);
+                nothingWrote = false;
+            }
+        } break;
+        
+        case AssetType_Skeleton:
+        {
+            if(derivedAsset)
+            {
+                if(asset->animation.syncThreesoldMS != 0)
+                {
+                    OutputToBuffer(buffer, "%s=%f,", ANIMATION_PROPERTY_SYNC_THREESOLD, asset->animation.syncThreesoldMS);
+                    nothingWrote = false;
+                }
+                
+                if(asset->animation.preparationThreesoldMS != 0)
+                {
+                    OutputToBuffer(buffer, "%s=%f,", ANIMATION_PROPERTY_PREPARATION_THREESOLD, asset->animation.preparationThreesoldMS);
+                    nothingWrote = false;
+                }
+            }
+        } break;
+    }
+    
+    
+    if(nothingWrote)
+    {
+        buffer->b -= nameSize;
+        buffer->size += nameSize;
+    }
+    else
+    {
+        OutputToBuffer(buffer, ";");
     }
 }
 
+internal b32 IsDataFile(AssetType type)
+{
+    b32 result = (type != AssetType_Font &&
+                  type != AssetType_Image &&
+                  type != AssetType_Sound &&
+                  type != AssetType_Model &&
+                  type != AssetType_Skeleton);
+    return result;
+}
+
+internal void WritebackAssetFileToFileSystem(Assets* assets, AssetFile* file, char* basePath)
+{
+    char path[128];
+    ComputeAssetFilePath(file, basePath, path, sizeof(path));
+    
+    AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, &file->header);
+    Assert(IsDataFile((AssetType) file->header.assetType));
+    
+    MemoryPool tempPool = {};
+    
+    Buffer metaDataBuffer = PushBuffer(&tempPool, MegaBytes(1));
+    
+    for(u32 assetIndex = 0; assetIndex < assetSubtypeArray->assetCount; ++assetIndex)
+    {
+        Asset* asset = assetSubtypeArray->assets + assetIndex;
+        
+        b32 derivedAsset = (assetIndex >= file->header.standardAssetCount);
+        
+        WriteAssetLabelsToBuffer(&metaDataBuffer, (AssetType) file->header.assetType, &asset->paka, derivedAsset);
+        
+        TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+        Buffer fileBuffer = PushBuffer(&tempPool, asset->dataFile.rawSize);
+        
+        
+        MetaAsset assetType = metaAsset_assetType[file->header.assetType];
+        String structName = {};
+        structName.b = (u8*) assetType.name;
+        structName.size = StrLen(assetType.name);
+        
+        DumpStructToBuffer(structName, &fileBuffer, asset->data);
+        
+        char* filename = asset->paka.name;
+        platformAPI.ReplaceFile(PlatformFile_data, path, filename, fileBuffer.b, fileBuffer.size);
+        EndTemporaryMemory(fileMemory);
+    }
+    
+    platformAPI.ReplaceFile(PlatformFile_markup, path, LABELS_FILE_NAME, metaDataBuffer.b, metaDataBuffer.size);
+    Clear(&tempPool);
+}
+
+internal void UpdateAssetFileContent(Assets* assets, Asset* asset, void* newContent, u32 newContentSize)
+{
+    Assert(IsDataFile((AssetType) asset->ID.type));
+    if(newContentSize != asset->dataSize)
+    {
+        FreeAsset(assets, asset);
+        asset->data = AcquireAssetMemory(assets, newContentSize, asset, asset->ID);
+        asset->state = Asset_loaded;
+    }
+    Copy(newContentSize, asset->data, newContent);
+}
 
 
-internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformTextureOpQueue* textureQueue, memory_index size)
+internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks, u32 taskCount, MemoryPool* pool, PlatformTextureOpQueue* textureQueue, memory_index size)
 {
     Assets* assets = PushStruct(pool, Assets); 
     
@@ -854,261 +833,409 @@ internal Assets* InitAssets(GameState* gameState, MemoryPool* pool, PlatformText
     
     assets->assetSentinel.next = &assets->assetSentinel;
     assets->assetSentinel.prev = &assets->assetSentinel;
-    assets->assetSentinel.assetIndex = 0;
     
-    char* assetPath = "assets";
-    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, assetPath);
-    
-    assets->fileCount = fileGroup.fileCount;
-    assets->files = PushArray(pool, AssetFile, assets->fileCount);
+    assets->loadQueue = loadQueue;
+    assets->tasks = tasks;
+    assets->taskCount = taskCount;
     
     
     for(u32 assetTypeIndex = 0; assetTypeIndex < AssetType_Count; ++assetTypeIndex)
     {
-        AllocateSubtypes(based on preprocessor generated data);
+        MetaAssetType metaType = metaAsset_subTypes[assetTypeIndex];
+        
+        AssetArray* assetArray = assets->assets + assetTypeIndex;
+        assetArray->subtypeCount = metaType.subtypeCount;
+        assetArray->subtypes = PushArray(pool, AssetSubtypeArray, assetArray->subtypeCount);
     }
     
+    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, ASSETS_PATH);
     
-    for(u32 fileIndex = 0; fileIndex < fileGroup.fileCount; fileIndex++)
+    assets->fileCount = fileGroup.fileCount;
+    assets->files = PushArray(pool, AssetFile, assets->fileCount);
+    
+    u32 fileIndex = 0;
+    for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
     {
         AssetFile* file = assets->files + fileIndex;
+        file->handle = platformAPI.OpenFile(&fileGroup, info);
         
-        file->handle = platformAPI.OpenNextFile(&fileGroup, assetPath);
         ZeroStruct(file->header);
-        platformAPI.ReadFromFile(&file->handle, sizeof(u64), sizeof(file->header), &file->header);
-        
-        if(file->header.magicValue != PAK_MAGIC_NUMBER)
+        platformAPI.ReadFromFile(&file->handle, 0, sizeof(file->header), &file->header);
+        PAKFileHeader* header = &file->header;
+        if(header->magicValue != PAK_MAGIC_NUMBER)
         {
             platformAPI.FileError(&file->handle, "magic number not valid");
         }
         
-        if(file->header.version != PAK_VERSION)
+        if(header->version != PAK_VERSION)
         {
             platformAPI.FileError(&file->handle, "pak file version not valid");
         }
         
         if(PlatformNoFileErrors(&file->handle))
         {
-            TempMemory assetMemory = BeginTemporaryMemory(pool);
+            u16 assetCount = (header->standardAssetCount + header->derivedAssetCount);
+            AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, header);
+            assetSubtypeArray->assetCount = assetCount;
+            assetSubtypeArray->assets = PushArray(pool, Asset, assetCount, NoClear());
             
-            u32 assetCountForType = sourceType->onePastLastAssetIndex - sourceType->firstAssetIndex;
-            u32 assetArraySize = assetCountForType * sizeof(PakAsset);
-            
-            u64 assetOffset = file->header.assetOffset + sourceType->firstAssetIndex * sizeof(PakAsset);
-            PakAsset* pakAssetArray = (PakAsset*) PushSize(pool, assetArraySize, NoClear());
-            platformAPI.ReadFromFile(&file->handle, assetOffset, assetArraySize, pakAssetArray);
-            
-            for(u32 assetIndex = 0; assetIndex < assetCountForType; assetIndex++)
-            {
-                Assert(assetCount < assets->assetCount);
-                Asset* dest = assets->assets + assetCount++;
-                PakAsset* source = pakAssetArray + assetIndex;
-                
-                dest->paka = *source;
-                
-                if(dest->paka.firstTagIndex == 0)
-                {
-                    dest->paka.onePastLastTagIndex = 0;
-                }
-                else
-                {
-                    dest->paka.firstTagIndex += (file->tagBase - 1);
-                    dest->paka.onePastLastTagIndex += (file->tagBase - 1);
-                }
-                dest->fileIndex = fileIndex;
-            }
-            
-            EndTemporaryMemory(assetMemory);
+            LoadAssetFile(assets, file, fileIndex, assetSubtypeArray, pool);
         }
         else
         {
             // TODO(Leonardo): notify user! so that he can download the file again.
             InvalidCodePath;
         }
+        
+        ++fileIndex;
     }
     platformAPI.GetAllFilesEnd(&fileGroup);
     
     return assets;
 }
 
-internal AssetID QueryAssets(u32 type, u32 subtype, Labels)
+inline b32 MatchesLabels(Asset* asset, AssetLabels* labels)
 {
-    AssetID result = {};
-    ???;
-}
-
-inline AssetMemoryHeader* GetAsset(Assets* assets, AssetID ID, b32 insertAtLRUList = false)
-{
-    AssetMemoryHeader* result = 0;
+    b32 result = true;
     
-    Asset* asset = GetAssetRaw(assets, ID);
-    
-    BeginAssetLock(assets);
-    if(asset->state == Asset_loaded)
+    for(u32 labelIndex = 0; labelIndex < ArrayCount(labels->labels); ++labelIndex)
     {
-        result = asset->header;
-        
-        if(insertAtLRUList)
+        PAKLabel* label = labels->labels + labelIndex;
+        if(label->label)
         {
-            if(IsValid(&asset->textureHandle))
+            b32 hasLabel = false;
+            for(u32 assetLabelIndex = 0; assetLabelIndex < ArrayCount(asset->paka.labels); ++labelIndex)
             {
-                DLLIST_REMOVE(&asset->LRU);
-                DLLIST_INSERT_AS_LAST(&assets->LRUSentinel, &asset->LRU);
+                PAKLabel* assetLabel = asset->paka.labels + assetLabelIndex;
+                if(assetLabel->label == label->label)
+                {
+                    if(label->value == assetLabel->value)
+                    {
+                        hasLabel = true;
+                    }
+                    break;
+                }
+            }
+            if(!hasLabel)
+            {
+                result = false;
+                break;
             }
         }
-        
-        RemoveHeaderFromList(result);
-        AddHeaderInFront(assets, result);
-        
-        CompletePastWritesBeforeFutureWrites;
     }
     
-    EndAssetLock(assets);
+    return result;
+}
+
+internal AssetID QueryAssets(Assets* assets, AssetType type, u32 subtype, RandomSequence* seq, AssetLabels* labels, u32 startingIndex = 0, u32 endingIndex = 0)
+{
+    AssetID result = {};
+    if(type)
+    {
+        AssetArray* array = assets->assets + type;
+        
+        if(subtype < array->subtypeCount)
+        {
+            AssetSubtypeArray* subtypeArray = array->subtypes + subtype;
+            
+            if(subtypeArray->assetCount > 0)
+            {
+                u32 matching = 0;
+                u32 matchingAssets[32];
+                
+                if(!endingIndex)
+                {
+                    endingIndex = subtypeArray->assetCount;
+                }
+                Assert(startingIndex <= endingIndex);
+                
+                for(u32 assetIndex = startingIndex; assetIndex < endingIndex; ++assetIndex)
+                {
+                    Asset* asset = subtypeArray->assets + assetIndex;
+                    if(MatchesLabels(asset, labels))
+                    {
+                        matchingAssets[matching++] = assetIndex;
+                    }
+                }
+                
+                if(matching > 0)
+                {
+                    result.type = SafeTruncateToU16(type);
+                    result.subtype = SafeTruncateToU16(subtype);
+                    
+                    u32 choice = RandomChoice(seq, matching);
+                    result.index = matchingAssets[choice];
+                }
+            }
+        }
+    }
+    
     
     return result;
 }
 
-inline Bitmap* GetBitmap(Assets* assets, BitmapId ID)
+inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
+{
+    MemoryPool tempPool = {};
+    
+    Buffer sourceBuffer;
+    sourceBuffer.b = (u8*) asset->data;
+    sourceBuffer.size = asset->paka.dataFile.rawSize;
+    
+    Buffer tempBuffer = CopyBuffer(&tempPool, sourceBuffer);
+    
+    FreeAsset(assets, asset);
+    
+    Tokenizer tokenizer = {};;
+    tokenizer.at = (char*) tempBuffer.b;
+    
+    MetaAsset assetType = metaAsset_assetType[ID.type];
+    String structName = {};
+    structName.b = (u8*) assetType.name;
+    structName.size = StrLen(assetType.name);
+    
+    
+    u32 finalSize = GetStructSize(structName, &tokenizer);
+    asset->data = AcquireAssetMemory(assets, finalSize, asset, ID);
+    
+    tokenizer.at = (char*) tempBuffer.b;
+    ParseBufferIntoStruct(structName, &tokenizer, asset->data);
+    
+    asset->state = Asset_loaded;
+    
+    Clear(&tempPool);
+}
+
+inline Asset* GetGameAsset(Assets* assets, AssetID ID, b32 insertAtLRUList = false)
+{
+    Asset* result = 0;
+    Asset* asset = GetAssetRaw(assets, ID);
+    if(asset)
+    {
+        if(asset->state == Asset_preloaded)
+        {
+            Assert(IsDataFile((AssetType)ID.type));
+            LoadAssetDataStructure(assets, asset, ID);
+            asset->state = Asset_loaded;
+        }
+        
+        if(asset->state == Asset_loaded)
+        {
+            result = asset;
+            if(insertAtLRUList)
+            {
+                if(IsValid(&asset->textureHandle))
+                {
+                    DLLIST_REMOVE(&asset->LRU);
+                    DLLIST_INSERT_AS_LAST(&assets->LRUSentinel, &asset->LRU);
+                }
+            }
+            
+            DLLIST_INSERT(&assets->assetSentinel, result);
+            
+            CompletePastWritesBeforeFutureWrites;
+        }
+    }
+    
+    
+    return result;
+}
+
+inline Bitmap* GetBitmap(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
     
-    AssetMemoryHeader* header = GetAsset(assets, ID.value, true);
-    Bitmap* result = header ? &header->bitmap : 0;
+    Asset* asset = GetGameAsset(assets, ID, true);
+    Bitmap* result = asset ? &asset->bitmap : 0;
     
     return result;
 }
 
-inline Font* GetFont(Assets* assets, FontId ID)
+inline Font* GetFont(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
     
-    AssetMemoryHeader* header = GetAsset(assets, ID.value);
-    Font* result = header ? &header->font : 0;
+    Asset* asset = GetGameAsset(assets, ID);
+    Font* result = asset ? &asset->font : 0;
     
     return result;
 }
 
-inline Sound* GetSound(Assets* assets, SoundId ID)
+inline Sound* GetSound(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
     
-    AssetMemoryHeader* header = GetAsset(assets, ID.value);
-    Sound* result = header ? &header->sound : 0;
-    
-    return result;
-}
-
-inline Animation* GetAnimation(Assets* assets, AnimationId ID)
-{
-    
-}
-
-inline Skeleton* GetSkeleton(Assets* assets, SkeletonId ID)
-{
-    Assert(IsValid(ID));
-    
-    AssetMemoryHeader* header = GetAsset(assets, ID.value);
-    Skeleton* result = header ? &header->skeleton : 0;
+    Asset* asset = GetGameAsset(assets, ID);
+    Sound* result = asset ? &asset->sound : 0;
     
     return result;
 }
 
-inline VertexModel* GetModel(Assets* assets, ModelId ID)
+inline Skeleton* GetSkeleton(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
     
-    AssetMemoryHeader* header = GetAsset(assets, ID.value);
-    VertexModel* result = header ? &header->model : 0;
+    Asset* asset = GetGameAsset(assets, ID);
+    Skeleton* result = asset ? &asset->skeleton : 0;
     
     return result;
 }
 
-
-
-inline PakBitmap* GetBitmapInfo(Assets* assets, BitmapId ID)
+inline Animation* GetAnimation(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
-    PakBitmap* result = &assets->assets[ID.value].paka.bitmap;
+    
+    Asset* asset = GetGameAsset(assets, ID);
+    Animation* result = asset ? &asset->animation : 0;
+    
     return result;
 }
 
-inline PakFont* GetFontInfo(Assets* assets, FontId ID)
+inline VertexModel* GetModel(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
-    PakFont* result = &assets->assets[ID.value].paka.font;
+    
+    Asset* asset = GetGameAsset(assets, ID);
+    VertexModel* result = asset ? &asset->model : 0;
+    
     return result;
 }
 
-inline PakSound* GetSoundInfo(Assets* assets, SoundId ID)
+#define GetData(type, assets, ID) (type*)GetDataDefinition_(assets, AssetType_##type, ID)
+inline void* GetDataDefinition_(Assets* assets, AssetType type, AssetID ID)
 {
+    Assert(type == ID.type);
     Assert(IsValid(ID));
-    PakSound* result = &assets->assets[ID.value].paka.sound;
+    
+    Asset* asset = GetGameAsset(assets, ID);
+    void* result = asset ? asset->data : 0;
+    
     return result;
 }
 
-inline PakAnimation* GetSkeletonInfo(Assets* assets, SkeletonId ID)
+inline PAKAsset* GetPakAsset(Assets* assets, AssetID ID, b32 insertAtLRUList = false)
 {
-    Assert(IsValid(ID));
-    PakAnimation* result = &assets->assets[ID.value].paka.animation;
+    PAKAsset* result = 0;
+    Asset* asset = GetGameAsset(assets, ID, insertAtLRUList);
+    if(asset)
+    {
+        result = &asset->paka;
+    }
+    
     return result;
 }
 
-inline PakModel* GetModelInfo(Assets* assets, ModelId ID)
+inline PAKBitmap* GetBitmapInfo(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
-    PakModel* result = &assets->assets[ID.value].paka.model;
+    
+    PAKAsset* asset = GetPakAsset(assets, ID);
+    PAKBitmap* result = &asset->bitmap;
+    return result;
+}
+
+inline PAKFont* GetFontInfo(Assets* assets, AssetID ID)
+{
+    Assert(IsValid(ID));
+    PAKAsset* asset = GetPakAsset(assets, ID);
+    PAKFont* result = &asset->font;
+    return result;
+}
+
+inline PAKSound* GetSoundInfo(Assets* assets, AssetID ID)
+{
+    Assert(IsValid(ID));
+    PAKAsset* asset = GetPakAsset(assets, ID);
+    PAKSound* result = &asset->sound;
+    return result;
+}
+
+inline PAKSkeleton* GetSkeletonInfo(Assets* assets, AssetID ID)
+{
+    Assert(IsValid(ID));
+    PAKAsset* asset = GetPakAsset(assets, ID);
+    PAKSkeleton* result = &asset->skeleton;
+    return result;
+}
+
+inline PAKModel* GetModelInfo(Assets* assets, AssetID ID)
+{
+    Assert(IsValid(ID));
+    PAKAsset* asset = GetPakAsset(assets, ID);
+    PAKModel* result = &asset->model;
     return result;
 }
 
 
 
-inline u32 GetGlyphFromCodePoint(Font* font, PakFont* info, u32 desired)
+inline u32 GetGlyphFromCodePoint(Font* font, PAKFont* info, u32 desired)
 {
     u32 result = 0;
     if(desired < info->onePastHighestCodePoint)
     {
         result = font->unicodeMap[desired];
-        Assert(result < info->glyphsCount);
+        Assert(result < info->glyphCount);
     }
     return result;
 }
 
-internal r32 GetHorizontalAdvanceForPair(Font* font, PakFont* info, u32 desiredPrevCodePoint, u32 desiredCodePoint)
+internal r32 GetHorizontalAdvanceForPair(Font* font, PAKFont* info, u32 desiredPrevCodePoint, u32 desiredCodePoint)
 {
     u32 glyph = GetGlyphFromCodePoint(font, info, desiredCodePoint);
     u32 prevGlyph = GetGlyphFromCodePoint(font, info, desiredPrevCodePoint);
     
-    r32 result = font->horizontalAdvance[prevGlyph * info->glyphsCount + glyph];
+    r32 result = font->horizontalAdvance[prevGlyph * info->glyphCount + glyph];
     return result;
 }
 
-internal r32 GetLineAdvance(PakFont* info)
+internal r32 GetLineAdvance(PAKFont* info)
 {
     r32 result = info->externalLeading + info->ascenderHeight + info->descenderHeight;
     return result;
 }
 
-internal r32 GetStartingLineY(PakFont* info)
+internal r32 GetStartingLineY(PAKFont* info)
 {
     r32 result = info->ascenderHeight;
     return result;
 }
 
 
-inline BitmapId GetBitmapForGlyph(Assets* assets, Font* font, PakFont* info, u32 desiredCodePoint)
+inline AssetID GetBitmapForGlyph(Assets* assets, AssetID fontID, u32 desiredCodePoint)
 {
-    u32 glyph = GetGlyphFromCodePoint(font, info, desiredCodePoint);
-    BitmapId result = font->glyphs[glyph].bitmapId;
-    if(result.value)
+    AssetID result = {};
+    
+    Font* font = GetFont(assets, fontID);
+    if(font)
     {
-        result.value += font->offsetRebaseGlyphs;
+        PAKFont* info = GetFontInfo(assets, fontID);
+        Asset* asset = GetAssetRaw(assets, fontID);
+        
+        u16 index = SafeTruncateToU16(GetGlyphFromCodePoint(font, info, desiredCodePoint));
+        
+        result.type = fontID.type;
+        result.subtype = fontID.subtype;
+        result.index = info->glyphAssetsFirstIndex + index;
     }
     
     return result;
     
 }
 
-inline AnimationId GetAnimationForSkeleton(Assets* assets, Skeleton* skeleton, PakSkeleton* info, u32 animationIndex)
+inline AssetID GetMatchingAnimationForSkeleton(Assets* assets, AssetID skeletonID, RandomSequence* seq, AssetLabels* labels)
 {
+    AssetID result = {};
     
+    Asset* asset = GetAssetRaw(assets, skeletonID);
+    
+    if(asset)
+    {
+        PAKSkeleton* info = GetSkeletonInfo(assets, skeletonID);
+        u32 startingIndex = info->animationAssetsFirstIndex;
+        u32 endingIndex = startingIndex + info->animationCount;
+        
+        result = QueryAssets(assets, (AssetType) skeletonID.type, skeletonID.subtype, seq, labels, startingIndex,endingIndex);
+    }
+    
+    return result;
 }

@@ -214,7 +214,7 @@ enum Packet_Type
     Type_ReloadEditingSlot,
     Type_MovePlayerInOtherRegion,
     Type_PauseToggle,
-    Type_ReloadAssets,
+    Type_RebuildAssets,
     Type_SaveSlotTabToFile,
     Type_PatchLocalServer,
     Type_PatchCheck,

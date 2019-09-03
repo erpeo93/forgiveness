@@ -1,4 +1,45 @@
 #pragma once
+inline bool IsEndOfLine(char c)
+{
+    bool result = ( c == '\n' || c == '\r' );
+    return result;
+}
+
+inline bool IsWhiteSpace(char c)
+{
+    bool result = ( c == ' ' ||
+                   c == '\t' ||
+                   IsEndOfLine( c ) );
+    return result;
+}
+
+inline bool IsAlphanumeric(char c)
+{
+    bool result = ( ( ( c >= 'a' ) && ( c <= 'z' ) ) ||
+                   ( ( c >= 'A' ) && ( c <= 'Z' ) ) );
+    
+    return result;
+}
+
+inline bool IsNumeric(char c)
+{
+    bool result = ( ( c >= '0' ) && ( c <= '9' ) );
+    
+    return result;
+}
+
+internal i32 StringToInt(char* string)
+{
+    i32 result = atoi(string);
+    return result;
+}
+
+internal r32 StringToFloat(char* string)
+{
+    r32 result = (r32) atof(string);
+    return result;
+}
+
 inline u64 StringHash( char* string, u32 length = U32_MAX )
 {
     u64 result = 0;
@@ -272,7 +313,7 @@ internal void R64ToASCII( FormatDest* dest, r64 value, u32 precision )
     }
 }
 
-internal unm FormatStringList( char* destInit, unm destSize, char* format, va_list argList )
+internal unm FormatStringList(char* destInit, unm destSize, char* format, va_list argList)
 {
     FormatDest dest = { destSize, destInit };
     
@@ -620,7 +661,7 @@ internal unm FormatStringList( char* destInit, unm destSize, char* format, va_li
     return result;
 }
 
-internal unm FormatString( char* dest, unm destSize, char* format, ... )
+internal unm FormatString(char* dest, unm destSize, char* format, ...)
 {
     va_list argList;
     va_start( argList, format );
@@ -643,3 +684,37 @@ inline void AppendString(char* original, u32 size, char* toAppend, u32 toAppendC
     }
     *copyHere = 0;
 }
+
+inline u32 FindFirstInString(char* string, char c)
+{
+    u32 result = 0xffffffff;
+    char* test = string;
+    u32 current = 0;
+    while(test)
+    {
+        if(*test++ == c)
+        {
+            result = current;
+            break;
+        }
+    }
+    
+    return result;
+}
+
+inline void TrimToFirstCharacter(char* buffer, u32 bufferSize, char* string, char trimHere)
+{
+    u32 find = FindFirstInString(string, trimHere);
+    if(find)
+    {
+        FormatString(buffer, bufferSize, "%.*s", find - 1, string);
+    }
+}
+
+
+struct Buffer
+{
+    u8* b;
+    u32 size;
+};
+typedef Buffer String;

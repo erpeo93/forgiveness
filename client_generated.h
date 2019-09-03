@@ -1,15 +1,3 @@
-MemberDefinition memberDefinitionOfRect2[] = 
- {
-{0, MetaType_Vec2, "min", (u32) (&((Rect2*)0)->min)}, 
-{0, MetaType_Vec2, "max", (u32) (&((Rect2*)0)->max)}, 
-};
-
-MemberDefinition memberDefinitionOfRect3[] = 
- {
-{0, MetaType_Vec3, "min", (u32) (&((Rect3*)0)->min)}, 
-{0, MetaType_Vec3, "max", (u32) (&((Rect3*)0)->max)}, 
-};
-
 char* MetaTable_EntityAction[] = 
  {
 "None",
@@ -161,7 +149,23 @@ char* MetaTable_ParticleUpdaterEndPosition[] =
 "DestPos",
 };
 
-#define META_HANDLE_ADD_TO_DEFINITION_HASH()\
-AddToDefinitionHash(definitionHash, Rect3, memberDefinitionOfRect3);\
-AddToDefinitionHash(definitionHash, Rect2, memberDefinitionOfRect2);
+MemberDefinition memberDefinitionOfground_coloration[] = 
+ {
+{0, MetaType_Vec4, "Vec4", "color", (u32) (&((ground_coloration*)0)->color), {}}, 
+};
 
+char* MetaLabels_Label_Test[] = 
+ {
+"Value0",
+"Value1",
+};
+
+#define META_HANDLE_ADD_TO_DEFINITION_HASH()\
+AddToMetaDefinitions(ground_coloration, memberDefinitionOfground_coloration);
+
+#define META_LABELS_ADD()\
+AddToMetaLabels(Label_Test, MetaLabels_Label_Test);
+
+#define META_DEFAULT_VALUES_CPP_SUCKS()\
+memberDefinitionOfground_coloration[0].def.def_Vec4 = V4(1, 0, 1, 1);\
+;

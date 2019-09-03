@@ -230,7 +230,7 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffect* 
         
         
         
-        if(updater->bitmapID.value)
+        if(IsValid(updater->bitmapID))
         {
             ObjectTransform transform = UprightTransform();
             transform.angle = angle;

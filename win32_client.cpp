@@ -1,37 +1,73 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
-#include <stdio.h>
-#include <errno.h>
-#include <xinput.h>
-#include <dsound.h>
-#include <gl/gl.h>
 #include <process.h>
 #include <Tlhelp32.h>
 #include <winbase.h>
 #include <DbgHelp.h>
+#include <stdio.h>
 #include <time.h>
-#include <math.h>
 
-
-#include "forg_basic_types.h"
+#include "forg_base.h"
 #define LL_NET_IMPLEMENTATION
 #include "ll_net.h"
+
 #include "forg_platform.h"
-global_variable PlatformAPI platform;
+global_variable PlatformAPI platformAPI;
+#include "forg_pool.h"
+#include "forg_debug_interface.h"
 #include "forg_token.h"
 #include "forg_shared.h"
 #include "forg_intrinsics.h"
 #include "forg_math.h"
+#include "forg_pool.cpp"
+
+#include "win32_forg.h"
+#include "win32_file.cpp"
+#include "win32_thread.cpp"
+
+#include <xinput.h>
+#include <dsound.h>
+#include <gl/gl.h>
 
 #pragma comment( lib, "wsock32.lib" )
 #pragma comment (lib, "Ws2_32.lib")
 
-#include "win32_client.h"
-#include "win32_file.cpp"
-#include "win32_thread.cpp"
-#include "forg_sort.cpp"
-#include "forg_token.cpp"
+struct Win32ScreenBuffer
+{
+    u16 width;
+    u16 height;
+    void* memory;
+    i32 bytesPerPixel;
+    i32 pitch;
+    BITMAPINFO info;
+};
+
+struct Win32SoundBuffer
+{
+    LPDIRECTSOUNDBUFFER buffer;
+    i32 samplesPerSecond;
+    i32 totalBufferSize;
+    i32 runningSampleIndex;
+    i32 bytesPerSample;
+    i32 delaySamples;
+};
+
+struct Win32Dimension
+{
+    i32 width;
+    i32 height;
+};
+
+struct Win32GameCode
+{
+    b32 isValid;
+    HMODULE gameDLL;
+    FILETIME lastWriteTime;
+    game_update_and_render* UpdateAndRender;
+    game_get_sound_output* GetSoundOutput;
+    game_frame_end* DEBUGFrameEnd;
+};
 
 global_variable b32 running;
 global_variable b32 freezing;
@@ -195,6 +231,8 @@ OpenGLGlobalFunction(glDrawElementsBaseVertex);
 #define WGL_ALPHA_BITS_ARB 0x201B
 #define WGL_DEPTH_BITS_ARB 0x2022
 
+#include "forg_file_formats.h"
+#include "forg_asset.h"
 #include "forg_render_tier.h"
 #include "forg_opengl.h"
 global_variable Opengl opengl;
@@ -1248,6 +1286,8 @@ PLATFORM_ERROR_MESSAGE(Win32ErrorMessage)
     InvalidCodePath;
 }
 
+
+#if 0
 PLATFORM_GET_CLIPBOARD(Win32GetClipboardText)
 {
     HANDLE h;
@@ -1274,6 +1314,7 @@ PLATFORM_SET_CLIPBOARD(Win32SetClipboardText)
     SetClipboardData(CF_TEXT, hMem);
     CloseClipboard();
 }
+#endif
 
 #if FORGIVENESS_INTERNAL
 global_variable DebugTable globalDebugTable_;
@@ -1406,27 +1447,21 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             gameMemory.api.PushWork = Win32PushWork;
             
             
-            gameMemory.api.GetAllSubdirectoriesName = Win32GetAllSubdirectoriesName;
-            gameMemory.api.CloseHandle = Win32CloseHandle;
+            gameMemory.api.GetAllSubdirectories = Win32GetAllSubdirectories;
+            gameMemory.api.CloseFile = Win32CloseFile;
             gameMemory.api.GetAllFilesBegin = Win32GetAllFilesBegin;
-            gameMemory.api.OpenNextFile = Win32OpenNextFile;
+            gameMemory.api.OpenFile = Win32OpenFile;
             gameMemory.api.GetAllFilesEnd = Win32GetAllFilesEnd;
             gameMemory.api.ReadFromFile = Win32ReadFromFile;
             gameMemory.api.FileError = Win32FileError;
             
             gameMemory.api.AllocateMemory = Win32AllocateMemory;
             gameMemory.api.DeallocateMemory = Win32DeallocateMemory;
-            gameMemory.api.GetClipboardText = Win32GetClipboardText;
-            gameMemory.api.SetClipboardText = Win32SetClipboardText;
             gameMemory.api.DEBUGMemoryStats = Win32GetMemoryStats;
             
             
             gameMemory.highPriorityQueue = &highQueue;
             gameMemory.lowPriorityQueue = &lowQueue;
-            
-            gameMemory.api.DEBUGReadFile = DEBUGWin32ReadFile;
-            gameMemory.api.DEBUGWriteFile = DEBUGWin32WriteFile;
-            gameMemory.api.DEBUGFreeFile = DEBUGWin32FreeFile;
             
             gameMemory.api.DEBUGExecuteSystemCommand = DEBUGWin32ExecuteCommand;
             gameMemory.api.DEBUGGetProcessState = DEBUGWin32GetProcessState;
@@ -1435,10 +1470,6 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             
             gameMemory.api.ErrorMessage = Win32ErrorMessage;
             
-            
-            gameMemory.api.DeleteFileWildcards = Win32DeleteFileWildcards;
-            gameMemory.api.MoveFileOrFolder = Win32MoveFileOrFolder;
-            gameMemory.api.CopyFileOrFolder = Win32CopyFileOrFolder;
             
             u32 textureOpCount = 1024;
             PlatformTextureOpQueue* textureQueue = &gameMemory.textureQueue;
@@ -1449,7 +1480,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                 op->next = textureQueue->firstFree + ( opIndex + 1 ); 
             }
             
-            platform = gameMemory.api;
+            platformAPI = gameMemory.api;
             
             LPVOID baseAddress = 0;
 #if FORGIVENESS_INTERNAL

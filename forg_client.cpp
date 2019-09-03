@@ -30,6 +30,7 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_ground.cpp"
 #include "forg_UIcommon.cpp"
 
+
 inline ClientEntity* GetEntityClient(GameModeWorld* worldMode, u64 identifier, b32 allocate = false)
 {
     ClientEntity* result = 0;
@@ -497,6 +498,12 @@ internal void UpdateEntities(GameModeWorld* worldMode, r32 timeToAdvance, Client
     }
 }
 
+void ReloadAssetsFromScratch(Assets* assets)
+{
+    CloseAllHandles(assets);
+    SendRebuildAssetsRequest();
+}
+
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
     Vec3 inputAcc = {};
@@ -641,6 +648,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
 
 internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* group, PlatformInput* input)
 {
+    
+#if 0    
     GameRenderCommands* commands = group->commands;
     Vec2 relativeScreenMouse = V2(input->relativeMouseX, input->relativeMouseY);
     
@@ -785,6 +794,7 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
     PushRect(group, rectTransform, serverRect, serverColor);
     PushRect(group, rectTransform, editorRect, editorColor);
     PushRect(group, rectTransform, joinRect, joinColor);
+#endif
     
     return 0;
 }
@@ -830,6 +840,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     GameState* gameState = memory->gameState;
     if(!gameState)
     {
+        LoadMetaData();
+        
         gameState = BootstrapPushStruct(GameState, totalPool);
         memory->gameState = gameState;
 #if FORGIVENESS_INTERNAL
@@ -848,11 +860,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         gameState->slowQueue = memory->lowPriorityQueue;
         gameState->textureQueue = &memory->textureQueue;
         
-        MemoryPool* pool = &gameState->assetsPool;
-        gameState->assets = InitAssets(gameState, pool, gameState->textureQueue, MegaBytes(256));
-        
+        gameState->assets = InitAssets(gameState->slowQueue, gameState->tasks, ArrayCount(gameState->tasks), &gameState->assetsPool, gameState->textureQueue, MegaBytes(256));
         
         InitializeSoundState(&gameState->soundState, &gameState->audioPool);
+        
         
         gameState->networkInterface.network = input->network;
         clientNetwork = &gameState->networkInterface;
@@ -864,13 +875,23 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         clientNetwork->nextSendReliableApplicationData = {};
         
         platformAPI.PushWork(gameState->slowQueue, ReceiveNetworkPackets, &gameState->receiveNetworkPackets);
+        
+        PlayGame(gameState, input);
+    }
+    
+    
+    if(false)
+    {
+        CloseAllHandles(gameState->assets);
+        Clear(&gameState->assetsPool);
+        gameState->assets = InitAssets(gameState->slowQueue, gameState->tasks, ArrayCount(gameState->tasks), &gameState->assetsPool, gameState->textureQueue, MegaBytes(256));
     }
     
     
     
     TempMemory renderMemory = BeginTemporaryMemory(&gameState->framePool);
     
-    RestoreLockedAssets(gameState->assets);
+    UnlockLockedAssets(gameState->assets);
     RenderGroup group = BeginRenderGroup(gameState->assets, commands);
     
     b32 rerun = false;

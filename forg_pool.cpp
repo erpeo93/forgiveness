@@ -1,11 +1,11 @@
 #define PushStruct( alloc, type, ... ) ( type* ) PushSize_( alloc, sizeof( type ), ##__VA_ARGS__ ) 
 #define PushArray( alloc, type, count, ... ) ( type* ) PushSize_( alloc, count * sizeof( type ), ##__VA_ARGS__ )
 #define PushSize( alloc, size, ... ) ( u8* ) PushSize_( alloc, size, ##__VA_ARGS__ )
-#define PushCopy( alloc, size, source, ... ) Copy( size, PushSize_( alloc, size, ##__VA_ARGS__ ), source )
+#define PushCopy(alloc, size, source, ... ) Copy(size, PushSize_( alloc, size, ##__VA_ARGS__ ), source)
 
 enum PushParamFlags
 {
-    PushParamFlag_Clear = ( 1 << 1 ),
+    PushParamFlag_Clear = ( 1 << 1 )
 };
 
 struct PushParams
@@ -120,20 +120,27 @@ internal void* PushSize_( MemoryPool* pool, memory_index size, PushParams params
     return result;
 }
 
-inline char* PushString( MemoryPool* pool, char* string )
+inline char* PushString(MemoryPool* pool, char* string)
 {
-    PushParams params = AlignNoClear( 1 );
-    char* result = ( char* ) PushCopy( pool, StrLen( string ) + 1, string, params );
+    PushParams params = AlignNoClear(1);
+    char* result = (char*) PushCopy(pool, StrLen(string) + 1, string, params);
     return result;
 }
 
-inline char* PushAndNullTerminate( MemoryPool* pool, char* string, u32 length )
+inline char* PushAndNullTerminate(MemoryPool* pool, char* string, u32 length)
 {
-    char* dest = ( char* ) PushSize_( pool, length + 1, NoClear() );
-    Copy( length, dest, string );
+    char* dest = (char*) PushSize_( pool, length + 1, NoClear());
+    Copy( length, dest, string);
     dest[length] = 0;
     
     return dest;
+}
+
+inline char* PushNullTerminatedString(MemoryPool* pool, char* string)
+{
+    u32 length = StrLen(string);
+    char* result = PushAndNullTerminate(pool, string, length);
+    return result;
 }
 
 inline void CheckPool( MemoryPool* pool )
@@ -252,7 +259,25 @@ inline void* BootstrapPushSize_( unm size, unm offsetToPool, PoolBootstrapParams
     bootstrap.minimumBlockSize = bootstrapParams.minimumBlockSize;
     bootstrap.allocationFlags = bootstrapParams.flags;
     void* structPtr = PushSize_( &bootstrap, size, params );
-    MemoryPool* dest = ( MemoryPool* ) ( ( u8* ) structPtr + offsetToPool );
+    MemoryPool* dest = (MemoryPool*) ( ( u8* ) structPtr + offsetToPool );
     *dest = bootstrap;
     return structPtr;
+}
+
+inline Buffer PushBuffer(MemoryPool* pool, u32 size, PushParams params = DefaultPushParams())
+{
+    Buffer result;
+    result.size = size;
+    result.b = PushSize(pool, size, params);
+    
+    return result;
+}
+
+inline Buffer CopyBuffer(MemoryPool* pool, Buffer source, PushParams params = DefaultPushParams())
+{
+    Buffer result;
+    result.b = (u8*) PushCopy(pool, source.size, source.b, params);
+    result.size = source.size;
+    
+    return result;
 }

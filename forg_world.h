@@ -55,8 +55,7 @@ struct TempLight
 struct WorldChunk
 {
 #ifndef FORG_SERVER
-    AssetLRULink LRU;
-    RenderTexture textureHandle;
+    SpecialTexture texture;
     Lights lights;
 #endif
     

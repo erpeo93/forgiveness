@@ -12,6 +12,13 @@ pushd ..\code
 ..\build\simple_preprocessor.exe > client_generated.h
 popd
 
+
+REM asset_preprocessor
+cl %commoncompilerflags% ..\code\asset_preprocessor.cpp /link %commonlinkerflags%
+pushd ..\code
+..\build\asset_preprocessor.exe > asset_generated.h
+popd
+
 REM compressor
 REM cl %commoncompilerflags% ..\code\simple_compressor.cpp /link %commonlinkerflags% 
 
@@ -20,7 +27,7 @@ REM cl %commoncompilerflags% -O2 ..\code\asset_builder.cpp /link %commonlinkerfl
 
 echo WAITING FOR PDB > lock.tmp
 
-cl %commoncompilerflags% -I ..\..\iaca-win64\ -Fmforg_client.map ..\code\forg_client.cpp -LD /link %commonlinkerflags% -PDB:forg_client%random%.pdb /EXPORT:GameUpdateAndRender /EXPORT:GameGetSoundOutput /EXPORT:GameDEBUGFrameEnd
+cl %commoncompilerflags% -Fmforg_client.map ..\code\forg_client.cpp -LD /link %commonlinkerflags% -PDB:forg_client%random%.pdb /EXPORT:GameUpdateAndRender /EXPORT:GameGetSoundOutput /EXPORT:GameDEBUGFrameEnd
 del lock.tmp
 
 

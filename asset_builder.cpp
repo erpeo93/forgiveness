@@ -16,7 +16,7 @@
 #include "stb_truetype.h"
 #endif
 
-#pragma pack( push, 1 )
+#pragma pack(push, 1)
 struct BitmapHeader
 {
     u16 FileType;
@@ -77,7 +77,7 @@ enum WAVE_ChunkID
     WAVE_IDdata = RIFF_CODE( 'd', 'a', 't', 'a' ),
 };
 
-#pragma pack( pop )
+#pragma pack(pop)
 
 
 global_variable HDC globalFontDC;
@@ -88,21 +88,25 @@ global_variable VOID* Bits;
 
 #define MAX_FONT_GLYPHS 0x10ffff
 
-internal LoadedFont LoadFont(char* filename, char* fontName, int height)
+internal LoadedFont LoadFont(char* path, char* filename, char* fontName, int height, u32 startingCodePoint, u32 endingCodePoint)
 {
-    AddFontResourceExA(filename, FR_PRIVATE, 0);
-    LoadedFont font = {};
-    font.win32Font = CreateFontA(height, 0, 0, 0,
-                                 FW_NORMAL, // NOTE(casey): Weight
-                                 FALSE, // NOTE(casey): Italic
-                                 FALSE, // NOTE(casey): Underline
-                                 FALSE, // NOTE(casey): Strikeout
-                                 DEFAULT_CHARSET, 
-                                 OUT_DEFAULT_PRECIS,
-                                 CLIP_DEFAULT_PRECIS, 
-                                 ANTIALIASED_QUALITY,
-                                 DEFAULT_PITCH|FF_DONTCARE,
-                                 fontName);
+    LoadedFont result = {};
+    
+    char completePath[128];
+    FormatString(completePath, sizeof(completePath), "%s/%s", path, filename);
+    
+    AddFontResourceExA(completePath, FR_PRIVATE, 0);
+    result.win32Font = CreateFontA(height, 0, 0, 0,
+                                   FW_NORMAL, // NOTE(casey): Weight
+                                   FALSE, // NOTE(casey): Italic
+                                   FALSE, // NOTE(casey): Underline
+                                   FALSE, // NOTE(casey): Strikeout
+                                   DEFAULT_CHARSET, 
+                                   OUT_DEFAULT_PRECIS,
+                                   CLIP_DEFAULT_PRECIS, 
+                                   ANTIALIASED_QUALITY,
+                                   DEFAULT_PITCH|FF_DONTCARE,
+                                   fontName);
     
     if(!globalFontDC)
     {
@@ -125,62 +129,71 @@ internal LoadedFont LoadFont(char* filename, char* fontName, int height)
         SetBkColor(globalFontDC, RGB(0, 0, 0));
     }
     
-    SelectObject(globalFontDC, font.win32Font );
-    GetTextMetrics(globalFontDC, &font.metrics);
+    SelectObject(globalFontDC, result.win32Font );
+    GetTextMetrics(globalFontDC, &result.metrics);
     
-    font.ascenderHeight = ( r32 ) font.metrics.tmAscent;
-    font.descenderHeight = ( r32 ) font.metrics.tmDescent;
-    font.externalLeading = ( r32 ) font.metrics.tmExternalLeading;
+    result.ascenderHeight = ( r32 ) result.metrics.tmAscent;
+    result.descenderHeight = ( r32 ) result.metrics.tmDescent;
+    result.externalLeading = ( r32 ) result.metrics.tmExternalLeading;
     
-    font.maximumGlyphsCount = 5000;
-    font.minCodePoint = INT_MAX;
-    font.maxCodePoint = 0;
-    font.onePastHighestCodePoint = 0;
+    result.maximumGlyphsCount = 5000;
+    result.minCodePoint = INT_MAX;
+    result.maxCodePoint = 0;
+    result.onePastHighestCodePoint = 0;
     
-    u32 glyphsTableSize = sizeof( u32 ) * font.maximumGlyphsCount;
-    font.glyphIndexForCodePoint = ( u32* ) malloc( glyphsTableSize );
-    memset( font.glyphIndexForCodePoint, 0, glyphsTableSize );
+    u32 glyphsTableSize = sizeof(u32) * result.maximumGlyphsCount;
+    result.glyphIndexForCodePoint = (u32*) malloc(glyphsTableSize);
+    memset(result.glyphIndexForCodePoint, 0, glyphsTableSize);
     
-    font.glyphs = ( PakGlyph* ) malloc( sizeof( PakGlyph ) * font.maximumGlyphsCount );
+    result.glyphs = (u32*) malloc(sizeof(u32) * result.maximumGlyphsCount);
+    result.glyphsCount = 0;
     
-    
-    u32 kerningTableSize = font.maximumGlyphsCount * font.maximumGlyphsCount * sizeof( r32 );
-    font.horizontalAdvancement = ( r32* ) malloc( kerningTableSize );
-    memset( font.horizontalAdvancement, 0, kerningTableSize );
-    
-    font.glyphsCount = 1;
-    font.glyphs[0].unicodeCodePoint = 0;
-    font.glyphs[0].bitmapId.value = 0;
-    
-    SelectObject(globalFontDC, font->win32Font);
-    
-    DWORD kerningPairsCount = GetKerningPairsW( globalFontDC, 0, 0 );
-    KERNINGPAIR* pairs = ( KERNINGPAIR* ) malloc( sizeof( KERNINGPAIR ) * kerningPairsCount );
-    GetKerningPairsW( globalFontDC, kerningPairsCount, pairs );
-    
-    for(DWORD pairIndex = 0; pairIndex < kerningPairsCount; pairIndex++)
+    for(u32 codePoint = startingCodePoint; codePoint <= endingCodePoint; ++codePoint)
     {
-        KERNINGPAIR* pair = pairs + pairIndex;
-        if( pair->wFirst < font->maximumGlyphsCount &&
-           pair->wSecond < font->maximumGlyphsCount )
+        Assert(codePoint < result.maximumGlyphsCount);
+        Assert(result.glyphsCount < result.maximumGlyphsCount);
+        
+        u32 glyphIndex = result.glyphsCount++;
+        result.glyphs[glyphIndex] = codePoint;
+        result.glyphIndexForCodePoint[codePoint] = glyphIndex;
+        
+        if(codePoint >= result.onePastHighestCodePoint)
         {
-            u32 first = font->glyphIndexForCodePoint[pair->wFirst];
-            u32 second = font->glyphIndexForCodePoint[pair->wSecond];
-            
-            if( first && second )
-            {
-                font->horizontalAdvancement[first * font->maximumGlyphsCount + second] += ( r32 ) pair->iKernAmount;
-            }
+            result.onePastHighestCodePoint = codePoint + 1;
         }
     }
     
+    
+    u32 kerningTableSize = result.maximumGlyphsCount * result.maximumGlyphsCount * sizeof(r32);
+    result.horizontalAdvancement = (r32*) malloc(kerningTableSize);
+    memset(result.horizontalAdvancement, 0, kerningTableSize);
+    
+    SelectObject(globalFontDC, result.win32Font);
+    DWORD kerningPairsCount = GetKerningPairsW(globalFontDC, 0, 0);
+    KERNINGPAIR* pairs = (KERNINGPAIR*) malloc( sizeof( KERNINGPAIR ) * kerningPairsCount );
+    GetKerningPairsW( globalFontDC, kerningPairsCount, pairs );
+    for(DWORD pairIndex = 0; pairIndex < kerningPairsCount; pairIndex++)
+    {
+        KERNINGPAIR* pair = pairs + pairIndex;
+        if( pair->wFirst < result.maximumGlyphsCount &&
+           pair->wSecond < result.maximumGlyphsCount )
+        {
+            u32 first = result.glyphIndexForCodePoint[pair->wFirst];
+            u32 second = result.glyphIndexForCodePoint[pair->wSecond];
+            
+            if(first && second)
+            {
+                result.horizontalAdvancement[first * result.maximumGlyphsCount + second] += ( r32 ) pair->iKernAmount;
+            }
+        }
+    }
     free(pairs);
     
-    return font;
+    return result;
 }
 
 
-internal LoadedBitmap LoadGlyph(LoadedFont* font, u32 codePoint, PakAsset* asset)
+internal LoadedBitmap LoadGlyph(LoadedFont* font, u32 codePoint, PAKAsset* asset)
 {
     LoadedBitmap result = {};
     
@@ -384,7 +397,7 @@ internal LoadedBitmap LoadImage(char* path, char* filename)
 {
     LoadedBitmap result = {};
     char completeName[256];
-    sprintf( completeName, "%s/%s", path, filename );
+    sprintf(completeName, "%s/%s", path, filename);
     
 #if STB_IMAGE_IMPLEMENTATION
     int x;
@@ -551,87 +564,83 @@ inline u32 GetChunkDataSize( RiffIter iter )
 }
 
 
-internal LoadedSound LoadWAV(char* filename)
+internal LoadedSound LoadWAV(char* fileContent)
 {
     LoadedSound result = {};
     
-    EntireFile sound = ReadFile( filename );
-    Assert( sound.content );
-    if( sound.content )
+    Assert(fileContent);
+    
+    WAVEHeader* header = (WAVEHeader*) fileContent;
+    Assert(header->id == WAVE_IDriff);
+    Assert(header->waveID == WAVE_IDwave);
+    
+    void* samplesLeft = 0;
+    void* samplesRight = 0;
+    
+    for(RiffIter iter = ParseChunkAt(header + 1, ( u8* ) ( header + 1) + header->size - 4 ); IsValid( iter ); iter = NextChunk(iter))
     {
-        result.free = sound.content;
-        WAVEHeader* header = (WAVEHeader*) sound.content;
-        Assert(header->id == WAVE_IDriff);
-        Assert(header->waveID == WAVE_IDwave);
-        
-        void* samplesLeft = 0;
-        void* samplesRight = 0;
-        
-        for(RiffIter iter = ParseChunkAt(header + 1, ( u8* ) ( header + 1) + header->size - 4 ); IsValid( iter ); iter = NextChunk(iter))
+        switch(GetType(iter))
         {
-            switch(GetType(iter))
+            case WAVE_IDfmt:
             {
-                case WAVE_IDfmt:
-                {
-                    WAVEFormat* format = ( WAVEFormat* ) GetChunkData(iter); 
-                    
-                    Assert(format->format == 1 );
-                    Assert(format->blocksPerSec = 48000);
-                    Assert(format->bitsPerSample == 16 );
-                    Assert(format->blockSize == format->channels * 2);
-                    
-                    result.countChannels = format->channels;
-                } break;
+                WAVEFormat* format = ( WAVEFormat* ) GetChunkData(iter); 
                 
-                case WAVE_IDdata:
+                Assert(format->format == 1 );
+                Assert(format->blocksPerSec = 48000);
+                Assert(format->bitsPerSample == 16 );
+                Assert(format->blockSize == format->channels * 2);
+                
+                result.countChannels = format->channels;
+            } break;
+            
+            case WAVE_IDdata:
+            {
+                u32 sampleDataSize = GetChunkDataSize(iter);
+                u32 sampleCount = sampleDataSize / (result.countChannels * sizeof(i16));
+                i16* samples = ( i16*) GetChunkData(iter);
+                
+                if(result.countChannels == 1)
                 {
-                    u32 sampleDataSize = GetChunkDataSize(iter);
-                    u32 sampleCount = sampleDataSize / (result.countChannels * sizeof(i16));
-                    i16* samples = ( i16*) GetChunkData(iter);
+                    result.samples[0] = samples;
+                    result.samples[1] = 0;
+                }
+                else
+                {
+                    // TODO( Leonardo ): stereo!
+                    Assert(result.countChannels == 2);
                     
-                    if(result.countChannels == 1)
+                    result.samples[0] = samples;
+                    result.samples[1] = samples + sampleCount;
+                    
+                    for(u32 sampleIndex = 0;
+                        sampleIndex < sampleCount;
+                        ++sampleIndex)
                     {
-                        result.samples[0] = samples;
-                        result.samples[1] = 0;
+                        i16 source = samples[2*sampleIndex];
+                        samples[2*sampleIndex] = samples[sampleIndex];
+                        samples[sampleIndex] = source;
                     }
-                    else
+                }
+                
+                i16 maxSampleValue = I16_MIN;
+                for( u32 sampleIndex = 0; sampleIndex < sampleCount * result.countChannels; sampleIndex++ )
+                {
+                    i16 sampleValue = samples[sampleIndex];
+                    
+                    if(sampleValue > maxSampleValue)
                     {
-                        // TODO( Leonardo ): stereo!
-                        Assert(result.countChannels == 2);
-                        
-                        result.samples[0] = samples;
-                        result.samples[1] = samples + sampleCount;
-                        
-                        for(u32 sampleIndex = 0;
-                            sampleIndex < sampleCount;
-                            ++sampleIndex)
-                        {
-                            i16 source = samples[2*sampleIndex];
-                            samples[2*sampleIndex] = samples[sampleIndex];
-                            samples[sampleIndex] = source;
-                        }
+                        maxSampleValue = sampleValue;
                     }
-                    
-                    i16 maxSampleValue = I16_MIN;
-                    for( u32 sampleIndex = 0; sampleIndex < sampleCount * result.countChannels; sampleIndex++ )
-                    {
-                        i16 sampleValue = samples[sampleIndex];
-                        
-                        if(sampleValue > maxSampleValue)
-                        {
-                            maxSampleValue = sampleValue;
-                        }
-                    }
-                    
-                    result.countChannels = 1;
-                    Assert(maxSampleValue > 0);
-                    result.maxSampleValue = maxSampleValue;
-                    result.decibelLevel = 20 * Log10((r32) maxSampleValue / (r32) I16_MAX);
-                    
-                    
-                    result.countSamples = sampleCount;
-                } break;
-            }
+                }
+                
+                result.countChannels = 1;
+                Assert(maxSampleValue > 0);
+                result.maxSampleValue = maxSampleValue;
+                result.decibelLevel = 20 * Log10((r32) maxSampleValue / (r32) I16_MAX);
+                
+                
+                result.countSamples = sampleCount;
+            } break;
         }
     }
     
@@ -768,13 +777,6 @@ inline char* GetXMLValues( XMLTag* tag, char* name )
 }
 
 
-struct PieceInfo
-{
-    u32 assetType;
-    r32 tags[Tag_count];
-    r32 nativeHeight;
-};
-
 struct TempBone
 {
     i32 parentID;
@@ -819,9 +821,8 @@ char* AdvanceToLastSlash( char* name )
 }
 
 
-internal LoadedSkeleton LoadSkeleton(char* path, char* filename, u32 animationIndex)
+internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
 {
-    u32 currentIndex = 0;
     LoadedAnimation result = {};
     
     
@@ -836,23 +837,6 @@ internal LoadedSkeleton LoadSkeleton(char* path, char* filename, u32 animationIn
     result.ass = (PieceAss* ) malloc(assCount * sizeof(PieceAss));
     memset(result.ass, 0, assCount * sizeof(PieceAss));
     
-    char filePath[256] = {};
-    char* onePastLastSlash = filename;
-    char* holder = filename;
-    while(*holder )
-    {
-        if(*holder++ == '/' )
-        {
-            onePastLastSlash = holder;
-        }
-    }
-    i32 countPath = StrLen(filename ) - StrLen(onePastLastSlash );
-    StrCpy(filename, countPath, filePath, ArrayCount(filePath ) );
-    
-    
-    char toRead[256];
-    sprintf(toRead, "%s/%s", path, filename );
-    EntireFile animation = ReadFile(toRead);
     
     SpriteInfo tempSprites[64] = {};
     i32 currentFolderID = 0;
@@ -860,16 +844,14 @@ internal LoadedSkeleton LoadSkeleton(char* path, char* filename, u32 animationIn
     u32* currentfolderSpriteCounter = 0;
     u32 tempSpriteCount = 0;
     u32 definitiveSpriteCount = 0;
+    u16 currentIndex = 0;
     
-    char animationName[64];
-    Assert(animation.content );
-    if(animation.content )
+    
+    Assert(fileContent);
     {
-        result.free = animation.content;
-        
         // TODO(Leonardo ): robustness!
         i32 startOffset = 134;
-        char* start = (char* ) animation.content + startOffset;
+        char* start = (char* ) fileContent + startOffset;
         
         b32 mainLineActive = false;
         b32 loading = false;
@@ -979,7 +961,7 @@ internal LoadedSkeleton LoadSkeleton(char* path, char* filename, u32 animationIn
                     
                     if(animationIndex == currentIndex++)
                     {
-                        FormatString(animationName, sizeof(animationName), "%s", name);
+                        FormatString(result.name, sizeof(result.name), "%s", name);
                         loading = true;
                         result.durationMS = SafeTruncateToU16(length);
                         Assert(result.durationMS);
@@ -995,8 +977,6 @@ internal LoadedSkeleton LoadSkeleton(char* path, char* filename, u32 animationIn
                             
                             ++animationNameLength;
                         }
-                        
-                        result.stringHashID = StringHash(animationName, animationNameLength);
                         
                         frameCount = 0;
                         currentSpin = 0;
@@ -1301,72 +1281,30 @@ internal LoadedSkeleton LoadSkeleton(char* path, char* filename, u32 animationIn
     }
     
     free(frames);
-    Assert(result.durationMS );
+    Assert(result.durationMS);
     
+    return result;
+}
+
+internal u16 CountAnimations(char* fileContent)
+{
+    u16 result = 0;
     
+    Assert(fileContent);
+    // TODO(Leonardo ): robustness!
+    i32 startOffset = 134;
+    char* start = (char* ) fileContent + startOffset;
     
-    
-    char prop[256];
-    sprintf(prop, "%s/animations.properties", path);
-    EntireFile properties = ReadFile(prop);
-    
-    if(animationName && properties.content)
+    while(start != 0)
     {
-        Tokenizer tokenizer = {};
-        tokenizer.at = (char*) properties.content;
+        XMLTag currentTag = {};
+        start = ReadXMLTag(start, &currentTag);
         
-        b32 parsingProperties = true;
-        b32 activeProperties = false;
-        
-        while(parsingProperties)
+        if(StrEqual(currentTag.title, "animation"))
         {
-            Token t = GetToken(&tokenizer);
-            
-            switch(t.type)
-            {
-                case Token_Identifier:
-                {
-                    if(TokenEquals(t, animationName))
-                    {
-                        activeProperties = true;
-                    }
-                    else if(TokenEquals(t, "syncThreesold"))
-                    {
-                        if(RequireToken(&tokenizer, Token_EqualSign))
-                        {
-                            Token value = GetToken(&tokenizer);
-                            if(activeProperties)
-                            {
-                                result.syncThreesoldMS = (u16) atoi(value.text);
-                            }
-                        }
-                    }
-                    else if(TokenEquals(t, "preparationThreesold"))
-                    {
-                        if(RequireToken(&tokenizer, Token_EqualSign))
-                        {
-                            Token value = GetToken(&tokenizer);
-                            if(activeProperties)
-                            {
-                                result.preparationThreesoldMS = (u16) atoi(value.text);
-                            }
-                        }
-                    }
-                } break;
-                
-                case Token_SemiColon:
-                {
-                    activeProperties = false;
-                } break;
-                
-                case Token_EndOfFile:
-                {
-                    parsingProperties = false;
-                } break;
-            }
+            ++result;
         }
     }
-    
     return result;
 }
 
@@ -1402,10 +1340,9 @@ inline FaceVertexData ParseFaceVertexData(Tokenizer* tokenizer)
     return result;
 }
 
-internal LoadedModel LoadModel(char* path, char* filename)
+internal LoadedModel LoadModel(char* fileContent)
 {
     LoadedModel result = {};
-    
     u32 maxVertexCount = U16_MAX;
     u32 maxFaceCount = U16_MAX;
     
@@ -1415,94 +1352,89 @@ internal LoadedModel LoadModel(char* path, char* filename)
     Vec3 min = V3(R32_MAX, R32_MAX, R32_MAX);
     Vec3 max = V3(R32_MIN, R32_MIN, R32_MIN);
     
-    char completeName[256];
-    sprintf(completeName, "%s/%s", path, filename);
-    EntireFile model = ReadFile(completeName);
-    if(model.content)
+    Assert(fileContent);
+    Tokenizer tokenizer = {};
+    tokenizer.at = (char*) fileContent;
+    
+    b32 parsing = true;
+    while(parsing)
     {
-        Tokenizer tokenizer = {};
-        tokenizer.at = (char*) model.content;
-        
-        b32 parsing = true;
-        while(parsing)
+        Token t = GetToken(&tokenizer);
+        switch(t.type)
         {
-            Token t = GetToken(&tokenizer);
-            switch(t.type)
+            case Token_Identifier:
             {
-                case Token_Identifier:
+                if(TokenEquals(t, "v"))
                 {
-                    if(TokenEquals(t, "v"))
+                    Assert(result.vertexCount < maxVertexCount);
+                    ColoredVertex* dest = result.vertexes + result.vertexCount++;
+                    
+                    Token x = GetToken(&tokenizer);
+                    Token y = GetToken(&tokenizer);
+                    Token z = GetToken(&tokenizer);
+                    
+                    if(x.type == Token_Number && y.type == Token_Number && z.type == Token_Number)
                     {
-                        Assert(result.vertexCount < maxVertexCount);
-                        ColoredVertex* dest = result.vertexes + result.vertexCount++;
+                        dest->P.x = (r32) R32FromChar(x.text);
+                        dest->P.y = (r32) R32FromChar(y.text);
+                        dest->P.z = (r32) R32FromChar(z.text);
                         
-                        Token x = GetToken(&tokenizer);
-                        Token y = GetToken(&tokenizer);
-                        Token z = GetToken(&tokenizer);
+                        dest->N = {};
                         
-                        if(x.type == Token_Number && y.type == Token_Number && z.type == Token_Number)
+                        if(dest->P.x > max.x)
                         {
-                            dest->P.x = (r32) R32FromChar(x.text);
-                            dest->P.y = (r32) R32FromChar(y.text);
-                            dest->P.z = (r32) R32FromChar(z.text);
-                            
-                            dest->N = {};
-                            
-                            if(dest->P.x > max.x)
-                            {
-                                max.x = dest->P.x;
-                            }
-                            else if(dest->P.x < min.x)
-                            {
-                                min.x = dest->P.x;
-                            }
-                            
-                            if(dest->P.y > max.y)
-                            {
-                                max.y = dest->P.y;
-                            }
-                            else if(dest->P.y < min.y)
-                            {
-                                min.y = dest->P.y;
-                            }
-                            
-                            if(dest->P.z > max.z)
-                            {
-                                max.z = dest->P.z;
-                            }
-                            else if(dest->P.z < min.z)
-                            {
-                                min.z = dest->P.z;
-                            }
+                            max.x = dest->P.x;
                         }
-                        else
+                        else if(dest->P.x < min.x)
                         {
-                            InvalidCodePath;
+                            min.x = dest->P.x;
                         }
                         
-                        dest->color = V4(1, 1, 1, 1);
+                        if(dest->P.y > max.y)
+                        {
+                            max.y = dest->P.y;
+                        }
+                        else if(dest->P.y < min.y)
+                        {
+                            min.y = dest->P.y;
+                        }
+                        
+                        if(dest->P.z > max.z)
+                        {
+                            max.z = dest->P.z;
+                        }
+                        else if(dest->P.z < min.z)
+                        {
+                            min.z = dest->P.z;
+                        }
                     }
-                    else if(TokenEquals(t, "f"))
+                    else
                     {
-                        Assert(result.faceCount < maxFaceCount);
-                        ModelFace* dest = result.faces + result.faceCount++;
-                        
-                        FaceVertexData d0 = ParseFaceVertexData(&tokenizer);
-                        FaceVertexData d1 = ParseFaceVertexData(&tokenizer);
-                        FaceVertexData d2 = ParseFaceVertexData(&tokenizer);
-                        
-                        dest->i0 = d0.vertexIndex;
-                        dest->i1 = d1.vertexIndex;
-                        dest->i2 = d2.vertexIndex;
-                        
+                        InvalidCodePath;
                     }
-                } break;
-                
-                case Token_EndOfFile:
+                    
+                    dest->color = V4(1, 1, 1, 1);
+                }
+                else if(TokenEquals(t, "f"))
                 {
-                    parsing = false;
-                } break;
-            }
+                    Assert(result.faceCount < maxFaceCount);
+                    ModelFace* dest = result.faces + result.faceCount++;
+                    
+                    FaceVertexData d0 = ParseFaceVertexData(&tokenizer);
+                    FaceVertexData d1 = ParseFaceVertexData(&tokenizer);
+                    FaceVertexData d2 = ParseFaceVertexData(&tokenizer);
+                    
+                    dest->i0 = d0.vertexIndex;
+                    dest->i1 = d1.vertexIndex;
+                    dest->i2 = d2.vertexIndex;
+                    
+                }
+            } break;
+            
+            case Token_EndOfFile:
+            {
+                parsing = false;
+            } break;
         }
     }
     
@@ -1511,160 +1443,274 @@ internal LoadedModel LoadModel(char* path, char* filename)
 }
 
 
-
-internal void WritePak(AssetType type, AssetSubtype subtype, char* outputFilename)
+internal u8* ReadEntireFile(MemoryPool* pool, PlatformFileGroup* group, PlatformFileInfo* info)
 {
-    char outputpak[128];
-    FormatString(outputpak, sizeof(outputpak), "assets/%s", fileName_);
+    PlatformFileHandle handle = platformAPI.OpenFile(group, info);
+    u8* result = PushSize(pool, info->size, NoClear());
+    platformAPI.ReadFromFile(&handle, 0, info->size, result);
+    platformAPI.CloseFile(&handle);
+    return result;
+}
+
+internal void AddLabel(PAKAsset* asset, u16 label, u16 value)
+{
+    b32 found = false;
     
+    for(u32 labelIndex = 0; labelIndex < ArrayCount(asset->labels); ++labelIndex)
     {
-        FILE* out = fopen(outputpak, "wb");
+        PAKLabel* dest = asset->labels + labelIndex;
+        if(!dest->label)
+        {
+            dest->label = label;
+            dest->value = value;
+            found = true;
+            break;
+        }
+    }
+    
+    Assert(found);
+}
+
+internal void FillPAKProperty(PAKAsset* asset, Token property, Token value)
+{
+    if(TokenEquals(property, ANIMATION_PROPERTY_SYNC_THREESOLD))
+    {
+        asset->animation.syncThreesoldMS = (u16) StringToInt(value.text);
+    }
+    else if(TokenEquals(property, ANIMATION_PROPERTY_PREPARATION_THREESOLD))
+    {
+        asset->animation.preparationThreesoldMS = (u16) StringToInt(value.text);
+    }
+    else if(TokenEquals(property, IMAGE_PROPERTY_ALIGN_X))
+    {
+        asset->bitmap.align[0] = (r32) StringToFloat(value.text);
+    }
+    else if(TokenEquals(property, IMAGE_PROPERTY_ALIGN_Y))
+    {
+        asset->bitmap.align[1] = (r32) StringToFloat(value.text);
+    }
+    else
+    {
+        u16 labelType = SafeTruncateToU16(GetMetaLabelType(property));
+        if(labelType)
+        {
+            u16 labelValue = ExistMetaLabelValue(labelType, value);
+            if(labelValue != INVALID_LABEL_VALUE)
+            {
+                AddLabel(asset, labelType, labelValue);
+            }
+        }
+    }
+}
+
+internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* asset, char* name, PlatformFileGroup* markupFiles)
+{
+    FormatString(asset->name, sizeof(asset->name), "%s", name);
+    asset->dataOffset = ftell(out);
+    for(u32 labelIndex = 0; labelIndex < MAX_LABEL_PER_ASSET; ++labelIndex)
+    {
+        asset->labels[labelIndex] = {};
+    }
+    
+    for(PlatformFileInfo* info = markupFiles->firstFileInfo; info; info = info->next)
+    {
+        u8* fileContent = ReadEntireFile(tempPool, markupFiles, info);
+        
+        Tokenizer tokenizer = {};
+        tokenizer.at = (char*) fileContent;
+        Token t = AdvanceToToken(&tokenizer, name);
+        
+        if(t.type != Token_EndOfFile)
+        {
+            if(RequireToken(&tokenizer, Token_Colon))
+            {
+                while(true)
+                {
+                    Token p = GetToken(&tokenizer);
+                    
+                    if(p.type == Token_Comma)
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        if(p.type == Token_SemiColon)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            Token propertyName = p;
+                            if(RequireToken(&tokenizer, Token_EqualSign))
+                            {
+                                Token value = GetToken(&tokenizer);
+                                FillPAKProperty(asset, p, value);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char* outputPath)
+{
+    u32 type = GetMetaAssetType(sourceDir);
+    u32 subtype = GetMetaAssetSubtype(type, sourceSubdir);
+    
+    char source[128];
+    char filename[128];
+    char output[128];
+    
+    FormatString(source, sizeof(source), "%s/%s/%s", basePath, sourceDir, sourceSubdir);
+    FormatString(filename, sizeof(filename), "%s_%s.upak", sourceDir, sourceSubdir);
+    FormatString(output, sizeof(output), "%s/%s", outputPath, filename);
+    
+    PAKFileHeader header = {};
+    header.magicValue = PAK_MAGIC_NUMBER;
+    header.version = PAK_VERSION;
+    
+    header.assetType = SafeTruncateToU16(type);
+    header.assetSubType = SafeTruncateToU16(subtype);
+    header.standardAssetCount = 0;
+    header.derivedAssetCount = 0;
+    
+    PlatformFileType fileType = PlatformFile_invalid;
+    switch(type)
+    {
+        case AssetType_Image:
+        {
+            fileType = PlatformFile_image;
+        } break;
+        
+        case AssetType_Sound:
+        {
+            fileType = PlatformFile_sound;
+        } break;
+        
+        case AssetType_Font:
+        {
+            fileType = PlatformFile_font;
+        } break;
+        
+        case AssetType_Skeleton:
+        {
+            fileType = PlatformFile_skeleton;
+        } break;
+        
+        case AssetType_Model:
+        {
+            fileType = PlatformFile_model;
+        } break;
+        
+        case AssetType_Count:
+        {
+            InvalidCodePath;
+        } break;
+        
+        default:
+        {
+            fileType = PlatformFile_data;
+        } break;
+    }
+    
+    
+    u32 startingFontCodepoint = ' ';
+    u32 endingFontCodepoint = '~';
+    
+    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(fileType, source);
+    
+    u16 standardAssetCount = 0;
+    u16 derivedAssetCount = 0;
+    
+    MemoryPool tempPool = {};
+    for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
+    {
+        TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+        PlatformFileHandle handle = platformAPI.OpenFile(&fileGroup, info);
+        switch(type)
+        {
+            case AssetType_Font:
+            {
+                derivedAssetCount += SafeTruncateToU16(endingFontCodepoint - startingFontCodepoint);
+            } break;
+            
+            case AssetType_Skeleton:
+            {
+                u8* tempData = PushSize(&tempPool, info->size, NoClear());
+                platformAPI.ReadFromFile(&handle, 0, info->size, tempData);
+                derivedAssetCount += CountAnimations((char*) tempData);
+            } break;
+            
+            default:
+            {
+            } break;
+        }
+        ++standardAssetCount;
+        
+        platformAPI.CloseFile(&handle);
+        EndTemporaryMemory(fileMemory);
+    }
+    platformAPI.GetAllFilesEnd(&fileGroup);
+    
+    header.standardAssetCount = standardAssetCount;
+    header.derivedAssetCount = derivedAssetCount;
+    
+    u16 assetCount = header.standardAssetCount + header.derivedAssetCount;
+    if(assetCount > 0)
+    {
+        FILE* out = fopen(output, "wb");
         if(out)
         {
-            PAKHeader header = {};
-            header.magicValue = PAK_MAGIC_NUMBER;
-            header.version = PAK_VERSION;
+            fwrite(&header, sizeof(PAKFileHeader), 1, out);
             
-            header.type = type;
-            header.subtype = subtype;
-            header.assetcount = assets->assetCount;
-            
-            u32 assetArraySize = header.assetcount * sizeof(PakAsset);
-            
-            header.assetOffset = sizeof(PAKHeader);
-            fwrite(&header, sizeof(PAKHeader), 1, out);
-            
+            u32 assetArraySize = assetCount * sizeof(PAKAsset);
             fseek(out, assetArraySize, SEEK_CUR);
             
-            for(eachFileInFolder)
+            PAKAsset* pakAssets = PushArray(&tempPool, PAKAsset, assetCount, NoClear());
+            
+            u16 runningDerivedAssetIndex = derivedAssetCount ? assetCount : 0;
+            u16 runningAssetIndex = 0;
+            
+            PlatformFileGroup markupFiles = platformAPI.GetAllFilesBegin(PlatformFile_markup, source);
+            
+            fileGroup = platformAPI.GetAllFilesBegin(fileType, source);
+            
+            for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
-                AssetSource* source = assets->assetSources + assetIndex;
-                PakAsset* dest = assets->assets + assetIndex;
-                dest->dataOffset = ftell(out );
+                TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
                 
-                switch(sources->type)
+                u8* fileContent = ReadEntireFile(&tempPool, &fileGroup, info);
+                
+                Assert(runningAssetIndex < assetCount);
+                Assert(runningDerivedAssetIndex < assetCount);
+                
+                PAKAsset* dest = pakAssets + runningAssetIndex++;
+                FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
+                
+                switch(type)
                 {
-                    case Bitmap:
+                    case AssetType_Image:
                     {
-                        LoadedBitmap bitmap = LoadBitmap(source->path, source->bitmap.filename);
-                        
-                        Assert(stringHash);
-                        Assets* assets = currentAssets_;
-                        AddedAsset asset = AddAsset(assets);
-                        asset.source->type = Pak_bitmap;
-                        StrCpy(filename, StrLen(filename ), asset.source->bitmap.filename, ArrayCount(asset.source->bitmap.filename ) );
-                        StrCpy(path, StrLen(path), asset.source->bitmap.path, ArrayCount(asset.source->bitmap.path ) );
-                        
-                        asset.dest->bitmap.align[0] = alignX;
-                        asset.dest->bitmap.align[1] = alignY;
-                        asset.dest->typeHashID = stringHash;
-                        asset.dest->nameHashID = StringHash(filename);
-                        
-                        asset.dest->offsetFromOriginalOffset = 0;
-                        
-                        LoadedBitmap bitmap = LoadBitmap(path, filename, false);
-                        asset.dest->bitmap.nativeHeight = bitmap.downsampleFactor * bitmap.height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
-                        free(bitmap.free );
-                        
-                        
-                        BitmapId result = { asset.ID };
+                        LoadedBitmap bitmap = LoadImage(source, info->name);
                         
                         dest->bitmap.dimension[0] = bitmap.width;
                         dest->bitmap.dimension[1] = bitmap.height;
                         
+                        dest->bitmap.align[0] = 0.5f;
+                        dest->bitmap.align[1] = 0.5f;
+                        
+                        dest->bitmap.nativeHeight =bitmap.downsampleFactor * bitmap.height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
+                        
                         fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out);
                         free(bitmap.free);
+                        
                     } break;
                     
-                    case Font:
+                    case AssetType_Sound:
                     {
-                        asset.source->type = Pak_font;
-                        asset.source->font.font = font;
-                        
-                        asset.dest->typeHashID = StringHash(Asset_font);
-                        asset.dest->nameHashID = 0;
-                        asset.dest->offsetFromOriginalOffset = 0;
-                        asset.dest->font.glyphsCount = font->glyphsCount;
-                        asset.dest->font.ascenderHeight = font->ascenderHeight;
-                        asset.dest->font.descenderHeight = font->descenderHeight;
-                        asset.dest->font.externalLeading = font->externalLeading;
-                        asset.dest->font.onePastHighestCodePoint = font->onePastHighestCodePoint;
-                        
-                        
-                        FontId result = { asset.ID };
-                        
-                        LoadedFont font = LoadFont();
-                        FinalizeFontKernings(&font);
-                        
-                        for(u32 codePoint = ' ';
-                            codePoint < '~';
-                            codePoint++ )
-                        {
-                            AddCharacterAsset(fonts + fontIndex, codePoint);
-                        }
-                        
-                        u32 glyphsSize = font->glyphsCount * sizeof(PakGlyph );
-                        fwrite(font->glyphs, glyphsSize, 1, out);
-                        
-                        u8* horizontalAdvancePtr = (u8* ) font->horizontalAdvancement;
-                        for(u32 glyphIndex = 0; glyphIndex < font->glyphsCount; glyphIndex++ )
-                        {
-                            
-                            u32 horizontalAdvanceSliceSize = sizeof(r32 ) * font->glyphsCount; 
-                            fwrite(horizontalAdvancePtr, horizontalAdvanceSliceSize, 1, out);
-                            horizontalAdvancePtr += sizeof(r32 ) * font->maximumGlyphsCount;
-                        }
-                        
-                        free(font->glyphs);
-                        free(font->horizontalAdvancement);
-                        free(font->glyphIndexForCodePoint);
-                        
-                        
-                        for(every character)
-                        {
-                            Assets* assets = currentAssets_;
-                            AddedAsset asset = AddAsset(assets );
-                            
-                            asset.source->type = Pak_fontGlyph;
-                            asset.source->glyph.codePoint = codePoint;
-                            asset.source->glyph.font = font;
-                            
-                            // NOTE(Leonardo ): alignment is set later!
-                            asset.dest->typeHashID = 0;
-                            asset.dest->nameHashID = 0;
-                            asset.dest->offsetFromOriginalOffset = 0;
-                            asset.dest->bitmap.align[0] = 0.0f;
-                            asset.dest->bitmap.align[1] = 0.0f;
-                            asset.dest->bitmap.nativeHeight = 0.0f;
-                            
-                            BitmapId result = {asset.ID, V4(1, 1, 1, 1)};
-                            
-                            u32 glyphIndex = font->glyphsCount++;
-                            Assert(font->glyphsCount < font->maximumGlyphsCount );
-                            PakGlyph* glyph = font->glyphs + glyphIndex;
-                            glyph->unicodeCodePoint = codePoint;
-                            glyph->bitmapId = result;
-                            
-                            font->glyphIndexForCodePoint[codePoint] = glyphIndex;
-                            
-                            if(codePoint >= font->onePastHighestCodePoint )
-                            {
-                                font->onePastHighestCodePoint = codePoint + 1;
-                            }
-                            
-                            LoadedBitmap bitmap = LoadGlyph(source->glyph.font, source->glyph.codePoint, dest);
-                            
-                            dest->bitmap.dimension[0] = bitmap.width;
-                            dest->bitmap.dimension[1] = bitmap.height;
-                            fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32), 1, out);
-                        }
-                        
-                        free(bitmap.free );
-                    } break;
-                    
-                    case Sound:
-                    {
-                        LoadedSound sound = LoadWAV(filename);
+                        LoadedSound sound = LoadWAV((char*) fileContent);
                         dest->sound.sampleCount = sound.countSamples;
                         dest->sound.channelCount = sound.countChannels;
                         dest->sound.maxSampleValue = sound.maxSampleValue;
@@ -1674,56 +1720,11 @@ internal void WritePak(AssetType type, AssetSubtype subtype, char* outputFilenam
                         {
                             fwrite(sound.samples[channelIndex], sound.countSamples * sizeof(i16), 1, out); 
                         }
-                        
-                        free(sound.free);
                     } break;
                     
-                    case Skeleton:
+                    case AssetType_Model:
                     {
-                        LoadedSkeleton skeleton = LoadSkeleton(source->animation.path);
-                        
-                        u32 countTotalBones = 0;
-                        u32 countTotalAss = 0;
-                        
-                        for(u32 frameIndex = 0; frameIndex < animation.frameCount; frameIndex++)
-                        {
-                            FrameData* data = animation.frames + frameIndex;
-                            
-                            countTotalBones += data->countBones;
-                            countTotalAss += data->countAss;
-                        }
-                        
-                        source->animation.header.durationMS = animation.durationMS;
-                        source->animation.header.syncThreesoldMS = animation.syncThreesoldMS;
-                        source->animation.header.preparationThreesoldMS = animation.preparationThreesoldMS;
-                        source->animation.header.nameHash = animation.stringHashID;
-                        dest->nameHashID = animation.stringHashID;
-                        if(!dest->typeHashID)
-                        {
-                            dest->typeHashID = animation.stringHashID;
-                        }
-                        
-                        dest->animation.spriteCount = animation.spriteInfoCount;
-                        
-                        dest->animation.frameCount = animation.frameCount;
-                        dest->animation.boneCount = countTotalBones;
-                        dest->animation.assCount = countTotalAss;
-                        
-                        Assert(source->animation.header.durationMS > 0);
-                        fwrite(&source->animation.header, sizeof(AnimationHeader), 1, out);
-                        fwrite(animation.spriteInfos, sizeof(SpriteInfo) * animation.spriteInfoCount, 1, out);
-                        fwrite(animation.frames, sizeof(FrameData) * animation.frameCount, 1, out);
-                        fwrite(animation.bones, countTotalBones * sizeof(Bone), 1, out);
-                        fwrite(animation.ass, countTotalAss * sizeof(PieceAss), 1, out);
-                        
-                        free(animation.bones);
-                        free(animation.ass);
-                        free(animation.free);
-                    } break;
-                    
-                    case model:
-                    {
-                        LoadedModel model = LoadModel(source->model.name);
+                        LoadedModel model = LoadModel((char*) fileContent);
                         
                         dest->model.vertexCount = model.vertexCount;
                         dest->model.faceCount = model.faceCount;
@@ -1735,18 +1736,118 @@ internal void WritePak(AssetType type, AssetSubtype subtype, char* outputFilenam
                         free(model.faces);
                     } break;
                     
-                    case Data:
+                    case AssetType_Font:
                     {
-                        ???
+                        // TODO(Leonardo): how can we pass the font name here?
+                        char fontName[128];
+                        TrimToFirstCharacter(fontName, sizeof(fontName), info->name, '.');
+                        LoadedFont font = LoadFont(source, info->name, fontName, 64, startingFontCodepoint, endingFontCodepoint);
+                        
+                        dest->font.glyphCount = font.glyphsCount;
+                        dest->font.ascenderHeight = font.ascenderHeight;
+                        dest->font.descenderHeight = font.descenderHeight;
+                        dest->font.externalLeading = font.externalLeading;
+                        dest->font.onePastHighestCodePoint = font.onePastHighestCodePoint;
+                        
+                        u32 glyphsSize = font.glyphsCount * sizeof(u32);
+                        fwrite(font.glyphs, glyphsSize, 1, out);
+                        
+                        u8* horizontalAdvancePtr = (u8*) font.horizontalAdvancement;
+                        for(u32 glyphIndex = 0; glyphIndex < font.glyphsCount; glyphIndex++ )
+                        {
+                            u32 horizontalAdvanceSliceSize = sizeof(r32) * font.glyphsCount; 
+                            fwrite(horizontalAdvancePtr, horizontalAdvanceSliceSize, 1, out);
+                            horizontalAdvancePtr += sizeof(r32) * font.maximumGlyphsCount;
+                        }
+                        
+                        dest->font.glyphAssetsFirstIndex = runningDerivedAssetIndex;
+                        for(u32 glyphIndex = 0; glyphIndex < font.glyphsCount; ++glyphIndex)
+                        {
+                            PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;
+                            FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, "ignored", &markupFiles);
+                            
+                            u32 codePoint = font.glyphs[glyphIndex];
+                            LoadedBitmap bitmap = LoadGlyph(&font, codePoint, derivedAsset);
+                            derivedAsset->bitmap.dimension[0] = bitmap.width;
+                            derivedAsset->bitmap.dimension[1] = bitmap.height;
+                            derivedAsset->bitmap.nativeHeight = 0;
+                            
+                            fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32), 1, out);
+                            free(bitmap.free);
+                        }
+                        
+                        
+                        free(font.glyphs);
+                        free(font.horizontalAdvancement);
+                        free(font.glyphIndexForCodePoint);
                     } break;
                     
-                    InvalidDefaultCase;
+                    case AssetType_Skeleton:
+                    {
+                        u16 animationCount = CountAnimations((char*) fileContent);
+                        dest->skeleton.animationCount = animationCount;
+                        dest->skeleton.animationAssetsFirstIndex = runningDerivedAssetIndex;
+                        
+                        for(u16 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
+                        {
+                            PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;
+                            LoadedAnimation animation = LoadAnimation((char*) fileContent, animationIndex);
+                            
+                            char trimmedFilename[128];
+                            TrimToFirstCharacter(trimmedFilename, sizeof(trimmedFilename), filename, '.');
+                            char animationName[128];
+                            FormatString(animationName, sizeof(animationName), "%s_%s", trimmedFilename, animation.name);
+                            FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, animationName, &markupFiles);
+                            
+                            u32 countTotalBones = 0;
+                            u32 countTotalAss = 0;
+                            for(u32 frameIndex = 0; frameIndex < animation.frameCount; frameIndex++)
+                            {
+                                FrameData* data = animation.frames + frameIndex;
+                                countTotalBones += data->countBones;
+                                countTotalAss += data->countAss;
+                            }
+                            
+                            dest->animation.durationMS = animation.durationMS;
+                            dest->animation.syncThreesoldMS = 0;
+                            dest->animation.preparationThreesoldMS = 0;
+                            Assert(dest->animation.durationMS > 0);
+                            
+                            dest->animation.spriteCount = animation.spriteInfoCount;
+                            dest->animation.frameCount = animation.frameCount;
+                            dest->animation.boneCount = countTotalBones;
+                            dest->animation.assCount = countTotalAss;
+                            
+                            
+                            fwrite(animation.spriteInfos, sizeof(SpriteInfo) * animation.spriteInfoCount, 1, out);
+                            fwrite(animation.frames, sizeof(FrameData) * animation.frameCount, 1, out);
+                            fwrite(animation.bones, countTotalBones * sizeof(Bone), 1, out);
+                            fwrite(animation.ass, countTotalAss * sizeof(PieceAss), 1, out);
+                            
+                            free(animation.bones);
+                            free(animation.ass);
+                            free(animation.free);
+                        }
+                    } break;
+                    
+                    case AssetType_Count:
+                    {
+                        InvalidCodePath;
+                    }
+                    default:
+                    {
+                        dest->dataFile.rawSize = SafeTruncateUInt64ToU32(info->size);
+                        fwrite(fileContent, info->size, 1, out);
+                    } break;
                 }
+                
+                EndTemporaryMemory(fileMemory);
             }
+            platformAPI.GetAllFilesEnd(&fileGroup);
+            platformAPI.GetAllFilesEnd(&markupFiles);
             
-            fseek(out, (u32) header.assetOffset, SEEK_SET);
-            fwrite(&assets->assets, header.assetcount * sizeof(PakAsset), 1, out);
-            
+            fseek(out, (u32) sizeof(PAKFileHeader), SEEK_SET);
+            fwrite(pakAssets, assetCount * sizeof(PAKAsset), 1, out);
             fseek(out, 0, SEEK_END);
             fclose(out);
         }
@@ -1759,39 +1860,82 @@ internal void WritePak(AssetType type, AssetSubtype subtype, char* outputFilenam
 
 
 
-
-internal void BuildAssetSubtype()
+internal void BuildAssets(char* sourcePath, char* destPath)
 {
-    GetAllfiles();
-    AssetSubtype subtype = ?;
-    WritePak(type, subtype, assets);
-}
-
-internal void BuildAssetType()
-{
-    GetAllSubdirectories();
+    PlatformSubdirNames subdir;
+    platformAPI.GetAllSubdirectories(&subdir, sourcePath);
     
-    
-    assetType type = getType();
-    for(each subdirectory)
+    for(u32 subdirIndex = 0; subdirIndex < subdir.count; ++subdirIndex)
     {
-        BuildAssetSubtype(type);
+        char* subdirName = subdir.names[subdirIndex];
+        char sourceAssetTypePath[128];
+        FormatString(sourceAssetTypePath, sizeof(sourceAssetTypePath), "%s/%s", sourcePath, subdirName);
+        
+        PlatformSubdirNames subsubdir;
+        platformAPI.GetAllSubdirectories(&subsubdir, sourceAssetTypePath);
+        
+        for(u32 subsubDirIndex = 0; subsubDirIndex < subsubdir.count; ++subsubDirIndex)
+        {
+            char* subsubDirName = subsubdir.names[subsubDirIndex];
+            WritePak(sourcePath, subdirName, subsubDirName, destPath);
+        }
     }
-}
-
-internal void BuildAssets(char* path)
-{
-    
+#if 0    
     LoadFont("definition/fonts/MorrisRoman-Black.ttf", "Morris Roman Black", 64);
     LoadFont("c:/windows/fonts/arial.ttf", "Arial", 64);
     //LoadFont("definition/fonts/dum1.ttf", "Dumbledor 1", 64),
     //LoadFont("c:/windows/fonts/courier.ttf", "Courier New", 64 ),
+#endif
     
-    GetAllSubdirectories(path);
-    for(eachSubdirectory)
-    {
-        BuildAssetType();
-    }
 }
 
+
+#if 0
+internal WatchForFileChanges()
+{
+    
+    b32 result = false;
+    
+    for(every folder)
+    {
+        for(every subfolder)
+        {
+            GetCorrenspodingFileDateHash();
+            
+            b32 updatedFiles = false;
+            BeginFiles();
+            
+            for(every file)
+            {
+                if(NotEqual(timestamp, hash->timestamp))
+                {
+                    if(Hash(data) is different)
+                    {
+                        updatedFiles = true;
+                    }
+                }
+            }
+            
+            EndFiles();
+            
+            BeginFiles(labels);
+            
+            if(Changed(labelsFile))
+            {
+                updatedFiles = true;
+            }
+            EndFiles();
+            
+            
+            if(updatedFiles)
+            {
+                WritePak(replaced);
+                result = true;
+            }
+        }
+    }
+    
+    return result;
+}
+#endif
 

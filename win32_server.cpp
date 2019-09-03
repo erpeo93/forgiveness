@@ -7,21 +7,30 @@
 #include <DbgHelp.h>
 #include <stdio.h>
 #include <time.h>
-#include "sqlite3.h"
-#include "forg_basic_types.h"
 
+#include "forg_base.h"
 #define LL_NET_IMPLEMENTATION
 #include "ll_net.h"
 
-#pragma comment( lib, "wsock32.lib" )
 #include "forg_platform.h"
+global_variable PlatformAPI platformAPI;
+#include "forg_pool.h"
+#include "forg_debug_interface.h"
+#include "forg_token.h"
+#include "forg_shared.h"
 #include "forg_intrinsics.h"
-#include "win32_forg.h"
 #include "forg_math.h"
-#include "forg_server.h"
+#include "forg_pool.cpp"
+
+#include "win32_forg.h"
 #include "win32_file.cpp"
-#include "win32_process.cpp"
 #include "win32_thread.cpp"
+
+#include "win32_process.cpp"
+
+
+
+#pragma comment( lib, "wsock32.lib" )
 
 global_variable Win32MemoryBlock globalMemorySentinel;
 global_variable TicketMutex memoryMutex;
@@ -29,6 +38,9 @@ global_variable b32 globalRecording;
 global_variable b32 globalPlayingBack;
 global_variable HANDLE recordingHandle;
 global_variable HANDLE playingBackHandle;
+
+#define SERVER_MAX_FPS 10
+#define SERVER_MIN_MSEC_PER_FRAME 1000.0f / (r32) (SERVER_MAX_FPS)
 
 inline b32 IsInLoop()
 {
@@ -195,7 +207,7 @@ internal void EndInputRecording()
     CloseHandle( recordingHandle );
 }
 
-INPUT_RECORDING_COMMAND( Win32DispatchInputRecordingCommand )
+INPUT_RECORDING_COMMAND(Win32DispatchInputRecordingCommand)
 {
     if( recording )
     {
@@ -237,7 +249,9 @@ struct ServerFunctions
     HMODULE serverDLL;
     FILETIME lastWriteTime;
     server_simulate_worlds* SimulateWorlds;
+#if FORGIVENESS_INTERNAL
     server_frame_end* ServerFrameEnd;
+#endif
 };
 
 internal void FreeServerCode( ServerFunctions* functions )
@@ -246,7 +260,10 @@ internal void FreeServerCode( ServerFunctions* functions )
     functions->serverDLL = {};
     
     functions->SimulateWorlds = 0;
+    
+#if FORGIVENESS_INTERNAL
     functions->ServerFrameEnd = 0;
+#endif
 }
 
 ServerFunctions LoadServerCode( char* DLLName, char* tempDLLName, char* lockName )
@@ -273,7 +290,10 @@ ServerFunctions LoadServerCode( char* DLLName, char* tempDLLName, char* lockName
         {
             result.serverDLL = serverDLL;
             result.SimulateWorlds = ( server_simulate_worlds* ) GetProcAddress( serverDLL, "SimulateWorlds" );
+            
+#if FORGIVENESS_INTERNAL
             result.ServerFrameEnd = ( server_frame_end* ) GetProcAddress( serverDLL, "ServerFrameEnd" );
+#endif
         }
     }
     
@@ -306,19 +326,16 @@ int main( int argc, char* argv[] )
     memory.api.AllocateMemory = Win32AllocateMemory;
     memory.api.DeallocateMemory = Win32DeallocateMemory;
     
-    memory.api.DEBUGReadFile = DEBUGWin32ReadFile;
-    memory.api.DEBUGWriteFile = DEBUGWin32WriteFile;
-    memory.api.DEBUGFreeFile = DEBUGWin32FreeFile;
 #if FORGIVENESS_INTERNAL
     memory.api.PlatformInputRecordingCommand = Win32DispatchInputRecordingCommand;
     memory.api.PlatformInputRecordingHandlePlayer = Win32InputRecordingHandlePlayer;
     memory.api.DEBUGMemoryStats = Win32GetMemoryStats;
     memory.debugTable = globalDebugTable;
 #endif
-    memory.api.GetAllSubdirectoriesName = Win32GetAllSubdirectoriesName;
-    memory.api.CloseHandle = Win32CloseHandle;
+    memory.api.GetAllSubdirectories = Win32GetAllSubdirectories;
+    memory.api.CloseFile = Win32CloseFile;
     memory.api.GetAllFilesBegin = Win32GetAllFilesBegin;
-    memory.api.OpenNextFile = Win32OpenNextFile;
+    memory.api.OpenFile = Win32OpenFile;
     memory.api.GetAllFilesEnd = Win32GetAllFilesEnd;
     memory.api.ReadFromFile = Win32ReadFromFile;
     memory.api.FileError = Win32FileError;
@@ -326,12 +343,7 @@ int main( int argc, char* argv[] )
     memory.api.DEBUGExecuteSystemCommand = DEBUGWin32ExecuteCommand;
     memory.api.DEBUGGetProcessState = DEBUGWin32GetProcessState;
     
-    memory.api.CreateFolder = Win32CreateFolder;
-    memory.api.CopyAllFiles = Win32CopyAllFiles;
-    memory.api.DeleteFolderRecursive = Win32DeleteFolderRecursive;
-    memory.api.DeleteFileWildcards = Win32DeleteFileWildcards;
-    memory.api.MoveFileOrFolder = Win32MoveFileOrFolder;
-    memory.api.CopyFileOrFolder = Win32CopyFileOrFolder;
+    memory.api.DeleteFiles = Win32DeleteFiles;
     
     memory.api.net = Win32NetworkAPI;
     
@@ -340,6 +352,8 @@ int main( int argc, char* argv[] )
     
     memory.fastQueue = &fastQueue;
     memory.slowQueue = &slowQueue;
+    
+    platformAPI = memory.api;
     
     char* DLLName = "forg_server.dll";
     char* tempDLLName = "forg_server_temp.dll";

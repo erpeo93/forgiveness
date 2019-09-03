@@ -1,12 +1,11 @@
+#include "forg_base.h"
+#include "forg_shared.h"
 #include "forg_token.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
 #include <string.h>
 #include <math.h>
-
-#define Assert( expression ) if( !( expression ) ) { *( ( int* ) 0 ) = 0; }
-#define ArrayCount( value ) ( sizeof( value ) / sizeof( ( value )[0] ) )
 
 #include "forg_token.cpp"
 char* ReadEntireFileAndNullTerminate( char* filename )
@@ -41,15 +40,19 @@ void ParseIntrospectParam( Tokenizer* tokenizer )
     }
 }
 
-void ParseMember( Tokenizer* tokenizer, Token structToken, Token memberNameToken )
+char memberDefaultValues[KiloBytes(16)] = {};
+
+void ParseMember(Tokenizer* tokenizer, Token structToken, Token memberNameToken, u32 memberIndex)
 {
     bool parsing = true;
     bool isPointer = false;
     bool nameParsed = false;
+    Token defaultValue = {};
+    
     while( parsing )
     {
-        Token token = GetToken( tokenizer );
-        switch( token.type )
+        Token token = GetToken(tokenizer);
+        switch(token.type)
         {
             case Token_Asterisk:
             {
@@ -58,16 +61,25 @@ void ParseMember( Tokenizer* tokenizer, Token structToken, Token memberNameToken
             
             case Token_Identifier:
             {
-                if( !nameParsed )
+                if(TokenEquals(token, "MetaDefault"))
                 {
-                    
-#if 0                    
-                    printf( "{ %s, MetaType_%.*s, \"%.*s\", (u32) ( &(( %.*s* )0)->%.*s ) }, \n", isPointer ? "MetaFlag_Pointer" : "0",memberNameToken.textLength, memberNameToken.text, token.textLength, token.text, structToken.textLength, structToken.text, token.textLength, token.text );
-#else
-                    printf( "{0, MetaType_%.*s, \"%.*s\", (u32) (&((%.*s*)0)->%.*s)}, \n",memberNameToken.textLength, memberNameToken.text, token.textLength, token.text, structToken.textLength, structToken.text, token.textLength, token.text );
-#endif
-                    
-                    nameParsed = true;
+                    if(RequireToken(tokenizer, Token_OpenParen))
+                    {
+                        defaultValue = Stringize(GetToken(tokenizer));
+                    }
+                }
+                else
+                {
+                    if(!nameParsed)
+                    {
+                        
+                        printf("{%s, MetaType_%.*s, \"%.*s\", \"%.*s\", (u32) (&((%.*s*)0)->%.*s), {}}, \n",isPointer ? "MetaFlag_Pointer" : "0", 
+                               memberNameToken.textLength, memberNameToken.text, memberNameToken.textLength, memberNameToken.text,
+                               token.textLength, token.text, 
+                               structToken.textLength, structToken.text, 
+                               token.textLength, token.text);
+                        nameParsed = true;
+                    }
                 }
             } break;
             
@@ -77,6 +89,9 @@ void ParseMember( Tokenizer* tokenizer, Token structToken, Token memberNameToken
             } break;
         }
     }
+    
+    sprintf(memberDefaultValues, "memberDefinitionOf%.*s[%d].def.def_%.*s = %.*s;\\", structToken.textLength, structToken.text, memberIndex, memberNameToken.textLength, memberNameToken.text, defaultValue.textLength, defaultValue.text);
+    
 }
 
 struct MetaStruct
@@ -92,8 +107,9 @@ void ParseStruct(Tokenizer* tokenizer)
     //printf( "#ifdef INTROSPECTION\n");
     printf( "MemberDefinition memberDefinitionOf%.*s[] = \n {\n", nameToken.textLength, nameToken.text );
     
-    if( RequireToken( tokenizer, Token_OpenBraces ) )
+    if(RequireToken( tokenizer, Token_OpenBraces))
     {
+        u32 memberIndex = 0;
         for(;;)
         {
             Token memberType = GetToken( tokenizer );
@@ -103,7 +119,7 @@ void ParseStruct(Tokenizer* tokenizer)
             }
             else
             {
-                ParseMember( tokenizer, nameToken, memberType );
+                ParseMember(tokenizer, nameToken, memberType, memberIndex++);
             }
         }
     }
@@ -118,7 +134,6 @@ void ParseStruct(Tokenizer* tokenizer)
     
     meta->next = firstStruct;
     firstStruct = meta;
-    
 }
 
 void ParseIntrospection( Tokenizer* tokenizer )
@@ -143,6 +158,7 @@ void ParseIntrospection( Tokenizer* tokenizer )
     }
 }
 
+
 inline Token FirstUnderScore( Token token )
 {
     Token result = token;
@@ -163,9 +179,85 @@ inline Token FirstUnderScore( Token token )
     return result;
 }
 
+struct MetaLabel
+{
+    char* name;
+    MetaLabel* next;
+};
+
+
+bool ParseLabelParam(Tokenizer* tokenizer)
+{
+    bool result = true;
+    for(;;)
+    {
+        Token token = GetToken( tokenizer );
+        if(token.type == Token_Identifier)
+        {
+        }
+        
+        if( token.type == Token_CloseParen || token.type == Token_EndOfFile )
+        {
+            break;
+        }
+    }
+    return result;
+}
+
+global_variable MetaLabel* firstLabelList;
+void ParseLabels(Tokenizer* tokenizer)
+{
+    ParseLabelParam(tokenizer);
+    
+    Token enumToken = GetToken(tokenizer);
+    if( TokenEquals( enumToken, "enum" ) )
+    {
+        Token nameToken = GetToken(tokenizer);
+        Assert( nameToken.type == Token_Identifier );
+        printf( "char* MetaLabels_%.*s[] = \n {\n", nameToken.textLength, nameToken.text );
+        
+        if(RequireToken(tokenizer, Token_OpenBraces))
+        {
+            for(;;)
+            {
+                Token element = GetToken(tokenizer);
+                if( element.type == Token_CloseBraces)
+                {
+                    break;
+                }
+                else
+                {
+                    if(element.type == Token_Identifier)
+                    {
+                        element = FirstUnderScore(element);
+                        printf( "\"%.*s\",\n", element.textLength, element.text );
+                    }
+                }
+            }
+        }
+        printf( "};\n" );
+        printf( "\n" );
+        
+        
+        
+        MetaLabel* meta = ( MetaLabel* ) malloc( sizeof( MetaLabel ) );
+        meta->name = ( char* ) malloc(nameToken.textLength + 1);
+        memcpy(meta->name, nameToken.text, nameToken.textLength);
+        meta->name[nameToken.textLength] = 0;
+        
+        meta->next = firstLabelList;
+        firstLabelList = meta;
+    }
+    else
+    {
+        InvalidCodePath;
+    }
+}
+
+
 void ParseTable(Tokenizer* tokenizer, bool printPrefix)
 {
-    Token nameToken = GetToken( tokenizer );
+    Token nameToken = GetToken(tokenizer);
     Assert( nameToken.type == Token_Identifier );
     printf( "char* MetaTable_%.*s[] = \n {\n", nameToken.textLength, nameToken.text );
     
@@ -196,7 +288,7 @@ void ParseTable(Tokenizer* tokenizer, bool printPrefix)
 }
 
 
-bool ParseTableParam( Tokenizer* tokenizer )
+bool ParseTableParam(Tokenizer* tokenizer)
 {
     bool result = true;
     for(;;)
@@ -225,7 +317,7 @@ void ParseEnumTable(Tokenizer* tokenizer)
     {
         bool printPrefix = ParseTableParam(tokenizer);
         
-        Token enumToken = GetToken( tokenizer );
+        Token enumToken = GetToken(tokenizer);
         if( TokenEquals( enumToken, "enum" ) )
         {
             ParseTable(tokenizer, printPrefix);
@@ -323,6 +415,8 @@ int main( int argc, char** argv )
         "forg_client.h",
         "forg_animation.h",
         "forg_particles.h",
+        "forg_asset.h",
+        "asset_labels.h",
     };
     for( int fileIndex = 0; fileIndex < sizeof( fileNames ) / sizeof( fileNames[0] ); ++fileIndex )
     {
@@ -360,6 +454,11 @@ int main( int argc, char** argv )
                     {
                         ParseEnumTable( &tokenizer );
                     }
+                    else if(TokenEquals(token, "printLabels"))
+                    {
+                        ParseLabels(&tokenizer);
+                    }
+                    
 					else if(TokenEquals(token, "printFlags"))
 					{
 						ParseFlags(&tokenizer);
@@ -377,11 +476,27 @@ int main( int argc, char** argv )
     printf( "#define META_HANDLE_ADD_TO_DEFINITION_HASH()\\\n" );
     for(MetaStruct* meta = firstStruct; meta; meta = meta->next)
     {
-        printf("AddToDefinitionHash(definitionHash, %s, memberDefinitionOf%s);", meta->name, meta->name); 
+        printf("AddToMetaDefinitions(%s, memberDefinitionOf%s);", meta->name, meta->name); 
         
         printf( meta->next ? "\\" : "" );
         printf( "\n" );
     }
     printf( "\n" );
+    
+    printf( "#define META_LABELS_ADD()\\\n" );
+    for(MetaLabel* meta = firstLabelList; meta; meta = meta->next)
+    {
+        printf("AddToMetaLabels(%s, MetaLabels_%s);", meta->name, meta->name); 
+        
+        printf( meta->next ? "\\" : "" );
+        printf( "\n" );
+    }
+    printf( "\n" );
+    
+    
+    printf("#define META_DEFAULT_VALUES_CPP_SUCKS()\\\n");
+    printf(memberDefaultValues);
+    printf("\n;");
+    printf("\n");
 }
 

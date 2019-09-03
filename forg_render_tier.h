@@ -2,26 +2,6 @@
 #define MAX_TEXTURE_COUNT 256
 #define MAX_SPECIAL_TEXTURE_COUNT 32
 
-struct RenderTexture
-{
-    u32 index;
-    u16 width;
-    u16 height;
-};
-
-struct Bitmap
-{
-    void* pixels;
-    u16 width;
-    u16 height;
-    
-    Vec2 pivot;
-    r32 nativeHeight;
-    r32 widthOverHeight;
-    
-    RenderTexture textureHandle;
-};
-
 inline RenderTexture TextureHandle(u32 index, u16 width, u16 height)
 {
     RenderTexture result;

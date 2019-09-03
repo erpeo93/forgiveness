@@ -18,7 +18,6 @@
 #include "forg_world_generation.cpp"
 #include "forg_world_server.cpp"
 #include "forg_network_server.cpp"
-#include "forg_editor.cpp"
 #include "forg_import.cpp"
 #include "forg_inventory.cpp"
 //#include "forg_memory.cpp"
@@ -34,6 +33,7 @@
 
 #pragma comment(lib, "wsock32.lib")
 
+#include "forg_editor.cpp"
 #include "asset_builder.cpp"
 
 #if FORGIVENESS_INTERNAL
@@ -404,6 +404,28 @@ internal Player* FirstFreePlayer(ServerState* server)
     return result;
 }
 
+
+#if 0
+PLATFORM_WORK_CALLBACK(WatchForFileChanges)
+{
+    while(true)
+    {
+        BeginTicketMutex();
+        
+        if(!assets->filesToLoad)
+        {
+            if(WatchForFileChanges(assets, ASSETS_PATH))
+            {
+                assets->filesToLoad = true;
+            }
+        }
+        
+        EndTicketMutex();
+    }
+}
+#endif
+
+
 extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 {
     platformAPI = memory->api;
@@ -413,6 +435,9 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 #endif
     if(!memory->server)
     {
+        LoadMetaData();
+        
+        
         server = memory->server = BootstrapPushStruct(ServerState, worldPool);
         // NOTE(Leonardo): sqlite test!
         
@@ -443,10 +468,13 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         server->playerCount = 1;
         server->entityCount = 1;
+        
+        BuildAssets("assets/raw", "assets");
 #if 0   
         if(editor)
         {
             BuildAssets();
+            platformAPI.PushWork(WatchForFileChanges);
         }
         
         AddAllPakFileHashes(server);
@@ -461,6 +489,20 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 #endif
         
     }
+    
+    
+#if 0    
+    if(assets->filesToLoad)
+    {
+        BeginTicketMutex();
+        
+        ReplaceChangedAssetFiles(assets);
+        
+        CompletePastWritesBeforeFutureWrites;
+        assets->filesToLoad = false;
+        EndTicketMutex();
+    }
+#endif
     
     
     // TODO(Leonardo): change the API of the network library to return a networkConnection*!

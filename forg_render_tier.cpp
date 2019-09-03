@@ -905,11 +905,11 @@ inline void SoftwareRenderCommands( PlatformWorkQueue* renderQueue, GameRenderCo
             work->dest = dest;
             work->clip = clip;
             
-            platform.PushWork( renderQueue, RenderTileToOutput, work );
+            platformAPI.PushWork( renderQueue, RenderTileToOutput, work );
             work++;
         }
     }
-    platform.CompleteQueueWork( renderQueue );
+    platformAPI.CompleteQueueWork( renderQueue );
 }
 
 internal Rect2i AspectRatioFit( i32 renderWidth, i32 renderHeight, i32 windowWidth, i32 windowHeight )

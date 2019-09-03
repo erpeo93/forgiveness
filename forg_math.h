@@ -614,6 +614,17 @@ inline Vec3 ToV3( r32 x, r32 y )
 //
 //
 
+inline b32 operator != (Vec4 v1, Vec4 v2)
+{
+    b32 result = false;
+    if( ( v1.x != v2.x ) || ( v1.y != v2.y ) ||
+       ( v1.z != v2.z ) || ( v1.w != v2.w ) )
+    {
+        result = true;
+    }
+    return result;
+}
+
 
 inline Vec4 V4( r32 X, r32 Y, r32 z, r32 W )
 {

@@ -1,33 +1,4 @@
-inline bool IsEndOfLine( char c )
-{
-    bool result = ( c == '\n' || c == '\r' );
-    return result;
-}
-
-inline bool IsWhiteSpace( char c )
-{
-    bool result = ( c == ' ' ||
-                   c == '\t' ||
-                   IsEndOfLine( c ) );
-    return result;
-}
-
-inline bool IsAlphanumeric( char c )
-{
-    bool result = ( ( ( c >= 'a' ) && ( c <= 'z' ) ) ||
-                   ( ( c >= 'A' ) && ( c <= 'Z' ) ) );
-    
-    return result;
-}
-
-inline bool IsNumeric( char c )
-{
-    bool result = ( ( c >= '0' ) && ( c <= '9' ) );
-    
-    return result;
-}
-
-inline bool IsDecimalNumber( Token t )
+inline bool IsDecimalNumber(Token t)
 {
     bool result = false;
     for( int charIndex = 0; charIndex < t.textLength; ++charIndex )
@@ -239,6 +210,19 @@ inline Token Stringize(Token token)
     
     return token;
 }
+
+inline Buffer BufferizeFirstTokenAndAdvance(Tokenizer* tokenizer)
+{
+    Buffer result;
+    
+    Token t = GetToken(tokenizer);
+    
+    result.b = (u8*) t.text;
+    result.size = t.textLength;
+    
+    return result;
+}
+
 inline void AdvanceToNextToken(Tokenizer* tokenizer, ForgTokenType type)
 {
     bool parsing = true;
@@ -282,7 +266,6 @@ inline bool NextTokenIs(Tokenizer* tokenizer, ForgTokenType type)
     return result;
 }
 
-#define RequiresToken(tokenizer, tokenType) if(!RequireToken(tokenizer, Token_##tokenType)){InvalidCodePath;}
 inline bool RequireToken(Tokenizer* tokenizer, int tokenType)
 {
     Token token = GetToken( tokenizer );
@@ -290,3 +273,19 @@ inline bool RequireToken(Tokenizer* tokenizer, int tokenType)
     return result;
 }
 
+inline Token AdvanceToToken(Tokenizer* tokenizer, char* tokenValue)
+{
+    Token result = GetToken(tokenizer);
+    while(result.type != Token_EndOfFile)
+    {
+        result = Stringize(result);
+        if(TokenEquals(result, tokenValue))
+        {
+            break;
+        }
+        
+        result = GetToken(tokenizer);
+    }
+    
+    return result;
+}

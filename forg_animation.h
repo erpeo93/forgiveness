@@ -5,6 +5,21 @@
 #define MIN_STATUS_ALPHA -20.0f
 #define MAX_STATUS_ALPHA 20.0f
 
+enum SpriteInfoFlags
+{
+    Sprite_Composed = (1 << 1),
+    Sprite_Entity = (1 << 2),
+};
+
+enum AnimationLoopingType
+{
+    Loop_none,
+    Loop_normal,
+    Loop_pingPong,
+};
+
+
+#ifndef FORG_SERVER
 struct BoneAlteration
 {
     b32 valid;
@@ -403,3 +418,4 @@ struct BoneAlterations
 {
     EditorBoneAlteration* firstBoneAlteration;
 };
+#endif

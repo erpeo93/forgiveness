@@ -291,9 +291,9 @@ inline void SendNewTabMessage()
 }
 
 
-inline void SendReloadAssetsRequest()
+inline void SendRebuildAssetsRequest()
 {
-    StartPacket(ReloadAssets);
+    StartPacket(RebuildAssets);
     CloseAndSendReliablePacket();
 }
 

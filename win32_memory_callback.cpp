@@ -1,4 +1,4 @@
-inline void Win32FreeMemoryBlock( Win32MemoryBlock* block )
+inline void Win32FreeMemoryBlock(Win32MemoryBlock* block)
 {
     BeginTicketMutex(&memoryMutex);
     block->prev->next = block->next;
@@ -64,12 +64,12 @@ PLATFORM_ALLOCATE_MEMORY( Win32AllocateMemory )
 }
 
 //void name( PlatformMemoryBlock* block )
-PLATFORM_DEALLOCATE_MEMORY( Win32DeallocateMemory )
+PLATFORM_DEALLOCATE_MEMORY(Win32DeallocateMemory)
 {
-    if( block )
+    if(block)
     {
         Win32MemoryBlock* win32Block = ( Win32MemoryBlock* ) block;
-        if( IsInLoop() )
+        if(IsInLoop())
         {
             win32Block->loopingFlags = LoopingFlag_FreedDuringLooping;
         }
