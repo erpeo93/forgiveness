@@ -618,7 +618,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                     worldMode->voronoiPingPong[voronoiIndex].deltaP += deltaP;
                 }
                 
-                UpdateAndRenderGround(worldMode, group, myPlayer->universeP);
+                //UpdateAndRenderGround(worldMode, group, myPlayer->universeP);
                 
                 worldMode->particleCache->deltaParticleP = deltaP;
                 UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
@@ -629,11 +629,23 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 myPlayer->oldUniverseP = myPlayer->universeP;
                 
+                
+                
                 RandomSequence seq = Seed(123);
+                AssetLabels bitmapLabels = {};
+                bitmapLabels.labels[0].label = Label_Test;
+                bitmapLabels.labels[0].value = TestLabel_Value1;
+                
+                AssetID test = QueryAssets(group->assets, AssetType_Image, 0, &seq, &bitmapLabels);
+                
+                PushBitmap(group, UprightTransform(), test, V3(0, 0, 0), 1.0f);
+                
+                
+                
+                
+                
                 AssetLabels labels = {};
                 FontId fontID = QueryAssets(group->assets, AssetType_Font, AssetFont_game, &seq, &labels);
-                
-                
                 SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / group->commands->settings.width, 0.0f, 0.0f), V3(0.0f, 2.0f / group->commands->settings.height, 0.0f), V3( 0, 0, 1), V3(0, 0, 0), V2(0, 0));
                 
                 UIOrthoTextOp(group, fontID, "hello world", 1.0f, V3(0, 0, 0), TextOp_draw, V4(1, 1, 1, 1), true);

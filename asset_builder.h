@@ -15,6 +15,12 @@ struct LoadedBitmap
     void* free;
 };
 
+struct LoadedColoration
+{
+    Vec4 color;
+    char imageName[64];
+};
+
 struct LoadedFont
 {
     HFONT win32Font;

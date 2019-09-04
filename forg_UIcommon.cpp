@@ -43,7 +43,7 @@ internal Rect2 UIOrthoTextOp(RenderGroup* group, FontId fontID, Font* font, PAKF
                     else
                     {
                         Assert( op == TextOp_getSize );
-                        Bitmap* bitmap = GetBitmap(group->assets, ID);
+                        Bitmap* bitmap = GetBitmap(group->assets, ID).bitmap;
                         if(bitmap)
                         {
                             BitmapDim dim = GetBitmapDim( bitmap, P, V3( 1.0f, 0.0f, 0.0f ), V3( 0.0f, 1.0f, 0.0f ), glyphHeight );

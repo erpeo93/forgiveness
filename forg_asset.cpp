@@ -96,8 +96,17 @@ internal AssetMemoryBlock* FreeAsset(Assets* assets, Asset* asset)
     return result;
 }
 
-inline Asset* GetAssetRaw(Assets* assets, AssetID ID)
+struct GetAssetResult
 {
+    Asset* asset;
+    b32 derived;
+};
+
+
+inline GetAssetResult GetAssetRaw(Assets* assets, AssetID ID)
+{
+    GetAssetResult result = {};
+    
     Assert(ID.type);
     Assert(ID.type < AssetType_Count);
     AssetArray* array = assets->assets + ID.type;
@@ -108,12 +117,16 @@ inline Asset* GetAssetRaw(Assets* assets, AssetID ID)
     Assert(ID.index < (subtype->standardAssetCount + subtype->derivedAssetCount));
     Asset* asset = subtype->assets + ID.index;
     
-    return asset;
+    result.asset = asset;
+    result.derived = (ID.index >= subtype->standardAssetCount);
+    
+    return result;
 }
 
 inline void LockAssetForCurrentFrame(Assets* assets, AssetID ID)
 {
-    Asset* asset = GetAssetRaw(assets, ID);
+    GetAssetResult get = GetAssetRaw(assets, ID);
+    Asset* asset = get.asset;
     asset->state = Asset_locked;
     DLLIST_REMOVE(&asset->LRU);
     DLLIST_INSERT_AS_LAST(&assets->lockedLRUSentinel, &asset->LRU);
@@ -138,7 +151,7 @@ inline void UnlockLockedAssets(Assets* assets)
     Assert(DLLIST_ISEMPTY(&assets->lockedLRUSentinel));
 }
 
-internal void* AcquireAssetMemory(Assets* assets, u32 size, Asset* destAsset, AssetID ID)
+internal void* AcquireAssetMemory(Assets* assets, u32 size, Asset* destAsset)
 {
     Assert(destAsset->data == 0);
     
@@ -193,10 +206,6 @@ internal void* AcquireAssetMemory(Assets* assets, u32 size, Asset* destAsset, As
     }
     
     Assert(result);
-    
-    destAsset->ID = ID;
-    destAsset->dataSize = size;
-    
     DLLIST_INSERT(&assets->assetSentinel, destAsset);
     
     return result;
@@ -373,7 +382,15 @@ struct AssetBoilerplate
 internal AssetBoilerplate BeginAssetBoilerplate(Assets* assets, AssetID ID)
 {
     AssetBoilerplate result = {};
-    Asset* asset = GetAssetRaw(assets, ID);
+    GetAssetResult get = GetAssetRaw(assets, ID);
+    Asset* asset = get.asset;
+    
+    if(ID.type == AssetType_Image && get.derived)
+    {
+        ID.index = asset->paka.coloration.bitmapIndex;
+        asset = GetAssetRaw(assets, ID).asset;
+    }
+    
     if(asset && asset->fileIndex < assets->fileCount)
     {
         if(AtomicCompareExchangeUint32((u32*) &asset->state, Asset_queued, Asset_unloaded) == Asset_unloaded)
@@ -383,7 +400,6 @@ internal AssetBoilerplate BeginAssetBoilerplate(Assets* assets, AssetID ID)
             {
                 result.asset = asset;
                 asset->data = 0;
-                asset->dataSize = 0;
             }
             else
             {
@@ -430,7 +446,7 @@ void LoadBitmap(Assets* assets, AssetID ID)
         PAKBitmap* info = &asset->paka.bitmap;
         u32 size = info->dimension[0] * info->dimension[1] * 4;
         
-        asset->data = AcquireAssetMemory(assets, size, asset, ID);
+        asset->data = AcquireAssetMemory(assets, size, asset);
         Bitmap* bitmap = &asset->bitmap;
         
         bitmap->width = SafeTruncateToU16(info->dimension[0]);
@@ -462,7 +478,7 @@ internal void LoadFont(Assets* assets, AssetID ID)
         
         u32 size = glyphsSize + horizontalAdvanceSize + unicodeMapSize;
         
-        asset->data = AcquireAssetMemory(assets, size, asset, ID);
+        asset->data = AcquireAssetMemory(assets, size, asset);
         Font* font = &asset->font;
         
         font->codepoints = (u32*) (asset->data);
@@ -484,7 +500,7 @@ void LoadSound(Assets* assets, AssetID ID)
         PAKSound* info = &asset->paka.sound;
         
         u32 size = info->channelCount * info->sampleCount * sizeof(i16);
-        asset->data = AcquireAssetMemory(assets, size, asset, ID);
+        asset->data = AcquireAssetMemory(assets, size, asset);
         
         Sound* sound = &asset->sound;
         sound->countChannels = info->channelCount;
@@ -517,7 +533,7 @@ void LoadAnimation(Assets* assets, AssetID ID)
         
         u32 size =spriteCount * sizeof(SpriteInfo) + frameCount * sizeof(FrameData) + countAss * sizeof(PieceAss) + countBones * sizeof(Bone);
         
-        asset->data = AcquireAssetMemory(assets, size, asset, ID);
+        asset->data = AcquireAssetMemory(assets, size, asset);
         u8* base = (u8*) asset->data;
         
         Animation* animation = &asset->animation;
@@ -534,22 +550,6 @@ void LoadAnimation(Assets* assets, AssetID ID)
     }
 }
 
-
-void LoadSkeleton(Assets* assets, AssetID ID)
-{
-    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID);
-    if(boilerplate.task)
-    {
-        Asset* asset = boilerplate.asset;
-        PAKSkeleton* info = &asset->paka.skeleton;
-        
-        asset->skeleton.animationCount = info->animationCount;
-        
-        asset->state = Asset_loaded;
-        EndTaskWithMemory(boilerplate.task);
-    }
-}
-
 void LoadModel(Assets* assets, AssetID ID)
 {
     AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID);
@@ -563,7 +563,7 @@ void LoadModel(Assets* assets, AssetID ID)
         
         u32 size = vertexCount * sizeof(ColoredVertex) + faceCount * sizeof(ModelFace);
         
-        asset->data = AcquireAssetMemory(assets, size, asset, ID);
+        asset->data = AcquireAssetMemory(assets, size, asset);
         void* memory = asset->data;
         u8* base = (u8*) memory;
         
@@ -589,7 +589,7 @@ void LoadDataFile(Assets* assets, AssetID ID)
     {
         Asset* asset = boilerplate.asset;
         u32 size = asset->paka.dataFile.rawSize;
-        asset->data = AcquireAssetMemory(assets, size, asset, ID);
+        asset->data = AcquireAssetMemory(assets, size, asset);
         EndAssetBoilerplate(assets, boilerplate, size, Asset_preloaded);
     }
 }
@@ -621,11 +621,19 @@ internal void LoadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, Asse
     for(u32 assetIndex = 0; assetIndex < assetCount; assetIndex++)
     {
         Asset* dest = assetSubtypeArray->assets + assetIndex;
+        
+        dest->data = 0;
+        dest->textureHandle = {};
         dest->paka = pakAssetArray[assetIndex];
         dest->fileIndex = fileIndex;
+        
         dest->state = Asset_unloaded;
+        if(file->header.assetType == AssetType_Skeleton ||
+           (file->header.assetType == AssetType_Image && assetIndex >= file->header.standardAssetCount))
+        {
+            dest->state = Asset_loaded;
+        }
     }
-    
     EndTemporaryMemory(assetMemory);
 }
 
@@ -799,13 +807,9 @@ internal void WritebackAssetFileToFileSystem(Assets* assets, AssetFile* file, ch
 
 internal void UpdateAssetFileContent(Assets* assets, Asset* asset, void* newContent, u32 newContentSize)
 {
-    Assert(IsDataFile((AssetType) asset->ID.type));
-    if(newContentSize != asset->dataSize)
-    {
-        FreeAsset(assets, asset);
-        asset->data = AcquireAssetMemory(assets, newContentSize, asset, asset->ID);
-        asset->state = Asset_loaded;
-    }
+    FreeAsset(assets, asset);
+    asset->data = AcquireAssetMemory(assets, newContentSize, asset);
+    asset->state = Asset_loaded;
     Copy(newContentSize, asset->data, newContent);
 }
 
@@ -849,7 +853,6 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
     for(u32 assetTypeIndex = 0; assetTypeIndex < AssetType_Count; ++assetTypeIndex)
     {
         MetaAssetType metaType = metaAsset_subTypes[assetTypeIndex];
-        
         AssetArray* assetArray = assets->assets + assetTypeIndex;
         assetArray->subtypeCount = metaType.subtypeCount;
         assetArray->subtypes = PushArray(pool, AssetSubtypeArray, assetArray->subtypeCount);
@@ -935,7 +938,7 @@ inline b32 MatchesLabels(Asset* asset, AssetLabels* labels)
     return result;
 }
 
-internal AssetID QueryAssets(Assets* assets, AssetType type, u32 subtype, RandomSequence* seq, AssetLabels* labels, u16 startingIndex = 0, u16 endingIndex = 0)
+internal AssetID QueryAssets(Assets* assets, AssetType type, u32 subtype, RandomSequence* seq, AssetLabels* labels, u16 startingIndex = 0, u16 onePastEndingIndex = 0)
 {
     AssetID result = {};
     if(type)
@@ -951,15 +954,22 @@ internal AssetID QueryAssets(Assets* assets, AssetType type, u32 subtype, Random
                 u16 matching = 0;
                 u16 matchingAssets[32];
                 
-                if(!endingIndex)
+                u16 maximumAssetIndexAllowed = subtypeArray->standardAssetCount;
+                
+                // NOTE(Leonardo): colorations!
+                if(type == AssetType_Image)
                 {
-                    endingIndex = subtypeArray->standardAssetCount;
+                    maximumAssetIndexAllowed += subtypeArray->derivedAssetCount;
                 }
-                endingIndex = Min(endingIndex, subtypeArray->standardAssetCount);
                 
-                Assert(startingIndex <= endingIndex);
+                if(!onePastEndingIndex)
+                {
+                    onePastEndingIndex = maximumAssetIndexAllowed;
+                }
+                onePastEndingIndex = Min(onePastEndingIndex, maximumAssetIndexAllowed);
                 
-                for(u16 assetIndex = startingIndex; assetIndex < endingIndex; ++assetIndex)
+                Assert(startingIndex <= onePastEndingIndex);
+                for(u16 assetIndex = startingIndex; assetIndex < onePastEndingIndex; ++assetIndex)
                 {
                     Asset* asset = subtypeArray->assets + assetIndex;
                     if(MatchesLabels(asset, labels))
@@ -1006,7 +1016,7 @@ inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
     
     
     u32 finalSize = GetStructSize(structName, &tokenizer);
-    asset->data = AcquireAssetMemory(assets, finalSize, asset, ID);
+    asset->data = AcquireAssetMemory(assets, finalSize, asset);
     
     tokenizer.at = (char*) tempBuffer.b;
     ParseBufferIntoStruct(structName, &tokenizer, asset->data, finalSize);
@@ -1027,15 +1037,19 @@ struct GetGameAssetResult
 {
     Asset* asset;
     PAKAsset* info;
+    b32 derived;
 };
 
-inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID, b32 insertAtLRUList = false)
+inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID)
 {
     GetGameAssetResult result = {};
-    Asset* asset = GetAssetRaw(assets, ID);
+    GetAssetResult get = GetAssetRaw(assets, ID);
+    
+    Asset* asset = get.asset;
     if(asset)
     {
         result.info = &asset->paka;
+        result.derived = get.derived;
         
         if(asset->state == Asset_preloaded)
         {
@@ -1047,17 +1061,13 @@ inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID, b32 insertAtL
         if(asset->state == Asset_loaded)
         {
             result.asset = asset;
-            if(insertAtLRUList)
+            if(IsValid(&asset->textureHandle))
             {
-                if(IsValid(&asset->textureHandle))
-                {
-                    DLLIST_REMOVE(&asset->LRU);
-                    DLLIST_INSERT_AS_LAST(&assets->LRUSentinel, &asset->LRU);
-                }
+                DLLIST_REMOVE(&asset->LRU);
+                DLLIST_INSERT_AS_LAST(&assets->LRUSentinel, &asset->LRU);
             }
             
             DLLIST_INSERT(&assets->assetSentinel, asset);
-            
             CompletePastWritesBeforeFutureWrites;
         }
     }
@@ -1066,12 +1076,32 @@ inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID, b32 insertAtL
     return result;
 }
 
-inline Bitmap* GetBitmap(Assets* assets, AssetID ID)
+struct ColoredBitmap
+{
+    Bitmap* bitmap;
+    Vec4 coloration;
+};
+
+inline ColoredBitmap GetBitmap(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
+    ColoredBitmap result = {};
     
-    GetGameAssetResult get = GetGameAsset(assets, ID, true);
-    Bitmap* result = get.asset ? &get.asset->bitmap : 0;
+    GetGameAssetResult get = GetGameAsset(assets, ID);
+    
+    if(ID.type == AssetType_Image && get.derived)
+    {
+        AssetID parentID = ID;
+        parentID.index = get.info->coloration.bitmapIndex;
+        GetGameAssetResult getParent = GetGameAsset(assets, parentID);
+        result.bitmap = getParent.asset ? &getParent.asset->bitmap : 0;
+        result.coloration = get.info->coloration.color;
+    }
+    else
+    {
+        result.bitmap = get.asset ? &get.asset->bitmap : 0;
+        result.coloration = V4(1, 1, 1, 1);
+    }
     
     return result;
 }
@@ -1138,10 +1168,10 @@ inline void* GetDataDefinition_(Assets* assets, AssetType type, AssetID ID)
     return result;
 }
 
-inline PAKAsset* GetPakAsset(Assets* assets, AssetID ID, b32 insertAtLRUList = false)
+inline PAKAsset* GetPakAsset(Assets* assets, AssetID ID)
 {
     PAKAsset* result = 0;
-    GetGameAssetResult get = GetGameAsset(assets, ID, insertAtLRUList);
+    GetGameAssetResult get = GetGameAsset(assets, ID);
     result = get.info;
     
     return result;
@@ -1230,7 +1260,7 @@ inline AssetID GetBitmapForGlyph(Assets* assets, AssetID fontID, u32 desiredCode
     if(font)
     {
         PAKFont* info = GetFontInfo(assets, fontID);
-        Asset* asset = GetAssetRaw(assets, fontID);
+        Asset* asset = GetAssetRaw(assets, fontID).asset;
         
         u16 index = SafeTruncateToU16(GetGlyphIndexForCodePoint(font, info, desiredCodePoint));
         Assert(index);
@@ -1248,7 +1278,7 @@ inline AssetID GetMatchingAnimationForSkeleton(Assets* assets, AssetID skeletonI
 {
     AssetID result = {};
     
-    Asset* asset = GetAssetRaw(assets, skeletonID);
+    Asset* asset = GetAssetRaw(assets, skeletonID).asset;
     
     if(asset)
     {

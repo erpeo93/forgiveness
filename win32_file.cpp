@@ -17,81 +17,92 @@ internal PLATFORM_FILE_ERROR(Win32FileError)
 
 struct FileExtension
 {
-    char extension[16];
+    u32 count;
+    char extensions[16][16];
 };
 
-internal FileExtension GetFileExtension(PlatformFileType type)
+internal void AddExtension(FileExtension* extensions, char* extension)
 {
-    FileExtension result = {};
+    Assert(extensions->count < ArrayCount(extensions->extensions));
+    char* dest = extensions->extensions[extensions->count++];
+    FormatString(dest, sizeof(extensions->extensions[0]), "%s", extension);
+}
+
+internal char* GetExtension(FileExtension* extensions, u32 extensionIndex)
+{
+    char* result = 0;
+    if(extensionIndex < extensions->count)
+    {
+        result = extensions->extensions[extensionIndex];
+    }
     
-    char* extension = 0;
+    return result;
+}
+
+internal void GetFileExtensions(FileExtension* ext, PlatformFileType type)
+{
     switch(type)
     {
         case PlatformFile_compressedAsset:
         {
-            extension = "pak";
+            AddExtension(ext, "pak");
         } break;
         
         case PlatformFile_uncompressedAsset:
         {
-            extension = "upak";
+            AddExtension(ext, "upak");
         } break;
         
         case PlatformFile_savedGame:
         {
-            extension = "fsav";
+            AddExtension(ext, "fsav");
         } break;
         
         case PlatformFile_image:
         {
-            extension = "png";
-            
+            AddExtension(ext, "png");
+            AddExtension(ext, "color");
         } break;
         
         case PlatformFile_font:
         {
-            extension = "ttf";
+            AddExtension(ext, "ttf");
             
         } break;
         
         case PlatformFile_skeleton:
         {
-            extension = "scml";
-            
+            AddExtension(ext, "scml");
         } break;
         
         case PlatformFile_sound:
         {
-            extension = "wav";
+            AddExtension(ext, "wav");
             
         } break;
         
         case PlatformFile_model:
         {
-            extension = "obj";
+            AddExtension(ext, "obj");
         } break;
         
         case PlatformFile_data:
         {
-            extension = "dat";
+            AddExtension(ext, "dat");
         } break;
         
         case PlatformFile_markup:
         {
-            extension = "tag";
+            AddExtension(ext, "tag");
         } break;
         
         case PlatformFile_reloadedAsset:
         {
-            extension = "rll";
+            AddExtension(ext, "rll");
         } break;
         
         InvalidDefaultCase;
     }
-    
-    FormatString(result.extension, sizeof(result.extension), "%s", extension);
-    
-    return result;
 }
 
 //void name(PlatformSubdirNames* output, char* folderPath)
@@ -142,16 +153,18 @@ internal PLATFORM_GET_ALL_SUBDIRECTORIES(Win32GetAllSubdirectories)
 //PlatformFileGroup name(PlatformFileType type, char* folderPath)
 internal PLATFORM_GET_ALL_FILE_BEGIN(Win32GetAllFilesBegin)
 {
-    FileExtension ext = GetFileExtension(type);
+    FileExtension ext;
+    ext.count = 0;
+    GetFileExtensions(&ext, type);
     
     char pathString[128];
     pathString[0] = 0;
-    char completePath[128];
     if(path)
     {
         FormatString(pathString, sizeof(pathString), "%s/", path);
     }
-    FormatString(completePath, sizeof(completePath), "%s*.%s",  pathString, ext.extension);
+    
+    char completePath[128];
     
     PlatformFileGroup result = {};
     Win32PlatformFileGroup* group = BootstrapPushStruct(Win32PlatformFileGroup, memory);
@@ -160,28 +173,34 @@ internal PLATFORM_GET_ALL_FILE_BEGIN(Win32GetAllFilesBegin)
     result.firstFileInfo = 0;
     result.platform = group;
     
-    WIN32_FIND_DATAA findData;
-    HANDLE findHandle = FindFirstFileA(completePath, &findData);
-    while(findHandle != INVALID_HANDLE_VALUE)
-    {
-        ++result.fileCount;
-        
-        PlatformFileInfo* info = PushStruct(&group->memory, PlatformFileInfo);
-        info->size = ((u64)findData.nFileSizeHigh << (u64)32) | ((u64)findData.nFileSizeLow);
-        info->name = PushNullTerminatedString(&group->memory, findData.cFileName);
-        
-        info->next = result.firstFileInfo;
-        result.firstFileInfo = info;
-        
-        if(!FindNextFile(findHandle, &findData))
-        {
-            break;
-        }
-    }
     
-    if(findHandle != INVALID_HANDLE_VALUE)
+    for(u32 extensionIndex = 0; extensionIndex < ext.count; ++extensionIndex)
     {
-        FindClose(findHandle);
+        char* extension = GetExtension(&ext, extensionIndex);
+        FormatString(completePath, sizeof(completePath), "%s*.%s",  pathString, extension);
+        WIN32_FIND_DATAA findData;
+        HANDLE findHandle = FindFirstFileA(completePath, &findData);
+        while(findHandle != INVALID_HANDLE_VALUE)
+        {
+            ++result.fileCount;
+            
+            PlatformFileInfo* info = PushStruct(&group->memory, PlatformFileInfo);
+            info->size = ((u64)findData.nFileSizeHigh << (u64)32) | ((u64)findData.nFileSizeLow);
+            info->name = PushNullTerminatedString(&group->memory, findData.cFileName);
+            
+            info->next = result.firstFileInfo;
+            result.firstFileInfo = info;
+            
+            if(!FindNextFile(findHandle, &findData))
+            {
+                break;
+            }
+        }
+        
+        if(findHandle != INVALID_HANDLE_VALUE)
+        {
+            FindClose(findHandle);
+        }
     }
     
     return result;
@@ -252,30 +271,43 @@ internal PLATFORM_READ_FROM_FILE(Win32ReadFromFile)
 
 PLATFORM_DELETE_FILES(Win32DeleteFiles)
 {
-    FileExtension ext = GetFileExtension(type);
+    FileExtension ext;
+    ext.count = 0;
+    GetFileExtensions(&ext, type);
     
-	WIN32_FIND_DATA fd;
-    char completeFileName[MAX_PATH];
-    FormatString(completeFileName, sizeof(completeFileName), "%s\\*.%s", path, ext.extension);
-    
-	HANDLE hFind = FindFirstFile(completeFileName, &fd);
-	if (hFind != INVALID_HANDLE_VALUE)
-	{
-		do
-		{
-			FormatString(completeFileName, sizeof(completeFileName), "%s\\%s", path, fd.cFileName);
-			DeleteFile(completeFileName);
-		} while (FindNextFile(hFind, &fd));
-		FindClose(hFind);
-	}
+    for(u32 extensionIndex = 0; extensionIndex < ext.count; ++extensionIndex)
+    {
+        char* extension = GetExtension(&ext, extensionIndex);
+        WIN32_FIND_DATA fd;
+        char completeFileName[MAX_PATH];
+        FormatString(completeFileName, sizeof(completeFileName), "%s\\*.%s", path, extension);
+        
+        HANDLE hFind = FindFirstFile(completeFileName, &fd);
+        if (hFind != INVALID_HANDLE_VALUE)
+        {
+            do
+            {
+                FormatString(completeFileName, sizeof(completeFileName), "%s\\%s", path, fd.cFileName);
+                DeleteFile(completeFileName);
+            } while (FindNextFile(hFind, &fd));
+            FindClose(hFind);
+        }
+    }
 }
 
 
 PLATFORM_REPLACE_FILE(Win32ReplaceFile)
 {
-    FileExtension ext = GetFileExtension(type);
+    FileExtension ext;
+    ext.count = 0;
+    GetFileExtensions(&ext, type);
+    
+    
+    Assert(ext.count == 1);
+    
+    char* extension = GetExtension(&ext, 0);
     char fileName[128];
-    FormatString(fileName, sizeof(fileName), "%s/%s.%s", path, file, ext.extension);
+    FormatString(fileName, sizeof(fileName), "%s/%s.%s", path, file, extension);
     
     b32 result = false;
     Assert(size <= 0xFFFFFFFF);

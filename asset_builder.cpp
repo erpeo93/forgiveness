@@ -510,6 +510,81 @@ internal LoadedBitmap LoadImage(char* path, char* filename)
     return result;
 }
 
+internal b32 IsColorationFile(char* filename)
+{
+    b32 result = false;
+    
+    u32 point = FindFirstInString(filename, '.');
+    char* extension = filename + point + 1;
+    
+    result = (StrEqual(extension, "color"));
+    return result;
+}
+
+internal LoadedColoration LoadColoration(char* fileContent)
+{
+    LoadedColoration result = {};
+    result.color = V4(1, 1, 1, 1);
+    
+    Tokenizer tokenizer = {};
+    tokenizer.at = fileContent;
+    
+    
+    b32 parsing = true;
+    
+    b32 parsedR = false;
+    b32 parsedG = false;
+    b32 parsedB = false;
+    
+    while(parsing)
+    {
+        Token t = GetToken(&tokenizer);
+        
+        switch(t.type)
+        {
+            case Token_EndOfFile:
+            {
+                parsing = false;
+            } break;
+            
+            case Token_String:
+            {
+                t = Stringize(t);
+            }
+            case Token_Identifier:
+            {
+                FormatString(result.imageName, sizeof(result.imageName), "%.*s", t.textLength, t.text);
+            } break;
+            
+            case Token_Number:
+            
+            {
+                if(!parsedR)
+                {
+                    parsedR = true;
+                    result.color.r = StringToFloat(t.text);
+                }
+                else if(!parsedG)
+                {
+                    parsedG = true;
+                    result.color.g = StringToFloat(t.text);
+                }
+                else if(!parsedB)
+                {
+                    parsedB = true;
+                    result.color.b = StringToFloat(t.text);
+                }
+                else
+                {
+                    result.color.a = StringToFloat(t.text);
+                }
+            } break;
+        }
+    }
+    
+    return result;
+}
+
 struct RiffIter
 {
     u8* at;
@@ -1631,25 +1706,43 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
     {
         TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
         PlatformFileHandle handle = platformAPI.OpenFile(&fileGroup, info);
+        
+        u16 standard = 1;
+        u16 derived = 0;
+        
         switch(type)
         {
             case AssetType_Font:
             {
-                derivedAssetCount += SafeTruncateToU16(endingFontCodepoint - startingFontCodepoint);
+                derived = SafeTruncateToU16(endingFontCodepoint - startingFontCodepoint);
             } break;
             
             case AssetType_Skeleton:
             {
                 u8* tempData = PushSize(&tempPool, info->size, NoClear());
                 platformAPI.ReadFromFile(&handle, 0, info->size, tempData);
-                derivedAssetCount += CountAnimations((char*) tempData);
+                derived = CountAnimations((char*) tempData);
+            } break;
+            
+            case AssetType_Image:
+            {
+                if(IsColorationFile(info->name))
+                {
+                    standard = 0;
+                    derived = 1;
+                }
             } break;
             
             default:
             {
             } break;
         }
-        ++standardAssetCount;
+        
+        Assert(standardAssetCount < U16_MAX / 2);
+        Assert(derivedAssetCount < U16_MAX / 2);
+        
+        standardAssetCount += standard;
+        derivedAssetCount += derived;
         
         platformAPI.CloseFile(&handle);
         EndTemporaryMemory(fileMemory);
@@ -1686,32 +1779,63 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
                 u8* fileContent = ReadEntireFile(&tempPool, &fileGroup, info);
                 
                 Assert(runningAssetIndex < assetCount);
-                Assert(runningDerivedAssetIndex < assetCount);
+                Assert(runningDerivedAssetIndex <= assetCount);
                 
                 PAKAsset* dest = pakAssets + runningAssetIndex++;
-                FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
                 
                 switch(type)
                 {
                     case AssetType_Image:
                     {
-                        LoadedBitmap bitmap = LoadImage(source, info->name);
-                        
-                        dest->bitmap.dimension[0] = bitmap.width;
-                        dest->bitmap.dimension[1] = bitmap.height;
-                        
-                        dest->bitmap.align[0] = 0.5f;
-                        dest->bitmap.align[1] = 0.5f;
-                        
-                        dest->bitmap.nativeHeight =bitmap.downsampleFactor * bitmap.height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
-                        
-                        fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out);
-                        free(bitmap.free);
-                        
+                        if(IsColorationFile(info->name))
+                        {
+                            --runningAssetIndex;
+                            PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;
+                            FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, info->name, &markupFiles);
+                            
+                            LoadedColoration coloration = LoadColoration((char*) fileContent);
+                            
+                            u16 bitmapIndex = 0;
+                            b32 found = false;
+                            for(PlatformFileInfo* testInfo = fileGroup.firstFileInfo; testInfo; testInfo = testInfo->next)
+                            {
+                                if(!IsColorationFile(testInfo->name))
+                                {
+                                    if(StrEqual(testInfo->name, coloration.imageName))
+                                    {
+                                        found = true;
+                                        break;
+                                    }
+                                    
+                                    ++bitmapIndex;
+                                }
+                            }
+                            Assert(found);
+                            
+                            derivedAsset->coloration.color = coloration.color;
+                            derivedAsset->coloration.bitmapIndex = bitmapIndex;
+                        }
+                        else
+                        {
+                            FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
+                            LoadedBitmap bitmap = LoadImage(source, info->name);
+                            
+                            dest->bitmap.dimension[0] = bitmap.width;
+                            dest->bitmap.dimension[1] = bitmap.height;
+                            
+                            dest->bitmap.align[0] = 0.5f;
+                            dest->bitmap.align[1] = 0.5f;
+                            
+                            dest->bitmap.nativeHeight =bitmap.downsampleFactor * bitmap.height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
+                            
+                            fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out);
+                            free(bitmap.free);
+                        }
                     } break;
                     
                     case AssetType_Sound:
                     {
+                        FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
                         LoadedSound sound = LoadWAV((char*) fileContent);
                         dest->sound.sampleCount = sound.countSamples;
                         dest->sound.channelCount = sound.countChannels;
@@ -1726,6 +1850,7 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
                     
                     case AssetType_Model:
                     {
+                        FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
                         LoadedModel model = LoadModel((char*) fileContent);
                         
                         dest->model.vertexCount = model.vertexCount;
@@ -1740,6 +1865,7 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
                     
                     case AssetType_Font:
                     {
+                        FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
                         // TODO(Leonardo): how can we pass the font name here?
                         char fontName[128];
                         TrimToFirstCharacter(fontName, sizeof(fontName), info->name, '.');
@@ -1803,6 +1929,7 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
                     
                     case AssetType_Skeleton:
                     {
+                        FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
                         u16 animationCount = CountAnimations((char*) fileContent);
                         dest->skeleton.animationCount = animationCount;
                         dest->skeleton.animationAssetsFirstIndex = runningDerivedAssetIndex;
@@ -1855,6 +1982,7 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
                     }
                     default:
                     {
+                        FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
                         dest->dataFile.rawSize = SafeTruncateUInt64ToU32(info->size);
                         fwrite(fileContent, info->size, 1, out);
                     } break;

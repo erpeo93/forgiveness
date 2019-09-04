@@ -499,6 +499,14 @@ int main( int argc, char** argv )
     }
     printf( "\n" );
     
+    printf("enum Labels\n{\n");
+    printf("Label_Invalid,\n");
+    for(MetaLabel* meta = firstLabelList; meta; meta = meta->next)
+    {
+        printf("%s,", meta->name); 
+        printf( "\n" );
+    }
+    printf( "};\n" );
     
     printf("#define META_DEFAULT_VALUES_CPP_SUCKS()\\\n");
     printf(memberDefaultValues);

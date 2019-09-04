@@ -175,6 +175,11 @@ AddToMetaDefinitions(GroundColorationArrayTest, memberDefinitionOfGroundColorati
 #define META_LABELS_ADD()\
 AddToMetaLabels(Label_Test, MetaLabels_Label_Test);
 
+enum Labels
+{
+Label_Invalid,
+Label_Test,
+};
 #define META_DEFAULT_VALUES_CPP_SUCKS()\
 memberDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;memberDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;memberDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);
 ;

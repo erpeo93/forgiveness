@@ -36,6 +36,12 @@ struct PAKBitmap
     */
 };
 
+struct PAKColoration
+{
+    Vec4 color;
+    u16 bitmapIndex;
+};
+
 struct PAKFont
 {
     u32 glyphCount;
@@ -122,6 +128,7 @@ struct PAKAsset
     union
     {
         PAKBitmap bitmap;
+        PAKColoration coloration;
         PAKSound sound;
         PAKSkeleton skeleton;
         PAKAnimation animation;

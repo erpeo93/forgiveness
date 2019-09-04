@@ -458,10 +458,15 @@ inline void PushTexture(RenderGroup* group, RenderTexture texture, Vec3 P, Vec3 
     }
 }
 
-inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTransform, Bitmap* bitmap,  Vec3 P, r32 height, Vec2 scale, Vec4 color, Lights lights, Vec2 pivot)
+inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTransform, ColoredBitmap coloredBitmap,  Vec3 P, r32 height, Vec2 scale, Vec4 color, Lights lights, Vec2 pivot)
 {
     BitmapDim result = {};
     GameRenderCommands* commands = renderGroup->commands;
+    
+    
+    Bitmap* bitmap = coloredBitmap.bitmap;
+    color = Hadamart(color, coloredBitmap.coloration);
+    
     if(bitmap->width && bitmap->height)
     {
         r32 angleRad = DegToRad(objectTransform.angle);
@@ -519,12 +524,11 @@ inline b32 PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTransform,
 {
     b32 result = false;
     
-    Bitmap* bitmap = GetBitmap(renderGroup->assets, ID);
-    if(bitmap)
+    ColoredBitmap bitmap = GetBitmap(renderGroup->assets, ID);
+    if(bitmap.bitmap)
     {
         result = true;
-        //color = Hadamart(color, ID.coloration);
-        PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, bitmap->pivot);
+        PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, bitmap.bitmap->pivot);
     }
     else
     {
@@ -549,10 +553,9 @@ inline void PushUIBitmap(RenderGroup* group, BitmapId ID, Vec2 screenCenterOffse
 inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, Vec2 pivot, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
 {
     BitmapDim result = {};
-    Bitmap* bitmap = GetBitmap(renderGroup->assets, ID);
-    if(bitmap)
+    ColoredBitmap bitmap = GetBitmap(renderGroup->assets, ID);
+    if(bitmap.bitmap)
     {
-        //color = Hadamart(color, ID.coloration);
         result = PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, pivot);
     }
     else
@@ -610,10 +613,12 @@ inline void PushCube_(RenderGroup* group, Vec3 P, r32 height, r32 width, RenderT
 
 inline void PushTexturedCube(RenderGroup* group, Vec3 P, r32 height, r32 width, BitmapId ID, Vec4 color = V4(1.0f, 1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
 {
-    Bitmap* bitmap = GetBitmap(group->assets, ID);
-    if(bitmap)
+    ColoredBitmap bitmap = GetBitmap(group->assets, ID);
+    if(bitmap.bitmap)
     {
-        PushCube_(group, P, height, width, bitmap->textureHandle, color, lights);
+        Bitmap* actualBitmap = bitmap.bitmap;
+        color = Hadamart(color, bitmap.coloration);
+        PushCube_(group, P, height, width, actualBitmap->textureHandle, color, lights);
     }
     else
     {
@@ -691,12 +696,13 @@ inline void PushTrunkatedPyramid(RenderGroup* group, RenderTexture texture, Vec3
 
 inline void PushTrunkatedPyramid(RenderGroup* group, BitmapId BID, Vec3 P, Vec3 topP, u32 subdivisions, Vec3 XAxisBottom, Vec3 YAxisBottom, Vec3 ZAxisBottom, Vec3 XAxisTop, Vec3 YAxisTop, Vec3 ZAxisTop, r32 radiousBottom, r32 radiousTop, r32 height, Vec4 baseColor, Vec4 topColor, Lights lights, r32 modulationPercentage, b32 drawBase = true, b32 drawTop = true)
 {
-    Bitmap* bitmap = GetBitmap(group->assets, BID);
-    if(bitmap)
+    ColoredBitmap bitmap = GetBitmap(group->assets, BID);
+    Bitmap* actualBitmap = bitmap.bitmap;
+    if(bitmap.bitmap)
     {
-        //baseColor = Hadamart(baseColor, BID.coloration);
-        //topColor = Hadamart(topColor, BID.coloration);
-        PushTrunkatedPyramid(group, bitmap->textureHandle, P, topP, subdivisions, XAxisBottom, YAxisBottom, ZAxisBottom, XAxisTop, YAxisTop, ZAxisTop, radiousBottom, radiousTop, height, baseColor, topColor, lights,modulationPercentage, drawBase, drawTop);
+        baseColor = Hadamart(baseColor, bitmap.coloration);
+        topColor = Hadamart(topColor, bitmap.coloration);
+        PushTrunkatedPyramid(group, actualBitmap->textureHandle, P, topP, subdivisions, XAxisBottom, YAxisBottom, ZAxisBottom, XAxisTop, YAxisTop, ZAxisTop, radiousBottom, radiousTop, height, baseColor, topColor, lights,modulationPercentage, drawBase, drawTop);
     }
     else
     {

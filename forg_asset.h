@@ -138,7 +138,6 @@ struct Animation
 
 struct Skeleton
 {
-    u16 animationCount;
 };
 
 
@@ -245,10 +244,7 @@ struct Asset
 {
     AssetLRULink LRU;
     
-    AssetID ID;
-    u32 dataSize;
     void* data;
-    
     union
     {
         Bitmap bitmap;
@@ -266,7 +262,6 @@ struct Asset
     u32 fileIndex;
     
     u32 state;
-    
     
     Asset* next;
     Asset* prev;
