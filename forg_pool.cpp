@@ -264,11 +264,14 @@ inline void* BootstrapPushSize_( unm size, unm offsetToPool, PoolBootstrapParams
     return structPtr;
 }
 
-inline Buffer PushBuffer(MemoryPool* pool, u32 size, PushParams params = DefaultPushParams())
+inline Stream PushStream(MemoryPool* pool, u32 size, PushParams params = DefaultPushParams())
 {
-    Buffer result;
+    Stream result;
     result.size = size;
-    result.b = PushSize(pool, size, params);
+    result.left = size;
+    result.begin = PushSize(pool, size, params);
+    result.current = result.begin;
+    result.written = 0;
     
     return result;
 }
@@ -276,8 +279,8 @@ inline Buffer PushBuffer(MemoryPool* pool, u32 size, PushParams params = Default
 inline Buffer CopyBuffer(MemoryPool* pool, Buffer source, PushParams params = DefaultPushParams())
 {
     Buffer result;
-    result.b = (u8*) PushCopy(pool, source.size, source.b, params);
-    result.size = source.size;
+    result.ptr = (char*) PushCopy(pool, source.length, source.ptr, params);
+    result.length = source.length;
     
     return result;
 }

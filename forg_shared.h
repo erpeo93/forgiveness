@@ -713,10 +713,40 @@ inline void TrimToFirstCharacter(char* buffer, u32 bufferSize, char* string, cha
     }
 }
 
+struct Stream
+{
+    u8* begin;
+    u32 size;
+    
+    u8* current;
+    u32 left;
+    
+    u32 written;
+};
 
 struct Buffer
 {
-    u8* b;
-    u32 size;
+    char* ptr;
+    u32 length;
 };
+
 typedef Buffer String;
+
+internal unm OutputToStream(Stream* stream, char* format, ...)
+{
+    va_list argList;
+    va_start(argList, format);
+    unm result = FormatStringList((char*) stream->current, stream->left, format, argList);
+    va_end( argList );
+    
+    stream->current += result;
+    
+    Assert(result < 0xffffffff);
+    u32 size = (u32) result;
+    Assert(size <= stream->size);
+    stream->size -= size;
+    
+    stream->written += size;
+    
+    return result;
+}

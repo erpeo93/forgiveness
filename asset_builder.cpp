@@ -1580,7 +1580,7 @@ internal void FillPAKProperty(PAKAsset* asset, Token property, Token value)
 
 internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* asset, char* name, PlatformFileGroup* markupFiles)
 {
-    FormatString(asset->name, sizeof(asset->name), "%s", name);
+    FormatString(asset->sourceName, sizeof(asset->sourceName), "%s", name);
     asset->dataOffset = ftell(out);
     for(u32 labelIndex = 0; labelIndex < MAX_LABEL_PER_ASSET; ++labelIndex)
     {
@@ -1646,6 +1646,8 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
     FormatString(output, sizeof(output), "%s/%s", outputPath, filename);
     
     PAKFileHeader header = {};
+    
+    FormatString(header.name, sizeof(header.name), "%s", filename);
     header.magicValue = PAK_MAGIC_NUMBER;
     header.version = PAK_VERSION;
     
@@ -1654,32 +1656,33 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
     header.standardAssetCount = 0;
     header.derivedAssetCount = 0;
     
-    PlatformFileType fileType = PlatformFile_invalid;
+    u32 fileTypes = PlatformFile_invalid;
     switch(type)
     {
         case AssetType_Image:
         {
-            fileType = PlatformFile_image;
+            fileTypes |= PlatformFile_png;
+            fileTypes |= PlatformFile_Coloration;
         } break;
         
         case AssetType_Sound:
         {
-            fileType = PlatformFile_sound;
+            fileTypes |= PlatformFile_sound;
         } break;
         
         case AssetType_Font:
         {
-            fileType = PlatformFile_font;
+            fileTypes |= PlatformFile_font;
         } break;
         
         case AssetType_Skeleton:
         {
-            fileType = PlatformFile_skeleton;
+            fileTypes |= PlatformFile_skeleton;
         } break;
         
         case AssetType_Model:
         {
-            fileType = PlatformFile_model;
+            fileTypes |= PlatformFile_model;
         } break;
         
         case AssetType_Count:
@@ -1689,7 +1692,7 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
         
         default:
         {
-            fileType = PlatformFile_data;
+            fileTypes |= PlatformFile_data;
         } break;
     }
     
@@ -1697,7 +1700,7 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
     u32 startingFontCodepoint = ' ';
     u32 endingFontCodepoint = '~';
     
-    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(fileType, source);
+    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(fileTypes, source);
     
     u16 standardAssetCount = 0;
     u16 derivedAssetCount = 0;
@@ -1770,7 +1773,7 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
             
             PlatformFileGroup markupFiles = platformAPI.GetAllFilesBegin(PlatformFile_markup, source);
             
-            fileGroup = platformAPI.GetAllFilesBegin(fileType, source);
+            fileGroup = platformAPI.GetAllFilesBegin(fileTypes, source);
             
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
@@ -1812,6 +1815,8 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
                             }
                             Assert(found);
                             
+                            Assert(StrLen(coloration.imageName) < sizeof(derivedAsset->coloration.imageName));
+                            FormatString(derivedAsset->coloration.imageName, sizeof(derivedAsset->coloration.imageName), "%s", coloration.imageName);
                             derivedAsset->coloration.color = coloration.color;
                             derivedAsset->coloration.bitmapIndex = bitmapIndex;
                         }

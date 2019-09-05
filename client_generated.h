@@ -92,24 +92,6 @@ MetaFlag MetaFlags_EditorRole[] =
 {"3DModeller", (1 << 8)},
 };
 
-char* MetaTable_EditorWidgetType[] = 
- {
-"None",
-"TaxonomyTree",
-"EditingTaxonomyTabs",
-"Animation",
-"SoundDatabase",
-"GeneralButtons",
-"SoundEvents",
-"Components",
-"Misc",
-"ColorPicker",
-"GroundParams",
-"Debug3DModels",
-"WidgetSelection",
-"Count",
-};
-
 char* MetaTable_ForgDayPhase[] = 
  {
 "Day",

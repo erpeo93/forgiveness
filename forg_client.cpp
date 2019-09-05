@@ -10,9 +10,10 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_world.cpp"
 //#include "forg_world_client.cpp"
 #include "forg_world_generation.cpp"
-#include "forg_editor.cpp"
 #include "forg_asset.cpp"
 #include "forg_render.cpp"
+#include "forg_sound.cpp"
+#include "forg_editor.cpp"
 #include "forg_camera.cpp"
 //#include "forg_light.cpp"
 #include "forg_network_client.cpp"
@@ -21,7 +22,6 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_rock.cpp"
 #include "forg_object.cpp"
 //#include "forg_crafting.cpp"
-#include "forg_sound.cpp"
 #include "forg_particles.cpp"
 //#include "forg_bolt.cpp"
 //#include "forg_bound.cpp"
@@ -140,6 +140,10 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     
     //result->currentPhase = DayPhase_Day;
     result->soundState = &gameState->soundState;
+    
+    result->editorUI.input = input;
+    result->editorUI.pool = result->persistentPool;
+    result->editorUI.soundState = result->soundState;
     
 }
 
@@ -575,90 +579,86 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             }
             
             
-            // TODO(Leonardo): this should not be here!
-#if 0
-            if(!gameState->music)
-            {
-                RandomSequence seq = Seed(worldMode->worldSeed);
-                gameState->music = PlaySound(&gameState->soundState, gameState->assets, GetRandomSound(gameState->assets, Asset_music, &seq), 0.0f);
-            }
-#endif
             group->assets = gameState->assets;
             player->identifier = myPlayer->identifier;
             
-            if(true)
+            
+#if 0            
+            if(!gameState->music)
             {
-                Clear(group, V4(0.0f, 0.0f, 0.0f, 1.0f));
-                //ResetLightGrid(worldMode);
+                RandomSequence seq = Seed(1111);
+                AssetLabels soundLabels = {};
+                SoundId testSound = QueryAssets(group->assets, AssetType_Sound, AssetSound_exploration, &seq, &soundLabels);
                 
-                MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), 1.0f);
-                UpdateAndSetupGameCamera(worldMode, group, input);
-                UpdateEntities(worldMode, input->timeToAdvance, player, myPlayer);
+                gameState->music = PlaySound(&gameState->soundState, group->assets, testSound, 0);
                 
-                BeginDepthPeel(group);
-                
-                AddEntityLights(worldMode);
-                //FinalizeLightGrid(worldMode, group);
-                
-                Vec3 directionalLightColor = V3(1, 1, 1);
-                Vec3 directionalLightDirection = V3(0, 0, -1);
-                r32 directionalLightIntensity = 1.0f;
-                Vec3 ambientLightColor = HandleDaynightCycle(worldMode, input);
-                ambientLightColor = V3(0, 0, 0);
-                
-                PushAmbientLighting(group, ambientLightColor, directionalLightColor, directionalLightDirection, directionalLightIntensity);
-                RenderEntities(worldMode, group, myPlayer, input->timeToAdvance);
-                
-                myPlayer->universeP = player->universeP;
-                Vec3 deltaP = -Subtract(myPlayer->universeP, myPlayer->oldUniverseP);
-                
-                
-                for(u32 voronoiIndex = 0; voronoiIndex < ArrayCount(worldMode->voronoiPingPong); ++voronoiIndex)
-                {
-                    worldMode->voronoiPingPong[voronoiIndex].deltaP += deltaP;
-                }
-                
-                //UpdateAndRenderGround(worldMode, group, myPlayer->universeP);
-                
-                worldMode->particleCache->deltaParticleP = deltaP;
-                UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
-                //worldMode->boltCache->deltaP = deltaP;
-                //UpdateAndRenderBolts(worldMode, worldMode->boltCache, input->timeToAdvance, group);
-                
-                EndDepthPeel(group);
-                
-                myPlayer->oldUniverseP = myPlayer->universeP;
-                
-                
-                
-                RandomSequence seq = Seed(123);
-                AssetLabels bitmapLabels = {};
-                bitmapLabels.labels[0].label = Label_Test;
-                bitmapLabels.labels[0].value = TestLabel_Value1;
-                
-                AssetID test = QueryAssets(group->assets, AssetType_Image, 0, &seq, &bitmapLabels);
-                
-                PushBitmap(group, UprightTransform(), test, V3(0, 0, 0), 1.0f);
-                
-                
-                
-                
-                
-                AssetLabels labels = {};
-                FontId fontID = QueryAssets(group->assets, AssetType_Font, AssetFont_game, &seq, &labels);
-                SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / group->commands->settings.width, 0.0f, 0.0f), V3(0.0f, 2.0f / group->commands->settings.height, 0.0f), V3( 0, 0, 1), V3(0, 0, 0), V2(0, 0));
-                
-                UIOrthoTextOp(group, fontID, "hello world", 1.0f, V3(0, 0, 0), TextOp_draw, V4(1, 1, 1, 1), true);
-#if 0
-                Rect3 worldCameraBounds = GetScreenBoundsAtTargetDistance(group);
-                Rect2 screenBounds = RectCenterDim(V2(0, 0), V2(worldCameraBounds.max.x - worldCameraBounds.min.x, worldCameraBounds.max.y - worldCameraBounds.min.y));
-                PushRectOutline(group, FlatTransform(), screenBounds, V4(1.0f, 0.0f, 0.0f, 1.0f), 0.1f); 
-#endif
             }
+#endif
+            
+            Clear(group, V4(0.1f, 0.1f, 0.1f, 1.0f));
+            //ResetLightGrid(worldMode);
+            
+            MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), 1.0f);
+            UpdateAndSetupGameCamera(worldMode, group, input);
+            UpdateEntities(worldMode, input->timeToAdvance, player, myPlayer);
+            
+            BeginDepthPeel(group);
+            
+            AddEntityLights(worldMode);
+            //FinalizeLightGrid(worldMode, group);
+            
+            Vec3 directionalLightColor = V3(1, 1, 1);
+            Vec3 directionalLightDirection = V3(0, 0, -1);
+            r32 directionalLightIntensity = 1.0f;
+            Vec3 ambientLightColor = HandleDaynightCycle(worldMode, input);
+            ambientLightColor = V3(0, 0, 0);
+            
+            PushAmbientLighting(group, ambientLightColor, directionalLightColor, directionalLightDirection, directionalLightIntensity);
+            RenderEntities(worldMode, group, myPlayer, input->timeToAdvance);
+            
+            myPlayer->universeP = player->universeP;
+            Vec3 deltaP = -Subtract(myPlayer->universeP, myPlayer->oldUniverseP);
+            
+            
+            for(u32 voronoiIndex = 0; voronoiIndex < ArrayCount(worldMode->voronoiPingPong); ++voronoiIndex)
+            {
+                worldMode->voronoiPingPong[voronoiIndex].deltaP += deltaP;
+            }
+            
+            //UpdateAndRenderGround(worldMode, group, myPlayer->universeP);
+            
+            worldMode->particleCache->deltaParticleP = deltaP;
+            UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
+            //worldMode->boltCache->deltaP = deltaP;
+            //UpdateAndRenderBolts(worldMode, worldMode->boltCache, input->timeToAdvance, group);
+            
+            EndDepthPeel(group);
+            
+            myPlayer->oldUniverseP = myPlayer->universeP;
+            
+            
+            
+            RandomSequence seq = Seed(123);
+            AssetLabels bitmapLabels = {};
+            bitmapLabels.labels[0].label = Label_Test;
+            bitmapLabels.labels[0].value = TestLabel_Value1;
+            
+            BitmapId test = QueryAssets(group->assets, AssetType_Image, 0, &seq, &bitmapLabels);
+            
+            PushBitmap(group, UprightTransform(), test, V3(0, 0, 0), 1.0f);
+            
+            
+            
+            
+            RenderEditor(group, &worldMode->editorUI, worldMode->relativeScreenMouseP);
+#if 0
+            Rect3 worldCameraBounds = GetScreenBoundsAtTargetDistance(group);
+            Rect2 screenBounds = RectCenterDim(V2(0, 0), V2(worldCameraBounds.max.x - worldCameraBounds.min.x, worldCameraBounds.max.y - worldCameraBounds.min.y));
+            PushRectOutline(group, FlatTransform(), screenBounds, V4(1.0f, 0.0f, 0.0f, 1.0f), 0.1f); 
+#endif
         }
         
     }
-    
     SendUpdate(inputAcc);
     
     

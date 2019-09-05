@@ -1454,6 +1454,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             gameMemory.api.GetAllFilesEnd = Win32GetAllFilesEnd;
             gameMemory.api.ReadFromFile = Win32ReadFromFile;
             gameMemory.api.FileError = Win32FileError;
+            gameMemory.api.ReplaceFile = Win32ReplaceFile;
             
             gameMemory.api.AllocateMemory = Win32AllocateMemory;
             gameMemory.api.DeallocateMemory = Win32DeallocateMemory;

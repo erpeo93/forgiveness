@@ -58,7 +58,7 @@ internal WorldChunk* GetChunk(WorldChunk** chunks, u32 chunkCount, i32 worldX, i
     while( *testChunkPtr )
     {
         WorldChunk* testChunk = *testChunkPtr;
-        if( testChunk->worldX == worldX && testChunk->worldY == worldY )
+        if( testChunk->worldX == worldX && testChunk->worldY == worldY)
         {
             result = testChunk;
             break;

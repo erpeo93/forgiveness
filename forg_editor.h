@@ -1,6 +1,83 @@
 #pragma once
 
 
+struct AUID
+{
+    void* p1;
+    void* p2;
+    void* p3;
+};
+
+inline AUID auID(void* p1)
+{
+    AUID result = {};
+    result.p1 = p1;
+    
+    return result;
+}
+
+inline AUID auID(void* p1, void* p2)
+{
+    AUID result = {};
+    result.p1 = p1;
+    result.p2 = p2;
+    
+    return result;
+}
+
+inline AUID auID(void* p1, void* p2, void* p3)
+{
+    AUID result = {};
+    result.p1 = p1;
+    result.p2 = p2;
+    result.p3 = p3;
+    
+    return result;
+}
+
+struct AUIDData
+{
+    AUID ID;
+    
+    Rect2 dim;
+    union
+    {
+        b32 show;
+        u32 optionIndex;
+    };
+    
+    AUIDData* next;
+};
+
+struct AUIDStorage
+{
+    AUIDData* data[1024];
+};
+
+internal b32 AreEqual(AUID i1, AUID i2)
+{
+    b32 result = (i1.p1 == i2.p1 && 
+                  i1.p2 == i2.p2 &&
+                  i1.p3 == i2.p3);
+    return result;
+}
+
+struct EditorUIContext
+{
+    AUID nextHot;
+    AUID hot;
+    AUID interactive;
+    AUIDStorage storage;
+    PlatformInput* input;
+    MemoryPool* pool;
+    
+    SoundState* soundState;
+    PlayingSound* playingSound;
+    
+    Vec2 offset;
+};
+
+
 #define EditorRole_Everyone 0xffffffff
 printFlags(noPrefix) enum EditorRole
 {
@@ -13,54 +90,3 @@ printFlags(noPrefix) enum EditorRole
     EditorRole_WebDeveloper = (1 << 7),
     EditorRole_3DModeller = (1 << 8),
 };
-
-printTable(noPrefix) enum EditorWidgetType
-{
-    EditorWidget_None,
-    EditorWidget_TaxonomyTree,
-    EditorWidget_EditingTaxonomyTabs,
-    EditorWidget_Animation,
-    EditorWidget_SoundDatabase,
-    EditorWidget_GeneralButtons,
-    EditorWidget_SoundEvents,
-    EditorWidget_Components,
-    EditorWidget_Misc,
-    EditorWidget_ColorPicker,
-    EditorWidget_GroundParams,
-    EditorWidget_Debug3DModels,
-    EditorWidget_WidgetSelection,
-    
-    EditorWidget_Count,
-};
-
-struct WidgetPermanent
-{
-    r32 fontSize;
-    Vec2 P;
-    Vec2 resizeP;
-};
-
-struct EditorWidget
-{
-    i32 changeCount;
-    
-    b32 needsToBeReloaded;
-    u32 necessaryRole;
-    
-    WidgetPermanent permanent;
-    r32 dataOffsetY;
-    
-    b32 moving;
-    i32 movingClipWidth;
-    i32 movingClipHeight;
-    
-    i32 oldClipWidth;
-    i32 oldClipHeight;
-    
-    i32 maxDataY;
-    i32 minDataY;
-    
-    char fileName[32];
-    char name[32];
-};
-

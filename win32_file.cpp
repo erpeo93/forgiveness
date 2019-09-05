@@ -39,69 +39,68 @@ internal char* GetExtension(FileExtension* extensions, u32 extensionIndex)
     return result;
 }
 
-internal void GetFileExtensions(FileExtension* ext, PlatformFileType type)
+internal void GetFileExtensions(FileExtension* ext, u32 types)
 {
-    switch(type)
+    if(types & PlatformFile_compressedAsset)
     {
-        case PlatformFile_compressedAsset:
-        {
-            AddExtension(ext, "pak");
-        } break;
+        AddExtension(ext, "pak");
+    }
+    
+    if(types & PlatformFile_uncompressedAsset)
+    {
+        AddExtension(ext, "upak");
+    }
+    
+    if(types & PlatformFile_savedGame)
+    {
+        AddExtension(ext, "fsav");
+    }
+    
+    if(types & PlatformFile_png)
+    {
+        AddExtension(ext, "png");
+    }
+    
+    if(types & PlatformFile_Coloration)
+    {
+        AddExtension(ext, "color");
+    }
+    
+    if(types & PlatformFile_font)
+    {
+        AddExtension(ext, "ttf");
         
-        case PlatformFile_uncompressedAsset:
-        {
-            AddExtension(ext, "upak");
-        } break;
+    }
+    
+    if(types & PlatformFile_skeleton)
+    {
+        AddExtension(ext, "scml");
+    }
+    
+    if(types & PlatformFile_sound)
+    {
+        AddExtension(ext, "wav");
         
-        case PlatformFile_savedGame:
-        {
-            AddExtension(ext, "fsav");
-        } break;
-        
-        case PlatformFile_image:
-        {
-            AddExtension(ext, "png");
-            AddExtension(ext, "color");
-        } break;
-        
-        case PlatformFile_font:
-        {
-            AddExtension(ext, "ttf");
-            
-        } break;
-        
-        case PlatformFile_skeleton:
-        {
-            AddExtension(ext, "scml");
-        } break;
-        
-        case PlatformFile_sound:
-        {
-            AddExtension(ext, "wav");
-            
-        } break;
-        
-        case PlatformFile_model:
-        {
-            AddExtension(ext, "obj");
-        } break;
-        
-        case PlatformFile_data:
-        {
-            AddExtension(ext, "dat");
-        } break;
-        
-        case PlatformFile_markup:
-        {
-            AddExtension(ext, "tag");
-        } break;
-        
-        case PlatformFile_reloadedAsset:
-        {
-            AddExtension(ext, "rll");
-        } break;
-        
-        InvalidDefaultCase;
+    }
+    
+    if(types & PlatformFile_model)
+    {
+        AddExtension(ext, "obj");
+    }
+    
+    if(types & PlatformFile_data)
+    {
+        AddExtension(ext, "dat");
+    }
+    
+    if(types & PlatformFile_markup)
+    {
+        AddExtension(ext, "tag");
+    }
+    
+    if(types & PlatformFile_reloadedAsset)
+    {
+        AddExtension(ext, "rll");
     }
 }
 
@@ -155,7 +154,7 @@ internal PLATFORM_GET_ALL_FILE_BEGIN(Win32GetAllFilesBegin)
 {
     FileExtension ext;
     ext.count = 0;
-    GetFileExtensions(&ext, type);
+    GetFileExtensions(&ext, fileTypes);
     
     char pathString[128];
     pathString[0] = 0;

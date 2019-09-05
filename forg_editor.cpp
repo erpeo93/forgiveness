@@ -1,990 +1,588 @@
-global_variable u32 meta_definitionCount;
-global_variable StructDefinition meta_definitions[1024];
-MemberDefinition* FindMetaField(MemberDefinition* members, u32 memberCount, Token fieldName)
+internal void EditStruct(String structName, void* structPtr)
 {
-    MemberDefinition* result = 0;
-    for(u32 fieldIndex = 0; fieldIndex < memberCount; ++fieldIndex)
-    {
-        MemberDefinition* test = members + fieldIndex;
-        if(TokenEquals(fieldName, test->name))
-        {
-            result = test;
-            break;
-        }
-    }
-    
-    return result;
-    
-}
-MemberDefinition* FindMetaField(StructDefinition* definition, Token fieldName)
-{
-    MemberDefinition* result = FindMetaField(definition->members, definition->memberCount, fieldName);
-    Assert(result);
-    return result;
-}
-
-#define AddToMetaDefinitions(name, definition) AddToMetaDefinitions_(#name, sizeof(name), ArrayCount(definition), definition)
-internal void AddToMetaDefinitions_(char* name, u32 size, u32 memberCount, MemberDefinition* members)
-{
-    Assert(meta_definitionCount < ArrayCount(meta_definitions));
-    StructDefinition* definition = meta_definitions + meta_definitionCount++;
-    
-    FormatString(definition->name, sizeof(definition->name), "%s", name);
-    definition->memberCount = memberCount;
-    definition->size = size;
-    definition->members = members;
+    ReservedSpace ignored = {};
+    StructOperation(structName, 0, structPtr, FieldOperation_Edit, 0, &ignored);
 }
 
 
-global_variable u32 meta_labelTypeCount = 0;
-global_variable MetaLabelList meta_labels[1024];
-internal u32 GetMetaLabelType(Token labelName)
+struct EditorLayout
 {
-    u32 result = 0;
-    for(u32 labelType = 0; labelType < meta_labelTypeCount; ++labelType)
-    {
-        MetaLabelList* list = meta_labels + labelType;
-        if(TokenEquals(labelName, list->name))
-        {
-            result = labelType;
-            break;
-        }
-    }
-    return result;
-}
-
-internal char* GetMetaLabelTypeName(u16 value)
-{
-    Assert(value < meta_labelTypeCount);
-    MetaLabelList* list = meta_labels + value;
-    char* result = list->name;
+    EditorUIContext* context;
+    Vec4 defaultColoration;
     
-    return result;
-}
-
-internal u16 ExistMetaLabelValue(u32 labelType, Token value)
-{
-    u16 result = INVALID_LABEL_VALUE;
+    char* buffer;
+    u32 bufferSize;
     
-    Assert(labelType < meta_labelTypeCount);
-    MetaLabelList* list = meta_labels + labelType;
+    Vec2 currentP;
+    Vec2 lastP;
+    Vec2 rawP;
     
-    for(u16 labelIndex = 0; labelIndex < list->labelCount; ++labelIndex)
-    {
-        char* name = list->labels[labelIndex];
-        if(TokenEquals(value, name))
-        {
-            result = labelIndex;
-            break;
-        }
-    }
+    FontId fontID;
+    PAKFont* font;
+    r32 fontScale;
+    r32 horizontalAdvance;
+    r32 standardButtonDim;
+    b32 nextRawOnNextCommand;
     
-    return result;
-}
-
-internal char* GetMetaLabelValueName(u16 labelType, u16 labelValue)
-{
-    Assert(labelType < meta_labelTypeCount);
-    MetaLabelList* list = meta_labels + labelType;
+    RenderGroup* group;
     
-    Assert(labelValue < list->labelCount);
-    char* result = list->labels[labelValue];
-    return result;
-}
-
-
-#define AddToMetaLabels(name, labels) AddToMetaLabels_(#name, ArrayCount(labels), labels)
-internal void AddToMetaLabels_(char* name, u16 labelCount, char** labels)
-{
-    Assert(meta_labelTypeCount < ArrayCount(meta_labels));
-    MetaLabelList* list = meta_labels + meta_labelTypeCount++;
-    
-    FormatString(list->name, sizeof(list->name), "%s", name);
-    list->labelCount = labelCount;
-    list->labels = labels;
-}
-
-internal void LoadMetaData()
-{
-    
-    META_DEFAULT_VALUES_CPP_SUCKS();
-    META_HANDLE_ADD_TO_DEFINITION_HASH();
-    AddToMetaDefinitions(Vec2, memberDefinitionOfVec2);
-    AddToMetaDefinitions(Vec3, memberDefinitionOfVec3);
-    AddToMetaDefinitions(Vec4, memberDefinitionOfVec4);
-    
-    
-    AddToMetaLabels_("INVALIDINVALIDINVALID", 0, 0);
-    META_LABELS_ADD();
-}
-
-
-internal StructDefinition* GetMetaStructDefinition(String name)
-{
-    StructDefinition* result = 0;
-    for(u32 definitionIndex = 0; definitionIndex < meta_definitionCount; ++definitionIndex)
-    {
-        StructDefinition* definition = meta_definitions + definitionIndex;
-        if(StrEqual(name.size, (char*) name.b, definition->name))
-        {
-            result = definition;
-            break;
-        }
-    }
-    
-    Assert(result);
-    return result;
-}
-
-enum FieldOperationType
-{
-    FieldOperation_GetSize,
-    FieldOperation_Dump,
-    FieldOperation_Edit,
-    FieldOperation_Parse,
+    Vec2 mouseP;
 };
 
-internal u32 Parseu32(Tokenizer* tokenizer, u32 defaultVal)
-{
-    u32 result = defaultVal;
-    
-    Token t = GetToken(tokenizer);
-    Assert(t.type == Token_Number);
-    result = (u32) StringToInt(t.text);
-    
-    return result;
-}
 
-internal unm OutputToBuffer(Buffer* output, char* format, ...)
+enum EditorTextFlags
+{
+    EditorText_StartingSpace = (1 << 0),
+    EditorText_OnTop = (1 << 1),
+    EditorText_DarkBackground = (1 << 2)
+};
+
+
+internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char* format, ...)
 {
     va_list argList;
     va_start(argList, format);
-    unm result = FormatStringList((char*) output->b, output->size, format, argList);
-    va_end( argList );
+    FormatStringList(layout->buffer, layout->bufferSize, format, argList);
+    va_end(argList);
     
-    output->b += result;
+    r32 z = (flags & EditorText_OnTop) ? 1.0f : 0.0f;
+    b32 startingSpace = (flags & EditorText_StartingSpace);
     
-    u32 size = SafeTruncateUInt64ToU32(result);
-    Assert(size <= output->size);
-    output->size -= size;
+    Vec3 P = V3(layout->currentP, z);
+    Rect2 textDim = InvertedInfinityRect2();
+    char* text = layout->buffer;
+    textDim = GetTextDim(layout->group, layout->fontID, text, P, layout->fontScale, startingSpace);
+    
+    if(flags & EditorText_DarkBackground)
+    {
+        Vec2 padding = layout->fontScale * V2(4, 8);
+        textDim.min -= padding;
+        textDim.max += padding;
+        PushRect(layout->group, FlatTransform(), textDim, V4(0.02f, 0.02f, 0.02f, 1.0f));
+    }
+    
+    PushText(layout->group, layout->fontID, text, P, layout->fontScale, color, startingSpace);
+    
+    layout->lastP = layout->currentP;
+    layout->currentP.x = textDim.max.x;
+    
+    return textDim;
+}
+
+
+r32 RawHeight(EditorLayout* layout)
+{
+    r32 result = layout->fontScale * GetLineAdvance(layout->font);
+    return result;
+}
+
+internal void NextRaw(EditorLayout* layout)
+{
+    layout->rawP.y -= RawHeight(layout);
+    layout->lastP = layout->currentP;
+    
+    layout->currentP = layout->rawP;
+    layout->nextRawOnNextCommand = false;
+}
+
+internal void SetRawP(EditorLayout* layout, r32 X)
+{
+    layout->rawP.x = X;
+}
+
+internal void NextRawIfNecessary(EditorLayout* layout)
+{
+    if(layout->nextRawOnNextCommand)
+    {
+        NextRaw(layout);
+    }
+}
+
+internal void Push(EditorLayout* layout)
+{
+    layout->rawP.x += layout->fontScale * layout->horizontalAdvance;
+    layout->lastP = layout->currentP;
+    layout->currentP = layout->rawP;
+    layout->nextRawOnNextCommand = true;
+}
+
+internal void Nest(EditorLayout* layout)
+{
+    Push(layout);
+    NextRaw(layout);
+}
+
+internal void Pop(EditorLayout* layout)
+{
+    layout->rawP.x -= layout->fontScale * layout->horizontalAdvance;
+    layout->lastP = layout->currentP;
+    layout->currentP = layout->rawP;
+    layout->nextRawOnNextCommand = false;
+}
+
+internal Vec4 StandardTextColor()
+{
+    Vec4 result = V4(1, 1, 1, 1);
+    return result;
+}
+
+internal Vec4 DefaultEditorStringColor()
+{
+    Vec4 result = V4(1, 0, 1, 1);
+    return result;
+}
+internal Vec2 ButtonDim(EditorLayout* layout)
+{
+    Vec2 result = layout->fontScale * V2(2.0f * layout->standardButtonDim, layout->standardButtonDim);
+    return result;
+}
+
+internal Vec2 CollapsibleDim(EditorLayout* layout)
+{
+    Vec2 result = layout->fontScale * 0.5f * V2(layout->standardButtonDim, layout->standardButtonDim);
     
     return result;
 }
 
-internal u32 U32Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Buffer* output, b32 isInArray)
+inline b32 IsHotAUID(EditorUIContext* context, AUID ID)
 {
-    u32 size = sizeof(u32);
-    u32 value = field->def.def_u32;
-    if(source)
-    {
-        value = Parseu32(source, value);
-    }
-    
-    switch(operation)
-    {
-        case FieldOperation_GetSize:
-        {
-        } break;
-        
-        case FieldOperation_Parse:
-        {
-            *((u32*)ptr) = value;
-        } break;
-        
-        case FieldOperation_Dump:
-        {
-            value = *(u32*) ptr;
-            
-            if(isInArray)
-            {
-                OutputToBuffer(output, "%d", value);
-            }
-            else
-            {
-                if(value != field->def.def_u32)
-                {
-                    OutputToBuffer(output, "%s=%d;", field->name, value);
-                }
-            }
-        } break;
-    }
-    
-    return size;
-}
-
-
-internal r32 Parser32(Tokenizer* tokenizer, r32 defaultVal)
-{
-    r32 result = defaultVal;
-    
-    Token t = GetToken(tokenizer);
-    Assert(t.type == Token_Number);
-    result = (r32) StringToFloat(t.text);
-    
-    return result;
-}
-
-internal u32 R32Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Buffer* output, b32 isInArray)
-{
-    u32 size = sizeof(r32);
-    r32 value = field->def.def_r32;
-    if(source)
-    {
-        value = Parser32(source, value);
-    }
-    
-    switch(operation)
-    {
-        case FieldOperation_GetSize:
-        {
-        } break;
-        
-        case FieldOperation_Parse:
-        {
-            *((r32*)ptr) = value;
-        } break;
-        
-        case FieldOperation_Dump:
-        {
-            value = *(r32*) ptr;
-            
-            if(isInArray)
-            {
-                OutputToBuffer(output, "%f", value);
-            }
-            else
-            {
-                if(value != field->def.def_r32)
-                {
-                    OutputToBuffer(output, "%s=%f;", field->name, value);
-                }
-            }
-        } break;
-    }
-    
-    return size;
-}
-
-
-internal Vec2 ParseVec2(Tokenizer* tokenizer, Vec2 defaultVal)
-{
-    Vec2 result = defaultVal;
-    if(RequireToken(tokenizer, Token_OpenBraces))
-    {
-        while(true)
-        {
-            Token t = GetToken(tokenizer);
-            if(t.type == Token_Identifier)
-            {
-                if(RequireToken(tokenizer, Token_EqualSign))
-                {
-                    r32 value = Parser32(tokenizer, 0);
-                    MemberDefinition* field = FindMetaField(memberDefinitionOfVec2, ArrayCount(memberDefinitionOfVec2), t);
-                    if(field)
-                    {
-                        r32* dest = (r32*) ((u8*) &result + field->offset);
-                        *dest = value;
-                    }
-                }
-            }
-            else if(t.type == Token_CloseBraces)
-            {
-                break;
-            }
-        }
-    }
-    else
-    {
-        InvalidCodePath;
-    }
-    
-    return result;
-}
-
-internal u32 Vec2Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Buffer* output, b32 isInArray)
-{
-    u32 size = sizeof(Vec2);
-    Vec2 value = field->def.def_Vec2;
-    if(tokenizer)
-    {
-        value = ParseVec2(tokenizer, value);
-    }
-    
-    switch(operation)
-    {
-        case FieldOperation_GetSize:
-        {
-        } break;
-        
-        case FieldOperation_Parse:
-        {
-            *((Vec2*)ptr) = value;
-        } break;
-        
-        case FieldOperation_Dump:
-        {
-            value = *(Vec2*) ptr;
-            
-            
-            if(isInArray)
-            {
-                OutputToBuffer(output, "{");
-                if(value != field->def.def_Vec2)
-                {
-                    if(value.x != field->def.def_Vec2.x)
-                    {
-                        OutputToBuffer(output, "x=%f;", value.x);
-                    }
-                    
-                    if(value.y != field->def.def_Vec2.y)
-                    {
-                        OutputToBuffer(output, "y=%f;", value.y);
-                    }
-                }
-                OutputToBuffer(output, "}");
-            }
-            else
-            {
-                if(value != field->def.def_Vec2)
-                {
-                    OutputToBuffer(output, "%s={", field->name);
-                    if(value.x != field->def.def_Vec2.x)
-                    {
-                        OutputToBuffer(output, "x=%f;", value.x);
-                    }
-                    
-                    if(value.y != field->def.def_Vec2.y)
-                    {
-                        OutputToBuffer(output, "y=%f;", value.y);
-                    }
-                    OutputToBuffer(output, "};");
-                }
-            }
-        } break;
-    }
-    
-    return size;
-}
-
-
-
-internal Vec3 ParseVec3(Tokenizer* tokenizer, Vec3 defaultVal)
-{
-    Vec3 result = defaultVal;
-    if(RequireToken(tokenizer, Token_OpenBraces))
-    {
-        while(true)
-        {
-            Token t = GetToken(tokenizer);
-            if(t.type == Token_Identifier)
-            {
-                if(RequireToken(tokenizer, Token_EqualSign))
-                {
-                    r32 value = Parser32(tokenizer, 0);
-                    MemberDefinition* field = FindMetaField(memberDefinitionOfVec3, ArrayCount(memberDefinitionOfVec3), t);
-                    if(field)
-                    {
-                        r32* dest = (r32*) ((u8*) &result + field->offset);
-                        *dest = value;
-                    }
-                }
-            }
-            else if(t.type == Token_CloseBraces)
-            {
-                break;
-            }
-        }
-    }
-    else
-    {
-        InvalidCodePath;
-    }
-    
+    b32 result = AreEqual(context->hot, ID);
     return result;
 }
 
 
-internal u32 Vec3Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Buffer* output, b32 isInArray)
+#define GetUIButton(context, button) &(context->input->button)
+#define UIPressed(context, button) Pressed(GetUIButton(context, button))
+
+#define HotAUIDAndPressed(context, ID, button) HotAUIDAndPressed_(context, ID, GetUIButton(context, button))
+internal b32 HotAUIDAndPressed_(EditorUIContext* context, AUID ID, PlatformButton* button)
 {
-    u32 size = sizeof(Vec3);
-    Vec3 value = field->def.def_Vec3;
-    if(tokenizer)
-    {
-        value = ParseVec3(tokenizer, value);
-    }
+    b32 result = IsHotAUID(context, ID) && Pressed(button);
+    return result;
     
-    switch(operation)
-    {
-        case FieldOperation_GetSize:
-        {
-        } break;
-        
-        case FieldOperation_Parse:
-        {
-            *((Vec3*)ptr) = value;
-        } break;
-        
-        case FieldOperation_Dump:
-        {
-            value = *(Vec3*) ptr;
-            
-            if(isInArray)
-            {
-                OutputToBuffer(output, "{");
-                if(value != field->def.def_Vec3)
-                {
-                    if(value.x != field->def.def_Vec3.x)
-                    {
-                        OutputToBuffer(output, "x=%f;", value.x);
-                    }
-                    
-                    if(value.y != field->def.def_Vec3.y)
-                    {
-                        OutputToBuffer(output, "y=%f;", value.y);
-                    }
-                    
-                    if(value.z != field->def.def_Vec3.z)
-                    {
-                        OutputToBuffer(output, "z=%f;", value.z);
-                    }
-                }
-                OutputToBuffer(output, "}");
-            }
-            else
-            {
-                if(value != field->def.def_Vec3)
-                {
-                    OutputToBuffer(output, "%s={", field->name);
-                    
-                    if(value.x != field->def.def_Vec3.x)
-                    {
-                        OutputToBuffer(output, "x=%f;", value.x);
-                    }
-                    
-                    if(value.y != field->def.def_Vec3.y)
-                    {
-                        OutputToBuffer(output, "y=%f;", value.y);
-                    }
-                    
-                    if(value.z != field->def.def_Vec3.z)
-                    {
-                        OutputToBuffer(output, "z=%f;", value.z);
-                    }
-                    OutputToBuffer(output, "};");
-                }
-            }
-        } break;
-    }
-    
-    return size;
 }
 
-
-internal Vec4 ParseVec4(Tokenizer* tokenizer, Vec4 defaultVal)
+inline void SetNextHotAUID(EditorUIContext* context, AUID ID)
 {
-    Vec4 result = defaultVal;
-    if(RequireToken(tokenizer, Token_OpenBraces))
-    {
-        while(true)
-        {
-            Token t = GetToken(tokenizer);
-            if(t.type == Token_Identifier)
-            {
-                if(RequireToken(tokenizer, Token_EqualSign))
-                {
-                    r32 value = Parser32(tokenizer, 0);
-                    MemberDefinition* field = FindMetaField(memberDefinitionOfVec4, ArrayCount(memberDefinitionOfVec4), t);
-                    if(field)
-                    {
-                        r32* dest = (r32*) ((u8*) &result + field->offset);
-                        *dest = value;
-                    }
-                }
-            }
-            else if(t.type == Token_CloseBraces)
-            {
-                break;
-            }
-        }
-    }
-    else
-    {
-        InvalidCodePath;
-    }
+    context->nextHot = ID;
+}
+
+inline void SetInteractiveAUID(EditorUIContext* context, AUID ID)
+{
+    context->interactive = ID;
+}
+
+inline void EndInteraction(EditorUIContext* context)
+{
+    context->interactive = {};
+}
+
+inline b32 IsInteractiveAUID(EditorUIContext* context, AUID ID)
+{
+    b32 result = AreEqual(context->interactive, ID);
+    return result;
+}
+
+inline u32 AUIDHashIndex(AUIDStorage* storage, AUID ID)
+{
+    Assert(IsPowerOf2(ArrayCount(storage->data)));
+    
+    u32 rawIndex = (u32) ((u64) ID.p1 + (u64) ID.p2 + (u64) ID.p3);
+    u32 result = rawIndex & (ArrayCount(storage->data) - 1);
     
     return result;
 }
 
-internal u32 Vec4Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Buffer* output, b32 isInArray)
+internal AUIDData* GetAUIDData(EditorUIContext* context, AUID ID)
 {
-    u32 size = sizeof(Vec4);
-    Vec4 value = field->def.def_Vec4;
-    if(source)
+    AUIDStorage* storage = &context->storage;
+    
+    AUIDData* result = 0;
+    
+    u32 hashIndex = AUIDHashIndex(storage, ID);
+    for(AUIDData* data = storage->data[hashIndex]; data; data = data->next)
     {
-        value = ParseVec4(source, value);
-    }
-    
-    switch(operation)
-    {
-        case FieldOperation_GetSize:
+        if(AreEqual(data->ID, ID))
         {
-        } break;
-        
-        case FieldOperation_Parse:
-        {
-            *((Vec4*)ptr) = value;
-        } break;
-        
-        case FieldOperation_Dump:
-        {
-            value = *(Vec4*) ptr;
-            
-            
-            if(isInArray)
-            {
-                OutputToBuffer(output, "{");
-                if(value != field->def.def_Vec4)
-                {
-                    if(value.x != field->def.def_Vec4.x)
-                    {
-                        OutputToBuffer(output, "x=%f;", value.x);
-                    }
-                    
-                    if(value.y != field->def.def_Vec4.y)
-                    {
-                        OutputToBuffer(output, "y=%f;", value.y);
-                    }
-                    
-                    if(value.z != field->def.def_Vec4.z)
-                    {
-                        OutputToBuffer(output, "z=%f;", value.z);
-                    }
-                    if(value.w != field->def.def_Vec4.w)
-                    {
-                        OutputToBuffer(output, "w=%f;", value.w);
-                    }
-                }
-                OutputToBuffer(output, "}");
-            }
-            else
-            {
-                if(value != field->def.def_Vec4)
-                {
-                    OutputToBuffer(output, "%s={", field->name);
-                    
-                    if(value.x != field->def.def_Vec4.x)
-                    {
-                        OutputToBuffer(output, "x=%f;", value.x);
-                    }
-                    
-                    if(value.y != field->def.def_Vec4.y)
-                    {
-                        OutputToBuffer(output, "y=%f;", value.y);
-                    }
-                    
-                    if(value.z != field->def.def_Vec4.z)
-                    {
-                        OutputToBuffer(output, "z=%f;", value.z);
-                    }
-                    
-                    if(value.w != field->def.def_Vec4.w)
-                    {
-                        OutputToBuffer(output, "w=%f;", value.w);
-                    }
-                    OutputToBuffer(output, "};");
-                }
-            }
-        } break;
-    }
-    
-    return size;
-}
-
-struct ReservedSpace
-{
-    void* ptr;
-    u32 size;
-};
-
-internal void* ReserveSpace(ReservedSpace* space, u32 size)
-{
-    Assert(size <= space->size);
-    void* result = space->ptr;
-    space->ptr = (void*) ((u8*) space->ptr + size);
-    space->size -= size;
-    
-    return result;
-}
-
-
-
-internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Buffer* output, ReservedSpace* reserved);
-internal u32 FieldOperation(MemberDefinition* field, FieldOperationType operation, void* fieldPtr, Tokenizer* tokenizer, Buffer* output, ReservedSpace* reserved, u32* elementCount)
-{
-    u32 result = 0;
-    b32 pointer = (field->flags & MetaFlag_Pointer);
-    u32 elements = 0;
-    
-    if(pointer && operation == FieldOperation_Dump)
-    {
-        Assert(*elementCount);
-        OutputToBuffer(output, "%s=", field->name);
-    }
-    
-    while(true)
-    {
-        ++elements;
-        u32 fieldSize = 0;
-        switch(field->type)
-        {
-            case MetaType_u32:
-            {
-                fieldSize = U32Operation(field, operation, fieldPtr, tokenizer, output, pointer);
-            } break;
-            
-            case MetaType_r32:
-            {
-                fieldSize = R32Operation(field, operation, fieldPtr, tokenizer, output, pointer);
-            } break;
-            
-            case MetaType_Vec2:
-            {
-                fieldSize = Vec2Operation(field, operation, fieldPtr, tokenizer, output, pointer);
-            } break;
-            
-            case MetaType_Vec3:
-            {
-                fieldSize = Vec3Operation(field, operation, fieldPtr, tokenizer, output, pointer);
-            } break;
-            
-            case MetaType_Vec4:
-            {
-                fieldSize = Vec4Operation(field, operation, fieldPtr, tokenizer, output, pointer);
-            } break;
-            
-            default:
-            {
-                if(pointer && operation == FieldOperation_Dump)
-                {
-                    OutputToBuffer(output, "{");
-                }
-                
-                String structName = {};
-                structName.b = (u8*) field->typeName;
-                structName.size = StrLen(field->typeName);
-                fieldSize = StructOperation(structName, tokenizer, fieldPtr, operation, output, reserved);
-                
-                if(pointer && operation == FieldOperation_Dump)
-                {
-                    OutputToBuffer(output, "}");
-                }
-            } break;
-        }
-        
-        if(pointer)
-        {
-            if(operation == FieldOperation_Dump)
-            {
-                if(elements == *elementCount)
-                {
-                    break;
-                }
-                else
-                {
-                    OutputToBuffer(output, ",");
-                    fieldPtr = (void*) ((u8*) fieldPtr + field->size);
-                }
-            }
-            else
-            {
-                result += fieldSize;
-                Token t = GetToken(tokenizer);
-                if(t.type == Token_Comma)
-                {
-                    // NOTE(Leonardo): advance in the array and continue!
-                    if(operation == FieldOperation_Parse)
-                    {
-                        fieldPtr = (void*) ((u8*) fieldPtr + field->size);
-                    }
-                }
-                else
-                {
-                    Assert(t.type == Token_SemiColon);
-                    break;
-                }
-            }
-        }
-        else
-        {
+            result = data;
             break;
         }
     }
     
-    if(operation == FieldOperation_GetSize)
+    if(!result)
     {
-        *elementCount = elements;
+        result = PushStruct(context->pool, AUIDData);
+        result->ID = ID;
+        result->next = storage->data[hashIndex];
+        storage->data[hashIndex] = result;
     }
     
-    if(pointer && operation == FieldOperation_Dump)
+    
+    return result;
+}
+
+internal Rect2 EditorElementName(EditorLayout* layout, char* name)
+{
+    Vec4 color = V4(1, 1, 0.5f, 1);
+    Rect2 result = EditorTextDraw(layout, color, EditorText_StartingSpace, name);
+    EditorTextDraw(layout, color, 0, ":");
+    
+    return result;
+}
+
+internal Rect2 ShowString(EditorLayout* layout, char* name, char* string, u32 flags, Vec4 color = DefaultEditorStringColor())
+{
+    if(name)
     {
-        OutputToBuffer(output, ";");
+        EditorElementName(layout, name);
+    }
+    Rect2 result = EditorTextDraw(layout, color, flags, "%s", string);
+    return result;
+}
+
+
+internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID, StringArray options, char* outputBuffer, u32 outputLength)
+{
+    b32 result = false;
+    b32 showOptions = false;
+    
+    AUIDData* data = GetAUIDData(layout->context, ID);
+    Vec4 color = DefaultEditorStringColor();
+    if(options.count)
+    {
+        if(PointInRect(data->dim, layout->mouseP))
+        {
+            SetNextHotAUID(layout->context, ID);
+            color = V4(1, 1, 0, 1);
+        }
+        
+        
+        if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
+        {
+            SetInteractiveAUID(layout->context, ID);
+        }
+        
+        if(IsInteractiveAUID(layout->context, ID))
+        {
+            color = V4(0, 1, 0, 1);
+            
+            i32 optionIndex = (i32) data->optionIndex;
+            if(UIPressed(layout->context, actionUp))
+            {
+                --optionIndex;
+            }
+            
+            if(UIPressed(layout->context, actionDown))
+            {
+                ++optionIndex;
+            }
+            
+            optionIndex = Wrap(0, optionIndex, (i32) options.count); 
+            Assert(optionIndex >= 0);
+            
+            data->optionIndex = (u32) optionIndex;
+            
+            showOptions = true;
+            if(UIPressed(layout->context, confirmButton))
+            {
+                EndInteraction(layout->context);
+                FormatString(outputBuffer, outputLength, "%s", options.strings[data->optionIndex]);
+                result = true;
+            }
+        }
+    }
+    
+    data->dim = ShowString(layout, name, string, EditorText_StartingSpace, color);
+    
+    if(showOptions)
+    {
+        EditorLayout optionLayout = *layout;
+        SetRawP(&optionLayout, layout->lastP.x);
+        
+        for(u32 optionIndex = 0; optionIndex < options.count; ++optionIndex)
+        {
+            NextRaw(&optionLayout);
+            Vec4 optionColor = (data->optionIndex == optionIndex) ? V4(0, 0, 1, 1) : DefaultEditorStringColor();
+            ShowString(&optionLayout, 0, options.strings[optionIndex], EditorText_OnTop | EditorText_StartingSpace | EditorText_DarkBackground, optionColor);
+        }
     }
     
     return result;
 }
 
-internal void CopyDefaultValue(MemberDefinition* member, void* ptr)
+internal b32 EditString(EditorLayout* layout, char* name, char* string, StringArray options, char* output, u32 outputLength)
 {
-    switch(member->type)
-    {
-        case MetaType_u8:
-        {
-            *(u8*) ptr = member->def.def_u8;
-        } break;
-        
-        case MetaType_i8:
-        {
-            *(i8*) ptr = member->def.def_i8;
-        } break;
-        
-        case MetaType_u16:
-        {
-            *(u16*) ptr = member->def.def_u16;
-        } break;
-        case MetaType_i16:
-        {
-            *(i16*) ptr = member->def.def_i16;
-        } break;
-        case MetaType_u32:
-        {
-            *(u32*) ptr = member->def.def_u32;
-        } break;
-        
-        case MetaType_i32:
-        {
-            *(i32*) ptr = member->def.def_i32;
-        } break;
-        
-        case MetaType_u64:
-        {
-            *(u64*) ptr = member->def.def_u64;
-        } break;
-        case MetaType_i64:
-        {
-            *(i64*) ptr = member->def.def_i64;
-        } break;
-        
-        case MetaType_Vec2:
-        {
-            *(Vec2*) ptr = member->def.def_Vec2;
-        } break;
-        case MetaType_Vec3:
-        {
-            *(Vec3*) ptr = member->def.def_Vec3;
-        } break;
-        case MetaType_Vec4:
-        {
-            *(Vec4*) ptr = member->def.def_Vec4;
-        } break;
-        case MetaType_r32:
-        {
-            *(r32*) ptr = member->def.def_r32;
-        } break;
-        case MetaType_b32:
-        {
-            *(b32*) ptr = member->def.def_b32;
-        } break;
-    }
-}
-
-internal u32* GetMetaPtrElementCountForArray(StructDefinition* definition, MemberDefinition* arrayField, void* structPtr)
-{
-    Token counter = {};
-    char counterName[128];
-    counter.text = counterName;
-    counter.textLength =(u32) FormatString(counterName, sizeof(counterName),"%s_%s", EDITOR_COUNTER_STRING, arrayField->name);
-    
-    MemberDefinition* counterDefinition = FindMetaField(definition, counter);
-    Assert(counterDefinition->type == MetaType_u32);
-    void* counterPtr = (void*) ((u8*) structPtr + counterDefinition->offset);
-    
-    u32* result = (u32*) counterPtr;
+    b32 result = EditString(layout, name, string, auID(string), options, output, outputLength);
     return result;
 }
 
-internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Buffer* output, ReservedSpace* reserved)
+
+internal Rect2 ShowU32(EditorLayout* layout, char* name, u32 number)
 {
-    u32 result = 0;
-    StructDefinition* definition = GetMetaStructDefinition(structName);
-    result += definition->size;
+    if(name){EditorElementName(layout, name);}Rect2 result = EditorTextDraw(layout, V4(1, 0, 0, 1), EditorText_StartingSpace, "%d", number);
+    return result;
+}
+
+internal void EditU32(EditorLayout* layout, char* name, u32* number)
+{
+    AUID ID = auID(number);
+}
+
+internal Rect2 ShowU16(EditorLayout* layout, char* name, u16 number)
+{
+    if(name){EditorElementName(layout, name);}Rect2 result = EditorTextDraw(layout, V4(1, 0, 0, 1), EditorText_StartingSpace, "%d", number);
+    return result;
+}
+
+internal void EditU16(EditorLayout* layout, char* name, u16* number)
+{
+    AUID ID = auID(number);
     
-    if(operation == FieldOperation_Parse)
-    {
-        for(u32 fieldIndex = 0; fieldIndex < definition->memberCount; ++fieldIndex)
-        {
-            MemberDefinition* member = definition->members + fieldIndex;
-            
-            if(!member->flags & MetaFlag_Pointer)
-            {
-                void* fieldPtr = (void*) ((u8*) dataPtr + member->offset);
-                CopyDefaultValue(member, fieldPtr);
-            }
-        }
-    }
     
-    if(operation == FieldOperation_Dump || operation == FieldOperation_Edit)
+}
+
+internal b32 EditorButton(EditorLayout* layout, Vec2 rawOffset, Vec2 buttonDim, char* name, AUID ID, Vec4 color = V4(1, 0, 0, 1))
+{
+    b32 result = false;
+    Vec2 buttonMin = layout->currentP + Hadamart(rawOffset, V2(RawHeight(layout), RawHeight(layout)));
+    Rect2 button = RectMinDim(buttonMin, buttonDim);
+    
+    if(PointInRect(button, layout->mouseP))
     {
-        for(u32 fieldIndex = 0; fieldIndex < definition->memberCount; ++fieldIndex)
-        {
-            MemberDefinition* member = definition->members + fieldIndex;
-            
-            // NOTE(Leonardo): we can't dump nor edit counters!
-            if(!StrEqual(StrLen(EDITOR_COUNTER_STRING), EDITOR_COUNTER_STRING, member->name))
-            {
-                void* fieldPtr = (void*) ((u8*) dataPtr + member->offset);
-                u32 elementCount = 1;
-                if(member->flags & MetaFlag_Pointer)
-                {
-                    elementCount = *GetMetaPtrElementCountForArray(definition, member, dataPtr);
-                    Assert(sizeof(u64) == sizeof(void*));
-                    fieldPtr = (void*) (*(u64*)fieldPtr);
-                }
-                
-                if(elementCount)
-                {
-                    result += FieldOperation(member, operation, fieldPtr, tokenizer, output, reserved, &elementCount);
-                }
-            }
-        }
+        SetNextHotAUID(layout->context, ID);
     }
     else
     {
-        Token o = GetToken(tokenizer);
-        Assert(o.type == Token_OpenBraces);
-        for(;;)
+        color.a = 0.5f * color.a;
+    }
+    
+    if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
+    {
+        result = true;
+    }
+    
+    layout->currentP.x += 1.2f* buttonDim.x;
+    
+    PushRect(layout->group, FlatTransform(), button, color);
+    if(name)
+    {
+        PushTextEnclosed(layout->group, layout->fontID, name, button, layout->fontScale, StandardTextColor());
+    }
+    
+    return result;
+}
+
+internal b32 EditorCollapsible(EditorLayout* layout, char* string, AUID ID)
+{
+    AUIDData* data = GetAUIDData(layout->context, ID);
+    
+    Vec4 collapsibleColor = data->show ? V4(0, 1, 0, 1) : V4(0, 0, 1, 1);
+    Vec2 collapseDim = CollapsibleDim(layout);
+    if(EditorButton(layout, V2(0, 0), collapseDim, 0, ID, collapsibleColor))
+    {
+        data->show = !data->show;
+    }
+    EditorElementName(layout, string);
+    
+    b32 result = data->show;
+    
+    return result;
+}
+
+internal b32 EditorCollapsible(EditorLayout* layout, char* string)
+{
+    b32 result = EditorCollapsible(layout, string, auID(string));
+    return result;
+}
+
+internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID ID)
+{
+    GetGameAssetResult get = GetGameAsset(assets, ID);
+    PAKAsset* info = get.info;
+    
+    b32 showAssetInfo = EditorCollapsible(layout, info->sourceName);
+    switch(ID.type)
+    {
+        case AssetType_Image:
         {
-            Token t = GetToken(tokenizer);
-            if(t.type == Token_CloseBraces)
+            if(get.derived)
             {
-                break;
-            }
-            else if(t.type == Token_SemiColon)
-            {
-            }
-            else if(t.type == Token_EndOfFile)
-            {
-                break;
             }
             else
             {
-                Token fieldName = Stringize(t);
-                MemberDefinition* field = FindMetaField(definition, fieldName);
-                if(StrEqual(StrLen(EDITOR_COUNTER_STRING), EDITOR_COUNTER_STRING, field->name))
-                {
-                    InvalidCodePath;
-                }
-                
-                if(RequireToken(tokenizer, Token_EqualSign))
-                {
-                    void* fieldPtr = (void*) ((u8*) dataPtr + field->offset);
-                    
-                    if(operation == FieldOperation_Parse && field->flags & MetaFlag_Pointer)
-                    {
-                        Tokenizer fake = {};
-                        fake.at = tokenizer->at;
-                        
-                        u32 elementCount;
-                        FieldOperation(field, FieldOperation_GetSize, fieldPtr, &fake, output, reserved, &elementCount);
-                        u32* counterPtr = GetMetaPtrElementCountForArray(definition, field, dataPtr);
-                        *counterPtr = elementCount;
-                        void* arrayPtr = ReserveSpace(reserved, elementCount * field->size);
-                        
-                        Assert(sizeof(u64) == sizeof(void*));
-                        *(u64*) fieldPtr = (u64) arrayPtr;
-                        
-                        fieldPtr = arrayPtr;
-                    }
-                    u32 ignored;
-                    result += FieldOperation(field, operation, fieldPtr, tokenizer, output, reserved, &ignored);
-                }
-                else
-                {
-                    InvalidCodePath;
-                }
             }
-            
-        }
+        } break;
+        
+        case AssetType_Sound:
+        {
+            AUID auid = auID(info, "sound");
+            Vec2 buttonDim = ButtonDim(layout);
+            if(EditorButton(layout, V2(0.25f, -0.1f), buttonDim, "play", auid))
+            {
+                EditorUIContext* UI = layout->context;
+                if(UI->playingSound)
+                {
+                    ChangeVolume(UI->soundState, UI->playingSound, 0, V2(0, 0));
+                }
+                UI->playingSound = PlaySound(UI->soundState, assets, ID, 0);
+            }
+        } break;
     }
     
-    return result;
-}
-
-internal u32 GetStructSize(String structName, Tokenizer* tokenizer)
-{
-    ReservedSpace ignored = {};
-    u32 result = StructOperation(structName, tokenizer, 0, FieldOperation_GetSize, 0, &ignored);
-    return result;
-}
-
-internal void ParseBufferIntoStruct(String structName, Tokenizer* tokenizer, void* structPtr, u32 reservedSize)
-{
-    ReservedSpace reserved = {};
-    StructDefinition* definition = GetMetaStructDefinition(structName);
-    reserved.ptr = (void*) ((u8*) structPtr + definition->size);
-    reserved.size = reservedSize - definition->size;
-    
-    StructOperation(structName, tokenizer, structPtr, FieldOperation_Parse, 0, &reserved);
-    
-    Assert(reserved.size == 0);
-}
-
-internal void DumpStructToBuffer(String structName, Buffer* dest, void* structPtr)
-{
-    ReservedSpace ignored = {};
-    OutputToBuffer(dest, "{");
-    StructOperation(structName, 0, structPtr, FieldOperation_Dump, dest, &ignored);
-    OutputToBuffer(dest, "}");
-}
-
-#if 0
-internal void EditAssetFile()
-{
-    switch(file->type)
+    if(showAssetInfo)
     {
-        EditAssetLabels();
-        case Image:
-        {
-            if()
-            {
-                PushBitmap();
-            }
-        } break;
+        Nest(layout);
         
-        case Sound:
+        switch(ID.type)
         {
-            if()
+            case AssetType_Sound:
             {
-                PlaySound();
-            }
-        } break;
-        
-        case Model:
-        {
-            if()
-            {
-                PushModel();
-            }
+                PAKSound* sound = &info->sound;
+                ShowU32(layout, "total samples", sound->sampleCount);
+                ShowU32(layout, "channels", sound->channelCount);
+                NextRaw(layout);
+            } break;
         }
         
-        Default:
+        if(EditorCollapsible(layout, "labels", auID(info, "labels")))
         {
-            EditDataStructure();
-            
-            if(SaveButton())
+            Push(layout);
+            for(u32 labelIndex = 0; labelIndex < ArrayCount(info->labels); ++labelIndex)
             {
-                WriteBackAssetFileToFileSystem();
+                PAKLabel* label = info->labels + labelIndex;
+                if(label->label)
+                {
+                    NextRaw(layout);
+                    
+                    char* labelType = GetMetaLabelTypeName(label->label);
+                    char* labelValue = GetMetaLabelValueName(label->label, label->value);
+                    
+                    
+                    StringArray options = GetLabelValueList(label->label);
+                    
+                    char outputBuffer[32];
+                    if(EditString(layout, labelType, labelValue, auID(info, "labels", (void*) labelIndex), options, outputBuffer, sizeof(outputBuffer)))
+                    {
+                        Token newValue = Tokenize(outputBuffer);
+                        u16 value = ExistMetaLabelValue(label->label, newValue);
+                        label->value = value;
+                    }
+                }
             }
-        } break;
+            
+            Pop(layout);
+        }
+        
+        Pop(layout);
     }
 }
-#endif
+
+internal void RenderEditAssetFile(EditorLayout* layout, Assets* assets, u32 fileIndex)
+{
+    PAKFileHeader* file = GetFileInfo(assets, fileIndex);
+    
+    b32 showAssetData = EditorCollapsible(layout, file->name);
+    
+    AUID saveID = auID(file, "saveButton");
+    if(EditorButton(layout, V2(0.25f, -0.1f), ButtonDim(layout), "save", saveID))
+    {
+        WritebackAssetFileToFileSystem(assets, file->assetType, file->assetSubType, "../server/assets/raw");
+    }
+    
+    if(showAssetData)
+    {
+        Push(layout);
+        NextRaw(layout);
+        
+        char* assetType = GetAssetTypeName(file->assetType);
+        char* assetSubtype = GetAssetSubtypeName(file->assetType, file->assetSubType);
+        
+        ShowString(layout, "type", assetType, EditorText_StartingSpace);
+        ShowString(layout, "subtype", assetSubtype, EditorText_StartingSpace);
+        
+        NextRaw(layout);
+        
+        ShowU16(layout, "standard", file->standardAssetCount);
+        ShowU16(layout, "derived", file->derivedAssetCount);
+        
+        NextRaw(layout);
+        
+        if(EditorCollapsible(layout, "assets", auID(&file->magicValue)))
+        {
+            Push(layout);
+            u16 totalAssetCount = file->standardAssetCount + file->derivedAssetCount;
+            for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
+            {
+                NextRaw(layout);
+                AssetID ID = {};
+                ID.type = file->assetType;
+                ID.subtype = file->assetSubType;
+                ID.index = assetIndex;
+                
+                RenderAndEditAsset(layout, assets, ID);
+            }
+            Pop(layout);
+        }
+        
+        Pop(layout);
+    }
+}
+
+internal EditorLayout StandardLayout(MemoryPool* pool, RenderGroup* group, EditorUIContext* context, Vec2 mouseP, Vec4 defaultColoration = V4(1, 1, 1, 1), r32 fontScale = 1.0f, r32 horizontalAdvance = 100.0f)
+{
+    EditorLayout result = {};
+    
+    RandomSequence seq = {};
+    AssetLabels labels = {};
+    FontId fontID = QueryAssets(group->assets, AssetType_Font, AssetFont_game, &seq, &labels);
+    PAKFont* font = GetFontInfo(group->assets, fontID);
+    
+    
+    
+    result.context = context;
+    
+    result.defaultColoration = defaultColoration;
+    
+    result.bufferSize = KiloBytes(64);
+    result.buffer = (char*) PushSize(pool, result.bufferSize);
+    
+    result.currentP = context->offset;
+    result.rawP = result.currentP;
+    result.lastP = result.rawP;
+    
+    result.fontID = fontID;
+    result.font = font;
+    result.fontScale = fontScale;
+    result.horizontalAdvance = horizontalAdvance;
+    result.standardButtonDim = 0.5f * horizontalAdvance;
+    
+    result.mouseP = mouseP;
+    result.group = group;
+    
+    return result;
+}
+
+internal void RenderEditor(RenderGroup* group, EditorUIContext* context, Vec2 mouseP)
+{
+    MemoryPool editorPool = {};
+    
+    SetOrthographicTransformScreenDim(group);
+    
+    context->offset.x = 0;
+    context->offset.y -= 10.0f * context->input->mouseWheelOffset;
+    
+    context->nextHot = {};
+    
+    EditorLayout layout = StandardLayout(&editorPool, group, context, mouseP);
+    RenderEditAssetFile(&layout, group->assets, 0);
+    
+    
+    context->hot = context->nextHot;
+    
+    if(Pressed(&context->input->escButton))
+    {
+        context->interactive = {};
+    }
+    
+    Clear(&editorPool);
+}

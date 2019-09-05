@@ -6,6 +6,12 @@
 //
 //
 
+inline b32 IsPowerOf2(u32 value)
+{
+    b32 result = ((value & (value -1)) == 0);
+    return result;
+}
+
 inline b32 Normalized( r32 value )
 {
     b32 result = ( value >= 0.0f && value <= 1.0f );
@@ -210,9 +216,9 @@ inline i32 Wrap(i32 min, i32 value, i32 maxPlusOne)
     return result;
 }
 
-inline i32 Bounds( i32 minCase, i32 maxCase, i32 min, i32 value, i32 max )
+inline u32 Bounds(u32 minCase, u32 maxCase, u32 min, u32 value, u32 max)
 {
-    i32 result = value;
+    u32 result = value;
     if( value < min )
     {
         result = minCase;
@@ -225,19 +231,13 @@ inline i32 Bounds( i32 minCase, i32 maxCase, i32 min, i32 value, i32 max )
     return result;
 }
 
-inline i32 Bounds11( i32 min, i32 value, i32 max )
+inline u32 Bounds(u32 min, u32 value, u32 max)
 {
-    i32 result = Bounds( -1, 1, min, value, max );
+    u32 result = Bounds(min, max, min, value, max);
     return result;
 }
 
-inline i32 Bounds( i32 min, i32 value, i32 max )
-{
-    i32 result = Bounds( min, max, min, value, max );
-    return result;
-}
-
-inline r32 Clamp( r32 min, r32 value, r32 max )
+inline r32 Clamp(r32 min, r32 value, r32 max)
 {
     r32 result = value;
     if( result < min )

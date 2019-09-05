@@ -307,18 +307,19 @@ typedef PLATFORM_ERROR_MESSAGE(platform_error_message);
 
 typedef enum PlatformFileType
 {
-    PlatformFile_invalid,
-    PlatformFile_compressedAsset,
-    PlatformFile_uncompressedAsset,
-    PlatformFile_savedGame,
-    PlatformFile_image,
-    PlatformFile_font,
-    PlatformFile_skeleton,
-    PlatformFile_sound,
-    PlatformFile_model,
-    PlatformFile_data,
-    PlatformFile_markup,
-    PlatformFile_reloadedAsset,
+    PlatformFile_invalid = 0,
+    PlatformFile_compressedAsset = (1 << 0),
+    PlatformFile_uncompressedAsset = (1 << 1),
+    PlatformFile_savedGame = (1 << 2),
+    PlatformFile_png  = (1 << 3),
+    PlatformFile_Coloration  = (1 << 4),
+    PlatformFile_font  = (1 << 5),
+    PlatformFile_skeleton  = (1 << 6),
+    PlatformFile_sound  = (1 << 7),
+    PlatformFile_model = (1 << 8),
+    PlatformFile_data = (1 << 9),
+    PlatformFile_markup = (1 << 10),
+    PlatformFile_reloadedAsset = (1 << 11),
     
     PlatformFile_count,
 } PlatformFileType;
@@ -354,7 +355,7 @@ struct PlatformSubdirNames
     char names[32][1024];
 };
 
-#define PLATFORM_GET_ALL_FILE_BEGIN(name) PlatformFileGroup name(PlatformFileType type, char* path)
+#define PLATFORM_GET_ALL_FILE_BEGIN(name) PlatformFileGroup name(u32 fileTypes, char* path)
 typedef PLATFORM_GET_ALL_FILE_BEGIN(platform_get_all_file_begin);
 
 #define PLATFORM_GET_ALL_SUBDIRECTORIES(name) void name(PlatformSubdirNames* output, char* folderPath)

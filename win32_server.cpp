@@ -339,6 +339,7 @@ int main( int argc, char* argv[] )
     memory.api.GetAllFilesEnd = Win32GetAllFilesEnd;
     memory.api.ReadFromFile = Win32ReadFromFile;
     memory.api.FileError = Win32FileError;
+    memory.api.ReplaceFile = Win32ReplaceFile;
     
     memory.api.DEBUGExecuteSystemCommand = DEBUGWin32ExecuteCommand;
     memory.api.DEBUGGetProcessState = DEBUGWin32GetProcessState;

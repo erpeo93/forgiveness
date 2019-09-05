@@ -33,7 +33,7 @@
 
 #pragma comment(lib, "wsock32.lib")
 
-#include "forg_editor.cpp"
+#include "forg_meta_asset.cpp"
 #include "asset_builder.cpp"
 
 #if FORGIVENESS_INTERNAL

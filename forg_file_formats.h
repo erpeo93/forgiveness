@@ -8,6 +8,8 @@
 
 struct PAKFileHeader
 {
+    char name[32];
+    
     u32 magicValue;
     u32 version;
     
@@ -38,6 +40,7 @@ struct PAKBitmap
 
 struct PAKColoration
 {
+    char imageName[32];
     Vec4 color;
     u16 bitmapIndex;
 };
@@ -121,7 +124,7 @@ struct PAKDataFile
 
 struct PAKAsset
 {
-    char name[32];
+    char sourceName[32];
     u64 dataOffset;
     PAKLabel labels[MAX_LABEL_PER_ASSET];
     

@@ -329,12 +329,6 @@ inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, 
     PushRect4Colors(renderGroup, objectTransform, P, dim, color, color, color, color, lights);
 }
 
-inline void PushUIRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 color, Lights lights = {0, 0})
-{
-    objectTransform.cameraOffset += V3(renderGroup->gameCamera.screenCameraOffset, 0);
-    PushRect4Colors(renderGroup, objectTransform, P, dim, color, color, color, color, lights);
-}
-
 inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Rect2 rect, Vec4 color, Lights lights = {0, 0})
 {
     PushRect(renderGroup, objectTransform, V3(GetCenter(rect), 0.0f), GetDim(rect), color, lights);
@@ -863,6 +857,112 @@ inline u16 PushPointLight(RenderGroup* renderGroup, Vec3 P, Vec3 color, r32 stre
     return result;
 }
 
+
+enum TextOperation
+{
+    TextOp_draw,
+    TextOp_getSize,
+};
+
+internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont* info, char* string, Vec3 P, r32 fontScale, TextOperation op, Vec4 color, b32 startingSpace, b32 drawShadow)
+{
+    Rect2 result = InvertedInfinityRect2();
+    
+    if(font && info)
+    {
+        u32 prevCodePoint = startingSpace ? ' ' : 0;
+        for( char* at = string; *at; at++)
+        {
+            u8 codePoint = *at;
+            P.x += fontScale * GetHorizontalAdvanceForPair(font, info, prevCodePoint, codePoint);
+            if( codePoint != ' ' )
+            {
+                BitmapId ID = GetBitmapForGlyph(group->assets, fontID, codePoint);
+                if(IsValid(ID))
+                {
+                    PAKBitmap* glyphInfo = GetBitmapInfo(group->assets, ID);
+                    r32 glyphHeight = fontScale * glyphInfo->dimension[1];
+                    if(op == TextOp_getSize)
+                    {
+                        Bitmap* bitmap = GetBitmap(group->assets, ID).bitmap;
+                        if(bitmap)
+                        {
+                            BitmapDim dim = GetBitmapDim( bitmap, P, V3( 1.0f, 0.0f, 0.0f ), V3( 0.0f, 1.0f, 0.0f ), glyphHeight );
+                            Rect2 glyphRect = RectMinDim(dim.P.xy, dim.size);
+                            result = Union(result, glyphRect);
+                        }
+                        else
+                        {
+                            LoadBitmap(group->assets, ID);
+                        }
+                    }
+                    else
+                    {
+                        if(drawShadow)
+                        {
+                            PushBitmap(group, FlatTransform(), ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight, V2( 1.0f, 1.0f ), V4( 0.0f, 0.0f, 0.0f, 1.0f ) );
+                        }
+                        
+                        PushBitmap(group, FlatTransform(), ID, P, glyphHeight, V2(1.0f, 1.0f), color);
+                    }
+                }
+            }
+            
+            prevCodePoint = codePoint;
+        }
+        
+    }
+    
+    return result;
+}
+
+
+internal void PushText(RenderGroup* group, FontId fontID, char* string, Vec3 P,r32 fontScale = 1.0f, Vec4 color = V4(1, 1, 1, 1), b32 startingSpace = false, b32 drawShadow = true)
+{
+    PushFont(group, fontID);
+    Font* font = GetFont(group->assets, fontID);
+    if(font)
+    {
+        PAKFont* info = GetFontInfo(group->assets, fontID);
+        PushText_(group, fontID, font, info, string, P, fontScale, TextOp_draw, color, startingSpace, drawShadow);
+    }
+}
+
+internal Rect2 GetTextDim(RenderGroup* group, FontId fontID, char* string, Vec3 P, r32 fontScale = 1.0f, b32 startingSpace = false)
+{
+    Rect2 result = InvertedInfinityRect2();
+    
+    PushFont(group, fontID);
+    Font* font = GetFont(group->assets, fontID);
+    if(font)
+    {
+        PAKFont* info = GetFontInfo(group->assets, fontID);
+        
+        result = PushText_(group, fontID, font, info, string, P, fontScale, TextOp_getSize, V4(1, 1, 1, 1), startingSpace, false);
+    }
+    
+    return result;
+}
+
+internal void PushTextEnclosed(RenderGroup* group, FontId fontID, char* string, Rect2 rect, r32 fontScale = 1.0f, Vec4 color = V4(1, 1, 1, 1), b32 drawShadow = true)
+{
+    Vec3 refP = V3(rect.min, 0);
+    Rect2 currentDim = GetTextDim(group, fontID, string, refP, fontScale);
+    
+    r32 coeffY = GetDim(rect).y / GetDim(currentDim).y;
+    r32 coeffX = GetDim(rect).x / GetDim(currentDim).x;
+    
+    r32 coeff = Min(coeffX, coeffY);
+    
+    r32 adjustedFontScale = coeff * fontScale;
+    Rect2 actualDim = GetTextDim(group, fontID, string, refP, adjustedFontScale);
+    
+    Vec2 offset = GetCenter(rect) - GetCenter(actualDim);
+    Vec3 finalP = refP + V3(offset, 0);
+    
+    PushText(group, fontID, string, finalP, adjustedFontScale);
+}
+
 inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLength, Vec3 cameraX = V3(1, 0, 0), Vec3 cameraY = V3(0, 1, 0), Vec3 cameraZ = V3(0, 0, 1), Vec3 cameraP = V3(0, 0, 0), Vec2 screenCameraOffset = V2(0, 0), u32 renderTargetIndex = 0)
 {
     b32 orthographic = flags & Camera_Orthographic;
@@ -914,6 +1014,16 @@ inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLen
     setup.directionalLightColor = {};
     setup.directionalLightDir = {};
     PushSetup(renderGroup, &setup);
+}
+
+inline void SetOrthographicTransform(RenderGroup* group, u32 width, u32 height, u32 textureIndex = 0)
+{
+    SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / width, 0.0f, 0.0f), V3(0.0f, 2.0f / width, 0.0f), V3( 0, 0, 1), V3(0, 0, 0), V2(0, 0), textureIndex);
+}
+
+inline void SetOrthographicTransformScreenDim(RenderGroup* group)
+{
+    SetOrthographicTransform(group, group->commands->settings.width, group->commands->settings.height, 0);
 }
 
 inline RenderGroup BeginRenderGroup(Assets* assets, GameRenderCommands* commands)

@@ -217,8 +217,8 @@ inline Buffer BufferizeFirstTokenAndAdvance(Tokenizer* tokenizer)
     
     Token t = GetToken(tokenizer);
     
-    result.b = (u8*) t.text;
-    result.size = t.textLength;
+    result.ptr = t.text;
+    result.length = t.textLength;
     
     return result;
 }
@@ -270,6 +270,15 @@ inline bool RequireToken(Tokenizer* tokenizer, int tokenType)
 {
     Token token = GetToken( tokenizer );
     bool result = token.type == tokenType;
+    return result;
+}
+
+inline Token Tokenize(char* string)
+{
+    Token result = {};
+    result.text = string;
+    result.textLength = StrLen(string);
+    
     return result;
 }
 

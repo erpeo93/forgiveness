@@ -259,7 +259,6 @@ struct Asset
     RenderTexture textureHandle;
     
     PAKAsset paka;
-    u32 fileIndex;
     
     u32 state;
     
@@ -272,7 +271,7 @@ struct AssetSubtypeArray
     u16 standardAssetCount;
     u16 derivedAssetCount;
     Asset* assets;
-    
+    u32 fileIndex;
 };
 
 struct AssetArray

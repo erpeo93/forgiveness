@@ -131,7 +131,7 @@ int main(int argc, char** argv)
         
         
         
-        metaAssetPtr += sprintf(metaAssetPtr, "{\"%s\", %d},\n", folderName, folderIndex);
+        metaAssetPtr += sprintf(metaAssetPtr, "{\"%s\", %d},\n", folderName, folderIndex + 1);
         
         SubFolders* subFolders = allSubFolders + folderIndex;
         char subpath[128];

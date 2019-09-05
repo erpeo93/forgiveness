@@ -26,7 +26,6 @@
 #include "forg_skill.h"
 #include "forg_crafting.h"
 //#include "forg_entity.h"
-#include "forg_editor.h"
 //#include "forg_memory.h"
 #include "forg_world.h"
 #include "forg_world_generation.h"

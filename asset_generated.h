@@ -13,12 +13,12 @@ AssetType_Count
 MetaAsset metaAsset_assetType[] = 
 {
 {"Invalid", 0},
-{"Font", 0},
-{"ground_coloration", 1},
-{"Image", 2},
-{"Model", 3},
-{"Skeleton", 4},
-{"Sound", 5},
+{"Font", 1},
+{"ground_coloration", 2},
+{"Image", 3},
+{"Model", 4},
+{"Skeleton", 5},
+{"Sound", 6},
 };
 
 
@@ -71,12 +71,30 @@ MetaAsset metaAsset_Skeleton[] = {
 };
 enum AssetSoundType
 {
+AssetSound_bloop,
+AssetSound_crack,
 AssetSound_default,
+AssetSound_drop,
+AssetSound_exploration,
+AssetSound_forest,
+AssetSound_glide,
+AssetSound_gliding,
+AssetSound_puhp,
+AssetSound_thunder,
 AssetSound_Count
 };
 
 MetaAsset metaAsset_Sound[] = {
-{"default", 0},
+{"bloop", 0},
+{"crack", 1},
+{"default", 2},
+{"drop", 3},
+{"exploration", 4},
+{"forest", 5},
+{"glide", 6},
+{"gliding", 7},
+{"puhp", 8},
+{"thunder", 9},
 };
 MetaAssetType metaAsset_subTypes[AssetType_Count] = 
 {
@@ -86,7 +104,7 @@ MetaAssetType metaAsset_subTypes[AssetType_Count] =
 {1, metaAsset_Image},
 {1, metaAsset_Model},
 {1, metaAsset_Skeleton},
-{1, metaAsset_Sound},
+{10, metaAsset_Sound},
 };
 
 

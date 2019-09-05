@@ -206,6 +206,8 @@ struct GameModeWorld
     r32 cameraDolly;
     
     SoundState* soundState;
+    
+    EditorUIContext editorUI;
 };
 
 enum GameMode
