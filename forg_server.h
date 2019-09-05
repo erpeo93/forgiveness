@@ -13,6 +13,7 @@
 #include "forg_file_formats.h"
 #include "asset_labels.h"
 #include "forg_asset.h"
+#include "forg_editor.h"
 #include "forg_animation.h"
 #include "asset_builder.h"
 #include "forg_random.h"

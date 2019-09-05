@@ -549,7 +549,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     
     Vec3 groundMouseP = ProjectOnGround(unprojectedWorldMouseP, group->gameCamera.P);
     worldMode->worldMouseP = groundMouseP;
-    worldMode->relativeScreenMouseP = V2(input->relativeMouseX, input->relativeMouseY);
+    
+    Vec2 newMouseP = V2(input->relativeMouseX, input->relativeMouseY);
+    Vec2 deltaMouseScreenP = newMouseP - worldMode->relativeScreenMouseP;
+    worldMode->relativeScreenMouseP = newMouseP;
     
     
     b32 reloadTaxonomyAutocompletes = false;
@@ -650,7 +653,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             
             
-            RenderEditor(group, &worldMode->editorUI, worldMode->relativeScreenMouseP);
+            RenderEditor(group, &worldMode->editorUI, worldMode->relativeScreenMouseP, deltaMouseScreenP);
 #if 0
             Rect3 worldCameraBounds = GetScreenBoundsAtTargetDistance(group);
             Rect2 screenBounds = RectCenterDim(V2(0, 0), V2(worldCameraBounds.max.x - worldCameraBounds.min.x, worldCameraBounds.max.y - worldCameraBounds.min.y));
@@ -897,14 +900,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         platformAPI.PushWork(gameState->slowQueue, ReceiveNetworkPackets, &gameState->receiveNetworkPackets);
         
         PlayGame(gameState, input);
-    }
-    
-    
-    if(false)
-    {
-        CloseAllHandles(gameState->assets);
-        Clear(&gameState->assetsPool);
-        gameState->assets = InitAssets(gameState->slowQueue, gameState->tasks, ArrayCount(gameState->tasks), &gameState->assetsPool, gameState->textureQueue, MegaBytes(256));
     }
     
     

@@ -154,6 +154,10 @@ internal StructDefinition* GetMetaStructDefinition(String name)
     return result;
 }
 
+
+
+
+
 enum FieldOperationType
 {
     FieldOperation_GetSize,
@@ -173,7 +177,21 @@ internal u32 Parseu32(Tokenizer* tokenizer, u32 defaultVal)
     return result;
 }
 
-internal u32 U32Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+struct EditorLayout;
+internal void EditU32(EditorLayout* layout, char* name, u32* number);
+internal void EditU16(EditorLayout* layout, char* name, u16* number);
+internal void EditR32(EditorLayout* layout, char* name, r32* number);
+internal void EditVec2(EditorLayout* layout, char* name, Vec2* v);
+internal void EditVec3(EditorLayout* layout, char* name, Vec3* v);
+internal void EditVec4(EditorLayout* layout, char* name, Vec4 * v);
+internal void NextRaw(EditorLayout* layout);
+internal void Push(EditorLayout* layout);
+internal void Pop(EditorLayout* layout);
+internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char* format, ...);
+internal b32 EditorCollapsible(EditorLayout* layout, char* string, AUID ID);
+internal b32 StandardEditorButton(EditorLayout* layout, char* name, AUID ID, Vec4 color);
+
+internal u32 U32Operation(EditorLayout* layout, MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
 {
     u32 size = sizeof(u32);
     u32 value = field->def.def_u32;
@@ -209,6 +227,16 @@ internal u32 U32Operation(MemberDefinition* field, FieldOperationType operation,
                 }
             }
         } break;
+        
+#ifndef FORG_SERVER        
+        case FieldOperation_Edit:
+        {
+            EditU32(layout, field->name, (u32*) ptr);
+        } break;
+#endif
+        
+        InvalidDefaultCase;
+        
     }
     
     return size;
@@ -226,7 +254,7 @@ internal r32 Parser32(Tokenizer* tokenizer, r32 defaultVal)
     return result;
 }
 
-internal u32 R32Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+internal u32 R32Operation(EditorLayout* layout, MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
 {
     u32 size = sizeof(r32);
     r32 value = field->def.def_r32;
@@ -262,6 +290,14 @@ internal u32 R32Operation(MemberDefinition* field, FieldOperationType operation,
                 }
             }
         } break;
+        
+#ifndef FORG_SERVER
+        case FieldOperation_Edit:
+        {
+            EditR32(layout, field->name, (r32*) ptr);
+        } break;
+#endif
+        InvalidDefaultCase;
     }
     
     return size;
@@ -303,7 +339,7 @@ internal Vec2 ParseVec2(Tokenizer* tokenizer, Vec2 defaultVal)
     return result;
 }
 
-internal u32 Vec2Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Stream* output, b32 isInArray)
+internal u32 Vec2Operation(EditorLayout* layout, MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Stream* output, b32 isInArray)
 {
     u32 size = sizeof(Vec2);
     Vec2 value = field->def.def_Vec2;
@@ -363,6 +399,15 @@ internal u32 Vec2Operation(MemberDefinition* field, FieldOperationType operation
                 }
             }
         } break;
+        
+#ifndef FORG_SERVER
+        case FieldOperation_Edit:
+        {
+            EditVec2(layout, field->name, (Vec2*) ptr);
+        } break;
+#endif
+        
+        InvalidDefaultCase;
     }
     
     return size;
@@ -406,7 +451,7 @@ internal Vec3 ParseVec3(Tokenizer* tokenizer, Vec3 defaultVal)
 }
 
 
-internal u32 Vec3Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Stream* output, b32 isInArray)
+internal u32 Vec3Operation(EditorLayout* layout, MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Stream* output, b32 isInArray)
 {
     u32 size = sizeof(Vec3);
     Vec3 value = field->def.def_Vec3;
@@ -476,6 +521,15 @@ internal u32 Vec3Operation(MemberDefinition* field, FieldOperationType operation
                 }
             }
         } break;
+        
+#ifndef FORG_SERVER
+        case FieldOperation_Edit:
+        {
+            EditVec3(layout, field->name, (Vec3*) ptr);
+        } break;
+#endif
+        
+        InvalidDefaultCase;
     }
     
     return size;
@@ -517,7 +571,7 @@ internal Vec4 ParseVec4(Tokenizer* tokenizer, Vec4 defaultVal)
     return result;
 }
 
-internal u32 Vec4Operation(MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+internal u32 Vec4Operation(EditorLayout* layout, MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
 {
     u32 size = sizeof(Vec4);
     Vec4 value = field->def.def_Vec4;
@@ -597,6 +651,15 @@ internal u32 Vec4Operation(MemberDefinition* field, FieldOperationType operation
                 }
             }
         } break;
+        
+#ifndef FORG_SERVER
+        case FieldOperation_Edit:
+        {
+            EditVec4(layout, field->name, (Vec4*) ptr);
+        } break;
+#endif
+        
+        InvalidDefaultCase;
     }
     
     return size;
@@ -618,10 +681,15 @@ internal void* ReserveSpace(ReservedSpace* space, u32 size)
     return result;
 }
 
+struct StructOperationResult
+{
+    u32 size;
+    b32 deleted;
+};
 
 
-internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved);
-internal u32 FieldOperation(MemberDefinition* field, FieldOperationType operation, void* fieldPtr, Tokenizer* tokenizer, Stream* output, ReservedSpace* reserved, u32* elementCount)
+internal StructOperationResult StructOperation(EditorLayout* layout, String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer);
+internal u32 FieldOperation(EditorLayout* layout, MemberDefinition* field, FieldOperationType operation, void* fieldPtr, Tokenizer* tokenizer, Stream* output, ReservedSpace* reserved, u32* elementCount)
 {
     u32 result = 0;
     b32 pointer = (field->flags & MetaFlag_Pointer);
@@ -636,32 +704,38 @@ internal u32 FieldOperation(MemberDefinition* field, FieldOperationType operatio
     while(true)
     {
         ++elements;
+#ifndef FORG_SERVER
+        if(operation == FieldOperation_Edit)
+        {
+            NextRaw(layout);
+        }
+#endif
         u32 fieldSize = 0;
         switch(field->type)
         {
             case MetaType_u32:
             {
-                fieldSize = U32Operation(field, operation, fieldPtr, tokenizer, output, pointer);
+                fieldSize = U32Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer);
             } break;
             
             case MetaType_r32:
             {
-                fieldSize = R32Operation(field, operation, fieldPtr, tokenizer, output, pointer);
+                fieldSize = R32Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer);
             } break;
             
             case MetaType_Vec2:
             {
-                fieldSize = Vec2Operation(field, operation, fieldPtr, tokenizer, output, pointer);
+                fieldSize = Vec2Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer);
             } break;
             
             case MetaType_Vec3:
             {
-                fieldSize = Vec3Operation(field, operation, fieldPtr, tokenizer, output, pointer);
+                fieldSize = Vec3Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer);
             } break;
             
             case MetaType_Vec4:
             {
-                fieldSize = Vec4Operation(field, operation, fieldPtr, tokenizer, output, pointer);
+                fieldSize = Vec4Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer);
             } break;
             
             default:
@@ -674,7 +748,22 @@ internal u32 FieldOperation(MemberDefinition* field, FieldOperationType operatio
                 String structName = {};
                 structName.ptr = field->typeName;
                 structName.length = StrLen(field->typeName);
-                fieldSize = StructOperation(structName, tokenizer, fieldPtr, operation, output, reserved);
+                StructOperationResult structOp = StructOperation(layout, structName, tokenizer, fieldPtr, operation, output, reserved, pointer);
+                
+                
+                if(structOp.deleted)
+                {
+                    Assert(*elementCount > 0);
+                    u32 grabThis = *elementCount - 1;
+                    u32 offset = field->size * grabThis - (elements - 1);
+                    void* sourcePtr = (void*) ((u8*) fieldPtr + offset);
+                    
+                    Copy(field->size, fieldPtr, sourcePtr);
+                    
+                    *elementCount = *elementCount - 1;
+                }
+                
+                fieldSize += structOp.size;
                 
                 if(pointer && operation == FieldOperation_Dump)
                 {
@@ -685,15 +774,18 @@ internal u32 FieldOperation(MemberDefinition* field, FieldOperationType operatio
         
         if(pointer)
         {
-            if(operation == FieldOperation_Dump)
+            if(operation == FieldOperation_Dump || operation == FieldOperation_Edit)
             {
-                if(elements == *elementCount)
+                if(elements >= *elementCount)
                 {
                     break;
                 }
                 else
                 {
-                    OutputToStream(output, ",");
+                    if(output)
+                    {
+                        OutputToStream(output, ",");
+                    }
                     fieldPtr = (void*) ((u8*) fieldPtr + field->size);
                 }
             }
@@ -814,11 +906,11 @@ internal u32* GetMetaPtrElementCountForArray(StructDefinition* definition, Membe
     return result;
 }
 
-internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved)
+internal StructOperationResult StructOperation(EditorLayout* layout, String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer = false)
 {
-    u32 result = 0;
+    StructOperationResult result = {};
     StructDefinition* definition = GetMetaStructDefinition(structName);
-    result += definition->size;
+    result.size += definition->size;
     
     if(operation == FieldOperation_Parse)
     {
@@ -836,27 +928,80 @@ internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* data
     
     if(operation == FieldOperation_Dump || operation == FieldOperation_Edit)
     {
-        for(u32 fieldIndex = 0; fieldIndex < definition->memberCount; ++fieldIndex)
+        b32 canProceed = true;
+        
+#ifndef FORG_SERVER
+        if(operation == FieldOperation_Edit)
         {
-            MemberDefinition* member = definition->members + fieldIndex;
+            canProceed = EditorCollapsible(layout, 0, auID(dataPtr, "structCollapse"));
+            EditorTextDraw(layout, V4(1, 1, 1, 1), EditorText_StartingSpace, "%.*s {}", structName.length, structName.ptr);
             
-            // NOTE(Leonardo): we can't dump nor edit counters!
-            if(!StrEqual(StrLen(EDITOR_COUNTER_STRING), EDITOR_COUNTER_STRING, member->name))
+            if(parentWasPointer)
             {
-                void* fieldPtr = (void*) ((u8*) dataPtr + member->offset);
-                u32 elementCount = 1;
-                if(member->flags & MetaFlag_Pointer)
+                if(StandardEditorButton(layout, "canc", auID(dataPtr, "cancButton"), V4(0, 0.5f, 1.0f, 1.0f)))
                 {
-                    elementCount = *GetMetaPtrElementCountForArray(definition, member, dataPtr);
-                    Assert(sizeof(u64) == sizeof(void*));
-                    fieldPtr = (void*) (*(u64*)fieldPtr);
-                }
-                
-                if(elementCount)
-                {
-                    result += FieldOperation(member, operation, fieldPtr, tokenizer, output, reserved, &elementCount);
+                    result.deleted = true;
                 }
             }
+        }
+#endif
+        
+        if(canProceed)
+        {
+#ifndef FORG_SERVER
+            Push(layout);
+#endif
+            for(u32 fieldIndex = 0; fieldIndex < definition->memberCount; ++fieldIndex)
+            {
+                MemberDefinition* member = definition->members + fieldIndex;
+                // NOTE(Leonardo): we can't dump nor edit counters!
+                if(!StrEqual(StrLen(EDITOR_COUNTER_STRING), EDITOR_COUNTER_STRING, member->name))
+                {
+                    void* fieldPtr = (void*) ((u8*) dataPtr + member->offset);
+                    
+                    u32 fakeElementCount = 1;
+                    u32* elementCount = &fakeElementCount;
+                    b32 show = true;
+                    
+                    if(member->flags & MetaFlag_Pointer)
+                    {
+                        elementCount = GetMetaPtrElementCountForArray(definition, member, dataPtr);
+                        Assert(sizeof(u64) == sizeof(void*));
+                        fieldPtr = (void*) (*(u64*)fieldPtr);
+                        
+#ifndef FORG_SERVER                
+                        if(operation == FieldOperation_Edit)
+                        {
+                            NextRaw(layout);
+                            show = EditorCollapsible(layout, 0, auID(fieldPtr, "collapsible"));
+                            EditorTextDraw(layout, V4(1, 1, 1, 1), 0, "%s [%d]", member->name, *elementCount);
+                        }
+#endif
+                    }
+                    
+                    if(*elementCount && show)
+                    {
+#ifndef FORG_SERVER
+                        if((member->flags & MetaFlag_Pointer) && operation == FieldOperation_Edit)
+                        {
+                            Push(layout);
+                        }
+#endif
+                        result.size += FieldOperation(layout, member, operation, fieldPtr, tokenizer, output, reserved, elementCount);
+#ifndef FORG_SERVER
+                        if((member->flags & MetaFlag_Pointer) && operation == FieldOperation_Edit)
+                        {
+                            Pop(layout);
+                        }
+#endif
+                        
+                    }
+                }
+            }
+            
+#ifndef FORG_SERVER
+            Pop(layout);
+#endif
         }
     }
     else
@@ -896,7 +1041,7 @@ internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* data
                         fake.at = tokenizer->at;
                         
                         u32 elementCount;
-                        FieldOperation(field, FieldOperation_GetSize, fieldPtr, &fake, output, reserved, &elementCount);
+                        FieldOperation(layout, field, FieldOperation_GetSize, fieldPtr, &fake, output, reserved, &elementCount);
                         u32* counterPtr = GetMetaPtrElementCountForArray(definition, field, dataPtr);
                         *counterPtr = elementCount;
                         void* arrayPtr = ReserveSpace(reserved, elementCount * field->size);
@@ -907,7 +1052,7 @@ internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* data
                         fieldPtr = arrayPtr;
                     }
                     u32 ignored;
-                    result += FieldOperation(field, operation, fieldPtr, tokenizer, output, reserved, &ignored);
+                    result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, &ignored);
                 }
                 else
                 {
@@ -924,7 +1069,7 @@ internal u32 StructOperation(String structName, Tokenizer* tokenizer, void* data
 internal u32 GetStructSize(String structName, Tokenizer* tokenizer)
 {
     ReservedSpace ignored = {};
-    u32 result = StructOperation(structName, tokenizer, 0, FieldOperation_GetSize, 0, &ignored);
+    u32 result = StructOperation(0, structName, tokenizer, 0, FieldOperation_GetSize, 0, &ignored).size;
     return result;
 }
 
@@ -935,7 +1080,7 @@ internal void ParseBufferIntoStruct(String structName, Tokenizer* tokenizer, voi
     reserved.ptr = (void*) ((u8*) structPtr + definition->size);
     reserved.size = reservedSize - definition->size;
     
-    StructOperation(structName, tokenizer, structPtr, FieldOperation_Parse, 0, &reserved);
+    StructOperation(0, structName, tokenizer, structPtr, FieldOperation_Parse, 0, &reserved);
     
     Assert(reserved.size == 0);
 }
@@ -944,6 +1089,6 @@ internal void DumpStructToStream(String structName, Stream* dest, void* structPt
 {
     ReservedSpace ignored = {};
     OutputToStream(dest, "{");
-    StructOperation(structName, 0, structPtr, FieldOperation_Dump, dest, &ignored);
+    StructOperation(0, structName, 0, structPtr, FieldOperation_Dump, dest, &ignored);
     OutputToStream(dest, "}");
 }

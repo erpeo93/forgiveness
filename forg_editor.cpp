@@ -1,42 +1,8 @@
-internal void EditStruct(String structName, void* structPtr)
+internal void EditStruct(EditorLayout* layout, String structName, void* structPtr)
 {
     ReservedSpace ignored = {};
-    StructOperation(structName, 0, structPtr, FieldOperation_Edit, 0, &ignored);
+    StructOperation(layout, structName, 0, structPtr, FieldOperation_Edit, 0, &ignored);
 }
-
-
-struct EditorLayout
-{
-    EditorUIContext* context;
-    Vec4 defaultColoration;
-    
-    char* buffer;
-    u32 bufferSize;
-    
-    Vec2 currentP;
-    Vec2 lastP;
-    Vec2 rawP;
-    
-    FontId fontID;
-    PAKFont* font;
-    r32 fontScale;
-    r32 horizontalAdvance;
-    r32 standardButtonDim;
-    b32 nextRawOnNextCommand;
-    
-    RenderGroup* group;
-    
-    Vec2 mouseP;
-};
-
-
-enum EditorTextFlags
-{
-    EditorText_StartingSpace = (1 << 0),
-    EditorText_OnTop = (1 << 1),
-    EditorText_DarkBackground = (1 << 2)
-};
-
 
 internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char* format, ...)
 {
@@ -82,7 +48,6 @@ internal void NextRaw(EditorLayout* layout)
     layout->lastP = layout->currentP;
     
     layout->currentP = layout->rawP;
-    layout->nextRawOnNextCommand = false;
 }
 
 internal void SetRawP(EditorLayout* layout, r32 X)
@@ -90,20 +55,11 @@ internal void SetRawP(EditorLayout* layout, r32 X)
     layout->rawP.x = X;
 }
 
-internal void NextRawIfNecessary(EditorLayout* layout)
-{
-    if(layout->nextRawOnNextCommand)
-    {
-        NextRaw(layout);
-    }
-}
-
 internal void Push(EditorLayout* layout)
 {
     layout->rawP.x += layout->fontScale * layout->horizontalAdvance;
     layout->lastP = layout->currentP;
     layout->currentP = layout->rawP;
-    layout->nextRawOnNextCommand = true;
 }
 
 internal void Nest(EditorLayout* layout)
@@ -117,7 +73,6 @@ internal void Pop(EditorLayout* layout)
     layout->rawP.x -= layout->fontScale * layout->horizontalAdvance;
     layout->lastP = layout->currentP;
     layout->currentP = layout->rawP;
-    layout->nextRawOnNextCommand = false;
 }
 
 internal Vec4 StandardTextColor()
@@ -153,6 +108,7 @@ inline b32 IsHotAUID(EditorUIContext* context, AUID ID)
 
 #define GetUIButton(context, button) &(context->input->button)
 #define UIPressed(context, button) Pressed(GetUIButton(context, button))
+#define UIReleased(context, button) Released(GetUIButton(context, button))
 
 #define HotAUIDAndPressed(context, ID, button) HotAUIDAndPressed_(context, ID, GetUIButton(context, button))
 internal b32 HotAUIDAndPressed_(EditorUIContext* context, AUID ID, PlatformButton* button)
@@ -221,25 +177,29 @@ internal AUIDData* GetAUIDData(EditorUIContext* context, AUID ID)
     return result;
 }
 
-internal Rect2 EditorElementName(EditorLayout* layout, char* name)
+
+internal Rect2 EditorElementName(EditorLayout* layout, char* name, b32 colon = true)
 {
     Vec4 color = V4(1, 1, 0.5f, 1);
     Rect2 result = EditorTextDraw(layout, color, EditorText_StartingSpace, name);
-    EditorTextDraw(layout, color, 0, ":");
+    
+    if(colon)
+    {
+        EditorTextDraw(layout, color, 0, ":");
+    }
     
     return result;
 }
 
 internal Rect2 ShowString(EditorLayout* layout, char* name, char* string, u32 flags, Vec4 color = DefaultEditorStringColor())
 {
-    if(name)
-    {
-        EditorElementName(layout, name);
-    }
+    if(name){EditorElementName(layout, name);}
     Rect2 result = EditorTextDraw(layout, color, flags, "%s", string);
     return result;
 }
 
+#define ShowName(layout, name)if(name){EditorElementName(layout, name);}
+#define ShowStandard(layout, color, format, ...) EditorTextDraw(layout, color, EditorText_StartingSpace, format, ##__VA_ARGS__)
 
 internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID, StringArray options, char* outputBuffer, u32 outputLength)
 {
@@ -317,29 +277,97 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, StringAr
 }
 
 
-internal Rect2 ShowU32(EditorLayout* layout, char* name, u32 number)
-{
-    if(name){EditorElementName(layout, name);}Rect2 result = EditorTextDraw(layout, V4(1, 0, 0, 1), EditorText_StartingSpace, "%d", number);
-    return result;
-}
-
 internal void EditU32(EditorLayout* layout, char* name, u32* number)
 {
     AUID ID = auID(number);
-}
-
-internal Rect2 ShowU16(EditorLayout* layout, char* name, u16 number)
-{
-    if(name){EditorElementName(layout, name);}Rect2 result = EditorTextDraw(layout, V4(1, 0, 0, 1), EditorText_StartingSpace, "%d", number);
-    return result;
+    
+    Vec4 color = V4(1, 0, 0, 1);
+    
+    ShowName(layout, name);
+    ShowStandard(layout, color, "%d", *number);
 }
 
 internal void EditU16(EditorLayout* layout, char* name, u16* number)
 {
     AUID ID = auID(number);
     
-    
+    Vec4 color = V4(1, 0, 0, 1);
+    ShowName(layout, name);
+    ShowStandard(layout, color, "%d", *number);
 }
+
+
+internal void EditR32(EditorLayout* layout, char* name, r32* number)
+{
+    AUID ID = auID(number);
+    AUIDData* data = GetAUIDData(layout->context, ID);
+    
+    
+    Vec4 color = V4(1, 0.5f, 0, 1);
+    if(PointInRect(data->dim, layout->mouseP))
+    {
+        color = V4(1, 0.0f, 1.0f, 1.0f);
+        SetNextHotAUID(layout->context, ID);
+    }
+    
+    if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
+    {
+        SetInteractiveAUID(layout->context, ID);
+    }
+    
+    
+    if(IsInteractiveAUID(layout->context, ID))
+    {
+        if(UIReleased(layout->context, mouseLeft))
+        {
+            EndInteraction(layout->context);
+        }
+        else
+        {
+            data->speed += 0.005f * layout->deltaMouseP.x;
+            data->speed = Clamp(0.05f, data->speed, 3.0f);
+            r32 delta = data->speed * layout->deltaMouseP.y;
+            *number += delta;
+        }
+    }
+    
+    
+    
+    ShowName(layout, name);
+    Rect2 elementRect = ShowStandard(layout, color, "%f", *number);
+    data->dim = elementRect;
+}
+
+internal void EditVec2(EditorLayout* layout, char* name, Vec2* v)
+{
+    AUID ID = auID(v);
+    
+    EditorElementName(layout, name);
+    EditR32(layout, "x", &v->x);
+    EditR32(layout, "y", &v->y);
+}
+
+internal void EditVec3(EditorLayout* layout, char* name, Vec3* v)
+{
+    AUID ID = auID(v);
+    
+    EditorElementName(layout, name);
+    EditR32(layout, "x", &v->x);
+    EditR32(layout, "y", &v->y);
+    EditR32(layout, "z", &v->z);
+}
+
+internal void EditVec4(EditorLayout* layout, char* name, Vec4 * v)
+{
+    AUID ID = auID(v);
+    
+    EditorElementName(layout, name);
+    EditR32(layout, "x", &v->x);
+    EditR32(layout, "y", &v->y);
+    EditR32(layout, "z", &v->z);
+    EditR32(layout, "w", &v->w);
+}
+
 
 internal b32 EditorButton(EditorLayout* layout, Vec2 rawOffset, Vec2 buttonDim, char* name, AUID ID, Vec4 color = V4(1, 0, 0, 1))
 {
@@ -372,6 +400,13 @@ internal b32 EditorButton(EditorLayout* layout, Vec2 rawOffset, Vec2 buttonDim, 
     return result;
 }
 
+internal b32 StandardEditorButton(EditorLayout* layout, char* name, AUID ID, Vec4 color = V4(1, 0, 0, 1))
+{
+    Vec2 buttonDim = ButtonDim(layout);
+    b32 result = EditorButton(layout, V2(0.25f, -0.1f), buttonDim, name, ID);
+    return result;
+}
+
 internal b32 EditorCollapsible(EditorLayout* layout, char* string, AUID ID)
 {
     AUIDData* data = GetAUIDData(layout->context, ID);
@@ -382,7 +417,11 @@ internal b32 EditorCollapsible(EditorLayout* layout, char* string, AUID ID)
     {
         data->show = !data->show;
     }
-    EditorElementName(layout, string);
+    
+    if(string)
+    {
+        EditorElementName(layout, string, false);
+    }
     
     b32 result = data->show;
     
@@ -407,6 +446,7 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
         {
             if(get.derived)
             {
+                
             }
             else
             {
@@ -416,8 +456,8 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
         case AssetType_Sound:
         {
             AUID auid = auID(info, "sound");
-            Vec2 buttonDim = ButtonDim(layout);
-            if(EditorButton(layout, V2(0.25f, -0.1f), buttonDim, "play", auid))
+            
+            if(StandardEditorButton(layout, "play", auid))
             {
                 EditorUIContext* UI = layout->context;
                 if(UI->playingSound)
@@ -427,23 +467,106 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                 UI->playingSound = PlaySound(UI->soundState, assets, ID, 0);
             }
         } break;
+        
+        case AssetType_Font:
+        {
+            
+        } break;
+        
+        case AssetType_Model:
+        {
+            
+        } break;
+        
+        case AssetType_Skeleton:
+        {
+            
+        } break;
+        
+        case AssetType_Invalid:
+        case AssetType_Count:
+        {
+            InvalidCodePath;
+        } break;
+        
+        default:
+        {
+        } break;
     }
     
     if(showAssetInfo)
     {
-        Nest(layout);
-        
         switch(ID.type)
         {
+            case AssetType_Image:
+            {
+                if(get.derived)
+                {
+                    
+                }
+                else
+                {
+                }
+            } break;
+            
             case AssetType_Sound:
             {
+                Nest(layout);
                 PAKSound* sound = &info->sound;
-                ShowU32(layout, "total samples", sound->sampleCount);
-                ShowU32(layout, "channels", sound->channelCount);
-                NextRaw(layout);
+                ShowName(layout, "total samples");
+                ShowStandard(layout, StandardTextColor(), "%d", sound->sampleCount);
+                
+                ShowName(layout, "channels");
+                ShowStandard(layout, StandardTextColor(), "%d", sound->channelCount);
+                Pop(layout);
+            } break;
+            
+            case AssetType_Font:
+            {
+                
+            } break;
+            
+            case AssetType_Model:
+            {
+                
+            } break;
+            
+            case AssetType_Skeleton:
+            {
+                
+            } break;
+            
+            case AssetType_Invalid:
+            case AssetType_Count:
+            {
+                InvalidCodePath;
+            } break;
+            
+            default:
+            {
+                Asset* asset = GetGameAsset(assets, ID).asset;
+                if(asset)
+                {
+                    MetaAsset metaAssetType = metaAsset_assetType[ID.type];
+                    String structName = {};
+                    structName.ptr = metaAssetType.name;
+                    structName.length = StrLen(metaAssetType.name);
+                    
+                    Nest(layout);
+                    EditStruct(layout, structName, asset->data);
+                    Pop(layout);
+                }
+                else
+                {
+                    LoadDataFile(assets, ID);
+                }
             } break;
         }
         
+        
+        
+        
+        Nest(layout);
         if(EditorCollapsible(layout, "labels", auID(info, "labels")))
         {
             Push(layout);
@@ -457,7 +580,6 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                     char* labelType = GetMetaLabelTypeName(label->label);
                     char* labelValue = GetMetaLabelValueName(label->label, label->value);
                     
-                    
                     StringArray options = GetLabelValueList(label->label);
                     
                     char outputBuffer[32];
@@ -469,10 +591,8 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                     }
                 }
             }
-            
             Pop(layout);
         }
-        
         Pop(layout);
     }
 }
@@ -502,8 +622,10 @@ internal void RenderEditAssetFile(EditorLayout* layout, Assets* assets, u32 file
         
         NextRaw(layout);
         
-        ShowU16(layout, "standard", file->standardAssetCount);
-        ShowU16(layout, "derived", file->derivedAssetCount);
+        ShowName(layout, "standard");
+        ShowStandard(layout, StandardTextColor(), "%d", file->standardAssetCount);
+        ShowName(layout, "derived");
+        ShowStandard(layout, StandardTextColor(), "%d", file->derivedAssetCount);
         
         NextRaw(layout);
         
@@ -528,7 +650,7 @@ internal void RenderEditAssetFile(EditorLayout* layout, Assets* assets, u32 file
     }
 }
 
-internal EditorLayout StandardLayout(MemoryPool* pool, RenderGroup* group, EditorUIContext* context, Vec2 mouseP, Vec4 defaultColoration = V4(1, 1, 1, 1), r32 fontScale = 1.0f, r32 horizontalAdvance = 100.0f)
+internal EditorLayout StandardLayout(MemoryPool* pool, RenderGroup* group, EditorUIContext* context, Vec2 mouseP, Vec2 deltaMouseP, Vec4 defaultColoration = V4(1, 1, 1, 1), r32 fontScale = 1.0f, r32 horizontalAdvance = 100.0f)
 {
     EditorLayout result = {};
     
@@ -557,24 +679,39 @@ internal EditorLayout StandardLayout(MemoryPool* pool, RenderGroup* group, Edito
     result.standardButtonDim = 0.5f * horizontalAdvance;
     
     result.mouseP = mouseP;
+    result.deltaMouseP = deltaMouseP;
     result.group = group;
     
     return result;
 }
 
-internal void RenderEditor(RenderGroup* group, EditorUIContext* context, Vec2 mouseP)
+internal void RenderEditor(RenderGroup* group, EditorUIContext* context, Vec2 mouseP, Vec2 deltaMouseP)
 {
     MemoryPool editorPool = {};
     
     SetOrthographicTransformScreenDim(group);
     
-    context->offset.x = 0;
+    if(Pressed(&context->input->actionLeft))
+    {
+        context->offset.x -= 10.0f;
+    }
+    
+    if(Pressed(&context->input->actionRight))
+    {
+        context->offset.x += 10.0f;
+    }
+    
     context->offset.y -= 10.0f * context->input->mouseWheelOffset;
     
     context->nextHot = {};
     
-    EditorLayout layout = StandardLayout(&editorPool, group, context, mouseP);
-    RenderEditAssetFile(&layout, group->assets, 0);
+    EditorLayout layout = StandardLayout(&editorPool, group, context, mouseP, deltaMouseP, V4(1, 1, 1, 1), 0.5f);
+    
+    for(u32 fileIndex = 0; fileIndex < group->assets->fileCount; ++fileIndex)
+    {
+        RenderEditAssetFile(&layout, group->assets, fileIndex);
+        NextRaw(&layout);
+    }
     
     
     context->hot = context->nextHot;

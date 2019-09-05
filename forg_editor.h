@@ -1,6 +1,4 @@
 #pragma once
-
-
 struct AUID
 {
     void* p1;
@@ -44,6 +42,7 @@ struct AUIDData
     {
         b32 show;
         u32 optionIndex;
+        r32 speed;
     };
     
     AUIDData* next;
@@ -71,10 +70,42 @@ struct EditorUIContext
     PlatformInput* input;
     MemoryPool* pool;
     
-    SoundState* soundState;
-    PlayingSound* playingSound;
+    struct SoundState* soundState;
+    struct PlayingSound* playingSound;
     
     Vec2 offset;
+};
+
+struct EditorLayout
+{
+    EditorUIContext* context;
+    Vec4 defaultColoration;
+    
+    char* buffer;
+    u32 bufferSize;
+    
+    Vec2 currentP;
+    Vec2 lastP;
+    Vec2 rawP;
+    
+    FontId fontID;
+    PAKFont* font;
+    r32 fontScale;
+    r32 horizontalAdvance;
+    r32 standardButtonDim;
+    
+    struct RenderGroup* group;
+    
+    Vec2 mouseP;
+    Vec2 deltaMouseP;
+};
+
+
+enum EditorTextFlags
+{
+    EditorText_StartingSpace = (1 << 0),
+    EditorText_OnTop = (1 << 1),
+    EditorText_DarkBackground = (1 << 2)
 };
 
 
