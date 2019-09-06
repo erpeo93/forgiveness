@@ -348,7 +348,7 @@ internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArr
         else
         {
             data->speed += 0.005f * layout->deltaMouseP.x;
-            data->speed = Clamp(0.05f, data->speed, 3.0f);
+            data->speed = Clamp(0.01f, data->speed, 3.0f);
             r32 delta = data->speed * layout->deltaMouseP.y;
             *number += delta;
         }

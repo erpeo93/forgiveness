@@ -983,67 +983,75 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                     if(pointer)
                     {
                         result.size += (sizeof(MetaArrayHeader) + sizeof(MetaArrayTrailer));
-                        
                         elementCount = GetMetaPtrElementCountForArray(definition, field, dataPtr);
-                        Assert(elementCount);
-                        Assert(sizeof(u64) == sizeof(void*));
-                        MetaArrayHeader* header = (MetaArrayHeader*) (*(u64*)fieldPtr);
-                        fieldPtr = (void*) (header + 1);
-#ifndef FORG_SERVER                
-                        if(operation == FieldOperation_Edit)
+                        if(elementCount)
                         {
-                            NextRaw(layout);
-                            show = EditorCollapsible(layout, 0, auID(originalfieldPtr, "collapsible"));
-                            EditorTextDraw(layout, V4(1, 1, 1, 1), 0, "%s [%d]", field->name, *elementCount);
-                            
-                            if(StandardEditorButton(layout, "add", auID(originalfieldPtr, "addButton"), V4(0, 1.0f, 1.0f, 1.0f)))
+                            Assert(sizeof(u64) == sizeof(void*));
+                            MetaArrayHeader* header = (MetaArrayHeader*) (*(u64*)fieldPtr);
+                            fieldPtr = (void*) (header + 1);
+#ifndef FORG_SERVER                
+                            if(operation == FieldOperation_Edit)
                             {
-                                u32 newElementCount = 32;
+                                NextRaw(layout);
+                                show = EditorCollapsible(layout, 0, auID(originalfieldPtr, "collapsible"));
+                                EditorTextDraw(layout, V4(1, 1, 1, 1), 0, "%s [%d]", field->name, *elementCount);
                                 
-                                
-                                *elementCount = *elementCount + 1;
-                                if(*elementCount == 1)
+                                if(StandardEditorButton(layout, "add", auID(originalfieldPtr, "addButton"), V4(0, 1.0f, 1.0f, 1.0f)))
                                 {
-                                    void* memory = PushSize(layout->context->pool, newElementCount * field->size + sizeof(MetaArrayHeader) + sizeof(MetaArrayTrailer));
-                                    InitMetaArrayBlock(memory, newElementCount, 0, field->size);
-                                    *(u64*)originalfieldPtr = (u64) memory;
-                                    header = (MetaArrayHeader*) memory;
-                                    fieldPtr = header + 1;
-                                }
-                                
-                                
-                                void* here = 0;
-                                MetaArrayHeader* currentHeader = header;
-                                while(!here)
-                                {
-                                    void* arrayPtr = (void*) (currentHeader + 1);
+                                    u32 newElementCount = 32;
                                     
-                                    MetaArrayTrailer* trailer = GetTrailer(arrayPtr, field->size);
-                                    if(currentHeader->count < currentHeader->maxCount)
+                                    
+                                    *elementCount = *elementCount + 1;
+                                    if(*elementCount == 1)
                                     {
-                                        here = (void*)((u8*)arrayPtr + currentHeader->count++ * field->size);
+                                        void* memory = PushSize(layout->context->pool, newElementCount * field->size + sizeof(MetaArrayHeader) + sizeof(MetaArrayTrailer));
+                                        InitMetaArrayBlock(memory, newElementCount, 0, field->size);
+                                        *(u64*)originalfieldPtr = (u64) memory;
+                                        header = (MetaArrayHeader*) memory;
+                                        fieldPtr = header + 1;
                                     }
-                                    else
+                                    
+                                    
+                                    void* here = 0;
+                                    MetaArrayHeader* currentHeader = header;
+                                    while(!here)
                                     {
-                                        if(!trailer->nextBlock)
-                                        {
-                                            void* memory = PushSize(layout->context->pool, newElementCount * field->size + sizeof(MetaArrayHeader) + sizeof(MetaArrayTrailer));
-                                            InitMetaArrayBlock(memory, newElementCount, 0, field->size);
-                                            
-                                            trailer->nextBlock = memory;
-                                        }
+                                        void* arrayPtr = (void*) (currentHeader + 1);
                                         
-                                        currentHeader = (MetaArrayHeader*) trailer->nextBlock;
+                                        MetaArrayTrailer* trailer = GetTrailer(arrayPtr, field->size);
+                                        if(currentHeader->count < currentHeader->maxCount)
+                                        {
+                                            here = (void*)((u8*)arrayPtr + currentHeader->count++ * field->size);
+                                        }
+                                        else
+                                        {
+                                            if(!trailer->nextBlock)
+                                            {
+                                                void* memory = PushSize(layout->context->pool, newElementCount * field->size + sizeof(MetaArrayHeader) + sizeof(MetaArrayTrailer));
+                                                InitMetaArrayBlock(memory, newElementCount, 0, field->size);
+                                                
+                                                trailer->nextBlock = memory;
+                                            }
+                                            
+                                            currentHeader = (MetaArrayHeader*) trailer->nextBlock;
+                                        }
                                     }
+                                    
+                                    InitFieldDefault(field, here);
                                 }
-                                
-                                InitFieldDefault(field, here);
                             }
-                        }
 #endif
+                        }
+                        else
+                        {
+                            show = false;
+                            InvalidCodePath;
+                            // TODO(Leonardo): show something on the editor here, like "error: field doesn't have a counter!
+                        }
+                        
                     }
                     
-                    if(*elementCount && show)
+                    if(show && *elementCount)
                     {
 #ifndef FORG_SERVER
                         if(pointer && operation == FieldOperation_Edit)
