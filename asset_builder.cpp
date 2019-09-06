@@ -2071,7 +2071,6 @@ internal WatchForFileChanges()
             }
             
             EndFiles();
-            
             BeginFiles(labels);
             
             if(Changed(labelsFile))

@@ -411,7 +411,6 @@ PLATFORM_WORK_CALLBACK(WatchForFileChanges)
     while(true)
     {
         BeginTicketMutex();
-        
         if(!assets->filesToLoad)
         {
             if(WatchForFileChanges(assets, ASSETS_PATH))
