@@ -873,7 +873,7 @@ inline Rect2 Offset( Rect2 rect, Vec2 offset )
     return result;
 }
 
-inline Rect2 AddRadius( Rect2 rect, Vec2 dim )
+inline Rect2 AddRadius(Rect2 rect, Vec2 dim)
 {
     Rect2 result = rect;
     result.min -= dim;

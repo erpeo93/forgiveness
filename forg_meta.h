@@ -1,5 +1,4 @@
 #pragma once
-
 enum MetaType
 {
     MetaType_None,
@@ -16,21 +15,33 @@ enum MetaType
     MetaType_Vec4,
     MetaType_r32,
     MetaType_b32,
+    MetaType_ArrayCounter, // NOTE(Leonardo): u16
+    MetaType_Hash64,
+    MetaType_GameLabel,
+    MetaType_GameAssetType,
+    
+    
+    
+    
+    MetaType_FirstCustomMetaType = MetaType_GameAssetType,
+    
+    
     
     MetaType_GroundColorationArrayTest
 };
 
-enum MemberMetaFlags
+enum FieldMetaFlags
 {
     MetaFlag_Pointer = (1 << 0),
     MetaFlag_Hashed = (1 << 1),
 };
 
-union DefaultMemberValue
+union DefaultFieldValue
 {
     u8 def_u8;
     i8 def_i8;
     u16 def_u16;
+    u16 def_ArrayCounter;
     i16 def_i16;
     u32 def_u32;
     i32 def_i32;
@@ -41,25 +52,32 @@ union DefaultMemberValue
     Vec2 def_Vec2;
     Vec3 def_Vec3;
     Vec4 def_Vec4;
+    Hash64 def_Hash64;
+    GameLabel def_GameLabel;
+    GameAssetType def_GameAssetType;
 };
 
-struct MemberDefinition
+struct FieldDefinition
 {
     u32 flags;
     MetaType type;
-    char typeName[64];
+    char* typeName;
     char* name;
     u32 offset;
-    DefaultMemberValue def;
+    DefaultFieldValue def;
     u32 size;
+    char* optionsName; // NOTE(Leonardo): used by the editor!
+    char* counterName;
+    u32 counterOffset;
+    char* fixedField;
 };
 
 struct StructDefinition
 {
     char name[64];
     u32 size;
-    u32 memberCount;
-    MemberDefinition* members;
+    u32 fieldCount;
+    FieldDefinition* fields;
 };
 
 struct MetaFlag
@@ -68,13 +86,13 @@ struct MetaFlag
 	u32 value;
 };
 
-MemberDefinition memberDefinitionOfVec2[] = 
+FieldDefinition fieldDefinitionOfVec2[] = 
 {
     {0, MetaType_r32, "r32", "x", (u32) (&((Vec2*)0)->x)}, 
     {0, MetaType_r32, "r32", "y", (u32) (&((Vec2*)0)->y)}, 
 };
 
-MemberDefinition memberDefinitionOfVec3[] = 
+FieldDefinition fieldDefinitionOfVec3[] = 
 {
     {0, MetaType_r32, "r32", "x", (u32) (&((Vec3*)0)->x)}, 
     {0, MetaType_r32, "r32", "y", (u32) (&((Vec3*)0)->y)}, 
@@ -86,7 +104,7 @@ MemberDefinition memberDefinitionOfVec3[] =
 };
 
 
-MemberDefinition memberDefinitionOfVec4[] = 
+FieldDefinition fieldDefinitionOfVec4[] = 
 {
     {0, MetaType_r32, "r32", "x", (u32) (&((Vec4*)0)->x)}, 
     {0, MetaType_r32, "r32", "y", (u32) (&((Vec4*)0)->y)}, 

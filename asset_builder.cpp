@@ -1550,11 +1550,11 @@ internal void FillPAKProperty(PAKAsset* asset, Token property, Token value)
 {
     if(TokenEquals(property, ANIMATION_PROPERTY_SYNC_THREESOLD))
     {
-        asset->animation.syncThreesoldMS = (u16) StringToInt(value.text);
+        asset->animation.syncThreesoldMS = SafeTruncateToU16(StringToUInt32(value.text));
     }
     else if(TokenEquals(property, ANIMATION_PROPERTY_PREPARATION_THREESOLD))
     {
-        asset->animation.preparationThreesoldMS = (u16) StringToInt(value.text);
+        asset->animation.preparationThreesoldMS = SafeTruncateToU16(StringToUInt32(value.text));
     }
     else if(TokenEquals(property, IMAGE_PROPERTY_ALIGN_X))
     {
@@ -1634,8 +1634,8 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
 {
     MemoryPool tempPool = {};
     
-    u32 type = GetMetaAssetType(sourceDir);
-    u32 subtype = GetMetaAssetSubtype(type, sourceSubdir);
+    u16 type = GetMetaAssetType(sourceDir);
+    u16 subtype = GetMetaAssetSubtype(type, sourceSubdir);
     
     char source[128];
     char filename[128];

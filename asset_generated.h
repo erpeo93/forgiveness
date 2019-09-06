@@ -10,15 +10,15 @@ AssetType_Sound,
 AssetType_Count
 };
 
-MetaAsset metaAsset_assetType[] = 
+char* metaAsset_assetType[] = 
 {
-{"Invalid", 0},
-{"Font", 1},
-{"ground_coloration", 2},
-{"Image", 3},
-{"Model", 4},
-{"Skeleton", 5},
-{"Sound", 6},
+"Invalid", 
+"Font",
+"ground_coloration",
+"Image",
+"Model",
+"Skeleton",
+"Sound",
 };
 
 
@@ -29,9 +29,9 @@ AssetFont_game,
 AssetFont_Count
 };
 
-MetaAsset metaAsset_Font[] = {
-{"debug", 0},
-{"game", 1},
+char* metaAsset_Font[] = {
+"debug",
+"game",
 };
 enum Assetground_colorationType
 {
@@ -39,8 +39,8 @@ Assetground_coloration_default,
 Assetground_coloration_Count
 };
 
-MetaAsset metaAsset_ground_coloration[] = {
-{"default", 0},
+char* metaAsset_ground_coloration[] = {
+"default",
 };
 enum AssetImageType
 {
@@ -48,8 +48,8 @@ AssetImage_default,
 AssetImage_Count
 };
 
-MetaAsset metaAsset_Image[] = {
-{"default", 0},
+char* metaAsset_Image[] = {
+"default",
 };
 enum AssetModelType
 {
@@ -57,8 +57,8 @@ AssetModel_default,
 AssetModel_Count
 };
 
-MetaAsset metaAsset_Model[] = {
-{"default", 0},
+char* metaAsset_Model[] = {
+"default",
 };
 enum AssetSkeletonType
 {
@@ -66,8 +66,8 @@ AssetSkeleton_default,
 AssetSkeleton_Count
 };
 
-MetaAsset metaAsset_Skeleton[] = {
-{"default", 0},
+char* metaAsset_Skeleton[] = {
+"default",
 };
 enum AssetSoundType
 {
@@ -84,17 +84,17 @@ AssetSound_thunder,
 AssetSound_Count
 };
 
-MetaAsset metaAsset_Sound[] = {
-{"bloop", 0},
-{"crack", 1},
-{"default", 2},
-{"drop", 3},
-{"exploration", 4},
-{"forest", 5},
-{"glide", 6},
-{"gliding", 7},
-{"puhp", 8},
-{"thunder", 9},
+char* metaAsset_Sound[] = {
+"bloop",
+"crack",
+"default",
+"drop",
+"exploration",
+"forest",
+"glide",
+"gliding",
+"puhp",
+"thunder",
 };
 MetaAssetType metaAsset_subTypes[AssetType_Count] = 
 {

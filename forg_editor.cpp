@@ -4,6 +4,19 @@ internal void EditStruct(EditorLayout* layout, String structName, void* structPt
     StructOperation(layout, structName, 0, structPtr, FieldOperation_Edit, 0, &ignored);
 }
 
+
+internal Vec2 RectPadding(r32 fontScale)
+{
+    Vec2 result = fontScale * V2(4, 8);
+    return result;
+}
+
+internal Vec2 ButtonPadding(r32 fontScale)
+{
+    Vec2 result = fontScale * V2(2, 2);
+    return result;
+}
+
 internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char* format, ...)
 {
     va_list argList;
@@ -21,10 +34,9 @@ internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char*
     
     if(flags & EditorText_DarkBackground)
     {
-        Vec2 padding = layout->fontScale * V2(4, 8);
-        textDim.min -= padding;
-        textDim.max += padding;
-        PushRect(layout->group, FlatTransform(), textDim, V4(0.02f, 0.02f, 0.02f, 1.0f));
+        Vec2 padding = RectPadding(layout->fontScale);
+        textDim = AddRadius(textDim, padding);
+        PushRect(layout->group, FlatTransform(z), textDim, V4(0.02f, 0.02f, 0.02f, 1.0f));
     }
     
     PushText(layout->group, layout->fontID, text, P, layout->fontScale, color, startingSpace);
@@ -34,7 +46,6 @@ internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char*
     
     return textDim;
 }
-
 
 r32 RawHeight(EditorLayout* layout)
 {
@@ -178,7 +189,7 @@ internal AUIDData* GetAUIDData(EditorUIContext* context, AUID ID)
 }
 
 
-internal Rect2 EditorElementName(EditorLayout* layout, char* name, b32 colon = true)
+internal Rect2 EditorElementName_(EditorLayout* layout, char* name, b32 colon = true)
 {
     Vec4 color = V4(1, 1, 0.5f, 1);
     Rect2 result = EditorTextDraw(layout, color, EditorText_StartingSpace, name);
@@ -191,15 +202,17 @@ internal Rect2 EditorElementName(EditorLayout* layout, char* name, b32 colon = t
     return result;
 }
 
+#define ShowName(layout, name)if(name){EditorElementName_(layout, name, true);}
+#define ShowNameNoColon(layout, name)if(name){EditorElementName_(layout, name, false);}
+#define ShowStandard(layout, color, format, ...) EditorTextDraw(layout, color, EditorText_StartingSpace, format, ##__VA_ARGS__)
+
 internal Rect2 ShowString(EditorLayout* layout, char* name, char* string, u32 flags, Vec4 color = DefaultEditorStringColor())
 {
-    if(name){EditorElementName(layout, name);}
+    ShowName(layout, name);
     Rect2 result = EditorTextDraw(layout, color, flags, "%s", string);
     return result;
 }
 
-#define ShowName(layout, name)if(name){EditorElementName(layout, name);}
-#define ShowStandard(layout, color, format, ...) EditorTextDraw(layout, color, EditorText_StartingSpace, format, ##__VA_ARGS__)
 
 internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID, StringArray options, char* outputBuffer, u32 outputLength)
 {
@@ -342,7 +355,7 @@ internal void EditVec2(EditorLayout* layout, char* name, Vec2* v)
 {
     AUID ID = auID(v);
     
-    EditorElementName(layout, name);
+    ShowName(layout, name);
     EditR32(layout, "x", &v->x);
     EditR32(layout, "y", &v->y);
 }
@@ -351,7 +364,7 @@ internal void EditVec3(EditorLayout* layout, char* name, Vec3* v)
 {
     AUID ID = auID(v);
     
-    EditorElementName(layout, name);
+    ShowName(layout, name);
     EditR32(layout, "x", &v->x);
     EditR32(layout, "y", &v->y);
     EditR32(layout, "z", &v->z);
@@ -361,12 +374,119 @@ internal void EditVec4(EditorLayout* layout, char* name, Vec4 * v)
 {
     AUID ID = auID(v);
     
-    EditorElementName(layout, name);
+    ShowName(layout, name);
     EditR32(layout, "x", &v->x);
     EditR32(layout, "y", &v->y);
     EditR32(layout, "z", &v->z);
     EditR32(layout, "w", &v->w);
 }
+
+internal void EditHash64(EditorLayout* layout, char* name, Hash64* hash, char* optionsName)
+{
+    ShowString(layout, "autocomplete", optionsName, EditorText_StartingSpace);
+}
+
+internal void EditGameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable)
+{
+    ShowNameNoColon(layout, name);
+    char output[64];
+    
+    char* typeString = GetAssetTypeName(type->type);
+    if(!typeString)
+    {
+        type->type = 0;
+        typeString = GetAssetTypeName(type->type);
+    }
+    
+    StringArray typeOptions = {};
+    if(typeEditable)
+    {
+        typeOptions = GetAssetTypeList();
+    }
+    
+    if(EditString(layout, "type", typeString, auID(&type->type), typeOptions, output, sizeof(output)))
+    {
+        u16 newType = GetMetaAssetType(output);
+        if(newType != type->type)
+        {
+            type->type = newType;
+            type->subtype = 0;
+        }
+    }
+    
+    char* subtypeString = GetAssetSubtypeName(type->type, type->subtype);
+    if(!subtypeString)
+    {
+        type->subtype = 0;
+        subtypeString = GetAssetSubtypeName(type->type, type->subtype);
+    }
+    
+    StringArray subtypeOptions = GetAssetSubtypeList(type->type);
+    if(EditString(layout, "subtype", subtypeString, auID(&type->subtype), subtypeOptions, output, sizeof(output)))
+    {
+        u16 newSubtype = GetMetaAssetSubtype(type->type, output);
+        
+        if(newSubtype != INVALID_ASSET_SUBTYPE)
+        {
+            type->subtype = newSubtype;
+        }
+    }
+}
+
+internal b32 EditGameLabel(EditorLayout* layout, char* name, GameLabel* label, b32 isInArray)
+{
+    b32 result = false;
+    
+    ShowNameNoColon(layout, name);
+    char output[64];
+    
+    char* typeString = GetMetaLabelTypeName(label->label);
+    if(!typeString)
+    {
+        label->label = 0;
+        typeString = GetMetaLabelTypeName(label->label);
+    }
+    
+    StringArray typeOptions = GetLabelTypeList();
+    if(EditString(layout, "type", typeString, auID(&label->label), typeOptions, output, sizeof(output)))
+    {
+        u16 newType = GetMetaLabelType(Tokenize(output));
+        if(newType != label->label)
+        {
+            label->label = newType;
+            label->value = 0;
+        }
+    }
+    
+    char* valueString = GetMetaLabelValueName(label->label, label->value);
+    if(!valueString)
+    {
+        label->value = 0;
+        valueString = GetMetaLabelValueName(label->label, label->value);
+    }
+    
+    StringArray valueOptions = GetLabelValueList(label->label);
+    if(EditString(layout, "value", valueString, auID(&label->value), valueOptions, output, sizeof(output)))
+    {
+        u16 newValue = ExistMetaLabelValue(label->label, Tokenize(output));
+        
+        if(newValue != INVALID_LABEL_VALUE)
+        {
+            label->value = newValue;
+        }
+    }
+    
+    if(isInArray)
+    {
+        if(StandardEditorButton(layout, "canc", auID(label, "cancButton"), V4(0, 0.5f, 1.0f, 1.0f)))
+        {
+            result = true;
+        }
+    }
+    
+    return result;
+}
+
 
 
 internal b32 EditorButton(EditorLayout* layout, Vec2 rawOffset, Vec2 buttonDim, char* name, AUID ID, Vec4 color = V4(1, 0, 0, 1))
@@ -391,7 +511,7 @@ internal b32 EditorButton(EditorLayout* layout, Vec2 rawOffset, Vec2 buttonDim, 
     
     layout->currentP.x += 1.2f* buttonDim.x;
     
-    PushRect(layout->group, FlatTransform(), button, color);
+    PushRect(layout->group, FlatTransform(), AddRadius(button, ButtonPadding(layout->fontScale)), color);
     if(name)
     {
         PushTextEnclosed(layout->group, layout->fontID, name, button, layout->fontScale, StandardTextColor());
@@ -407,7 +527,7 @@ internal b32 StandardEditorButton(EditorLayout* layout, char* name, AUID ID, Vec
     return result;
 }
 
-internal b32 EditorCollapsible(EditorLayout* layout, char* string, AUID ID)
+internal b32 EditorCollapsible(EditorLayout* layout, char* name, AUID ID)
 {
     AUIDData* data = GetAUIDData(layout->context, ID);
     
@@ -418,11 +538,7 @@ internal b32 EditorCollapsible(EditorLayout* layout, char* string, AUID ID)
         data->show = !data->show;
     }
     
-    if(string)
-    {
-        EditorElementName(layout, string, false);
-    }
-    
+    ShowNameNoColon(layout, name);
     b32 result = data->show;
     
     return result;
@@ -547,10 +663,10 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                 Asset* asset = GetGameAsset(assets, ID).asset;
                 if(asset)
                 {
-                    MetaAsset metaAssetType = metaAsset_assetType[ID.type];
+                    char* metaAssetType = metaAsset_assetType[ID.type];
                     String structName = {};
-                    structName.ptr = metaAssetType.name;
-                    structName.length = StrLen(metaAssetType.name);
+                    structName.ptr = metaAssetType;
+                    structName.length = StrLen(metaAssetType);
                     
                     Nest(layout);
                     EditStruct(layout, structName, asset->data);
@@ -573,23 +689,8 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
             for(u32 labelIndex = 0; labelIndex < ArrayCount(info->labels); ++labelIndex)
             {
                 PAKLabel* label = info->labels + labelIndex;
-                if(label->label)
-                {
-                    NextRaw(layout);
-                    
-                    char* labelType = GetMetaLabelTypeName(label->label);
-                    char* labelValue = GetMetaLabelValueName(label->label, label->value);
-                    
-                    StringArray options = GetLabelValueList(label->label);
-                    
-                    char outputBuffer[32];
-                    if(EditString(layout, labelType, labelValue, auID(info, "labels", (void*) labelIndex), options, outputBuffer, sizeof(outputBuffer)))
-                    {
-                        Token newValue = Tokenize(outputBuffer);
-                        u16 value = ExistMetaLabelValue(label->label, newValue);
-                        label->value = value;
-                    }
-                }
+                NextRaw(layout);
+                EditGameLabel(layout, 0, label, false);
             }
             Pop(layout);
         }

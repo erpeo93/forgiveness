@@ -167,7 +167,7 @@ inline bool TokenEquals( Token token, char* name )
         }
     }
     
-    bool result = ( *at == 0 );
+    bool result = (*at == 0);
     return result;
 }
 

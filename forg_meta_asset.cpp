@@ -1,11 +1,11 @@
 global_variable u32 meta_definitionCount;
 global_variable StructDefinition meta_definitions[1024];
-MemberDefinition* FindMetaField(MemberDefinition* members, u32 memberCount, Token fieldName)
+FieldDefinition* FindMetaField(FieldDefinition* fields, u32 fieldCount, Token fieldName)
 {
-    MemberDefinition* result = 0;
-    for(u32 fieldIndex = 0; fieldIndex < memberCount; ++fieldIndex)
+    FieldDefinition* result = 0;
+    for(u32 fieldIndex = 0; fieldIndex < fieldCount; ++fieldIndex)
     {
-        MemberDefinition* test = members + fieldIndex;
+        FieldDefinition* test = fields + fieldIndex;
         if(TokenEquals(fieldName, test->name))
         {
             result = test;
@@ -16,32 +16,33 @@ MemberDefinition* FindMetaField(MemberDefinition* members, u32 memberCount, Toke
     return result;
     
 }
-MemberDefinition* FindMetaField(StructDefinition* definition, Token fieldName)
+FieldDefinition* FindMetaField(StructDefinition* definition, Token fieldName)
 {
-    MemberDefinition* result = FindMetaField(definition->members, definition->memberCount, fieldName);
+    FieldDefinition* result = FindMetaField(definition->fields, definition->fieldCount, fieldName);
     Assert(result);
     return result;
 }
 
 #define AddToMetaDefinitions(name, definition) AddToMetaDefinitions_(#name, sizeof(name), ArrayCount(definition), definition)
-internal void AddToMetaDefinitions_(char* name, u32 size, u32 memberCount, MemberDefinition* members)
+internal void AddToMetaDefinitions_(char* name, u32 size, u32 fieldCount, FieldDefinition* fields)
 {
     Assert(meta_definitionCount < ArrayCount(meta_definitions));
     StructDefinition* definition = meta_definitions + meta_definitionCount++;
     
     FormatString(definition->name, sizeof(definition->name), "%s", name);
-    definition->memberCount = memberCount;
+    definition->fieldCount = fieldCount;
     definition->size = size;
-    definition->members = members;
+    definition->fields = fields;
 }
 
 
-global_variable u32 meta_labelTypeCount = 0;
-global_variable MetaLabelList meta_labels[1024];
-internal u32 GetMetaLabelType(Token labelName)
+global_variable u16 meta_labelTypeCount;
+global_variable MetaLabelList meta_labels[Label_Count];
+global_variable char* meta_labelsString[Label_Count - 1];
+internal u16 GetMetaLabelType(Token labelName)
 {
-    u32 result = 0;
-    for(u32 labelType = 0; labelType < meta_labelTypeCount; ++labelType)
+    u16 result = 0;
+    for(u16 labelType = 0; labelType < meta_labelTypeCount; ++labelType)
     {
         MetaLabelList* list = meta_labels + labelType;
         if(TokenEquals(labelName, list->name))
@@ -55,14 +56,16 @@ internal u32 GetMetaLabelType(Token labelName)
 
 internal char* GetMetaLabelTypeName(u16 value)
 {
-    Assert(value < meta_labelTypeCount);
-    MetaLabelList* list = meta_labels + value;
-    char* result = list->name;
-    
+    char* result = 0;
+    if(value < meta_labelTypeCount)
+    {
+        MetaLabelList* list = meta_labels + value;
+        result = list->name;
+    }
     return result;
 }
 
-internal u16 ExistMetaLabelValue(u32 labelType, Token value)
+internal u16 ExistMetaLabelValue(u16 labelType, Token value)
 {
     u16 result = INVALID_LABEL_VALUE;
     Assert(labelType < meta_labelTypeCount);
@@ -83,11 +86,15 @@ internal u16 ExistMetaLabelValue(u32 labelType, Token value)
 
 internal char* GetMetaLabelValueName(u16 labelType, u16 labelValue)
 {
-    Assert(labelType < meta_labelTypeCount);
-    MetaLabelList* list = meta_labels + labelType;
-    
-    Assert(labelValue < list->labelCount);
-    char* result = list->labels[labelValue];
+    char* result = 0;
+    if(labelType < meta_labelTypeCount)
+    {
+        MetaLabelList* list = meta_labels + labelType;
+        if(labelValue < list->labelCount)
+        {
+            result = list->labels[labelValue];
+        }
+    }
     return result;
 }
 
@@ -96,6 +103,38 @@ struct StringArray
     char** strings;
     u32 count;
 };
+
+internal StringArray GetAssetTypeList()
+{
+    StringArray result;
+    result.strings = &metaAsset_assetType[1];
+    result.count = AssetType_Count - 1; // NOTE(Leonardo): avoid the "invalid" asset type
+    return result;
+}
+
+internal StringArray GetAssetSubtypeList(u16 type)
+{
+    StringArray result = {};
+    
+    Assert(type < AssetType_Count);
+    MetaAssetType* typeArray = metaAsset_subTypes + type;
+    
+    result.strings = typeArray->names;
+    result.count = typeArray->subtypeCount;
+    
+    return result;
+}
+
+internal StringArray GetLabelTypeList()
+{
+    StringArray result = {};
+    
+    result.strings = meta_labelsString;
+    result.count = meta_labelTypeCount - 1; // NOTE(Leonardo): avoid the "invalid" label
+    
+    return result;
+}
+
 
 internal StringArray GetLabelValueList(u16 labelType)
 {
@@ -122,18 +161,23 @@ internal void AddToMetaLabels_(char* name, u16 labelCount, char** labels)
     list->labels = labels;
 }
 
+char* MetaLabels_Invalid[] =
+{
+    "invalid",
+};
+
 internal void LoadMetaData()
 {
     
     META_DEFAULT_VALUES_CPP_SUCKS();
     META_HANDLE_ADD_TO_DEFINITION_HASH();
-    AddToMetaDefinitions(Vec2, memberDefinitionOfVec2);
-    AddToMetaDefinitions(Vec3, memberDefinitionOfVec3);
-    AddToMetaDefinitions(Vec4, memberDefinitionOfVec4);
+    AddToMetaDefinitions(Vec2, fieldDefinitionOfVec2);
+    AddToMetaDefinitions(Vec3, fieldDefinitionOfVec3);
+    AddToMetaDefinitions(Vec4, fieldDefinitionOfVec4);
     
-    
-    AddToMetaLabels_("INVALIDINVALIDINVALID", 0, 0);
+    AddToMetaLabels(INVALID, MetaLabels_Invalid);
     META_LABELS_ADD();
+    META_ASSET_LABEL_STRINGS();
 }
 
 
@@ -150,13 +194,17 @@ internal StructDefinition* GetMetaStructDefinition(String name)
         }
     }
     
-    Assert(result);
     return result;
 }
 
 
 
 
+struct StructOperationResult
+{
+    u32 size;
+    b32 deleted;
+};
 
 enum FieldOperationType
 {
@@ -172,7 +220,7 @@ internal u32 Parseu32(Tokenizer* tokenizer, u32 defaultVal)
     
     Token t = GetToken(tokenizer);
     Assert(t.type == Token_Number);
-    result = (u32) StringToInt(t.text);
+    result = StringToUInt32(t.text);
     
     return result;
 }
@@ -184,16 +232,22 @@ internal void EditR32(EditorLayout* layout, char* name, r32* number);
 internal void EditVec2(EditorLayout* layout, char* name, Vec2* v);
 internal void EditVec3(EditorLayout* layout, char* name, Vec3* v);
 internal void EditVec4(EditorLayout* layout, char* name, Vec4 * v);
+internal void EditHash64(EditorLayout* layout, char* name, Hash64* h, char* optionsName);
+internal b32 EditGameLabel(EditorLayout* layout, char* name, GameLabel* label, b32 isInArray);
+internal void EditGameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable);
 internal void NextRaw(EditorLayout* layout);
+internal void Nest(EditorLayout* layout);
 internal void Push(EditorLayout* layout);
 internal void Pop(EditorLayout* layout);
 internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char* format, ...);
 internal b32 EditorCollapsible(EditorLayout* layout, char* string, AUID ID);
 internal b32 StandardEditorButton(EditorLayout* layout, char* name, AUID ID, Vec4 color);
 
-internal u32 U32Operation(EditorLayout* layout, MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+internal StructOperationResult u32Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
 {
-    u32 size = sizeof(u32);
+    StructOperationResult result = {};
+    
+    result.size = sizeof(u32);
     u32 value = field->def.def_u32;
     if(source)
     {
@@ -239,9 +293,8 @@ internal u32 U32Operation(EditorLayout* layout, MemberDefinition* field, FieldOp
         
     }
     
-    return size;
+    return result;
 }
-
 
 internal r32 Parser32(Tokenizer* tokenizer, r32 defaultVal)
 {
@@ -254,9 +307,11 @@ internal r32 Parser32(Tokenizer* tokenizer, r32 defaultVal)
     return result;
 }
 
-internal u32 R32Operation(EditorLayout* layout, MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+internal StructOperationResult r32Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
 {
-    u32 size = sizeof(r32);
+    StructOperationResult result = {};
+    result.size = sizeof(r32);
+    
     r32 value = field->def.def_r32;
     if(source)
     {
@@ -300,7 +355,239 @@ internal u32 R32Operation(EditorLayout* layout, MemberDefinition* field, FieldOp
         InvalidDefaultCase;
     }
     
-    return size;
+    return result;
+}
+
+
+internal Hash64 ParseHash64(Tokenizer* tokenizer, Hash64 defaultVal)
+{
+    Hash64 result = defaultVal;
+    
+    Token t = GetToken(tokenizer);
+    Assert(t.type == Token_Number);
+    result = (Hash64) StringToUInt64(t.text, t.textLength);
+    
+    return result;
+}
+
+internal StructOperationResult Hash64Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+{
+    StructOperationResult result = {};
+    result.size = sizeof(Hash64);
+    Hash64 value = field->def.def_Hash64;
+    if(source)
+    {
+        value = ParseHash64(source, value);
+    }
+    
+    switch(operation)
+    {
+        case FieldOperation_GetSize:
+        {
+        } break;
+        
+        case FieldOperation_Parse:
+        {
+            *((Hash64*)ptr) = value;
+        } break;
+        
+        case FieldOperation_Dump:
+        {
+            value = *(Hash64*) ptr;
+            if(isInArray)
+            {
+                OutputToStream(output, "%ul", value);
+            }
+            else
+            {
+                if(value != field->def.def_Hash64)
+                {
+                    OutputToStream(output, "%s=%ul;", field->name, value);
+                }
+            }
+        } break;
+#ifndef FORG_SERVER
+        case FieldOperation_Edit:
+        {
+            EditHash64(layout, field->name, (Hash64*) ptr, field->optionsName);
+        } break;
+#endif
+        InvalidDefaultCase;
+    }
+    
+    return result;
+}
+
+internal u32 PackLabel(GameLabel label)
+{
+    u32 result = (u32) (label.label << 16) | (u32) (label.value);
+    return result;
+}
+
+internal GameLabel UnpackLabel(u32 packed)
+{
+    GameLabel result;
+    result.label = (u16) (packed >> 16);
+    result.value = (u16) (packed & 0xffff);
+    
+    return result;
+}
+
+internal u32 PackAssetType(GameAssetType type)
+{
+    u32 result = (u32) (type.type << 16) | (u32) (type.subtype);
+    return result;
+}
+
+internal GameAssetType UnpackAssetType(u32 packed)
+{
+    GameAssetType result;
+    result.type = (u16) (packed >> 16);
+    result.subtype = (u16) (packed & 0xffff);
+    
+    return result;
+}
+
+internal GameLabel ParseGameLabel(Tokenizer* tokenizer, GameLabel defaultVal)
+{
+    GameLabel result = defaultVal;
+    
+    Token t = GetToken(tokenizer);
+    Assert(t.type == Token_Number);
+    u32 packed = StringToUInt32(t.text);
+    result = UnpackLabel(packed);
+    return result;
+}
+
+internal StructOperationResult GameLabelOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+{
+    StructOperationResult result = {};
+    result.size = sizeof(GameLabel);
+    GameLabel value = field->def.def_GameLabel;
+    if(source)
+    {
+        value = ParseGameLabel(source, value);
+    }
+    switch(operation)
+    {
+        case FieldOperation_GetSize:
+        {
+        } break;
+        
+        case FieldOperation_Parse:
+        {
+            *((GameLabel*)ptr) = value;
+        } break;
+        
+#ifndef FORG_SERVER
+        case FieldOperation_Edit:
+        {
+            result.deleted = EditGameLabel(layout, field->name, (GameLabel*) ptr, isInArray);
+        } break;
+#endif
+        
+        case FieldOperation_Dump:
+        {
+            value = *(GameLabel*) ptr;
+            u32 packed = PackLabel(value);
+            if(isInArray)
+            {
+                OutputToStream(output, "%d", packed);
+            }
+            else
+            {
+                u32 def = PackLabel(field->def.def_GameLabel);
+                if(packed != def)
+                {
+                    OutputToStream(output, "%s=%d;", field->name, packed);
+                }
+            }
+        } break;
+        InvalidDefaultCase;
+    }
+    
+    return result;
+}
+
+internal GameAssetType ParseGameAssetType(Tokenizer* tokenizer, GameAssetType defaultVal)
+{
+    GameAssetType result = defaultVal;
+    
+    Token t = GetToken(tokenizer);
+    Assert(t.type == Token_Number);
+    u32 packed = StringToUInt32(t.text);
+    result = UnpackAssetType(packed);
+    return result;
+}
+
+
+#define IsFixedField(field, ptr, name) IsFixedField_(field, #name, &ptr->name)
+internal b32 IsFixedField_(FieldDefinition* field, char* fieldName, void* fieldPtr)
+{
+    b32 result = false;
+    
+    if(field->fixedField)
+    {
+        if(StrEqual(field->fixedField, fieldName))
+        {
+            result = true;
+        }
+    }
+    return result;
+}
+
+internal StructOperationResult GameAssetTypeOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+{
+    StructOperationResult result = {};
+    result.size = sizeof(GameAssetType);
+    GameAssetType value = field->def.def_GameAssetType;
+    if(source)
+    {
+        value = ParseGameAssetType(source, value);
+    }
+    
+    switch(operation)
+    {
+        case FieldOperation_GetSize:
+        {
+        } break;
+        
+        case FieldOperation_Parse:
+        {
+            *((GameAssetType*)ptr) = value;
+        } break;
+        
+#ifndef FORG_SERVER
+        case FieldOperation_Edit:
+        {
+            GameAssetType* type = (GameAssetType*) ptr;
+            
+            b32 typeEditable = !IsFixedField(field, type, type);
+            EditGameAssetType(layout, field->name, type, typeEditable);
+        } break;
+#endif
+        
+        case FieldOperation_Dump:
+        {
+            value = *(GameAssetType*) ptr;
+            u32 packed = PackAssetType(value);
+            if(isInArray)
+            {
+                OutputToStream(output, "%d", packed);
+            }
+            else
+            {
+                u32 def = PackAssetType(field->def.def_GameAssetType);
+                if(packed != def)
+                {
+                    OutputToStream(output, "%s=%d;", field->name, packed);
+                }
+            }
+        } break;
+        InvalidDefaultCase;
+    }
+    
+    return result;
 }
 
 
@@ -317,7 +604,7 @@ internal Vec2 ParseVec2(Tokenizer* tokenizer, Vec2 defaultVal)
                 if(RequireToken(tokenizer, Token_EqualSign))
                 {
                     r32 value = Parser32(tokenizer, 0);
-                    MemberDefinition* field = FindMetaField(memberDefinitionOfVec2, ArrayCount(memberDefinitionOfVec2), t);
+                    FieldDefinition* field = FindMetaField(fieldDefinitionOfVec2, ArrayCount(fieldDefinitionOfVec2), t);
                     if(field)
                     {
                         r32* dest = (r32*) ((u8*) &result + field->offset);
@@ -339,9 +626,10 @@ internal Vec2 ParseVec2(Tokenizer* tokenizer, Vec2 defaultVal)
     return result;
 }
 
-internal u32 Vec2Operation(EditorLayout* layout, MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Stream* output, b32 isInArray)
+internal StructOperationResult Vec2Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Stream* output, b32 isInArray)
 {
-    u32 size = sizeof(Vec2);
+    StructOperationResult result = {};
+    result.size = sizeof(Vec2);
     Vec2 value = field->def.def_Vec2;
     if(tokenizer)
     {
@@ -410,7 +698,7 @@ internal u32 Vec2Operation(EditorLayout* layout, MemberDefinition* field, FieldO
         InvalidDefaultCase;
     }
     
-    return size;
+    return result;
 }
 
 
@@ -428,7 +716,7 @@ internal Vec3 ParseVec3(Tokenizer* tokenizer, Vec3 defaultVal)
                 if(RequireToken(tokenizer, Token_EqualSign))
                 {
                     r32 value = Parser32(tokenizer, 0);
-                    MemberDefinition* field = FindMetaField(memberDefinitionOfVec3, ArrayCount(memberDefinitionOfVec3), t);
+                    FieldDefinition* field = FindMetaField(fieldDefinitionOfVec3, ArrayCount(fieldDefinitionOfVec3), t);
                     if(field)
                     {
                         r32* dest = (r32*) ((u8*) &result + field->offset);
@@ -451,9 +739,10 @@ internal Vec3 ParseVec3(Tokenizer* tokenizer, Vec3 defaultVal)
 }
 
 
-internal u32 Vec3Operation(EditorLayout* layout, MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Stream* output, b32 isInArray)
+internal StructOperationResult Vec3Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Stream* output, b32 isInArray)
 {
-    u32 size = sizeof(Vec3);
+    StructOperationResult result = {};
+    result.size = sizeof(Vec3);
     Vec3 value = field->def.def_Vec3;
     if(tokenizer)
     {
@@ -532,7 +821,7 @@ internal u32 Vec3Operation(EditorLayout* layout, MemberDefinition* field, FieldO
         InvalidDefaultCase;
     }
     
-    return size;
+    return result;
 }
 
 
@@ -549,7 +838,7 @@ internal Vec4 ParseVec4(Tokenizer* tokenizer, Vec4 defaultVal)
                 if(RequireToken(tokenizer, Token_EqualSign))
                 {
                     r32 value = Parser32(tokenizer, 0);
-                    MemberDefinition* field = FindMetaField(memberDefinitionOfVec4, ArrayCount(memberDefinitionOfVec4), t);
+                    FieldDefinition* field = FindMetaField(fieldDefinitionOfVec4, ArrayCount(fieldDefinitionOfVec4), t);
                     if(field)
                     {
                         r32* dest = (r32*) ((u8*) &result + field->offset);
@@ -571,9 +860,10 @@ internal Vec4 ParseVec4(Tokenizer* tokenizer, Vec4 defaultVal)
     return result;
 }
 
-internal u32 Vec4Operation(EditorLayout* layout, MemberDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+internal StructOperationResult Vec4Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
 {
-    u32 size = sizeof(Vec4);
+    StructOperationResult result = {};
+    result.size = sizeof(Vec4);
     Vec4 value = field->def.def_Vec4;
     if(source)
     {
@@ -662,7 +952,7 @@ internal u32 Vec4Operation(EditorLayout* layout, MemberDefinition* field, FieldO
         InvalidDefaultCase;
     }
     
-    return size;
+    return result;
 }
 
 struct ReservedSpace
@@ -681,24 +971,65 @@ internal void* ReserveSpace(ReservedSpace* space, u32 size)
     return result;
 }
 
-struct StructOperationResult
+struct MetaArrayHeader
 {
-    u32 size;
-    b32 deleted;
+    u16 count;
+    u16 maxCount;
 };
 
+struct MetaArrayTrailer
+{
+    void* nextBlock;
+};
+
+internal void* InitMetaArrayBlock(void* memory, u32 elementCount, u32 filled, u32 elementSize)
+{
+    MetaArrayHeader* header = (MetaArrayHeader*) memory;
+    
+    Assert(filled <= elementCount);
+    header->count = SafeTruncateToU16(filled);
+    header->maxCount = SafeTruncateToU16(elementCount);
+    
+    void* result = (header + 1);
+    void* trailerPtr = (void*) ((u8*) result + (elementCount * elementSize));
+    MetaArrayTrailer* trailer = (MetaArrayTrailer*) trailerPtr;
+    trailer->nextBlock = 0;
+    
+    return result;
+}
+
+internal MetaArrayHeader* GetHeader(void* dataPtr)
+{
+    MetaArrayHeader* result = (MetaArrayHeader*) dataPtr - 1;
+    return result;
+}
+
+internal MetaArrayTrailer* GetTrailer(void* dataPtr, u32 elementSize)
+{
+    MetaArrayHeader* header = GetHeader(dataPtr);
+    MetaArrayTrailer* result = (MetaArrayTrailer*) ((u8*) dataPtr + header->maxCount * elementSize);
+    
+    return result;
+    
+}
 
 internal StructOperationResult StructOperation(EditorLayout* layout, String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer);
-internal u32 FieldOperation(EditorLayout* layout, MemberDefinition* field, FieldOperationType operation, void* fieldPtr, Tokenizer* tokenizer, Stream* output, ReservedSpace* reserved, u32* elementCount)
+internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* fieldPtr, Tokenizer* tokenizer, Stream* output, ReservedSpace* reserved, u16* elementCount)
 {
     u32 result = 0;
     b32 pointer = (field->flags & MetaFlag_Pointer);
-    u32 elements = 0;
+    u16 elements = 0;
     
-    if(pointer && operation == FieldOperation_Dump)
+    Assert(*elementCount);
+    u16* blockElementCount = elementCount;
+    if(pointer)
     {
-        Assert(*elementCount);
-        OutputToStream(output, "%s=", field->name);
+        MetaArrayHeader* header = GetHeader(fieldPtr);
+        blockElementCount = &header->count;
+        if(operation == FieldOperation_Dump)
+        {
+            OutputToStream(output, "%s=", field->name);
+        }
     }
     
     while(true)
@@ -710,36 +1041,24 @@ internal u32 FieldOperation(EditorLayout* layout, MemberDefinition* field, Field
             NextRaw(layout);
         }
 #endif
-        u32 fieldSize = 0;
+        
+        StructOperationResult op = {};
+        
+#define DUMB_OPERATION(type) case MetaType_##type:{op = type##Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer);} break;
         switch(field->type)
         {
-            case MetaType_u32:
-            {
-                fieldSize = U32Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer);
-            } break;
-            
-            case MetaType_r32:
-            {
-                fieldSize = R32Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer);
-            } break;
-            
-            case MetaType_Vec2:
-            {
-                fieldSize = Vec2Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer);
-            } break;
-            
-            case MetaType_Vec3:
-            {
-                fieldSize = Vec3Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer);
-            } break;
-            
-            case MetaType_Vec4:
-            {
-                fieldSize = Vec4Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer);
-            } break;
+            DUMB_OPERATION(u32);
+            DUMB_OPERATION(r32);
+            DUMB_OPERATION(Vec2);
+            DUMB_OPERATION(Vec3);
+            DUMB_OPERATION(Vec4);
+            DUMB_OPERATION(Hash64);
+            DUMB_OPERATION(GameLabel);
+            DUMB_OPERATION(GameAssetType);
             
             default:
             {
+                Assert(field->type > MetaType_FirstCustomMetaType);
                 if(pointer && operation == FieldOperation_Dump)
                 {
                     OutputToStream(output, "{");
@@ -748,22 +1067,7 @@ internal u32 FieldOperation(EditorLayout* layout, MemberDefinition* field, Field
                 String structName = {};
                 structName.ptr = field->typeName;
                 structName.length = StrLen(field->typeName);
-                StructOperationResult structOp = StructOperation(layout, structName, tokenizer, fieldPtr, operation, output, reserved, pointer);
-                
-                
-                if(structOp.deleted)
-                {
-                    Assert(*elementCount > 0);
-                    u32 grabThis = *elementCount - 1;
-                    u32 offset = field->size * grabThis - (elements - 1);
-                    void* sourcePtr = (void*) ((u8*) fieldPtr + offset);
-                    
-                    Copy(field->size, fieldPtr, sourcePtr);
-                    
-                    *elementCount = *elementCount - 1;
-                }
-                
-                fieldSize += structOp.size;
+                op = StructOperation(layout, structName, tokenizer, fieldPtr, operation, output, reserved, pointer);
                 
                 if(pointer && operation == FieldOperation_Dump)
                 {
@@ -772,11 +1076,29 @@ internal u32 FieldOperation(EditorLayout* layout, MemberDefinition* field, Field
             } break;
         }
         
+        if(op.deleted)
+        {
+            --*elementCount;
+            Assert(*blockElementCount > 0);
+            
+            u32 offset = field->size * --*blockElementCount;
+            void* targetPtr = AdvanceVoidPtrBytes(fieldPtr, offset);
+            void* destPtr = fieldPtr;
+            void* sourcePtr = AdvanceVoidPtrBytes(fieldPtr, field->size);
+            
+            while(destPtr != targetPtr)
+            {
+                Copy(field->size, destPtr, sourcePtr);
+                destPtr = sourcePtr;
+                sourcePtr = AdvanceVoidPtrBytes(sourcePtr, field->size);
+            }
+        }
+        
         if(pointer)
         {
             if(operation == FieldOperation_Dump || operation == FieldOperation_Edit)
             {
-                if(elements >= *elementCount)
+                if(elements >= *blockElementCount)
                 {
                     break;
                 }
@@ -791,7 +1113,7 @@ internal u32 FieldOperation(EditorLayout* layout, MemberDefinition* field, Field
             }
             else
             {
-                result += fieldSize;
+                result += op.size;
                 Token t = GetToken(tokenizer);
                 if(t.type == Token_Comma)
                 {
@@ -827,83 +1149,78 @@ internal u32 FieldOperation(EditorLayout* layout, MemberDefinition* field, Field
     return result;
 }
 
-internal void CopyDefaultValue(MemberDefinition* member, void* ptr)
+internal void CopyDefaultValue(FieldDefinition* field, void* ptr)
 {
-    switch(member->type)
+    if(field->flags & MetaFlag_Pointer)
     {
-        case MetaType_u8:
+        Assert(sizeof(u64) == sizeof(void*));
+        *(u64*) ptr = (u64) 0;
+    }
+    else
+    {
+#define DUMB_COPY_DEF(type) case MetaType_##type: {*(type*) ptr = field->def.def_##type;} break;
+        switch(field->type)
         {
-            *(u8*) ptr = member->def.def_u8;
-        } break;
-        
-        case MetaType_i8:
-        {
-            *(i8*) ptr = member->def.def_i8;
-        } break;
-        
-        case MetaType_u16:
-        {
-            *(u16*) ptr = member->def.def_u16;
-        } break;
-        case MetaType_i16:
-        {
-            *(i16*) ptr = member->def.def_i16;
-        } break;
-        case MetaType_u32:
-        {
-            *(u32*) ptr = member->def.def_u32;
-        } break;
-        
-        case MetaType_i32:
-        {
-            *(i32*) ptr = member->def.def_i32;
-        } break;
-        
-        case MetaType_u64:
-        {
-            *(u64*) ptr = member->def.def_u64;
-        } break;
-        case MetaType_i64:
-        {
-            *(i64*) ptr = member->def.def_i64;
-        } break;
-        
-        case MetaType_Vec2:
-        {
-            *(Vec2*) ptr = member->def.def_Vec2;
-        } break;
-        case MetaType_Vec3:
-        {
-            *(Vec3*) ptr = member->def.def_Vec3;
-        } break;
-        case MetaType_Vec4:
-        {
-            *(Vec4*) ptr = member->def.def_Vec4;
-        } break;
-        case MetaType_r32:
-        {
-            *(r32*) ptr = member->def.def_r32;
-        } break;
-        case MetaType_b32:
-        {
-            *(b32*) ptr = member->def.def_b32;
-        } break;
+            DUMB_COPY_DEF(u8);
+            DUMB_COPY_DEF(u16);
+            DUMB_COPY_DEF(u32);
+            DUMB_COPY_DEF(u64);
+            DUMB_COPY_DEF(i8);
+            DUMB_COPY_DEF(i16);
+            DUMB_COPY_DEF(i32);
+            DUMB_COPY_DEF(i64);
+            DUMB_COPY_DEF(b32);
+            DUMB_COPY_DEF(r32);
+            DUMB_COPY_DEF(Vec2);
+            DUMB_COPY_DEF(Vec3);
+            DUMB_COPY_DEF(Vec4);
+            DUMB_COPY_DEF(Hash64);
+            DUMB_COPY_DEF(ArrayCounter);
+            DUMB_COPY_DEF(GameLabel);
+            DUMB_COPY_DEF(GameAssetType);
+        }
     }
 }
 
-internal u32* GetMetaPtrElementCountForArray(StructDefinition* definition, MemberDefinition* arrayField, void* structPtr)
+internal ArrayCounter* GetMetaPtrElementCountForArray(StructDefinition* definition, FieldDefinition* arrayField, void* structPtr)
 {
-    Token counter = {};
-    char counterName[128];
-    counter.text = counterName;
-    counter.textLength =(u32) FormatString(counterName, sizeof(counterName),"%s_%s", EDITOR_COUNTER_STRING, arrayField->name);
+    ArrayCounter* result = 0;
+    for(u32 fieldIndex = 0; fieldIndex < definition->fieldCount; ++fieldIndex)
+    {
+        FieldDefinition* field = definition->fields + fieldIndex;
+        if(StrEqual(field->counterName, arrayField->name))
+        {
+            Assert(field->type == MetaType_ArrayCounter);
+            result = (ArrayCounter*) ((u8*) structPtr + field->offset);
+            break;
+        }
+    }
     
-    MemberDefinition* counterDefinition = FindMetaField(definition, counter);
-    Assert(counterDefinition->type == MetaType_u32);
-    void* counterPtr = (void*) ((u8*) structPtr + counterDefinition->offset);
-    
-    u32* result = (u32*) counterPtr;
     return result;
+}
+
+internal void InitStructDefault(StructDefinition* definition, void* dataPtr)
+{
+    for(u32 fieldIndex = 0; fieldIndex < definition->fieldCount; ++fieldIndex)
+    {
+        FieldDefinition* field = definition->fields + fieldIndex;
+        void* fieldPtr = (void*) ((u8*) dataPtr + field->offset);
+        CopyDefaultValue(field, fieldPtr);
+    }
+}
+
+internal void InitFieldDefault(FieldDefinition* field, void* dataPtr)
+{
+    String structName = Stringize(field->typeName);
+    StructDefinition* structDefinition = GetMetaStructDefinition(structName);
+    if(structDefinition)
+    {
+        InitStructDefault(structDefinition, dataPtr);
+    }
+    else
+    {
+        CopyDefaultValue(field, dataPtr);
+    }
 }
 
 internal StructOperationResult StructOperation(EditorLayout* layout, String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer = false)
@@ -914,16 +1231,7 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
     
     if(operation == FieldOperation_Parse)
     {
-        for(u32 fieldIndex = 0; fieldIndex < definition->memberCount; ++fieldIndex)
-        {
-            MemberDefinition* member = definition->members + fieldIndex;
-            
-            if(!member->flags & MetaFlag_Pointer)
-            {
-                void* fieldPtr = (void*) ((u8*) dataPtr + member->offset);
-                CopyDefaultValue(member, fieldPtr);
-            }
-        }
+        InitStructDefault(definition, dataPtr);
     }
     
     if(operation == FieldOperation_Dump || operation == FieldOperation_Edit)
@@ -951,30 +1259,80 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
 #ifndef FORG_SERVER
             Push(layout);
 #endif
-            for(u32 fieldIndex = 0; fieldIndex < definition->memberCount; ++fieldIndex)
+            for(u32 fieldIndex = 0; fieldIndex < definition->fieldCount; ++fieldIndex)
             {
-                MemberDefinition* member = definition->members + fieldIndex;
+                FieldDefinition* field = definition->fields + fieldIndex;
+                b32 pointer = (field->flags & MetaFlag_Pointer);
+                
                 // NOTE(Leonardo): we can't dump nor edit counters!
-                if(!StrEqual(StrLen(EDITOR_COUNTER_STRING), EDITOR_COUNTER_STRING, member->name))
+                if(field->type != MetaType_ArrayCounter)
                 {
-                    void* fieldPtr = (void*) ((u8*) dataPtr + member->offset);
+                    void* originalfieldPtr = (void*) ((u8*) dataPtr + field->offset);
+                    void* fieldPtr = originalfieldPtr;
                     
-                    u32 fakeElementCount = 1;
-                    u32* elementCount = &fakeElementCount;
+                    u16 fakeElementCount = 1;
+                    ArrayCounter* elementCount = &fakeElementCount;
                     b32 show = true;
                     
-                    if(member->flags & MetaFlag_Pointer)
+                    if(pointer)
                     {
-                        elementCount = GetMetaPtrElementCountForArray(definition, member, dataPtr);
-                        Assert(sizeof(u64) == sizeof(void*));
-                        fieldPtr = (void*) (*(u64*)fieldPtr);
+                        result.size += (sizeof(MetaArrayHeader) + sizeof(MetaArrayTrailer));
                         
+                        elementCount = GetMetaPtrElementCountForArray(definition, field, dataPtr);
+                        Assert(elementCount);
+                        Assert(sizeof(u64) == sizeof(void*));
+                        MetaArrayHeader* header = (MetaArrayHeader*) (*(u64*)fieldPtr);
+                        fieldPtr = (void*) (header + 1);
 #ifndef FORG_SERVER                
                         if(operation == FieldOperation_Edit)
                         {
                             NextRaw(layout);
-                            show = EditorCollapsible(layout, 0, auID(fieldPtr, "collapsible"));
-                            EditorTextDraw(layout, V4(1, 1, 1, 1), 0, "%s [%d]", member->name, *elementCount);
+                            show = EditorCollapsible(layout, 0, auID(originalfieldPtr, "collapsible"));
+                            EditorTextDraw(layout, V4(1, 1, 1, 1), 0, "%s [%d]", field->name, *elementCount);
+                            
+                            if(StandardEditorButton(layout, "add", auID(originalfieldPtr, "addButton"), V4(0, 1.0f, 1.0f, 1.0f)))
+                            {
+                                u32 newElementCount = 32;
+                                
+                                
+                                *elementCount = *elementCount + 1;
+                                if(*elementCount == 1)
+                                {
+                                    void* memory = PushSize(layout->context->pool, newElementCount * field->size + sizeof(MetaArrayHeader) + sizeof(MetaArrayTrailer));
+                                    InitMetaArrayBlock(memory, newElementCount, 0, field->size);
+                                    *(u64*)originalfieldPtr = (u64) memory;
+                                    header = (MetaArrayHeader*) memory;
+                                    fieldPtr = header + 1;
+                                }
+                                
+                                
+                                void* here = 0;
+                                MetaArrayHeader* currentHeader = header;
+                                while(!here)
+                                {
+                                    void* arrayPtr = (void*) (currentHeader + 1);
+                                    
+                                    MetaArrayTrailer* trailer = GetTrailer(arrayPtr, field->size);
+                                    if(currentHeader->count < currentHeader->maxCount)
+                                    {
+                                        here = (void*)((u8*)arrayPtr + currentHeader->count++ * field->size);
+                                    }
+                                    else
+                                    {
+                                        if(!trailer->nextBlock)
+                                        {
+                                            void* memory = PushSize(layout->context->pool, newElementCount * field->size + sizeof(MetaArrayHeader) + sizeof(MetaArrayTrailer));
+                                            InitMetaArrayBlock(memory, newElementCount, 0, field->size);
+                                            
+                                            trailer->nextBlock = memory;
+                                        }
+                                        
+                                        currentHeader = (MetaArrayHeader*) trailer->nextBlock;
+                                    }
+                                }
+                                
+                                InitFieldDefault(field, here);
+                            }
                         }
 #endif
                     }
@@ -982,14 +1340,45 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                     if(*elementCount && show)
                     {
 #ifndef FORG_SERVER
-                        if((member->flags & MetaFlag_Pointer) && operation == FieldOperation_Edit)
+                        if(pointer && operation == FieldOperation_Edit)
                         {
                             Push(layout);
                         }
 #endif
-                        result.size += FieldOperation(layout, member, operation, fieldPtr, tokenizer, output, reserved, elementCount);
+                        
+                        while(true)
+                        {
+                            b32 showBlock = true;
+                            if(pointer)
+                            {
+                                MetaArrayHeader* header = GetHeader(fieldPtr);
+                                showBlock = (header->count > 0);
+                            }
+                            
+                            if(showBlock)
+                            {
+                                result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, elementCount);
+                            }
+                            if(pointer)
+                            {
+                                MetaArrayTrailer* trailer = GetTrailer(fieldPtr, field->size);
+                                if(trailer->nextBlock)
+                                {
+                                    MetaArrayHeader* nextHeader = (MetaArrayHeader*) trailer->nextBlock;
+                                    fieldPtr = nextHeader + 1;
+                                }
+                                else
+                                {
+                                    break;
+                                }
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
 #ifndef FORG_SERVER
-                        if((member->flags & MetaFlag_Pointer) && operation == FieldOperation_Edit)
+                        if(pointer && operation == FieldOperation_Edit)
                         {
                             Pop(layout);
                         }
@@ -1025,34 +1414,51 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
             else
             {
                 Token fieldName = Stringize(t);
-                MemberDefinition* field = FindMetaField(definition, fieldName);
-                if(StrEqual(StrLen(EDITOR_COUNTER_STRING), EDITOR_COUNTER_STRING, field->name))
-                {
-                    InvalidCodePath;
-                }
+                FieldDefinition* field = FindMetaField(definition, fieldName);
+                Assert(field->type != MetaType_ArrayCounter);
                 
                 if(RequireToken(tokenizer, Token_EqualSign))
                 {
                     void* fieldPtr = (void*) ((u8*) dataPtr + field->offset);
+                    u32 additionalSize = sizeof(MetaArrayHeader) + sizeof(MetaArrayTrailer);
+                    if(field->flags & MetaFlag_Pointer)
+                    {
+                        result.size += additionalSize;
+                    }
                     
+                    b32 valid = true;
                     if(operation == FieldOperation_Parse && field->flags & MetaFlag_Pointer)
                     {
                         Tokenizer fake = {};
                         fake.at = tokenizer->at;
                         
-                        u32 elementCount;
+                        u16 elementCount;
                         FieldOperation(layout, field, FieldOperation_GetSize, fieldPtr, &fake, output, reserved, &elementCount);
-                        u32* counterPtr = GetMetaPtrElementCountForArray(definition, field, dataPtr);
+                        
+                        ArrayCounter* counterPtr = GetMetaPtrElementCountForArray(definition, field, dataPtr);
+                        Assert(counterPtr);
                         *counterPtr = elementCount;
-                        void* arrayPtr = ReserveSpace(reserved, elementCount * field->size);
                         
                         Assert(sizeof(u64) == sizeof(void*));
-                        *(u64*) fieldPtr = (u64) arrayPtr;
-                        
-                        fieldPtr = arrayPtr;
+                        if(elementCount)
+                        {
+                            void* headerPtr = ReserveSpace(reserved, elementCount * field->size + additionalSize);
+                            void* arrayPtr = InitMetaArrayBlock(headerPtr, elementCount, elementCount, field->size);
+                            
+                            *(u64*) fieldPtr = (u64) headerPtr;
+                            fieldPtr = arrayPtr;
+                        }
+                        else
+                        {
+                            *(u64*) fieldPtr = 0;
+                        }
                     }
-                    u32 ignored;
-                    result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, &ignored);
+                    
+                    if(valid)
+                    {
+                        u16 ignored = 1;
+                        result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, &ignored);
+                    }
                 }
                 else
                 {

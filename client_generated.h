@@ -131,17 +131,27 @@ char* MetaTable_ParticleUpdaterEndPosition[] =
 "DestPos",
 };
 
-MemberDefinition memberDefinitionOfGroundColorationArrayTest[] = 
+FieldDefinition fieldDefinitionOfGameAssetType[] = 
  {
-{0, MetaType_u32, "u32", "p1", (u32) (&((GroundColorationArrayTest*)0)->p1), {}, sizeof(u32)}, 
-{0, MetaType_u32, "u32", "p2", (u32) (&((GroundColorationArrayTest*)0)->p2), {}, sizeof(u32)}, 
+{0, MetaType_u16, "u16", "type", (u32) (&((GameAssetType*)0)->type), {}, sizeof(u16),"invalid",0, 0}, 
+{0, MetaType_u16, "u16", "subtype", (u32) (&((GameAssetType*)0)->subtype), {}, sizeof(u16),"invalid",0, 0}, 
 };
 
-MemberDefinition memberDefinitionOfground_coloration[] = 
+FieldDefinition fieldDefinitionOfGroundColorationArrayTest[] = 
  {
-{0, MetaType_Vec4, "Vec4", "color", (u32) (&((ground_coloration*)0)->color), {}, sizeof(Vec4)}, 
-{0, MetaType_u32, "u32", "array_counter_a1", (u32) (&((ground_coloration*)0)->array_counter_a1), {}, sizeof(u32)}, 
-{MetaFlag_Pointer, MetaType_GroundColorationArrayTest, "GroundColorationArrayTest", "a1", (u32) (&((ground_coloration*)0)->a1), {}, sizeof(GroundColorationArrayTest)}, 
+{0, MetaType_u32, "u32", "p1", (u32) (&((GroundColorationArrayTest*)0)->p1), {}, sizeof(u32),"invalid",0, 0}, 
+{0, MetaType_u32, "u32", "p2", (u32) (&((GroundColorationArrayTest*)0)->p2), {}, sizeof(u32),"invalid",0, 0}, 
+{0, MetaType_GameLabel, "GameLabel", "label", (u32) (&((GroundColorationArrayTest*)0)->label), {}, sizeof(GameLabel),"invalid",0, 0}, 
+};
+
+FieldDefinition fieldDefinitionOfground_coloration[] = 
+ {
+{0, MetaType_Vec4, "Vec4", "color", (u32) (&((ground_coloration*)0)->color), {}, sizeof(Vec4),"invalid",0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "testCounter", (u32) (&((ground_coloration*)0)->testCounter), {}, sizeof(ArrayCounter),"invalid","a1", (u32)(&((ground_coloration*)0)->a1)}, 
+{MetaFlag_Pointer, MetaType_GroundColorationArrayTest, "GroundColorationArrayTest", "a1", (u32) (&((ground_coloration*)0)->a1), {}, sizeof(GroundColorationArrayTest),"invalid",0, 0}, 
+{0, MetaType_GameAssetType, "GameAssetType", "asset", (u32) (&((ground_coloration*)0)->asset), {}, sizeof(GameAssetType),"invalid",0, 0, "type"}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "labelCount", (u32) (&((ground_coloration*)0)->labelCount), {}, sizeof(ArrayCounter),"invalid","labels", (u32)(&((ground_coloration*)0)->labels)}, 
+{MetaFlag_Pointer, MetaType_GameLabel, "GameLabel", "labels", (u32) (&((ground_coloration*)0)->labels), {}, sizeof(GameLabel),"invalid",0, 0}, 
 };
 
 char* MetaLabels_Label_Test[] = 
@@ -151,8 +161,9 @@ char* MetaLabels_Label_Test[] =
 };
 
 #define META_HANDLE_ADD_TO_DEFINITION_HASH()\
-AddToMetaDefinitions(ground_coloration, memberDefinitionOfground_coloration);\
-AddToMetaDefinitions(GroundColorationArrayTest, memberDefinitionOfGroundColorationArrayTest);
+AddToMetaDefinitions(ground_coloration, fieldDefinitionOfground_coloration);\
+AddToMetaDefinitions(GroundColorationArrayTest, fieldDefinitionOfGroundColorationArrayTest);\
+AddToMetaDefinitions(GameAssetType, fieldDefinitionOfGameAssetType);
 
 #define META_LABELS_ADD()\
 AddToMetaLabels(Label_Test, MetaLabels_Label_Test);
@@ -161,7 +172,11 @@ enum Labels
 {
 Label_Invalid,
 Label_Test,
+Label_Count,
 };
+#define META_ASSET_LABEL_STRINGS()\
+meta_labelsString[Label_Test - 1] = "Label_Test";\
+
 #define META_DEFAULT_VALUES_CPP_SUCKS()\
-memberDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;memberDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;memberDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);
+fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};
 ;

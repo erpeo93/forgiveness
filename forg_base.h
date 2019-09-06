@@ -19,6 +19,9 @@ typedef double r64;
 
 typedef i32 b32;
 
+typedef u64 Hash64;
+typedef u16 ArrayCounter;
+
 typedef size_t memory_index;
 typedef uintptr_t unm;
 typedef intptr_t snm;
@@ -156,6 +159,9 @@ union Vec4
 #define printFlags(...)
 #define printLabels(...)
 #define MetaDefault(...)
+#define MetaAutocomplete(...)
+#define MetaCounter(...)
+#define MetaFixed(...)
 
 #include <float.h>
 #include <limits.h>
@@ -201,6 +207,7 @@ struct m4x4
 #define Min(A , B) (((A) < (B)) ? (A) : (B))
 
 #define ArrayCount(array) (sizeof(array) / sizeof((array)[0]))
+#define AdvanceVoidPtrBytes(ptr, size) (void*) ((u8*) (ptr) + (size))
 
 #define AlignPow2(value, n)  (((value)  + ((n) - 1)) & ~((n) - 1))  
 #define Align16(value) AlignPow2(value, 16)

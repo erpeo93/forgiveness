@@ -3,19 +3,17 @@
 #define ASSETS_PATH "assets"
 #define LABELS_FILE_NAME "properties"
 
-struct MetaAsset
-{
-    char* name;
-    u32 value;
-};
+
+typedef PAKLabel GameLabel;
 
 struct MetaAssetType
 {
     u32 subtypeCount;
-    MetaAsset* enums;
+    char** names;
 };
 
 #define INVALID_LABEL_VALUE 0xffff
+#define INVALID_ASSET_SUBTYPE 0xffff
 struct MetaLabelList
 {
     char name[64];
@@ -172,19 +170,31 @@ struct DataFile
 };
 
 
-#define EDITOR_COUNTER_STRING "array_counter"
+introspection() struct GameAssetType
+{
+    u16 type;
+    u16 subtype;
+};
+
 introspection() struct GroundColorationArrayTest
 {
     u32 p1 MetaDefault("2");
     u32 p2 MetaDefault("3");
+    
+    GameLabel label;
 };
 
 introspection() struct ground_coloration
 {
     Vec4 color MetaDefault("V4(1, 0, 1, 1)");
     
-    u32 array_counter_a1;
+    ArrayCounter testCounter MetaCounter(a1);
     GroundColorationArrayTest* a1;
+    
+    GameAssetType asset MetaDefault("{AssetType_Font, AssetFont_debug}") MetaFixed(type);
+    
+    ArrayCounter labelCount MetaCounter(labels);
+    GameLabel* labels;
 };
 
 
@@ -326,17 +336,16 @@ inline b32 IsValid(AssetID ID)
 }
 
 
-#define GetValueFromEnum(enums, value) GetValueFromEnum_(enums, ArrayCount(enums), value)
-internal u32 GetValueFromEnum_(MetaAsset* enums, u32 enumCount, char* value)
+#define GetValueFromNames(names, value) GetValueFromNames_(names, ArrayCount(names), value)
+internal u32 GetValueFromNames_(char** names, u32 nameCount, char* value)
 {
     u32 result = 0;
-    
-    for(u32 enumIndex = 0; enumIndex < enumCount; ++enumIndex)
+    for(u32 nameIndex = 0; nameIndex < nameCount; ++nameIndex)
     {
-        MetaAsset* enumValue = enums + enumIndex;
-        if(StrEqual(value, enumValue->name))
+        char* name = names[nameIndex];
+        if(StrEqual(value, name))
         {
-            result = enumIndex;
+            result = nameIndex;
             break;
         }
     }
@@ -344,37 +353,30 @@ internal u32 GetValueFromEnum_(MetaAsset* enums, u32 enumCount, char* value)
     return result;
 }
 
-#define GetNameFromEnum(enums, value) GetNameFromEnum_(enums, ArrayCount(enums), value)
-internal char* GetNameFromEnum_(MetaAsset* enums, u32 enumCount, u32 value)
+#define GetNameFromNames(names, value) GetNameFromNames_(names, ArrayCount(names), value)
+internal char* GetNameFromNames_(char** names, u32 nameCount, u32 value)
 {
     char* result = 0;
-    
-    for(u32 enumIndex = 0; enumIndex < enumCount; ++enumIndex)
+    if(value < nameCount)
     {
-        MetaAsset* enumValue = enums + enumIndex;
-        if(enumValue->value == value)
-        {
-            result = enumValue->name;
-            break;
-        }
+        result = names[value];
     }
-    
     return result;
 }
 
-internal u32 GetMetaAssetType(char* type)
+internal u16 GetMetaAssetType(char* type)
 {
-    u32 result = GetValueFromEnum(metaAsset_assetType, type);
+    u16 result = SafeTruncateToU16(GetValueFromNames(metaAsset_assetType, type));
     
     return result;
 }
 
-internal char* GetAssetTypeName(u32 type)
+internal char* GetAssetTypeName(u16 type)
 {
     char* result = 0;
     if(type < AssetType_Count)
     {
-        result = GetNameFromEnum(metaAsset_assetType, type);
+        result = GetNameFromNames(metaAsset_assetType, type);
     }
     else
     {
@@ -384,28 +386,27 @@ internal char* GetAssetTypeName(u32 type)
     return result;
 }
 
-
-internal u32 GetMetaAssetSubtype(u32 type, char* subtype)
+internal u16 GetMetaAssetSubtype(u16 type, char* subtype)
 {
-    u32 result = 0;
+    u16 result = 0;
     
     if(type < AssetType_Count)
     {
         MetaAssetType sub = metaAsset_subTypes[type];
-        result = GetValueFromEnum_(sub.enums, sub.subtypeCount, subtype);
+        result = SafeTruncateToU16(GetValueFromNames_(sub.names, sub.subtypeCount, subtype));
     }
     
     return result;
 }
 
-internal char* GetAssetSubtypeName(u32 type, u32 subtype)
+internal char* GetAssetSubtypeName(u16 type, u16 subtype)
 {
     char* result = 0;
     
     if(type < AssetType_Count)
     {
         MetaAssetType sub = metaAsset_subTypes[type];
-        result = GetNameFromEnum_(sub.enums, sub.subtypeCount, subtype);
+        result = GetNameFromNames_(sub.names, sub.subtypeCount, subtype);
     }
     
     return result;

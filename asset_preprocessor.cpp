@@ -107,8 +107,8 @@ int main(int argc, char** argv)
     char metaSubtypesTable[2048];
     
     char* metaAssetPtr = metaAssetTable;
-    metaAssetPtr += sprintf(metaAssetPtr, "MetaAsset metaAsset_assetType[] = \n{\n");
-    metaAssetPtr += sprintf(metaAssetPtr, "{\"Invalid\", 0},\n");
+    metaAssetPtr += sprintf(metaAssetPtr, "char* metaAsset_assetType[] = \n{\n");
+    metaAssetPtr += sprintf(metaAssetPtr, "\"Invalid\", \n");
     
     
     char* metaSubtypesPtr = metaSubtypesTable;
@@ -131,7 +131,7 @@ int main(int argc, char** argv)
         
         
         
-        metaAssetPtr += sprintf(metaAssetPtr, "{\"%s\", %d},\n", folderName, folderIndex + 1);
+        metaAssetPtr += sprintf(metaAssetPtr, "\"%s\",\n", folderName);
         
         SubFolders* subFolders = allSubFolders + folderIndex;
         char subpath[128];
@@ -158,7 +158,7 @@ int main(int argc, char** argv)
         char* metaSubAssetPtr = metaSubAssetTable;
         char* folderName = folders.names[folderIndex];
         
-        metaSubAssetPtr += sprintf(metaSubAssetPtr, "MetaAsset metaAsset_%s[] = {\n", folderName);
+        metaSubAssetPtr += sprintf(metaSubAssetPtr, "char* metaAsset_%s[] = {\n", folderName);
         
         
         printf("enum Asset%sType", folderName);
@@ -171,8 +171,7 @@ int main(int argc, char** argv)
             printf("Asset%s_%s", folderName, subFolderName);
             Enum();
             
-            
-            metaSubAssetPtr += sprintf(metaSubAssetPtr, "{\"%s\", %d},\n", subFolderName, subFolderIndex);
+            metaSubAssetPtr += sprintf(metaSubAssetPtr, "\"%s\",\n", subFolderName);
         }
         
         printf("Asset%s_Count\n", folderName);

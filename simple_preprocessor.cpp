@@ -40,16 +40,25 @@ void ParseIntrospectParam( Tokenizer* tokenizer )
     }
 }
 
-char memberDefaultValues[KiloBytes(16)] = {};
-char* memberDefaultValuePtr = memberDefaultValues;
+char fieldDefaultValues[KiloBytes(16)] = {};
+char* fieldDefaultValuePtr = fieldDefaultValues;
 
-void ParseMember(Tokenizer* tokenizer, Token structToken, Token memberNameToken, u32 memberIndex)
+void ParseField(Tokenizer* tokenizer, Token structToken, Token fieldNameToken, u32 fieldIndex)
 {
     bool parsing = true;
     bool isPointer = false;
     bool nameParsed = false;
     Token defaultValue = {};
     bool hasDefault = false;
+    
+    Token optionsToken = {};
+    optionsToken.text = "invalid";
+    optionsToken.textLength = StrLen(optionsToken.text);
+    Token counterToken = optionsToken;
+    Token fixedToken = optionsToken;
+    b32 fixedFieldCount = 0;
+    
+    Token nameToken = {};
     
     while( parsing )
     {
@@ -70,19 +79,56 @@ void ParseMember(Tokenizer* tokenizer, Token structToken, Token memberNameToken,
                         hasDefault = true;
                         defaultValue = Stringize(GetToken(tokenizer));
                     }
+                    
+                    if(!RequireToken(tokenizer, Token_CloseParen))
+                    {
+                        InvalidCodePath;
+                    }
+                }
+                else if(TokenEquals(token, "MetaAutocomplete"))
+                {
+                    if(RequireToken(tokenizer, Token_OpenParen))
+                    {
+                        optionsToken = Stringize(GetToken(tokenizer));
+                    }
+                    
+                    if(!RequireToken(tokenizer, Token_CloseParen))
+                    {
+                        InvalidCodePath;
+                    }
+                }
+                else if(TokenEquals(token, "MetaCounter"))
+                {
+                    if(RequireToken(tokenizer, Token_OpenParen))
+                    {
+                        counterToken = Stringize(GetToken(tokenizer));
+                    }
+                    
+                    if(!RequireToken(tokenizer, Token_CloseParen))
+                    {
+                        InvalidCodePath;
+                    }
+                }
+                else if(TokenEquals(token, "MetaFixed"))
+                {
+                    Assert(fixedFieldCount == 0);
+                    fixedFieldCount++;
+                    
+                    if(RequireToken(tokenizer, Token_OpenParen))
+                    {
+                        fixedToken = Stringize(GetToken(tokenizer));
+                    }
+                    
+                    if(!RequireToken(tokenizer, Token_CloseParen))
+                    {
+                        InvalidCodePath;
+                    }
                 }
                 else
                 {
                     if(!nameParsed)
                     {
-                        
-                        printf("{%s, MetaType_%.*s, \"%.*s\", \"%.*s\", (u32) (&((%.*s*)0)->%.*s), {}, sizeof(%.*s)}, \n",isPointer ? "MetaFlag_Pointer" : "0", 
-                               memberNameToken.textLength, memberNameToken.text, memberNameToken.textLength, memberNameToken.text,
-                               token.textLength, token.text, 
-                               structToken.textLength, structToken.text, 
-                               token.textLength, token.text,
-                               memberNameToken.textLength, memberNameToken.text);
-                        nameParsed = true;
+                        nameToken = token;
                     }
                 }
             } break;
@@ -90,13 +136,41 @@ void ParseMember(Tokenizer* tokenizer, Token structToken, Token memberNameToken,
             case Token_SemiColon:
             {
                 parsing = false;
+                printf("{%s, MetaType_%.*s, \"%.*s\", \"%.*s\", (u32) (&((%.*s*)0)->%.*s), {}, sizeof(%.*s),\"%.*s\"",
+                       isPointer ? "MetaFlag_Pointer" : "0", 
+                       fieldNameToken.textLength, fieldNameToken.text, 
+                       fieldNameToken.textLength, fieldNameToken.text,
+                       nameToken.textLength, nameToken.text, 
+                       structToken.textLength, structToken.text, 
+                       nameToken.textLength, nameToken.text,
+                       fieldNameToken.textLength, fieldNameToken.text,
+                       optionsToken.textLength, optionsToken.text);
+                if(!TokenEquals(counterToken, "invalid"))
+                {
+                    printf(",\"%.*s\", (u32)(&((%.*s*)0)->%.*s)", 
+                           counterToken.textLength, counterToken.text,
+                           structToken.textLength, structToken.text, 
+                           counterToken.textLength, counterToken.text);
+                }
+                else
+                {
+                    printf(",0, 0");
+                }
+                
+                if(!TokenEquals(fixedToken, "invalid"))
+                {
+                    printf(", \"%.*s\"", fixedToken.textLength, fixedToken.text);
+                }
+                
+                printf("}, \n");
+                
             } break;
         }
     }
     
     if(hasDefault)
     {
-        memberDefaultValuePtr += sprintf(memberDefaultValuePtr, "memberDefinitionOf%.*s[%d].def.def_%.*s =%.*s;", structToken.textLength, structToken.text, memberIndex, memberNameToken.textLength, memberNameToken.text, defaultValue.textLength, defaultValue.text);
+        fieldDefaultValuePtr += sprintf(fieldDefaultValuePtr, "fieldDefinitionOf%.*s[%d].def.def_%.*s =%.*s;", structToken.textLength, structToken.text, fieldIndex, fieldNameToken.textLength, fieldNameToken.text, defaultValue.textLength, defaultValue.text);
     }
 }
 
@@ -111,21 +185,21 @@ void ParseStruct(Tokenizer* tokenizer)
 {
     Token nameToken = GetToken( tokenizer );
     //printf( "#ifdef INTROSPECTION\n");
-    printf( "MemberDefinition memberDefinitionOf%.*s[] = \n {\n", nameToken.textLength, nameToken.text );
+    printf( "FieldDefinition fieldDefinitionOf%.*s[] = \n {\n", nameToken.textLength, nameToken.text );
     
     if(RequireToken( tokenizer, Token_OpenBraces))
     {
-        u32 memberIndex = 0;
+        u32 fieldIndex = 0;
         for(;;)
         {
-            Token memberType = GetToken( tokenizer );
-            if( memberType.type == Token_CloseBraces )
+            Token fieldType = GetToken( tokenizer );
+            if( fieldType.type == Token_CloseBraces )
             {
                 break;
             }
             else
             {
-                ParseMember(tokenizer, nameToken, memberType, memberIndex++);
+                ParseField(tokenizer, nameToken, fieldType, fieldIndex++);
             }
         }
     }
@@ -482,7 +556,7 @@ int main( int argc, char** argv )
     printf( "#define META_HANDLE_ADD_TO_DEFINITION_HASH()\\\n" );
     for(MetaStruct* meta = firstStruct; meta; meta = meta->next)
     {
-        printf("AddToMetaDefinitions(%s, memberDefinitionOf%s);", meta->name, meta->name); 
+        printf("AddToMetaDefinitions(%s, fieldDefinitionOf%s);", meta->name, meta->name); 
         
         printf( meta->next ? "\\" : "" );
         printf( "\n" );
@@ -506,10 +580,20 @@ int main( int argc, char** argv )
         printf("%s,", meta->name); 
         printf( "\n" );
     }
+    
+    printf("Label_Count,\n");
     printf( "};\n" );
     
+    printf("#define META_ASSET_LABEL_STRINGS()\\\n");
+    for(MetaLabel* meta = firstLabelList; meta; meta = meta->next)
+    {
+        printf("meta_labelsString[%s - 1] = \"%s\";\\\n", meta->name, meta->name);
+    }
+    printf("\n");
+    
+    
     printf("#define META_DEFAULT_VALUES_CPP_SUCKS()\\\n");
-    printf(memberDefaultValues);
+    printf(fieldDefaultValues);
     printf("\n;");
     printf("\n");
 }

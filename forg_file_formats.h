@@ -20,12 +20,12 @@ struct PAKFileHeader
     u16 derivedAssetCount;
 };
 
-#define MAX_LABEL_PER_ASSET 8
 struct PAKLabel
 {
     u16 label;
     u16 value;
 };
+
 
 struct PAKBitmap
 {
@@ -122,6 +122,7 @@ struct PAKDataFile
     */
 };
 
+#define MAX_LABEL_PER_ASSET 8
 struct PAKAsset
 {
     char sourceName[32];

@@ -28,9 +28,25 @@ inline bool IsNumeric(char c)
     return result;
 }
 
-internal i32 StringToInt(char* string)
+internal i32 StringToInt32(char* string)
 {
     i32 result = atoi(string);
+    return result;
+}
+
+internal u32 StringToUInt32(char* string)
+{
+    u32 result = atoi(string);
+    return result;
+}
+
+internal u64 StringToUInt64(char* string, u32 length)
+{
+    char end__ = string[length];
+    char* end_ = &end__;
+    char** end = &end_;
+    
+    u64 result = _strtoui64(string, end, 10);
     return result;
 }
 
@@ -469,7 +485,7 @@ internal unm FormatStringList(char* destInit, unm destSize, char* format, va_lis
                     case 'u': 
                     {
                         u64 value = ReadVarArgUnsignedInteger( integerLen, argList );
-                        U64ToASCII( &temp, ( u64 ) value, 10, decChars );
+                        U64ToASCII( &temp, ( u64 ) value, 10, decChars);
                     } break;
                     
                     case 'o': 
@@ -729,8 +745,16 @@ struct Buffer
     char* ptr;
     u32 length;
 };
-
 typedef Buffer String;
+
+internal String Stringize(char* nullTerminatedString)
+{
+    String result;
+    result.ptr = nullTerminatedString;
+    result.length = StrLen(nullTerminatedString);
+    
+    return result;
+}
 
 internal unm OutputToStream(Stream* stream, char* format, ...)
 {

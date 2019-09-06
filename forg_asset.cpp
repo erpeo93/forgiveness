@@ -822,10 +822,10 @@ internal void WritebackAssetFileToFileSystem(Assets* assets, u16 type, u16 subty
             default:
             {
                 Stream file = PushStream(&tempPool, asset->dataFile.rawSize);
-                MetaAsset metaAssetType = metaAsset_assetType[type];
+                char* metaAssetType = metaAsset_assetType[type];
                 String structName = {};
-                structName.ptr = metaAssetType.name;
-                structName.length = StrLen(metaAssetType.name);
+                structName.ptr = metaAssetType;
+                structName.length = StrLen(metaAssetType);
                 
                 DumpStructToStream(structName, &file, asset->data);
                 char* filename = asset->paka.sourceName;
@@ -1045,10 +1045,10 @@ inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
     Tokenizer tokenizer = {};;
     tokenizer.at = (char*) tempBuffer.ptr;
     
-    MetaAsset assetType = metaAsset_assetType[ID.type];
+    char* assetType = metaAsset_assetType[ID.type];
     String structName = {};
-    structName.ptr = assetType.name;
-    structName.length = StrLen(assetType.name);
+    structName.ptr = assetType;
+    structName.length = StrLen(assetType);
     
     
     u32 finalSize = GetStructSize(structName, &tokenizer);
