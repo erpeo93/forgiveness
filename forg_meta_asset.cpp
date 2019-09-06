@@ -23,6 +23,21 @@ FieldDefinition* FindMetaField(StructDefinition* definition, Token fieldName)
     return result;
 }
 
+#define IsFixedField(field, ptr, name) IsFixedField_(field, #name, &ptr->name)
+internal b32 IsFixedField_(FieldDefinition* field, char* fieldName, void* fieldPtr)
+{
+    b32 result = false;
+    
+    if(field->fixedField)
+    {
+        if(StrEqual(field->fixedField, fieldName))
+        {
+            result = true;
+        }
+    }
+    return result;
+}
+
 #define AddToMetaDefinitions(name, definition) AddToMetaDefinitions_(#name, sizeof(name), ArrayCount(definition), definition)
 internal void AddToMetaDefinitions_(char* name, u32 size, u32 fieldCount, FieldDefinition* fields)
 {
@@ -168,7 +183,6 @@ char* MetaLabels_Invalid[] =
 
 internal void LoadMetaData()
 {
-    
     META_DEFAULT_VALUES_CPP_SUCKS();
     META_HANDLE_ADD_TO_DEFINITION_HASH();
     AddToMetaDefinitions(Vec2, fieldDefinitionOfVec2);
@@ -199,22 +213,7 @@ internal StructDefinition* GetMetaStructDefinition(String name)
 
 
 
-
-struct StructOperationResult
-{
-    u32 size;
-    b32 deleted;
-};
-
-enum FieldOperationType
-{
-    FieldOperation_GetSize,
-    FieldOperation_Dump,
-    FieldOperation_Edit,
-    FieldOperation_Parse,
-};
-
-internal u32 Parseu32(Tokenizer* tokenizer, u32 defaultVal)
+internal u32 Parse_u32(Tokenizer* tokenizer, u32 defaultVal)
 {
     u32 result = defaultVal;
     
@@ -225,78 +224,23 @@ internal u32 Parseu32(Tokenizer* tokenizer, u32 defaultVal)
     return result;
 }
 
-struct EditorLayout;
-internal void EditU32(EditorLayout* layout, char* name, u32* number);
-internal void EditU16(EditorLayout* layout, char* name, u16* number);
-internal void EditR32(EditorLayout* layout, char* name, r32* number);
-internal void EditVec2(EditorLayout* layout, char* name, Vec2* v);
-internal void EditVec3(EditorLayout* layout, char* name, Vec3* v);
-internal void EditVec4(EditorLayout* layout, char* name, Vec4 * v);
-internal void EditHash64(EditorLayout* layout, char* name, Hash64* h, char* optionsName);
-internal b32 EditGameLabel(EditorLayout* layout, char* name, GameLabel* label, b32 isInArray);
-internal void EditGameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable);
-internal void NextRaw(EditorLayout* layout);
-internal void Nest(EditorLayout* layout);
-internal void Push(EditorLayout* layout);
-internal void Pop(EditorLayout* layout);
-internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char* format, ...);
-internal b32 EditorCollapsible(EditorLayout* layout, char* string, AUID ID);
-internal b32 StandardEditorButton(EditorLayout* layout, char* name, AUID ID, Vec4 color);
-
-internal StructOperationResult u32Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+internal void Dump_u32(Stream* output, FieldDefinition* field, u32 value, b32 isInArray)
 {
-    StructOperationResult result = {};
-    
-    result.size = sizeof(u32);
-    u32 value = field->def.def_u32;
-    if(source)
+    if(isInArray)
     {
-        value = Parseu32(source, value);
+        OutputToStream(output, "%d", value);
     }
-    
-    switch(operation)
+    else
     {
-        case FieldOperation_GetSize:
+        if(value != field->def.def_u32)
         {
-        } break;
-        
-        case FieldOperation_Parse:
-        {
-            *((u32*)ptr) = value;
-        } break;
-        
-        case FieldOperation_Dump:
-        {
-            value = *(u32*) ptr;
-            
-            if(isInArray)
-            {
-                OutputToStream(output, "%d", value);
-            }
-            else
-            {
-                if(value != field->def.def_u32)
-                {
-                    OutputToStream(output, "%s=%d;", field->name, value);
-                }
-            }
-        } break;
-        
-#ifndef FORG_SERVER        
-        case FieldOperation_Edit:
-        {
-            EditU32(layout, field->name, (u32*) ptr);
-        } break;
-#endif
-        
-        InvalidDefaultCase;
-        
+            OutputToStream(output, "%s=%d;", field->name, value);
+        }
     }
-    
-    return result;
 }
 
-internal r32 Parser32(Tokenizer* tokenizer, r32 defaultVal)
+
+internal r32 Parse_r32(Tokenizer* tokenizer, r32 defaultVal)
 {
     r32 result = defaultVal;
     
@@ -307,59 +251,23 @@ internal r32 Parser32(Tokenizer* tokenizer, r32 defaultVal)
     return result;
 }
 
-internal StructOperationResult r32Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+internal void Dump_r32(Stream* output, FieldDefinition* field, r32 value, b32 isInArray)
 {
-    StructOperationResult result = {};
-    result.size = sizeof(r32);
-    
-    r32 value = field->def.def_r32;
-    if(source)
+    if(isInArray)
     {
-        value = Parser32(source, value);
+        OutputToStream(output, "%f", value);
     }
-    
-    switch(operation)
+    else
     {
-        case FieldOperation_GetSize:
+        if(value != field->def.def_r32)
         {
-        } break;
-        
-        case FieldOperation_Parse:
-        {
-            *((r32*)ptr) = value;
-        } break;
-        
-        case FieldOperation_Dump:
-        {
-            value = *(r32*) ptr;
-            
-            if(isInArray)
-            {
-                OutputToStream(output, "%f", value);
-            }
-            else
-            {
-                if(value != field->def.def_r32)
-                {
-                    OutputToStream(output, "%s=%f;", field->name, value);
-                }
-            }
-        } break;
-        
-#ifndef FORG_SERVER
-        case FieldOperation_Edit:
-        {
-            EditR32(layout, field->name, (r32*) ptr);
-        } break;
-#endif
-        InvalidDefaultCase;
+            OutputToStream(output, "%s=%f;", field->name, value);
+        }
     }
-    
-    return result;
 }
 
 
-internal Hash64 ParseHash64(Tokenizer* tokenizer, Hash64 defaultVal)
+internal Hash64 Parse_Hash64(Tokenizer* tokenizer, Hash64 defaultVal)
 {
     Hash64 result = defaultVal;
     
@@ -370,52 +278,19 @@ internal Hash64 ParseHash64(Tokenizer* tokenizer, Hash64 defaultVal)
     return result;
 }
 
-internal StructOperationResult Hash64Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+internal void Dump_Hash64(Stream* output, FieldDefinition* field, Hash64 value, b32 isInArray)
 {
-    StructOperationResult result = {};
-    result.size = sizeof(Hash64);
-    Hash64 value = field->def.def_Hash64;
-    if(source)
+    if(isInArray)
     {
-        value = ParseHash64(source, value);
+        OutputToStream(output, "%ul", value);
     }
-    
-    switch(operation)
+    else
     {
-        case FieldOperation_GetSize:
+        if(value != field->def.def_Hash64)
         {
-        } break;
-        
-        case FieldOperation_Parse:
-        {
-            *((Hash64*)ptr) = value;
-        } break;
-        
-        case FieldOperation_Dump:
-        {
-            value = *(Hash64*) ptr;
-            if(isInArray)
-            {
-                OutputToStream(output, "%ul", value);
-            }
-            else
-            {
-                if(value != field->def.def_Hash64)
-                {
-                    OutputToStream(output, "%s=%ul;", field->name, value);
-                }
-            }
-        } break;
-#ifndef FORG_SERVER
-        case FieldOperation_Edit:
-        {
-            EditHash64(layout, field->name, (Hash64*) ptr, field->optionsName);
-        } break;
-#endif
-        InvalidDefaultCase;
+            OutputToStream(output, "%s=%ul;", field->name, value);
+        }
     }
-    
-    return result;
 }
 
 internal u32 PackLabel(GameLabel label)
@@ -448,7 +323,7 @@ internal GameAssetType UnpackAssetType(u32 packed)
     return result;
 }
 
-internal GameLabel ParseGameLabel(Tokenizer* tokenizer, GameLabel defaultVal)
+internal GameLabel Parse_GameLabel(Tokenizer* tokenizer, GameLabel defaultVal)
 {
     GameLabel result = defaultVal;
     
@@ -459,57 +334,24 @@ internal GameLabel ParseGameLabel(Tokenizer* tokenizer, GameLabel defaultVal)
     return result;
 }
 
-internal StructOperationResult GameLabelOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+internal void Dump_GameLabel(Stream* output, FieldDefinition* field, GameLabel value, b32 isInArray)
 {
-    StructOperationResult result = {};
-    result.size = sizeof(GameLabel);
-    GameLabel value = field->def.def_GameLabel;
-    if(source)
+    u32 packed = PackLabel(value);
+    if(isInArray)
     {
-        value = ParseGameLabel(source, value);
+        OutputToStream(output, "%d", packed);
     }
-    switch(operation)
+    else
     {
-        case FieldOperation_GetSize:
+        u32 def = PackLabel(field->def.def_GameLabel);
+        if(packed != def)
         {
-        } break;
-        
-        case FieldOperation_Parse:
-        {
-            *((GameLabel*)ptr) = value;
-        } break;
-        
-#ifndef FORG_SERVER
-        case FieldOperation_Edit:
-        {
-            result.deleted = EditGameLabel(layout, field->name, (GameLabel*) ptr, isInArray);
-        } break;
-#endif
-        
-        case FieldOperation_Dump:
-        {
-            value = *(GameLabel*) ptr;
-            u32 packed = PackLabel(value);
-            if(isInArray)
-            {
-                OutputToStream(output, "%d", packed);
-            }
-            else
-            {
-                u32 def = PackLabel(field->def.def_GameLabel);
-                if(packed != def)
-                {
-                    OutputToStream(output, "%s=%d;", field->name, packed);
-                }
-            }
-        } break;
-        InvalidDefaultCase;
+            OutputToStream(output, "%s=%d;", field->name, packed);
+        }
     }
-    
-    return result;
 }
 
-internal GameAssetType ParseGameAssetType(Tokenizer* tokenizer, GameAssetType defaultVal)
+internal GameAssetType Parse_GameAssetType(Tokenizer* tokenizer, GameAssetType defaultVal)
 {
     GameAssetType result = defaultVal;
     
@@ -520,69 +362,293 @@ internal GameAssetType ParseGameAssetType(Tokenizer* tokenizer, GameAssetType de
     return result;
 }
 
-
-#define IsFixedField(field, ptr, name) IsFixedField_(field, #name, &ptr->name)
-internal b32 IsFixedField_(FieldDefinition* field, char* fieldName, void* fieldPtr)
+internal void Dump_GameAssetType(Stream* output, FieldDefinition* field, GameAssetType value, b32 isInArray)
 {
-    b32 result = false;
-    
-    if(field->fixedField)
+    u32 packed = PackAssetType(value);
+    if(isInArray)
     {
-        if(StrEqual(field->fixedField, fieldName))
+        OutputToStream(output, "%d", packed);
+    }
+    else
+    {
+        u32 def = PackAssetType(field->def.def_GameAssetType);
+        if(packed != def)
         {
-            result = true;
+            OutputToStream(output, "%s=%d;", field->name, packed);
         }
     }
+}
+
+
+internal void ParseVectorMembers(Tokenizer* tokenizer, FieldDefinition* fields, u32 fieldCount, void* ptr)
+{
+    while(true)
+    {
+        Token t = GetToken(tokenizer);
+        if(t.type == Token_Identifier)
+        {
+            if(RequireToken(tokenizer, Token_EqualSign))
+            {
+                r32 value = Parse_r32(tokenizer, 0);
+                FieldDefinition* field = FindMetaField(fields, fieldCount, t);
+                if(field)
+                {
+                    r32* dest = (r32*) ((u8*) ptr + field->offset);
+                    *dest = value;
+                }
+            }
+        }
+        else if(t.type == Token_CloseBraces)
+        {
+            break;
+        }
+    }
+}
+
+internal Vec2 Parse_Vec2(Tokenizer* tokenizer, Vec2 defaultVal)
+{
+    Vec2 result = defaultVal;
+    if(RequireToken(tokenizer, Token_OpenBraces))
+    {
+        FieldDefinition* fields = fieldDefinitionOfVec2;
+        u32 count = ArrayCount(fieldDefinitionOfVec2);
+        
+        ParseVectorMembers(tokenizer, fields, count, &result);
+    }
+    else
+    {
+        InvalidCodePath;
+    }
+    
+    return result;
+}
+
+
+#define OUTPUT_VECTOR_ELEMENT(v, el) if(value.el != field->def.def_##v.el) {OutputToStream(output, "%s=%f;", #el, value.el);}
+
+internal void Dump_Vec2(Stream* output, FieldDefinition* field, Vec2 value, b32 isInArray)
+{
+    if(isInArray)
+    {
+        OutputToStream(output, "{");
+        OUTPUT_VECTOR_ELEMENT(Vec2, x);
+        OUTPUT_VECTOR_ELEMENT(Vec2, y);
+        OutputToStream(output, "}");
+    }
+    else
+    {
+        if(value != field->def.def_Vec2)
+        {
+            OutputToStream(output, "{", field->name);
+            OUTPUT_VECTOR_ELEMENT(Vec2, x);
+            OUTPUT_VECTOR_ELEMENT(Vec2, y);
+            OutputToStream(output, "};");
+        }
+    }
+}
+
+internal Vec3 Parse_Vec3(Tokenizer* tokenizer, Vec3 defaultVal)
+{
+    Vec3 result = defaultVal;
+    if(RequireToken(tokenizer, Token_OpenBraces))
+    {
+        ParseVectorMembers(tokenizer, fieldDefinitionOfVec3, ArrayCount(fieldDefinitionOfVec3), &result);
+    }
+    else
+    {
+        InvalidCodePath;
+    }
+    
+    return result;
+}
+
+internal void Dump_Vec3(Stream* output, FieldDefinition* field, Vec3 value, b32 isInArray)
+{
+    if(isInArray)
+    {
+        OutputToStream(output, "{");
+        OUTPUT_VECTOR_ELEMENT(Vec3, x);
+        OUTPUT_VECTOR_ELEMENT(Vec3, y);
+        OUTPUT_VECTOR_ELEMENT(Vec3, z);
+        OutputToStream(output, "}");
+    }
+    else
+    {
+        if(value != field->def.def_Vec3)
+        {
+            OutputToStream(output, "%s={", field->name);
+            OUTPUT_VECTOR_ELEMENT(Vec3, x);
+            OUTPUT_VECTOR_ELEMENT(Vec3, y);
+            OUTPUT_VECTOR_ELEMENT(Vec3, z);
+            OutputToStream(output, "};");
+        }
+    }
+}
+
+internal Vec4 Parse_Vec4(Tokenizer* tokenizer, Vec4 defaultVal)
+{
+    Vec4 result = defaultVal;
+    if(RequireToken(tokenizer, Token_OpenBraces))
+    {
+        ParseVectorMembers(tokenizer, fieldDefinitionOfVec4, ArrayCount(fieldDefinitionOfVec4), &result);
+    }
+    else
+    {
+        InvalidCodePath;
+    }
+    
+    return result;
+}
+
+internal void Dump_Vec4(Stream* output, FieldDefinition* field, Vec4 value, b32 isInArray)
+{
+    if(isInArray)
+    {
+        OutputToStream(output, "{");
+        if(value != field->def.def_Vec4)
+        {
+            OUTPUT_VECTOR_ELEMENT(Vec4, x);
+            OUTPUT_VECTOR_ELEMENT(Vec4, y);
+            OUTPUT_VECTOR_ELEMENT(Vec4, z);
+            OUTPUT_VECTOR_ELEMENT(Vec4, w);
+        }
+        OutputToStream(output, "}");
+    }
+    else
+    {
+        if(value != field->def.def_Vec4)
+        {
+            OutputToStream(output, "%s={", field->name);
+            OUTPUT_VECTOR_ELEMENT(Vec4, x);
+            OUTPUT_VECTOR_ELEMENT(Vec4, y);
+            OUTPUT_VECTOR_ELEMENT(Vec4, z);
+            OUTPUT_VECTOR_ELEMENT(Vec4, w);
+            OutputToStream(output, "};");
+        }
+    }
+}
+
+
+
+struct StructOperationResult
+{
+    u32 size;
+    b32 deleted;
+};
+
+enum FieldOperationType
+{
+    FieldOperation_GetSize,
+    FieldOperation_Dump,
+    FieldOperation_Edit,
+    FieldOperation_Parse,
+};
+
+struct EditorLayout;
+internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArray);
+internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArray);
+internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray);
+internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray);
+internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray);
+internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray);
+internal b32 Edit_Hash64(EditorLayout* layout, char* name, Hash64* h, char* optionsName, b32 isInArray);
+internal b32 Edit_GameLabel(EditorLayout* layout, char* name, GameLabel* label, b32 isInArray);
+internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray);
+internal void NextRaw(EditorLayout* layout);
+internal void Nest(EditorLayout* layout);
+internal void Push(EditorLayout* layout);
+internal void Pop(EditorLayout* layout);
+internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char* format, ...);
+internal b32 EditorCollapsible(EditorLayout* layout, char* string, AUID ID);
+internal b32 StandardEditorButton(EditorLayout* layout, char* name, AUID ID, Vec4 color);
+
+#define DUMB_OPERATION_BOILERPLATE_(type)\
+case FieldOperation_GetSize:{} break;\
+case FieldOperation_Parse:{*((type*)ptr) = value;} break;
+
+#ifdef FORG_SERVER
+#define DUMB_OPERATION_BOILERPLATE(type) DUMB_OPERATION_BOILERPLATE_(type)
+#else
+#define DUMB_OPERATION_BOILERPLATE(type)\
+DUMB_OPERATION_BOILERPLATE_(type)\
+case FieldOperation_Edit:{result.deleted = Edit_##type(layout, field->name, (type*) ptr, isInArray);} break;
+#endif
+
+#define DUMB_INIT_BOILERPLATE(type)\
+result.size = sizeof(type);\
+type value = field->def.def_##type;\
+if(source){value = Parse_##type(source, value);}
+
+#define STANDARD_OPERATION_FUNCTION(type)\
+internal StructOperationResult type##Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)\
+{\
+    StructOperationResult result = {};\
+    DUMB_INIT_BOILERPLATE(type);\
+    switch(operation)\
+    {\
+        DUMB_OPERATION_BOILERPLATE(type);\
+        case FieldOperation_Dump:\
+        {\
+            value = *(type*) ptr;\
+            Dump_##type(output, field, value, isInArray);\
+        } break;\
+        InvalidDefaultCase;\
+    }\
+    return result;\
+}
+
+STANDARD_OPERATION_FUNCTION(u32);
+STANDARD_OPERATION_FUNCTION(r32);
+STANDARD_OPERATION_FUNCTION(GameLabel);
+STANDARD_OPERATION_FUNCTION(Vec2);
+STANDARD_OPERATION_FUNCTION(Vec3);
+STANDARD_OPERATION_FUNCTION(Vec4);
+
+internal StructOperationResult Hash64Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+{
+    StructOperationResult result = {};
+    DUMB_INIT_BOILERPLATE(Hash64);
+    switch(operation)
+    {
+        DUMB_OPERATION_BOILERPLATE_(Hash64);
+#ifndef FORG_SERVER
+        case FieldOperation_Edit:
+        {
+            Edit_Hash64(layout, field->name, (Hash64*) ptr, field->optionsName, isInArray);
+        } break;
+#endif
+        case FieldOperation_Dump:
+        {
+            value = *(Hash64*) ptr;
+            Dump_Hash64(output, field, value, isInArray);
+        } break;
+        
+        InvalidDefaultCase;
+    }
+    
     return result;
 }
 
 internal StructOperationResult GameAssetTypeOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
 {
     StructOperationResult result = {};
-    result.size = sizeof(GameAssetType);
-    GameAssetType value = field->def.def_GameAssetType;
-    if(source)
-    {
-        value = ParseGameAssetType(source, value);
-    }
-    
+    DUMB_INIT_BOILERPLATE(GameAssetType);
     switch(operation)
     {
-        case FieldOperation_GetSize:
-        {
-        } break;
-        
-        case FieldOperation_Parse:
-        {
-            *((GameAssetType*)ptr) = value;
-        } break;
-        
+        DUMB_OPERATION_BOILERPLATE_(GameAssetType);
 #ifndef FORG_SERVER
         case FieldOperation_Edit:
         {
             GameAssetType* type = (GameAssetType*) ptr;
-            
             b32 typeEditable = !IsFixedField(field, type, type);
-            EditGameAssetType(layout, field->name, type, typeEditable);
+            Edit_GameAssetType(layout, field->name, type, typeEditable, isInArray);
         } break;
 #endif
         
         case FieldOperation_Dump:
         {
             value = *(GameAssetType*) ptr;
-            u32 packed = PackAssetType(value);
-            if(isInArray)
-            {
-                OutputToStream(output, "%d", packed);
-            }
-            else
-            {
-                u32 def = PackAssetType(field->def.def_GameAssetType);
-                if(packed != def)
-                {
-                    OutputToStream(output, "%s=%d;", field->name, packed);
-                }
-            }
+            Dump_GameAssetType(output, field, value, isInArray);
         } break;
         InvalidDefaultCase;
     }
@@ -591,369 +657,7 @@ internal StructOperationResult GameAssetTypeOperation(EditorLayout* layout, Fiel
 }
 
 
-internal Vec2 ParseVec2(Tokenizer* tokenizer, Vec2 defaultVal)
-{
-    Vec2 result = defaultVal;
-    if(RequireToken(tokenizer, Token_OpenBraces))
-    {
-        while(true)
-        {
-            Token t = GetToken(tokenizer);
-            if(t.type == Token_Identifier)
-            {
-                if(RequireToken(tokenizer, Token_EqualSign))
-                {
-                    r32 value = Parser32(tokenizer, 0);
-                    FieldDefinition* field = FindMetaField(fieldDefinitionOfVec2, ArrayCount(fieldDefinitionOfVec2), t);
-                    if(field)
-                    {
-                        r32* dest = (r32*) ((u8*) &result + field->offset);
-                        *dest = value;
-                    }
-                }
-            }
-            else if(t.type == Token_CloseBraces)
-            {
-                break;
-            }
-        }
-    }
-    else
-    {
-        InvalidCodePath;
-    }
-    
-    return result;
-}
 
-internal StructOperationResult Vec2Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Stream* output, b32 isInArray)
-{
-    StructOperationResult result = {};
-    result.size = sizeof(Vec2);
-    Vec2 value = field->def.def_Vec2;
-    if(tokenizer)
-    {
-        value = ParseVec2(tokenizer, value);
-    }
-    
-    switch(operation)
-    {
-        case FieldOperation_GetSize:
-        {
-        } break;
-        
-        case FieldOperation_Parse:
-        {
-            *((Vec2*)ptr) = value;
-        } break;
-        
-        case FieldOperation_Dump:
-        {
-            value = *(Vec2*) ptr;
-            
-            
-            if(isInArray)
-            {
-                OutputToStream(output, "{");
-                if(value != field->def.def_Vec2)
-                {
-                    if(value.x != field->def.def_Vec2.x)
-                    {
-                        OutputToStream(output, "x=%f;", value.x);
-                    }
-                    
-                    if(value.y != field->def.def_Vec2.y)
-                    {
-                        OutputToStream(output, "y=%f;", value.y);
-                    }
-                }
-                OutputToStream(output, "}");
-            }
-            else
-            {
-                if(value != field->def.def_Vec2)
-                {
-                    OutputToStream(output, "%s={", field->name);
-                    if(value.x != field->def.def_Vec2.x)
-                    {
-                        OutputToStream(output, "x=%f;", value.x);
-                    }
-                    
-                    if(value.y != field->def.def_Vec2.y)
-                    {
-                        OutputToStream(output, "y=%f;", value.y);
-                    }
-                    OutputToStream(output, "};");
-                }
-            }
-        } break;
-        
-#ifndef FORG_SERVER
-        case FieldOperation_Edit:
-        {
-            EditVec2(layout, field->name, (Vec2*) ptr);
-        } break;
-#endif
-        
-        InvalidDefaultCase;
-    }
-    
-    return result;
-}
-
-
-
-internal Vec3 ParseVec3(Tokenizer* tokenizer, Vec3 defaultVal)
-{
-    Vec3 result = defaultVal;
-    if(RequireToken(tokenizer, Token_OpenBraces))
-    {
-        while(true)
-        {
-            Token t = GetToken(tokenizer);
-            if(t.type == Token_Identifier)
-            {
-                if(RequireToken(tokenizer, Token_EqualSign))
-                {
-                    r32 value = Parser32(tokenizer, 0);
-                    FieldDefinition* field = FindMetaField(fieldDefinitionOfVec3, ArrayCount(fieldDefinitionOfVec3), t);
-                    if(field)
-                    {
-                        r32* dest = (r32*) ((u8*) &result + field->offset);
-                        *dest = value;
-                    }
-                }
-            }
-            else if(t.type == Token_CloseBraces)
-            {
-                break;
-            }
-        }
-    }
-    else
-    {
-        InvalidCodePath;
-    }
-    
-    return result;
-}
-
-
-internal StructOperationResult Vec3Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* tokenizer, Stream* output, b32 isInArray)
-{
-    StructOperationResult result = {};
-    result.size = sizeof(Vec3);
-    Vec3 value = field->def.def_Vec3;
-    if(tokenizer)
-    {
-        value = ParseVec3(tokenizer, value);
-    }
-    
-    switch(operation)
-    {
-        case FieldOperation_GetSize:
-        {
-        } break;
-        
-        case FieldOperation_Parse:
-        {
-            *((Vec3*)ptr) = value;
-        } break;
-        
-        case FieldOperation_Dump:
-        {
-            value = *(Vec3*) ptr;
-            
-            if(isInArray)
-            {
-                OutputToStream(output, "{");
-                if(value != field->def.def_Vec3)
-                {
-                    if(value.x != field->def.def_Vec3.x)
-                    {
-                        OutputToStream(output, "x=%f;", value.x);
-                    }
-                    
-                    if(value.y != field->def.def_Vec3.y)
-                    {
-                        OutputToStream(output, "y=%f;", value.y);
-                    }
-                    
-                    if(value.z != field->def.def_Vec3.z)
-                    {
-                        OutputToStream(output, "z=%f;", value.z);
-                    }
-                }
-                OutputToStream(output, "}");
-            }
-            else
-            {
-                if(value != field->def.def_Vec3)
-                {
-                    OutputToStream(output, "%s={", field->name);
-                    
-                    if(value.x != field->def.def_Vec3.x)
-                    {
-                        OutputToStream(output, "x=%f;", value.x);
-                    }
-                    
-                    if(value.y != field->def.def_Vec3.y)
-                    {
-                        OutputToStream(output, "y=%f;", value.y);
-                    }
-                    
-                    if(value.z != field->def.def_Vec3.z)
-                    {
-                        OutputToStream(output, "z=%f;", value.z);
-                    }
-                    OutputToStream(output, "};");
-                }
-            }
-        } break;
-        
-#ifndef FORG_SERVER
-        case FieldOperation_Edit:
-        {
-            EditVec3(layout, field->name, (Vec3*) ptr);
-        } break;
-#endif
-        
-        InvalidDefaultCase;
-    }
-    
-    return result;
-}
-
-
-internal Vec4 ParseVec4(Tokenizer* tokenizer, Vec4 defaultVal)
-{
-    Vec4 result = defaultVal;
-    if(RequireToken(tokenizer, Token_OpenBraces))
-    {
-        while(true)
-        {
-            Token t = GetToken(tokenizer);
-            if(t.type == Token_Identifier)
-            {
-                if(RequireToken(tokenizer, Token_EqualSign))
-                {
-                    r32 value = Parser32(tokenizer, 0);
-                    FieldDefinition* field = FindMetaField(fieldDefinitionOfVec4, ArrayCount(fieldDefinitionOfVec4), t);
-                    if(field)
-                    {
-                        r32* dest = (r32*) ((u8*) &result + field->offset);
-                        *dest = value;
-                    }
-                }
-            }
-            else if(t.type == Token_CloseBraces)
-            {
-                break;
-            }
-        }
-    }
-    else
-    {
-        InvalidCodePath;
-    }
-    
-    return result;
-}
-
-internal StructOperationResult Vec4Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
-{
-    StructOperationResult result = {};
-    result.size = sizeof(Vec4);
-    Vec4 value = field->def.def_Vec4;
-    if(source)
-    {
-        value = ParseVec4(source, value);
-    }
-    
-    switch(operation)
-    {
-        case FieldOperation_GetSize:
-        {
-        } break;
-        
-        case FieldOperation_Parse:
-        {
-            *((Vec4*)ptr) = value;
-        } break;
-        
-        case FieldOperation_Dump:
-        {
-            value = *(Vec4*) ptr;
-            
-            
-            if(isInArray)
-            {
-                OutputToStream(output, "{");
-                if(value != field->def.def_Vec4)
-                {
-                    if(value.x != field->def.def_Vec4.x)
-                    {
-                        OutputToStream(output, "x=%f;", value.x);
-                    }
-                    
-                    if(value.y != field->def.def_Vec4.y)
-                    {
-                        OutputToStream(output, "y=%f;", value.y);
-                    }
-                    
-                    if(value.z != field->def.def_Vec4.z)
-                    {
-                        OutputToStream(output, "z=%f;", value.z);
-                    }
-                    if(value.w != field->def.def_Vec4.w)
-                    {
-                        OutputToStream(output, "w=%f;", value.w);
-                    }
-                }
-                OutputToStream(output, "}");
-            }
-            else
-            {
-                if(value != field->def.def_Vec4)
-                {
-                    OutputToStream(output, "%s={", field->name);
-                    
-                    if(value.x != field->def.def_Vec4.x)
-                    {
-                        OutputToStream(output, "x=%f;", value.x);
-                    }
-                    
-                    if(value.y != field->def.def_Vec4.y)
-                    {
-                        OutputToStream(output, "y=%f;", value.y);
-                    }
-                    
-                    if(value.z != field->def.def_Vec4.z)
-                    {
-                        OutputToStream(output, "z=%f;", value.z);
-                    }
-                    
-                    if(value.w != field->def.def_Vec4.w)
-                    {
-                        OutputToStream(output, "w=%f;", value.w);
-                    }
-                    OutputToStream(output, "};");
-                }
-            }
-        } break;
-        
-#ifndef FORG_SERVER
-        case FieldOperation_Edit:
-        {
-            EditVec4(layout, field->name, (Vec4*) ptr);
-        } break;
-#endif
-        
-        InvalidDefaultCase;
-    }
-    
-    return result;
-}
 
 struct ReservedSpace
 {
@@ -1178,6 +882,8 @@ internal void CopyDefaultValue(FieldDefinition* field, void* ptr)
             DUMB_COPY_DEF(ArrayCounter);
             DUMB_COPY_DEF(GameLabel);
             DUMB_COPY_DEF(GameAssetType);
+            
+            InvalidDefaultCase;
         }
     }
 }

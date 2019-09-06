@@ -290,28 +290,38 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, StringAr
 }
 
 
-internal void EditU32(EditorLayout* layout, char* name, u32* number)
+internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArray)
 {
+    b32 result = false;
+    
     AUID ID = auID(number);
     
     Vec4 color = V4(1, 0, 0, 1);
     
     ShowName(layout, name);
     ShowStandard(layout, color, "%d", *number);
+    
+    return result;
 }
 
-internal void EditU16(EditorLayout* layout, char* name, u16* number)
+internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArray)
 {
+    b32 result = false;
+    
     AUID ID = auID(number);
     
     Vec4 color = V4(1, 0, 0, 1);
     ShowName(layout, name);
     ShowStandard(layout, color, "%d", *number);
+    
+    return result;
 }
 
 
-internal void EditR32(EditorLayout* layout, char* name, r32* number)
+internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray)
 {
+    b32 result = false;
+    
     AUID ID = auID(number);
     AUIDData* data = GetAUIDData(layout->context, ID);
     
@@ -349,45 +359,63 @@ internal void EditR32(EditorLayout* layout, char* name, r32* number)
     ShowName(layout, name);
     Rect2 elementRect = ShowStandard(layout, color, "%f", *number);
     data->dim = elementRect;
+    
+    return result;
 }
 
-internal void EditVec2(EditorLayout* layout, char* name, Vec2* v)
+internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray)
 {
+    b32 result = false;
+    
     AUID ID = auID(v);
     
     ShowName(layout, name);
-    EditR32(layout, "x", &v->x);
-    EditR32(layout, "y", &v->y);
+    Edit_r32(layout, "x", &v->x, false);
+    Edit_r32(layout, "y", &v->y, false);
+    
+    return result;
 }
 
-internal void EditVec3(EditorLayout* layout, char* name, Vec3* v)
+internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray)
 {
+    b32 result = false;
+    
     AUID ID = auID(v);
     
     ShowName(layout, name);
-    EditR32(layout, "x", &v->x);
-    EditR32(layout, "y", &v->y);
-    EditR32(layout, "z", &v->z);
+    Edit_r32(layout, "x", &v->x, false);
+    Edit_r32(layout, "y", &v->y, false);
+    Edit_r32(layout, "z", &v->z, false);
+    
+    return result;
 }
 
-internal void EditVec4(EditorLayout* layout, char* name, Vec4 * v)
+internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray)
 {
+    b32 result = false;
+    
     AUID ID = auID(v);
     
     ShowName(layout, name);
-    EditR32(layout, "x", &v->x);
-    EditR32(layout, "y", &v->y);
-    EditR32(layout, "z", &v->z);
-    EditR32(layout, "w", &v->w);
+    Edit_r32(layout, "x", &v->x, false);
+    Edit_r32(layout, "y", &v->y, false);
+    Edit_r32(layout, "z", &v->z, false);
+    Edit_r32(layout, "w", &v->w, false);
+    
+    return result;
 }
 
-internal void EditHash64(EditorLayout* layout, char* name, Hash64* hash, char* optionsName)
+internal b32 Edit_Hash64(EditorLayout* layout, char* name, Hash64* hash, char* optionsName, b32 isInArray)
 {
+    b32 result = false;
     ShowString(layout, "autocomplete", optionsName, EditorText_StartingSpace);
+    return result;
 }
 
-internal void EditGameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable)
+internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray)
 {
+    b32 result = false;
+    
     ShowNameNoColon(layout, name);
     char output[64];
     
@@ -431,9 +459,11 @@ internal void EditGameAssetType(EditorLayout* layout, char* name, GameAssetType*
             type->subtype = newSubtype;
         }
     }
+    
+    return result;
 }
 
-internal b32 EditGameLabel(EditorLayout* layout, char* name, GameLabel* label, b32 isInArray)
+internal b32 Edit_GameLabel(EditorLayout* layout, char* name, GameLabel* label, b32 isInArray)
 {
     b32 result = false;
     
@@ -690,7 +720,7 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
             {
                 PAKLabel* label = info->labels + labelIndex;
                 NextRaw(layout);
-                EditGameLabel(layout, 0, label, false);
+                Edit_GameLabel(layout, 0, label, false);
             }
             Pop(layout);
         }
