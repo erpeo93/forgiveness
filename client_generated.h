@@ -92,16 +92,6 @@ MetaFlag MetaFlags_EditorRole[] =
 {"3DModeller", (1 << 8)},
 };
 
-char* MetaTable_ForgDayPhase[] = 
- {
-"Day",
-"Sunrise",
-"Morning",
-"Sunset",
-"Dusk",
-"Night",
-};
-
 char* MetaTable_AnimationEffectType[] = 
  {
 "None",
@@ -141,7 +131,7 @@ FieldDefinition fieldDefinitionOfGroundColorationArrayTest[] =
  {
 {0, MetaType_u32, "u32", "p1", (u32) (&((GroundColorationArrayTest*)0)->p1), {}, sizeof(u32),"invalid",0, 0}, 
 {0, MetaType_u32, "u32", "p2", (u32) (&((GroundColorationArrayTest*)0)->p2), {}, sizeof(u32),"invalid",0, 0}, 
-{0, MetaType_GameLabel, "GameLabel", "label", (u32) (&((GroundColorationArrayTest*)0)->label), {}, sizeof(GameLabel),"invalid",0, 0}, 
+{0, MetaType_GameProperty, "GameProperty", "property", (u32) (&((GroundColorationArrayTest*)0)->property), {}, sizeof(GameProperty),"invalid",0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfground_coloration[] = 
@@ -150,14 +140,20 @@ FieldDefinition fieldDefinitionOfground_coloration[] =
 {0, MetaType_ArrayCounter, "ArrayCounter", "testCounter", (u32) (&((ground_coloration*)0)->testCounter), {}, sizeof(ArrayCounter),"invalid","a1", (u32)(&((ground_coloration*)0)->a1)}, 
 {MetaFlag_Pointer, MetaType_GroundColorationArrayTest, "GroundColorationArrayTest", "a1", (u32) (&((ground_coloration*)0)->a1), {}, sizeof(GroundColorationArrayTest),"invalid",0, 0}, 
 {0, MetaType_GameAssetType, "GameAssetType", "asset", (u32) (&((ground_coloration*)0)->asset), {}, sizeof(GameAssetType),"invalid",0, 0, "type"}, 
-{0, MetaType_ArrayCounter, "ArrayCounter", "labelCount", (u32) (&((ground_coloration*)0)->labelCount), {}, sizeof(ArrayCounter),"invalid","labels", (u32)(&((ground_coloration*)0)->labels)}, 
-{MetaFlag_Pointer, MetaType_GameLabel, "GameLabel", "labels", (u32) (&((ground_coloration*)0)->labels), {}, sizeof(GameLabel),"invalid",0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "propertyCount", (u32) (&((ground_coloration*)0)->propertyCount), {}, sizeof(ArrayCounter),"invalid","properties", (u32)(&((ground_coloration*)0)->properties)}, 
+{MetaFlag_Pointer, MetaType_GameProperty, "GameProperty", "properties", (u32) (&((ground_coloration*)0)->properties), {}, sizeof(GameProperty),"invalid",0, 0}, 
 };
 
-char* MetaLabels_Label_Test[] = 
+char* MetaProperties_Test[] = 
  {
 "Value0",
 "Value1",
+};
+
+char* MetaProperties_test2[] = 
+ {
+"bla",
+"damaged",
 };
 
 #define META_HANDLE_ADD_TO_DEFINITION_HASH()\
@@ -165,17 +161,20 @@ AddToMetaDefinitions(ground_coloration, fieldDefinitionOfground_coloration);\
 AddToMetaDefinitions(GroundColorationArrayTest, fieldDefinitionOfGroundColorationArrayTest);\
 AddToMetaDefinitions(GameAssetType, fieldDefinitionOfGameAssetType);
 
-#define META_LABELS_ADD()\
-AddToMetaLabels(Label_Test, MetaLabels_Label_Test);
+#define META_PROPERTIES_ADD()\
+AddToMetaProperties(test2, MetaProperties_test2);\
+AddToMetaProperties(Test, MetaProperties_Test);
 
-enum Labels
+enum Propertys
 {
-Label_Invalid,
-Label_Test,
-Label_Count,
+Property_Invalid,
+Property_test2,
+Property_Test,
+Property_Count,
 };
-#define META_ASSET_LABEL_STRINGS()\
-meta_labelsString[Label_Test - 1] = "Label_Test";\
+#define META_ASSET_PROPERTIES_STRINGS()\
+meta_propertiesString[Property_test2 - 1] = "test2";\
+meta_propertiesString[Property_Test - 1] = "Test";\
 
 #define META_DEFAULT_VALUES_CPP_SUCKS()\
 fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};

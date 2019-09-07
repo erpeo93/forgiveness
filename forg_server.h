@@ -11,7 +11,9 @@
 #include "forg_intrinsics.h"
 #include "forg_math.h"
 #include "forg_file_formats.h"
-#include "asset_labels.h"
+
+#define Property(name) enum Property_##name
+#include "../properties/test.properties"
 #include "forg_asset.h"
 #include "forg_editor.h"
 #include "forg_animation.h"
@@ -42,25 +44,12 @@ struct PlayerRequest
     u8 data[512];
 };
 
-struct ForgFile
-{
-    char filename[64];
-    u64 hash;
-    
-    union
-    {
-        ForgFile* next;
-        ForgFile* nextFree;
-    };
-};
-
 struct Player
 {
     b32 connectionClosed;
     u16 connectionSlot;
     
     b32 allPakFileSent;
-    b32 allDataFileSent;
     u32 pakFileIndex;
     u32 pakFileOffset;
     
@@ -122,21 +111,13 @@ struct ServerState
     RandomSequence instantiateSequence;
     RandomSequence randomSequence;
     RandomSequence objectSequence;
-    
-    PlatformProcessHandle assetBuilder;
-    
-    ForgFile* files;
-    ForgFile* firstFreeFile;
-    
-    MemoryPool filePool;
-    MemoryPool scratchPool;
 };
 
-#define SERVER_SIMULATE_WORLDS( name ) void name(PlatformServerMemory* memory, r32 secondElapsed)
-typedef SERVER_SIMULATE_WORLDS( server_simulate_worlds );
+#define SERVER_SIMULATE_WORLDS(name) void name(PlatformServerMemory* memory, r32 secondElapsed)
+typedef SERVER_SIMULATE_WORLDS(server_simulate_worlds);
 
-#define SERVER_FRAME_END( name ) DebugTable* name( PlatformServerMemory* memory )
-typedef SERVER_FRAME_END( server_frame_end );
+#define SERVER_FRAME_END(name) DebugTable* name(PlatformServerMemory* memory)
+typedef SERVER_FRAME_END(server_frame_end);
 
 
 

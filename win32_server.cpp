@@ -313,7 +313,7 @@ int main( int argc, char* argv[] )
     PlatformWorkQueue fastQueue = {};
     Win32MakeQueue(&fastQueue, ArrayCount(fastStartups), fastStartups);
     
-    Win32ThreadStartup slowStartups[1] = {};
+    Win32ThreadStartup slowStartups[2] = {};
     PlatformWorkQueue slowQueue = {};
     Win32MakeQueue(&slowQueue, ArrayCount(slowStartups), slowStartups);
     

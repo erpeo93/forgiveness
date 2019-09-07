@@ -255,17 +255,10 @@ inline void SendEffectTriggered(Player* player, EffectTriggeredToSend* toSend)
 }
 #endif
 
-inline void SendDataFileHeader(Player* player, char* name, u32 fileSize, u32 chunkSize)
+inline void SendFileHeader(Player* player, u16 type, u16 subtype, u32 fileSize, u32 chunkSize)
 {
-    StartPacket(player, DataFileHeader);
-    Pack("sLL", name, fileSize, chunkSize);
-    CloseAndStoreReliablePacket(player);
-}
-
-inline void SendPakFileHeader(Player* player, char* name, u32 fileSize, u32 chunkSize)
-{
-    StartPacket(player, PakFileHeader);
-    Pack("sLL", name, fileSize, chunkSize);
+    StartPacket(player, FileHeader);
+    Pack("HHLL", type, subtype, fileSize, chunkSize);
     CloseAndStoreReliablePacket(player);
 }
 
@@ -285,13 +278,6 @@ inline void SendFileChunks(Player* player, char* source, u32 sizeToSend, u32 chu
         CloseAndStoreReliablePacket(player);
         sentSize += toSent;
     }
-}
-
-inline void SendDontDeleteFile(Player* player, char* filename)
-{
-    StartPacket(player, DontDeleteFile);
-    Pack("s", filename);
-    CloseAndStoreReliablePacket(player);
 }
 
 

@@ -118,7 +118,6 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->defaultCameraZ = 34.0f;
     result->cameraWorldOffset = V3(0.0f, 0.0f, result->defaultCameraZ);
     result->cameraFocusID = 0;
-    result->modulationWithFocusColor = 0.15f;
     
     result->firstFreeRock = 0;
     result->firstFreePlantSegment = 0;
@@ -142,7 +141,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->soundState = &gameState->soundState;
     
     result->editorUI.input = input;
-    result->editorUI.pool = result->persistentPool;
+    result->editorUI.pool = &gameState->assetsPool;
     result->editorUI.soundState = result->soundState;
     
 }
@@ -502,12 +501,6 @@ internal void UpdateEntities(GameModeWorld* worldMode, r32 timeToAdvance, Client
     }
 }
 
-void ReloadAssetsFromScratch(Assets* assets)
-{
-    CloseAllHandles(assets);
-    SendRebuildAssetsRequest();
-}
-
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
     Vec3 inputAcc = {};
@@ -555,8 +548,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     worldMode->relativeScreenMouseP = newMouseP;
     
     
-    b32 reloadTaxonomyAutocompletes = false;
-    b32 reloadAssetAutocompletes = false;
     if(myPlayer->identifier)
     {
         ClientEntity* player = GetEntityClient(worldMode, myPlayer->identifier);
@@ -642,13 +633,17 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             
             RandomSequence seq = Seed(123);
-            AssetLabels bitmapLabels = {};
-            bitmapLabels.labels[0].label = Label_Test;
-            bitmapLabels.labels[0].value = TestLabel_Value1;
+            GameProperties bitmapProperties = {};
+            bitmapProperties.properties[0].property = Property_Test;
+            bitmapProperties.properties[0].value = Value1;
             
-            BitmapId test = QueryAssets(group->assets, AssetType_Image, 0, &seq, &bitmapLabels);
+            BitmapId test = QueryAssets(group->assets, AssetType_Image, 0, &seq, &bitmapProperties);
             
-            PushBitmap(group, UprightTransform(), test, V3(0, 0, 0), 1.0f);
+            if(IsValid(test))
+            {
+                PushBitmap(group, UprightTransform(), test, V3(0, 0, 0), 1.0f);
+            }
+            
             
             
             

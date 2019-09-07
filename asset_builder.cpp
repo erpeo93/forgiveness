@@ -1527,16 +1527,16 @@ internal u8* ReadEntireFile(MemoryPool* pool, PlatformFileGroup* group, Platform
     return result;
 }
 
-internal void AddLabel(PAKAsset* asset, u16 label, u16 value)
+internal void AddProperty(PAKAsset* asset, u16 property, u16 value)
 {
     b32 found = false;
     
-    for(u32 labelIndex = 0; labelIndex < ArrayCount(asset->labels); ++labelIndex)
+    for(u32 propertyIndex = 0; propertyIndex < ArrayCount(asset->properties); ++propertyIndex)
     {
-        PAKLabel* dest = asset->labels + labelIndex;
-        if(!dest->label)
+        PAKProperty* dest = asset->properties + propertyIndex;
+        if(!dest->property)
         {
-            dest->label = label;
+            dest->property = property;
             dest->value = value;
             found = true;
             break;
@@ -1566,25 +1566,96 @@ internal void FillPAKProperty(PAKAsset* asset, Token property, Token value)
     }
     else
     {
-        u16 labelType = SafeTruncateToU16(GetMetaLabelType(property));
-        if(labelType)
+        u16 propertyType = SafeTruncateToU16(GetMetaPropertyType(property));
+        if(propertyType)
         {
-            u16 labelValue = ExistMetaLabelValue(labelType, value);
-            if(labelValue != INVALID_LABEL_VALUE)
+            u16 propertyValue = ExistMetaPropertyValue(propertyType, value);
+            if(propertyValue != INVALID_PROPERTY_VALUE)
             {
-                AddLabel(asset, labelType, labelValue);
+                AddProperty(asset, propertyType, propertyValue);
             }
         }
     }
+}
+
+
+struct SavedFileInfoHash
+{
+    char pathAndName[256];
+    u64 timestamp;
+    
+    SavedFileInfoHash* next;
+};
+
+struct TimestampHash
+{
+    MemoryPool pool;
+    SavedFileInfoHash* hashSlots[1024];
+};
+
+internal SavedFileInfoHash* AddFileDateHash(TimestampHash* hash, char* pathAndName, u64 timestamp)
+{
+    Assert(IsPowerOf2(ArrayCount(hash->hashSlots)));
+    u64 hashRaw = StringHash(pathAndName);
+    u32 slotIndex = hashRaw & (ArrayCount(hash->hashSlots) - 1);
+    
+    SavedFileInfoHash* newHash = PushStruct(&hash->pool, SavedFileInfoHash);
+    FormatString(newHash->pathAndName, sizeof(newHash->pathAndName), "%s", pathAndName);
+    ReplaceAll(newHash->pathAndName, '.', '_');
+    ReplaceAll(newHash->pathAndName, '/', '_');
+    
+    newHash->timestamp = timestamp;
+    
+    FREELIST_INSERT(newHash, hash->hashSlots[slotIndex]);
+    
+    return newHash;
+}
+
+internal SavedFileInfoHash* GetCorrenspodingFileDateHash(TimestampHash* hash, char* path, char* name)
+{
+    char pathAndName[256];
+    FormatString(pathAndName, sizeof(pathAndName), "%s/%s", path, name);
+    ReplaceAll(pathAndName, '.', '_');
+    ReplaceAll(pathAndName, '/', '_');
+    
+    Assert(IsPowerOf2(ArrayCount(hash->hashSlots)));
+    u64 hashRaw = StringHash(pathAndName);
+    u32 slotIndex = hashRaw & (ArrayCount(hash->hashSlots) - 1);
+    
+    
+    SavedFileInfoHash* result = 0;
+    for(SavedFileInfoHash* test = hash->hashSlots[slotIndex]; test; test = test->next)
+    {
+        if(StrEqual(test->pathAndName, pathAndName))
+        {
+            result = test;
+            break;
+        }
+    }
+    
+    if(!result)
+    {
+        result = AddFileDateHash(hash, pathAndName, 0);
+    }
+    return result;
+}
+
+internal void SaveFileDateHash(SavedFileInfoHash* info, u64 timestamp)
+{
+    info->timestamp = timestamp;
+    
+    u8* fileContent = (u8*) info;
+    u32 fileSize = sizeof(SavedFileInfoHash);
+    platformAPI.ReplaceFile(PlatformFile_timestamp, TIMESTAMP_PATH, info->pathAndName, fileContent, fileSize);
 }
 
 internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* asset, char* name, PlatformFileGroup* markupFiles)
 {
     FormatString(asset->sourceName, sizeof(asset->sourceName), "%s", name);
     asset->dataOffset = ftell(out);
-    for(u32 labelIndex = 0; labelIndex < MAX_LABEL_PER_ASSET; ++labelIndex)
+    for(u32 propertyIndex = 0; propertyIndex < MAX_PROPERTIES_PER_ASSET; ++propertyIndex)
     {
-        asset->labels[labelIndex] = {};
+        asset->properties[propertyIndex] = {};
     }
     
     for(PlatformFileInfo* info = markupFiles->firstFileInfo; info; info = info->next)
@@ -1630,32 +1701,8 @@ internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* as
     }
 }
 
-internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char* outputPath)
+internal u32 GetFileTypes(AssetType type)
 {
-    MemoryPool tempPool = {};
-    
-    u16 type = GetMetaAssetType(sourceDir);
-    u16 subtype = GetMetaAssetSubtype(type, sourceSubdir);
-    
-    char source[128];
-    char filename[128];
-    char output[128];
-    
-    FormatString(source, sizeof(source), "%s/%s/%s", basePath, sourceDir, sourceSubdir);
-    FormatString(filename, sizeof(filename), "%s_%s.upak", sourceDir, sourceSubdir);
-    FormatString(output, sizeof(output), "%s/%s", outputPath, filename);
-    
-    PAKFileHeader header = {};
-    
-    FormatString(header.name, sizeof(header.name), "%s", filename);
-    header.magicValue = PAK_MAGIC_NUMBER;
-    header.version = PAK_VERSION;
-    
-    header.assetType = SafeTruncateToU16(type);
-    header.assetSubType = SafeTruncateToU16(subtype);
-    header.standardAssetCount = 0;
-    header.derivedAssetCount = 0;
-    
     u32 fileTypes = PlatformFile_invalid;
     switch(type)
     {
@@ -1696,6 +1743,37 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
         } break;
     }
     
+    return fileTypes;
+}
+
+internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, char* sourceSubdir, char* outputPath, b32 propertiesChanged)
+{
+    MemoryPool tempPool = {};
+    
+    u16 type = GetMetaAssetType(sourceDir);
+    u16 subtype = GetMetaAssetSubtype(type, sourceSubdir);
+    
+    char source[128];
+    char filename[128];
+    char output[128];
+    
+    FormatString(source, sizeof(source), "%s/%s/%s", basePath, sourceDir, sourceSubdir);
+    FormatString(filename, sizeof(filename), "%s_%s.upak", sourceDir, sourceSubdir);
+    FormatString(output, sizeof(output), "%s/%s", outputPath, filename);
+    
+    PAKFileHeader header = {};
+    
+    FormatString(header.name, sizeof(header.name), "%s", filename);
+    header.magicValue = PAK_MAGIC_NUMBER;
+    header.version = PAK_VERSION;
+    
+    FormatString(header.type, sizeof(header.type), "%s", sourceDir);
+    FormatString(header.subtype, sizeof(header.subtype), "%s", sourceSubdir);
+    header.standardAssetCount = 0;
+    header.derivedAssetCount = 0;
+    
+    u32 fileTypes = GetFileTypes((AssetType) type);
+    
     
     u32 startingFontCodepoint = ' ';
     u32 endingFontCodepoint = '~';
@@ -1705,10 +1783,19 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
     u16 standardAssetCount = 0;
     u16 derivedAssetCount = 0;
     
+    b32 writeFile = propertiesChanged;
+    
     for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
     {
         TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
         PlatformFileHandle handle = platformAPI.OpenFile(&fileGroup, info);
+        
+        SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
+        if(saved->timestamp != info->timestamp)
+        {
+            SaveFileDateHash(saved, info->timestamp);
+            writeFile = true;
+        }
         
         u16 standard = 1;
         u16 derived = 0;
@@ -1750,13 +1837,25 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
         platformAPI.CloseFile(&handle);
         EndTemporaryMemory(fileMemory);
     }
-    platformAPI.GetAllFilesEnd(&fileGroup);
     
     header.standardAssetCount = standardAssetCount;
     header.derivedAssetCount = derivedAssetCount;
     
+    
+    PlatformFileGroup markupFiles = platformAPI.GetAllFilesBegin(PlatformFile_markup, source);
+    for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
+    {
+        SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
+        
+        if(saved->timestamp != info->timestamp)
+        {
+            SaveFileDateHash(saved, info->timestamp);
+            writeFile = true;
+        }
+    }
+    
     u16 assetCount = header.standardAssetCount + header.derivedAssetCount;
-    if(assetCount > 0)
+    if(writeFile && assetCount > 0)
     {
         FILE* out = fopen(output, "wb");
         if(out)
@@ -1771,21 +1870,15 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
             u16 runningDerivedAssetIndex = derivedAssetCount ? header.standardAssetCount : 0;
             u16 runningAssetIndex = 0;
             
-            PlatformFileGroup markupFiles = platformAPI.GetAllFilesBegin(PlatformFile_markup, source);
-            
-            fileGroup = platformAPI.GetAllFilesBegin(fileTypes, source);
-            
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
                 TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
-                
                 u8* fileContent = ReadEntireFile(&tempPool, &fileGroup, info);
                 
                 Assert(runningAssetIndex < assetCount);
                 Assert(runningDerivedAssetIndex <= assetCount);
                 
                 PAKAsset* dest = pakAssets + runningAssetIndex++;
-                
                 switch(type)
                 {
                     case AssetType_Image:
@@ -1995,8 +2088,6 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
                 
                 EndTemporaryMemory(fileMemory);
             }
-            platformAPI.GetAllFilesEnd(&fileGroup);
-            platformAPI.GetAllFilesEnd(&markupFiles);
             
             fseek(out, (u32) sizeof(PAKFileHeader), SEEK_SET);
             fwrite(pakAssets, assetCount * sizeof(PAKAsset), 1, out);
@@ -2008,17 +2099,31 @@ internal void WritePak(char* basePath, char* sourceDir, char* sourceSubdir, char
             InvalidCodePath;
         }
     }
+    platformAPI.GetAllFilesEnd(&fileGroup);
+    platformAPI.GetAllFilesEnd(&markupFiles);
     
     Clear(&tempPool);
 }
 
 
 
-internal void BuildAssets(char* sourcePath, char* destPath)
+internal void BuildAssets(TimestampHash* hash, char* sourcePath, char* destPath)
 {
+    b32 propertiesChanged = false;
+    PlatformFileGroup propertiesFiles = platformAPI.GetAllFilesBegin(PlatformFile_properties, PROPERTIES_PATH);
+    for(PlatformFileInfo* info = propertiesFiles.firstFileInfo; info; info = info->next)
+    {
+        SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, PROPERTIES_PATH, info->name);
+        if(saved->timestamp != info->timestamp)
+        {
+            SaveFileDateHash(saved, info->timestamp);
+            propertiesChanged = true;
+        }
+    }
+    platformAPI.GetAllFilesEnd(&propertiesFiles);
+    
     PlatformSubdirNames subdir;
     platformAPI.GetAllSubdirectories(&subdir, sourcePath);
-    
     for(u32 subdirIndex = 0; subdirIndex < subdir.count; ++subdirIndex)
     {
         char* subdirName = subdir.names[subdirIndex];
@@ -2031,64 +2136,61 @@ internal void BuildAssets(char* sourcePath, char* destPath)
         for(u32 subsubDirIndex = 0; subsubDirIndex < subsubdir.count; ++subsubDirIndex)
         {
             char* subsubDirName = subsubdir.names[subsubDirIndex];
-            WritePak(sourcePath, subdirName, subsubDirName, destPath);
+            WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, propertiesChanged);
         }
     }
-#if 0    
-    LoadFont("definition/fonts/MorrisRoman-Black.ttf", "Morris Roman Black", 64);
-    LoadFont("c:/windows/fonts/arial.ttf", "Arial", 64);
-    //LoadFont("definition/fonts/dum1.ttf", "Dumbledor 1", 64),
-    //LoadFont("c:/windows/fonts/courier.ttf", "Courier New", 64 ),
-#endif
-    
 }
 
-
-#if 0
-internal WatchForFileChanges()
+internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char* destPath)
 {
-    
-    b32 result = false;
-    
-    for(every folder)
+    PlatformSubdirNames subdir;
+    platformAPI.GetAllSubdirectories(&subdir, sourcePath);
+    for(u32 subdirIndex = 0; subdirIndex < subdir.count; ++subdirIndex)
     {
-        for(every subfolder)
+        char* subdirName = subdir.names[subdirIndex];
+        char sourceAssetTypePath[128];
+        FormatString(sourceAssetTypePath, sizeof(sourceAssetTypePath), "%s/%s", sourcePath, subdirName);
+        PlatformSubdirNames subsubdir;
+        platformAPI.GetAllSubdirectories(&subsubdir, sourceAssetTypePath);
+        
+        for(u32 subsubDirIndex = 0; subsubDirIndex < subsubdir.count; ++subsubDirIndex)
         {
-            GetCorrenspodingFileDateHash();
-            
+            char* subsubDirName = subsubdir.names[subsubDirIndex];
             b32 updatedFiles = false;
-            BeginFiles();
+            char fullpath[128];
+            FormatString(fullpath, sizeof(fullpath), "%s/%s/%s", sourcePath, subdirName, subsubDirName);
             
-            for(every file)
+            u16 type = GetMetaAssetType(subdirName);
+            u32 fileTypes = GetFileTypes((AssetType)type);
+            PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(fileTypes, fullpath);
+            for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
-                if(NotEqual(timestamp, hash->timestamp))
+                SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
+                if(info->timestamp != infoHash->timestamp)
                 {
-                    if(Hash(data) is different)
-                    {
-                        updatedFiles = true;
-                    }
+                    updatedFiles = true;
+                    
                 }
             }
+            platformAPI.GetAllFilesEnd(&fileGroup);
             
-            EndFiles();
-            BeginFiles(labels);
             
-            if(Changed(labelsFile))
+            PlatformFileGroup markupFiles = platformAPI.GetAllFilesBegin(PlatformFile_markup, fullpath);
+            for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
             {
-                updatedFiles = true;
+                SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
+                if(info->timestamp != infoHash->timestamp)
+                {
+                    updatedFiles = true;
+                }
             }
-            EndFiles();
-            
+            platformAPI.GetAllFilesEnd(&markupFiles);
             
             if(updatedFiles)
             {
-                WritePak(replaced);
-                result = true;
+                WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, false);
             }
         }
     }
-    
-    return result;
 }
-#endif
 

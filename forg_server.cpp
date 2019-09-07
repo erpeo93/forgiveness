@@ -62,104 +62,6 @@ internal void HandleDebugMessage(PlatformServerMemory* memory, ServerPlayer* pla
 }
 #endif
 
-inline ForgFile* FindFile(ServerState* server, ForgFile** firstFilePtr, char* fileName)
-{
-    ForgFile* result = 0;
-    
-    char nameWithoutPoint[64];
-    RemoveExtension(nameWithoutPoint, sizeof(nameWithoutPoint), fileName);
-    
-    u32 withoutPointLength = StrLen(nameWithoutPoint);
-    
-    for(ForgFile* test = *firstFilePtr; test; test = test->next)
-    {
-        if(StrEqual(withoutPointLength, test->filename, nameWithoutPoint))
-        {
-            result = test;
-            break;
-        }
-    }
-    
-    if(!result)
-    {
-        FREELIST_ALLOC(result, server->firstFreeFile, PushStruct(&server->filePool, ForgFile));
-        StrCpy(fileName, StrLen(fileName), result->filename, sizeof(result->filename));
-        result->hash = 0;
-        
-        FREELIST_INSERT(result, *firstFilePtr);
-    }
-    return result;
-}
-
-
-#if 0
-inline void AddAllPakFileHashes(ServerState* server)
-{
-    char* pakPath = "assets";
-    PlatformFileGroup pakGroup = platformAPI.GetAllFilesBegin(PlatformFile_compressedAsset, pakPath);
-    for(u32 fileIndex = 0; fileIndex < pakGroup.fileCount; ++fileIndex)
-    {
-        TempMemory fileMemory = BeginTemporaryMemory(&server->scratchPool);
-        
-        PlatformFileHandle handle = platformAPI.OpenNextFile(&pakGroup, pakPath);
-        
-        char* buffer = (char*) PushSize(&server->scratchPool, handle.fileSize);
-        platformAPI.ReadFromFile(&handle, 0, handle.fileSize, buffer);
-        
-        
-        uLong uncompressedSize = *((uLong*) buffer);
-        u32 fileSize = uncompressedSize;
-        
-        u8* uncompressed = PushArray(&server->scratchPool, u8, uncompressedSize);
-        
-        u8* compressedSource = (u8*) buffer + 4;
-        uLong compressedLen = handle.fileSize - 4;
-        
-        int cmp_status = uncompress(uncompressed, &uncompressedSize, compressedSource, compressedLen);
-        Assert(cmp_status == Z_OK);
-        Assert(uncompressedSize == fileSize); 
-        
-        
-        
-        
-        ForgFile* serverFile = FindFile(server, &server->files, handle.name);
-        
-        u64 hash64 = *(u64*) uncompressed;
-        serverFile->hash = hash64;
-        
-        platformAPI.CloseHandle(&handle);
-        
-        EndTemporaryMemory(fileMemory);
-    }
-    platformAPI.GetAllFilesEnd(&pakGroup);
-}
-
-inline void BuildAssetsSync(ServerState* server)
-{
-    PlatformProcessHandle assetBuilder = platformAPI.DEBUGExecuteSystemCommand(".", "../asset_builder.exe", "");
-    while(true)
-    {
-        PlatformProcessState assetBuilderState = platformAPI.DEBUGGetProcessState(assetBuilder);
-        if(!assetBuilderState.isRunning)
-        {
-            break;
-        }
-    }
-}
-
-inline void BuildAssetsAsync(ServerState* server)
-{
-    server->reloadingAssets = true;
-    server->assetBuilder = platformAPI.DEBUGExecuteSystemCommand(".", "../asset_builder.exe", "");
-}
-
-inline void ReloadServer(ServerState* server)
-{
-    WriteDataFiles(server->activeTable);
-    ImportAllFiles();
-}
-#endif
-
 
 PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 {
@@ -219,6 +121,18 @@ internal void DispatchApplicationPacket(ServerState* server, Player* player, u32
             }
         } break;
         
+        
+#if 0        
+        case Type_FileHash:
+        {
+            u16 type;
+            u16 subtype;
+            u64 hash;
+            packetPtr = unpack(packetPtr, "HHQ", &type, &subtype, &hash);
+            ForgFile* file = FindFile(server, &player->files, type, subtype);
+            file->hash = hash;
+        } break;
+#endif
         
 #if 0        
         case Type_RegenerateWorldChunks:
@@ -281,15 +195,6 @@ internal void DispatchApplicationPacket(ServerState* server, Player* player, u32
                 server->gamePaused = !server->gamePaused;
             }
         } break;
-        
-        case Type_FileHash:
-        {
-            char filename[64];
-            u64 hash;
-            packetPtr = unpack(packetPtr, "sQ", filename, &hash);
-            ForgFile* file = FindFile(server, &player->files, filename);
-            file->hash = hash;
-        } break;
 #endif
         
         default:
@@ -304,8 +209,10 @@ internal void DispatchApplicationPacket(ServerState* server, Player* player, u32
     }
 }
 
-internal void DispatchPlayerMessages(ServerState* server)
+internal void HandlePlayersNetwork(ServerState* server)
 {
+    MemoryPool scratchPool = {};
+    
     server->elapsedTime = 0.1f;
     for( u32 playerIndex = 0; 
         playerIndex < MAXIMUM_SERVER_PLAYERS; 
@@ -327,6 +234,70 @@ internal void DispatchPlayerMessages(ServerState* server)
             }
             else
             {
+                if(!player->allPakFileSent)
+                {
+                    u32 chunkSize = KiloBytes(1);
+                    u32 toSendSize = MegaBytes(1);
+                    
+                    PlatformFileGroup pakFiles = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, ASSETS_PATH);
+                    
+                    u32 fileIndex = 0;
+                    for(PlatformFileInfo* info = pakFiles.firstFileInfo; info; info = info->next)
+                    {
+                        if(fileIndex++ == player->pakFileIndex)
+                        {
+                            PlatformFileHandle handle = platformAPI.OpenFile(&pakFiles, info);
+                            if(player->pakFileOffset == 0)
+                            {
+                                PAKFileHeader header;
+                                platformAPI.ReadFromFile(&handle, 0, sizeof(PAKFileHeader), &header);
+                                u16 type = GetMetaAssetType(header.type);
+                                u16 subtype = GetMetaAssetSubtype(type, header.subtype);
+                                SendFileHeader(player, type, subtype, SafeTruncateUInt64ToU32(info->size), chunkSize);
+                            }
+                            
+                            u32 sizeToRead = Min(toSendSize, SafeTruncateUInt64ToU32(info->size) - player->pakFileOffset);
+                            
+                            if(sizeToRead <= chunkSize)
+                            {
+                                break;
+                            }
+                            
+                            TempMemory fileMemory = BeginTemporaryMemory(&scratchPool);
+                            
+                            char* buffer = (char*) PushSize(&scratchPool, sizeToRead);
+                            platformAPI.ReadFromFile(&handle, player->pakFileOffset, sizeToRead, buffer);
+                            SendFileChunks(player, buffer, sizeToRead, chunkSize);
+                            
+                            EndTemporaryMemory(fileMemory);
+                            
+                            
+                            
+                            
+                            player->pakFileOffset += sizeToRead;
+                            u32 modSizeToRead = sizeToRead;
+                            if(modSizeToRead % chunkSize)
+                            {
+                                modSizeToRead += chunkSize - (sizeToRead % chunkSize);
+                            }
+                            Assert(modSizeToRead % chunkSize == 0);
+                            toSendSize -= modSizeToRead;
+                            
+                            if(player->pakFileOffset >= info->size)
+                            {
+                                player->pakFileOffset = 0;
+                                if(++player->pakFileIndex == pakFiles.fileCount)
+                                {
+                                    player->allPakFileSent = true;
+                                }
+                            }
+                            platformAPI.CloseFile(&handle);
+                        }
+                    }
+                    platformAPI.GetAllFilesEnd(&pakFiles);
+                }
+                
+                
                 while(true)
                 {
                     NetworkPacketReceived received = platformAPI.net.GetPacketOnSlot(&server->clientInterface, player->connectionSlot);
@@ -405,25 +376,14 @@ internal Player* FirstFreePlayer(ServerState* server)
 }
 
 
-#if 0
 PLATFORM_WORK_CALLBACK(WatchForFileChanges)
 {
+    TimestampHash* hash = (TimestampHash*) param;
     while(true)
     {
-        BeginTicketMutex();
-        if(!assets->filesToLoad)
-        {
-            if(WatchForFileChanges(assets, ASSETS_PATH))
-            {
-                assets->filesToLoad = true;
-            }
-        }
-        
-        EndTicketMutex();
+        WatchReloadFileChanges(hash, ASSETS_RAW_PATH, ASSETS_PATH);
     }
 }
-#endif
-
 
 extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 {
@@ -438,7 +398,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         
         server = memory->server = BootstrapPushStruct(ServerState, worldPool);
-        // NOTE(Leonardo): sqlite test!
         
         server->fastQueue = memory->fastQueue;
         server->slowQueue = memory->slowQueue;
@@ -468,41 +427,32 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         server->playerCount = 1;
         server->entityCount = 1;
         
-        BuildAssets("assets/raw", "assets");
-#if 0   
-        if(editor)
+        TimestampHash* hash = BootstrapPushStruct(TimestampHash, pool);
+        
+        MemoryPool tempPool = {};
+        
+        PlatformFileGroup timestampFiles = platformAPI.GetAllFilesBegin(PlatformFile_timestamp, TIMESTAMP_PATH);
+        for(PlatformFileInfo* info = timestampFiles.firstFileInfo; info; info = info->next)
         {
-            BuildAssets();
-            platformAPI.PushWork(WatchForFileChanges);
+            TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+            
+            if(sizeof(SavedFileInfoHash) == info->size)
+            {
+                u8* fileContent = ReadEntireFile(&tempPool, &timestampFiles, info);
+                SavedFileInfoHash* infoHash = (SavedFileInfoHash*) fileContent;
+                AddFileDateHash(hash, infoHash->pathAndName, infoHash->timestamp);
+            }
+            
+            EndTemporaryMemory(fileMemory);
         }
+        platformAPI.GetAllFilesEnd(&timestampFiles);
         
-        AddAllPakFileHashes(server);
-        Assets* assets = InitAssets(JustEntityDefinitionFiles);
+        BuildAssets(hash, ASSETS_RAW_PATH, ASSETS_PATH);
+        platformAPI.PushWork(server->slowQueue, WatchForFileChanges, hash);
         
-        if(editor)
-        {
-            AddReloadAssetsWatch();
-        }
-        
-        BuildWorld(server, GenerateWorld_OnlyChunks);
-#endif
-        
+        //Assets* assets = InitAssets(JustEntityDefinitionFiles);
+        //BuildWorld(server, GenerateWorld_OnlyChunks);
     }
-    
-    
-#if 0    
-    if(assets->filesToLoad)
-    {
-        BeginTicketMutex();
-        
-        ReplaceChangedAssetFiles(assets);
-        
-        CompletePastWritesBeforeFutureWrites;
-        assets->filesToLoad = false;
-        EndTicketMutex();
-    }
-#endif
-    
     
     // TODO(Leonardo): change the API of the network library to return a networkConnection*!
     u16 newConnections[16] = {};
@@ -515,7 +465,8 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         player->connectionSlot = connectionSlot;
     }
     
-    DispatchPlayerMessages(server);
+    
+    HandlePlayersNetwork(server);
     HandlePlayersRequest(server);
     MoveEntitiesAndSendUpdates(server);
 }

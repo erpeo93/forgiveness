@@ -13,16 +13,16 @@ struct PAKFileHeader
     u32 magicValue;
     u32 version;
     
-    u16 assetType;
-    u16 assetSubType;
+    char type[32];
+    char subtype[32];
     
     u16 standardAssetCount;
     u16 derivedAssetCount;
 };
 
-struct PAKLabel
+struct PAKProperty
 {
-    u16 label;
+    u16 property;
     u16 value;
 };
 
@@ -122,12 +122,12 @@ struct PAKDataFile
     */
 };
 
-#define MAX_LABEL_PER_ASSET 8
+#define MAX_PROPERTIES_PER_ASSET 8
 struct PAKAsset
 {
     char sourceName[32];
     u64 dataOffset;
-    PAKLabel labels[MAX_LABEL_PER_ASSET];
+    PAKProperty properties[MAX_PROPERTIES_PER_ASSET];
     
     union
     {

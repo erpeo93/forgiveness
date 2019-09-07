@@ -463,52 +463,52 @@ internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType*
     return result;
 }
 
-internal b32 Edit_GameLabel(EditorLayout* layout, char* name, GameLabel* label, b32 isInArray)
+internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* property, b32 isInArray)
 {
     b32 result = false;
     
     ShowNameNoColon(layout, name);
     char output[64];
     
-    char* typeString = GetMetaLabelTypeName(label->label);
+    char* typeString = GetMetaPropertyTypeName(property->property);
     if(!typeString)
     {
-        label->label = 0;
-        typeString = GetMetaLabelTypeName(label->label);
+        property->property = 0;
+        typeString = GetMetaPropertyTypeName(property->property);
     }
     
-    StringArray typeOptions = GetLabelTypeList();
-    if(EditString(layout, "type", typeString, auID(&label->label), typeOptions, output, sizeof(output)))
+    StringArray typeOptions = GetPropertyTypeList();
+    if(EditString(layout, "type", typeString, auID(&property->property), typeOptions, output, sizeof(output)))
     {
-        u16 newType = GetMetaLabelType(Tokenize(output));
-        if(newType != label->label)
+        u16 newType = GetMetaPropertyType(Tokenize(output));
+        if(newType != property->property)
         {
-            label->label = newType;
-            label->value = 0;
+            property->property = newType;
+            property->value = 0;
         }
     }
     
-    char* valueString = GetMetaLabelValueName(label->label, label->value);
+    char* valueString = GetMetaPropertyValueName(property->property, property->value);
     if(!valueString)
     {
-        label->value = 0;
-        valueString = GetMetaLabelValueName(label->label, label->value);
+        property->value = 0;
+        valueString = GetMetaPropertyValueName(property->property, property->value);
     }
     
-    StringArray valueOptions = GetLabelValueList(label->label);
-    if(EditString(layout, "value", valueString, auID(&label->value), valueOptions, output, sizeof(output)))
+    StringArray valueOptions = GetPropertyValueList(property->property);
+    if(EditString(layout, "value", valueString, auID(&property->value), valueOptions, output, sizeof(output)))
     {
-        u16 newValue = ExistMetaLabelValue(label->label, Tokenize(output));
+        u16 newValue = ExistMetaPropertyValue(property->property, Tokenize(output));
         
-        if(newValue != INVALID_LABEL_VALUE)
+        if(newValue != INVALID_PROPERTY_VALUE)
         {
-            label->value = newValue;
+            property->value = newValue;
         }
     }
     
     if(isInArray)
     {
-        if(StandardEditorButton(layout, "canc", auID(label, "cancButton"), V4(0, 0.5f, 1.0f, 1.0f)))
+        if(StandardEditorButton(layout, "canc", auID(property, "cancButton"), V4(0, 0.5f, 1.0f, 1.0f)))
         {
             result = true;
         }
@@ -519,32 +519,43 @@ internal b32 Edit_GameLabel(EditorLayout* layout, char* name, GameLabel* label, 
 
 
 
-internal b32 EditorButton(EditorLayout* layout, Vec2 rawOffset, Vec2 buttonDim, char* name, AUID ID, Vec4 color = V4(1, 0, 0, 1))
+internal b32 EditorButton(EditorLayout* layout, Vec2 rawOffset, Vec2 buttonDim, char* name, AUID ID, b32 disabled = false, Vec4 color = V4(1, 0, 0, 1))
 {
     b32 result = false;
     Vec2 buttonMin = layout->currentP + Hadamart(rawOffset, V2(RawHeight(layout), RawHeight(layout)));
     Rect2 button = RectMinDim(buttonMin, buttonDim);
     
-    if(PointInRect(button, layout->mouseP))
+    if(disabled)
     {
-        SetNextHotAUID(layout->context, ID);
+        color.a *= 0.2f;
     }
     else
     {
-        color.a = 0.5f * color.a;
-    }
-    
-    if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
-    {
-        result = true;
+        if(PointInRect(button, layout->mouseP))
+        {
+            SetNextHotAUID(layout->context, ID);
+        }
+        else
+        {
+            color.a = 0.5f * color.a;
+        }
+        
+        if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
+        {
+            result = true;
+        }
     }
     
     layout->currentP.x += 1.2f* buttonDim.x;
-    
     PushRect(layout->group, FlatTransform(), AddRadius(button, ButtonPadding(layout->fontScale)), color);
     if(name)
     {
-        PushTextEnclosed(layout->group, layout->fontID, name, button, layout->fontScale, StandardTextColor());
+        Vec4 textColor = StandardTextColor();
+        if(disabled)
+        {
+            textColor.a *= 0.2f;
+        }
+        PushTextEnclosed(layout->group, layout->fontID, name, button, layout->fontScale, textColor);
     }
     
     return result;
@@ -563,7 +574,7 @@ internal b32 EditorCollapsible(EditorLayout* layout, char* name, AUID ID)
     
     Vec4 collapsibleColor = data->show ? V4(0, 1, 0, 1) : V4(0, 0, 1, 1);
     Vec2 collapseDim = CollapsibleDim(layout);
-    if(EditorButton(layout, V2(0, 0), collapseDim, 0, ID, collapsibleColor))
+    if(EditorButton(layout, V2(0, 0), collapseDim, 0, ID, false, collapsibleColor))
     {
         data->show = !data->show;
     }
@@ -713,14 +724,14 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
         
         
         Nest(layout);
-        if(EditorCollapsible(layout, "labels", auID(info, "labels")))
+        if(EditorCollapsible(layout, "properties", auID(info, "properties")))
         {
             Push(layout);
-            for(u32 labelIndex = 0; labelIndex < ArrayCount(info->labels); ++labelIndex)
+            for(u32 propertyIndex = 0; propertyIndex < ArrayCount(info->properties); ++propertyIndex)
             {
-                PAKLabel* label = info->labels + labelIndex;
+                PAKProperty* property = info->properties + propertyIndex;
                 NextRaw(layout);
-                Edit_GameLabel(layout, 0, label, false);
+                Edit_GameProperty(layout, 0, property, false);
             }
             Pop(layout);
         }
@@ -728,48 +739,45 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
     }
 }
 
-internal void RenderEditAssetFile(EditorLayout* layout, Assets* assets, u32 fileIndex)
+internal void RenderEditAssetFile(EditorLayout* layout, Assets* assets, PAKFileHeader* header)
 {
-    PAKFileHeader* file = GetFileInfo(assets, fileIndex);
-    
-    b32 showAssetData = EditorCollapsible(layout, file->name);
-    
-    AUID saveID = auID(file, "saveButton");
+    b32 showAssetData = EditorCollapsible(layout, header->name);
+    AUID saveID = auID(header, "saveButton");
     if(EditorButton(layout, V2(0.25f, -0.1f), ButtonDim(layout), "save", saveID))
     {
-        WritebackAssetFileToFileSystem(assets, file->assetType, file->assetSubType, "../server/assets/raw");
+        WritebackAssetFileToFileSystem(assets, header->type, header->subtype, "../server/assets/raw");
     }
+    
+    u16 type = GetMetaAssetType(header->type);
+    u16 subtype = GetMetaAssetSubtype(type, header->subtype);
     
     if(showAssetData)
     {
         Push(layout);
         NextRaw(layout);
         
-        char* assetType = GetAssetTypeName(file->assetType);
-        char* assetSubtype = GetAssetSubtypeName(file->assetType, file->assetSubType);
-        
-        ShowString(layout, "type", assetType, EditorText_StartingSpace);
-        ShowString(layout, "subtype", assetSubtype, EditorText_StartingSpace);
+        ShowString(layout, "type", header->type, EditorText_StartingSpace);
+        ShowString(layout, "subtype", header->subtype, EditorText_StartingSpace);
         
         NextRaw(layout);
         
         ShowName(layout, "standard");
-        ShowStandard(layout, StandardTextColor(), "%d", file->standardAssetCount);
+        ShowStandard(layout, StandardTextColor(), "%d", header->standardAssetCount);
         ShowName(layout, "derived");
-        ShowStandard(layout, StandardTextColor(), "%d", file->derivedAssetCount);
+        ShowStandard(layout, StandardTextColor(), "%d", header->derivedAssetCount);
         
         NextRaw(layout);
         
-        if(EditorCollapsible(layout, "assets", auID(&file->magicValue)))
+        if(EditorCollapsible(layout, "assets", auID(&header->magicValue)))
         {
             Push(layout);
-            u16 totalAssetCount = file->standardAssetCount + file->derivedAssetCount;
+            u16 totalAssetCount = header->standardAssetCount + header->derivedAssetCount;
             for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
             {
                 NextRaw(layout);
                 AssetID ID = {};
-                ID.type = file->assetType;
-                ID.subtype = file->assetSubType;
+                ID.type = type;
+                ID.subtype = subtype;
                 ID.index = assetIndex;
                 
                 RenderAndEditAsset(layout, assets, ID);
@@ -781,17 +789,12 @@ internal void RenderEditAssetFile(EditorLayout* layout, Assets* assets, u32 file
     }
 }
 
-internal EditorLayout StandardLayout(MemoryPool* pool, RenderGroup* group, EditorUIContext* context, Vec2 mouseP, Vec2 deltaMouseP, Vec4 defaultColoration = V4(1, 1, 1, 1), r32 fontScale = 1.0f, r32 horizontalAdvance = 100.0f)
+internal EditorLayout StandardLayout(MemoryPool* pool, FontId ID, RenderGroup* group, EditorUIContext* context, Vec2 mouseP, Vec2 deltaMouseP, Vec4 defaultColoration = V4(1, 1, 1, 1), r32 fontScale = 1.0f, r32 horizontalAdvance = 100.0f)
 {
     EditorLayout result = {};
     
-    RandomSequence seq = {};
-    AssetLabels labels = {};
-    FontId fontID = QueryAssets(group->assets, AssetType_Font, AssetFont_game, &seq, &labels);
-    PAKFont* font = GetFontInfo(group->assets, fontID);
     
-    
-    
+    PAKFont* font = GetFontInfo(group->assets, ID);
     result.context = context;
     
     result.defaultColoration = defaultColoration;
@@ -803,7 +806,7 @@ internal EditorLayout StandardLayout(MemoryPool* pool, RenderGroup* group, Edito
     result.rawP = result.currentP;
     result.lastP = result.rawP;
     
-    result.fontID = fontID;
+    result.fontID = ID;
     result.font = font;
     result.fontScale = fontScale;
     result.horizontalAdvance = horizontalAdvance;
@@ -818,39 +821,43 @@ internal EditorLayout StandardLayout(MemoryPool* pool, RenderGroup* group, Edito
 
 internal void RenderEditor(RenderGroup* group, EditorUIContext* context, Vec2 mouseP, Vec2 deltaMouseP)
 {
-    MemoryPool editorPool = {};
-    
-    SetOrthographicTransformScreenDim(group);
-    
-    if(Pressed(&context->input->actionLeft))
+    RandomSequence seq = {};
+    GameProperties properties = {};
+    FontId fontID = QueryAssets(group->assets, AssetType_Font, AssetFont_game, &seq, &properties);
+    if(IsValid(fontID))
     {
-        context->offset.x -= 10.0f;
+        MemoryPool editorPool = {};
+        SetOrthographicTransformScreenDim(group);
+        if(Pressed(&context->input->actionLeft))
+        {
+            context->offset.x -= 10.0f;
+        }
+        if(Pressed(&context->input->actionRight))
+        {
+            context->offset.x += 10.0f;
+        }
+        context->offset.y -= 10.0f * context->input->mouseWheelOffset;
+        
+        context->nextHot = {};
+        EditorLayout layout = StandardLayout(&editorPool, fontID, group, context, mouseP, deltaMouseP, V4(1, 1, 1, 1), 0.5f);
+        
+        for(u32 fileIndex = 0; fileIndex < group->assets->fileCount; ++fileIndex)
+        {
+            AssetFile* file = GetAssetFile(group->assets, fileIndex);
+            PAKFileHeader* header = GetFileInfo(group->assets, fileIndex);
+            
+            AssetSubtypeArray* assets = GetAssetSubtypeForFile(group->assets, header);
+            if(assets)
+            {
+                RenderEditAssetFile(&layout, group->assets, header);
+                NextRaw(&layout);
+            }
+        }
+        context->hot = context->nextHot;
+        if(Pressed(&context->input->escButton))
+        {
+            context->interactive = {};
+        }
+        Clear(&editorPool);
     }
-    
-    if(Pressed(&context->input->actionRight))
-    {
-        context->offset.x += 10.0f;
-    }
-    
-    context->offset.y -= 10.0f * context->input->mouseWheelOffset;
-    
-    context->nextHot = {};
-    
-    EditorLayout layout = StandardLayout(&editorPool, group, context, mouseP, deltaMouseP, V4(1, 1, 1, 1), 0.5f);
-    
-    for(u32 fileIndex = 0; fileIndex < group->assets->fileCount; ++fileIndex)
-    {
-        RenderEditAssetFile(&layout, group->assets, fileIndex);
-        NextRaw(&layout);
-    }
-    
-    
-    context->hot = context->nextHot;
-    
-    if(Pressed(&context->input->escButton))
-    {
-        context->interactive = {};
-    }
-    
-    Clear(&editorPool);
 }

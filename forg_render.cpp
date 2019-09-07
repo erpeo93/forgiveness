@@ -960,7 +960,7 @@ internal void PushTextEnclosed(RenderGroup* group, FontId fontID, char* string, 
     Vec2 offset = GetCenter(rect) - GetCenter(actualDim);
     Vec3 finalP = refP + V3(offset, 0);
     
-    PushText(group, fontID, string, finalP, adjustedFontScale);
+    PushText(group, fontID, string, finalP, adjustedFontScale, color, false, drawShadow);
 }
 
 inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLength, Vec3 cameraX = V3(1, 0, 0), Vec3 cameraY = V3(0, 1, 0), Vec3 cameraZ = V3(0, 0, 1), Vec3 cameraP = V3(0, 0, 0), Vec2 screenCameraOffset = V2(0, 0), u32 renderTargetIndex = 0)

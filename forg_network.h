@@ -197,28 +197,15 @@ enum Packet_Type
     Type_StartedAction,
     Type_CompletedAction,
     
-    Type_DataFileHeader,
-    Type_PakFileHeader,
+    Type_FileHeader,
     Type_FileChunk,
-    Type_DontDeleteFile,
     
     Type_FileHash,
     
-    Type_AllDataFileSent,
-    Type_AllPakFileSent,
-    
-    Type_NewEditorTab,
-    Type_EditorElement,
-    Type_PopEditorElement,
-    Type_EditTab,
-    Type_ReloadEditingSlot,
     Type_MovePlayerInOtherRegion,
     Type_PauseToggle,
-    Type_RebuildAssets,
-    Type_SaveSlotTabToFile,
     Type_PatchLocalServer,
     Type_PatchCheck,
-    Type_SaveAssetFadFile,
     Type_RegenerateWorldChunks,
     
 #if FORGIVENESS_INTERNAL

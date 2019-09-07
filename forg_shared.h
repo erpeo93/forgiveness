@@ -729,6 +729,17 @@ inline void TrimToFirstCharacter(char* buffer, u32 bufferSize, char* string, cha
     }
 }
 
+inline void ReplaceAll(char* string, char source, char dest)
+{
+    for(char* test = string; *test; ++test)
+    {
+        if(*test == source)
+        {
+            *test = dest;
+        }
+    }
+}
+
 struct Stream
 {
     u8* begin;

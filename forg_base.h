@@ -157,7 +157,6 @@ union Vec4
 #define introspection(...)
 #define printTable(...)
 #define printFlags(...)
-#define printLabels(...)
 #define MetaDefault(...)
 #define MetaAutocomplete(...)
 #define MetaCounter(...)

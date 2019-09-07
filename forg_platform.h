@@ -319,6 +319,8 @@ typedef enum PlatformFileType
     PlatformFile_data = (1 << 9),
     PlatformFile_markup = (1 << 10),
     PlatformFile_reloadedAsset = (1 << 11),
+    PlatformFile_timestamp = (1 << 12),
+    PlatformFile_properties = (1 << 13),
     
     PlatformFile_count,
 } PlatformFileType;
@@ -335,6 +337,7 @@ struct PlatformFileInfo
 {
     u64 size;
     char* name;
+    u64 timestamp;
     
     PlatformFileInfo* next;
 };

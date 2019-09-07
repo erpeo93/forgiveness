@@ -1,24 +1,33 @@
 #pragma once
 
 #define ASSETS_PATH "assets"
-#define LABELS_FILE_NAME "properties"
+#define TIMESTAMP_PATH "assets/timestamps"
+#define ASSETS_RAW_PATH "assets/raw"
+#define MARKUP_FILE_NAME "markup"
+#define PROPERTIES_PATH "../properties"
+
+#define ANIMATION_PROPERTY_SYNC_THREESOLD "syncThreesold"
+#define ANIMATION_PROPERTY_PREPARATION_THREESOLD "preparationThreesold"
+#define IMAGE_PROPERTY_ALIGN_X "alignX"
+#define IMAGE_PROPERTY_ALIGN_Y "alignY"
 
 
-typedef PAKLabel GameLabel;
+
+typedef PAKProperty GameProperty;
 
 struct MetaAssetType
 {
-    u32 subtypeCount;
+    u16 subtypeCount;
     char** names;
 };
 
-#define INVALID_LABEL_VALUE 0xffff
+#define INVALID_PROPERTY_VALUE 0xffff
 #define INVALID_ASSET_SUBTYPE 0xffff
-struct MetaLabelList
+struct MetaPropertyList
 {
     char name[64];
-    u16 labelCount;
-    char** labels;
+    u16 propertyCount;
+    char** properties;
 };
 
 #include "asset_generated.h"
@@ -36,9 +45,9 @@ typedef AssetID ModelId;
 typedef AssetID SkeletonId;
 typedef AssetID SoundId;
 
-struct AssetLabels
+struct GameProperties
 {
-    PAKLabel labels[MAX_LABEL_PER_ASSET];
+    GameProperty properties[MAX_PROPERTIES_PER_ASSET];
 };
 
 struct RenderTexture
@@ -181,7 +190,7 @@ introspection() struct GroundColorationArrayTest
     u32 p1 MetaDefault("2");
     u32 p2 MetaDefault("3");
     
-    GameLabel label;
+    GameProperty property;
 };
 
 introspection() struct ground_coloration
@@ -193,8 +202,8 @@ introspection() struct ground_coloration
     
     GameAssetType asset MetaDefault("{AssetType_Font, AssetFont_debug}") MetaFixed(type);
     
-    ArrayCounter labelCount MetaCounter(labels);
-    GameLabel* labels;
+    ArrayCounter propertyCount MetaCounter(properties);
+    GameProperty* properties;
 };
 
 
@@ -294,6 +303,7 @@ struct AssetFile
 {
     PlatformFileHandle handle;
     PAKFileHeader header;
+    b32 reloading;
 };
 
 struct Assets
@@ -337,10 +347,10 @@ inline b32 IsValid(AssetID ID)
 
 
 #define GetValueFromNames(names, value) GetValueFromNames_(names, ArrayCount(names), value)
-internal u32 GetValueFromNames_(char** names, u32 nameCount, char* value)
+internal u16 GetValueFromNames_(char** names, u16 nameCount, char* value)
 {
-    u32 result = 0;
-    for(u32 nameIndex = 0; nameIndex < nameCount; ++nameIndex)
+    u16 result = 0xffff;
+    for(u16 nameIndex = 0; nameIndex < nameCount; ++nameIndex)
     {
         char* name = names[nameIndex];
         if(StrEqual(value, name))
@@ -366,7 +376,7 @@ internal char* GetNameFromNames_(char** names, u32 nameCount, u32 value)
 
 internal u16 GetMetaAssetType(char* type)
 {
-    u16 result = SafeTruncateToU16(GetValueFromNames(metaAsset_assetType, type));
+    u16 result = GetValueFromNames(metaAsset_assetType, type);
     
     return result;
 }
@@ -388,12 +398,12 @@ internal char* GetAssetTypeName(u16 type)
 
 internal u16 GetMetaAssetSubtype(u16 type, char* subtype)
 {
-    u16 result = 0;
+    u16 result = 0xffff;
     
     if(type < AssetType_Count)
     {
         MetaAssetType sub = metaAsset_subTypes[type];
-        result = SafeTruncateToU16(GetValueFromNames_(sub.names, sub.subtypeCount, subtype));
+        result = GetValueFromNames_(sub.names, sub.subtypeCount, subtype);
     }
     
     return result;

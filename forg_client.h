@@ -12,7 +12,10 @@
 #include "forg_random.h"
 #include "forg_file_formats.h"
 #include "asset_builder.h"
-#include "asset_labels.h"
+
+#define Property(name) enum Property_##name
+#include "../properties/test.properties"
+
 #include "forg_asset.h"
 #include "forg_meta.h"
 #include "forg_render_tier.h"
@@ -60,6 +63,19 @@ struct DayPhase
     ForgDayPhase next;
 };
 
+
+struct ReceivingAssetFile
+{
+    MemoryPool memory;
+    
+    u16 type;
+    u16 subtype;
+    u32 finalSize;
+    u32 chunkSize;
+    u32 runningSize;
+    u8* content;
+};
+
 struct ClientPlayer
 {
     u32 identifier;
@@ -78,11 +94,9 @@ struct ClientPlayer
     PossibleActionType overlappingPossibleActions[Action_Count];
     
     u64 openedContainerID;
+    
+    ReceivingAssetFile* receiving;
 };
-
-
-
-
 
 
 
@@ -102,21 +116,10 @@ struct ClientEntity
     ClientEntity* next;
 };
 
-struct ToDeleteFile
-{
-    char filename[64];
-    b32 toDelete;
-    
-    union
-    {
-        ToDeleteFile* next;
-        ToDeleteFile* nextFree;
-    };
-};
-
 struct GameModeWorld
 {
     struct GameState* gameState;
+    
     
     ClientEntity* nearestEntities[8];
     r32 nearestCameraZ[8];
@@ -138,7 +141,6 @@ struct GameModeWorld
     MemoryPool* temporaryPool;
     
     ClientEntity* entities[1024];
-    
     WorldChunk* chunks[1024];
     
     
@@ -150,19 +152,13 @@ struct GameModeWorld
     ClientAnimationEffect* firstFreeEffect;
     
     RandomSequence leafFlowerFruitSequence;
-    RandomSequence waterRipplesSequence;
     ParticleCache* particleCache;
     
     RandomSequence boltSequence;
     r32 boltTime;
     BoltCache* boltCache;
     
-    TaxonomyTable* table;
-    TaxonomyTable* oldTable;
-    
     ClientPlayer player;
-    
-    r32 modulationWithFocusColor;
     
     
 #if FORGIVENESS_INTERNAL
@@ -179,10 +175,8 @@ struct GameModeWorld
     
     b32 voronoiValid;
     b32 generatingVoronoi;
-    
     VoronoiDiagram voronoiPingPong[2];
     VoronoiDiagram* activeDiagram;
-    WorldTile nullTile;
     
     
     

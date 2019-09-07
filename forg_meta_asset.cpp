@@ -51,47 +51,47 @@ internal void AddToMetaDefinitions_(char* name, u32 size, u32 fieldCount, FieldD
 }
 
 
-global_variable u16 meta_labelTypeCount;
-global_variable MetaLabelList meta_labels[Label_Count];
-global_variable char* meta_labelsString[Label_Count - 1];
-internal u16 GetMetaLabelType(Token labelName)
+global_variable u16 meta_propertyTypeCount;
+global_variable MetaPropertyList meta_properties[Property_Count];
+global_variable char* meta_propertiesString[Property_Count - 1];
+internal u16 GetMetaPropertyType(Token propertyName)
 {
     u16 result = 0;
-    for(u16 labelType = 0; labelType < meta_labelTypeCount; ++labelType)
+    for(u16 propertyType = 0; propertyType < meta_propertyTypeCount; ++propertyType)
     {
-        MetaLabelList* list = meta_labels + labelType;
-        if(TokenEquals(labelName, list->name))
+        MetaPropertyList* list = meta_properties + propertyType;
+        if(TokenEquals(propertyName, list->name))
         {
-            result = labelType;
+            result = propertyType;
             break;
         }
     }
     return result;
 }
 
-internal char* GetMetaLabelTypeName(u16 value)
+internal char* GetMetaPropertyTypeName(u16 value)
 {
     char* result = 0;
-    if(value < meta_labelTypeCount)
+    if(value < meta_propertyTypeCount)
     {
-        MetaLabelList* list = meta_labels + value;
+        MetaPropertyList* list = meta_properties + value;
         result = list->name;
     }
     return result;
 }
 
-internal u16 ExistMetaLabelValue(u16 labelType, Token value)
+internal u16 ExistMetaPropertyValue(u16 propertyType, Token value)
 {
-    u16 result = INVALID_LABEL_VALUE;
-    Assert(labelType < meta_labelTypeCount);
-    MetaLabelList* list = meta_labels + labelType;
+    u16 result = INVALID_PROPERTY_VALUE;
+    Assert(propertyType < meta_propertyTypeCount);
+    MetaPropertyList* list = meta_properties + propertyType;
     
-    for(u16 labelIndex = 0; labelIndex < list->labelCount; ++labelIndex)
+    for(u16 propertyIndex = 0; propertyIndex < list->propertyCount; ++propertyIndex)
     {
-        char* name = list->labels[labelIndex];
+        char* name = list->properties[propertyIndex];
         if(TokenEquals(value, name))
         {
-            result = labelIndex;
+            result = propertyIndex;
             break;
         }
     }
@@ -99,15 +99,15 @@ internal u16 ExistMetaLabelValue(u16 labelType, Token value)
     return result;
 }
 
-internal char* GetMetaLabelValueName(u16 labelType, u16 labelValue)
+internal char* GetMetaPropertyValueName(u16 propertyType, u16 propertyValue)
 {
     char* result = 0;
-    if(labelType < meta_labelTypeCount)
+    if(propertyType < meta_propertyTypeCount)
     {
-        MetaLabelList* list = meta_labels + labelType;
-        if(labelValue < list->labelCount)
+        MetaPropertyList* list = meta_properties + propertyType;
+        if(propertyValue < list->propertyCount)
         {
-            result = list->labels[labelValue];
+            result = list->properties[propertyValue];
         }
     }
     return result;
@@ -140,43 +140,43 @@ internal StringArray GetAssetSubtypeList(u16 type)
     return result;
 }
 
-internal StringArray GetLabelTypeList()
+internal StringArray GetPropertyTypeList()
 {
     StringArray result = {};
     
-    result.strings = meta_labelsString;
-    result.count = meta_labelTypeCount - 1; // NOTE(Leonardo): avoid the "invalid" label
+    result.strings = meta_propertiesString;
+    result.count = meta_propertyTypeCount - 1; // NOTE(Leonardo): avoid the "invalid" property
     
     return result;
 }
 
 
-internal StringArray GetLabelValueList(u16 labelType)
+internal StringArray GetPropertyValueList(u16 propertyType)
 {
     StringArray result = {};
     
-    Assert(labelType < meta_labelTypeCount);
-    MetaLabelList* list = meta_labels + labelType;
+    Assert(propertyType < meta_propertyTypeCount);
+    MetaPropertyList* list = meta_properties + propertyType;
     
-    result.strings = list->labels;
-    result.count = list->labelCount;
+    result.strings = list->properties;
+    result.count = list->propertyCount;
     
     return result;
 }
 
 
-#define AddToMetaLabels(name, labels) AddToMetaLabels_(#name, ArrayCount(labels), labels)
-internal void AddToMetaLabels_(char* name, u16 labelCount, char** labels)
+#define AddToMetaProperties(name, properties) AddToMetaProperties_(#name, ArrayCount(properties), properties)
+internal void AddToMetaProperties_(char* name, u16 propertyCount, char** properties)
 {
-    Assert(meta_labelTypeCount < ArrayCount(meta_labels));
-    MetaLabelList* list = meta_labels + meta_labelTypeCount++;
+    Assert(meta_propertyTypeCount < ArrayCount(meta_properties));
+    MetaPropertyList* list = meta_properties + meta_propertyTypeCount++;
     
     FormatString(list->name, sizeof(list->name), "%s", name);
-    list->labelCount = labelCount;
-    list->labels = labels;
+    list->propertyCount = propertyCount;
+    list->properties = properties;
 }
 
-char* MetaLabels_Invalid[] =
+char* MetaProperties_Invalid[] =
 {
     "invalid",
 };
@@ -189,9 +189,9 @@ internal void LoadMetaData()
     AddToMetaDefinitions(Vec3, fieldDefinitionOfVec3);
     AddToMetaDefinitions(Vec4, fieldDefinitionOfVec4);
     
-    AddToMetaLabels(INVALID, MetaLabels_Invalid);
-    META_LABELS_ADD();
-    META_ASSET_LABEL_STRINGS();
+    AddToMetaProperties(Invalid, MetaProperties_Invalid);
+    META_PROPERTIES_ADD();
+    META_ASSET_PROPERTIES_STRINGS();
 }
 
 
@@ -293,16 +293,16 @@ internal void Dump_Hash64(Stream* output, FieldDefinition* field, Hash64 value, 
     }
 }
 
-internal u32 PackLabel(GameLabel label)
+internal u32 PackProperty(GameProperty property)
 {
-    u32 result = (u32) (label.label << 16) | (u32) (label.value);
+    u32 result = (u32) (property.property << 16) | (u32) (property.value);
     return result;
 }
 
-internal GameLabel UnpackLabel(u32 packed)
+internal GameProperty UnpackProperty(u32 packed)
 {
-    GameLabel result;
-    result.label = (u16) (packed >> 16);
+    GameProperty result;
+    result.property = (u16) (packed >> 16);
     result.value = (u16) (packed & 0xffff);
     
     return result;
@@ -323,27 +323,27 @@ internal GameAssetType UnpackAssetType(u32 packed)
     return result;
 }
 
-internal GameLabel Parse_GameLabel(Tokenizer* tokenizer, GameLabel defaultVal)
+internal GameProperty Parse_GameProperty(Tokenizer* tokenizer, GameProperty defaultVal)
 {
-    GameLabel result = defaultVal;
+    GameProperty result = defaultVal;
     
     Token t = GetToken(tokenizer);
     Assert(t.type == Token_Number);
     u32 packed = StringToUInt32(t.text);
-    result = UnpackLabel(packed);
+    result = UnpackProperty(packed);
     return result;
 }
 
-internal void Dump_GameLabel(Stream* output, FieldDefinition* field, GameLabel value, b32 isInArray)
+internal void Dump_GameProperty(Stream* output, FieldDefinition* field, GameProperty value, b32 isInArray)
 {
-    u32 packed = PackLabel(value);
+    u32 packed = PackProperty(value);
     if(isInArray)
     {
         OutputToStream(output, "%d", packed);
     }
     else
     {
-        u32 def = PackLabel(field->def.def_GameLabel);
+        u32 def = PackProperty(field->def.def_GameProperty);
         if(packed != def)
         {
             OutputToStream(output, "%s=%d;", field->name, packed);
@@ -552,7 +552,7 @@ internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray)
 internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray);
 internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray);
 internal b32 Edit_Hash64(EditorLayout* layout, char* name, Hash64* h, char* optionsName, b32 isInArray);
-internal b32 Edit_GameLabel(EditorLayout* layout, char* name, GameLabel* label, b32 isInArray);
+internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* property, b32 isInArray);
 internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray);
 internal void NextRaw(EditorLayout* layout);
 internal void Nest(EditorLayout* layout);
@@ -599,7 +599,7 @@ internal StructOperationResult type##Operation(EditorLayout* layout, FieldDefini
 
 STANDARD_OPERATION_FUNCTION(u32);
 STANDARD_OPERATION_FUNCTION(r32);
-STANDARD_OPERATION_FUNCTION(GameLabel);
+STANDARD_OPERATION_FUNCTION(GameProperty);
 STANDARD_OPERATION_FUNCTION(Vec2);
 STANDARD_OPERATION_FUNCTION(Vec3);
 STANDARD_OPERATION_FUNCTION(Vec4);
@@ -757,7 +757,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
             DUMB_OPERATION(Vec3);
             DUMB_OPERATION(Vec4);
             DUMB_OPERATION(Hash64);
-            DUMB_OPERATION(GameLabel);
+            DUMB_OPERATION(GameProperty);
             DUMB_OPERATION(GameAssetType);
             
             default:
@@ -880,7 +880,7 @@ internal void CopyDefaultValue(FieldDefinition* field, void* ptr)
             DUMB_COPY_DEF(Vec4);
             DUMB_COPY_DEF(Hash64);
             DUMB_COPY_DEF(ArrayCounter);
-            DUMB_COPY_DEF(GameLabel);
+            DUMB_COPY_DEF(GameProperty);
             DUMB_COPY_DEF(GameAssetType);
             
             InvalidDefaultCase;

@@ -17,7 +17,7 @@ enum MetaType
     MetaType_b32,
     MetaType_ArrayCounter, // NOTE(Leonardo): u16
     MetaType_Hash64,
-    MetaType_GameLabel,
+    MetaType_GameProperty,
     MetaType_GameAssetType,
     
     
@@ -53,7 +53,7 @@ union DefaultFieldValue
     Vec3 def_Vec3;
     Vec4 def_Vec4;
     Hash64 def_Hash64;
-    GameLabel def_GameLabel;
+    GameProperty def_GameProperty;
     GameAssetType def_GameAssetType;
 };
 

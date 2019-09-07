@@ -259,74 +259,56 @@ inline Token FirstUnderScore( Token token )
     return result;
 }
 
-struct MetaLabel
+struct MetaProperty
 {
     char* name;
-    MetaLabel* next;
+    MetaProperty* next;
 };
 
 
-bool ParseLabelParam(Tokenizer* tokenizer)
+global_variable MetaProperty* firstPropertyList;
+void ParseProperties(Tokenizer* tokenizer)
 {
-    bool result = true;
-    for(;;)
-    {
-        Token token = GetToken( tokenizer );
-        if(token.type == Token_Identifier)
-        {
-        }
-        
-        if( token.type == Token_CloseParen || token.type == Token_EndOfFile )
-        {
-            break;
-        }
-    }
-    return result;
-}
-
-global_variable MetaLabel* firstLabelList;
-void ParseLabels(Tokenizer* tokenizer)
-{
-    ParseLabelParam(tokenizer);
-    
-    Token enumToken = GetToken(tokenizer);
-    if( TokenEquals( enumToken, "enum" ) )
+    if(RequireToken(tokenizer, Token_OpenParen))
     {
         Token nameToken = GetToken(tokenizer);
         Assert( nameToken.type == Token_Identifier );
-        printf( "char* MetaLabels_%.*s[] = \n {\n", nameToken.textLength, nameToken.text );
+        printf( "char* MetaProperties_%.*s[] = \n {\n", nameToken.textLength, nameToken.text );
         
-        if(RequireToken(tokenizer, Token_OpenBraces))
+        if(RequireToken(tokenizer, Token_CloseParen))
         {
-            for(;;)
+            if(RequireToken(tokenizer, Token_OpenBraces))
             {
-                Token element = GetToken(tokenizer);
-                if( element.type == Token_CloseBraces)
+                for(;;)
                 {
-                    break;
-                }
-                else
-                {
-                    if(element.type == Token_Identifier)
+                    Token element = GetToken(tokenizer);
+                    if( element.type == Token_CloseBraces)
                     {
-                        element = FirstUnderScore(element);
-                        printf( "\"%.*s\",\n", element.textLength, element.text );
+                        break;
+                    }
+                    else
+                    {
+                        if(element.type == Token_Identifier)
+                        {
+                            element = FirstUnderScore(element);
+                            printf( "\"%.*s\",\n", element.textLength, element.text );
+                        }
                     }
                 }
             }
+            printf( "};\n" );
+            printf( "\n" );
+            
+            
+            
+            MetaProperty* meta = ( MetaProperty* ) malloc( sizeof( MetaProperty ) );
+            meta->name = ( char* ) malloc(nameToken.textLength + 1);
+            memcpy(meta->name, nameToken.text, nameToken.textLength);
+            meta->name[nameToken.textLength] = 0;
+            
+            meta->next = firstPropertyList;
+            firstPropertyList = meta;
         }
-        printf( "};\n" );
-        printf( "\n" );
-        
-        
-        
-        MetaLabel* meta = ( MetaLabel* ) malloc( sizeof( MetaLabel ) );
-        meta->name = ( char* ) malloc(nameToken.textLength + 1);
-        memcpy(meta->name, nameToken.text, nameToken.textLength);
-        meta->name[nameToken.textLength] = 0;
-        
-        meta->next = firstLabelList;
-        firstLabelList = meta;
     }
     else
     {
@@ -492,11 +474,10 @@ int main( int argc, char** argv )
         "forg_AI.cpp",
         "forg_AI.h",
         "forg_editor.h",
-        "forg_client.h",
         "forg_animation.h",
         "forg_particles.h",
         "forg_asset.h",
-        "asset_labels.h",
+        "../properties/test.properties",
     };
     for( int fileIndex = 0; fileIndex < sizeof( fileNames ) / sizeof( fileNames[0] ); ++fileIndex )
     {
@@ -534,9 +515,9 @@ int main( int argc, char** argv )
                     {
                         ParseEnumTable( &tokenizer );
                     }
-                    else if(TokenEquals(token, "printLabels"))
+                    else if(TokenEquals(token, "Property"))
                     {
-                        ParseLabels(&tokenizer);
+                        ParseProperties(&tokenizer);
                     }
                     
 					else if(TokenEquals(token, "printFlags"))
@@ -563,31 +544,31 @@ int main( int argc, char** argv )
     }
     printf( "\n" );
     
-    printf( "#define META_LABELS_ADD()\\\n" );
-    for(MetaLabel* meta = firstLabelList; meta; meta = meta->next)
+    printf( "#define META_PROPERTIES_ADD()\\\n" );
+    for(MetaProperty* meta = firstPropertyList; meta; meta = meta->next)
     {
-        printf("AddToMetaLabels(%s, MetaLabels_%s);", meta->name, meta->name); 
+        printf("AddToMetaProperties(%s, MetaProperties_%s);", meta->name, meta->name); 
         
         printf( meta->next ? "\\" : "" );
         printf( "\n" );
     }
     printf( "\n" );
     
-    printf("enum Labels\n{\n");
-    printf("Label_Invalid,\n");
-    for(MetaLabel* meta = firstLabelList; meta; meta = meta->next)
+    printf("enum Propertys\n{\n");
+    printf("Property_Invalid,\n");
+    for(MetaProperty* meta = firstPropertyList; meta; meta = meta->next)
     {
-        printf("%s,", meta->name); 
+        printf("Property_%s,", meta->name); 
         printf( "\n" );
     }
     
-    printf("Label_Count,\n");
+    printf("Property_Count,\n");
     printf( "};\n" );
     
-    printf("#define META_ASSET_LABEL_STRINGS()\\\n");
-    for(MetaLabel* meta = firstLabelList; meta; meta = meta->next)
+    printf("#define META_ASSET_PROPERTIES_STRINGS()\\\n");
+    for(MetaProperty* meta = firstPropertyList; meta; meta = meta->next)
     {
-        printf("meta_labelsString[%s - 1] = \"%s\";\\\n", meta->name, meta->name);
+        printf("meta_propertiesString[Property_%s - 1] = \"%s\";\\\n", meta->name, meta->name);
     }
     printf("\n");
     

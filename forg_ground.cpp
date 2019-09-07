@@ -963,9 +963,9 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                         
                         
                         Vec4 tileColor = V4(0, 1, 0, 1);
-                        AssetLabels labels = {};
+                        GameProperties properties = {};
                         
-                        AssetID ID = QueryAssets(group->assets, AssetType_ground_coloration, 0, &seq, &labels);
+                        AssetID ID = QueryAssets(group->assets, AssetType_ground_coloration, 0, &seq, &properties);
                         if(IsValid(ID))
                         {
                             ground_coloration* groundColoration = GetData(ground_coloration, group->assets, ID);

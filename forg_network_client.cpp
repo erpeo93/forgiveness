@@ -110,28 +110,6 @@ internal void SendInputRecordingMessage( b32 recording, b32 startAutomatically )
 }
 #endif
 
-internal void TrackUpdate( ClientPlayer* player, Vec3 acceleration, Vec3 velocity )
-{
-#if 0    
-    NotImplemented;
-    SimEntity* entity = &player->P;
-    u32 ackIndex = player->firstFreeAck++;
-    
-    if( player->firstFreeAck == ArrayCount( player->updateToAck ) )
-    {
-        player->firstFreeAck = 0;
-    }
-    
-    SendedUpdate* toFill = player->updateToAck + ackIndex;
-    toFill->sequenceNumber = player->actionSequenceNumber;
-    toFill->p = entity->regionPosition;
-    toFill->acceleration = acceleration;
-    toFill->velocity = velocity;
-    toFill->valid = true;
-#endif
-    
-}
-
 internal void SendUpdate(Vec3 acceleration)
 {
     StartPacket(ActionRequest);
@@ -284,19 +262,6 @@ internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
 }
 
 
-inline void SendNewTabMessage()
-{
-    StartPacket(NewEditorTab);
-    CloseAndSendReliablePacket();
-}
-
-
-inline void SendRebuildAssetsRequest()
-{
-    StartPacket(RebuildAssets);
-    CloseAndSendReliablePacket();
-}
-
 inline void SendPatchServerRequest()
 {
     StartPacket(PatchLocalServer);
@@ -309,19 +274,6 @@ inline void SendPatchCheckRequest()
     CloseAndSendReliablePacket();
 }
 
-inline void SendSaveTabRequest(u32 taxonomy)
-{
-    StartPacket(SaveSlotTabToFile);
-    Pack("L", taxonomy);
-    CloseAndSendReliablePacket();
-}
-
-inline void SendReloadEditingMessage(u32 taxonomy, u32 tabIndex)
-{
-    StartPacket(ReloadEditingSlot);
-    Pack("LL", taxonomy, tabIndex);
-    CloseAndSendReliablePacket();
-}
 
 inline void SendMovePlayerRequest(Vec3 offset)
 {
@@ -343,10 +295,10 @@ inline void SendRegenerateWorldChunksRequest(u32 worldSeed, GenerateWorldMode ge
     CloseAndSendReliablePacket();
 }
 
-inline void SendFileHash(char* fileName, u64 hash)
+inline void SendFileHash(u16 type, u16 subtype, u64 hash)
 {
     StartPacket(FileHash);
-    Pack("sQ", fileName, hash);
+    Pack("HHQ", type, subtype, hash);
     CloseAndSendReliablePacket();
 }
 
@@ -383,6 +335,8 @@ inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, 
 inline void AddSkillAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, u32 skillTaxonomy, u64 targetID, u32 animationEffectFlags);
 internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
+    ClientPlayer* player = &worldMode->player;
+    
     ClientEntity* currentEntity = 0;
     ClientEntity* currentContainer = 0;
     u16 readSize = 0;
@@ -417,16 +371,22 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 
 #if 0                
-                for(u32 fileIndex = 0; fileIndex < gameState->assets->fileCount; fileIndex++)
+                MemoryPool tempPool = {};
+                for(every asset file)
                 {
-                    AssetFile* file = gameState->assets->files + fileIndex;
-                    PlatformFileHandle* handle = &file->handle;
-                    if(!StrEqual(handle->name, ".") && !StrEqual(handle->name, ".."))
+                    TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+                    AssetFile* file = GetAssetFile(assets, fileIndex);
+                    PAKFileHeader* header = GetFileHeader(assets, fileIndex);
+                    u64 hash = ComputeHash();
+                    AssetSubtypeArray* assets = GetAssetSubtype(assets, header);
+                    if(assets)
                     {
-                        u64 hash;
-                        platformAPI.ReadFromFile(handle, 0, sizeof(u64), &hash);
-                        SendFileHash(handle->name, hash);
+                        u16 type = ?;
+                        u16 subtype = ?;
+                        SendFileHash(type, subtype, hash);
                     }
+                    
+                    EndTemporaryMemory(fileMemory);
                 }
 #endif
                 
@@ -482,6 +442,85 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 if(e->identifier == worldMode->player.identifier)
                 {
                     worldMode->player.universeP = P;
+                }
+            } break;
+            
+            
+            case Type_FileHeader:
+            {
+                player->receiving = BootstrapPushStruct(ReceivingAssetFile, memory);
+                ReceivingAssetFile* receiving = player->receiving;
+                
+                Unpack("HHLL", &receiving->type, &receiving->subtype, &receiving->finalSize, &receiving->chunkSize);
+                receiving->runningSize = 0;
+                receiving->content = PushSize(&receiving->memory, receiving->finalSize);
+            } break;
+            
+            case Type_FileChunk:
+            {
+                ReceivingAssetFile* receiving = player->receiving;
+                u8* source = packetPtr;
+                u8* dest = receiving->content + receiving->runningSize;
+                
+                u32 sizeToCopy = Min(receiving->chunkSize, receiving->finalSize - receiving->runningSize);
+                Copy(sizeToCopy, dest, packetPtr);
+                
+                packetPtr += sizeToCopy;
+                receiving->runningSize += sizeToCopy;
+                if(receiving->runningSize >= receiving->finalSize)
+                {
+                    Assert(receiving->runningSize == receiving->finalSize);
+                    Assets* assets = gameState->assets;
+                    AssetFile* destFile = 0;
+                    u32 destFileIndex = 0;
+                    
+                    for(u32 fileIndex = 0; fileIndex < assets->fileCount; ++fileIndex)
+                    {
+                        AssetFile* file = GetAssetFile(assets, fileIndex);
+                        u16 type = GetMetaAssetType(file->header.type);
+                        u16 subtype = GetMetaAssetSubtype(type, file->header.subtype);
+                        
+                        if(receiving->type == type && receiving->subtype == subtype)
+                        {
+                            platformAPI.CloseFile(&file->handle);
+                            destFile = file;
+                            destFileIndex = fileIndex;
+                            
+                            break;
+                        }
+                    }
+                    
+                    
+                    
+                    if(!destFile)
+                    {
+                        destFileIndex = assets->fileCount++;
+                        destFile = GetAssetFile(assets, destFileIndex);
+                    }
+                    //platformAPI.deletefile(preexisting);
+                    char* type = GetAssetTypeName(receiving->type);
+                    char* subtype = GetAssetSubtypeName(receiving->type, receiving->subtype);
+                    
+                    char newName[128];
+                    FormatString(newName, sizeof(newName), "%s_%s", type, subtype);
+                    platformAPI.ReplaceFile(PlatformFile_uncompressedAsset, ASSETS_PATH, newName, receiving->content, receiving->finalSize);
+                    
+                    char path[64];
+                    PlatformFileGroup fake = {};
+                    fake.path = path;
+                    FormatString(fake.path, sizeof(path), "%s", ASSETS_PATH);
+                    
+                    char name[64];
+                    PlatformFileInfo fakeInfo = {};
+                    fakeInfo.name = name;
+                    FormatString(fakeInfo.name, sizeof(name), "%s", newName);
+                    
+                    destFile->handle = platformAPI.OpenFile(&fake, &fakeInfo);
+                    ReloadAssetFile(assets, destFile, destFileIndex, &receiving->memory);
+                    
+                    
+                    Clear(&receiving->memory);
+                    player->receiving = 0;
                 }
             } break;
             
@@ -882,65 +921,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             {
                 ClientEntity* player = GetEntityClient(worldMode, worldMode->player.identifier);
                 player->draggingID = 0;
-            } break;
-            
-            case Type_DataFileHeader:
-            {
-                DataFileArrived* dataFile = PushStruct(&worldMode->filePool, DataFileArrived);
-                FREELIST_INSERT(dataFile, worldMode->firstDataFileArrived);
-                Unpack("sLL", dataFile->name, &dataFile->fileSize, &dataFile->chunkSize);
-                
-                dataFile->data = PushSize(&worldMode->filePool, dataFile->fileSize);
-                dataFile->runningFileSize = 0;
-                
-                worldMode->currentFile = dataFile;
-            } break;
-            
-            case Type_PakFileHeader:
-            {
-                DataFileArrived* pakFile = PushStruct(&worldMode->filePool, DataFileArrived);
-                FREELIST_INSERT(pakFile, worldMode->firstPakFileArrived);
-                Unpack("sLL", pakFile->name, &pakFile->fileSize, &pakFile->chunkSize);
-                
-                pakFile->data = PushSize(&worldMode->filePool, pakFile->fileSize);
-                pakFile->runningFileSize = 0;
-                
-                worldMode->currentFile = pakFile;
-            } break;
-            
-            case Type_FileChunk:
-            {
-                DataFileArrived* file = worldMode->currentFile;
-                u8* source = packetPtr;
-                u8* dest = file->data + file->runningFileSize;
-                
-                u32 sizeToCopy = Min(file->chunkSize, file->fileSize - file->runningFileSize);
-                Copy(sizeToCopy, dest, packetPtr);
-                
-                packetPtr += sizeToCopy;
-                
-                file->runningFileSize += sizeToCopy;
-                
-                Assert(file->runningFileSize <= file->fileSize);
-            } break;
-            
-            case Type_DontDeleteFile:
-            {
-                char filename[64];
-                Unpack("s", filename);
-                MarkFileAsArrived(worldMode, filename);
-            } break;
-            
-            case Type_AllDataFileSent:
-            {
-                CompletePastWritesBeforeFutureWrites;
-                Unpack("L", &worldMode->dataFileSent);
-            } break;
-            
-            case Type_AllPakFileSent:
-            {
-                CompletePastWritesBeforeFutureWrites;
-                worldMode->allPakFilesArrived = true;
             } break;
             
             case Type_PatchLocalServer:

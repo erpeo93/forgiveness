@@ -95,12 +95,22 @@ internal void GetFileExtensions(FileExtension* ext, u32 types)
     
     if(types & PlatformFile_markup)
     {
-        AddExtension(ext, "tag");
+        AddExtension(ext, "markup");
     }
     
     if(types & PlatformFile_reloadedAsset)
     {
         AddExtension(ext, "rll");
+    }
+    
+    if(types & PlatformFile_timestamp)
+    {
+        AddExtension(ext, "timestamp");
+    }
+    
+    if(types & PlatformFile_properties)
+    {
+        AddExtension(ext, "properties");
     }
 }
 
@@ -186,6 +196,9 @@ internal PLATFORM_GET_ALL_FILE_BEGIN(Win32GetAllFilesBegin)
             PlatformFileInfo* info = PushStruct(&group->memory, PlatformFileInfo);
             info->size = ((u64)findData.nFileSizeHigh << (u64)32) | ((u64)findData.nFileSizeLow);
             info->name = PushNullTerminatedString(&group->memory, findData.cFileName);
+            
+            info->timestamp = ((u64)findData.ftLastWriteTime.dwHighDateTime << (u64) 32) | (u64) findData.ftLastWriteTime.dwLowDateTime;
+            
             
             info->next = result.firstFileInfo;
             result.firstFileInfo = info;
