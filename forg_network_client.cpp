@@ -494,6 +494,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     
                     if(!destFile)
                     {
+                        Assert(assets->fileCount < assets->maxFileCount);
                         destFileIndex = assets->fileCount++;
                         destFile = GetAssetFile(assets, destFileIndex);
                     }
@@ -513,7 +514,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     char name[64];
                     PlatformFileInfo fakeInfo = {};
                     fakeInfo.name = name;
-                    FormatString(fakeInfo.name, sizeof(name), "%s", newName);
+                    FormatString(fakeInfo.name, sizeof(name), "%s.upak", newName);
                     
                     destFile->handle = platformAPI.OpenFile(&fake, &fakeInfo);
                     ReloadAssetFile(assets, destFile, destFileIndex, &receiving->memory);

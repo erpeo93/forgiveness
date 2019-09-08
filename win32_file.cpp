@@ -170,7 +170,7 @@ internal PLATFORM_GET_ALL_FILE_BEGIN(Win32GetAllFilesBegin)
     pathString[0] = 0;
     if(path)
     {
-        FormatString(pathString, sizeof(pathString), "%s/", path);
+        FormatString(pathString, sizeof(pathString), "%s", path);
     }
     
     char completePath[128];
@@ -186,7 +186,7 @@ internal PLATFORM_GET_ALL_FILE_BEGIN(Win32GetAllFilesBegin)
     for(u32 extensionIndex = 0; extensionIndex < ext.count; ++extensionIndex)
     {
         char* extension = GetExtension(&ext, extensionIndex);
-        FormatString(completePath, sizeof(completePath), "%s*.%s",  pathString, extension);
+        FormatString(completePath, sizeof(completePath), "%s/*.%s",  pathString, extension);
         WIN32_FIND_DATAA findData;
         HANDLE findHandle = FindFirstFileA(completePath, &findData);
         while(findHandle != INVALID_HANDLE_VALUE)
@@ -233,7 +233,7 @@ internal PLATFORM_OPEN_FILE(Win32OpenFile)
     PlatformFileHandle result = {};
     
     char completePath[128];
-    FormatString(completePath, sizeof(completePath), "%s%s", group->path, info->name);
+    FormatString(completePath, sizeof(completePath), "%s/%s", group->path, info->name);
     
     HANDLE handle = CreateFile(completePath, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_ALWAYS, 0, 0);
     result.noErrors = (handle != INVALID_HANDLE_VALUE);

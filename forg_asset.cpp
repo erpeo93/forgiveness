@@ -116,6 +116,46 @@ struct GetAssetResult
     b32 derived;
 };
 
+internal Asset* GetAsset(AssetSubtypeArray* assets, u16 index)
+{
+    Asset* result = 0;
+    
+    u16 runningIndex = index;
+    AssetBlock* block = assets->firstAssetBlock;
+    while(true)
+    {
+        if(index < ASSETS_PER_BLOCK)
+        {
+            break;
+        }
+        block = block->next;
+        index -= ASSETS_PER_BLOCK;
+    }
+    
+    Assert(block);
+    result = block->assets + index;
+    
+    return result;
+}
+
+internal AssetBlock* AcquireAssetBlocks(Assets* assets, u16 assetCount)
+{
+    AssetBlock* result = 0;
+    Assert(assetCount > 0);
+    u16 blockCount = ((assetCount - 1) / ASSETS_PER_BLOCK) + 1;
+    
+    for(u16 blockIndex = 0; blockIndex < blockCount; ++blockIndex)
+    {
+        AssetBlock* block;
+        FREELIST_ALLOC(block, assets->firstFreeAssetBlock, PushStruct(assets->blockPool, AssetBlock));
+        block->next = result;
+        result = block;
+    }
+    
+    return result;
+}
+
+
 
 inline GetAssetResult GetAssetRaw(Assets* assets, AssetID ID)
 {
@@ -129,7 +169,7 @@ inline GetAssetResult GetAssetRaw(Assets* assets, AssetID ID)
     AssetSubtypeArray* subtype = array->subtypes + ID.subtype;
     
     Assert(ID.index < (subtype->standardAssetCount + subtype->derivedAssetCount));
-    Asset* asset = subtype->assets + ID.index;
+    Asset* asset = GetAsset(subtype, ID.index);
     
     result.asset = asset;
     result.derived = (ID.index >= subtype->standardAssetCount);
@@ -343,7 +383,6 @@ inline u32 AcquireTextureHandle(Assets* assets)
         AssetLRULink* free = sentinel->next;
         Assert(free);
         DLLIST_REMOVE(free);
-        
         Asset* LRU = (Asset*) free;
         result = LRU->textureHandle.index;
         Clear(&LRU->textureHandle);
@@ -659,13 +698,10 @@ internal void LoadAssetFile(Assets* assets, AssetFile* file, AssetSubtypeArray* 
     u64 assetOffset = sizeof(PAKFileHeader);
     platformAPI.ReadFromFile(&file->handle, assetOffset, pakAssetArraySize, pakAssetArray);
     
-    for(u32 assetIndex = 0; assetIndex < assetCount; assetIndex++)
+    for(u16 assetIndex = 0; assetIndex < assetCount; assetIndex++)
     {
-        Asset* dest = assetSubtypeArray->assets + assetIndex;
-        
-        dest->LRU = {};
-        dest->data = 0;
-        dest->textureHandle = {};
+        Asset* dest = GetAsset(assetSubtypeArray, assetIndex);
+        Assert(dest->data == 0);
         dest->paka = pakAssetArray[assetIndex];
         
         dest->state = Asset_unloaded;
@@ -676,35 +712,62 @@ internal void LoadAssetFile(Assets* assets, AssetFile* file, AssetSubtypeArray* 
         if(assetType == AssetType_Skeleton ||
            (assetType == AssetType_Image && assetIndex >= file->header.standardAssetCount))
         {
-            dest->state = Asset_loaded;
+            dest->state = Asset_loadedNoData;
         }
     }
     EndTemporaryMemory(assetMemory);
 }
 
+internal b32 InitFileAssetHeader(AssetFile* file)
+{
+    b32 result = false;
+    ZeroStruct(file->header);
+    platformAPI.ReadFromFile(&file->handle, 0, sizeof(file->header), &file->header);
+    if(PlatformNoFileErrors(&file->handle))
+    {
+        result = true;
+    }
+    PAKFileHeader* header = &file->header;
+    if(header->magicValue != PAK_MAGIC_NUMBER)
+    {
+        result = false;
+        platformAPI.FileError(&file->handle, "magic number not valid");
+    }
+    
+    if(header->version != PAK_VERSION)
+    {
+        result = false;
+        platformAPI.FileError(&file->handle, "pak file version not valid");
+    }
+    
+    return result;
+}
 
 internal void ReloadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, MemoryPool* pool)
 {
-    AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, &file->header);
-    Assert(assetSubtypeArray);
-    u16 assetCount = (assetSubtypeArray->standardAssetCount + assetSubtypeArray->derivedAssetCount);
-    for(u32 assetIndex = 0; assetIndex < assetCount; ++assetIndex)
+    if(InitFileAssetHeader(file))
     {
-        Asset* asset = assetSubtypeArray->assets + assetIndex;
-        if(asset->state == Asset_loaded || asset->state == Asset_preloaded)
+        AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, &file->header);
+        Assert(assetSubtypeArray);
+        u16 assetCount = (assetSubtypeArray->standardAssetCount + assetSubtypeArray->derivedAssetCount);
+        for(u16 assetIndex = 0; assetIndex < assetCount; ++assetIndex)
         {
-            FreeAsset(assets, asset);
+            Asset* asset = GetAsset(assetSubtypeArray, assetIndex);
+            if(asset->state == Asset_loaded || asset->state == Asset_preloaded)
+            {
+                FreeAsset(assets, asset);
+            }
         }
+        FREELIST_FREE(assetSubtypeArray->firstAssetBlock, AssetBlock, assets->firstFreeAssetBlock);
+        
+        assetSubtypeArray->standardAssetCount = file->header.standardAssetCount;
+        assetSubtypeArray->derivedAssetCount = file->header.derivedAssetCount;
+        u16 newAssetCount = assetSubtypeArray->standardAssetCount + assetSubtypeArray->derivedAssetCount;
+        
+        assetSubtypeArray->firstAssetBlock = AcquireAssetBlocks(assets, newAssetCount);
+        assetSubtypeArray->fileIndex = fileIndex;
+        LoadAssetFile(assets, file, assetSubtypeArray, pool);
     }
-    
-    Assert(assetSubtypeArray->standardAssetCount == file->header.standardAssetCount);
-    Assert(assetSubtypeArray->derivedAssetCount == file->header.derivedAssetCount);
-    
-    assetSubtypeArray->standardAssetCount = file->header.standardAssetCount;
-    assetSubtypeArray->derivedAssetCount = file->header.derivedAssetCount;
-    //assetSubtypeArray->assets = PushArray(pool, Asset, assetCount, NoClear());
-    assetSubtypeArray->fileIndex = fileIndex;
-    LoadAssetFile(assets, file, assetSubtypeArray, pool);
 }
 
 internal void WriteAssetMarkupDataToStream(Stream* stream, AssetType type, PAKAsset* asset, b32 derivedAsset)
@@ -784,13 +847,17 @@ internal void DumpColorationToStream(PAKColoration* coloration, Stream* stream)
                    coloration->color.a);
 }
 
-internal void WritebackAssetFileToFileSystem(Assets* assets, char* assetType, char* assetSubtype, char* basePath)
+internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* basePath)
 {
+    u16 type = ID.type;
+    u16 subtype = ID.subtype;
+    u16 index = ID.index;
+    
+    char* assetType = GetAssetTypeName(type);
+    char* assetSubtype = GetAssetSubtypeName(type, subtype);
+    
     char path[128];
     FormatString(path, sizeof(path), "%s/%s/%s", basePath, assetType, assetSubtype);
-    
-    u16 type = GetMetaAssetType(assetType);
-    u16 subtype = GetMetaAssetSubtype(type, assetSubtype);
     
     AssetSubtypeArray* assetSubtypeArray = GetAssetSubtype(assets, assetType, assetSubtype);
     Assert(assetSubtypeArray);
@@ -798,60 +865,58 @@ internal void WritebackAssetFileToFileSystem(Assets* assets, char* assetType, ch
     
     Stream metaDataStream = PushStream(&tempPool, MegaBytes(1));
     
-    u16 assetCount = (assetSubtypeArray->standardAssetCount + assetSubtypeArray->derivedAssetCount);
-    for(u32 assetIndex = 0; assetIndex < assetCount; ++assetIndex)
+    Asset* asset = GetAsset(assetSubtypeArray, index);
+    b32 derivedAsset = (index >= assetSubtypeArray->standardAssetCount);
+    
+    WriteAssetMarkupDataToStream(&metaDataStream, (AssetType) type, &asset->paka, derivedAsset);
+    TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+    switch(type)
     {
-        Asset* asset = assetSubtypeArray->assets + assetIndex;
-        
-        b32 derivedAsset = (assetIndex >= assetSubtypeArray->standardAssetCount);
-        
-        WriteAssetMarkupDataToStream(&metaDataStream, (AssetType) type, &asset->paka, derivedAsset);
-        TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
-        switch(type)
+        case AssetType_Font:
+        case AssetType_Model:
+        case AssetType_Skeleton:
+        case AssetType_Sound:
         {
-            
-            case AssetType_Font:
-            case AssetType_Model:
-            case AssetType_Skeleton:
-            case AssetType_Sound:
-            {
-                // NOTE(Leonardo): we can't possibly have edited these!
-            } break;
-            
-            case AssetType_Image:
-            {
-                if(derivedAsset)
-                {
-                    Stream file = PushStream(&tempPool, KiloBytes(1));
-                    DumpColorationToStream(&asset->paka.coloration, &file);
-                    char* filename = asset->paka.sourceName;
-                    
-                    char filenameNoExtension[64];
-                    TrimToFirstCharacter(filenameNoExtension, sizeof(filenameNoExtension), filename, '.');
-                    
-                    platformAPI.ReplaceFile(PlatformFile_Coloration, path, filenameNoExtension, file.begin, file.written);
-                }
-            } break;
-            
-            default:
-            {
-                Stream file = PushStream(&tempPool, MegaBytes(16));
-                char* metaAssetType = metaAsset_assetType[type];
-                String structName = {};
-                structName.ptr = metaAssetType;
-                structName.length = StrLen(metaAssetType);
-                
-                DumpStructToStream(structName, &file, asset->data);
-                char* filename = asset->paka.sourceName;
-                platformAPI.ReplaceFile(PlatformFile_data, path, filename, file.begin, file.written);
-            } break;
-            
-        }
+            // NOTE(Leonardo): we can't possibly have edited these!
+        } break;
         
-        EndTemporaryMemory(fileMemory);
+        case AssetType_Image:
+        {
+            if(derivedAsset)
+            {
+                Stream file = PushStream(&tempPool, KiloBytes(1));
+                DumpColorationToStream(&asset->paka.coloration, &file);
+                char* filename = asset->paka.sourceName;
+                
+                char filenameNoExtension[64];
+                TrimToFirstCharacter(filenameNoExtension, sizeof(filenameNoExtension), filename, '.');
+                
+                platformAPI.ReplaceFile(PlatformFile_Coloration, path, filenameNoExtension, file.begin, file.written);
+            }
+        } break;
+        
+        default:
+        {
+            Stream file = PushStream(&tempPool, MegaBytes(16));
+            char* metaAssetType = metaAsset_assetType[type];
+            String structName = {};
+            structName.ptr = metaAssetType;
+            structName.length = StrLen(metaAssetType);
+            
+            DumpStructToStream(structName, &file, asset->data);
+            char* filename = asset->paka.sourceName;
+            platformAPI.ReplaceFile(PlatformFile_data, path, filename, file.begin, file.written);
+        } break;
+        
     }
     
-    platformAPI.ReplaceFile(PlatformFile_markup, path, MARKUP_FILE_NAME, metaDataStream.begin, metaDataStream.written);
+    EndTemporaryMemory(fileMemory);
+    
+    char markupFilename[128];
+    FormatString(markupFilename, sizeof(markupFilename), "%s", asset->paka.sourceName);
+    ReplaceAll(markupFilename, '.', '_');
+    
+    platformAPI.ReplaceFile(PlatformFile_markup, path, markupFilename, metaDataStream.begin, metaDataStream.written);
     Clear(&tempPool);
 }
 
@@ -890,6 +955,9 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
     assets->tasks = tasks;
     assets->taskCount = taskCount;
     
+    assets->firstFreeAssetBlock = 0;
+    assets->blockPool = pool;
+    
     
     for(u32 assetTypeIndex = 0; assetTypeIndex < AssetType_Count; ++assetTypeIndex)
     {
@@ -901,8 +969,9 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
     
     PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, ASSETS_PATH);
     
+    assets->maxFileCount = Max(1024, fileGroup.fileCount);
     assets->fileCount = fileGroup.fileCount;
-    assets->files = PushArray(pool, AssetFile, assets->fileCount);
+    assets->files = PushArray(pool, AssetFile, assets->maxFileCount);
     
     u32 fileIndex = 0;
     for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
@@ -910,20 +979,8 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
         AssetFile* file = assets->files + fileIndex;
         file->handle = platformAPI.OpenFile(&fileGroup, info);
         
-        ZeroStruct(file->header);
-        platformAPI.ReadFromFile(&file->handle, 0, sizeof(file->header), &file->header);
         PAKFileHeader* header = &file->header;
-        if(header->magicValue != PAK_MAGIC_NUMBER)
-        {
-            platformAPI.FileError(&file->handle, "magic number not valid");
-        }
-        
-        if(header->version != PAK_VERSION)
-        {
-            platformAPI.FileError(&file->handle, "pak file version not valid");
-        }
-        
-        if(PlatformNoFileErrors(&file->handle))
+        if(InitFileAssetHeader(file))
         {
             u16 assetCount = (header->standardAssetCount + header->derivedAssetCount);
             AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, header);
@@ -931,7 +988,7 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
             {
                 assetSubtypeArray->standardAssetCount = header->standardAssetCount;
                 assetSubtypeArray->derivedAssetCount = header->derivedAssetCount;
-                assetSubtypeArray->assets = PushArray(pool, Asset, assetCount, NoClear());
+                assetSubtypeArray->firstAssetBlock = AcquireAssetBlocks(assets, assetCount);
                 assetSubtypeArray->fileIndex = fileIndex;
                 LoadAssetFile(assets, file, assetSubtypeArray, pool);
             }
@@ -1019,7 +1076,7 @@ internal AssetID QueryAssets(Assets* assets, AssetType type, u32 subtype, Random
                 Assert(startingIndex <= onePastEndingIndex);
                 for(u16 assetIndex = startingIndex; assetIndex < onePastEndingIndex; ++assetIndex)
                 {
-                    Asset* asset = subtypeArray->assets + assetIndex;
+                    Asset* asset = GetAsset(subtypeArray, assetIndex);
                     if(MatchesProperties(asset, properties))
                     {
                         matchingAssets[matching++] = assetIndex;

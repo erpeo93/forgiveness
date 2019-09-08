@@ -258,7 +258,7 @@ internal void HandlePlayersNetwork(ServerState* server)
                             
                             u32 sizeToRead = Min(toSendSize, SafeTruncateUInt64ToU32(info->size) - player->pakFileOffset);
                             
-                            if(sizeToRead <= chunkSize)
+                            if(sizeToRead == 0)
                             {
                                 break;
                             }
@@ -436,11 +436,16 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         {
             TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
             
+            u8* fileContent = ReadEntireFile(&tempPool, &timestampFiles, info);
             if(sizeof(SavedFileInfoHash) == info->size)
             {
-                u8* fileContent = ReadEntireFile(&tempPool, &timestampFiles, info);
                 SavedFileInfoHash* infoHash = (SavedFileInfoHash*) fileContent;
                 AddFileDateHash(hash, infoHash->pathAndName, infoHash->timestamp);
+            }
+            else if(sizeof(SavedTypeSubtypeCountHash) == info->size)
+            {
+                SavedTypeSubtypeCountHash* countHash = (SavedTypeSubtypeCountHash*) fileContent;
+                AddFileCountHash(hash, countHash->type, countHash->subtype, countHash->fileCount, countHash->markupCount);
             }
             
             EndTemporaryMemory(fileMemory);

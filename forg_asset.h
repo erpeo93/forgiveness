@@ -237,6 +237,7 @@ enum AssetState
     Asset_preloaded,
     Asset_loaded,
     Asset_locked,
+    Asset_loadedNoData,
 };
 
 struct AssetLRULink
@@ -262,7 +263,6 @@ struct SpecialTexture
 struct Asset
 {
     AssetLRULink LRU;
-    
     void* data;
     union
     {
@@ -285,11 +285,24 @@ struct Asset
     Asset* prev;
 };
 
+#define ASSETS_PER_BLOCK 64
+struct AssetBlock
+{
+    Asset assets[ASSETS_PER_BLOCK];
+    
+    union
+    {
+        AssetBlock* next;
+        AssetBlock* nextFree;
+    };
+};
+
 struct AssetSubtypeArray
 {
     u16 standardAssetCount;
     u16 derivedAssetCount;
-    Asset* assets;
+    
+    AssetBlock* firstAssetBlock;
     u32 fileIndex;
 };
 
@@ -303,7 +316,6 @@ struct AssetFile
 {
     PlatformFileHandle handle;
     PAKFileHeader header;
-    b32 reloading;
 };
 
 struct Assets
@@ -324,8 +336,8 @@ struct Assets
     AssetLRULink specialLRUSentinel;
     AssetLRULink lockedLRUSentinel;
     
-    
     u32 fileCount;
+    u32 maxFileCount;
     AssetFile* files;
     
     u32 whitePixel;
@@ -336,6 +348,8 @@ struct Assets
     u32 maxSpecialTextureHandleIndex;
     
     AssetArray assets[AssetType_Count];
+    AssetBlock* firstFreeAssetBlock;
+    MemoryPool* blockPool;
 };
 
 

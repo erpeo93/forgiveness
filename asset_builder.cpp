@@ -1578,7 +1578,6 @@ internal void FillPAKProperty(PAKAsset* asset, Token property, Token value)
     }
 }
 
-
 struct SavedFileInfoHash
 {
     char pathAndName[256];
@@ -1587,11 +1586,82 @@ struct SavedFileInfoHash
     SavedFileInfoHash* next;
 };
 
+struct SavedTypeSubtypeCountHash
+{
+    u16 type;
+    u16 subtype;
+    
+    u32 fileCount;
+    u32 markupCount;
+    
+    SavedTypeSubtypeCountHash* next;
+};
+
 struct TimestampHash
 {
     MemoryPool pool;
     SavedFileInfoHash* hashSlots[1024];
+    SavedTypeSubtypeCountHash* countHashSlots[128];
 };
+
+
+internal SavedTypeSubtypeCountHash* AddFileCountHash(TimestampHash* hash, u16 type, u16 subtype, u32 fileCount, u32 markupCount)
+{
+    Assert(IsPowerOf2(ArrayCount(hash->hashSlots)));
+    u64 hashRaw = (type + 12) * (subtype + 10);
+    u32 slotIndex = hashRaw & (ArrayCount(hash->countHashSlots) - 1);
+    
+    SavedTypeSubtypeCountHash* newHash = PushStruct(&hash->pool, SavedTypeSubtypeCountHash);
+    newHash->type = type;
+    newHash->subtype = subtype;
+    newHash->fileCount = fileCount;
+    newHash->markupCount = markupCount;
+    
+    FREELIST_INSERT(newHash, hash->countHashSlots[slotIndex]);
+    
+    return newHash;
+}
+
+internal SavedTypeSubtypeCountHash* GetCorrenspodingFileCountHash(TimestampHash* hash, u16 type, u16 subtype)
+{
+    Assert(IsPowerOf2(ArrayCount(hash->hashSlots)));
+    u64 hashRaw = (type + 12) * (subtype + 10);
+    u32 slotIndex = hashRaw & (ArrayCount(hash->countHashSlots) - 1);
+    
+    
+    SavedTypeSubtypeCountHash* result = 0;
+    for(SavedTypeSubtypeCountHash* test = hash->countHashSlots[slotIndex]; test; test = test->next)
+    {
+        if(type == test->type && subtype == test->subtype)
+        {
+            result = test;
+            break;
+        }
+    }
+    
+    if(!result)
+    {
+        result = AddFileCountHash(hash, type, subtype, 0, 0);
+    }
+    return result;
+}
+
+internal void SaveFileCountHash(SavedTypeSubtypeCountHash* info, u32 fileCount, u32 markupCount)
+{
+    info->fileCount = fileCount;
+    info->markupCount = markupCount;
+    
+    u8* fileContent = (u8*) info;
+    u32 fileSize = sizeof(SavedTypeSubtypeCountHash);
+    
+    char name[128];
+    
+    char* type = GetAssetTypeName(info->type);
+    char* subtype = GetAssetSubtypeName(info->type, info->subtype);
+    FormatString(name, sizeof(name), "%s_%s", type, subtype);
+    
+    platformAPI.ReplaceFile(PlatformFile_timestamp, TIMESTAMP_PATH, name, fileContent, fileSize);
+}
 
 internal SavedFileInfoHash* AddFileDateHash(TimestampHash* hash, char* pathAndName, u64 timestamp)
 {
@@ -1661,7 +1731,6 @@ internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* as
     for(PlatformFileInfo* info = markupFiles->firstFileInfo; info; info = info->next)
     {
         u8* fileContent = ReadEntireFile(tempPool, markupFiles, info);
-        
         Tokenizer tokenizer = {};
         tokenizer.at = (char*) fileContent;
         Token t = AdvanceToToken(&tokenizer, name);
@@ -1783,7 +1852,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     u16 standardAssetCount = 0;
     u16 derivedAssetCount = 0;
     
-    b32 writeFile = propertiesChanged;
+    b32 updatedFiles = propertiesChanged;
     
     for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
     {
@@ -1794,7 +1863,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
         if(saved->timestamp != info->timestamp)
         {
             SaveFileDateHash(saved, info->timestamp);
-            writeFile = true;
+            updatedFiles = true;
         }
         
         u16 standard = 1;
@@ -1819,7 +1888,29 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                 if(IsColorationFile(info->name))
                 {
                     standard = 0;
-                    derived = 1;
+                    derived = 0;
+                    
+                    u8* tempData = PushSize(&tempPool, info->size, NoClear());
+                    platformAPI.ReadFromFile(&handle, 0, info->size, tempData);
+                    LoadedColoration coloration = LoadColoration((char*) tempData);
+                    b32 found = false;
+                    for(PlatformFileInfo* testInfo = fileGroup.firstFileInfo; testInfo; testInfo = testInfo->next)
+                    {
+                        if(!IsColorationFile(testInfo->name))
+                        {
+                            if(StrEqual(testInfo->name, coloration.imageName))
+                            {
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if(found)
+                    {
+                        derived = 1;
+                    }
+                    
                 }
             } break;
             
@@ -1850,12 +1941,23 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
         if(saved->timestamp != info->timestamp)
         {
             SaveFileDateHash(saved, info->timestamp);
-            writeFile = true;
+            updatedFiles = true;
         }
     }
     
     u16 assetCount = header.standardAssetCount + header.derivedAssetCount;
-    if(writeFile && assetCount > 0)
+    
+    b32 changedFiles = false;
+    SavedTypeSubtypeCountHash* savedCount = GetCorrenspodingFileCountHash(hash, type, subtype);
+    if(fileGroup.fileCount != savedCount->fileCount || 
+       markupFiles.fileCount != savedCount->markupCount)
+    {
+        SaveFileCountHash(savedCount, fileGroup.fileCount, markupFiles.fileCount);
+        changedFiles = true;
+    }
+    
+    
+    if(updatedFiles || changedFiles)
     {
         FILE* out = fopen(output, "wb");
         if(out)
@@ -1885,14 +1987,9 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                     {
                         if(IsColorationFile(info->name))
                         {
-                            --runningAssetIndex;
-                            PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;
-                            FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, info->name, &markupFiles);
-                            
                             LoadedColoration coloration = LoadColoration((char*) fileContent);
-                            
-                            u16 bitmapIndex = 0;
                             b32 found = false;
+                            u16 bitmapIndex = 0;
                             for(PlatformFileInfo* testInfo = fileGroup.firstFileInfo; testInfo; testInfo = testInfo->next)
                             {
                                 if(!IsColorationFile(testInfo->name))
@@ -1906,12 +2003,18 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                     ++bitmapIndex;
                                 }
                             }
-                            Assert(found);
                             
-                            Assert(StrLen(coloration.imageName) < sizeof(derivedAsset->coloration.imageName));
-                            FormatString(derivedAsset->coloration.imageName, sizeof(derivedAsset->coloration.imageName), "%s", coloration.imageName);
-                            derivedAsset->coloration.color = coloration.color;
-                            derivedAsset->coloration.bitmapIndex = bitmapIndex;
+                            if(found)
+                            {
+                                --runningAssetIndex;
+                                PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;
+                                FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, info->name, &markupFiles);
+                                
+                                Assert(StrLen(coloration.imageName) < sizeof(derivedAsset->coloration.imageName));
+                                FormatString(derivedAsset->coloration.imageName, sizeof(derivedAsset->coloration.imageName), "%s", coloration.imageName);
+                                derivedAsset->coloration.color = coloration.color;
+                                derivedAsset->coloration.bitmapIndex = bitmapIndex;
+                            }
                         }
                         else
                         {
@@ -2161,6 +2264,8 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             FormatString(fullpath, sizeof(fullpath), "%s/%s/%s", sourcePath, subdirName, subsubDirName);
             
             u16 type = GetMetaAssetType(subdirName);
+            u16 subtype = GetMetaAssetSubtype(type, subsubDirName);
+            
             u32 fileTypes = GetFileTypes((AssetType)type);
             PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(fileTypes, fullpath);
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
@@ -2186,7 +2291,20 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             }
             platformAPI.GetAllFilesEnd(&markupFiles);
             
-            if(updatedFiles)
+            
+            SavedTypeSubtypeCountHash* countHash = GetCorrenspodingFileCountHash(hash, type, subtype);
+            
+            u32 currentFileCount = fileGroup.fileCount;
+            u32 currentMarkupFileCount = fileGroup.fileCount;
+            
+            b32 deletedFiles = false;
+            if(currentFileCount < countHash->fileCount || currentMarkupFileCount < countHash->markupCount)
+            {
+                deletedFiles = true;
+            }
+            
+            
+            if(updatedFiles || deletedFiles)
             {
                 WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, false);
             }

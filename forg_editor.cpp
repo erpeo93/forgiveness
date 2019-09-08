@@ -597,6 +597,14 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
     PAKAsset* info = get.info;
     
     b32 showAssetInfo = EditorCollapsible(layout, info->sourceName);
+    
+    AUID saveID = auID(info, "saveButton");
+    if(EditorButton(layout, V2(0.25f, -0.1f), ButtonDim(layout), "save", saveID))
+    {
+        WritebackAssetToFileSystem(assets, ID, "../server/assets/raw");
+    }
+    
+    
     switch(ID.type)
     {
         case AssetType_Image:
@@ -742,12 +750,6 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
 internal void RenderEditAssetFile(EditorLayout* layout, Assets* assets, PAKFileHeader* header)
 {
     b32 showAssetData = EditorCollapsible(layout, header->name);
-    AUID saveID = auID(header, "saveButton");
-    if(EditorButton(layout, V2(0.25f, -0.1f), ButtonDim(layout), "save", saveID))
-    {
-        WritebackAssetFileToFileSystem(assets, header->type, header->subtype, "../server/assets/raw");
-    }
-    
     u16 type = GetMetaAssetType(header->type);
     u16 subtype = GetMetaAssetSubtype(type, header->subtype);
     
