@@ -451,9 +451,9 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 player->receiving = BootstrapPushStruct(ReceivingAssetFile, memory);
                 ReceivingAssetFile* receiving = player->receiving;
                 
-                Unpack("HHLL", &receiving->type, &receiving->subtype, &receiving->finalSize, &receiving->chunkSize);
+                Unpack("HHLLL", &receiving->type, &receiving->subtype, &receiving->uncompressedSize, &receiving->compressedSize, &receiving->chunkSize);
                 receiving->runningSize = 0;
-                receiving->content = PushSize(&receiving->memory, receiving->finalSize);
+                receiving->content = PushSize(&receiving->memory, receiving->compressedSize);
             } break;
             
             case Type_FileChunk:
@@ -462,14 +462,14 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 u8* source = packetPtr;
                 u8* dest = receiving->content + receiving->runningSize;
                 
-                u32 sizeToCopy = Min(receiving->chunkSize, receiving->finalSize - receiving->runningSize);
+                u32 sizeToCopy = Min(receiving->chunkSize, receiving->compressedSize - receiving->runningSize);
                 Copy(sizeToCopy, dest, packetPtr);
                 
                 packetPtr += sizeToCopy;
                 receiving->runningSize += sizeToCopy;
-                if(receiving->runningSize >= receiving->finalSize)
+                if(receiving->runningSize >= receiving->compressedSize)
                 {
-                    Assert(receiving->runningSize == receiving->finalSize);
+                    Assert(receiving->runningSize == receiving->compressedSize);
                     Assets* assets = gameState->assets;
                     AssetFile* destFile = 0;
                     u32 destFileIndex = 0;
@@ -502,9 +502,20 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     char* type = GetAssetTypeName(receiving->type);
                     char* subtype = GetAssetSubtypeName(receiving->type, receiving->subtype);
                     
+                    
+                    u8* compressed = receiving->content;
+                    u32 compressedSize = receiving->compressedSize;
+                    
+                    u32 uncompressedSize = receiving->uncompressedSize;
+                    u8* uncompressed = PushSize(&receiving->memory, uncompressedSize);
+                    u32 cmp_status = uncompress(uncompressed, (mz_ulong*) &uncompressedSize, compressed, compressedSize);
+                    
+                    Assert(cmp_status == Z_OK);
+                    Assert(uncompressedSize == receiving->uncompressedSize);
+                    
                     char newName[128];
                     FormatString(newName, sizeof(newName), "%s_%s", type, subtype);
-                    platformAPI.ReplaceFile(PlatformFile_uncompressedAsset, ASSETS_PATH, newName, receiving->content, receiving->finalSize);
+                    platformAPI.ReplaceFile(PlatformFile_uncompressedAsset, ASSETS_PATH, newName, uncompressed, uncompressedSize);
                     
                     char path[64];
                     PlatformFileGroup fake = {};

@@ -333,6 +333,7 @@ struct Assets
     Asset assetSentinel;
     
     AssetLRULink LRUSentinel;
+    AssetLRULink LRUFreeSentinel;
     AssetLRULink specialLRUSentinel;
     AssetLRULink lockedLRUSentinel;
     

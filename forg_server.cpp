@@ -24,7 +24,6 @@
 #include "forg_AI.cpp"
 #include "forg_action_effect.cpp"
 #include "forg_essence.cpp"
-#include "miniz.c"
 #endif
 
 #include "forg_network_server.cpp"
@@ -35,6 +34,7 @@
 
 #include "forg_meta_asset.cpp"
 #include "asset_builder.cpp"
+#include "miniz.c"
 
 #if FORGIVENESS_INTERNAL
 DebugTable* globalDebugTable;
@@ -234,133 +234,89 @@ internal void HandlePlayersNetwork(ServerState* server)
             }
             else
             {
-                if(!player->allPakFileSent)
+                u32 toSendSize = KiloBytes(250);
+                while(player->firstLoginFileToSend && (toSendSize > 0))
                 {
-                    u32 chunkSize = KiloBytes(1);
-                    u32 toSendSize = MegaBytes(1);
-                    
-                    PlatformFileGroup pakFiles = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, ASSETS_PATH);
-                    
-                    u32 fileIndex = 0;
-                    for(PlatformFileInfo* info = pakFiles.firstFileInfo; info; info = info->next)
-                    {
-                        if(fileIndex++ == player->pakFileIndex)
-                        {
-                            PlatformFileHandle handle = platformAPI.OpenFile(&pakFiles, info);
-                            if(player->pakFileOffset == 0)
-                            {
-                                PAKFileHeader header;
-                                platformAPI.ReadFromFile(&handle, 0, sizeof(PAKFileHeader), &header);
-                                u16 type = GetMetaAssetType(header.type);
-                                u16 subtype = GetMetaAssetSubtype(type, header.subtype);
-                                SendFileHeader(player, type, subtype, SafeTruncateUInt64ToU32(info->size), chunkSize);
-                            }
-                            
-                            u32 sizeToRead = Min(toSendSize, SafeTruncateUInt64ToU32(info->size) - player->pakFileOffset);
-                            
-                            if(sizeToRead == 0)
-                            {
-                                break;
-                            }
-                            
-                            TempMemory fileMemory = BeginTemporaryMemory(&scratchPool);
-                            
-                            char* buffer = (char*) PushSize(&scratchPool, sizeToRead);
-                            platformAPI.ReadFromFile(&handle, player->pakFileOffset, sizeToRead, buffer);
-                            SendFileChunks(player, buffer, sizeToRead, chunkSize);
-                            
-                            EndTemporaryMemory(fileMemory);
-                            
-                            
-                            
-                            
-                            player->pakFileOffset += sizeToRead;
-                            u32 modSizeToRead = sizeToRead;
-                            if(modSizeToRead % chunkSize)
-                            {
-                                modSizeToRead += chunkSize - (sizeToRead % chunkSize);
-                            }
-                            Assert(modSizeToRead % chunkSize == 0);
-                            toSendSize -= modSizeToRead;
-                            
-                            if(player->pakFileOffset >= info->size)
-                            {
-                                player->pakFileOffset = 0;
-                                if(++player->pakFileIndex == pakFiles.fileCount)
-                                {
-                                    player->allPakFileSent = true;
-                                }
-                            }
-                            platformAPI.CloseFile(&handle);
-                        }
-                    }
-                    platformAPI.GetAllFilesEnd(&pakFiles);
+                    FileToSend* toSend = player->firstLoginFileToSend;
+                    toSendSize = SendFileChunksToPlayer(server, player, toSendSize, toSend, &player->firstLoginFileToSend);
                 }
                 
-                
-                while(true)
+                if(!player->firstLoginFileToSend)
                 {
-                    NetworkPacketReceived received = platformAPI.net.GetPacketOnSlot(&server->clientInterface, player->connectionSlot);
-                    
-                    if(received.disconnected)
+                    while(player->firstReloadedFileToSend && (toSendSize > 0))
                     {
-                        player->connectionClosed = true;
-                        break;
-                    }
-                    
-                    if(!received.dataSize)
-                    {
-                        break;
-                    }
-                    
-                    
-                    unsigned char* packetPtr = received.data;
-                    
-                    ForgNetworkApplicationData applicationData;
-                    packetPtr = ForgUnpackApplicationData(packetPtr, &applicationData);
-                    
-                    ForgNetworkReceiver* receiver = &player->receiver;
-                    if(applicationData.flags & ForgNetworkFlag_Ordered)
-                    {
-                        u32 delta = ApplicationDelta(applicationData, receiver->orderedBiggestReceived);
-                        if(delta > 0 && delta < WINDOW_SIZE)
-                        {
-                            u32 index = (receiver->circularStartingIndex + (delta - 1)) % WINDOW_SIZE;
-                            receiver->orderedWindow[index] = received;
-                        }
-                        
-                        u32 dispatched = 0;
-                        
-                        while(true)
-                        {
-                            u32 index = (receiver->circularStartingIndex + dispatched) % WINDOW_SIZE;
-                            NetworkPacketReceived* test = receiver->orderedWindow + index;
-                            if(test->dataSize)
-                            {
-                                DispatchApplicationPacket(server, player, playerID, test->data + sizeof(ForgNetworkApplicationData), test->dataSize - sizeof(ForgNetworkApplicationData));
-                                test->dataSize = 0;
-                                ++dispatched;
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
-                        
-                        receiver->circularStartingIndex += dispatched;
-                        receiver->orderedBiggestReceived.index += dispatched;
-                    }
-                    else
-                    {
-                        if(ApplicationIndexGreater(applicationData, receiver->unorderedBiggestReceived))
-                        {
-                            receiver->unorderedBiggestReceived = applicationData;
-                            DispatchApplicationPacket(server, player, playerID, packetPtr, received.dataSize - sizeof(ForgNetworkApplicationData));
-                        }
+                        FileToSend* toSend = player->firstReloadedFileToSend;
+                        toSendSize = SendFileChunksToPlayer(server, player, toSendSize, toSend, &player->firstReloadedFileToSend);
                     }
                 }
             }
         }
+        
+        if(player->connectionSlot)
+        {
+            while(true)
+            {
+                NetworkPacketReceived received = platformAPI.net.GetPacketOnSlot(&server->clientInterface, player->connectionSlot);
+                
+                if(received.disconnected)
+                {
+                    player->connectionClosed = true;
+                    break;
+                }
+                
+                if(!received.dataSize)
+                {
+                    break;
+                }
+                
+                
+                unsigned char* packetPtr = received.data;
+                
+                ForgNetworkApplicationData applicationData;
+                packetPtr = ForgUnpackApplicationData(packetPtr, &applicationData);
+                
+                ForgNetworkReceiver* receiver = &player->receiver;
+                if(applicationData.flags & ForgNetworkFlag_Ordered)
+                {
+                    u32 delta = ApplicationDelta(applicationData, receiver->orderedBiggestReceived);
+                    if(delta > 0 && delta < WINDOW_SIZE)
+                    {
+                        u32 index = (receiver->circularStartingIndex + (delta - 1)) % WINDOW_SIZE;
+                        receiver->orderedWindow[index] = received;
+                    }
+                    
+                    u32 dispatched = 0;
+                    
+                    while(true)
+                    {
+                        u32 index = (receiver->circularStartingIndex + dispatched) % WINDOW_SIZE;
+                        NetworkPacketReceived* test = receiver->orderedWindow + index;
+                        if(test->dataSize)
+                        {
+                            DispatchApplicationPacket(server, player, playerID, test->data + sizeof(ForgNetworkApplicationData), test->dataSize - sizeof(ForgNetworkApplicationData));
+                            test->dataSize = 0;
+                            ++dispatched;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    
+                    receiver->circularStartingIndex += dispatched;
+                    receiver->orderedBiggestReceived.index += dispatched;
+                }
+                else
+                {
+                    if(ApplicationIndexGreater(applicationData, receiver->unorderedBiggestReceived))
+                    {
+                        receiver->unorderedBiggestReceived = applicationData;
+                        DispatchApplicationPacket(server, player, playerID, packetPtr, received.dataSize - sizeof(ForgNetworkApplicationData));
+                    }
+                }
+            }
+        }
+        
     }
 }
 
@@ -396,8 +352,47 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     {
         LoadMetaData();
         
+        server = memory->server = BootstrapPushStruct(ServerState, gamePool);
         
-        server = memory->server = BootstrapPushStruct(ServerState, worldPool);
+        PlatformFileGroup pakFiles = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, ASSETS_PATH);
+        
+        server->fileCount = pakFiles.fileCount;
+        server->files = PushArray(&server->gamePool, GameFile, server->fileCount);
+        
+        MemoryPool filePool = {};
+        
+        u32 fileIndex = 0;
+        for(PlatformFileInfo* info = pakFiles.firstFileInfo; info; info = info->next)
+        {
+            PlatformFileHandle handle = platformAPI.OpenFile(&pakFiles, info);
+            
+            GameFile* file = server->files + fileIndex++;
+            file->uncompressedSize = SafeTruncateUInt64ToU32(info->size);
+            
+            TempMemory fileMemory = BeginTemporaryMemory(&filePool);
+            
+            u8* uncompressedContent = (u8*) PushSize(&filePool, info->size);
+            platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
+            
+            file->compressedSize = compressBound(file->uncompressedSize);
+            file->content = PushSize(&server->gamePool, file->compressedSize);
+            
+            u32 cmp_status = compress(file->content, (mz_ulong*) &file->compressedSize, (const unsigned char*) uncompressedContent, file->uncompressedSize);
+            Assert(cmp_status == Z_OK);
+            
+            PAKFileHeader* header = (PAKFileHeader*) uncompressedContent;
+            file->type = GetMetaAssetType(header->type);
+            file->subtype = GetMetaAssetSubtype(file->type, header->subtype);
+            
+            platformAPI.CloseFile(&handle);
+            
+            
+            
+            
+            EndTemporaryMemory(fileMemory);
+        }
+        platformAPI.GetAllFilesEnd(&pakFiles);
+        
         
         server->fastQueue = memory->fastQueue;
         server->slowQueue = memory->slowQueue;
@@ -468,6 +463,17 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         u16 connectionSlot = newConnections[newConnectionIndex];
         Player* player = FirstFreePlayer(server);
         player->connectionSlot = connectionSlot;
+        
+        Assert(!player->firstLoginFileToSend);
+        Assert(!player->firstReloadedFileToSend);
+        for(u32 fileIndex = 0; fileIndex < server->fileCount; ++fileIndex)
+        {
+            FileToSend* toSend;
+            FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
+            toSend->index = fileIndex;
+            
+            FREELIST_INSERT(toSend, player->firstLoginFileToSend);
+        }
     }
     
     

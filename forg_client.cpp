@@ -16,6 +16,7 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_editor.cpp"
 #include "forg_camera.cpp"
 //#include "forg_light.cpp"
+#include "miniz.c"
 #include "forg_network_client.cpp"
 #include "forg_plant.cpp"
 #include "forg_mesh.cpp"
@@ -29,7 +30,6 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_cutscene.cpp"
 #include "forg_ground.cpp"
 #include "forg_UIcommon.cpp"
-
 
 inline ClientEntity* GetEntityClient(GameModeWorld* worldMode, u64 identifier, b32 allocate = false)
 {

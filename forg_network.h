@@ -78,7 +78,7 @@ struct ForgNetworkPacketQueue
 };
 
 
-#define WINDOW_SIZE 256
+#define WINDOW_SIZE 2048
 struct ForgNetworkReceiver
 {
     ForgNetworkApplicationData unorderedBiggestReceived;

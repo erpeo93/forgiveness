@@ -39,6 +39,28 @@
 #include "client_generated.h"
 
 PlatformAPI platformAPI;
+
+struct GameFile
+{
+    u32 uncompressedSize;
+    u32 compressedSize;
+    u8* content;
+    
+    u16 type;
+    u16 subtype;
+};
+
+struct FileToSend
+{
+    u32 index;
+    
+    union
+    {
+        FileToSend* next;
+        FileToSend* nextFree;
+    };
+};
+
 struct PlayerRequest
 {
     u8 data[512];
@@ -49,10 +71,6 @@ struct Player
     b32 connectionClosed;
     u16 connectionSlot;
     
-    b32 allPakFileSent;
-    u32 pakFileIndex;
-    u32 pakFileOffset;
-    
     ForgNetworkPacketQueue standardPacketQueue;
     ForgNetworkPacketQueue reliablePacketQueue;
     
@@ -60,6 +78,10 @@ struct Player
     
     u32 requestCount;
     PlayerRequest requests[8];
+    
+    u32 sendingFileOffset;
+    FileToSend* firstLoginFileToSend;
+    FileToSend* firstReloadedFileToSend;
 };
 
 struct ReceiveNetworkPacketWork
@@ -102,7 +124,7 @@ struct ServerState
     //SpacePartition collisionPartition;
     //SpacePartition playerPartition;
     
-    MemoryPool worldPool;
+    MemoryPool gamePool;
     MemoryPool networkPool;
     
     ReceiveNetworkPacketWork receivePacketWork;
@@ -111,6 +133,11 @@ struct ServerState
     RandomSequence instantiateSequence;
     RandomSequence randomSequence;
     RandomSequence objectSequence;
+    
+    u32 fileCount;
+    GameFile* files;
+    
+    FileToSend* firstFreeToSendFile;
 };
 
 #define SERVER_SIMULATE_WORLDS(name) void name(PlatformServerMemory* memory, r32 secondElapsed)

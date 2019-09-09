@@ -70,7 +70,10 @@ struct ReceivingAssetFile
     
     u16 type;
     u16 subtype;
-    u32 finalSize;
+    
+    u32 uncompressedSize;
+    u32 compressedSize;
+    
     u32 chunkSize;
     u32 runningSize;
     u8* content;

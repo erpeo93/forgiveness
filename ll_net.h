@@ -1415,7 +1415,15 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
                         }
                     }
                     
-                    dataToSend -= (sendCount * totalSize);
+                    u32 sent = sendCount * totalSize;
+                    if(sent >= dataToSend)
+                    {
+                        dataToSend = 0;
+                    }
+                    else
+                    {
+                        dataToSend -= sent;
+                    }
                     connection->lastSent = packet;
                 }
                 
@@ -1529,7 +1537,6 @@ NETWORK_OPEN_CONNECTION(Win32OpenConnection)
     
     BeginTicketMutex(&connection->mutex);
     
-    
     if(connection->sendQueueSentinel.next)
     {
         if(!DLLIST_ISEMPTY(&connection->sendQueueSentinel))
@@ -1544,12 +1551,11 @@ NETWORK_OPEN_CONNECTION(Win32OpenConnection)
     {
         if(!DLLIST_ISEMPTY(&connection->recvQueueSentinel))
         {
-            connection->recvQueueSentinel.prev ->next = connection->firstFreePacket;
+            connection->recvQueueSentinel.prev->next = connection->firstFreePacket;
             connection->firstFreePacket = connection->recvQueueSentinel.next;
         }
     }
     DLLIST_INIT(&connection->recvQueueSentinel);
-    
     
     FREELIST_FREE(connection->firstQueuedAck, NetworkBufferedAck, connection->firstFreeAck);
     

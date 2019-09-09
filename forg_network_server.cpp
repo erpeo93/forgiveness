@@ -255,10 +255,10 @@ inline void SendEffectTriggered(Player* player, EffectTriggeredToSend* toSend)
 }
 #endif
 
-inline void SendFileHeader(Player* player, u16 type, u16 subtype, u32 fileSize, u32 chunkSize)
+inline void SendFileHeader(Player* player, u16 type, u16 subtype, u32 uncompressedSize, u32 compressedSize, u32 chunkSize)
 {
     StartPacket(player, FileHeader);
-    Pack("HHLL", type, subtype, fileSize, chunkSize);
+    Pack("HHLLL", type, subtype, uncompressedSize, compressedSize, chunkSize);
     CloseAndStoreReliablePacket(player);
 }
 
@@ -280,6 +280,45 @@ inline void SendFileChunks(Player* player, char* source, u32 sizeToSend, u32 chu
     }
 }
 
+#define CHUNK_SIZE KiloBytes(1)
+internal u32 SendFileChunksToPlayer(ServerState* server, Player* player, u32 sizeToSend, FileToSend* toSend, FileToSend** writeNext)
+{
+    u32 result = sizeToSend;
+    
+    Assert(toSend->index < server->fileCount);
+    GameFile* file = server->files + toSend->index;
+    if(player->sendingFileOffset == 0)
+    {
+        SendFileHeader(player, file->type, file->subtype, file->uncompressedSize, file->compressedSize, CHUNK_SIZE);
+    }
+    
+    u32 remainingSizeInFile = SafeTruncateUInt64ToU32(file->compressedSize) - player->sendingFileOffset;
+    u32 sending = Min(sizeToSend, remainingSizeInFile);
+    
+    if(sending > 0)
+    {
+        u8* buffer = file->content + player->sendingFileOffset;
+        SendFileChunks(player, (char*) buffer, sending, CHUNK_SIZE);
+        player->sendingFileOffset += sending;
+    }
+    
+    u32 roundedSent = sending;
+    if(roundedSent % CHUNK_SIZE)
+    {
+        roundedSent += CHUNK_SIZE - (roundedSent % CHUNK_SIZE);
+    }
+    Assert(roundedSent % CHUNK_SIZE == 0);
+    result -= roundedSent;
+    
+    if(player->sendingFileOffset >= file->compressedSize)
+    {
+        player->sendingFileOffset = 0;
+        *writeNext = toSend->next;
+        FREELIST_DEALLOC(toSend, server->firstFreeToSendFile);
+    }
+    
+    return result;
+}
 
 #if FORGIVENESS_INTERNAL
 internal void SendDebugEvent(Player* player, DebugEvent* event)

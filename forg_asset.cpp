@@ -377,20 +377,29 @@ inline u32 AcquireTextureHandle(Assets* assets)
     }
     else
     {
-        AssetLRULink* sentinel = &assets->LRUSentinel;
-        Assert(!DLLIST_ISEMPTY(sentinel));
+		b32 free = true;
+        AssetLRULink* freeThis = 0;
+		if(!DLLIST_ISEMPTY(&assets->LRUFreeSentinel))
+		{
+            free = false;
+			freeThis = assets->LRUFreeSentinel.next;
+		}
+		else
+		{
+			Assert(!DLLIST_ISEMPTY(&assets->LRUSentinel));
+            freeThis = assets->LRUSentinel.next;
+		}
         
-        AssetLRULink* free = sentinel->next;
-        Assert(free);
-        DLLIST_REMOVE(free);
-        Asset* LRU = (Asset*) free;
-        result = LRU->textureHandle.index;
-        Clear(&LRU->textureHandle);
+		Assert(freeThis);
+		DLLIST_REMOVE(freeThis);
+		Asset* LRU = (Asset*) free;
+		result = LRU->textureHandle.index;
+		Clear(&LRU->textureHandle);
         
-        if(LRU->state == Asset_loaded)
-        {
-            FreeAsset(assets, LRU);
-        }
+		if(free && LRU->state == Asset_loaded)
+		{
+			FreeAsset(assets, LRU);
+		}
     }
     
     return result;
@@ -415,6 +424,8 @@ inline u32 AcquireSpecialTextureHandle(Assets* assets)
         result = LRU->textureHandle.index;
         Assert(result >= MAX_TEXTURE_COUNT);
         Clear(&LRU->textureHandle);
+        
+		DLLIST_INSERT_AS_LAST(&assets->specialLRUSentinel, first);
     }
     
     return result;
@@ -755,6 +766,11 @@ internal void ReloadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, Me
             Asset* asset = GetAsset(assetSubtypeArray, assetIndex);
             if(asset->state == Asset_loaded || asset->state == Asset_preloaded)
             {
+				if(IsValid(&asset->textureHandle))
+				{
+					DLLIST_INSERT_AS_LAST(&asset->LRU, &assets->LRUFreeSentinel);
+				}
+                
                 FreeAsset(assets, asset);
             }
         }
