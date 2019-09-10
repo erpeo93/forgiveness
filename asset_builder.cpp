@@ -1955,7 +1955,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     }
     
     
-    if(updatedFiles || changedFiles)
+    if(assetCount && (updatedFiles || changedFiles))
     {
         FILE* out = fopen(output, "wb");
         if(out)

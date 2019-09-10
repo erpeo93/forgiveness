@@ -111,8 +111,6 @@ struct ServerState
     WorldSeason season;
     r32 seasonLerp;
     r32 seasonTime;
-    
-    r32 elapsedTime;
     u32 worldSeed;
     
     TaskWithMemory tasks[6];

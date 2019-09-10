@@ -209,11 +209,10 @@ internal void DispatchApplicationPacket(ServerState* server, Player* player, u32
     }
 }
 
-internal void HandlePlayersNetwork(ServerState* server)
+internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
 {
     MemoryPool scratchPool = {};
     
-    server->elapsedTime = 0.1f;
     for( u32 playerIndex = 0; 
         playerIndex < MAXIMUM_SERVER_PLAYERS; 
         playerIndex++ )
@@ -222,19 +221,16 @@ internal void HandlePlayersNetwork(ServerState* server)
         Player* player = server->players + playerIndex;
         if(player->connectionSlot)
         {
-            b32 allPacketSent = QueueAndFlushAllPackets(server, player, server->elapsedTime);
+            QueueAndFlushAllPackets(server, player, elapsedTime);
             if(player->connectionClosed)
             {
-                if(allPacketSent)
-                {
-                    platformAPI.net.CloseConnection(&server->clientInterface, player->connectionSlot);
-                    player->connectionSlot = 0;
-                    //RecyclePlayer(server, player);
-                }
+                platformAPI.net.CloseConnection(&server->clientInterface, player->connectionSlot);
+                player->connectionSlot = 0;
+                //RecyclePlayer(server, player);
             }
             else
             {
-                u32 toSendSize = KiloBytes(250);
+                u32 toSendSize = KiloBytes(50);
                 while(player->firstLoginFileToSend && (toSendSize > 0))
                 {
                     FileToSend* toSend = player->firstLoginFileToSend;
@@ -356,6 +352,7 @@ inline void ReadCompressFile(GameFile* file, u32 uncompressedSize, u8* uncompres
 
 extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 {
+    r32 elapsedTime = memory->elapsedTime;
     platformAPI = memory->api;
     ServerState* server = memory->server;
 #if FORGIVENESS_INTERNAL
@@ -560,9 +557,9 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     }
     
     
-    HandlePlayersNetwork(server);
+    HandlePlayersNetwork(server, elapsedTime);
     HandlePlayersRequest(server);
-    MoveEntitiesAndSendUpdates(server);
+    MoveEntitiesAndSendUpdates(server, elapsedTime);
 }
 
 

@@ -1,7 +1,7 @@
-internal void UpdateSeasonTimer(ServerState* server)
+internal void UpdateSeasonTimer(ServerState* server, r32 elapsedTime)
 {
     // NOTE(Leonardo): advance server "status"
-    server->seasonTime += server->elapsedTime;
+    server->seasonTime += elapsedTime;
     if(server->seasonTime >= SEASON_DURATION)
     {
         server->seasonTime = 0;
@@ -24,7 +24,7 @@ internal u32 AddEntity(ServerState* server, UniversePos P, u32 playerID)
     return result;
 }
 
-internal void MoveEntity(ServerState* server, Entity* entity)
+internal void MoveEntity(ServerState* server, Entity* entity, r32 elapsedTime)
 {
     
     
@@ -35,7 +35,7 @@ internal void MoveEntity(ServerState* server, Entity* entity)
     
     Vec3 acceleration = Normalize(entity->acc) *accelerationCoeff;
     Vec3 velocity = entity->speed;
-    r32 dt = server->elapsedTime;
+    r32 dt = elapsedTime;
     
     acceleration.xy += drag * velocity.xy;
     
@@ -110,14 +110,14 @@ internal void HandlePlayersRequest(ServerState* server)
 }
 
 
-internal void MoveEntitiesAndSendUpdates(ServerState* server)
+internal void MoveEntitiesAndSendUpdates(ServerState* server, r32 elapsedTime)
 {
     for(u32 entityIndex = 0; entityIndex < server->entityCount; ++entityIndex)
     {
         Entity* entity = server->entities + entityIndex;
         if(entity->ID)
         {
-            MoveEntity(server, entity);
+            MoveEntity(server, entity, elapsedTime);
             SendEntityUpdate(server, entity);
         }
     }

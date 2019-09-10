@@ -493,6 +493,7 @@ struct PlatformServerMemory
 #endif
     
     PlatformAPI api;
+    r32 elapsedTime;
     
     PlatformWorkQueue* fastQueue;
     PlatformWorkQueue* slowQueue;

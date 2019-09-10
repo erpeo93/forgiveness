@@ -978,22 +978,28 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                                 {
                                     if(*elementCount == 0 || (*elementCount > header->maxCount / 2))
                                     {
+                                        u32 oldSize = header->maxCount * field->size;
+                                        void* toFree = header;
+                                        
                                         u32 newElementCount = header ? (header->maxCount * 2) : 16;
                                         void* oldArray = fieldPtr;
                                         u32 sizeToCopy = *elementCount * field->size;
                                         void* newArray = GetMemory(layout->context->pool, newElementCount, field->size);
-                                        
-                                        Copy(sizeToCopy, newArray, oldArray);
-                                        //FreeBlock(oldArray, oldSize);
-                                        
                                         InitMetaArray(newArray, newElementCount);
                                         
-                                        *(u64*)originalfieldPtr = (u64) newArray;
                                         header = (MetaArrayHeader*) newArray;
                                         fieldPtr = header + 1;
+                                        
+                                        Copy(sizeToCopy, fieldPtr, oldArray);
+                                        
+                                        // TODO(Leonardo): free the block to avoid leaking memory!
+                                        //FreeBlock(oldArray, oldSize);
+                                        
+                                        *(u64*)originalfieldPtr = (u64) newArray;
                                     }
                                     
-                                    void* here = (void*)((u8*)fieldPtr + *elementCount++ * field->size);
+                                    u16 index = (*elementCount)++;
+                                    void* here = (void*)((u8*)fieldPtr + index * field->size);
                                     InitFieldDefault(field, here);
                                 }
                             }

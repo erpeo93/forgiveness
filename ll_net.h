@@ -625,7 +625,7 @@ struct NetworkBufferedPacket
     u16 dataSize;
     u8 data[PACKET_SIZE];
     
-    r32 timer;
+    r32 inFlightTimer;
     union
     {
         NetworkBufferedPacket* next;
@@ -1067,6 +1067,11 @@ inline r32 NetLerp(r32 value1, r32 lerp, r32 value2)
 
 inline void AdjustRTT(NetworkConnection* connection, r32 packetRTT)
 {
+    Assert(packetRTT >= 0);
+    if(!connection->estimatedRTT)
+    {
+        connection->estimatedRTT = 0.2f;
+    }
     connection->estimatedRTT = NetLerp(connection->estimatedRTT, 0.2f, packetRTT);
 }
 
@@ -1100,7 +1105,7 @@ inline void DispatchQueuedAcks(NetworkConnection* connection)
                 NetworkBufferedPacket* next = packet->next;
                 if(Acked(toDispatch->ack, packet->progressiveIndex))
                 {
-                    AdjustRTT(connection, packet->timer);
+                    AdjustRTT(connection, packet->inFlightTimer);
                     connection->sendAllowedBandwidth += (r32) KiloBytes(1);
                     DLLIST_REMOVE(packet);
                     
@@ -1242,9 +1247,7 @@ NETWORK_QUEUE_PACKET(Win32QueuePacket)
     
     
     u8 flags = 0;
-    
     flags = Set2BitsFlags(flags, GUARANTEED_DELIVERY_STARTING_BIT, (u8) params.guaranteedDelivery);
-    
     
     u32 receivingSpeedLimit = 256;
     if(connection->receivingPacketPerSecond > receivingSpeedLimit)
@@ -1253,7 +1256,7 @@ NETWORK_QUEUE_PACKET(Win32QueuePacket)
     }
     
     newPacket->flags = flags;
-    newPacket->timer = 0;
+    newPacket->inFlightTimer = R32_MAX;
     
     DLLIST_INSERT_AS_LAST(&connection->sendQueueSentinel, newPacket);
 }
@@ -1283,18 +1286,31 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
             
 			GuaranteedDelivery timeType = (GuaranteedDelivery) Get2BitFlags(packet->flags, GUARANTEED_DELIVERY_STARTING_BIT);
             b32 guaranteedDelivery = (timeType > GuaranteedDelivery_None);
-			r32 targetTime = 2.0f * connection->estimatedRTT;
             
-			if(packet->timer >= targetTime)
+			
+            b32 firstTime = false;
+            if(packet->inFlightTimer != R32_MAX)
+            {
+                packet->inFlightTimer += elapsedTime;
+			}
+            else
+            {
+                firstTime = true;
+            }
+            
+            r32 targetTime = Max(0.1f, 2.0f * connection->estimatedRTT);
+            if(packet->inFlightTimer >= targetTime)
 			{
-                r32 timer = packet->timer;
-				b32 firstTime = (timer == R32_MAX);
-				packet->timer = 0;
-				if(!firstTime)
+                b32 sendPacket = true;
+				r32 timer = packet->inFlightTimer;
+				packet->inFlightTimer = 0;
+                
+                if(!firstTime)
 				{
 					SignalPacketLost(connection, timer);
 					if(!guaranteedDelivery)
 					{
+                        sendPacket = false;
 						BeginTicketMutex(&connection->mutex);
 						DLLIST_REMOVE(packet);
 						FREELIST_INSERT(packet, connection->firstFreePacket);
@@ -1302,37 +1318,39 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
 					}					
 				}
                 
-				BeginTicketMutex(&connection->mutex);
-				NetworkAck ackToInclude = connection->ackToInclude;
-                EndTicketMutex(&connection->mutex);
-                
-			    unsigned char buff_[2048];
-                
-                u32 totalSize = 0;
-                unsigned char* buff = PackHeader_(buff_, STARTNUMBER, connection->counterpartConnectionSlot, connection->salt, packet->flags, packet->progressiveIndex, ackToInclude.progressiveIndex, ackToInclude.bits);
-                memcpy(buff, packet->data, packet->dataSize);
-                buff += packet->dataSize;
-                totalSize = PackTrailer_(buff_, buff, packet->flags);
-                
-                
-                if(sendto(network->fd, (const char*) buff_, totalSize, 0, (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
+                if(sendPacket)
                 {
-                    InvalidCodePath;
-                }
-                
-                if(totalSize >= dataToSend)
-                {
-                    dataToSend = 0;
-                }
-                else
-                {
-                    dataToSend -= totalSize;
+                    BeginTicketMutex(&connection->mutex);
+                    NetworkAck ackToInclude = connection->ackToInclude;
+                    EndTicketMutex(&connection->mutex);
+                    
+                    unsigned char buff_[2048];
+                    
+                    u32 totalSize = 0;
+                    unsigned char* buff = PackHeader_(buff_, STARTNUMBER, connection->counterpartConnectionSlot, connection->salt, packet->flags, packet->progressiveIndex, ackToInclude.progressiveIndex, ackToInclude.bits);
+                    memcpy(buff, packet->data, packet->dataSize);
+                    buff += packet->dataSize;
+                    totalSize = PackTrailer_(buff_, buff, packet->flags);
+                    
+                    
+                    if(sendto(network->fd, (const char*) buff_, totalSize, 0, (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
+                    {
+                        break;
+                    }
+                    
+                    if(totalSize >= dataToSend)
+                    {
+                        dataToSend = 0;
+                    }
+                    else
+                    {
+                        dataToSend -= totalSize;
+                    }
                 }
 			}
-            
-			packet->timer += elapsedTime;
             packet = next;
         }
+        
         result = DLLIST_ISEMPTY(&connection->sendQueueSentinel);
     }
     

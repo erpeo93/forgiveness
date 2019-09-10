@@ -39,7 +39,7 @@ global_variable b32 globalPlayingBack;
 global_variable HANDLE recordingHandle;
 global_variable HANDLE playingBackHandle;
 
-#define SERVER_MAX_FPS 10
+#define SERVER_MAX_FPS 60
 #define SERVER_MIN_MSEC_PER_FRAME 1000.0f / (r32) (SERVER_MAX_FPS)
 
 inline b32 IsInLoop()
@@ -423,7 +423,7 @@ int main( int argc, char* argv[] )
             }
             start = end;
             secondElapsed = MSecondElapsed / 1000.0f;
-            
+            memory.elapsedTime = secondElapsed;
             
             FRAME_MARKER(secondElapsed);
 #if FORGIVENESS_INTERNAL
