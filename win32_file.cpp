@@ -41,12 +41,7 @@ internal char* GetExtension(FileExtension* extensions, u32 extensionIndex)
 
 internal void GetFileExtensions(FileExtension* ext, u32 types)
 {
-    if(types & PlatformFile_compressedAsset)
-    {
-        AddExtension(ext, "pak");
-    }
-    
-    if(types & PlatformFile_uncompressedAsset)
+    if(types & PlatformFile_AssetPack)
     {
         AddExtension(ext, "upak");
     }

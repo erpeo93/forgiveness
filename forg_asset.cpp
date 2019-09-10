@@ -983,7 +983,7 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
         assetArray->subtypes = PushArray(pool, AssetSubtypeArray, assetArray->subtypeCount);
     }
     
-    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, ASSETS_PATH);
+    PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, ASSETS_PATH);
     
     assets->maxFileCount = Max(1024, fileGroup.fileCount);
     assets->fileCount = fileGroup.fileCount;

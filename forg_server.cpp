@@ -341,6 +341,19 @@ PLATFORM_WORK_CALLBACK(WatchForFileChanges)
     }
 }
 
+inline void ReadCompressFile(GameFile* file, u32 uncompressedSize, u8* uncompressedContent)
+{
+    Clear(&file->pool);
+	file->uncompressedSize = uncompressedSize;          
+    file->compressedSize = compressBound(file->uncompressedSize);
+    file->content = PushSize(&file->pool, file->compressedSize);
+    u32 cmp_status = compress(file->content, (mz_ulong*) &file->compressedSize, (const unsigned char*) uncompressedContent, file->uncompressedSize);
+    Assert(cmp_status == Z_OK);
+    PAKFileHeader* header = (PAKFileHeader*) uncompressedContent;
+    file->type = GetMetaAssetType(header->type);
+    file->subtype = GetMetaAssetSubtype(file->type, header->subtype);
+}
+
 extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 {
     platformAPI = memory->api;
@@ -348,46 +361,32 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 #if FORGIVENESS_INTERNAL
     globalDebugTable = memory->debugTable;
 #endif
+    
+    MemoryPool tempPool = {};
     if(!memory->server)
     {
         LoadMetaData();
         
         server = memory->server = BootstrapPushStruct(ServerState, gamePool);
         
-        PlatformFileGroup pakFiles = platformAPI.GetAllFilesBegin(PlatformFile_uncompressedAsset, ASSETS_PATH);
+        PlatformFileGroup pakFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, ASSETS_PATH);
         
         server->fileCount = pakFiles.fileCount;
         server->files = PushArray(&server->gamePool, GameFile, server->fileCount);
-        
-        MemoryPool filePool = {};
         
         u32 fileIndex = 0;
         for(PlatformFileInfo* info = pakFiles.firstFileInfo; info; info = info->next)
         {
             PlatformFileHandle handle = platformAPI.OpenFile(&pakFiles, info);
-            
             GameFile* file = server->files + fileIndex++;
-            file->uncompressedSize = SafeTruncateUInt64ToU32(info->size);
+            TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
             
-            TempMemory fileMemory = BeginTemporaryMemory(&filePool);
-            
-            u8* uncompressedContent = (u8*) PushSize(&filePool, info->size);
+            u8* uncompressedContent = (u8*) PushSize(&tempPool, info->size);
             platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
             
-            file->compressedSize = compressBound(file->uncompressedSize);
-            file->content = PushSize(&server->gamePool, file->compressedSize);
+			ReadCompressFile(file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
             
-            u32 cmp_status = compress(file->content, (mz_ulong*) &file->compressedSize, (const unsigned char*) uncompressedContent, file->uncompressedSize);
-            Assert(cmp_status == Z_OK);
-            
-            PAKFileHeader* header = (PAKFileHeader*) uncompressedContent;
-            file->type = GetMetaAssetType(header->type);
-            file->subtype = GetMetaAssetSubtype(file->type, header->subtype);
-            
-            platformAPI.CloseFile(&handle);
-            
-            
-            
+            platformAPI.CloseFile(&handle);        
             
             EndTemporaryMemory(fileMemory);
         }
@@ -424,8 +423,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         TimestampHash* hash = BootstrapPushStruct(TimestampHash, pool);
         
-        MemoryPool tempPool = {};
-        
         PlatformFileGroup timestampFiles = platformAPI.GetAllFilesBegin(PlatformFile_timestamp, TIMESTAMP_PATH);
         for(PlatformFileInfo* info = timestampFiles.firstFileInfo; info; info = info->next)
         {
@@ -454,6 +451,89 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         //BuildWorld(server, GenerateWorld_OnlyChunks);
     }
     
+	PlatformFileGroup reloadedFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, RELOAD_PATH);
+	for(PlatformFileInfo* info = reloadedFiles.firstFileInfo; info; info = info->next)
+    {
+        if(info->size)
+        {
+            b32 deleteFile = false;
+            TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+            
+            PlatformFileHandle handle = platformAPI.OpenFile(&reloadedFiles, info);
+            PAKFileHeader header;
+            platformAPI.ReadFromFile(&handle, 0, sizeof(PAKFileHeader), &header);
+            
+            u16 type = GetMetaAssetType(header.type);
+            u16 subtype = GetMetaAssetSubtype(type, header.subtype);
+            
+            u32 fileIndex = 0;
+            GameFile* file = 0;
+            
+            for(u32 testIndex = 0; testIndex < server->fileCount; ++testIndex)
+            {
+                GameFile* test = server->files + testIndex;
+                if(test->type == type && test->subtype == subtype)
+                {
+                    file = test;
+                    fileIndex = testIndex;
+                    break;
+                }
+            }
+            
+            char nameNoExtension[128];
+            TrimToFirstCharacter(nameNoExtension, sizeof(nameNoExtension), info->name, '.');
+            if(file && (file->counter == 0))
+            {
+                u8* uncompressedContent = (u8*) PushSize(&tempPool, info->size);
+                platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
+                
+                platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, nameNoExtension, uncompressedContent, SafeTruncateUInt64ToU32(info->size));
+                ReadCompressFile(file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
+                
+                for(u32 playerIndex = 0; 
+                    playerIndex < MAXIMUM_SERVER_PLAYERS; 
+                    playerIndex++ )
+                {
+                    Player* player = server->players + playerIndex;
+                    if(player->connectionSlot)
+                    {
+                        FileToSend* toSend;
+                        FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
+                        toSend->index = fileIndex;
+                        
+                        ++file->counter;
+                        
+                        if(!player->firstReloadedFileToSend)
+                        {
+                            player->firstReloadedFileToSend = toSend;
+                        }
+                        else
+                        {
+                            for(FileToSend* firstToSend = player->firstReloadedFileToSend;; firstToSend = firstToSend->next)
+                            {
+                                if(!firstToSend->next)
+                                {
+                                    firstToSend->next = toSend;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            EndTemporaryMemory(fileMemory);
+            platformAPI.CloseFile(&handle);
+            
+            if(deleteFile)
+            {
+                platformAPI.ReplaceFile(PlatformFile_AssetPack, RELOAD_PATH, 
+                                        nameNoExtension, 0, 0);
+            }
+        }
+    }
+    platformAPI.GetAllFilesEnd(&reloadedFiles);
+    
     // TODO(Leonardo): change the API of the network library to return a networkConnection*!
     u16 newConnections[16] = {};
     u16 accepted = platformAPI.net.Accept(&server->clientInterface, newConnections, ArrayCount(newConnections));
@@ -468,10 +548,13 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         Assert(!player->firstReloadedFileToSend);
         for(u32 fileIndex = 0; fileIndex < server->fileCount; ++fileIndex)
         {
+            GameFile* file = server->files + fileIndex;
+            
             FileToSend* toSend;
             FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
             toSend->index = fileIndex;
             
+            ++file->counter;
             FREELIST_INSERT(toSend, player->firstLoginFileToSend);
         }
     }

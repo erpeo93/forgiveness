@@ -87,8 +87,7 @@ inline void QueueAndFlushAllPackets(ServerState* server, Player* player, ForgNet
     NetworkSendParams params = {};
     if(reliable)
     {
-        params.guaranteedDelivery = GuaranteedDelivery_ResendEverySecond;
-        params.criticalLevel = NetworkCritical_Important;
+        params.guaranteedDelivery = GuaranteedDelivery_Standard;
     }
     for(ForgNetworkPacket* toSend = queue->firstPacket; toSend; toSend = toSend->next)
     {
@@ -312,6 +311,7 @@ internal u32 SendFileChunksToPlayer(ServerState* server, Player* player, u32 siz
     
     if(player->sendingFileOffset >= file->compressedSize)
     {
+		--file->counter;
         player->sendingFileOffset = 0;
         *writeNext = toSend->next;
         FREELIST_DEALLOC(toSend, server->firstFreeToSendFile);

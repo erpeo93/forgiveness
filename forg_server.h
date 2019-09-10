@@ -42,12 +42,16 @@ PlatformAPI platformAPI;
 
 struct GameFile
 {
+    MemoryPool pool;
+    
     u32 uncompressedSize;
     u32 compressedSize;
     u8* content;
     
     u16 type;
     u16 subtype;
+    
+    u32 counter;
 };
 
 struct FileToSend

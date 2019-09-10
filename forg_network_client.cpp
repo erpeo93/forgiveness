@@ -20,7 +20,7 @@ internal void SendUnreliableData(void* data, u16 size)
 internal void SendReliableData(void* data, u16 size)
 {
     NetworkSendParams params = {};
-    params.guaranteedDelivery = GuaranteedDelivery_HalfASecond;
+    params.guaranteedDelivery = GuaranteedDelivery_Standard;
     platformAPI.net.QueuePacket(clientNetwork->network, 0, params, data, size);
 }
 
@@ -515,7 +515,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     
                     char newName[128];
                     FormatString(newName, sizeof(newName), "%s_%s", type, subtype);
-                    platformAPI.ReplaceFile(PlatformFile_uncompressedAsset, ASSETS_PATH, newName, uncompressed, uncompressedSize);
+                    platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, newName, uncompressed, uncompressedSize);
                     
                     char path[64];
                     PlatformFileGroup fake = {};

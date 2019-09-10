@@ -307,8 +307,7 @@ typedef PLATFORM_ERROR_MESSAGE(platform_error_message);
 typedef enum PlatformFileType
 {
     PlatformFile_invalid = 0,
-    PlatformFile_compressedAsset = (1 << 0),
-    PlatformFile_uncompressedAsset = (1 << 1),
+    PlatformFile_AssetPack = (1 << 1),
     PlatformFile_savedGame = (1 << 2),
     PlatformFile_png  = (1 << 3),
     PlatformFile_Coloration  = (1 << 4),

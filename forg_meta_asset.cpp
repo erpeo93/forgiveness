@@ -677,28 +677,14 @@ internal void* ReserveSpace(ReservedSpace* space, u32 size)
 
 struct MetaArrayHeader
 {
-    u16 count;
     u16 maxCount;
 };
 
-struct MetaArrayTrailer
-{
-    void* nextBlock;
-};
-
-internal void* InitMetaArrayBlock(void* memory, u32 elementCount, u32 filled, u32 elementSize)
+internal void* InitMetaArray(void* memory, u32 elementCount)
 {
     MetaArrayHeader* header = (MetaArrayHeader*) memory;
-    
-    Assert(filled <= elementCount);
-    header->count = SafeTruncateToU16(filled);
     header->maxCount = SafeTruncateToU16(elementCount);
-    
     void* result = (header + 1);
-    void* trailerPtr = (void*) ((u8*) result + (elementCount * elementSize));
-    MetaArrayTrailer* trailer = (MetaArrayTrailer*) trailerPtr;
-    trailer->nextBlock = 0;
-    
     return result;
 }
 
@@ -708,14 +694,12 @@ internal MetaArrayHeader* GetHeader(void* dataPtr)
     return result;
 }
 
-internal MetaArrayTrailer* GetTrailer(void* dataPtr, u32 elementSize)
+internal void* GetMemory(MemoryPool* pool, u32 elementCount, u32 elementSize)
 {
-    MetaArrayHeader* header = GetHeader(dataPtr);
-    MetaArrayTrailer* result = (MetaArrayTrailer*) ((u8*) dataPtr + header->maxCount * elementSize);
-    
+    void* result = (void*) PushSize(pool, elementCount * elementSize + sizeof(MetaArrayHeader));
     return result;
-    
 }
+
 
 internal StructOperationResult StructOperation(EditorLayout* layout, String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer);
 internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* fieldPtr, Tokenizer* tokenizer, Stream* output, ReservedSpace* reserved, u16* elementCount)
@@ -725,11 +709,8 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
     u16 elements = 0;
     
     Assert(*elementCount);
-    u16* blockElementCount = elementCount;
     if(pointer)
     {
-        MetaArrayHeader* header = GetHeader(fieldPtr);
-        blockElementCount = &header->count;
         if(operation == FieldOperation_Dump)
         {
             OutputToStream(output, "%s=", field->name);
@@ -782,10 +763,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
         
         if(op.deleted)
         {
-            --*elementCount;
-            Assert(*blockElementCount > 0);
-            
-            u32 offset = field->size * --*blockElementCount;
+            u32 offset = field->size * --*elementCount;
             void* targetPtr = AdvanceVoidPtrBytes(fieldPtr, offset);
             void* destPtr = fieldPtr;
             void* sourcePtr = AdvanceVoidPtrBytes(fieldPtr, field->size);
@@ -802,7 +780,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
         {
             if(operation == FieldOperation_Dump || operation == FieldOperation_Edit)
             {
-                if(elements >= *blockElementCount)
+                if(elements >= *elementCount)
                 {
                     break;
                 }
@@ -982,7 +960,7 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                     
                     if(pointer)
                     {
-                        result.size += (sizeof(MetaArrayHeader) + sizeof(MetaArrayTrailer));
+                        result.size += sizeof(MetaArrayHeader);
                         elementCount = GetMetaPtrElementCountForArray(definition, field, dataPtr);
                         if(elementCount)
                         {
@@ -998,45 +976,24 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                                 
                                 if(StandardEditorButton(layout, "add", auID(originalfieldPtr, "addButton"), V4(0, 1.0f, 1.0f, 1.0f)))
                                 {
-                                    u32 newElementCount = 32;
-                                    
-                                    
-                                    *elementCount = *elementCount + 1;
-                                    if(*elementCount == 1)
+                                    if(*elementCount == 0 || (*elementCount > header->maxCount / 2))
                                     {
-                                        void* memory = PushSize(layout->context->pool, newElementCount * field->size + sizeof(MetaArrayHeader) + sizeof(MetaArrayTrailer));
-                                        InitMetaArrayBlock(memory, newElementCount, 0, field->size);
-                                        *(u64*)originalfieldPtr = (u64) memory;
-                                        header = (MetaArrayHeader*) memory;
+                                        u32 newElementCount = header ? (header->maxCount * 2) : 16;
+                                        void* oldArray = fieldPtr;
+                                        u32 sizeToCopy = *elementCount * field->size;
+                                        void* newArray = GetMemory(layout->context->pool, newElementCount, field->size);
+                                        
+                                        Copy(sizeToCopy, newArray, oldArray);
+                                        //FreeBlock(oldArray, oldSize);
+                                        
+                                        InitMetaArray(newArray, newElementCount);
+                                        
+                                        *(u64*)originalfieldPtr = (u64) newArray;
+                                        header = (MetaArrayHeader*) newArray;
                                         fieldPtr = header + 1;
                                     }
                                     
-                                    
-                                    void* here = 0;
-                                    MetaArrayHeader* currentHeader = header;
-                                    while(!here)
-                                    {
-                                        void* arrayPtr = (void*) (currentHeader + 1);
-                                        
-                                        MetaArrayTrailer* trailer = GetTrailer(arrayPtr, field->size);
-                                        if(currentHeader->count < currentHeader->maxCount)
-                                        {
-                                            here = (void*)((u8*)arrayPtr + currentHeader->count++ * field->size);
-                                        }
-                                        else
-                                        {
-                                            if(!trailer->nextBlock)
-                                            {
-                                                void* memory = PushSize(layout->context->pool, newElementCount * field->size + sizeof(MetaArrayHeader) + sizeof(MetaArrayTrailer));
-                                                InitMetaArrayBlock(memory, newElementCount, 0, field->size);
-                                                
-                                                trailer->nextBlock = memory;
-                                            }
-                                            
-                                            currentHeader = (MetaArrayHeader*) trailer->nextBlock;
-                                        }
-                                    }
-                                    
+                                    void* here = (void*)((u8*)fieldPtr + *elementCount++ * field->size);
                                     InitFieldDefault(field, here);
                                 }
                             }
@@ -1060,37 +1017,7 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                         }
 #endif
                         
-                        while(true)
-                        {
-                            b32 showBlock = true;
-                            if(pointer)
-                            {
-                                MetaArrayHeader* header = GetHeader(fieldPtr);
-                                showBlock = (header->count > 0);
-                            }
-                            
-                            if(showBlock)
-                            {
-                                result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, elementCount);
-                            }
-                            if(pointer)
-                            {
-                                MetaArrayTrailer* trailer = GetTrailer(fieldPtr, field->size);
-                                if(trailer->nextBlock)
-                                {
-                                    MetaArrayHeader* nextHeader = (MetaArrayHeader*) trailer->nextBlock;
-                                    fieldPtr = nextHeader + 1;
-                                }
-                                else
-                                {
-                                    break;
-                                }
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
+                        result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, elementCount);
 #ifndef FORG_SERVER
                         if(pointer && operation == FieldOperation_Edit)
                         {
@@ -1134,7 +1061,7 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                 if(RequireToken(tokenizer, Token_EqualSign))
                 {
                     void* fieldPtr = (void*) ((u8*) dataPtr + field->offset);
-                    u32 additionalSize = sizeof(MetaArrayHeader) + sizeof(MetaArrayTrailer);
+                    u32 additionalSize = sizeof(MetaArrayHeader);
                     if(field->flags & MetaFlag_Pointer)
                     {
                         result.size += additionalSize;
@@ -1157,7 +1084,7 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                         if(elementCount)
                         {
                             void* headerPtr = ReserveSpace(reserved, elementCount * field->size + additionalSize);
-                            void* arrayPtr = InitMetaArrayBlock(headerPtr, elementCount, elementCount, field->size);
+                            void* arrayPtr = InitMetaArray(headerPtr, elementCount);
                             
                             *(u64*) fieldPtr = (u64) headerPtr;
                             fieldPtr = arrayPtr;
