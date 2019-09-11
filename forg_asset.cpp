@@ -995,6 +995,7 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
     {
         AssetFile* file = assets->files + fileIndex;
         file->handle = platformAPI.OpenFile(&fileGroup, info);
+        file->size = SafeTruncateUInt64ToU32(info->size);
         
         PAKFileHeader* header = &file->header;
         if(InitFileAssetHeader(file))

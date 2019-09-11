@@ -365,26 +365,30 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 clientNetwork->nextSendStandardApplicationData = {};
                 clientNetwork->nextSendOrderedApplicationData = {};
                 
+                Assets* assets = gameState->assets;
                 
-#if 0                
                 MemoryPool tempPool = {};
-                for(every asset file)
+                
+                for(u32 fileIndex = 0; fileIndex < assets->fileCount; ++fileIndex)
                 {
                     TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+                    
                     AssetFile* file = GetAssetFile(assets, fileIndex);
-                    PAKFileHeader* header = GetFileHeader(assets, fileIndex);
-                    u64 hash = ComputeHash();
-                    AssetSubtypeArray* assets = GetAssetSubtype(assets, header);
-                    if(assets)
-                    {
-                        u16 type = ?;
-                        u16 subtype = ?;
-                        SendFileHash(type, subtype, hash);
-                    }
+                    PAKFileHeader* fileHeader = GetFileInfo(assets, fileIndex);
+                    PlatformFileHandle* fileHandle = GetHandleFor(assets, fileIndex);
+                    
+                    u8* content = (u8*) PushSize(&tempPool, file->size);
+                    platformAPI.ReadFromFile(fileHandle, 0, file->size, content);
+                    
+                    
+                    u16 type = GetMetaAssetType(fileHeader->type);
+                    u16 subtype = GetMetaAssetSubtype(type, fileHeader->subtype);
+                    
+                    u64 dataHash = DataHash((char*) content, file->size);
+                    SendFileHash(type, subtype, dataHash);
                     
                     EndTemporaryMemory(fileMemory);
                 }
-#endif
                 
                 clientNetwork->serverChallenge = login.challenge;
                 GameAccessRequest(clientNetwork->serverChallenge);

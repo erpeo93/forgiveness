@@ -316,6 +316,7 @@ struct AssetArray
 struct AssetFile
 {
     PlatformFileHandle handle;
+    u32 size;
     PAKFileHeader header;
 };
 

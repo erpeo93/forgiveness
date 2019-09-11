@@ -99,18 +99,36 @@ internal void DispatchApplicationPacket(ServerState* server, Player* player, u32
             }
         } break;
         
-#if 0        
+        
         case Type_FileHash:
         {
             u16 type;
             u16 subtype;
             u64 hash;
             packetPtr = unpack(packetPtr, "HHQ", &type, &subtype, &hash);
-            ForgFile* file = FindFile(server, &player->files, type, subtype);
-            file->hash = hash;
+            
+            for(u32 fileIndex = 0; fileIndex < server->fileCount; ++fileIndex)
+            {
+                GameFile* file = server->files + fileIndex;
+                if(file->type == type && file->subtype == subtype)
+                {
+                    if(file->dataHash != hash)
+                    {
+                        FileToSend* toSend;
+                        FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
+                        toSend->acked = false;
+                        toSend->playerIndex = player->runningFileIndex++;
+                        toSend->serverFileIndex = fileIndex;
+                        toSend->sendingOffset = 0;
+                        
+                        ++file->counter;
+                        SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
+                        FREELIST_INSERT(toSend, player->firstLoginFileToSend);
+                    }
+                    break;
+                }
+            }
         } break;
-#endif
-        
         case Type_gameAccess:
         {
             GameAccessRequest clientReq;
@@ -126,24 +144,6 @@ internal void DispatchApplicationPacket(ServerState* server, Player* player, u32
                 
                 P.chunkOffset.x = 1.0f;
                 AddEntity(server, P, 0);
-                
-                
-                Assert(!player->firstLoginFileToSend);
-                Assert(!player->firstReloadedFileToSend);
-                for(u32 fileIndex = 0; fileIndex < server->fileCount; ++fileIndex)
-                {
-                    GameFile* file = server->files + fileIndex;
-                    FileToSend* toSend;
-                    FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
-                    toSend->acked = false;
-                    toSend->playerIndex = player->runningFileIndex++;
-                    toSend->serverFileIndex = fileIndex;
-                    toSend->sendingOffset = 0;
-                    
-                    ++file->counter;
-                    SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
-                    FREELIST_INSERT(toSend, player->firstLoginFileToSend);
-                }
             }
             else
             {
@@ -272,7 +272,7 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
             }
             else
             {
-                u32 toSendSize = KiloBytes(50);
+                u32 toSendSize = KiloBytes(250);
                 
                 FileToSend** toSendPtr = &player->firstLoginFileToSend;
                 toSendSize = SendAllPossibleData(server, player, toSendPtr, toSendSize);
@@ -386,6 +386,7 @@ inline void ReadCompressFile(GameFile* file, u32 uncompressedSize, u8* uncompres
     PAKFileHeader* header = (PAKFileHeader*) uncompressedContent;
     file->type = GetMetaAssetType(header->type);
     file->subtype = GetMetaAssetSubtype(file->type, header->subtype);
+    file->dataHash = DataHash((char*) uncompressedContent, uncompressedSize);
 }
 
 extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)

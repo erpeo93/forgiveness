@@ -48,6 +48,8 @@ struct GameFile
     u32 compressedSize;
     u8* content;
     
+    u64 dataHash;
+    
     u16 type;
     u16 subtype;
     
