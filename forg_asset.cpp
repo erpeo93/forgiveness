@@ -392,7 +392,7 @@ inline u32 AcquireTextureHandle(Assets* assets)
         
 		Assert(freeThis);
 		DLLIST_REMOVE(freeThis);
-		Asset* LRU = (Asset*) free;
+		Asset* LRU = (Asset*) freeThis;
 		result = LRU->textureHandle.index;
 		Clear(&LRU->textureHandle);
         
