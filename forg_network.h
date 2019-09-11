@@ -1,12 +1,15 @@
 #pragma once
 
 #define LOGIN_PORT 1313
-#define MTU KiloBytes(1) + 1
+#define MTU KiloBytes(1) + 32
+#define CHUNK_SIZE KiloBytes(1)
+
 #pragma pack(push, 1)
 
 enum ForgNetworkFlags
 {
     ForgNetworkFlag_Ordered = (1 << 1),
+    ForgNetworkFlag_FileChunk = (1 << 2),
 };
 
 struct ForgNetworkApplicationData

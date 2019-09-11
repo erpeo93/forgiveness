@@ -63,7 +63,7 @@ internal void SendEntityUpdate(ServerState* server, Entity* entity)
         {
             Player* player = server->players + targetEntity->playerID;
             SendEntityHeader(player, entity->ID);
-            u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, totalSize, entity->ID);
+            u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, entity->ID);
             Assert(writeHere);
             if(writeHere)
             {

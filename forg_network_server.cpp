@@ -1,13 +1,8 @@
-inline u8* ForgReserveSpace(Player* player, GuaranteedDelivery deliveryType, u16 size, u64 identifier)
+inline u8* ForgReserveSpace(Player* player, GuaranteedDelivery deliveryType, u8 flags, u16 size, u64 identifier)
 {
     ForgNetworkPacketQueue* queue = player->queues + deliveryType; 
     
-    u8 applicationFlags = 0;
-    if(deliveryType == GuaranteedDelivery_Ordered)
-    {
-        applicationFlags = ForgNetworkFlag_Ordered;
-    }
-    
+    u8 applicationFlags = flags;
     u8* result = 0;
     Assert(size <= MTU);
     ForgNetworkPacket* packet = 0;
@@ -71,15 +66,17 @@ inline u8* ForgReserveSpace(Player* player, GuaranteedDelivery deliveryType, u16
     return result;
 }
 
-#define CloseAndStoreStandardPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_None, __VA_ARGS__)
-#define CloseAndStoreGuaranteedPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_Guaranteed, __VA_ARGS__)
+#define CloseAndStoreStandardPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_None, 0, __VA_ARGS__)
+#define CloseAndStoreGuaranteedPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_Guaranteed,0, __VA_ARGS__)
 
-#define CloseAndStoreOrderedPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_Ordered, __VA_ARGS__)
+#define CloseAndStoreFilePacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_Guaranteed, ForgNetworkFlag_FileChunk, __VA_ARGS__)
 
-inline void CloseAndStore(Player* player, unsigned char* buff_, unsigned char* buff, GuaranteedDelivery deliveryType, u64 identifier = 0)
+#define CloseAndStoreOrderedPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_Ordered, ForgNetworkFlag_Ordered, __VA_ARGS__)
+
+inline void CloseAndStore(Player* player, unsigned char* buff_, unsigned char* buff, GuaranteedDelivery deliveryType, u8 flags, u64 identifier = 0)
 {
     u16 totalSize = ForgEndPacket_(buff_, buff);
-    u8* writeHere = ForgReserveSpace(player, deliveryType, totalSize, identifier);
+    u8* writeHere = ForgReserveSpace(player, deliveryType, flags, totalSize, identifier);
     Assert(writeHere);
     if(writeHere)
     {
@@ -259,7 +256,7 @@ inline void SendFileHeader(Player* player, u32 index, u16 type, u16 subtype, u32
 inline void SendFileChunks(Player* player, u32 index, char* source, u32 offset, u32 sizeToSend, u32 chunkSize)
 {
     u32 sentSize = 0;
-    u8* runningSource = (u8*) source;
+    u8* runningSource = (u8*) source + offset;
     
     while(sentSize < sizeToSend)
     {
@@ -267,53 +264,61 @@ inline void SendFileChunks(Player* player, u32 index, char* source, u32 offset, 
         u16 toSend = SafeTruncateToU16(Min(chunkSize, sizeToSend - sentSize));
         Pack("LLH", offset, index, toSend);
         Copy(toSend, buff, runningSource);
+        
         buff += toSend;
         runningSource += toSend;
         offset += toSend;
-        
-        CloseAndStoreGuaranteedPacket(player);
         sentSize += toSend;
+        
+        CloseAndStoreFilePacket(player);
     }
+    
+    Assert(sentSize == sizeToSend);
 }
 
-#define CHUNK_SIZE KiloBytes(1)
-internal u32 SendFileChunksToPlayer(ServerState* server, Player* player, u32 index, u32 sizeToSend, FileToSend* toSend, FileToSend** writeNext)
+internal u32 SendAllPossibleData(ServerState* server, Player* player, FileToSend** toSendPtr, u32 toSendSize)
 {
-    u32 result = sizeToSend;
-    
-    Assert(toSend->index < server->fileCount);
-    GameFile* file = server->files + toSend->index;
-    if(player->sendingFileOffset == 0)
+    while(*toSendPtr && (toSendSize > 0))
     {
-        SendFileHeader(player, index, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
+        FileToSend* toSend = *toSendPtr;
+        if(toSend->acked)
+        {
+            GameFile* file = server->files + toSend->serverFileIndex;
+            u32 remainingSizeInFile = SafeTruncateUInt64ToU32(file->compressedSize) - toSend->sendingOffset;
+            
+            u32 sending = Min(toSendSize, remainingSizeInFile);
+            if(sending > 0)
+            {
+                SendFileChunks(player, toSend->playerIndex, (char*) file->content, toSend->sendingOffset, sending, CHUNK_SIZE);
+                toSend->sendingOffset += sending;
+            }
+            
+            u32 roundedSent = sending;
+            if(roundedSent % CHUNK_SIZE)
+            {
+                roundedSent += CHUNK_SIZE - (roundedSent % CHUNK_SIZE);
+            }
+            Assert(roundedSent % CHUNK_SIZE == 0);
+            toSendSize -= roundedSent;
+            
+            if(toSend->sendingOffset >= file->compressedSize)
+            {
+                --file->counter;
+                *toSendPtr = toSend->next;
+                FREELIST_DEALLOC(toSend, server->firstFreeToSendFile);
+            }
+            else
+            {
+                Assert(toSendSize == 0);
+            }
+        }
+        else
+        {
+            toSendPtr = &toSend->next;
+        }
     }
     
-    u32 remainingSizeInFile = SafeTruncateUInt64ToU32(file->compressedSize) - player->sendingFileOffset;
-    u32 sending = Min(sizeToSend, remainingSizeInFile);
-    
-    if(sending > 0)
-    {
-        SendFileChunks(player, index, (char*) file->content, player->sendingFileOffset, sending, CHUNK_SIZE);
-        player->sendingFileOffset += sending;
-    }
-    
-    u32 roundedSent = sending;
-    if(roundedSent % CHUNK_SIZE)
-    {
-        roundedSent += CHUNK_SIZE - (roundedSent % CHUNK_SIZE);
-    }
-    Assert(roundedSent % CHUNK_SIZE == 0);
-    result -= roundedSent;
-    
-    if(player->sendingFileOffset >= file->compressedSize)
-    {
-		--file->counter;
-        player->sendingFileOffset = 0;
-        *writeNext = toSend->next;
-        FREELIST_DEALLOC(toSend, server->firstFreeToSendFile);
-    }
-    
-    return result;
+    return toSendSize;
 }
 
 #if FORGIVENESS_INTERNAL

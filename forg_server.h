@@ -56,7 +56,10 @@ struct GameFile
 
 struct FileToSend
 {
-    u32 index;
+    b32 acked;
+    u32 playerIndex;
+    u32 serverFileIndex;
+    u32 sendingOffset;
     
     union
     {
@@ -82,7 +85,7 @@ struct Player
     u32 requestCount;
     PlayerRequest requests[8];
     
-    u32 sendingFileOffset;
+    u32 runningFileIndex;
     FileToSend* firstLoginFileToSend;
     FileToSend* firstReloadedFileToSend;
 };

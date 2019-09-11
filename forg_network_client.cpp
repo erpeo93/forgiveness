@@ -291,6 +291,13 @@ inline void SendFileHash(u16 type, u16 subtype, u64 hash)
     CloseAndSendOrderedPacket();
 }
 
+internal void SendFileHeaderAck(u32 index)
+{
+    StartPacket(FileHeader);
+    Pack("L", index);
+    CloseAndSendGuaranteedPacket();
+}
+
 #if FORGIVENESS_INTERNAL
 inline SavedNameSlot* GetNameSlot( DebugTable* debugTable, u64 pointer )
 {
@@ -438,12 +445,22 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             case Type_FileHeader:
             {
                 ReceivingAssetFile* newFile = BootstrapPushStruct(ReceivingAssetFile, memory);
-                
                 Unpack("LHHLL", &newFile->index, &newFile->type, &newFile->subtype, &newFile->uncompressedSize, &newFile->compressedSize);
                 newFile->receivedSize = 0;
                 newFile->content = PushSize(&newFile->memory, newFile->compressedSize);
                 
+                
+                newFile->chunkCount = (newFile->compressedSize / CHUNK_SIZE) + 1;
+                newFile->receivedChunks = PushArray(&newFile->memory, b32, newFile->chunkCount);
+                
+                if(!player->receiveFileSentinel.next)
+                {
+                    DLLIST_INIT(&player->receiveFileSentinel);
+                }
+                
                 DLLIST_INSERT(&player->receiveFileSentinel, newFile);
+                
+				SendFileHeaderAck(newFile->index);
             } break;
             
             case Type_FileChunk:
@@ -451,7 +468,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 u32 offset;
                 u32 fileIndex;
                 u16 sizeToCopy;
-                u8* source = Unpack("LLH", &offset, &fileIndex, &sizeToCopy);
+                Unpack("LLH", &offset, &fileIndex, &sizeToCopy);
                 
                 ReceivingAssetFile* receiving = 0;
                 for(ReceivingAssetFile* test = player->receiveFileSentinel.next; test != &player->receiveFileSentinel; test = test->next)
@@ -465,77 +482,84 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 if(receiving)
                 {
-                    u8* dest = receiving->content + offset;
-                    Copy(sizeToCopy, dest, packetPtr);
-                    packetPtr += sizeToCopy;
-                    receiving->receivedSize += sizeToCopy;
-                    if(receiving->receivedSize >= receiving->compressedSize)
+                    Assert((offset % CHUNK_SIZE) == 0);
+                    u32 chunkIndex = offset / CHUNK_SIZE;
+                    Assert(chunkIndex < receiving->chunkCount);
+                    
+                    if(!receiving->receivedChunks[chunkIndex])
                     {
-                        Assert(receiving->receivedSize == receiving->compressedSize);
-                        Assets* assets = gameState->assets;
-                        AssetFile* destFile = 0;
-                        u32 destFileIndex = 0;
-                        
-                        for(u32 assetFileIndex = 0; assetFileIndex < assets->fileCount; ++assetFileIndex)
+                        receiving->receivedChunks[chunkIndex] = true;
+                        u8* dest = receiving->content + offset;
+                        Copy(sizeToCopy, dest, packetPtr);
+                        receiving->receivedSize += sizeToCopy;
+                        if(receiving->receivedSize >= receiving->compressedSize)
                         {
-                            AssetFile* file = GetAssetFile(assets, assetFileIndex);
-                            u16 type = GetMetaAssetType(file->header.type);
-                            u16 subtype = GetMetaAssetSubtype(type, file->header.subtype);
+                            Assert(receiving->receivedSize == receiving->compressedSize);
+                            Assets* assets = gameState->assets;
+                            AssetFile* destFile = 0;
+                            u32 destFileIndex = 0;
                             
-                            if(receiving->type == type && receiving->subtype == subtype)
+                            for(u32 assetFileIndex = 0; assetFileIndex < assets->fileCount; ++assetFileIndex)
                             {
-                                platformAPI.CloseFile(&file->handle);
-                                destFile = file;
-                                destFileIndex = assetFileIndex;
+                                AssetFile* file = GetAssetFile(assets, assetFileIndex);
+                                u16 type = GetMetaAssetType(file->header.type);
+                                u16 subtype = GetMetaAssetSubtype(type, file->header.subtype);
                                 
-                                break;
+                                if(receiving->type == type && receiving->subtype == subtype)
+                                {
+                                    platformAPI.CloseFile(&file->handle);
+                                    destFile = file;
+                                    destFileIndex = assetFileIndex;
+                                    
+                                    break;
+                                }
                             }
+                            
+                            
+                            
+                            if(!destFile)
+                            {
+                                Assert(assets->fileCount < assets->maxFileCount);
+                                destFileIndex = assets->fileCount++;
+                                destFile = GetAssetFile(assets, destFileIndex);
+                            }
+                            //platformAPI.deletefile(preexisting);
+                            char* type = GetAssetTypeName(receiving->type);
+                            char* subtype = GetAssetSubtypeName(receiving->type, receiving->subtype);
+                            
+                            u8* compressed = receiving->content;
+                            u32 compressedSize = receiving->compressedSize;
+                            
+                            u32 uncompressedSize = receiving->uncompressedSize;
+                            u8* uncompressed = PushSize(&receiving->memory, uncompressedSize);
+                            u32 cmp_status = uncompress(uncompressed, (mz_ulong*) &uncompressedSize, compressed, compressedSize);
+                            
+                            Assert(cmp_status == Z_OK);
+                            Assert(uncompressedSize == receiving->uncompressedSize);
+                            
+                            char newName[128];
+                            FormatString(newName, sizeof(newName), "%s_%s", type, subtype);
+                            platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, newName, uncompressed, uncompressedSize);
+                            
+                            char path[64];
+                            PlatformFileGroup fake = {};
+                            fake.path = path;
+                            FormatString(fake.path, sizeof(path), "%s", ASSETS_PATH);
+                            
+                            char name[64];
+                            PlatformFileInfo fakeInfo = {};
+                            fakeInfo.name = name;
+                            FormatString(fakeInfo.name, sizeof(name), "%s.upak", newName);
+                            
+                            destFile->handle = platformAPI.OpenFile(&fake, &fakeInfo);
+                            ReloadAssetFile(assets, destFile, destFileIndex, &receiving->memory);
+                            
+                            DLLIST_REMOVE(receiving);
+                            Clear(&receiving->memory);
                         }
-                        
-                        
-                        
-                        if(!destFile)
-                        {
-                            Assert(assets->fileCount < assets->maxFileCount);
-                            destFileIndex = assets->fileCount++;
-                            destFile = GetAssetFile(assets, destFileIndex);
-                        }
-                        //platformAPI.deletefile(preexisting);
-                        char* type = GetAssetTypeName(receiving->type);
-                        char* subtype = GetAssetSubtypeName(receiving->type, receiving->subtype);
-                        
-                        
-                        u8* compressed = receiving->content;
-                        u32 compressedSize = receiving->compressedSize;
-                        
-                        u32 uncompressedSize = receiving->uncompressedSize;
-                        u8* uncompressed = PushSize(&receiving->memory, uncompressedSize);
-                        u32 cmp_status = uncompress(uncompressed, (mz_ulong*) &uncompressedSize, compressed, compressedSize);
-                        
-                        Assert(cmp_status == Z_OK);
-                        Assert(uncompressedSize == receiving->uncompressedSize);
-                        
-                        char newName[128];
-                        FormatString(newName, sizeof(newName), "%s_%s", type, subtype);
-                        platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, newName, uncompressed, uncompressedSize);
-                        
-                        char path[64];
-                        PlatformFileGroup fake = {};
-                        fake.path = path;
-                        FormatString(fake.path, sizeof(path), "%s", ASSETS_PATH);
-                        
-                        char name[64];
-                        PlatformFileInfo fakeInfo = {};
-                        fakeInfo.name = name;
-                        FormatString(fakeInfo.name, sizeof(name), "%s.upak", newName);
-                        
-                        destFile->handle = platformAPI.OpenFile(&fake, &fakeInfo);
-                        ReloadAssetFile(assets, destFile, destFileIndex, &receiving->memory);
-                        
-                        DLLIST_REMOVE(receiving);
-                        Clear(&receiving->memory);
                     }
                 }
+                packetPtr += sizeToCopy;
             } break;
             
             case Type_plantUpdate:
@@ -1056,6 +1080,10 @@ internal void ReceiveNetworkPackets(GameState* gameState, GameModeWorld* worldMo
                     InvalidCodePath;
                 }
             }
+        }
+        else if(applicationData.flags & ForgNetworkFlag_FileChunk)
+        {
+            DispatchApplicationPacket(gameState, worldMode, packetPtr, packet.dataSize - sizeof(ForgNetworkApplicationData));
         }
         else
         {

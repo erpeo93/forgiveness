@@ -941,6 +941,7 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
     Assets* assets = PushStruct(pool, Assets); 
     
     DLLIST_INIT(&assets->LRUSentinel);
+    DLLIST_INIT(&assets->LRUFreeSentinel);
     DLLIST_INIT(&assets->specialLRUSentinel);
     DLLIST_INIT(&assets->lockedLRUSentinel);
     

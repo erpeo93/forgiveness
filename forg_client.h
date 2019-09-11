@@ -79,6 +79,9 @@ struct ReceivingAssetFile
     u32 receivedSize;
     u8* content;
     
+    u32 chunkCount;
+    b32* receivedChunks;
+    
     ReceivingAssetFile* prev;
     ReceivingAssetFile* next;
 };
