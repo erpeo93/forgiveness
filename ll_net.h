@@ -519,8 +519,10 @@ struct PacketHeader
 enum GuaranteedDelivery
 {
     GuaranteedDelivery_None = 0,
-    GuaranteedDelivery_Standard = 1,
+    GuaranteedDelivery_Guaranteed = 1,
     GuaranteedDelivery_Ordered = 2,
+    
+    GuaranteedDelivery_Count,
 };
 
 #define ACK_BITS_NUMBER_STARTING_BIT 4
@@ -665,12 +667,11 @@ struct NetworkConnection
     u8 counterpartAddress[64];
     int counterpartAddrSize;
     
-    
     u16 nextProgressiveIndex;
-    NetworkBufferedPacket sendQueueSentinel;
+    NetworkBufferedPacket toSendQueueSentinel;
+    NetworkBufferedPacket sentQueueSentinel;
     NetworkBufferedPacket recvQueueSentinel;
     NetworkBufferedPacket* firstFreePacket;
-    
     
     TicketMutex mutex;
     NetworkBufferedAck* firstQueuedAck;
@@ -720,7 +721,7 @@ struct NetworkInterface
 #define NETWORK_QUEUE_PACKET(name) void name(NetworkInterface* network, u16 connectionSlot, NetworkSendParams params,void* data, u16 size)
 typedef NETWORK_QUEUE_PACKET(network_platform_queue_packet);
 
-#define NETWORK_FLUSH_SEND_QUEUE(name) b32 name(NetworkInterface* network, u16 connectionSlot, r32 elapsedTime)
+#define NETWORK_FLUSH_SEND_QUEUE(name) void name(NetworkInterface* network, u16 connectionSlot, r32 elapsedTime)
 typedef NETWORK_FLUSH_SEND_QUEUE(network_platform_flush_send_queue);
 
 #define NETWORK_RECEIVE_DATA(name) void name(NetworkInterface* network)
@@ -1075,10 +1076,15 @@ inline void AdjustRTT(NetworkConnection* connection, r32 packetRTT)
     connection->estimatedRTT = NetLerp(connection->estimatedRTT, 0.2f, packetRTT);
 }
 
+inline void ReduceBandwidth(NetworkConnection* connection)
+{
+    connection->sendAllowedBandwidth /= 1.2f;
+}
+
 inline void SignalPacketLost(NetworkConnection* connection, r32 time)
 {
 	AdjustRTT(connection, time);
-    connection->sendAllowedBandwidth /= 1.2f;
+    ReduceBandwidth(connection);
 }
 
 inline u32 GetBandwidth(NetworkConnection* connection, r32 elapsedTime)
@@ -1100,7 +1106,7 @@ inline void DispatchQueuedAcks(NetworkConnection* connection)
         NetworkBufferedAck* lastDispatched = 0;
         for(NetworkBufferedAck* toDispatch = firstToDispatch; toDispatch; toDispatch = toDispatch->next)
         {
-            for(NetworkBufferedPacket* packet = connection->sendQueueSentinel.next; packet != &connection->sendQueueSentinel;)
+            for(NetworkBufferedPacket* packet = connection->sentQueueSentinel.next; packet != &connection->sentQueueSentinel;)
             {
                 NetworkBufferedPacket* next = packet->next;
                 if(Acked(toDispatch->ack, packet->progressiveIndex))
@@ -1239,7 +1245,6 @@ NETWORK_QUEUE_PACKET(Win32QueuePacket)
     FREELIST_ALLOC(newPacket, connection->firstFreePacket, (NetworkBufferedPacket*) malloc(sizeof(NetworkBufferedPacket)));
     EndTicketMutex(&connection->mutex);
     
-    newPacket->progressiveIndex = connection->nextProgressiveIndex++;
     
     Assert(size && size <= ArrayC(newPacket->data));
     newPacket->dataSize = size;
@@ -1256,20 +1261,53 @@ NETWORK_QUEUE_PACKET(Win32QueuePacket)
     }
     
     newPacket->flags = flags;
-    newPacket->inFlightTimer = R32_MAX;
+    newPacket->progressiveIndex = connection->nextProgressiveIndex++;
+    DLLIST_INSERT_AS_LAST(&connection->toSendQueueSentinel, newPacket);
+}
+
+internal void UpdateSentPackets(NetworkConnection* connection, r32 elapsedTime)
+{
     
-    DLLIST_INSERT_AS_LAST(&connection->sendQueueSentinel, newPacket);
+    r32 targetTime = Max(0.1f, 2.0f * connection->estimatedRTT);
+    NetworkBufferedPacket* packet = connection->sentQueueSentinel.next;
+    
+    while(packet != &connection->sentQueueSentinel)
+    {
+        NetworkBufferedPacket* next = packet->next;
+        
+        packet->inFlightTimer += elapsedTime;
+        if(packet->inFlightTimer >= targetTime)
+        {
+            SignalPacketLost(connection, packet->inFlightTimer);
+            
+            GuaranteedDelivery timeType = (GuaranteedDelivery) Get2BitFlags(packet->flags, GUARANTEED_DELIVERY_STARTING_BIT);
+            DLLIST_REMOVE(packet);
+            if(timeType > GuaranteedDelivery_None)
+            {
+                packet->progressiveIndex = connection->nextProgressiveIndex++;
+                DLLIST_INSERT_AS_LAST(&connection->toSendQueueSentinel, packet);
+            }
+            else
+            {
+                BeginTicketMutex(&connection->mutex);
+                FREELIST_INSERT(packet, connection->firstFreePacket);
+                EndTicketMutex(&connection->mutex);
+            }
+        }
+        
+        packet = next;
+    }
 }
 
 NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
 {
     elapsedTime = Min(elapsedTime, 0.2f);
-    b32 result = true;
     
     NetworkConnection* connection = network->connections + connectionSlot;
     if(connection)
     {
         DispatchQueuedAcks(connection);
+        UpdateSentPackets(connection, elapsedTime);
         
         u32 dataToSend = GetBandwidth(connection, elapsedTime);        
         r32 newReceivingSpeed = connection->receivedPacketsLastTick / elapsedTime;
@@ -1278,83 +1316,43 @@ NETWORK_FLUSH_SEND_QUEUE(Win32FlushSendQueue)
         connection->receivedPacketsLastTick = 0;
         
         
-        NetworkBufferedPacket* packet = connection->sendQueueSentinel.next;
-        while(packet != &connection->sendQueueSentinel && (dataToSend > 0))
+        NetworkBufferedPacket* packet = connection->toSendQueueSentinel.next;
+        while(packet != &connection->toSendQueueSentinel && (dataToSend > 0))
         {
             NetworkBufferedPacket* next = packet->next;
-            Assert(next);
             
-			GuaranteedDelivery timeType = (GuaranteedDelivery) Get2BitFlags(packet->flags, GUARANTEED_DELIVERY_STARTING_BIT);
-            b32 guaranteedDelivery = (timeType > GuaranteedDelivery_None);
+            BeginTicketMutex(&connection->mutex);
+            NetworkAck ackToInclude = connection->ackToInclude;
+            EndTicketMutex(&connection->mutex);
             
-			
-            b32 firstTime = false;
-            if(packet->inFlightTimer != R32_MAX)
+            unsigned char buff_[2048];
+            u32 totalSize = 0;
+            unsigned char* buff = PackHeader_(buff_, STARTNUMBER, connection->counterpartConnectionSlot, connection->salt, packet->flags, packet->progressiveIndex, ackToInclude.progressiveIndex, ackToInclude.bits);
+            memcpy(buff, packet->data, packet->dataSize);
+            buff += packet->dataSize;
+            totalSize = PackTrailer_(buff_, buff, packet->flags);
+            
+            if(sendto(network->fd, (const char*) buff_, totalSize, 0, (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
             {
-                packet->inFlightTimer += elapsedTime;
-			}
-            else
-            {
-                firstTime = true;
+                ReduceBandwidth(connection);
+                break;
             }
             
-            r32 targetTime = Max(0.1f, 2.0f * connection->estimatedRTT);
-            if(packet->inFlightTimer >= targetTime)
-			{
-                b32 sendPacket = true;
-				r32 timer = packet->inFlightTimer;
-				packet->inFlightTimer = 0;
-                
-                if(!firstTime)
-				{
-					SignalPacketLost(connection, timer);
-					if(!guaranteedDelivery)
-					{
-                        sendPacket = false;
-						BeginTicketMutex(&connection->mutex);
-						DLLIST_REMOVE(packet);
-						FREELIST_INSERT(packet, connection->firstFreePacket);
-						EndTicketMutex(&connection->mutex);
-					}					
-				}
-                
-                if(sendPacket)
-                {
-                    BeginTicketMutex(&connection->mutex);
-                    NetworkAck ackToInclude = connection->ackToInclude;
-                    EndTicketMutex(&connection->mutex);
-                    
-                    unsigned char buff_[2048];
-                    
-                    u32 totalSize = 0;
-                    unsigned char* buff = PackHeader_(buff_, STARTNUMBER, connection->counterpartConnectionSlot, connection->salt, packet->flags, packet->progressiveIndex, ackToInclude.progressiveIndex, ackToInclude.bits);
-                    memcpy(buff, packet->data, packet->dataSize);
-                    buff += packet->dataSize;
-                    totalSize = PackTrailer_(buff_, buff, packet->flags);
-                    
-                    
-                    if(sendto(network->fd, (const char*) buff_, totalSize, 0, (const sockaddr*) connection->counterpartAddress, connection->counterpartAddrSize) < 0)
-                    {
-                        break;
-                    }
-                    
-                    if(totalSize >= dataToSend)
-                    {
-                        dataToSend = 0;
-                    }
-                    else
-                    {
-                        dataToSend -= totalSize;
-                    }
-                }
-			}
+            if(totalSize >= dataToSend)
+            {
+                dataToSend = 0;
+            }
+            else
+            {
+                dataToSend -= totalSize;
+            }
+            
+            DLLIST_REMOVE(packet);
+            packet->inFlightTimer = 0;
+            DLLIST_INSERT_AS_LAST(&connection->sentQueueSentinel, packet);
             packet = next;
         }
-        
-        result = DLLIST_ISEMPTY(&connection->sendQueueSentinel);
     }
-    
-    return result;
 }
 
 inline void Win32FreeConnection(NetworkInterface* network, NetworkConnection* connection)
@@ -1364,11 +1362,18 @@ inline void Win32FreeConnection(NetworkInterface* network, NetworkConnection* co
     connection->ackToInclude = {};
     connection->ackToInclude.progressiveIndex = 0xffff;
     
-    if(!DLLIST_ISEMPTY(&connection->sendQueueSentinel))
+    if(!DLLIST_ISEMPTY(&connection->toSendQueueSentinel))
     {
-        connection->sendQueueSentinel.prev ->next = connection->firstFreePacket;
-        connection->firstFreePacket = connection->sendQueueSentinel.next;
-        DLLIST_INIT(&connection->sendQueueSentinel);
+        connection->toSendQueueSentinel.prev ->next = connection->firstFreePacket;
+        connection->firstFreePacket = connection->toSendQueueSentinel.next;
+        DLLIST_INIT(&connection->toSendQueueSentinel);
+    }
+    
+    if(!DLLIST_ISEMPTY(&connection->sentQueueSentinel))
+    {
+        connection->sentQueueSentinel.prev ->next = connection->firstFreePacket;
+        connection->firstFreePacket = connection->sentQueueSentinel.next;
+        DLLIST_INIT(&connection->sentQueueSentinel);
     }
     
     if(!DLLIST_ISEMPTY(&connection->recvQueueSentinel))
@@ -1380,7 +1385,8 @@ inline void Win32FreeConnection(NetworkInterface* network, NetworkConnection* co
     
     FREELIST_FREE(connection->firstQueuedAck, NetworkBufferedAck, connection->firstFreeAck);
     
-    Assert(DLLIST_ISEMPTY(&connection->sendQueueSentinel));
+    Assert(DLLIST_ISEMPTY(&connection->toSendQueueSentinel));
+    Assert(DLLIST_ISEMPTY(&connection->sentQueueSentinel));
     Assert(DLLIST_ISEMPTY(&connection->recvQueueSentinel));
     
     BeginTicketMutex(&network->connectionMutex);
@@ -1451,15 +1457,25 @@ NETWORK_OPEN_CONNECTION(Win32OpenConnection)
     
     BeginTicketMutex(&connection->mutex);
     
-    if(connection->sendQueueSentinel.next)
+    if(connection->toSendQueueSentinel.next)
     {
-        if(!DLLIST_ISEMPTY(&connection->sendQueueSentinel))
+        if(!DLLIST_ISEMPTY(&connection->toSendQueueSentinel))
         {
-            connection->sendQueueSentinel.prev ->next = connection->firstFreePacket;
-            connection->firstFreePacket = connection->sendQueueSentinel.next;
+            connection->toSendQueueSentinel.prev ->next = connection->firstFreePacket;
+            connection->firstFreePacket = connection->toSendQueueSentinel.next;
         }
     }
-    DLLIST_INIT(&connection->sendQueueSentinel);
+    DLLIST_INIT(&connection->toSendQueueSentinel);
+    
+    if(connection->sentQueueSentinel.next)
+    {
+        if(!DLLIST_ISEMPTY(&connection->sentQueueSentinel))
+        {
+            connection->sentQueueSentinel.prev ->next = connection->firstFreePacket;
+            connection->firstFreePacket = connection->sentQueueSentinel.next;
+        }
+    }
+    DLLIST_INIT(&connection->sentQueueSentinel);
     
     if(connection->recvQueueSentinel.next)
     {
@@ -1639,7 +1655,8 @@ NETWORK_RECEIVE_DATA(Win32ReceiveData)
                                 
                                 
                                 connection->nextProgressiveIndex = 0;
-                                DLLIST_INIT(&connection->sendQueueSentinel);
+                                DLLIST_INIT(&connection->toSendQueueSentinel);
+                                DLLIST_INIT(&connection->sentQueueSentinel);
                                 DLLIST_INIT(&connection->recvQueueSentinel);
                                 
                                 Assert(!connection->firstQueuedAck);

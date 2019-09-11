@@ -75,8 +75,7 @@ struct Player
     b32 connectionClosed;
     u16 connectionSlot;
     
-    ForgNetworkPacketQueue standardPacketQueue;
-    ForgNetworkPacketQueue reliablePacketQueue;
+    ForgNetworkPacketQueue queues[GuaranteedDelivery_Count];
     
     ForgNetworkReceiver receiver;
     

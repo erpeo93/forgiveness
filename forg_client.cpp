@@ -88,8 +88,8 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     char* loginServer = "127.0.0.1";
 #endif
     
-    clientNetwork->nextSendUnreliableApplicationData = {};
-    clientNetwork->nextSendReliableApplicationData = {};
+    clientNetwork->nextSendStandardApplicationData = {};
+    clientNetwork->nextSendOrderedApplicationData = {};
     ResetReceiver(&clientNetwork->receiver);
     platformAPI.net.OpenConnection(clientNetwork->network, loginServer, LOGIN_PORT);
     
@@ -889,8 +889,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         gameState->receiveNetworkPackets.network = &clientNetwork->network;
         gameState->receiveNetworkPackets.ReceiveData = platformAPI.net.ReceiveData;
         
-        clientNetwork->nextSendUnreliableApplicationData = {};
-        clientNetwork->nextSendReliableApplicationData = {};
+        clientNetwork->nextSendStandardApplicationData = {};
+        clientNetwork->nextSendOrderedApplicationData = {};
         
         platformAPI.PushWork(gameState->slowQueue, ReceiveNetworkPackets, &gameState->receiveNetworkPackets);
         

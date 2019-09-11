@@ -11,16 +11,10 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
     }
 }
 
-internal void SendUnreliableData(void* data, u16 size)
+internal void SendNetworkData(void* data, u16 size, GuaranteedDelivery deliveryType)
 {
     NetworkSendParams params = {};
-    platformAPI.net.QueuePacket(clientNetwork->network, 0, params, data, size);
-}
-
-internal void SendReliableData(void* data, u16 size)
-{
-    NetworkSendParams params = {};
-    params.guaranteedDelivery = GuaranteedDelivery_Standard;
+    params.guaranteedDelivery = deliveryType;
     platformAPI.net.QueuePacket(clientNetwork->network, 0, params, data, size);
 }
 
@@ -30,35 +24,29 @@ inline void FlushAllQueuedPackets(r32 timeToAdvance)
 }
 
 
-inline void CloseAndSend(unsigned char* buff_, unsigned char* buff, b32 reliable)
+inline void CloseAndSend(unsigned char* buff_, unsigned char* buff, GuaranteedDelivery deliveryType)
 {
     ForgNetworkApplicationData data;
     
-    if(reliable)
+    if(deliveryType == GuaranteedDelivery_Ordered)
     {
-        data = clientNetwork->nextSendReliableApplicationData;
-        clientNetwork->nextSendReliableApplicationData.index++;
+        data = clientNetwork->nextSendOrderedApplicationData;
+        data.flags = ForgNetworkFlag_Ordered;
+        clientNetwork->nextSendOrderedApplicationData.index++;
     }
     else
     {
-        data = clientNetwork->nextSendUnreliableApplicationData;
-        clientNetwork->nextSendUnreliableApplicationData.index++;
+        data = clientNetwork->nextSendStandardApplicationData;
+        data.flags = 0;
+        clientNetwork->nextSendStandardApplicationData.index++;
     }
     
-    data.flags = reliable ? ForgNetworkFlag_Ordered : 0;
     
     unsigned char* indexDest = buff_;
     ForgPackApplicationData(indexDest, data);
     
     u16 totalSize = ForgEndPacket_( buff_, buff);
-    if(reliable)
-    {
-        SendReliableData(buff_, totalSize);
-    }
-    else
-    {
-        SendUnreliableData(buff_, totalSize);
-    }
+    SendNetworkData(buff_, totalSize, deliveryType);
 }
 
 #define StartPacket(type) unsigned char buff_[1024]; unsigned char* buff = buff_ + sizeof(ForgNetworkApplicationData);buff = ForgPackHeader( buff, Type_##type);
@@ -66,8 +54,9 @@ inline void CloseAndSend(unsigned char* buff_, unsigned char* buff, b32 reliable
 #define Pack(formatString, ...) buff += pack(buff, formatString, ##__VA_ARGS__)
 #define Unpack(formatString, ...) packetPtr = unpack(packetPtr, formatString, ##__VA_ARGS__)
 
-#define CloseAndSendStandardPacket() CloseAndSend(buff_, buff, false)
-#define CloseAndSendReliablePacket() CloseAndSend(buff_, buff, true)
+#define CloseAndSendStandardPacket() CloseAndSend(buff_, buff, GuaranteedDelivery_None)
+#define CloseAndSendGuaranteedPacket() CloseAndSend(buff_, buff, GuaranteedDelivery_Guaranteed)
+#define CloseAndSendOrderedPacket() CloseAndSend(buff_, buff, GuaranteedDelivery_Ordered)
 
 
 
@@ -75,14 +64,14 @@ internal void LoginRequest(i32 password)
 {
     StartPacket(login);
     Pack("l", password);
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void GameAccessRequest(u32 challenge)
 {
     StartPacket(gameAccess);
     Pack("L", challenge);
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 #if FORGIVENESS_INTERNAL
@@ -95,7 +84,7 @@ internal void SendEditingEvent( DebugEvent* event )
         
         Pack("QQLHCQQ", event->clock, event->pointer, event->threadID, event->coreIndex, event->type, event->overNetwork[0], event->overNetwork[1]);
         
-        CloseAndSendReliablePacket();
+        CloseAndSendOrderedPacket();
     }
 }
 
@@ -105,7 +94,7 @@ internal void SendInputRecordingMessage( b32 recording, b32 startAutomatically )
     {
         StartPacket(InputRecording);
         Pack("ll", recording, startAutomatically);
-        CloseAndSendReliablePacket();
+        CloseAndSendOrderedPacket();
     }
 }
 #endif
@@ -123,7 +112,7 @@ internal void SendEquipRequest(u64 sourceContainerID, u8 objectIndex)
     
     Pack("QC", sourceContainerID, objectIndex);
     
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendDisequipRequest(u32 slotIndex, u64 destContainerID, u8 destObjectIndex)
@@ -132,7 +121,7 @@ internal void SendDisequipRequest(u32 slotIndex, u64 destContainerID, u8 destObj
     
     Pack("LQC", slotIndex, destContainerID, destObjectIndex);
     
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendDropRequest(u64 sourceContainerID, u8 objectIndex)
@@ -141,7 +130,7 @@ internal void SendDropRequest(u64 sourceContainerID, u8 objectIndex)
     
     Pack("QC", sourceContainerID, objectIndex);
     
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendMoveRequest(u64 sourceContainerID, u8 objectIndex, u64 destContainerID, u8 destObjectIndex)
@@ -151,7 +140,7 @@ internal void SendMoveRequest(u64 sourceContainerID, u8 objectIndex, u64 destCon
     
     Pack("QCQC", sourceContainerID, objectIndex, destContainerID, destObjectIndex);
     
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendSwapRequest(u64 sourceContainerID, u8 sourceObjectIndex)
@@ -160,7 +149,7 @@ internal void SendSwapRequest(u64 sourceContainerID, u8 sourceObjectIndex)
     
     Pack("QC", sourceContainerID, sourceObjectIndex);
     
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendDragEquipmentRequest(u32 slotIndex)
@@ -169,7 +158,7 @@ internal void SendDragEquipmentRequest(u32 slotIndex)
     
     Pack("L", slotIndex);
     
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendEquipDraggingRequest(u32 slotIndex)
@@ -178,7 +167,7 @@ internal void SendEquipDraggingRequest(u32 slotIndex)
     
     Pack("L", slotIndex);
     
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 
@@ -188,7 +177,7 @@ internal void SendCraftRequest(u32 taxonomy, GenerationData gen)
     
     Pack("LQ", taxonomy, gen.generic);
     
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendCraftFromInventoryRequest(u64 containerID, u32 objectIndex)
@@ -197,34 +186,34 @@ internal void SendCraftFromInventoryRequest(u64 containerID, u32 objectIndex)
     
     Pack("QL", containerID, objectIndex);
     
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 inline void SendCustomTargetPRequest(Vec3 P)
 {
     StartPacket(CustomTargetPRequest);
     Pack("V", P);
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendActiveSkillRequest(u32 taxonomy)
 {
     StartPacket(ActiveSkillRequest);
     Pack("L", taxonomy);
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendPassiveSkillRequest(u32 taxonomy)
 {
     StartPacket(PassiveSkillRequest);
     Pack("L", taxonomy);
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendReleaseDraggingRequest()
 {
     StartPacket(ReleaseDraggingRequest);
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendUnlockSkillCategoryRequest(u32 taxonomy)
@@ -233,14 +222,14 @@ internal void SendUnlockSkillCategoryRequest(u32 taxonomy)
     
     Pack("L", taxonomy);
     
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendSkillLevelUpRequest(u32 taxonomy)
 {
     StartPacket(SkillLevelUpRequest);
     Pack("L", taxonomy);
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendLearnRequest(u64 containerID, u32 objectIndex)
@@ -249,7 +238,7 @@ internal void SendLearnRequest(u64 containerID, u32 objectIndex)
     
     Pack("QL", containerID, objectIndex);
     
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
@@ -258,20 +247,20 @@ internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
     
     Pack("QL", containerID, objectIndex);
     
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 
 inline void SendPatchServerRequest()
 {
     StartPacket(PatchLocalServer);
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 inline void SendPatchCheckRequest()
 {
     StartPacket(PatchCheck);
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 
@@ -279,27 +268,27 @@ inline void SendMovePlayerRequest(Vec3 offset)
 {
     StartPacket(MovePlayerInOtherRegion);
     Pack("V", offset);
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 inline void SendPauseToggleMessage()
 {
     StartPacket(PauseToggle);
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 inline void SendRegenerateWorldChunksRequest(u32 worldSeed, GenerateWorldMode generateMode)
 {
     StartPacket(RegenerateWorldChunks);
     Pack("LL", worldSeed, generateMode);
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 inline void SendFileHash(u16 type, u16 subtype, u64 hash)
 {
     StartPacket(FileHash);
     Pack("HHQ", type, subtype, hash);
-    CloseAndSendReliablePacket();
+    CloseAndSendOrderedPacket();
 }
 
 #if FORGIVENESS_INTERNAL
@@ -366,8 +355,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 platformAPI.net.CloseConnection(clientNetwork->network, 0);
                 platformAPI.net.OpenConnection(clientNetwork->network, server, login.port);
                 ResetReceiver(&clientNetwork->receiver);
-                clientNetwork->nextSendUnreliableApplicationData = {};
-                clientNetwork->nextSendReliableApplicationData = {};
+                clientNetwork->nextSendStandardApplicationData = {};
+                clientNetwork->nextSendOrderedApplicationData = {};
                 
                 
 #if 0                
@@ -448,91 +437,104 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             
             case Type_FileHeader:
             {
-                player->receiving = BootstrapPushStruct(ReceivingAssetFile, memory);
-                ReceivingAssetFile* receiving = player->receiving;
+                ReceivingAssetFile* newFile = BootstrapPushStruct(ReceivingAssetFile, memory);
                 
-                Unpack("HHLLL", &receiving->type, &receiving->subtype, &receiving->uncompressedSize, &receiving->compressedSize, &receiving->chunkSize);
-                receiving->runningSize = 0;
-                receiving->content = PushSize(&receiving->memory, receiving->compressedSize);
+                Unpack("LHHLL", &newFile->index, &newFile->type, &newFile->subtype, &newFile->uncompressedSize, &newFile->compressedSize);
+                newFile->receivedSize = 0;
+                newFile->content = PushSize(&newFile->memory, newFile->compressedSize);
+                
+                DLLIST_INSERT(&player->receiveFileSentinel, newFile);
             } break;
             
             case Type_FileChunk:
             {
-                ReceivingAssetFile* receiving = player->receiving;
-                u8* source = packetPtr;
-                u8* dest = receiving->content + receiving->runningSize;
+                u32 offset;
+                u32 fileIndex;
+                u16 sizeToCopy;
+                u8* source = Unpack("LLH", &offset, &fileIndex, &sizeToCopy);
                 
-                u32 sizeToCopy = Min(receiving->chunkSize, receiving->compressedSize - receiving->runningSize);
-                Copy(sizeToCopy, dest, packetPtr);
-                
-                packetPtr += sizeToCopy;
-                receiving->runningSize += sizeToCopy;
-                if(receiving->runningSize >= receiving->compressedSize)
+                ReceivingAssetFile* receiving = 0;
+                for(ReceivingAssetFile* test = player->receiveFileSentinel.next; test != &player->receiveFileSentinel; test = test->next)
                 {
-                    Assert(receiving->runningSize == receiving->compressedSize);
-                    Assets* assets = gameState->assets;
-                    AssetFile* destFile = 0;
-                    u32 destFileIndex = 0;
-                    
-                    for(u32 fileIndex = 0; fileIndex < assets->fileCount; ++fileIndex)
+                    if(test->index == fileIndex)
                     {
-                        AssetFile* file = GetAssetFile(assets, fileIndex);
-                        u16 type = GetMetaAssetType(file->header.type);
-                        u16 subtype = GetMetaAssetSubtype(type, file->header.subtype);
+                        receiving = test;
+                        break;
+                    }
+                }
+                
+                if(receiving)
+                {
+                    u8* dest = receiving->content + offset;
+                    Copy(sizeToCopy, dest, packetPtr);
+                    packetPtr += sizeToCopy;
+                    receiving->receivedSize += sizeToCopy;
+                    if(receiving->receivedSize >= receiving->compressedSize)
+                    {
+                        Assert(receiving->receivedSize == receiving->compressedSize);
+                        Assets* assets = gameState->assets;
+                        AssetFile* destFile = 0;
+                        u32 destFileIndex = 0;
                         
-                        if(receiving->type == type && receiving->subtype == subtype)
+                        for(u32 assetFileIndex = 0; assetFileIndex < assets->fileCount; ++assetFileIndex)
                         {
-                            platformAPI.CloseFile(&file->handle);
-                            destFile = file;
-                            destFileIndex = fileIndex;
+                            AssetFile* file = GetAssetFile(assets, assetFileIndex);
+                            u16 type = GetMetaAssetType(file->header.type);
+                            u16 subtype = GetMetaAssetSubtype(type, file->header.subtype);
                             
-                            break;
+                            if(receiving->type == type && receiving->subtype == subtype)
+                            {
+                                platformAPI.CloseFile(&file->handle);
+                                destFile = file;
+                                destFileIndex = assetFileIndex;
+                                
+                                break;
+                            }
                         }
+                        
+                        
+                        
+                        if(!destFile)
+                        {
+                            Assert(assets->fileCount < assets->maxFileCount);
+                            destFileIndex = assets->fileCount++;
+                            destFile = GetAssetFile(assets, destFileIndex);
+                        }
+                        //platformAPI.deletefile(preexisting);
+                        char* type = GetAssetTypeName(receiving->type);
+                        char* subtype = GetAssetSubtypeName(receiving->type, receiving->subtype);
+                        
+                        
+                        u8* compressed = receiving->content;
+                        u32 compressedSize = receiving->compressedSize;
+                        
+                        u32 uncompressedSize = receiving->uncompressedSize;
+                        u8* uncompressed = PushSize(&receiving->memory, uncompressedSize);
+                        u32 cmp_status = uncompress(uncompressed, (mz_ulong*) &uncompressedSize, compressed, compressedSize);
+                        
+                        Assert(cmp_status == Z_OK);
+                        Assert(uncompressedSize == receiving->uncompressedSize);
+                        
+                        char newName[128];
+                        FormatString(newName, sizeof(newName), "%s_%s", type, subtype);
+                        platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, newName, uncompressed, uncompressedSize);
+                        
+                        char path[64];
+                        PlatformFileGroup fake = {};
+                        fake.path = path;
+                        FormatString(fake.path, sizeof(path), "%s", ASSETS_PATH);
+                        
+                        char name[64];
+                        PlatformFileInfo fakeInfo = {};
+                        fakeInfo.name = name;
+                        FormatString(fakeInfo.name, sizeof(name), "%s.upak", newName);
+                        
+                        destFile->handle = platformAPI.OpenFile(&fake, &fakeInfo);
+                        ReloadAssetFile(assets, destFile, destFileIndex, &receiving->memory);
+                        
+                        DLLIST_REMOVE(receiving);
+                        Clear(&receiving->memory);
                     }
-                    
-                    
-                    
-                    if(!destFile)
-                    {
-                        Assert(assets->fileCount < assets->maxFileCount);
-                        destFileIndex = assets->fileCount++;
-                        destFile = GetAssetFile(assets, destFileIndex);
-                    }
-                    //platformAPI.deletefile(preexisting);
-                    char* type = GetAssetTypeName(receiving->type);
-                    char* subtype = GetAssetSubtypeName(receiving->type, receiving->subtype);
-                    
-                    
-                    u8* compressed = receiving->content;
-                    u32 compressedSize = receiving->compressedSize;
-                    
-                    u32 uncompressedSize = receiving->uncompressedSize;
-                    u8* uncompressed = PushSize(&receiving->memory, uncompressedSize);
-                    u32 cmp_status = uncompress(uncompressed, (mz_ulong*) &uncompressedSize, compressed, compressedSize);
-                    
-                    Assert(cmp_status == Z_OK);
-                    Assert(uncompressedSize == receiving->uncompressedSize);
-                    
-                    char newName[128];
-                    FormatString(newName, sizeof(newName), "%s_%s", type, subtype);
-                    platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, newName, uncompressed, uncompressedSize);
-                    
-                    char path[64];
-                    PlatformFileGroup fake = {};
-                    fake.path = path;
-                    FormatString(fake.path, sizeof(path), "%s", ASSETS_PATH);
-                    
-                    char name[64];
-                    PlatformFileInfo fakeInfo = {};
-                    fakeInfo.name = name;
-                    FormatString(fakeInfo.name, sizeof(name), "%s.upak", newName);
-                    
-                    destFile->handle = platformAPI.OpenFile(&fake, &fakeInfo);
-                    ReloadAssetFile(assets, destFile, destFileIndex, &receiving->memory);
-                    
-                    
-                    Clear(&receiving->memory);
-                    player->receiving = 0;
                 }
             } break;
             
@@ -1015,7 +1017,6 @@ internal void ReceiveNetworkPackets(GameState* gameState, GameModeWorld* worldMo
         
         ForgNetworkApplicationData applicationData;
         packetPtr = ForgUnpackApplicationData(packetPtr, &applicationData);
-        
         
         ForgNetworkReceiver* receiver = &clientNetwork->receiver;
         if(applicationData.flags & ForgNetworkFlag_Ordered)

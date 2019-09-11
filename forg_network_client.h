@@ -11,8 +11,8 @@ struct ClientNetworkInterface
 {
     u32 serverChallenge;
     ForgNetworkReceiver receiver;
-    ForgNetworkApplicationData nextSendUnreliableApplicationData;
-    ForgNetworkApplicationData nextSendReliableApplicationData;
+    ForgNetworkApplicationData nextSendStandardApplicationData;
+    ForgNetworkApplicationData nextSendOrderedApplicationData;
     
     r32 serverFPS;
     r32 networkTimeElapsed;

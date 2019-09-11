@@ -234,7 +234,7 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
                 while(player->firstLoginFileToSend && (toSendSize > 0))
                 {
                     FileToSend* toSend = player->firstLoginFileToSend;
-                    toSendSize = SendFileChunksToPlayer(server, player, toSendSize, toSend, &player->firstLoginFileToSend);
+                    toSendSize = SendFileChunksToPlayer(server, player, toSend->index, toSendSize, toSend, &player->firstLoginFileToSend);
                 }
                 
                 if(!player->firstLoginFileToSend)
@@ -242,7 +242,7 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
                     while(player->firstReloadedFileToSend && (toSendSize > 0))
                     {
                         FileToSend* toSend = player->firstReloadedFileToSend;
-                        toSendSize = SendFileChunksToPlayer(server, player, toSendSize, toSend, &player->firstReloadedFileToSend);
+                        toSendSize = SendFileChunksToPlayer(server, player, toSend->index, toSendSize, toSend, &player->firstReloadedFileToSend);
                     }
                 }
             }

@@ -68,6 +68,7 @@ struct ReceivingAssetFile
 {
     MemoryPool memory;
     
+    u32 index;
     u16 type;
     u16 subtype;
     
@@ -75,8 +76,11 @@ struct ReceivingAssetFile
     u32 compressedSize;
     
     u32 chunkSize;
-    u32 runningSize;
+    u32 receivedSize;
     u8* content;
+    
+    ReceivingAssetFile* prev;
+    ReceivingAssetFile* next;
 };
 
 struct ClientPlayer
@@ -98,7 +102,7 @@ struct ClientPlayer
     
     u64 openedContainerID;
     
-    ReceivingAssetFile* receiving;
+    ReceivingAssetFile receiveFileSentinel;
 };
 
 

@@ -1,8 +1,12 @@
-inline u8* ForgReserveSpace(Player* player, b32 reliable, u16 size, u64 identifier)
+inline u8* ForgReserveSpace(Player* player, GuaranteedDelivery deliveryType, u16 size, u64 identifier)
 {
-    ForgNetworkPacketQueue* queue = reliable ? &player->reliablePacketQueue : &player->standardPacketQueue;
+    ForgNetworkPacketQueue* queue = player->queues + deliveryType; 
     
-    u8 applicationFlags = reliable ? ForgNetworkFlag_Ordered : 0;
+    u8 applicationFlags = 0;
+    if(deliveryType == GuaranteedDelivery_Ordered)
+    {
+        applicationFlags = ForgNetworkFlag_Ordered;
+    }
     
     u8* result = 0;
     Assert(size <= MTU);
@@ -35,7 +39,7 @@ inline u8* ForgReserveSpace(Player* player, b32 reliable, u16 size, u64 identifi
         }
         
         ForgNetworkApplicationData data = queue->nextSendApplicationData;
-        data.flags = reliable ? ForgNetworkFlag_Ordered : 0;
+        data.flags = applicationFlags;
         
         result = ForgPackApplicationData(packet->data, data);
         packet->size += sizeof(ForgNetworkApplicationData);
@@ -67,14 +71,15 @@ inline u8* ForgReserveSpace(Player* player, b32 reliable, u16 size, u64 identifi
     return result;
 }
 
-#define CloseAndStoreStandardPacket(player, ...) CloseAndStore(player, buff_, buff, false, __VA_ARGS__)
+#define CloseAndStoreStandardPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_None, __VA_ARGS__)
+#define CloseAndStoreGuaranteedPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_Guaranteed, __VA_ARGS__)
 
-#define CloseAndStoreReliablePacket(player, ...) CloseAndStore(player, buff_, buff, true, __VA_ARGS__)
+#define CloseAndStoreOrderedPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_Ordered, __VA_ARGS__)
 
-inline void CloseAndStore(Player* player, unsigned char* buff_, unsigned char* buff, b32 reliableAndOrdered, u64 identifier = 0)
+inline void CloseAndStore(Player* player, unsigned char* buff_, unsigned char* buff, GuaranteedDelivery deliveryType, u64 identifier = 0)
 {
     u16 totalSize = ForgEndPacket_(buff_, buff);
-    u8* writeHere = ForgReserveSpace(player, reliableAndOrdered, totalSize, identifier);
+    u8* writeHere = ForgReserveSpace(player, deliveryType, totalSize, identifier);
     Assert(writeHere);
     if(writeHere)
     {
@@ -82,13 +87,11 @@ inline void CloseAndStore(Player* player, unsigned char* buff_, unsigned char* b
     }
 }
 
-inline void QueueAndFlushAllPackets(ServerState* server, Player* player, ForgNetworkPacketQueue* queue, b32 reliable)
+inline void QueueAndFlushAllPackets(ServerState* server, Player* player, ForgNetworkPacketQueue* queue, GuaranteedDelivery deliveryType)
 {
     NetworkSendParams params = {};
-    if(reliable)
-    {
-        params.guaranteedDelivery = GuaranteedDelivery_Standard;
-    }
+    params.guaranteedDelivery = deliveryType;
+    
     for(ForgNetworkPacket* toSend = queue->firstPacket; toSend; toSend = toSend->next)
     {
         platformAPI.net.QueuePacket(&server->clientInterface, player->connectionSlot, params, toSend->data, toSend->size);
@@ -99,12 +102,14 @@ inline void QueueAndFlushAllPackets(ServerState* server, Player* player, ForgNet
     Clear(&queue->tempPool);
 }
 
-inline b32 QueueAndFlushAllPackets(ServerState* server, Player* player, r32 timeToAdvance)
+inline void QueueAndFlushAllPackets(ServerState* server, Player* player, r32 timeToAdvance)
 {
-    QueueAndFlushAllPackets(server, player, &player->standardPacketQueue, false);
-    QueueAndFlushAllPackets(server, player, &player->reliablePacketQueue, true);
-    b32 result = platformAPI.net.FlushSendQueue(&server->clientInterface, player->connectionSlot, timeToAdvance);
-    return result;
+    for(u32 deliveryType = GuaranteedDelivery_None; deliveryType < GuaranteedDelivery_Count; ++deliveryType)
+    {
+        ForgNetworkPacketQueue* queue = player->queues + deliveryType;
+        QueueAndFlushAllPackets(server, player, queue, (GuaranteedDelivery) deliveryType);
+    }
+    platformAPI.net.FlushSendQueue(&server->clientInterface, player->connectionSlot, timeToAdvance);
 }
 
 #define StartPacket(player, type) unsigned char buff_[2048]; unsigned char* buff = ForgPackHeader( buff_, Type_##type);
@@ -115,14 +120,14 @@ internal void SendLoginResponse(Player* player, u16 port, u32 challenge, b32 edi
 {
     StartPacket(player, login);
     Pack("HLl", port, challenge, editingEnabled);
-    CloseAndStoreReliablePacket(player);
+    CloseAndStoreOrderedPacket(player);
 }
 
 internal void SendGameAccessConfirm(Player* player, u64 worldSeed, u32 identifier)
 {
     StartPacket(player, gameAccess);
     Pack("QL", worldSeed, identifier);
-    CloseAndStoreReliablePacket(player);
+    CloseAndStoreOrderedPacket(player);
 }
 
 internal void SendWorldInfo(Player* player, WorldSeason season, r32 seasonLerp)
@@ -191,7 +196,7 @@ internal void SendDeleteMessage(SimRegion* region, SimEntity* entity)
                 StartPacket(player, deletedEntity);
                 
                 Pack("Q", entity->identifier);
-                CloseAndStoreReliablePacket(player);
+                CloseAndStoreOrderedPacket(player);
             }
         }
         playerSurfaceBlock = playerSurfaceBlock->next;
@@ -210,7 +215,7 @@ inline void SendEntityHeaderReliably(Player* player, u32 ID)
 {
     StartPacket(player, entityHeader);
     Pack("L", ID);
-    CloseAndStoreReliablePacket(player);
+    CloseAndStoreOrderedPacket(player);
 }
 
 #if 0
@@ -244,24 +249,14 @@ inline void SendCompletedAction(Player* player, u64 entityID, u8 actionIndex, u6
     CloseAndStoreStandardPacket(player, entityID);
 }
 
-
-#if 0
-inline void SendEffectTriggered(Player* player, EffectTriggeredToSend* toSend)
-{
-    StartPacket(player, effectTriggered);
-    Pack("QQL", toSend->actor, toSend->target, toSend->ID);
-    CloseAndStoreReliablePacket(player);
-}
-#endif
-
-inline void SendFileHeader(Player* player, u16 type, u16 subtype, u32 uncompressedSize, u32 compressedSize, u32 chunkSize)
+inline void SendFileHeader(Player* player, u32 index, u16 type, u16 subtype, u32 uncompressedSize, u32 compressedSize)
 {
     StartPacket(player, FileHeader);
-    Pack("HHLLL", type, subtype, uncompressedSize, compressedSize, chunkSize);
-    CloseAndStoreReliablePacket(player);
+    Pack("LHHLL", index, type, subtype, uncompressedSize, compressedSize);
+    CloseAndStoreOrderedPacket(player);
 }
 
-inline void SendFileChunks(Player* player, char* source, u32 sizeToSend, u32 chunkSize)
+inline void SendFileChunks(Player* player, u32 index, char* source, u32 offset, u32 sizeToSend, u32 chunkSize)
 {
     u32 sentSize = 0;
     u8* runningSource = (u8*) source;
@@ -269,18 +264,20 @@ inline void SendFileChunks(Player* player, char* source, u32 sizeToSend, u32 chu
     while(sentSize < sizeToSend)
     {
         StartPacket(player, FileChunk);
-        u32 toSent = Min(chunkSize, sizeToSend - sentSize);
-        Copy(toSent, buff, runningSource);
-        buff += toSent;
-        runningSource += toSent;
+        u16 toSend = SafeTruncateToU16(Min(chunkSize, sizeToSend - sentSize));
+        Pack("LLH", offset, index, toSend);
+        Copy(toSend, buff, runningSource);
+        buff += toSend;
+        runningSource += toSend;
+        offset += toSend;
         
-        CloseAndStoreReliablePacket(player);
-        sentSize += toSent;
+        CloseAndStoreGuaranteedPacket(player);
+        sentSize += toSend;
     }
 }
 
 #define CHUNK_SIZE KiloBytes(1)
-internal u32 SendFileChunksToPlayer(ServerState* server, Player* player, u32 sizeToSend, FileToSend* toSend, FileToSend** writeNext)
+internal u32 SendFileChunksToPlayer(ServerState* server, Player* player, u32 index, u32 sizeToSend, FileToSend* toSend, FileToSend** writeNext)
 {
     u32 result = sizeToSend;
     
@@ -288,7 +285,7 @@ internal u32 SendFileChunksToPlayer(ServerState* server, Player* player, u32 siz
     GameFile* file = server->files + toSend->index;
     if(player->sendingFileOffset == 0)
     {
-        SendFileHeader(player, file->type, file->subtype, file->uncompressedSize, file->compressedSize, CHUNK_SIZE);
+        SendFileHeader(player, index, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
     }
     
     u32 remainingSizeInFile = SafeTruncateUInt64ToU32(file->compressedSize) - player->sendingFileOffset;
@@ -296,8 +293,7 @@ internal u32 SendFileChunksToPlayer(ServerState* server, Player* player, u32 siz
     
     if(sending > 0)
     {
-        u8* buffer = file->content + player->sendingFileOffset;
-        SendFileChunks(player, (char*) buffer, sending, CHUNK_SIZE);
+        SendFileChunks(player, index, (char*) file->content, player->sendingFileOffset, sending, CHUNK_SIZE);
         player->sendingFileOffset += sending;
     }
     
@@ -339,7 +335,7 @@ internal void SendMemStats( Player* player )
     StartPacket(player, memoryStats);
     Pack("LQQ", stats.blockCount, stats.totalUsed, stats.totalSize );
     
-    CloseAndStoreReliablePacket(player);
+    CloseAndStoreOrderedPacket(player);
 }
 #endif
 
