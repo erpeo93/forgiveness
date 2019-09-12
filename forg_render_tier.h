@@ -1,6 +1,6 @@
 #pragma once
 #define MAX_TEXTURE_COUNT 256
-#define MAX_SPECIAL_TEXTURE_COUNT 32
+#define MAX_SPECIAL_TEXTURE_COUNT 128
 
 inline RenderTexture TextureHandle(u32 index, u16 width, u16 height)
 {
@@ -33,7 +33,7 @@ inline b32 IsValid(RenderTexture* texture)
     return result;
 }
 
-internal b32 IsValid(SpecialTexture* texture)
+internal b32 IsValidSpecial(SpecialTexture* texture)
 {
     b32 result = (texture->textureHandle.index > 0 &&
                   texture->textureHandle.width > 0 &&

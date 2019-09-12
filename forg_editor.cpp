@@ -1,7 +1,7 @@
 internal void EditStruct(EditorLayout* layout, String structName, void* structPtr)
 {
     ReservedSpace ignored = {};
-    StructOperation(layout, structName, 0, structPtr, FieldOperation_Edit, 0, &ignored);
+    StructOperation(layout, structName, structName, 0, structPtr, FieldOperation_Edit, 0, &ignored);
 }
 
 
@@ -215,7 +215,7 @@ internal Rect2 ShowString(EditorLayout* layout, char* name, char* string, u32 fl
 
 internal Rect2 ShowLabel(EditorLayout* layout, char* name, Vec4 color = DefaultEditorStringColor())
 {
-    Rect2 result = ShowString(layout, 0, name, 0, color);
+    Rect2 result = ShowString(layout, 0, name, EditorText_StartingSpace, color);
     return result;
 }
 
@@ -837,7 +837,7 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
     {
         RandomSequence seq = {};
         GameProperties properties = {};
-        FontId fontID = QueryAssets(group->assets, AssetType_Font, AssetFont_game, &seq, &properties);
+        FontId fontID = QueryFonts(group->assets, AssetFont_debug, &seq, &properties);
         if(IsValid(fontID))
         {
             MemoryPool editorPool = {};
@@ -856,7 +856,7 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
             context->offset.y -= 10.0f * context->input->mouseWheelOffset;
             
             context->nextHot = {};
-            EditorLayout layout = StandardLayout(&editorPool, fontID, group, context, mouseP, deltaMouseP, V4(1, 1, 1, 1), 0.5f);
+            EditorLayout layout = StandardLayout(&editorPool, fontID, group, context, mouseP, deltaMouseP, V4(1, 1, 1, 1), 0.8f);
             
             EditorTabs active = context->activeTab;
             
@@ -931,7 +931,6 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                         {
                             for(WorldChunk* chunk = worldMode->chunks[chunkIndex]; chunk; chunk = chunk->next)
                             {
-                                chunk->initialized = false;
                                 FreeSpecialTexture(group->assets, &chunk->texture);
                             }
                         }

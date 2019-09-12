@@ -144,6 +144,24 @@ FieldDefinition fieldDefinitionOfground_coloration[] =
 {MetaFlag_Pointer, MetaType_GameProperty, "GameProperty", "properties", (u32) (&((ground_coloration*)0)->properties), {}, sizeof(GameProperty),"invalid",0, 0}, 
 };
 
+FieldDefinition fieldDefinitionOftile_definition[] = 
+ {
+{0, MetaType_GameAssetType, "GameAssetType", "asset", (u32) (&((tile_definition*)0)->asset), {}, sizeof(GameAssetType),"invalid",0, 0, "type"}, 
+{0, MetaType_GameProperty, "GameProperty", "property", (u32) (&((tile_definition*)0)->property), {}, sizeof(GameProperty),"invalid",0, 0}, 
+};
+
+FieldDefinition fieldDefinitionOfTileMapping[] = 
+ {
+{0, MetaType_tile_definition, "tile_definition", "tile", (u32) (&((TileMapping*)0)->tile), {}, sizeof(tile_definition),"invalid",0, 0}, 
+{0, MetaType_r32, "r32", "weight", (u32) (&((TileMapping*)0)->weight), {}, sizeof(r32),"invalid",0, 0}, 
+};
+
+FieldDefinition fieldDefinitionOfground_generator[] = 
+ {
+{0, MetaType_ArrayCounter, "ArrayCounter", "tileTypeCount", (u32) (&((ground_generator*)0)->tileTypeCount), {}, sizeof(ArrayCounter),"invalid","tiles", (u32)(&((ground_generator*)0)->tiles)}, 
+{MetaFlag_Pointer, MetaType_TileMapping, "TileMapping", "tiles", (u32) (&((ground_generator*)0)->tiles), {}, sizeof(TileMapping),"invalid",0, 0}, 
+};
+
 char* MetaProperties_Test[] = 
  {
 "Value0",
@@ -156,26 +174,40 @@ char* MetaProperties_test2[] =
 "damaged",
 };
 
+char* MetaProperties_tileType[] = 
+ {
+"rock",
+"grass",
+"dirt",
+"sand",
+};
+
 #define META_HANDLE_ADD_TO_DEFINITION_HASH()\
+AddToMetaDefinitions(ground_generator, fieldDefinitionOfground_generator);\
+AddToMetaDefinitions(TileMapping, fieldDefinitionOfTileMapping);\
+AddToMetaDefinitions(tile_definition, fieldDefinitionOftile_definition);\
 AddToMetaDefinitions(ground_coloration, fieldDefinitionOfground_coloration);\
 AddToMetaDefinitions(GroundColorationArrayTest, fieldDefinitionOfGroundColorationArrayTest);\
 AddToMetaDefinitions(GameAssetType, fieldDefinitionOfGameAssetType);
 
 #define META_PROPERTIES_ADD()\
+AddToMetaProperties(tileType, MetaProperties_tileType);\
 AddToMetaProperties(test2, MetaProperties_test2);\
 AddToMetaProperties(Test, MetaProperties_Test);
 
 enum Propertys
 {
 Property_Invalid,
+Property_tileType,
 Property_test2,
 Property_Test,
 Property_Count,
 };
 #define META_ASSET_PROPERTIES_STRINGS()\
+meta_propertiesString[Property_tileType - 1] = "tileType";\
 meta_propertiesString[Property_test2 - 1] = "test2";\
 meta_propertiesString[Property_Test - 1] = "Test";\
 
 #define META_DEFAULT_VALUES_CPP_SUCKS()\
-fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};
+fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, AssetImage_default};
 ;

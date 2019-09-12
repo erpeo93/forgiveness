@@ -640,7 +640,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             bitmapProperties.properties[0].property = Property_Test;
             bitmapProperties.properties[0].value = Value1;
             
-            BitmapId test = QueryAssets(group->assets, AssetType_Image, 0, &seq, &bitmapProperties);
+            BitmapId test = QueryBitmaps(group->assets, 0, &seq, &bitmapProperties);
             
             if(IsValid(test))
             {

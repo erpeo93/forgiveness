@@ -27,7 +27,9 @@ enum MetaType
     
     
     
-    MetaType_GroundColorationArrayTest
+    MetaType_GroundColorationArrayTest,
+    MetaType_TileMapping,
+    MetaType_tile_definition,
 };
 
 enum FieldMetaFlags

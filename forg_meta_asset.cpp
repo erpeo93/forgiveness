@@ -701,7 +701,7 @@ internal void* GetMemory(MemoryPool* pool, u32 elementCount, u32 elementSize)
 }
 
 
-internal StructOperationResult StructOperation(EditorLayout* layout, String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer);
+internal StructOperationResult StructOperation(EditorLayout* layout, String structName, String name, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer);
 internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* fieldPtr, Tokenizer* tokenizer, Stream* output, ReservedSpace* reserved, u16* elementCount)
 {
     u32 result = 0;
@@ -749,10 +749,20 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
                     OutputToStream(output, "{");
                 }
                 
-                String structName = {};
-                structName.ptr = field->typeName;
-                structName.length = StrLen(field->typeName);
-                op = StructOperation(layout, structName, tokenizer, fieldPtr, operation, output, reserved, pointer);
+                char nameString[64];
+                if(pointer)
+                {
+                    FormatString(nameString, sizeof(nameString), "%s[%d]", field->name, elements - 1);
+                }
+                else
+                {
+                    FormatString(nameString, sizeof(nameString), "%s", field->name);
+                }
+                
+                String structName = Stringize(field->typeName);
+                String name = Stringize(nameString);
+                
+                op = StructOperation(layout, structName, name, tokenizer, fieldPtr, operation, output, reserved, pointer);
                 
                 if(pointer && operation == FieldOperation_Dump)
                 {
@@ -831,6 +841,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
     return result;
 }
 
+internal void InitStructDefault(StructDefinition* definition, void* dataPtr);
 internal void CopyDefaultValue(FieldDefinition* field, void* ptr)
 {
     if(field->flags & MetaFlag_Pointer)
@@ -861,7 +872,12 @@ internal void CopyDefaultValue(FieldDefinition* field, void* ptr)
             DUMB_COPY_DEF(GameProperty);
             DUMB_COPY_DEF(GameAssetType);
             
-            InvalidDefaultCase;
+            default:
+            {
+                String structName = Stringize(field->typeName);
+                StructDefinition* structDefinition = GetMetaStructDefinition(structName);
+                InitStructDefault(structDefinition, ptr);
+            } break;
         }
     }
 }
@@ -907,7 +923,7 @@ internal void InitFieldDefault(FieldDefinition* field, void* dataPtr)
     }
 }
 
-internal StructOperationResult StructOperation(EditorLayout* layout, String structName, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer = false)
+internal StructOperationResult StructOperation(EditorLayout* layout, String structName, String name, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer = false)
 {
     StructOperationResult result = {};
     StructDefinition* definition = GetMetaStructDefinition(structName);
@@ -925,8 +941,8 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
 #ifndef FORG_SERVER
         if(operation == FieldOperation_Edit)
         {
-            canProceed = EditorCollapsible(layout, 0, auID(dataPtr, "structCollapse"));
-            EditorTextDraw(layout, V4(1, 1, 1, 1), EditorText_StartingSpace, "%.*s {}", structName.length, structName.ptr);
+            canProceed = EditorCollapsible(layout, 0, auID(dataPtr, structName.ptr, "structCollapse"));
+            EditorTextDraw(layout, V4(1, 1, 1, 1), EditorText_StartingSpace, "%.*s {}", name.length, name.ptr);
             
             if(parentWasPointer)
             {
@@ -941,7 +957,10 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
         if(canProceed)
         {
 #ifndef FORG_SERVER
-            Push(layout);
+            if(operation == FieldOperation_Edit)
+            {
+                Push(layout);
+            }
 #endif
             for(u32 fieldIndex = 0; fieldIndex < definition->fieldCount; ++fieldIndex)
             {
@@ -978,8 +997,11 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                                 {
                                     if(*elementCount == 0 || (*elementCount > header->maxCount / 2))
                                     {
-                                        u32 oldSize = header->maxCount * field->size;
-                                        void* toFree = header;
+                                        if(header)
+                                        {
+                                            u32 oldSize = header->maxCount * field->size;
+                                            void* toFree = header;
+                                        }
                                         
                                         u32 newElementCount = header ? (header->maxCount * 2) : 16;
                                         void* oldArray = fieldPtr;
@@ -1036,83 +1058,88 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
             }
             
 #ifndef FORG_SERVER
-            Pop(layout);
+            if(operation == FieldOperation_Edit)
+            {
+                Pop(layout);
+            }
 #endif
         }
     }
     else
     {
         Token o = GetToken(tokenizer);
-        Assert(o.type == Token_OpenBraces);
-        for(;;)
+        if(o.type != Token_EndOfFile)
         {
-            Token t = GetToken(tokenizer);
-            if(t.type == Token_CloseBraces)
+            for(;;)
             {
-                break;
-            }
-            else if(t.type == Token_SemiColon)
-            {
-            }
-            else if(t.type == Token_EndOfFile)
-            {
-                break;
-            }
-            else
-            {
-                Token fieldName = Stringize(t);
-                FieldDefinition* field = FindMetaField(definition, fieldName);
-                Assert(field->type != MetaType_ArrayCounter);
-                
-                if(RequireToken(tokenizer, Token_EqualSign))
+                Token t = GetToken(tokenizer);
+                if(t.type == Token_CloseBraces)
                 {
-                    void* fieldPtr = (void*) ((u8*) dataPtr + field->offset);
-                    u32 additionalSize = sizeof(MetaArrayHeader);
-                    if(field->flags & MetaFlag_Pointer)
-                    {
-                        result.size += additionalSize;
-                    }
-                    
-                    b32 valid = true;
-                    if(operation == FieldOperation_Parse && field->flags & MetaFlag_Pointer)
-                    {
-                        Tokenizer fake = {};
-                        fake.at = tokenizer->at;
-                        
-                        u16 elementCount;
-                        FieldOperation(layout, field, FieldOperation_GetSize, fieldPtr, &fake, output, reserved, &elementCount);
-                        
-                        ArrayCounter* counterPtr = GetMetaPtrElementCountForArray(definition, field, dataPtr);
-                        Assert(counterPtr);
-                        *counterPtr = elementCount;
-                        
-                        Assert(sizeof(u64) == sizeof(void*));
-                        if(elementCount)
-                        {
-                            void* headerPtr = ReserveSpace(reserved, elementCount * field->size + additionalSize);
-                            void* arrayPtr = InitMetaArray(headerPtr, elementCount);
-                            
-                            *(u64*) fieldPtr = (u64) headerPtr;
-                            fieldPtr = arrayPtr;
-                        }
-                        else
-                        {
-                            *(u64*) fieldPtr = 0;
-                        }
-                    }
-                    
-                    if(valid)
-                    {
-                        u16 ignored = 1;
-                        result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, &ignored);
-                    }
+                    break;
+                }
+                else if(t.type == Token_SemiColon)
+                {
+                }
+                else if(t.type == Token_EndOfFile)
+                {
+                    break;
                 }
                 else
                 {
-                    InvalidCodePath;
+                    Token fieldName = Stringize(t);
+                    FieldDefinition* field = FindMetaField(definition, fieldName);
+                    Assert(field->type != MetaType_ArrayCounter);
+                    
+                    if(RequireToken(tokenizer, Token_EqualSign))
+                    {
+                        void* fieldPtr = (void*) ((u8*) dataPtr + field->offset);
+                        u32 additionalSize = sizeof(MetaArrayHeader);
+                        if(field->flags & MetaFlag_Pointer)
+                        {
+                            result.size += additionalSize;
+                        }
+                        
+                        b32 valid = true;
+                        if(operation == FieldOperation_Parse && field->flags & MetaFlag_Pointer)
+                        {
+                            Tokenizer fake = {};
+                            fake.at = tokenizer->at;
+                            
+                            u16 elementCount;
+                            FieldOperation(layout, field, FieldOperation_GetSize, fieldPtr, &fake, output, reserved, &elementCount);
+                            
+                            ArrayCounter* counterPtr = GetMetaPtrElementCountForArray(definition, field, dataPtr);
+                            Assert(counterPtr);
+                            *counterPtr = elementCount;
+                            
+                            Assert(sizeof(u64) == sizeof(void*));
+                            if(elementCount)
+                            {
+                                void* headerPtr = ReserveSpace(reserved, elementCount * field->size + additionalSize);
+                                void* arrayPtr = InitMetaArray(headerPtr, elementCount);
+                                
+                                *(u64*) fieldPtr = (u64) headerPtr;
+                                fieldPtr = arrayPtr;
+                            }
+                            else
+                            {
+                                *(u64*) fieldPtr = 0;
+                            }
+                        }
+                        
+                        if(valid)
+                        {
+                            u16 ignored = 1;
+                            result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, &ignored);
+                        }
+                    }
+                    else
+                    {
+                        InvalidCodePath;
+                    }
                 }
+                
             }
-            
         }
     }
     
@@ -1122,7 +1149,7 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
 internal u32 GetStructSize(String structName, Tokenizer* tokenizer)
 {
     ReservedSpace ignored = {};
-    u32 result = StructOperation(0, structName, tokenizer, 0, FieldOperation_GetSize, 0, &ignored).size;
+    u32 result = StructOperation(0, structName, structName, tokenizer, 0, FieldOperation_GetSize, 0, &ignored).size;
     return result;
 }
 
@@ -1133,7 +1160,7 @@ internal void ParseBufferIntoStruct(String structName, Tokenizer* tokenizer, voi
     reserved.ptr = (void*) ((u8*) structPtr + definition->size);
     reserved.size = reservedSize - definition->size;
     
-    StructOperation(0, structName, tokenizer, structPtr, FieldOperation_Parse, 0, &reserved);
+    StructOperation(0, structName, structName, tokenizer, structPtr, FieldOperation_Parse, 0, &reserved);
     
     Assert(reserved.size == 0);
 }
@@ -1142,6 +1169,6 @@ internal void DumpStructToStream(String structName, Stream* dest, void* structPt
 {
     ReservedSpace ignored = {};
     OutputToStream(dest, "{");
-    StructOperation(0, structName, 0, structPtr, FieldOperation_Dump, dest, &ignored);
+    StructOperation(0, structName, structName, 0, structPtr, FieldOperation_Dump, dest, &ignored);
     OutputToStream(dest, "}");
 }

@@ -207,6 +207,23 @@ introspection() struct ground_coloration
     GameProperty* properties;
 };
 
+introspection() struct tile_definition
+{
+    GameAssetType asset MetaDefault("{AssetType_Image, AssetImage_default}") MetaFixed(type);
+    GameProperty property;
+};
+
+introspection() struct TileMapping
+{
+    tile_definition tile;
+    r32 weight;
+};
+
+introspection() struct ground_generator
+{
+    ArrayCounter tileTypeCount MetaCounter(tiles);
+    TileMapping* tiles;
+};
 
 
 

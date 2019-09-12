@@ -411,13 +411,14 @@ inline u32 AcquireTextureHandle(Assets* assets)
 
 internal void FreeSpecialTexture(Assets* assets, SpecialTexture* texture)
 {
-    if(IsValid(&texture->textureHandle))
+    if(IsValidSpecial(texture))
     {
-        DLLIST_INSERT_AS_LAST(&texture->LRU, &assets->specialLRUFreeSentinel);
         texture->textureHandle.width = 0;
         texture->textureHandle.height = 0;
+        
+        DLLIST_REMOVE(&texture->LRU);
+        DLLIST_INSERT_AS_LAST(&assets->specialLRUFreeSentinel, &texture->LRU);
     }
-    
 }
 
 inline u32 AcquireSpecialTextureHandle(Assets* assets)
@@ -429,11 +430,10 @@ inline u32 AcquireSpecialTextureHandle(Assets* assets)
     }
     else
     {
-        b32 free = true;
+        
         AssetLRULink* freeThis = 0;
 		if(!DLLIST_ISEMPTY(&assets->specialLRUFreeSentinel))
 		{
-            free = false;
 			freeThis = assets->specialLRUFreeSentinel.next;
 		}
 		else
@@ -443,9 +443,10 @@ inline u32 AcquireSpecialTextureHandle(Assets* assets)
 		}
         
 		Assert(freeThis);
-		DLLIST_REMOVE(freeThis);
 		SpecialTexture* LRU = (SpecialTexture*) freeThis;
-        result = LRU->textureHandle.index;
+        DLLIST_REMOVE(&LRU->LRU);
+        
+		result = LRU->textureHandle.index;
         Assert(result >= MAX_TEXTURE_COUNT);
         Clear(&LRU->textureHandle);
     }
@@ -453,10 +454,10 @@ inline u32 AcquireSpecialTextureHandle(Assets* assets)
     return result;
 }
 
-inline void RefreshSpecialTexture(Assets* assets, AssetLRULink* LRU)
+inline void RefreshSpecialTexture(Assets* assets, SpecialTexture* texture)
 {
-    DLLIST_REMOVE(LRU);
-    DLLIST_INSERT_AS_LAST(&assets->specialLRUSentinel, LRU);
+    DLLIST_REMOVE(&texture->LRU);
+    DLLIST_INSERT_AS_LAST(&assets->specialLRUSentinel, &texture->LRU);
 }
 
 internal AssetSubtypeArray* GetAssetSubtype(Assets* assets, u16 type, u16 subtype)
@@ -714,9 +715,9 @@ void LoadModel(Assets* assets, AssetID ID)
     
 }
 
-void LoadDataFile(Assets* assets, AssetID ID)
+void LoadDataFile(Assets* assets, AssetID ID, b32 immediate = false)
 {
-    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID);
+    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID, immediate);
     if(boilerplate.task)
     {
         Asset* asset = boilerplate.asset;
@@ -798,7 +799,8 @@ internal void ReloadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, Me
             {
 				if(IsValid(&asset->textureHandle))
 				{
-					DLLIST_INSERT_AS_LAST(&asset->LRU, &assets->LRUFreeSentinel);
+                    DLLIST_REMOVE(&asset->LRU);
+					DLLIST_INSERT_AS_LAST(&assets->LRUFreeSentinel, &asset->LRU);
 				}
                 FreeAsset(assets, asset);
             }
@@ -949,8 +951,10 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
             structName.length = StrLen(metaAssetType);
             
             DumpStructToStream(structName, &file, asset->data);
-            char* filename = asset->paka.sourceName;
-            platformAPI.ReplaceFile(PlatformFile_data, path, filename, file.begin, file.written);
+            char filenameNoExtension[64];
+            TrimToFirstCharacter(filenameNoExtension, sizeof(filenameNoExtension),  asset->paka.sourceName, '.');
+            
+            platformAPI.ReplaceFile(PlatformFile_data, path, filenameNoExtension, file.begin, file.written);
         } break;
         
     }
@@ -1090,9 +1094,11 @@ inline b32 MatchesProperties(Asset* asset, GameProperties* properties)
     return result;
 }
 
-#define QueryBitmaps(assets, subtype, seq, properties) QueryAssets(assets, AssetType_Image, AssetImage_##subtype, seq, properties)
+#define QueryBitmaps(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Image, subtype, seq, properties)
+#define QueryFonts(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Font, subtype, seq, properties)
+#define QueryDataFiles(assets, type, sub, seq, properties) QueryAssets_(assets, AssetType_##type, sub, seq, properties)
 
-internal AssetID QueryAssets(Assets* assets, AssetType type, u32 subtype, RandomSequence* seq, GameProperties* properties, u16 startingIndex = 0, u16 onePastEndingIndex = 0)
+internal AssetID QueryAssets_(Assets* assets, AssetType type, u32 subtype, RandomSequence* seq, GameProperties* properties, u16 startingIndex = 0, u16 onePastEndingIndex = 0)
 {
     AssetID result = {};
     if(type)
@@ -1336,14 +1342,22 @@ inline VertexModel* GetModel(Assets* assets, AssetID ID)
     return result;
 }
 
-#define GetData(type, assets, ID) (type*)GetDataDefinition_(assets, AssetType_##type, ID)
-inline void* GetDataDefinition_(Assets* assets, AssetType type, AssetID ID)
+#define GetData(assets, type, ID) (type*)GetDataDefinition_(assets, AssetType_##type, ID)
+inline void* GetDataDefinition_(Assets* assets, AssetType type, AssetID ID, b32 immediate = true)
 {
     Assert(type == ID.type);
     Assert(IsValid(ID));
     
     GetGameAssetResult get = GetGameAsset(assets, ID);
     void* result = get.asset ? get.asset->data : 0;
+    
+    if(!result && immediate)
+    {
+        LoadDataFile(assets, ID, immediate);
+        get = GetGameAsset(assets, ID);
+        Assert(get.asset);
+        result = get.asset;
+    }
     
     return result;
 }
@@ -1466,7 +1480,7 @@ inline AssetID GetMatchingAnimationForSkeleton(Assets* assets, AssetID skeletonI
         u16 startingIndex = info->animationAssetsFirstIndex;
         u16 endingIndex = startingIndex + info->animationCount;
         
-        result = QueryAssets(assets, (AssetType) skeletonID.type, skeletonID.subtype, seq, properties, startingIndex,endingIndex);
+        result = QueryAssets_(assets, (AssetType) skeletonID.type, skeletonID.subtype, seq, properties, startingIndex,endingIndex);
     }
     
     return result;

@@ -682,6 +682,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                 if(!chunk->initialized)
                 {
                     chunk->initialized = true;
+                    chunk->texture = {};
                     chunk->worldX = X;
                     chunk->worldY = Y;
                     //BuildChunk(worldMode->table, worldMode->generator, chunk, X, Y, seed);
@@ -704,16 +705,19 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                 
                 Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - origin.chunkOffset;
                 
-                if(IsValid(&chunk->texture))
+                if(IsValidSpecial(&chunk->texture))
                 {
                     PushTexture(group, chunk->texture.textureHandle, chunkLowLeftCornerOffset, V3(chunkSide, 0, 0), V3(0, chunkSide, 0), V4(1, 1, 1, 1));
-                    RefreshSpecialTexture(group->assets, &chunk->texture.LRU);
                 }
                 else
                 {
-                    u32 textureIndex = AcquireSpecialTextureHandle(group->assets);
+                    u32 textureIndex = chunk->texture.textureHandle.index;
+                    if(!textureIndex)
+                    {
+                        textureIndex = AcquireSpecialTextureHandle(group->assets);
+                    }
+                    
                     chunk->texture.textureHandle = TextureHandle(textureIndex, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
-                    RefreshSpecialTexture(group->assets, &chunk->texture.LRU);
                     
                     RenderSetup lastSetup = group->lastSetup;
                     SetOrthographicTransform(group, chunkSide, chunkSide, textureIndex);
@@ -756,9 +760,6 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                         }
                     }
                     
-                    
-                    
-                    
                     for(i32 deltaY = -1; deltaY <= 1; ++deltaY)
                     {
                         for(i32 deltaX = -1; deltaX <= 1; ++deltaX)
@@ -786,33 +787,62 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                         Vec2 tileCenter = GetCenter(tileSurface);
                                         
                                         GameProperties properties = {};
+                                        AssetID ID = QueryDataFiles(group->assets, ground_generator, 0, &seq, &properties);
                                         
-                                        
-#if 0                                        
-                                        AssetID ID = QueryAssets(tile->properties);
-                                        TileDefinition* definition = GetData(TileDefinition, ID);
-                                        Assert(tileDefinition);
-#endif
-                                        
-                                        BitmapId groundID = QueryBitmaps(group->assets, default, &seq, &properties);
-                                        if(IsValid(groundID))
+                                        if(IsValid(ID))
                                         {
-                                            LockAssetForCurrentFrame(group->assets, groundID);
+                                            ground_generator* generator = GetData(group->assets, ground_generator, ID);
                                             
-                                            Vec3 splatP = V3(tileCenter, 0);
-                                            r32 height = voxelSide;
-                                            Vec2 scale = V2(RandomRangeFloat(&seq, 1.0f, 2.5f), RandomRangeFloat(&seq, 1.0f, 2.5f));
-                                            Vec4 color = V4(1, 1, 1, 1);
-                                            color.r += RandomBil(&seq) * 0.1f;
-                                            color.g += RandomBil(&seq) * 0.1f;
-                                            color.b += RandomBil(&seq) * 0.1f;
-                                            color = Clamp01(color);
+                                            r32 totalWeight = 0;
                                             
-                                            ObjectTransform transform = FlatTransform();
-                                            transform.angle = RandomUni(&seq) * TAU32;
-                                            if(!PushBitmap(group, transform, groundID, splatP, height * voxelSide, scale, color))
+                                            for(u32 tileIndex = 0; tileIndex < generator->tileTypeCount; ++tileIndex)
                                             {
-                                                InvalidCodePath;
+                                                TileMapping* tile = generator->tiles + tileIndex;
+                                                totalWeight += tile->weight;
+                                            }
+                                            
+                                            tile_definition* definition = 0;
+                                            r32 choosenWeight = RandomUni(&seq) * totalWeight;
+                                            r32 runningWeight = 0;
+                                            for(u32 tileIndex = 0; tileIndex < generator->tileTypeCount; ++tileIndex)
+                                            {
+                                                TileMapping* test = generator->tiles + tileIndex;
+                                                runningWeight += test->weight;
+                                                if(choosenWeight <= runningWeight)
+                                                {
+                                                    definition = &test->tile;
+                                                    break;
+                                                }
+                                            }
+                                            
+                                            
+                                            if(definition)
+                                            {
+                                                GameProperties definitionProperties = {};
+                                                definitionProperties.properties[0] = definition->property;
+                                                
+                                                BitmapId groundID = QueryBitmaps(group->assets, definition->asset.subtype, &seq, &definitionProperties);
+                                                
+                                                if(IsValid(groundID))
+                                                {
+                                                    LockAssetForCurrentFrame(group->assets, groundID);
+                                                    
+                                                    Vec3 splatP = V3(tileCenter, 0);
+                                                    r32 height = voxelSide;
+                                                    Vec2 scale = V2(RandomRangeFloat(&seq, 1.0f, 2.5f), RandomRangeFloat(&seq, 1.0f, 2.5f));
+                                                    Vec4 color = V4(1, 1, 1, 1);
+                                                    color.r += RandomBil(&seq) * 0.1f;
+                                                    color.g += RandomBil(&seq) * 0.1f;
+                                                    color.b += RandomBil(&seq) * 0.1f;
+                                                    color = Clamp01(color);
+                                                    
+                                                    ObjectTransform transform = FlatTransform();
+                                                    transform.angle = RandomUni(&seq) * TAU32;
+                                                    if(!PushBitmap(group, transform, groundID, splatP, height * voxelSide, scale, color))
+                                                    {
+                                                        InvalidCodePath;
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -820,9 +850,11 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                             }
                         }
                     }
-                    
                     PushSetup(group, &lastSetup);
                 }
+                
+                Assert(IsValidSpecial(&chunk->texture));
+                RefreshSpecialTexture(group->assets, &chunk->texture);
             }
         }
     }

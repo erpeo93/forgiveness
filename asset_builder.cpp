@@ -1860,7 +1860,6 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
         SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
         if(saved->timestamp != info->timestamp)
         {
-            SaveFileDateHash(saved, info->timestamp);
             updatedFiles = true;
         }
         
@@ -1935,10 +1934,8 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
     {
         SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
-        
         if(saved->timestamp != info->timestamp)
         {
-            SaveFileDateHash(saved, info->timestamp);
             updatedFiles = true;
         }
     }
@@ -1950,9 +1947,10 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     if(fileGroup.fileCount != savedCount->fileCount || 
        markupFiles.fileCount != savedCount->markupCount)
     {
-        SaveFileCountHash(savedCount, fileGroup.fileCount, markupFiles.fileCount);
         changedFiles = true;
     }
+    
+    
     
     
     if(assetCount && (updatedFiles || changedFiles))
@@ -1960,6 +1958,42 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
         FILE* out = fopen(output, "wb");
         if(out)
         {
+            for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
+            {
+                SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
+                if(saved->timestamp != info->timestamp)
+                {
+                    SaveFileDateHash(saved, info->timestamp);
+                }
+                
+            }
+            
+            for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
+            {
+                SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
+                if(saved->timestamp != info->timestamp)
+                {
+                    SaveFileDateHash(saved, info->timestamp);
+                }
+            }
+            
+            if(fileGroup.fileCount != savedCount->fileCount || 
+               markupFiles.fileCount != savedCount->markupCount)
+            {
+                SaveFileCountHash(savedCount, fileGroup.fileCount, markupFiles.fileCount);
+            }
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
             fwrite(&header, sizeof(PAKFileHeader), 1, out);
             
             u32 assetArraySize = assetCount * sizeof(PAKAsset);
@@ -2197,7 +2231,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
         }
         else
         {
-            InvalidCodePath;
+            printf("couldn't open file %s!\n", output);
         }
     }
     platformAPI.GetAllFilesEnd(&fileGroup);

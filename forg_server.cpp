@@ -580,8 +580,8 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             }
             
             EndTemporaryMemory(fileMemory);
-            platformAPI.CloseFile(&handle);
             
+            platformAPI.CloseFile(&handle);
             if(deleteFile)
             {
                 platformAPI.ReplaceFile(PlatformFile_AssetPack, RELOAD_PATH, 
