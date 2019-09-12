@@ -213,6 +213,11 @@ internal Rect2 ShowString(EditorLayout* layout, char* name, char* string, u32 fl
     return result;
 }
 
+internal Rect2 ShowLabel(EditorLayout* layout, char* name, Vec4 color = DefaultEditorStringColor())
+{
+    Rect2 result = ShowString(layout, 0, name, 0, color);
+    return result;
+}
 
 internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID, StringArray options, char* outputBuffer, u32 outputLength)
 {
@@ -228,7 +233,6 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID,
             SetNextHotAUID(layout->context, ID);
             color = V4(1, 1, 0, 1);
         }
-        
         
         if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
         {
@@ -621,7 +625,6 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
         case AssetType_Sound:
         {
             AUID auid = auID(info, "sound");
-            
             if(StandardEditorButton(layout, "play", auid))
             {
                 EditorUIContext* UI = layout->context;
@@ -804,7 +807,7 @@ internal EditorLayout StandardLayout(MemoryPool* pool, FontId ID, RenderGroup* g
     result.bufferSize = KiloBytes(64);
     result.buffer = (char*) PushSize(pool, result.bufferSize);
     
-    result.currentP = context->offset;
+    result.currentP = context->offset + 0.45f * V2(- (r32) group->commands->settings.width, (r32) group->commands->settings.height);
     result.rawP = result.currentP;
     result.lastP = result.rawP;
     
@@ -821,45 +824,127 @@ internal EditorLayout StandardLayout(MemoryPool* pool, FontId ID, RenderGroup* g
     return result;
 }
 
-internal void RenderEditor(RenderGroup* group, EditorUIContext* context, Vec2 mouseP, Vec2 deltaMouseP)
+internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 deltaMouseP)
 {
-    RandomSequence seq = {};
-    GameProperties properties = {};
-    FontId fontID = QueryAssets(group->assets, AssetType_Font, AssetFont_game, &seq, &properties);
-    if(IsValid(fontID))
+    EditorUIContext* context = &worldMode->editorUI;
+    Vec2 mouseP = worldMode->relativeScreenMouseP;
+    if(Pressed(&context->input->editorButton))
     {
-        MemoryPool editorPool = {};
-        SetOrthographicTransformScreenDim(group);
-        if(Pressed(&context->input->actionLeft))
+        context->showEditor = !context->showEditor;
+    }
+    
+    if(context->showEditor)
+    {
+        RandomSequence seq = {};
+        GameProperties properties = {};
+        FontId fontID = QueryAssets(group->assets, AssetType_Font, AssetFont_game, &seq, &properties);
+        if(IsValid(fontID))
         {
-            context->offset.x -= 10.0f;
-        }
-        if(Pressed(&context->input->actionRight))
-        {
-            context->offset.x += 10.0f;
-        }
-        context->offset.y -= 10.0f * context->input->mouseWheelOffset;
-        
-        context->nextHot = {};
-        EditorLayout layout = StandardLayout(&editorPool, fontID, group, context, mouseP, deltaMouseP, V4(1, 1, 1, 1), 0.5f);
-        
-        for(u32 fileIndex = 0; fileIndex < group->assets->fileCount; ++fileIndex)
-        {
-            AssetFile* file = GetAssetFile(group->assets, fileIndex);
-            PAKFileHeader* header = GetFileInfo(group->assets, fileIndex);
+            MemoryPool editorPool = {};
+            SetOrthographicTransformScreenDim(group);
             
-            AssetSubtypeArray* assets = GetAssetSubtypeForFile(group->assets, header);
-            if(assets)
+#if 0        
+            if(Pressed(&context->input->actionLeft))
             {
-                RenderEditAssetFile(&layout, group->assets, header);
-                NextRaw(&layout);
+                context->offset.x -= 10.0f;
             }
+            if(Pressed(&context->input->actionRight))
+            {
+                context->offset.x += 10.0f;
+            }
+#endif
+            context->offset.y -= 10.0f * context->input->mouseWheelOffset;
+            
+            context->nextHot = {};
+            EditorLayout layout = StandardLayout(&editorPool, fontID, group, context, mouseP, deltaMouseP, V4(1, 1, 1, 1), 0.5f);
+            
+            EditorTabs active = context->activeTab;
+            
+            AUID auid = auID(context, "left");
+            if(StandardEditorButton(&layout, "<", auid))
+            {
+                i32 currentTab = (i32) active - 1;
+                if(currentTab < 0)
+                {
+                    context->activeTab = (EditorTabs) (EditorTab_Count - 1);
+                }
+                else
+                {
+                    context->activeTab = (EditorTabs) currentTab;
+                }
+            }
+            
+            switch(active)
+            {
+                case EditorTab_Assets:
+                {
+                    ShowLabel(&layout, "Assets");
+                } break;
+                
+                case EditorTab_Misc:
+                {
+                    ShowLabel(&layout, "Misc");
+                } break;
+            }
+            
+            auid = auID(context, "right");
+            if(StandardEditorButton(&layout, ">", auid))
+            {
+                i32 currentTab = (i32) active + 1;
+                if(currentTab == EditorTab_Count)
+                {
+                    context->activeTab = (EditorTabs) 0;
+                }
+                else
+                {
+                    context->activeTab = (EditorTabs) currentTab;
+                }
+            }
+            
+            NextRaw(&layout);
+            NextRaw(&layout);
+            
+            switch(active)
+            {
+                case EditorTab_Assets:
+                {
+                    for(u32 fileIndex = 0; fileIndex < group->assets->fileCount; ++fileIndex)
+                    {
+                        AssetFile* file = GetAssetFile(group->assets, fileIndex);
+                        PAKFileHeader* header = GetFileInfo(group->assets, fileIndex);
+                        
+                        AssetSubtypeArray* assets = GetAssetSubtypeForFile(group->assets, header);
+                        if(assets)
+                        {
+                            RenderEditAssetFile(&layout, group->assets, header);
+                            NextRaw(&layout);
+                        }
+                    }
+                } break;
+                
+                case EditorTab_Misc:
+                {
+                    AUID miscID = auID(context, "resetGround");
+                    if(StandardEditorButton(&layout, "Regenerate Ground", miscID))
+                    {
+                        for(u32 chunkIndex = 0; chunkIndex < ArrayCount(worldMode->chunks); ++chunkIndex)
+                        {
+                            for(WorldChunk* chunk = worldMode->chunks[chunkIndex]; chunk; chunk = chunk->next)
+                            {
+                                chunk->initialized = false;
+                                FreeSpecialTexture(group->assets, &chunk->texture);
+                            }
+                        }
+                    }
+                } break;
+            }
+            
+            context->hot = context->nextHot;
+            if(Pressed(&context->input->escButton))
+            {
+                context->interactive = {};
+            }
+            Clear(&editorPool);
         }
-        context->hot = context->nextHot;
-        if(Pressed(&context->input->escButton))
-        {
-            context->interactive = {};
-        }
-        Clear(&editorPool);
     }
 }

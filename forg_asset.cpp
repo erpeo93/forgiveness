@@ -409,6 +409,17 @@ inline u32 AcquireTextureHandle(Assets* assets)
     return result;
 }
 
+internal void FreeSpecialTexture(Assets* assets, SpecialTexture* texture)
+{
+    if(IsValid(&texture->textureHandle))
+    {
+        DLLIST_INSERT_AS_LAST(&texture->LRU, &assets->specialLRUFreeSentinel);
+        texture->textureHandle.width = 0;
+        texture->textureHandle.height = 0;
+    }
+    
+}
+
 inline u32 AcquireSpecialTextureHandle(Assets* assets)
 {
     u32 result = 0;
@@ -418,18 +429,25 @@ inline u32 AcquireSpecialTextureHandle(Assets* assets)
     }
     else
     {
-        AssetLRULink* sentinel = &assets->specialLRUSentinel;
-        Assert(!DLLIST_ISEMPTY(sentinel));
+        b32 free = true;
+        AssetLRULink* freeThis = 0;
+		if(!DLLIST_ISEMPTY(&assets->specialLRUFreeSentinel))
+		{
+            free = false;
+			freeThis = assets->specialLRUFreeSentinel.next;
+		}
+		else
+		{
+			Assert(!DLLIST_ISEMPTY(&assets->specialLRUSentinel));
+            freeThis = assets->specialLRUSentinel.next;
+		}
         
-        AssetLRULink* first = sentinel->next;
-        DLLIST_REMOVE(first);
-        
-        SpecialTexture* LRU = (SpecialTexture*) first;
+		Assert(freeThis);
+		DLLIST_REMOVE(freeThis);
+		SpecialTexture* LRU = (SpecialTexture*) freeThis;
         result = LRU->textureHandle.index;
         Assert(result >= MAX_TEXTURE_COUNT);
         Clear(&LRU->textureHandle);
-        
-		DLLIST_INSERT_AS_LAST(&assets->specialLRUSentinel, first);
     }
     
     return result;
@@ -782,7 +800,6 @@ internal void ReloadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, Me
 				{
 					DLLIST_INSERT_AS_LAST(&asset->LRU, &assets->LRUFreeSentinel);
 				}
-                
                 FreeAsset(assets, asset);
             }
         }

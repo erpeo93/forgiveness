@@ -61,6 +61,14 @@ internal b32 AreEqual(AUID i1, AUID i2)
     return result;
 }
 
+enum EditorTabs
+{
+    EditorTab_Assets,
+    EditorTab_Misc,
+    
+    EditorTab_Count,
+};
+
 struct EditorUIContext
 {
     AUID nextHot;
@@ -74,6 +82,9 @@ struct EditorUIContext
     struct PlayingSound* playingSound;
     
     Vec2 offset;
+    
+    b32 showEditor;
+    EditorTabs activeTab;
 };
 
 struct EditorLayout

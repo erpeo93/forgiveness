@@ -704,7 +704,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                 
                 Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - origin.chunkOffset;
                 
-                if(IsValid(&chunk->texture.textureHandle))
+                if(IsValid(&chunk->texture))
                 {
                     PushTexture(group, chunk->texture.textureHandle, chunkLowLeftCornerOffset, V3(chunkSide, 0, 0), V3(0, chunkSide, 0), V4(1, 1, 1, 1));
                     RefreshSpecialTexture(group->assets, &chunk->texture.LRU);
@@ -787,11 +787,14 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                         
                                         GameProperties properties = {};
                                         
+                                        
+#if 0                                        
                                         AssetID ID = QueryAssets(tile->properties);
                                         TileDefinition* definition = GetData(TileDefinition, ID);
                                         Assert(tileDefinition);
+#endif
                                         
-                                        BitmapId groundID = QueryBitmaps(group->assets, tileDefinition->imageType, &seq, tileDefinition->properties);
+                                        BitmapId groundID = QueryBitmaps(group->assets, default, &seq, &properties);
                                         if(IsValid(groundID))
                                         {
                                             LockAssetForCurrentFrame(group->assets, groundID);

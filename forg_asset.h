@@ -337,6 +337,7 @@ struct Assets
     AssetLRULink LRUSentinel;
     AssetLRULink LRUFreeSentinel;
     AssetLRULink specialLRUSentinel;
+    AssetLRULink specialLRUFreeSentinel;
     AssetLRULink lockedLRUSentinel;
     
     u32 fileCount;

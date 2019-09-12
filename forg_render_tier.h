@@ -33,6 +33,14 @@ inline b32 IsValid(RenderTexture* texture)
     return result;
 }
 
+internal b32 IsValid(SpecialTexture* texture)
+{
+    b32 result = (texture->textureHandle.index > 0 &&
+                  texture->textureHandle.width > 0 &&
+                  texture->textureHandle.height > 0);
+    return result;
+}
+
 struct TextureOpUpdate
 {
     RenderTexture texture;

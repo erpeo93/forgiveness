@@ -650,7 +650,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             
             
-            RenderEditor(group, &worldMode->editorUI, worldMode->relativeScreenMouseP, deltaMouseScreenP);
+            RenderEditor(group, worldMode, deltaMouseScreenP);
 #if 0
             Rect3 worldCameraBounds = GetScreenBoundsAtTargetDistance(group);
             Rect2 screenBounds = RectCenterDim(V2(0, 0), V2(worldCameraBounds.max.x - worldCameraBounds.min.x, worldCameraBounds.max.y - worldCameraBounds.min.y));
