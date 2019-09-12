@@ -510,10 +510,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     u32 desiredAction = Action_Idle;
     u64 overlappingEntityID = 0;
     
-    PreloadAllGroundBitmaps(group->assets);
     
     ClientPlayer* myPlayer = &worldMode->player;
     ReceiveNetworkPackets(gameState, worldMode);
+    
     
     worldMode->originalTimeToAdvance = input->timeToAdvance;
     if(Pressed(&input->pauseButton))
@@ -621,6 +621,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 worldMode->voronoiPingPong[voronoiIndex].deltaP += deltaP;
             }
             
+            PreloadAllGroundBitmaps(group->assets);
             UpdateAndRenderGround(worldMode, group, myPlayer->universeP);
             
             worldMode->particleCache->deltaParticleP = deltaP;

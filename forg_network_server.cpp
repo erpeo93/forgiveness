@@ -303,7 +303,7 @@ internal u32 SendAllPossibleData(ServerState* server, Player* player, FileToSend
             
             if(toSend->sendingOffset >= file->compressedSize)
             {
-                --file->counter;
+                file->counter = file->counter - 1;
                 *toSendPtr = toSend->next;
                 FREELIST_DEALLOC(toSend, server->firstFreeToSendFile);
             }

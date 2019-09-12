@@ -1,7 +1,7 @@
 #pragma once
 
 #define ASSETS_PATH "assets"
-#define RELOAD_PATH "relaod"
+#define RELOAD_PATH "assets/reload"
 #define TIMESTAMP_PATH "assets/timestamps"
 #define ASSETS_RAW_PATH "assets/raw"
 #define MARKUP_FILE_NAME "markup"

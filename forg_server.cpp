@@ -270,6 +270,23 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
                 platformAPI.net.CloseConnection(&server->clientInterface, player->connectionSlot);
                 player->connectionSlot = 0;
                 //RecyclePlayer(server, player);
+                
+                for(FileToSend* login = player->firstLoginFileToSend; login; login = login->next)
+                {
+                    GameFile* file = server->files + login->serverFileIndex;
+                    --file->counter;
+                    FREELIST_DEALLOC(login, server->firstFreeToSendFile);
+                }
+                player->firstLoginFileToSend = 0;
+                
+                for(FileToSend* reload = player->firstReloadedFileToSend; reload; reload = reload->next)
+                {
+                    GameFile* file = server->files + reload->serverFileIndex;
+                    --file->counter;
+                    FREELIST_DEALLOC(reload, server->firstFreeToSendFile);
+                }
+                player->firstReloadedFileToSend = 0;
+                
             }
             else
             {
@@ -282,7 +299,6 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
                 {
                     FileToSend** reloadPtr = &player->firstReloadedFileToSend;
                     SendAllPossibleData(server, player, reloadPtr, toSendSize);
-                    
                 }
             }
         }
@@ -372,7 +388,7 @@ PLATFORM_WORK_CALLBACK(WatchForFileChanges)
     TimestampHash* hash = (TimestampHash*) param;
     while(true)
     {
-        WatchReloadFileChanges(hash, ASSETS_RAW_PATH, ASSETS_PATH);
+        WatchReloadFileChanges(hash, ASSETS_RAW_PATH, RELOAD_PATH);
     }
 }
 
@@ -405,6 +421,30 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         LoadMetaData();
         
         server = memory->server = BootstrapPushStruct(ServerState, gamePool);
+        
+        TimestampHash* hash = BootstrapPushStruct(TimestampHash, pool);
+        
+        PlatformFileGroup timestampFiles = platformAPI.GetAllFilesBegin(PlatformFile_timestamp, TIMESTAMP_PATH);
+        for(PlatformFileInfo* info = timestampFiles.firstFileInfo; info; info = info->next)
+        {
+            TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+            
+            u8* fileContent = ReadEntireFile(&tempPool, &timestampFiles, info);
+            if(sizeof(SavedFileInfoHash) == info->size)
+            {
+                SavedFileInfoHash* infoHash = (SavedFileInfoHash*) fileContent;
+                AddFileDateHash(hash, infoHash->pathAndName, infoHash->timestamp);
+            }
+            else if(sizeof(SavedTypeSubtypeCountHash) == info->size)
+            {
+                SavedTypeSubtypeCountHash* countHash = (SavedTypeSubtypeCountHash*) fileContent;
+                AddFileCountHash(hash, countHash->type, countHash->subtype, countHash->fileCount, countHash->markupCount);
+            }
+            
+            EndTemporaryMemory(fileMemory);
+        }
+        platformAPI.GetAllFilesEnd(&timestampFiles);
+        BuildAssets(hash, ASSETS_RAW_PATH, ASSETS_PATH);
         
         PlatformFileGroup pakFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, ASSETS_PATH);
         
@@ -458,32 +498,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         server->playerCount = 1;
         server->entityCount = 1;
         
-        TimestampHash* hash = BootstrapPushStruct(TimestampHash, pool);
-        
-        PlatformFileGroup timestampFiles = platformAPI.GetAllFilesBegin(PlatformFile_timestamp, TIMESTAMP_PATH);
-        for(PlatformFileInfo* info = timestampFiles.firstFileInfo; info; info = info->next)
-        {
-            TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
-            
-            u8* fileContent = ReadEntireFile(&tempPool, &timestampFiles, info);
-            if(sizeof(SavedFileInfoHash) == info->size)
-            {
-                SavedFileInfoHash* infoHash = (SavedFileInfoHash*) fileContent;
-                AddFileDateHash(hash, infoHash->pathAndName, infoHash->timestamp);
-            }
-            else if(sizeof(SavedTypeSubtypeCountHash) == info->size)
-            {
-                SavedTypeSubtypeCountHash* countHash = (SavedTypeSubtypeCountHash*) fileContent;
-                AddFileCountHash(hash, countHash->type, countHash->subtype, countHash->fileCount, countHash->markupCount);
-            }
-            
-            EndTemporaryMemory(fileMemory);
-        }
-        platformAPI.GetAllFilesEnd(&timestampFiles);
-        
-        BuildAssets(hash, ASSETS_RAW_PATH, ASSETS_PATH);
         platformAPI.PushWork(server->slowQueue, WatchForFileChanges, hash);
-        
         //Assets* assets = InitAssets(JustEntityDefinitionFiles);
         //BuildWorld(server, GenerateWorld_OnlyChunks);
     }
@@ -521,6 +536,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             TrimToFirstCharacter(nameNoExtension, sizeof(nameNoExtension), info->name, '.');
             if(file && (file->counter == 0))
             {
+                deleteFile = true;
                 u8* uncompressedContent = (u8*) PushSize(&tempPool, info->size);
                 platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
                 
@@ -558,7 +574,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
                                 }
                             }
                         }
-                        
 						SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
                     }
                 }

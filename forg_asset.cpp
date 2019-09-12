@@ -91,7 +91,7 @@ internal b32 MergeIfPossible(Assets* assets, AssetMemoryBlock* first, AssetMemor
 
 internal AssetMemoryBlock* FreeAsset(Assets* assets, Asset* asset)
 {
-    Assert(asset->state == Asset_loaded || asset->state == Asset_preloaded);
+    Assert(asset->state == Asset_loaded || asset->state == Asset_preloaded || asset->state == Asset_locked);
     DLLIST_REMOVE(asset);
     
     AssetMemoryBlock* result = (AssetMemoryBlock*) ((u8*) asset->data - sizeof(AssetMemoryBlock));
@@ -794,7 +794,7 @@ internal void ReloadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, Me
         for(u16 assetIndex = 0; assetIndex < assetCount; ++assetIndex)
         {
             Asset* asset = GetAsset(assetSubtypeArray, assetIndex);
-            if(asset->state == Asset_loaded || asset->state == Asset_preloaded)
+            if(asset->state == Asset_loaded || asset->state == Asset_preloaded || asset->state == Asset_locked)
             {
 				if(IsValid(&asset->textureHandle))
 				{
@@ -972,6 +972,7 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
     DLLIST_INIT(&assets->LRUSentinel);
     DLLIST_INIT(&assets->LRUFreeSentinel);
     DLLIST_INIT(&assets->specialLRUSentinel);
+    DLLIST_INIT(&assets->specialLRUFreeSentinel);
     DLLIST_INIT(&assets->lockedLRUSentinel);
     
     assets->blockSentinel.prev = &assets->blockSentinel;
