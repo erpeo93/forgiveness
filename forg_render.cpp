@@ -526,7 +526,6 @@ inline b32 PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTransform,
     }
     else
     {
-        ++renderGroup->countMissing;
         LoadBitmap(renderGroup->assets, ID);
     }
     
@@ -554,7 +553,6 @@ inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform o
     }
     else
     {
-        ++renderGroup->countMissing;
         LoadBitmap(renderGroup->assets, ID);
     }
     
@@ -700,7 +698,6 @@ inline void PushTrunkatedPyramid(RenderGroup* group, BitmapId BID, Vec3 P, Vec3 
     }
     else
     {
-        ++group->countMissing;
         LoadBitmap(group->assets, BID);
     }
 }
@@ -769,7 +766,6 @@ inline Font* PushFont(RenderGroup* renderGroup, FontId ID)
     }
     else
     {
-        ++renderGroup->countMissing;
         LoadFont(renderGroup->assets, ID);
     }
     
@@ -1016,14 +1012,14 @@ inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLen
     PushSetup(renderGroup, &setup);
 }
 
-inline void SetOrthographicTransform(RenderGroup* group, u32 width, u32 height, u32 textureIndex = 0)
+inline void SetOrthographicTransform(RenderGroup* group, r32 width, r32 height, u32 textureIndex = 0)
 {
     SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / width, 0.0f, 0.0f), V3(0.0f, 2.0f / width, 0.0f), V3( 0, 0, 1), V3(0, 0, 0), V2(0, 0), textureIndex);
 }
 
 inline void SetOrthographicTransformScreenDim(RenderGroup* group)
 {
-    SetOrthographicTransform(group, group->commands->settings.width, group->commands->settings.height, 0);
+    SetOrthographicTransform(group, (r32) group->commands->settings.width, (r32) group->commands->settings.height, 0);
 }
 
 inline RenderGroup BeginRenderGroup(Assets* assets, GameRenderCommands* commands)
@@ -1031,7 +1027,6 @@ inline RenderGroup BeginRenderGroup(Assets* assets, GameRenderCommands* commands
     RenderGroup result = {};
     result.assets = assets;
     result.commands = commands;
-    result.countMissing = 0;
     result.screenDim = V2i(commands->settings.width, commands->settings.height);
     
     m4x4_inv I = { Identity(), Identity() };

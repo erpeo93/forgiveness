@@ -77,7 +77,6 @@ struct RenderGroup
 {
     struct Assets* assets;
     
-    u32 countMissing;
     RenderSetup lastSetup;
     
     CameraTransform gameCamera;

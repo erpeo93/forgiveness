@@ -503,12 +503,14 @@ internal void UpdateEntities(GameModeWorld* worldMode, r32 timeToAdvance, Client
 
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
+    b32 result = false;
+    
     Vec3 inputAcc = {};
     u64 targetEntityID = 0;
     u32 desiredAction = Action_Idle;
     u64 overlappingEntityID = 0;
     
-    b32 result = false;
+    PreloadAllGroundBitmaps(group->assets);
     
     ClientPlayer* myPlayer = &worldMode->player;
     ReceiveNetworkPackets(gameState, worldMode);
@@ -619,7 +621,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 worldMode->voronoiPingPong[voronoiIndex].deltaP += deltaP;
             }
             
-            //UpdateAndRenderGround(worldMode, group, myPlayer->universeP);
+            UpdateAndRenderGround(worldMode, group, myPlayer->universeP);
             
             worldMode->particleCache->deltaParticleP = deltaP;
             UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);

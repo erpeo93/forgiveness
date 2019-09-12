@@ -149,6 +149,7 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
     }
     return result;
 }
+#endif
 
 inline WorldTile* GetTile(GameModeWorld* worldMode, WorldChunk* chunk, i32 tileX, i32 tileY)
 {
@@ -187,22 +188,16 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, WorldChunk* chunk, i32 tileX
     Assert(tileX >= 0 && tileX < CHUNK_DIM);
     Assert(tileY >= 0 && tileY < CHUNK_DIM);
     
-    
-    i32 lateralChunkSpan = WORLD_CHUNK_SPAN;
-    chunkX = Wrap(0, chunkX, lateralChunkSpan);
-    chunkY = Wrap(0, chunkY, lateralChunkSpan);
-    
-    
-    WorldChunk* newChunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, worldMode->persistentPool);
-    if(!newChunk->initialized)
+    if(!ChunkOutsideWorld(chunkX, chunkY))
     {
-        InvalidCodePath;
+        WorldChunk* newChunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, worldMode->persistentPool);
+        if(!newChunk->initialized)
+        {
+            InvalidCodePath;
+        }
+        result = GetTile(newChunk, (u32) tileX, (u32) tileY);
     }
-    
-    result = GetTile(newChunk, (u32) tileX, (u32) tileY);
     
     return result;
 }
-#endif
-
 #endif

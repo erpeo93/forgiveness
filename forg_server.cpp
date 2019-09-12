@@ -112,6 +112,7 @@ internal void DispatchApplicationPacket(ServerState* server, Player* player, u32
                 GameFile* file = server->files + fileIndex;
                 if(file->type == type && file->subtype == subtype)
                 {
+                    Assert(file->dataHash);
                     if(file->dataHash != hash)
                     {
                         FileToSend* toSend;

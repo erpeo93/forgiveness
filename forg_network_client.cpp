@@ -369,25 +369,35 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 MemoryPool tempPool = {};
                 
-                for(u32 fileIndex = 0; fileIndex < assets->fileCount; ++fileIndex)
+                
+                for(u16 type = 0; type < AssetType_Count; ++type)
                 {
-                    TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
-                    
-                    AssetFile* file = GetAssetFile(assets, fileIndex);
-                    PAKFileHeader* fileHeader = GetFileInfo(assets, fileIndex);
-                    PlatformFileHandle* fileHandle = GetHandleFor(assets, fileIndex);
-                    
-                    u8* content = (u8*) PushSize(&tempPool, file->size);
-                    platformAPI.ReadFromFile(fileHandle, 0, file->size, content);
-                    
-                    
-                    u16 type = GetMetaAssetType(fileHeader->type);
-                    u16 subtype = GetMetaAssetSubtype(type, fileHeader->subtype);
-                    
-                    u64 dataHash = DataHash((char*) content, file->size);
-                    SendFileHash(type, subtype, dataHash);
-                    
-                    EndTemporaryMemory(fileMemory);
+                    AssetArray* assetTypeArray = assets->assets + type;
+                    for(u16 subtype = 0; subtype < assetTypeArray->subtypeCount; ++subtype)
+                    {
+                        u64 dataHash = 0;
+                        for(u32 fileIndex = 0; fileIndex < assets->fileCount; ++fileIndex)
+                        {
+                            AssetFile* file = GetAssetFile(assets, fileIndex);
+                            PAKFileHeader* fileHeader = GetFileInfo(assets, fileIndex);
+                            PlatformFileHandle* fileHandle = GetHandleFor(assets, fileIndex);
+                            
+                            u16 fileType = GetMetaAssetType(fileHeader->type);
+                            u16 fileSubtype = GetMetaAssetSubtype(type, fileHeader->subtype);
+                            
+                            if(fileType == type && fileSubtype == subtype)
+                            {
+                                TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+                                
+                                u8* content = (u8*) PushSize(&tempPool, file->size);
+                                platformAPI.ReadFromFile(fileHandle, 0, file->size, content);
+                                
+                                dataHash = DataHash((char*) content, file->size);
+                                EndTemporaryMemory(fileMemory);
+                            }
+                        }
+                        SendFileHash(type, subtype, dataHash);
+                    }
                 }
                 
                 clientNetwork->serverChallenge = login.challenge;

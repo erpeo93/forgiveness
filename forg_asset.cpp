@@ -181,9 +181,13 @@ inline void LockAssetForCurrentFrame(Assets* assets, AssetID ID)
 {
     GetAssetResult get = GetAssetRaw(assets, ID);
     Asset* asset = get.asset;
-    asset->state = Asset_locked;
-    DLLIST_REMOVE(&asset->LRU);
-    DLLIST_INSERT_AS_LAST(&assets->lockedLRUSentinel, &asset->LRU);
+    
+    if(asset && asset->state == Asset_loaded)
+    {
+        asset->state = Asset_locked;
+        DLLIST_REMOVE(&asset->LRU);
+        DLLIST_INSERT_AS_LAST(&assets->lockedLRUSentinel, &asset->LRU);
+    }
 }
 
 inline void UnlockLockedAssets(Assets* assets)
@@ -476,11 +480,13 @@ struct AssetBoilerplate
     TaskWithMemory* task;
     Asset* asset;
     u32 fileIndex;
+    b32 immediate;
 };
 
-internal AssetBoilerplate BeginAssetBoilerplate(Assets* assets, AssetID ID)
+internal AssetBoilerplate BeginAssetBoilerplate(Assets* assets, AssetID ID, b32 immediate = false)
 {
     AssetBoilerplate result = {};
+    result.immediate = immediate;
     GetAssetResult get = GetAssetRaw(assets, ID);
     Asset* asset = get.asset;
     
@@ -534,14 +540,20 @@ internal void EndAssetBoilerplate(Assets* assets, AssetBoilerplate boilerplate, 
     
     work->task = task;
     
-    
-    platformAPI.PushWork(assets->loadQueue, LoadAssetThreaded, work);
+    if(boilerplate.immediate)
+    {
+        LoadAssetThreaded(work);
+    }
+    else
+    {
+        platformAPI.PushWork(assets->loadQueue, LoadAssetThreaded, work);
+    }
 }
 
 
-void LoadBitmap(Assets* assets, AssetID ID)
+void LoadBitmap(Assets* assets, AssetID ID, b32 immediate = false)
 {
-    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID);
+    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID, immediate);
     if(boilerplate.task)
     {
         Asset* asset = boilerplate.asset;
@@ -975,7 +987,6 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
     assets->firstFreeAssetBlock = 0;
     assets->blockPool = pool;
     
-    
     for(u32 assetTypeIndex = 0; assetTypeIndex < AssetType_Count; ++assetTypeIndex)
     {
         MetaAssetType metaType = metaAsset_subTypes[assetTypeIndex];
@@ -1012,7 +1023,7 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
             }
             else
             {
-                InvalidCodePath;
+                // TODO(Leonardo): delete the file!
             }
         }
         else
@@ -1060,6 +1071,8 @@ inline b32 MatchesProperties(Asset* asset, GameProperties* properties)
     
     return result;
 }
+
+#define QueryBitmaps(assets, subtype, seq, properties) QueryAssets(assets, AssetType_Image, AssetImage_##subtype, seq, properties)
 
 internal AssetID QueryAssets(Assets* assets, AssetType type, u32 subtype, RandomSequence* seq, GameProperties* properties, u16 startingIndex = 0, u16 onePastEndingIndex = 0)
 {
@@ -1113,9 +1126,9 @@ internal AssetID QueryAssets(Assets* assets, AssetType type, u32 subtype, Random
         }
     }
     
-    
     return result;
 }
+
 
 inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
 {
@@ -1156,22 +1169,40 @@ inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
     Clear(&tempPool);
 }
 
+internal void PreloadAll(Assets* assets, u16 type, u16 subtype, b32 immediate)
+{
+    AssetSubtypeArray* assetArray = GetAssetSubtype(assets, type, subtype);
+    Assert(assetArray);
+    BitmapId ID = {};
+    ID.type = type;
+    ID.subtype = subtype;
+    for(u16 assetIndex = 0; assetIndex < (assetArray->standardAssetCount + assetArray->derivedAssetCount); ++assetIndex)
+    {
+        ID.index = assetIndex;
+        
+        switch(type)
+        {
+            case AssetType_Image:
+            {
+                LoadBitmap(assets, ID, immediate);
+            } break;
+            
+            InvalidDefaultCase;
+        }
+    }
+}
+
+inline void PreloadAllGroundBitmaps(Assets* assets)
+{
+    PreloadAll(assets, AssetType_Image, AssetImage_default, true);
+}
+
 struct GetGameAssetResult
 {
     Asset* asset;
     PAKAsset* info;
     b32 derived;
 };
-
-internal b32 IsDataFile(AssetType type)
-{
-    b32 result = (type != AssetType_Font &&
-                  type != AssetType_Image &&
-                  type != AssetType_Sound &&
-                  type != AssetType_Model &&
-                  type != AssetType_Skeleton);
-    return result;
-}
 
 inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID)
 {
@@ -1186,12 +1217,11 @@ inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID)
         
         if(asset->state == Asset_preloaded)
         {
-            Assert(IsDataFile((AssetType)ID.type));
             LoadAssetDataStructure(assets, asset, ID);
             asset->state = Asset_loaded;
         }
         
-        if(asset->state == Asset_loaded)
+        if(asset->state == Asset_loaded || asset->state == Asset_locked)
         {
             result.asset = asset;
             if(IsValid(&asset->textureHandle))
@@ -1204,7 +1234,6 @@ inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID)
             CompletePastWritesBeforeFutureWrites;
         }
     }
-    
     
     return result;
 }

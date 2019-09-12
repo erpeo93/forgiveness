@@ -2,7 +2,6 @@ enum AssetType
 {
 AssetType_Invalid,
 AssetType_Font,
-AssetType_ground_coloration,
 AssetType_Image,
 AssetType_Model,
 AssetType_Skeleton,
@@ -14,7 +13,6 @@ char* metaAsset_assetType[] =
 {
 "Invalid", 
 "Font",
-"ground_coloration",
 "Image",
 "Model",
 "Skeleton",
@@ -32,15 +30,6 @@ AssetFont_Count
 char* metaAsset_Font[] = {
 "debug",
 "game",
-};
-enum Assetground_colorationType
-{
-Assetground_coloration_default,
-Assetground_coloration_Count
-};
-
-char* metaAsset_ground_coloration[] = {
-"default",
 };
 enum AssetImageType
 {
@@ -100,7 +89,6 @@ MetaAssetType metaAsset_subTypes[AssetType_Count] =
 {
 {0, NULL},
 {2, metaAsset_Font},
-{1, metaAsset_ground_coloration},
 {1, metaAsset_Image},
 {1, metaAsset_Model},
 {1, metaAsset_Skeleton},
