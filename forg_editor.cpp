@@ -647,7 +647,9 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
     b32 showAssetInfo = EditorCollapsible(layout, info->sourceName);
     
     AUID saveID = auID(info, "saveButton");
-    if(EditorButton(layout, V2(0.25f, -0.1f), ButtonDim(layout), "save", saveID))
+    
+    b32 disabled = (!get.asset);
+    if(EditorButton(layout, V2(0.25f, -0.1f), ButtonDim(layout), "save", saveID, disabled))
     {
         WritebackAssetToFileSystem(assets, ID, "../server/assets/raw");
     }
