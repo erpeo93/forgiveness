@@ -758,22 +758,19 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
             
             default:
             {
+                LoadDataFile(assets, ID, true);
                 Asset* asset = GetGameAsset(assets, ID).asset;
-                if(asset)
-                {
-                    char* metaAssetType = metaAsset_assetType[ID.type];
-                    String structName = {};
-                    structName.ptr = metaAssetType;
-                    structName.length = StrLen(metaAssetType);
-                    
-                    Nest(layout);
-                    EditStruct(layout, structName, asset->data);
-                    Pop(layout);
-                }
-                else
-                {
-                    LoadDataFile(assets, ID);
-                }
+                Assert(asset);
+                
+                
+                char* metaAssetType = metaAsset_assetType[ID.type];
+                String structName = {};
+                structName.ptr = metaAssetType;
+                structName.length = StrLen(metaAssetType);
+                
+                Nest(layout);
+                EditStruct(layout, structName, asset->data);
+                Pop(layout);
             } break;
         }
         
