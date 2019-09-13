@@ -134,7 +134,6 @@ struct GameModeWorld
     ClientEntity* nearestEntities[8];
     r32 nearestCameraZ[8];
     
-    WorldGeneratorDefinition* generator;
     WorldSeason season;
     r32 seasonLerp;
     

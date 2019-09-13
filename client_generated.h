@@ -80,6 +80,63 @@ char* MetaTable_SlotName[] =
 "Count",
 };
 
+FieldDefinition fieldDefinitionOfNoiseParams[] = 
+ {
+{0, MetaType_r32, "r32", "frequency", (u32) (&((NoiseParams*)0)->frequency), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_u32, "u32", "octaves", (u32) (&((NoiseParams*)0)->octaves), {}, sizeof(u32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "persistance", (u32) (&((NoiseParams*)0)->persistance), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "offset", (u32) (&((NoiseParams*)0)->offset), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "amplitude", (u32) (&((NoiseParams*)0)->amplitude), {}, sizeof(r32),"invalid",0, 0, 0}, 
+};
+
+FieldDefinition fieldDefinitionOfGenerationMinMax[] = 
+ {
+{0, MetaType_r32, "r32", "min", (u32) (&((GenerationMinMax*)0)->min), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "max", (u32) (&((GenerationMinMax*)0)->max), {}, sizeof(r32),"invalid",0, 0, 0}, 
+};
+
+char* MetaTable_GenerationBucketType[] = 
+ {
+"Bucket_Noise",
+"Bucket_MinMax",
+"Bucket_Fixed",
+};
+
+FieldDefinition fieldDefinitionOfGenerationBucket[] = 
+ {
+{0, MetaType_r32, "r32", "referencePoint", (u32) (&((GenerationBucket*)0)->referencePoint), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_NoiseParams, "NoiseParams", "params", (u32) (&((GenerationBucket*)0)->params), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
+{0, MetaType_GenerationMinMax, "GenerationMinMax", "minMax", (u32) (&((GenerationBucket*)0)->minMax), {}, sizeof(GenerationMinMax),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "fixed", (u32) (&((GenerationBucket*)0)->fixed), {}, sizeof(r32),"invalid",0, 0, 0}, 
+};
+
+FieldDefinition fieldDefinitionOfSelector[] = 
+ {
+{0, MetaType_Enumerator, "Enumerator", "type", (u32) (&((Selector*)0)->type), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_GenerationBucketType, ArrayCount(MetaTable_GenerationBucketType)}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "bucketCount", (u32) (&((Selector*)0)->bucketCount), {}, sizeof(ArrayCounter),"invalid","buckets", (u32)(&((Selector*)0)->buckets), 0}, 
+{MetaFlag_Pointer, MetaType_GenerationBucket, "GenerationBucket", "buckets", (u32) (&((Selector*)0)->buckets), {}, sizeof(GenerationBucket),"invalid",0, 0, 0}, 
+};
+
+FieldDefinition fieldDefinitionOfBiomePyramid[] = 
+ {
+{0, MetaType_Selector, "Selector", "drySelector", (u32) (&((BiomePyramid*)0)->drySelector), {}, sizeof(Selector),"invalid",0, 0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "rowCount", (u32) (&((BiomePyramid*)0)->rowCount), {}, sizeof(ArrayCounter),"invalid","temperatureSelectors", (u32)(&((BiomePyramid*)0)->temperatureSelectors), 0}, 
+{MetaFlag_Pointer, MetaType_Selector, "Selector", "temperatureSelectors", (u32) (&((BiomePyramid*)0)->temperatureSelectors), {}, sizeof(Selector),"invalid",0, 0, 0}, 
+};
+
+FieldDefinition fieldDefinitionOfworld_generator[] = 
+ {
+{0, MetaType_NoiseParams, "NoiseParams", "landscapeNoise", (u32) (&((world_generator*)0)->landscapeNoise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
+{0, MetaType_Selector, "Selector", "landscapeSelect", (u32) (&((world_generator*)0)->landscapeSelect), {}, sizeof(Selector),"invalid",0, 0, 0}, 
+{0, MetaType_NoiseParams, "NoiseParams", "temperatureNoise", (u32) (&((world_generator*)0)->temperatureNoise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
+{0, MetaType_Selector, "Selector", "temperatureSelect", (u32) (&((world_generator*)0)->temperatureSelect), {}, sizeof(Selector),"invalid",0, 0, 0}, 
+{0, MetaType_NoiseParams, "NoiseParams", "precipitationNoise", (u32) (&((world_generator*)0)->precipitationNoise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
+{0, MetaType_NoiseParams, "NoiseParams", "elevationNoise", (u32) (&((world_generator*)0)->elevationNoise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "elevationPower", (u32) (&((world_generator*)0)->elevationPower), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "beachThreesold", (u32) (&((world_generator*)0)->beachThreesold), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_BiomePyramid, "BiomePyramid", "biomePyramid", (u32) (&((world_generator*)0)->biomePyramid), {}, sizeof(BiomePyramid),"invalid",0, 0, 0}, 
+};
+
 MetaFlag MetaFlags_EditorRole[] = 
  {
 {"SoundDesigner", (1 << 1)},
@@ -123,43 +180,43 @@ char* MetaTable_ParticleUpdaterEndPosition[] =
 
 FieldDefinition fieldDefinitionOfGameAssetType[] = 
  {
-{0, MetaType_u16, "u16", "type", (u32) (&((GameAssetType*)0)->type), {}, sizeof(u16),"invalid",0, 0}, 
-{0, MetaType_u16, "u16", "subtype", (u32) (&((GameAssetType*)0)->subtype), {}, sizeof(u16),"invalid",0, 0}, 
+{0, MetaType_u16, "u16", "type", (u32) (&((GameAssetType*)0)->type), {}, sizeof(u16),"invalid",0, 0, 0}, 
+{0, MetaType_u16, "u16", "subtype", (u32) (&((GameAssetType*)0)->subtype), {}, sizeof(u16),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfGroundColorationArrayTest[] = 
  {
-{0, MetaType_u32, "u32", "p1", (u32) (&((GroundColorationArrayTest*)0)->p1), {}, sizeof(u32),"invalid",0, 0}, 
-{0, MetaType_u32, "u32", "p2", (u32) (&((GroundColorationArrayTest*)0)->p2), {}, sizeof(u32),"invalid",0, 0}, 
-{0, MetaType_GameProperty, "GameProperty", "property", (u32) (&((GroundColorationArrayTest*)0)->property), {}, sizeof(GameProperty),"invalid",0, 0}, 
+{0, MetaType_u32, "u32", "p1", (u32) (&((GroundColorationArrayTest*)0)->p1), {}, sizeof(u32),"invalid",0, 0, 0}, 
+{0, MetaType_u32, "u32", "p2", (u32) (&((GroundColorationArrayTest*)0)->p2), {}, sizeof(u32),"invalid",0, 0, 0}, 
+{0, MetaType_GameProperty, "GameProperty", "property", (u32) (&((GroundColorationArrayTest*)0)->property), {}, sizeof(GameProperty),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfground_coloration[] = 
  {
-{0, MetaType_Vec4, "Vec4", "color", (u32) (&((ground_coloration*)0)->color), {}, sizeof(Vec4),"invalid",0, 0}, 
-{0, MetaType_ArrayCounter, "ArrayCounter", "testCounter", (u32) (&((ground_coloration*)0)->testCounter), {}, sizeof(ArrayCounter),"invalid","a1", (u32)(&((ground_coloration*)0)->a1)}, 
-{MetaFlag_Pointer, MetaType_GroundColorationArrayTest, "GroundColorationArrayTest", "a1", (u32) (&((ground_coloration*)0)->a1), {}, sizeof(GroundColorationArrayTest),"invalid",0, 0}, 
+{0, MetaType_Vec4, "Vec4", "color", (u32) (&((ground_coloration*)0)->color), {}, sizeof(Vec4),"invalid",0, 0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "testCounter", (u32) (&((ground_coloration*)0)->testCounter), {}, sizeof(ArrayCounter),"invalid","a1", (u32)(&((ground_coloration*)0)->a1), 0}, 
+{MetaFlag_Pointer, MetaType_GroundColorationArrayTest, "GroundColorationArrayTest", "a1", (u32) (&((ground_coloration*)0)->a1), {}, sizeof(GroundColorationArrayTest),"invalid",0, 0, 0}, 
 {0, MetaType_GameAssetType, "GameAssetType", "asset", (u32) (&((ground_coloration*)0)->asset), {}, sizeof(GameAssetType),"invalid",0, 0, "type"}, 
-{0, MetaType_ArrayCounter, "ArrayCounter", "propertyCount", (u32) (&((ground_coloration*)0)->propertyCount), {}, sizeof(ArrayCounter),"invalid","properties", (u32)(&((ground_coloration*)0)->properties)}, 
-{MetaFlag_Pointer, MetaType_GameProperty, "GameProperty", "properties", (u32) (&((ground_coloration*)0)->properties), {}, sizeof(GameProperty),"invalid",0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "propertyCount", (u32) (&((ground_coloration*)0)->propertyCount), {}, sizeof(ArrayCounter),"invalid","properties", (u32)(&((ground_coloration*)0)->properties), 0}, 
+{MetaFlag_Pointer, MetaType_GameProperty, "GameProperty", "properties", (u32) (&((ground_coloration*)0)->properties), {}, sizeof(GameProperty),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOftile_definition[] = 
  {
 {0, MetaType_GameAssetType, "GameAssetType", "asset", (u32) (&((tile_definition*)0)->asset), {}, sizeof(GameAssetType),"invalid",0, 0, "type"}, 
-{0, MetaType_GameProperty, "GameProperty", "property", (u32) (&((tile_definition*)0)->property), {}, sizeof(GameProperty),"invalid",0, 0}, 
+{0, MetaType_GameProperty, "GameProperty", "property", (u32) (&((tile_definition*)0)->property), {}, sizeof(GameProperty),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfTileMapping[] = 
  {
-{0, MetaType_tile_definition, "tile_definition", "tile", (u32) (&((TileMapping*)0)->tile), {}, sizeof(tile_definition),"invalid",0, 0}, 
-{0, MetaType_r32, "r32", "weight", (u32) (&((TileMapping*)0)->weight), {}, sizeof(r32),"invalid",0, 0}, 
+{0, MetaType_tile_definition, "tile_definition", "tile", (u32) (&((TileMapping*)0)->tile), {}, sizeof(tile_definition),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "weight", (u32) (&((TileMapping*)0)->weight), {}, sizeof(r32),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfground_generator[] = 
  {
-{0, MetaType_ArrayCounter, "ArrayCounter", "tileTypeCount", (u32) (&((ground_generator*)0)->tileTypeCount), {}, sizeof(ArrayCounter),"invalid","tiles", (u32)(&((ground_generator*)0)->tiles)}, 
-{MetaFlag_Pointer, MetaType_TileMapping, "TileMapping", "tiles", (u32) (&((ground_generator*)0)->tiles), {}, sizeof(TileMapping),"invalid",0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "tileTypeCount", (u32) (&((ground_generator*)0)->tileTypeCount), {}, sizeof(ArrayCounter),"invalid","tiles", (u32)(&((ground_generator*)0)->tiles), 0}, 
+{MetaFlag_Pointer, MetaType_TileMapping, "TileMapping", "tiles", (u32) (&((ground_generator*)0)->tiles), {}, sizeof(TileMapping),"invalid",0, 0, 0}, 
 };
 
 char* MetaProperties_Test[] = 
@@ -188,7 +245,13 @@ AddToMetaDefinitions(TileMapping, fieldDefinitionOfTileMapping);\
 AddToMetaDefinitions(tile_definition, fieldDefinitionOftile_definition);\
 AddToMetaDefinitions(ground_coloration, fieldDefinitionOfground_coloration);\
 AddToMetaDefinitions(GroundColorationArrayTest, fieldDefinitionOfGroundColorationArrayTest);\
-AddToMetaDefinitions(GameAssetType, fieldDefinitionOfGameAssetType);
+AddToMetaDefinitions(GameAssetType, fieldDefinitionOfGameAssetType);\
+AddToMetaDefinitions(world_generator, fieldDefinitionOfworld_generator);\
+AddToMetaDefinitions(BiomePyramid, fieldDefinitionOfBiomePyramid);\
+AddToMetaDefinitions(Selector, fieldDefinitionOfSelector);\
+AddToMetaDefinitions(GenerationBucket, fieldDefinitionOfGenerationBucket);\
+AddToMetaDefinitions(GenerationMinMax, fieldDefinitionOfGenerationMinMax);\
+AddToMetaDefinitions(NoiseParams, fieldDefinitionOfNoiseParams);
 
 #define META_PROPERTIES_ADD()\
 AddToMetaProperties(tileType, MetaProperties_tileType);\

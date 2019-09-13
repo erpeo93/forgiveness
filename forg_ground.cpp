@@ -664,6 +664,8 @@ internal void UpdateAndRenderGround(GameState* gameState, GameModeWorld* worldMo
 
 inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, UniversePos origin)
 {
+    u32 worldSeed = 1111;
+    
     i32 originChunkX = origin.chunkX;
     i32 originChunkY = origin.chunkY;
     i32 chunkApron = 2;
@@ -681,11 +683,16 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                 
                 if(!chunk->initialized)
                 {
-                    chunk->initialized = true;
-                    chunk->texture = {};
-                    chunk->worldX = X;
-                    chunk->worldY = Y;
-                    //BuildChunk(worldMode->table, worldMode->generator, chunk, X, Y, seed);
+                    RandomSequence generatorSeq = Seed(worldSeed);
+                    GameProperties properties = {};
+                    
+                    AssetID ID = QueryDataFiles(group->assets, world_generator, 0, &generatorSeq, &properties);
+                    if(IsValid(ID))
+                    {
+                        RandomSequence seq = GetChunkSeed(chunk->worldX, chunk->worldY, worldSeed);
+                        world_generator* generator = GetData(group->assets, world_generator, ID);
+                        BuildChunk(generator, chunk, X, Y, worldSeed);
+                    }
                 }
             }
         }
@@ -701,123 +708,101 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
             {	
                 WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, worldMode->persistentPool);
                 
-                Assert(chunk->initialized);
-                
-                Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - origin.chunkOffset;
-                
-                if(IsValidSpecial(&chunk->texture))
+                if(chunk->initialized)
                 {
-                    PushTexture(group, chunk->texture.textureHandle, chunkLowLeftCornerOffset, V3(chunkSide, 0, 0), V3(0, chunkSide, 0), V4(1, 1, 1, 1));
-                }
-                else
-                {
-                    u32 textureIndex = chunk->texture.textureHandle.index;
-                    if(!textureIndex)
+                    Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - origin.chunkOffset;
+                    
+                    if(IsValidSpecial(&chunk->texture))
                     {
-                        textureIndex = AcquireSpecialTextureHandle(group->assets);
+                        PushTexture(group, chunk->texture.textureHandle, chunkLowLeftCornerOffset, V3(chunkSide, 0, 0), V3(0, chunkSide, 0), V4(1, 1, 1, 1));
                     }
-                    
-                    chunk->texture.textureHandle = TextureHandle(textureIndex, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
-                    
-                    RenderSetup lastSetup = group->lastSetup;
-                    SetOrthographicTransform(group, chunkSide, chunkSide, textureIndex);
-                    
-                    for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
+                    else
                     {
-                        for(u8 X = 0; X < CHUNK_DIM; ++X)
+                        u32 textureIndex = chunk->texture.textureHandle.index;
+                        if(!textureIndex)
                         {
-                            Vec3 tileMin = -0.5f * V3(chunkSide, chunkSide, 0) + V3(X * voxelSide, Y * voxelSide, 0);
-                            Vec2 tileDim = V2(voxelSide, voxelSide);
-                            
-                            Rect2 tileSurface = RectMinDim(tileMin.xy, tileDim);
-                            Vec2 tileCenter = GetCenter(tileSurface);
-                            
-                            WorldTile* sTiles[9];
-                            u32 index = 0;
-                            for(i32 tileY = (i32) Y - 1; tileY <= (i32) Y + 1; ++tileY)
-                            {
-                                for(i32 tileX = (i32) X - 1; tileX <= (i32) X + 1; ++tileX)
-                                {
-                                    sTiles[index++] = GetTile(worldMode, chunk, tileX, tileY);
-                                }
-                            }
-                            
-                            
-#if 0                            
-                            Vec4 c0 = BlendTilesColor(sTiles[0], sTiles[1], sTiles[3], sTiles[4]);
-                            Vec4 c1 = BlendTilesColor(sTiles[1], sTiles[2], sTiles[4], sTiles[5]);
-                            Vec4 c2 = BlendTilesColor(sTiles[4], sTiles[5], sTiles[7], sTiles[8]);
-                            Vec4 c3 = BlendTilesColor(sTiles[3], sTiles[4], sTiles[6], sTiles[7]);
-#else
-                            Vec4 c0 = V4(0, 1, 0, 1);
-                            Vec4 c1 = V4(0, 1, 0, 1);
-                            Vec4 c2 = V4(0, 1, 0, 1);
-                            Vec4 c3 = V4(0, 1, 0, 1);
-#endif
-                            
-                            PushRect4Colors(group, FlatTransform(), V3(tileCenter, 0), tileDim, 
-                                            c0, c1, c2, c3, {});
+                            textureIndex = AcquireSpecialTextureHandle(group->assets);
                         }
-                    }
-                    
-                    for(i32 deltaY = -1; deltaY <= 1; ++deltaY)
-                    {
-                        for(i32 deltaX = -1; deltaX <= 1; ++deltaX)
+                        
+                        chunk->texture.textureHandle = TextureHandle(textureIndex, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
+                        
+                        RenderSetup lastSetup = group->lastSetup;
+                        SetOrthographicTransform(group, chunkSide, chunkSide, textureIndex);
+                        
+                        for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
                         {
-                            i32 splatX = chunk->worldX + deltaX;
-                            i32 splatY = chunk->worldY + deltaY;
-                            
-                            if(!ChunkOutsideWorld(splatX, splatY))
+                            for(u8 X = 0; X < CHUNK_DIM; ++X)
                             {
-                                WorldChunk* splatChunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), splatX, splatY, 0);
-                                Assert(splatChunk->initialized);
-                                Vec3 chunkCenterOffset = chunkSide * V3((r32) deltaX, (r32) deltaY, 0);
+                                Vec3 tileMin = -0.5f * V3(chunkSide, chunkSide, 0) + V3(X * voxelSide, Y * voxelSide, 0);
+                                Vec2 tileDim = V2(voxelSide, voxelSide);
                                 
+                                Rect2 tileSurface = RectMinDim(tileMin.xy, tileDim);
+                                Vec2 tileCenter = GetCenter(tileSurface);
                                 
-                                
-                                RandomSequence seq = Seed(splatChunk->worldX * splatChunk->worldY);
-                                for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
+                                WorldTile* sTiles[9];
+                                u32 index = 0;
+                                for(i32 tileY = (i32) Y - 1; tileY <= (i32) Y + 1; ++tileY)
                                 {
-                                    for(u8 X = 0; X < CHUNK_DIM; ++X)
+                                    for(i32 tileX = (i32) X - 1; tileX <= (i32) X + 1; ++tileX)
                                     {
-                                        Vec3 tileMin = chunkCenterOffset + -0.5f * V3(chunkSide, chunkSide, 0) + V3(X * voxelSide, Y * voxelSide, 0);
-                                        Vec2 tileDim = V2(voxelSide, voxelSide);
-                                        
-                                        Rect2 tileSurface = RectMinDim(tileMin.xy, tileDim);
-                                        Vec2 tileCenter = GetCenter(tileSurface);
-                                        
-                                        GameProperties properties = {};
-                                        AssetID ID = QueryDataFiles(group->assets, ground_generator, 0, &seq, &properties);
-                                        
-                                        if(IsValid(ID))
+                                        sTiles[index++] = GetTile(worldMode, chunk, tileX, tileY);
+                                    }
+                                }
+                                
+                                
+#if 0                            
+                                Vec4 c0 = BlendTilesColor(sTiles[0], sTiles[1], sTiles[3], sTiles[4]);
+                                Vec4 c1 = BlendTilesColor(sTiles[1], sTiles[2], sTiles[4], sTiles[5]);
+                                Vec4 c2 = BlendTilesColor(sTiles[4], sTiles[5], sTiles[7], sTiles[8]);
+                                Vec4 c3 = BlendTilesColor(sTiles[3], sTiles[4], sTiles[6], sTiles[7]);
+#else
+                                Vec4 c0 = V4(0, 1, 0, 1);
+                                Vec4 c1 = V4(0, 1, 0, 1);
+                                Vec4 c2 = V4(0, 1, 0, 1);
+                                Vec4 c3 = V4(0, 1, 0, 1);
+#endif
+                                
+                                PushRect4Colors(group, FlatTransform(), V3(tileCenter, 0), tileDim, 
+                                                c0, c1, c2, c3, {});
+                            }
+                        }
+                        
+                        for(i32 deltaY = -1; deltaY <= 1; ++deltaY)
+                        {
+                            for(i32 deltaX = -1; deltaX <= 1; ++deltaX)
+                            {
+                                i32 splatX = chunk->worldX + deltaX;
+                                i32 splatY = chunk->worldY + deltaY;
+                                
+                                if(!ChunkOutsideWorld(splatX, splatY))
+                                {
+                                    WorldChunk* splatChunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), splatX, splatY, 0);
+                                    Assert(splatChunk->initialized);
+                                    Vec3 chunkCenterOffset = chunkSide * V3((r32) deltaX, (r32) deltaY, 0);
+                                    
+                                    
+                                    RandomSequence seq = GetChunkSeed(splatChunk->worldX, splatChunk->worldY, worldSeed);
+                                    for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
+                                    {
+                                        for(u8 X = 0; X < CHUNK_DIM; ++X)
                                         {
-                                            ground_generator* generator = GetData(group->assets, ground_generator, ID);
+                                            Vec3 tileMin = chunkCenterOffset + -0.5f * V3(chunkSide, chunkSide, 0) + V3(X * voxelSide, Y * voxelSide, 0);
+                                            Vec2 tileDim = V2(voxelSide, voxelSide);
                                             
-                                            r32 totalWeight = 0;
+                                            Rect2 tileSurface = RectMinDim(tileMin.xy, tileDim);
+                                            Vec2 tileCenter = GetCenter(tileSurface);
                                             
-                                            for(u32 tileIndex = 0; tileIndex < generator->tileTypeCount; ++tileIndex)
+                                            WorldTile* tile = GetTile(splatChunk, X, Y);
+                                            
+                                            GameProperties properties = {};
+                                            properties.properties[0] = tile->property;
+                                            
+                                            AssetID ID = QueryDataFiles(group->assets, tile_definition, 0, &seq, &properties);
+                                            
+                                            if(IsValid(ID))
                                             {
-                                                TileMapping* tile = generator->tiles + tileIndex;
-                                                totalWeight += tile->weight;
-                                            }
-                                            
-                                            tile_definition* definition = 0;
-                                            r32 choosenWeight = RandomUni(&seq) * totalWeight;
-                                            r32 runningWeight = 0;
-                                            for(u32 tileIndex = 0; tileIndex < generator->tileTypeCount; ++tileIndex)
-                                            {
-                                                TileMapping* test = generator->tiles + tileIndex;
-                                                runningWeight += test->weight;
-                                                if(choosenWeight <= runningWeight)
-                                                {
-                                                    definition = &test->tile;
-                                                    break;
-                                                }
-                                            }
-                                            
-                                            
-                                            if(definition)
-                                            {
+                                                tile_definition* definition = GetData(group->assets, tile_definition, ID);
+                                                Assert(definition);
                                                 GameProperties definitionProperties = {};
                                                 definitionProperties.properties[0] = definition->property;
                                                 
@@ -849,12 +834,12 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                 }
                             }
                         }
+                        PushSetup(group, &lastSetup);
                     }
-                    PushSetup(group, &lastSetup);
+                    
+                    Assert(IsValidSpecial(&chunk->texture));
+                    RefreshSpecialTexture(group->assets, &chunk->texture);
                 }
-                
-                Assert(IsValidSpecial(&chunk->texture));
-                RefreshSpecialTexture(group->assets, &chunk->texture);
             }
         }
     }

@@ -21,6 +21,7 @@ typedef i32 b32;
 
 typedef u64 Hash64;
 typedef u16 ArrayCounter;
+typedef u32 Enumerator;
 
 typedef size_t memory_index;
 typedef uintptr_t unm;
@@ -160,6 +161,7 @@ union Vec4
 #define MetaDefault(...)
 #define MetaAutocomplete(...)
 #define MetaCounter(...)
+#define MetaEnumerator(...)
 #define MetaFixed(...)
 
 #include <float.h>

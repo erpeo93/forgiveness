@@ -277,13 +277,6 @@ inline void SendPauseToggleMessage()
     CloseAndSendOrderedPacket();
 }
 
-inline void SendRegenerateWorldChunksRequest(u32 worldSeed, GenerateWorldMode generateMode)
-{
-    StartPacket(RegenerateWorldChunks);
-    Pack("LL", worldSeed, generateMode);
-    CloseAndSendOrderedPacket();
-}
-
 inline void SendFileHash(u16 type, u16 subtype, u64 hash)
 {
     StartPacket(FileHash);

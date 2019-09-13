@@ -40,7 +40,7 @@ inline GenerationBucket* AddEmptyBucket(Selector* selector, GenerationBucketType
     {
         selector->type = type;
     }
-    Assert(selector->type == type);
+    Assert(selector->type == (u32) type);
     
     if(selector->bucketCount < ArrayCount(selector->buckets))
     {
@@ -177,7 +177,7 @@ inline u32 SelectFromBiomePyramid(BiomePyramid* pyramid, r32 precipitationLevel,
     return result;
 }
 
-inline WorldTile GenerateTile(TaxonomyTable* table, WorldGeneratorDefinition* generator, r32 tileNormX, r32 tileNormY, u32 seed)
+inline WorldTile GenerateTile(world_generator* generator, r32 tileNormX, r32 tileNormY, u32 seed)
 {
     WorldTile result = {};
     
@@ -191,15 +191,7 @@ inline WorldTile GenerateTile(TaxonomyTable* table, WorldGeneratorDefinition* ge
     
     
     u32 biome = SelectFromBiomePyramid(&generator->biomePyramid, tilePrecipitation, tileTemperature, seed);
-#if 0    
-    u32 terracesCount = 256;
-    r32 terracesStep = maxHeight / terracesCount;
-    
-    u32 testTerraces = (u32) ((finalHeight / maxHeight) * terracesCount);
-    finalHeight = testTerraces * terracesStep;
-#endif
     finalHeight = 0;
-    
     
     r32 elevation = Evaluate(tileNormX, tileNormY, generator->elevationNoise, seed);
     
@@ -212,11 +204,12 @@ inline WorldTile GenerateTile(TaxonomyTable* table, WorldGeneratorDefinition* ge
     
     
     
+#if 0    
     if(elevation >= (WATER_LEVEL - generator->beachThreesold) && elevation < (WATER_LEVEL + generator->beachThreesold) && generator->beachTaxonomy)
     {
         //biome = GetSlotForTaxonomy(table, generator->beachTaxonomy)->taxonomy;
     }
-    
+#endif
     
     result.height = finalHeight;
     
@@ -249,6 +242,7 @@ inline WorldTile GenerateTile(TaxonomyTable* table, WorldGeneratorDefinition* ge
 }
 
 
+#if 0
 inline WorldTile OceanTile(TaxonomyTable* table, WorldGeneratorDefinition* generator, r32 tileNormX, r32 tileNormY, u32 seed)
 {
     
@@ -292,12 +286,26 @@ inline WorldTile OceanTile(TaxonomyTable* table, WorldGeneratorDefinition* gener
     
     return result;
 }
+#endif
 
 
-internal void BuildChunk(TaxonomyTable* table, WorldGeneratorDefinition* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY, u32 seed)
+inline WorldTile GenerateDumbTile(world_generator* generator, r32 tileNormX, r32 tileNormY, u32 seed)
 {
-    Assert(generator);
+    WorldTile result = {};
+    result.property.property = Property_tileType;
+    result.property.value = rock;
     
+    return result;
+}
+
+internal RandomSequence GetChunkSeed(u32 chunkX, u32 chunkY, u32 worldSeed)
+{
+    RandomSequence result = Seed(chunkX * chunkY * worldSeed);
+    return result;
+}
+
+internal void BuildChunk(world_generator* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY, u32 seed)
+{
     Assert(CHUNK_DIM % 2 == 0);
     
     chunk->initialized = true;
@@ -314,7 +322,6 @@ internal void BuildChunk(TaxonomyTable* table, WorldGeneratorDefinition* generat
     
     b32 chunkOutsideWorld = ChunkOutsideWorld(chunkX, chunkY);
     
-    
     for(u8 tileY = 0; tileY < CHUNK_DIM; ++tileY)
     {
         for(u8 tileX = 0; tileX < CHUNK_DIM; ++tileX)
@@ -329,14 +336,18 @@ internal void BuildChunk(TaxonomyTable* table, WorldGeneratorDefinition* generat
             Assert(Normalized(tileNormX));
             Assert(Normalized(tileNormY));
             
+#if 1
+            chunk->tiles[tileY][tileX] = GenerateDumbTile(generator, tileNormX, tileNormY, seed);
+#else
             if(chunkOutsideWorld)
             {
-                chunk->tiles[tileY][tileX] = OceanTile(table, generator, tileNormX, tileNormY, seed);
+                chunk->tiles[tileY][tileX] = OceanTile(tileNormX, tileNormY, seed);
             }
             else
             {
-                chunk->tiles[tileY][tileX] = GenerateTile(table, generator, tileNormX, tileNormY, seed);
+                chunk->tiles[tileY][tileX] = GenerateTile(tileNormX, tileNormY, seed);
             }
+#endif
         }
     }
 }

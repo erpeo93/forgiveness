@@ -2,12 +2,12 @@ enum AssetType
 {
 AssetType_Invalid,
 AssetType_Font,
-AssetType_ground_generator,
 AssetType_Image,
 AssetType_Model,
 AssetType_Skeleton,
 AssetType_Sound,
 AssetType_tile_definition,
+AssetType_world_generator,
 AssetType_Count
 };
 
@@ -15,12 +15,12 @@ char* metaAsset_assetType[] =
 {
 "Invalid", 
 "Font",
-"ground_generator",
 "Image",
 "Model",
 "Skeleton",
 "Sound",
 "tile_definition",
+"world_generator",
 };
 
 
@@ -34,15 +34,6 @@ AssetFont_Count
 char* metaAsset_Font[] = {
 "debug",
 "game",
-};
-enum Assetground_generatorType
-{
-Assetground_generator_default,
-Assetground_generator_Count
-};
-
-char* metaAsset_ground_generator[] = {
-"default",
 };
 enum AssetImageType
 {
@@ -107,16 +98,25 @@ Assettile_definition_Count
 char* metaAsset_tile_definition[] = {
 "default",
 };
+enum Assetworld_generatorType
+{
+Assetworld_generator_default,
+Assetworld_generator_Count
+};
+
+char* metaAsset_world_generator[] = {
+"default",
+};
 MetaAssetType metaAsset_subTypes[AssetType_Count] = 
 {
 {0, NULL},
 {2, metaAsset_Font},
-{1, metaAsset_ground_generator},
 {1, metaAsset_Image},
 {1, metaAsset_Model},
 {1, metaAsset_Skeleton},
 {10, metaAsset_Sound},
 {1, metaAsset_tile_definition},
+{1, metaAsset_world_generator},
 };
 
 

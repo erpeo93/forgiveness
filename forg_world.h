@@ -35,6 +35,9 @@ struct WorldTile
     r32 colorRandomness;
     Vec4 borderColor;
 #endif
+    
+    GameProperty property;
+    
     r32 height;
     r32 waterLevel;
 };

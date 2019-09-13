@@ -239,6 +239,17 @@ internal void Dump_u32(Stream* output, FieldDefinition* field, u32 value, b32 is
     }
 }
 
+internal u32 Parse_Enumerator(Tokenizer* tokenizer, Enumerator defaultVal)
+{
+    u32 result = Parse_u32(tokenizer, defaultVal);
+    return result;
+}
+
+internal void Dump_Enumerator(Stream* output, FieldDefinition* field, Enumerator value, b32 isInArray)
+{
+    Dump_u32(output, field, value, isInArray);
+}
+
 
 internal r32 Parse_r32(Tokenizer* tokenizer, r32 defaultVal)
 {
@@ -552,6 +563,7 @@ internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray)
 internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray);
 internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray);
 internal b32 Edit_Hash64(EditorLayout* layout, char* name, Hash64* h, char* optionsName, b32 isInArray);
+internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enumerator, StringArray options, b32 isInArray);
 internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* property, b32 isInArray);
 internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray);
 internal void NextRaw(EditorLayout* layout);
@@ -603,6 +615,34 @@ STANDARD_OPERATION_FUNCTION(GameProperty);
 STANDARD_OPERATION_FUNCTION(Vec2);
 STANDARD_OPERATION_FUNCTION(Vec3);
 STANDARD_OPERATION_FUNCTION(Vec4);
+
+internal StructOperationResult EnumeratorOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+{
+    StructOperationResult result = {};
+    DUMB_INIT_BOILERPLATE(Enumerator);
+    switch(operation)
+    {
+        DUMB_OPERATION_BOILERPLATE_(Enumerator);
+#ifndef FORG_SERVER
+        case FieldOperation_Edit:
+        {
+            StringArray options = {};
+            options.strings = field->options;
+            options.count = field->optionCount;
+            Edit_Enumerator(layout, field->name, (Enumerator*) ptr, options, isInArray);
+        } break;
+#endif
+        case FieldOperation_Dump:
+        {
+            value = *(Enumerator*) ptr;
+            Dump_Enumerator(output, field, value, isInArray);
+        } break;
+        
+        InvalidDefaultCase;
+    }
+    
+    return result;
+}
 
 internal StructOperationResult Hash64Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
 {
@@ -709,13 +749,17 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
     u16 elements = 0;
     
     Assert(*elementCount);
-    if(pointer)
-    {
-        if(operation == FieldOperation_Dump)
-        {
-            OutputToStream(output, "%s=", field->name);
-        }
-    }
+    
+    
+	StreamState beforeName = {};
+	StreamState afterName = {};
+	StreamState afterStruct = {};
+	if(operation == FieldOperation_Dump)
+	{
+		beforeName = SaveStreamState(output);
+		OutputToStream(output, "%s=", field->name);
+		afterName = SaveStreamState(output);
+	}
     
     while(true)
     {
@@ -738,13 +782,14 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
             DUMB_OPERATION(Vec3);
             DUMB_OPERATION(Vec4);
             DUMB_OPERATION(Hash64);
+            DUMB_OPERATION(Enumerator);
             DUMB_OPERATION(GameProperty);
             DUMB_OPERATION(GameAssetType);
             
             default:
             {
                 Assert(field->type > MetaType_FirstCustomMetaType);
-                if(pointer && operation == FieldOperation_Dump)
+                if(operation == FieldOperation_Dump)
                 {
                     OutputToStream(output, "{");
                 }
@@ -764,9 +809,22 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
                 
                 op = StructOperation(layout, structName, name, tokenizer, fieldPtr, operation, output, reserved, pointer);
                 
-                if(pointer && operation == FieldOperation_Dump)
+                if(operation == FieldOperation_Dump)
                 {
                     OutputToStream(output, "}");
+					afterStruct = SaveStreamState(output);
+                    
+					if(!pointer)
+					{
+						if(DeltaStreamState(afterStruct, afterName) == 2)
+						{
+							RestoreStreamState(output, beforeName);
+						}
+						else
+						{
+							OutputToStream(output, ";");
+						}
+					}
                 }
             } break;
         }
@@ -869,6 +927,7 @@ internal void CopyDefaultValue(FieldDefinition* field, void* ptr)
             DUMB_COPY_DEF(Vec4);
             DUMB_COPY_DEF(Hash64);
             DUMB_COPY_DEF(ArrayCounter);
+            DUMB_COPY_DEF(Enumerator);
             DUMB_COPY_DEF(GameProperty);
             DUMB_COPY_DEF(GameAssetType);
             

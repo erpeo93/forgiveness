@@ -69,7 +69,7 @@ inline r32 noise(r32 x, r32 y, r32 z, u32 seed)
                           grad(perlin_[BB+1], x-1, y-1, z-1 ))));
 }
 
-struct NoiseParams
+introspection() struct NoiseParams
 {
     r32 frequency;
     u32 octaves;
@@ -77,51 +77,64 @@ struct NoiseParams
     r32 offset;
     r32 amplitude;
 };
-struct GenerationMinMax
+
+introspection() struct GenerationMinMax
 {
     r32 min;
     r32 max;
 };
 
-enum GenerationBucketType
+printTable() enum GenerationBucketType
 {
     Bucket_Noise,
     Bucket_MinMax,
     Bucket_Fixed,
 };
 
-
-struct GenerationBucket
+introspection() struct GenerationBucket
 {
     r32 referencePoint;
     
-    union
-    {
-        NoiseParams params;
-        GenerationMinMax minMax;
-        r32 fixed;
-    };
+    NoiseParams params;
+    GenerationMinMax minMax;
+    r32 fixed;
 };
 
-struct Selector
+introspection() struct Selector
 {
-    GenerationBucketType type;
+    Enumerator type MetaEnumerator(GenerationBucketType);
     
-    u32 bucketCount;
-    GenerationBucket buckets[16];
+    ArrayCounter bucketCount MetaCounter(buckets);
+    GenerationBucket* buckets;
 };
 
 #define WATER_LEVEL 0.2f
 #define SWALLOW_WATER_LEVEL WATER_LEVEL - 0.03f
-
-struct BiomePyramid
+introspection() struct BiomePyramid
 {
     // NOTE(Leonardo): vertical!
     Selector drySelector;
     
     // NOTE(Leonardo): horizontal, one for every "slice"
-    u32 rowCount;
-    Selector temperatureSelectors[4];
+    ArrayCounter rowCount MetaCounter(temperatureSelectors);
+    Selector* temperatureSelectors;
+};
+
+introspection() struct world_generator
+{
+    NoiseParams landscapeNoise;
+    Selector landscapeSelect;
+    
+    NoiseParams temperatureNoise;
+    Selector temperatureSelect;
+    
+    NoiseParams precipitationNoise;
+    
+    NoiseParams elevationNoise;
+    r32 elevationPower;
+    r32 beachThreesold;
+    
+    BiomePyramid biomePyramid;
 };
 
 inline NoiseParams NoisePar(r32 frequency, u32 octaves, r32 offset, r32 amplitude,r32 persistance = 0.5f)
@@ -143,92 +156,3 @@ inline GenerationMinMax MinMax(r32 min, r32 max)
     
     return result;
 }
-
-struct SpawnTaxonomy
-{
-    u32 taxonomy;
-    u32 counter;
-    
-    union
-    {
-        SpawnTaxonomy* next;
-        SpawnTaxonomy* nextFree;
-    };
-};
-
-struct TaxonomyAssociation
-{
-    r32 weight;
-    r32 radious;
-    
-    SpawnTaxonomy* firstTaxonomy;
-    
-    union
-    {
-        TaxonomyAssociation* next;
-        TaxonomyAssociation* nextFree;
-    };
-};
-
-struct TaxonomyTileTimerSpawn
-{
-    u32 taxonomy;
-    
-    r32 timer;
-    r32 destTimer;
-    
-    r32 totalWeight;
-    
-    TaxonomyAssociation* firstAssociation;
-    
-    union
-    {
-        TaxonomyTileTimerSpawn* next;
-        TaxonomyTileTimerSpawn* nextFree;
-    };
-};
-
-struct TaxonomyTileAssociations
-{
-    u32 taxonomy;
-    
-    r32 totalWeight;
-    TaxonomyAssociation* firstAssociation;
-    
-    union
-    {
-        TaxonomyTileAssociations* next;
-        TaxonomyTileAssociations* nextFree;
-    };
-};
-
-enum GenerateWorldMode
-{
-    GenerateWorld_None,
-    GenerateWorld_OnlyChunks,
-    GenerateWorld_Standard,
-};
-
-struct WorldGeneratorDefinition
-{
-    NoiseParams landscapeNoise;
-    Selector landscapeSelect;
-    
-    NoiseParams temperatureNoise;
-    Selector temperatureSelect;
-    
-    NoiseParams precipitationNoise;
-    
-    
-    NoiseParams elevationNoise;
-    r32 elevationPower;
-    r32 beachThreesold;
-    u32 beachTaxonomy;
-    
-    BiomePyramid biomePyramid;
-    
-    TaxonomyTileAssociations* firstAssociation;
-    TaxonomyTileTimerSpawn* firstTimerSpawn;
-    
-    WorldGeneratorDefinition* nextFree;
-};

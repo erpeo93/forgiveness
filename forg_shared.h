@@ -751,12 +751,18 @@ struct Stream
     u32 written;
 };
 
+struct StreamState
+{
+	u32 left;
+};
+
 struct Buffer
 {
     char* ptr;
     u32 length;
 };
 typedef Buffer String;
+
 
 internal String Stringize(char* nullTerminatedString)
 {
@@ -782,6 +788,31 @@ internal unm OutputToStream(Stream* stream, char* format, ...)
     stream->size -= size;
     
     stream->written += size;
+    
+    return result;
+}
+
+internal StreamState SaveStreamState(Stream* stream)
+{
+	StreamState result = {};
+	result.left = stream->left;
+    
+	return result;
+}
+
+internal void RestoreStreamState(Stream* stream, StreamState state)
+{
+	Assert(state.left <= stream->left);
+	u32 delta = stream->left - state.left;
+	stream->current -= delta;
+	stream->left += delta;
+	stream->written -= delta;
+}
+
+internal u32 DeltaStreamState(StreamState s1, StreamState s2)
+{
+    Assert(s1.left <= s2.left);
+    u32 result = s2.left - s1.left;
     
     return result;
 }

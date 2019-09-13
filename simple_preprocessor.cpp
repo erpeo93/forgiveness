@@ -56,6 +56,7 @@ void ParseField(Tokenizer* tokenizer, Token structToken, Token fieldNameToken, u
     optionsToken.textLength = StrLen(optionsToken.text);
     Token counterToken = optionsToken;
     Token fixedToken = optionsToken;
+    Token enumToken = optionsToken;
     b32 fixedFieldCount = 0;
     
     Token nameToken = {};
@@ -102,6 +103,18 @@ void ParseField(Tokenizer* tokenizer, Token structToken, Token fieldNameToken, u
                     if(RequireToken(tokenizer, Token_OpenParen))
                     {
                         counterToken = Stringize(GetToken(tokenizer));
+                    }
+                    
+                    if(!RequireToken(tokenizer, Token_CloseParen))
+                    {
+                        InvalidCodePath;
+                    }
+                }
+                else if(TokenEquals(token, "MetaEnumerator"))
+                {
+                    if(RequireToken(tokenizer, Token_OpenParen))
+                    {
+                        enumToken = Stringize(GetToken(tokenizer));
                     }
                     
                     if(!RequireToken(tokenizer, Token_CloseParen))
@@ -160,6 +173,17 @@ void ParseField(Tokenizer* tokenizer, Token structToken, Token fieldNameToken, u
                 if(!TokenEquals(fixedToken, "invalid"))
                 {
                     printf(", \"%.*s\"", fixedToken.textLength, fixedToken.text);
+                }
+                else
+                {
+                    printf(", 0");
+                }
+                
+                if(!TokenEquals(enumToken, "invalid"))
+                {
+                    printf(", MetaTable_%.*s, ArrayCount(MetaTable_%.*s)", 
+                           enumToken.textLength, enumToken.text,
+                           enumToken.textLength, enumToken.text);
                 }
                 
                 printf("}, \n");
@@ -471,6 +495,7 @@ int main( int argc, char** argv )
         "forg_plant.h",
         "forg_inventory.h",
         "forg_world_generation.cpp",
+        "forg_world_generation.h",
         "forg_AI.cpp",
         "forg_AI.h",
         "forg_editor.h",

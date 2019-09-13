@@ -416,6 +416,50 @@ internal b32 Edit_Hash64(EditorLayout* layout, char* name, Hash64* hash, char* o
     return result;
 }
 
+internal char* GetStringFromOptions(StringArray options, u32 value)
+{
+    char* result = 0;
+    
+    if(value < options.count)
+    {
+        result = options.strings[value];
+    }
+    
+    return result;
+}
+
+internal Enumerator GetValueFromOptions(StringArray options, char* value)
+{
+    Enumerator result = {};
+    
+    for(u32 stringIndex = 0; stringIndex < options.count; ++stringIndex)
+    {
+        if(StrEqual(options.strings[stringIndex], value))
+        {
+            result = stringIndex;
+            break;
+        }
+    }
+    
+    
+    return result;
+}
+
+internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enumerator, StringArray options, b32 isInArray)
+{
+    b32 result = false;
+    
+    char* currentValue = GetStringFromOptions(options, *enumerator);
+    char output[64];
+    if(EditString(layout, name, currentValue, options, output, sizeof(output)))
+    {
+        Enumerator newValue = GetValueFromOptions(options, output);
+        *enumerator = newValue;
+        result = true;
+    }
+    return result;
+}
+
 internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray)
 {
     b32 result = false;

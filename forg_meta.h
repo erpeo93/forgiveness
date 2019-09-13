@@ -16,10 +16,10 @@ enum MetaType
     MetaType_r32,
     MetaType_b32,
     MetaType_ArrayCounter, // NOTE(Leonardo): u16
+    MetaType_Enumerator, // NOTE(Leonardo): u32
     MetaType_Hash64,
     MetaType_GameProperty,
     MetaType_GameAssetType,
-    
     
     
     
@@ -30,6 +30,12 @@ enum MetaType
     MetaType_GroundColorationArrayTest,
     MetaType_TileMapping,
     MetaType_tile_definition,
+    MetaType_NoiseParams,
+    MetaType_GenerationMinMax,
+    MetaType_GenerationBucketType,
+    MetaType_GenerationBucket,
+    MetaType_Selector,
+    MetaType_BiomePyramid,
 };
 
 enum FieldMetaFlags
@@ -44,6 +50,7 @@ union DefaultFieldValue
     i8 def_i8;
     u16 def_u16;
     u16 def_ArrayCounter;
+    u32 def_Enumerator;
     i16 def_i16;
     u32 def_u32;
     i32 def_i32;
@@ -72,6 +79,9 @@ struct FieldDefinition
     char* counterName;
     u32 counterOffset;
     char* fixedField;
+    
+    char** options;
+    u32 optionCount;
 };
 
 struct StructDefinition
