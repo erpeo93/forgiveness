@@ -751,14 +751,9 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
     Assert(*elementCount);
     
     
-	StreamState beforeName = {};
-	StreamState afterName = {};
-	StreamState afterStruct = {};
-	if(operation == FieldOperation_Dump)
+	if(pointer && operation == FieldOperation_Dump)
 	{
-		beforeName = SaveStreamState(output);
 		OutputToStream(output, "%s=", field->name);
-		afterName = SaveStreamState(output);
 	}
     
     while(true)
@@ -788,6 +783,14 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
             
             default:
             {
+                StreamState beforeName = SaveStreamState(output);
+                if(!pointer)
+                {
+                    OutputToStream(output, "%s=", field->name);
+                }
+                StreamState afterName = SaveStreamState(output);
+                
+                
                 Assert(field->type > MetaType_FirstCustomMetaType);
                 if(operation == FieldOperation_Dump)
                 {
@@ -812,8 +815,8 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
                 if(operation == FieldOperation_Dump)
                 {
                     OutputToStream(output, "}");
-					afterStruct = SaveStreamState(output);
                     
+                    StreamState afterStruct = SaveStreamState(output);
 					if(!pointer)
 					{
 						if(DeltaStreamState(afterStruct, afterName) == 2)

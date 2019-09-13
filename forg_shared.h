@@ -788,6 +788,7 @@ internal unm OutputToStream(Stream* stream, char* format, ...)
     stream->size -= size;
     
     stream->written += size;
+    stream->left -= size;
     
     return result;
 }

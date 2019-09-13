@@ -336,7 +336,8 @@ struct PlatformFileInfo
 {
     u64 size;
     char* name;
-    u64 timestamp;
+    u64 timestamp1;
+    u64 timestamp2;
     
     PlatformFileInfo* next;
 };

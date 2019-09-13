@@ -192,7 +192,9 @@ internal PLATFORM_GET_ALL_FILE_BEGIN(Win32GetAllFilesBegin)
             info->size = ((u64)findData.nFileSizeHigh << (u64)32) | ((u64)findData.nFileSizeLow);
             info->name = PushNullTerminatedString(&group->memory, findData.cFileName);
             
-            info->timestamp = ((u64)findData.ftLastAccessTime.dwHighDateTime << (u64) 32) | (u64) findData.ftLastAccessTime.dwLowDateTime;
+            info->timestamp1 = ((u64)findData.ftLastAccessTime.dwHighDateTime << (u64) 32) | (u64) findData.ftLastAccessTime.dwLowDateTime;
+            
+            info->timestamp2 = ((u64)findData.ftLastWriteTime.dwHighDateTime << (u64) 32) | (u64) findData.ftLastWriteTime.dwLowDateTime;
             
             
             info->next = result.firstFileInfo;
