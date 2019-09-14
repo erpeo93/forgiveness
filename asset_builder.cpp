@@ -1579,8 +1579,8 @@ internal void FillPAKProperty(PAKAsset* asset, Token property, Token value)
 struct SavedFileInfoHash
 {
     char pathAndName[256];
-    u64 timestamp1;
-    u64 timestamp2;
+    
+    PlatformFileTimestamp timestamp;
     
     SavedFileInfoHash* next;
 };
@@ -1662,7 +1662,7 @@ internal void SaveFileCountHash(SavedTypeSubtypeCountHash* info, u32 fileCount, 
     platformAPI.ReplaceFile(PlatformFile_timestamp, TIMESTAMP_PATH, name, fileContent, fileSize);
 }
 
-internal SavedFileInfoHash* AddFileDateHash(TimestampHash* hash, char* pathAndName, u64 timestamp1, u64 timestamp2)
+internal SavedFileInfoHash* AddFileDateHash(TimestampHash* hash, char* pathAndName, PlatformFileTimestamp timestamp)
 {
     Assert(IsPowerOf2(ArrayCount(hash->hashSlots)));
     u64 hashRaw = StringHash(pathAndName);
@@ -1673,8 +1673,7 @@ internal SavedFileInfoHash* AddFileDateHash(TimestampHash* hash, char* pathAndNa
     ReplaceAll(newHash->pathAndName, '.', '_');
     ReplaceAll(newHash->pathAndName, '/', '_');
     
-    newHash->timestamp1 = timestamp1;
-    newHash->timestamp2 = timestamp2;
+    newHash->timestamp = timestamp;
     
     FREELIST_INSERT(newHash, hash->hashSlots[slotIndex]);
     
@@ -1705,15 +1704,14 @@ internal SavedFileInfoHash* GetCorrenspodingFileDateHash(TimestampHash* hash, ch
     
     if(!result)
     {
-        result = AddFileDateHash(hash, pathAndName, 0, 0);
+        result = AddFileDateHash(hash, pathAndName, {});
     }
     return result;
 }
 
-internal void SaveFileDateHash(SavedFileInfoHash* info, u64 timestamp1, u64 timestamp2)
+internal void SaveFileDateHash(SavedFileInfoHash* info, PlatformFileTimestamp timestamp)
 {
-    info->timestamp1 = timestamp1;
-    info->timestamp2 = timestamp2;
+    info->timestamp = timestamp;
     
     u8* fileContent = (u8*) info;
     u32 fileSize = sizeof(SavedFileInfoHash);
@@ -1861,8 +1859,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
         PlatformFileHandle handle = platformAPI.OpenFile(&fileGroup, info);
         
         SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
-        if(saved->timestamp1 != info->timestamp1 ||
-           saved->timestamp2 != info->timestamp2)
+        if(!AreEqual(saved->timestamp, info->timestamp))
         {
             updatedFiles = true;
         }
@@ -1938,8 +1935,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
     {
         SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
-        if(saved->timestamp1 != info->timestamp1 ||
-           saved->timestamp2 != info->timestamp2)
+        if(!AreEqual(saved->timestamp, info->timestamp))
         {
             updatedFiles = true;
         }
@@ -1966,10 +1962,9 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
                 SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
-                if(saved->timestamp1 != info->timestamp1 ||
-                   saved->timestamp2 != info->timestamp2)
+                if(!AreEqual(saved->timestamp, info->timestamp))
                 {
-                    SaveFileDateHash(saved, info->timestamp1, info->timestamp2);
+                    SaveFileDateHash(saved, info->timestamp);
                 }
                 
             }
@@ -1977,10 +1972,9 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
             for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
             {
                 SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
-                if(saved->timestamp1 != info->timestamp1 ||
-                   saved->timestamp2 != info->timestamp2)
+                if(!AreEqual(saved->timestamp, info->timestamp))
                 {
-                    SaveFileDateHash(saved, info->timestamp1, info->timestamp2);
+                    SaveFileDateHash(saved, info->timestamp);
                 }
             }
             
@@ -2256,10 +2250,9 @@ internal void BuildAssets(TimestampHash* hash, char* sourcePath, char* destPath)
     for(PlatformFileInfo* info = propertiesFiles.firstFileInfo; info; info = info->next)
     {
         SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, PROPERTIES_PATH, info->name);
-        if(saved->timestamp1 != info->timestamp1 ||
-           saved->timestamp2 != info->timestamp2)
+        if(!AreEqual(saved->timestamp, info->timestamp))
         {
-            SaveFileDateHash(saved, info->timestamp1, info->timestamp2);
+            SaveFileDateHash(saved, info->timestamp);
             propertiesChanged = true;
         }
     }
@@ -2311,8 +2304,7 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
                 SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
-                if(info->timestamp1 != infoHash->timestamp1 ||
-                   info->timestamp2 != infoHash->timestamp2)
+                if(!AreEqual(info->timestamp, infoHash->timestamp))
                 {
                     updatedFiles = true;
                     
@@ -2325,8 +2317,7 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
             {
                 SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
-                if(info->timestamp1 != infoHash->timestamp1 ||
-                   info->timestamp2 != infoHash->timestamp2)
+                if(!AreEqual(info->timestamp, infoHash->timestamp))
                 {
                     updatedFiles = true;
                 }
@@ -2344,7 +2335,6 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             {
                 deletedFiles = true;
             }
-            
             
             if(updatedFiles || deletedFiles)
             {

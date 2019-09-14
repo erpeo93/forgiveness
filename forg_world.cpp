@@ -96,8 +96,6 @@ inline Vec3 Subtract(UniversePos A, UniversePos B)
 
 #ifdef FORG_SERVER
 #else
-
-#if 0
 struct GetUniversePosQuery
 {
     WorldChunk* chunk;
@@ -114,19 +112,24 @@ GetUniversePosQuery TranslateRelativePos(GameModeWorld* worldMode, UniversePos b
     
     baseP.chunkOffset.xy += relativeP;
     
-    i32 chunkOffsetX = Floor(baseP.chunkOffset.x * worldMode->oneOverChunkSide);
-    baseP.chunkX += chunkOffsetX;
-    baseP.chunkOffset.x -= chunkOffsetX * worldMode->chunkSide;
+    r32 chunkSide = CHUNK_SIDE;
+    r32 oneOverChunkSide = 1.0f / chunkSide;
     
-    i32 chunkOffsetY = Floor(baseP.chunkOffset.y * worldMode->oneOverChunkSide);
+    r32 oneOverVoxelSide = 1.0f / VOXEL_SIZE;
+    
+    i32 chunkOffsetX = Floor(baseP.chunkOffset.x * oneOverChunkSide);
+    baseP.chunkX += chunkOffsetX;
+    baseP.chunkOffset.x -= chunkOffsetX * chunkSide;
+    
+    i32 chunkOffsetY = Floor(baseP.chunkOffset.y * oneOverChunkSide);
     baseP.chunkY += chunkOffsetY;
-    baseP.chunkOffset.y -= chunkOffsetY * worldMode->chunkSide;
+    baseP.chunkOffset.y -= chunkOffsetY * chunkSide;
     
     WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), baseP.chunkX, baseP.chunkY, 0);
 	if(chunk)
     {
-        result.tileX = TruncateReal32ToI32(baseP.chunkOffset.x * worldMode->oneOverVoxelSide);
-        result.tileY = TruncateReal32ToI32(baseP.chunkOffset.y * worldMode->oneOverVoxelSide);
+        result.tileX = TruncateReal32ToI32(baseP.chunkOffset.x * oneOverVoxelSide);
+        result.tileY = TruncateReal32ToI32(baseP.chunkOffset.y * oneOverVoxelSide);
         
         result.chunkOffset = baseP.chunkOffset.xy;
         if(result.tileX < CHUNK_DIM && result.tileY < CHUNK_DIM)
@@ -141,7 +144,7 @@ GetUniversePosQuery TranslateRelativePos(GameModeWorld* worldMode, UniversePos b
 
 inline WorldTile* GetTile(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
 {
-    WorldTile* result = &worldMode->nullTile;
+    WorldTile* result = 0;
     GetUniversePosQuery query = TranslateRelativePos(worldMode, baseP, P);
     if(query.chunk)
     {
@@ -149,7 +152,6 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
     }
     return result;
 }
-#endif
 
 inline WorldTile* GetTile(GameModeWorld* worldMode, WorldChunk* chunk, i32 tileX, i32 tileY)
 {
@@ -188,15 +190,12 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, WorldChunk* chunk, i32 tileX
     Assert(tileX >= 0 && tileX < CHUNK_DIM);
     Assert(tileY >= 0 && tileY < CHUNK_DIM);
     
-    if(!ChunkOutsideWorld(chunkX, chunkY))
+    WorldChunk* newChunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, worldMode->persistentPool);
+    if(!newChunk->initialized)
     {
-        WorldChunk* newChunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, worldMode->persistentPool);
-        if(!newChunk->initialized)
-        {
-            InvalidCodePath;
-        }
-        result = GetTile(newChunk, (u32) tileX, (u32) tileY);
+        InvalidCodePath;
     }
+    result = GetTile(newChunk, (u32) tileX, (u32) tileY);
     
     return result;
 }

@@ -856,7 +856,7 @@ internal EditorLayout StandardLayout(MemoryPool* pool, FontId ID, RenderGroup* g
     
     result.fontID = ID;
     result.font = font;
-    result.fontScale = fontScale;
+    result.fontScale = context->fontScale;
     result.horizontalAdvance = horizontalAdvance;
     result.standardButtonDim = 0.5f * horizontalAdvance;
     
@@ -896,10 +896,19 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                 context->offset.x += 10.0f;
             }
 #endif
-            context->offset.y -= 10.0f * context->input->mouseWheelOffset;
+            
+            if(context->input->ctrlDown)
+            {
+                context->fontScale += 0.008f * context->input->mouseWheelOffset;
+            }
+            else
+            {
+                context->offset.y -= 10.0f * context->input->mouseWheelOffset;
+            }
+            context->fontScale = Max(context->fontScale, 0.4f);
             
             context->nextHot = {};
-            EditorLayout layout = StandardLayout(&editorPool, fontID, group, context, mouseP, deltaMouseP, V4(1, 1, 1, 1), 0.8f);
+            EditorLayout layout = StandardLayout(&editorPool, fontID, group, context, mouseP, deltaMouseP, V4(1, 1, 1, 1));
             
             EditorTabs active = context->activeTab;
             
@@ -974,6 +983,7 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                         {
                             for(WorldChunk* chunk = worldMode->chunks[chunkIndex]; chunk; chunk = chunk->next)
                             {
+                                chunk->initialized = false;
                                 FreeSpecialTexture(group->assets, &chunk->texture);
                             }
                         }

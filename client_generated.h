@@ -85,55 +85,50 @@ FieldDefinition fieldDefinitionOfNoiseParams[] =
 {0, MetaType_r32, "r32", "frequency", (u32) (&((NoiseParams*)0)->frequency), {}, sizeof(r32),"invalid",0, 0, 0}, 
 {0, MetaType_u32, "u32", "octaves", (u32) (&((NoiseParams*)0)->octaves), {}, sizeof(u32),"invalid",0, 0, 0}, 
 {0, MetaType_r32, "r32", "persistance", (u32) (&((NoiseParams*)0)->persistance), {}, sizeof(r32),"invalid",0, 0, 0}, 
-{0, MetaType_r32, "r32", "offset", (u32) (&((NoiseParams*)0)->offset), {}, sizeof(r32),"invalid",0, 0, 0}, 
-{0, MetaType_r32, "r32", "amplitude", (u32) (&((NoiseParams*)0)->amplitude), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "min", (u32) (&((NoiseParams*)0)->min), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "max", (u32) (&((NoiseParams*)0)->max), {}, sizeof(r32),"invalid",0, 0, 0}, 
 };
 
-FieldDefinition fieldDefinitionOfGenerationMinMax[] = 
+FieldDefinition fieldDefinitionOfNoiseBucket[] = 
  {
-{0, MetaType_r32, "r32", "min", (u32) (&((GenerationMinMax*)0)->min), {}, sizeof(r32),"invalid",0, 0, 0}, 
-{0, MetaType_r32, "r32", "max", (u32) (&((GenerationMinMax*)0)->max), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "referencePoint", (u32) (&((NoiseBucket*)0)->referencePoint), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_NoiseParams, "NoiseParams", "params", (u32) (&((NoiseBucket*)0)->params), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
 };
 
-char* MetaTable_GenerationBucketType[] = 
+FieldDefinition fieldDefinitionOfPropertyBucket[] = 
  {
-"Bucket_Noise",
-"Bucket_MinMax",
-"Bucket_Fixed",
+{0, MetaType_r32, "r32", "referencePoint", (u32) (&((PropertyBucket*)0)->referencePoint), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_GameProperty, "GameProperty", "property", (u32) (&((PropertyBucket*)0)->property), {}, sizeof(GameProperty),"invalid",0, 0, 0}, 
 };
 
-FieldDefinition fieldDefinitionOfGenerationBucket[] = 
+FieldDefinition fieldDefinitionOfNoiseSelector[] = 
  {
-{0, MetaType_r32, "r32", "referencePoint", (u32) (&((GenerationBucket*)0)->referencePoint), {}, sizeof(r32),"invalid",0, 0, 0}, 
-{0, MetaType_NoiseParams, "NoiseParams", "params", (u32) (&((GenerationBucket*)0)->params), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
-{0, MetaType_GenerationMinMax, "GenerationMinMax", "minMax", (u32) (&((GenerationBucket*)0)->minMax), {}, sizeof(GenerationMinMax),"invalid",0, 0, 0}, 
-{0, MetaType_r32, "r32", "fixed", (u32) (&((GenerationBucket*)0)->fixed), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "bucketCount", (u32) (&((NoiseSelector*)0)->bucketCount), {}, sizeof(ArrayCounter),"invalid","buckets", (u32)(&((NoiseSelector*)0)->buckets), 0}, 
+{MetaFlag_Pointer, MetaType_NoiseBucket, "NoiseBucket", "buckets", (u32) (&((NoiseSelector*)0)->buckets), {}, sizeof(NoiseBucket),"invalid",0, 0, 0}, 
 };
 
-FieldDefinition fieldDefinitionOfSelector[] = 
+FieldDefinition fieldDefinitionOfPropertySelector[] = 
  {
-{0, MetaType_Enumerator, "Enumerator", "type", (u32) (&((Selector*)0)->type), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_GenerationBucketType, ArrayCount(MetaTable_GenerationBucketType)}, 
-{0, MetaType_ArrayCounter, "ArrayCounter", "bucketCount", (u32) (&((Selector*)0)->bucketCount), {}, sizeof(ArrayCounter),"invalid","buckets", (u32)(&((Selector*)0)->buckets), 0}, 
-{MetaFlag_Pointer, MetaType_GenerationBucket, "GenerationBucket", "buckets", (u32) (&((Selector*)0)->buckets), {}, sizeof(GenerationBucket),"invalid",0, 0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "bucketCount", (u32) (&((PropertySelector*)0)->bucketCount), {}, sizeof(ArrayCounter),"invalid","buckets", (u32)(&((PropertySelector*)0)->buckets), 0}, 
+{MetaFlag_Pointer, MetaType_PropertyBucket, "PropertyBucket", "buckets", (u32) (&((PropertySelector*)0)->buckets), {}, sizeof(PropertyBucket),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfBiomePyramid[] = 
  {
-{0, MetaType_Selector, "Selector", "drySelector", (u32) (&((BiomePyramid*)0)->drySelector), {}, sizeof(Selector),"invalid",0, 0, 0}, 
+{0, MetaType_NoiseSelector, "NoiseSelector", "drySelector", (u32) (&((BiomePyramid*)0)->drySelector), {}, sizeof(NoiseSelector),"invalid",0, 0, 0}, 
 {0, MetaType_ArrayCounter, "ArrayCounter", "rowCount", (u32) (&((BiomePyramid*)0)->rowCount), {}, sizeof(ArrayCounter),"invalid","temperatureSelectors", (u32)(&((BiomePyramid*)0)->temperatureSelectors), 0}, 
-{MetaFlag_Pointer, MetaType_Selector, "Selector", "temperatureSelectors", (u32) (&((BiomePyramid*)0)->temperatureSelectors), {}, sizeof(Selector),"invalid",0, 0, 0}, 
+{MetaFlag_Pointer, MetaType_PropertySelector, "PropertySelector", "temperatureSelectors", (u32) (&((BiomePyramid*)0)->temperatureSelectors), {}, sizeof(PropertySelector),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfworld_generator[] = 
  {
 {0, MetaType_NoiseParams, "NoiseParams", "landscapeNoise", (u32) (&((world_generator*)0)->landscapeNoise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
-{0, MetaType_Selector, "Selector", "landscapeSelect", (u32) (&((world_generator*)0)->landscapeSelect), {}, sizeof(Selector),"invalid",0, 0, 0}, 
+{0, MetaType_NoiseSelector, "NoiseSelector", "landscapeSelect", (u32) (&((world_generator*)0)->landscapeSelect), {}, sizeof(NoiseSelector),"invalid",0, 0, 0}, 
 {0, MetaType_NoiseParams, "NoiseParams", "temperatureNoise", (u32) (&((world_generator*)0)->temperatureNoise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
-{0, MetaType_Selector, "Selector", "temperatureSelect", (u32) (&((world_generator*)0)->temperatureSelect), {}, sizeof(Selector),"invalid",0, 0, 0}, 
+{0, MetaType_NoiseSelector, "NoiseSelector", "temperatureSelect", (u32) (&((world_generator*)0)->temperatureSelect), {}, sizeof(NoiseSelector),"invalid",0, 0, 0}, 
 {0, MetaType_NoiseParams, "NoiseParams", "precipitationNoise", (u32) (&((world_generator*)0)->precipitationNoise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
-{0, MetaType_NoiseParams, "NoiseParams", "elevationNoise", (u32) (&((world_generator*)0)->elevationNoise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
 {0, MetaType_r32, "r32", "elevationPower", (u32) (&((world_generator*)0)->elevationPower), {}, sizeof(r32),"invalid",0, 0, 0}, 
-{0, MetaType_r32, "r32", "beachThreesold", (u32) (&((world_generator*)0)->beachThreesold), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "elevationCoeff", (u32) (&((world_generator*)0)->elevationCoeff), {}, sizeof(r32),"invalid",0, 0, 0}, 
 {0, MetaType_BiomePyramid, "BiomePyramid", "biomePyramid", (u32) (&((world_generator*)0)->biomePyramid), {}, sizeof(BiomePyramid),"invalid",0, 0, 0}, 
 };
 
@@ -248,9 +243,10 @@ AddToMetaDefinitions(GroundColorationArrayTest, fieldDefinitionOfGroundColoratio
 AddToMetaDefinitions(GameAssetType, fieldDefinitionOfGameAssetType);\
 AddToMetaDefinitions(world_generator, fieldDefinitionOfworld_generator);\
 AddToMetaDefinitions(BiomePyramid, fieldDefinitionOfBiomePyramid);\
-AddToMetaDefinitions(Selector, fieldDefinitionOfSelector);\
-AddToMetaDefinitions(GenerationBucket, fieldDefinitionOfGenerationBucket);\
-AddToMetaDefinitions(GenerationMinMax, fieldDefinitionOfGenerationMinMax);\
+AddToMetaDefinitions(PropertySelector, fieldDefinitionOfPropertySelector);\
+AddToMetaDefinitions(NoiseSelector, fieldDefinitionOfNoiseSelector);\
+AddToMetaDefinitions(PropertyBucket, fieldDefinitionOfPropertyBucket);\
+AddToMetaDefinitions(NoiseBucket, fieldDefinitionOfNoiseBucket);\
 AddToMetaDefinitions(NoiseParams, fieldDefinitionOfNoiseParams);
 
 #define META_PROPERTIES_ADD()\
@@ -272,5 +268,5 @@ meta_propertiesString[Property_test2 - 1] = "test2";\
 meta_propertiesString[Property_Test - 1] = "Test";\
 
 #define META_DEFAULT_VALUES_CPP_SUCKS()\
-fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, AssetImage_default};
+fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[5].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, AssetImage_default};
 ;

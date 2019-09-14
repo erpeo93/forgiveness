@@ -31,10 +31,12 @@ enum MetaType
     MetaType_TileMapping,
     MetaType_tile_definition,
     MetaType_NoiseParams,
-    MetaType_GenerationMinMax,
-    MetaType_GenerationBucketType,
-    MetaType_GenerationBucket,
-    MetaType_Selector,
+    MetaType_NoiseBucket,
+    MetaType_MinMaxBucket,
+    MetaType_PropertyBucket,
+    MetaType_NoiseSelector,
+    MetaType_MinMaxSelector,
+    MetaType_PropertySelector,
     MetaType_BiomePyramid,
 };
 

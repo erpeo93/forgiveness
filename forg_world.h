@@ -2,6 +2,7 @@
 #define WORLD_CHUNK_SPAN 8
 #define CHUNK_DIM 8
 #define VOXEL_SIZE 2.0f
+#define CHUNK_SIDE CHUNK_DIM * VOXEL_SIZE
 
 struct GenerationData
 {
@@ -18,28 +19,19 @@ struct UniversePos
 struct WorldTile
 {
 #ifndef FORG_SERVER
+    Lights lights;
     
-    r32 layoutNoise;
     r32 waterPhase;
     r32 waterSine;
     b32 movingNegative;
     RandomSequence waterSeq;
-    
     r32 blueNoise;
     r32 alphaNoise;
-    Lights lights;
-    r32 chunkynessSame;
-    r32 chunkynessOther;
-    Vec4 baseColor;
-    Vec4 colorDelta;
-    r32 colorRandomness;
-    Vec4 borderColor;
 #endif
     
+    Vec4 color;
     GameProperty property;
-    
-    r32 height;
-    r32 waterLevel;
+    r32 elevation;
 };
 
 struct TempLight

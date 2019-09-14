@@ -264,6 +264,8 @@ internal void* AcquireAssetMemory(Assets* assets, u32 size, Asset* destAsset)
     }
     
     Assert(result);
+    
+    DLLIST_REMOVE(destAsset);
     DLLIST_INSERT(&assets->assetSentinel, destAsset);
     
     return result;
@@ -1254,6 +1256,7 @@ inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID)
                 DLLIST_INSERT_AS_LAST(&assets->LRUSentinel, &asset->LRU);
             }
             
+            DLLIST_REMOVE(asset);
             DLLIST_INSERT(&assets->assetSentinel, asset);
             CompletePastWritesBeforeFutureWrites;
         }
@@ -1356,7 +1359,7 @@ inline void* GetDataDefinition_(Assets* assets, AssetType type, AssetID ID, b32 
         LoadDataFile(assets, ID, immediate);
         get = GetGameAsset(assets, ID);
         Assert(get.asset);
-        result = get.asset;
+        result = get.asset->data;
     }
     
     return result;

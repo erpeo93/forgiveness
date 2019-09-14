@@ -71,88 +71,74 @@ inline r32 noise(r32 x, r32 y, r32 z, u32 seed)
 
 introspection() struct NoiseParams
 {
-    r32 frequency;
-    u32 octaves;
+    r32 frequency MetaDefault("1");
+    u32 octaves MetaDefault("1");
     r32 persistance;
-    r32 offset;
-    r32 amplitude;
+    
+    r32 min MetaDefault("0");
+    r32 max MetaDefault("1");
 };
 
-introspection() struct GenerationMinMax
-{
-    r32 min;
-    r32 max;
-};
-
-printTable() enum GenerationBucketType
-{
-    Bucket_Noise,
-    Bucket_MinMax,
-    Bucket_Fixed,
-};
-
-introspection() struct GenerationBucket
+introspection() struct NoiseBucket
 {
     r32 referencePoint;
-    
     NoiseParams params;
-    GenerationMinMax minMax;
-    r32 fixed;
 };
 
-introspection() struct Selector
+introspection() struct PropertyBucket
 {
-    Enumerator type MetaEnumerator(GenerationBucketType);
-    
-    ArrayCounter bucketCount MetaCounter(buckets);
-    GenerationBucket* buckets;
+    r32 referencePoint;
+    GameProperty property;
 };
 
-#define WATER_LEVEL 0.2f
-#define SWALLOW_WATER_LEVEL WATER_LEVEL - 0.03f
+
+
+
+introspection() struct NoiseSelector
+{
+    ArrayCounter bucketCount MetaCounter(buckets);
+    NoiseBucket* buckets;
+};
+
+introspection() struct PropertySelector
+{
+    ArrayCounter bucketCount MetaCounter(buckets);
+    PropertyBucket* buckets;
+};
+
 introspection() struct BiomePyramid
 {
     // NOTE(Leonardo): vertical!
-    Selector drySelector;
+    NoiseSelector drySelector;
     
     // NOTE(Leonardo): horizontal, one for every "slice"
     ArrayCounter rowCount MetaCounter(temperatureSelectors);
-    Selector* temperatureSelectors;
+    PropertySelector* temperatureSelectors;
 };
 
 introspection() struct world_generator
 {
     NoiseParams landscapeNoise;
-    Selector landscapeSelect;
+    NoiseSelector landscapeSelect;
     
     NoiseParams temperatureNoise;
-    Selector temperatureSelect;
+    NoiseSelector temperatureSelect;
     
     NoiseParams precipitationNoise;
     
-    NoiseParams elevationNoise;
-    r32 elevationPower;
-    r32 beachThreesold;
+    r32 elevationPower MetaDefault("1");
+    r32 elevationCoeff MetaDefault("1");
     
     BiomePyramid biomePyramid;
 };
 
-inline NoiseParams NoisePar(r32 frequency, u32 octaves, r32 offset, r32 amplitude,r32 persistance = 0.5f)
+inline NoiseParams NoisePar(r32 frequency, u32 octaves, r32 min, r32 max,r32 persistance = 0.5f)
 {
     NoiseParams result = {};
     result.frequency = frequency;
     result.octaves = octaves;
     result.persistance = persistance;
-    result.offset = offset;
-    result.amplitude = amplitude;
-    return result;
-}
-
-inline GenerationMinMax MinMax(r32 min, r32 max)
-{
-    GenerationMinMax result = {};
     result.min = min;
     result.max = max;
-    
     return result;
 }

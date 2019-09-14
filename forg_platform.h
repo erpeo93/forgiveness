@@ -332,12 +332,23 @@ struct PlatformFileHandle
     void* platform;
 };
 
+struct PlatformFileTimestamp
+{
+    u64 access;
+    u64 write;
+};
+
+inline b32 AreEqual(PlatformFileTimestamp t1, PlatformFileTimestamp t2)
+{
+    b32 result = (t1.access == t2.access && t1.write == t2.write);
+    return result;
+}
+
 struct PlatformFileInfo
 {
     u64 size;
     char* name;
-    u64 timestamp1;
-    u64 timestamp2;
+    PlatformFileTimestamp timestamp;
     
     PlatformFileInfo* next;
 };

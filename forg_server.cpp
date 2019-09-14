@@ -433,7 +433,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             if(sizeof(SavedFileInfoHash) == info->size)
             {
                 SavedFileInfoHash* infoHash = (SavedFileInfoHash*) fileContent;
-                AddFileDateHash(hash, infoHash->pathAndName, infoHash->timestamp1, infoHash->timestamp2);
+                AddFileDateHash(hash, infoHash->pathAndName, infoHash->timestamp);
             }
             else if(sizeof(SavedTypeSubtypeCountHash) == info->size)
             {
@@ -574,6 +574,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
                                 }
                             }
                         }
+                        
 						SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
                     }
                 }

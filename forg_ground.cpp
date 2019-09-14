@@ -1,4 +1,3 @@
-#if 0
 #define JC_VORONOI_IMPLEMENTATION
 #undef internal
 #include "jc_voronoi.h"
@@ -31,8 +30,9 @@ PLATFORM_WORK_CALLBACK(GenerateVoronoiPoints)
     EndTaskWithMemory(work->task);
 }
 
-internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, UniversePos originP, i32 originChunkX, i32 originChunkY, i32 chunkApron, i32 lateralChunkSpan)
+internal void GenerateVoronoi(GameModeWorld* worldMode, UniversePos originP, i32 originChunkX, i32 originChunkY, i32 chunkApron)
 {
+    GameState* gameState = worldMode->gameState;
     TaskWithMemory* task = BeginTaskWithMemory(gameState->tasks, ArrayCount(gameState->tasks), false);
     if(task)
     {
@@ -42,7 +42,6 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
         {
             diagram = worldMode->voronoiPingPong + 1;
         }
-        
         diagram->deltaP = {};
         diagram->originP = originP;
         
@@ -70,110 +69,44 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
                 Vec3 chunkLowLeftCornerOffset = V3(V2i(X - originChunkX, Y - originChunkY), 0.0f) * chunkSide - originP.chunkOffset;
                 Rect2 chunkRect = RectMinDim(chunkLowLeftCornerOffset.xy, V2(chunkSide, chunkSide));
                 
-                if(!ChunkOutsideWorld(X, Y))
-                {	
-                    RandomSequence seq = Seed((X + 10) * (Y + 10));
-                    WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
-                    
-                    if(!chunk->initialized)
+                RandomSequence seq = Seed((X + 10) * (Y + 10));
+                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
+                
+                Assert(chunk->initialized);
+                
+                Assert(X == chunk->worldX);
+                Assert(Y == chunk->worldY);
+                
+                for(u8 tileY = 0; tileY < chunkDim; tileY++)
+                {
+                    for(u8 tileX = 0; tileX < chunkDim; tileX++)
                     {
-                        InvalidCodePath;
-                    }
-                    
-                    Assert(X == chunk->worldX);
-                    Assert(Y == chunk->worldY);
-                    
-                    for(u8 tileY = 0; tileY < chunkDim; tileY++)
-                    {
-                        for(u8 tileX = 0; tileX < chunkDim; tileX++)
+                        Vec2 tileCenter = voxelSide * V2(tileX + 0.5f, tileY + 0.5f);
+                        Vec2 destP2D = chunkLowLeftCornerOffset.xy + tileCenter;
+                        
+                        
+                        WorldTile* tile = GetTile(chunk, tileX, tileY);
+                        
+                        r32 groundPointMaxOffset = 0.5f;
+                        u32 groundPointPerTile = 4;
+                        r32 groundPointPerTileV = 1.0f;
+                        
+                        r32 pointMaxOffset = Min(0.5f * voxelSide, groundPointMaxOffset);
+                        
+                        u32 pointsPerTile = RoundReal32ToU32(groundPointPerTile + RandomBil(&seq) * groundPointPerTileV);
+                        
+                        pointsPerTile = Min(maxPointsPerTile, pointsPerTile);
+                        for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
                         {
-                            Vec2 tileCenter = voxelSide * V2(tileX + 0.5f, tileY + 0.5f);
-                            Vec2 destP2D = chunkLowLeftCornerOffset.xy + tileCenter;
+                            points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
+                            points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
                             
-                            
-                            WorldTile* tile = &chunk->tiles[tileY][tileX];
-                            
-                            
-                            if(true)
-                            {
-                                
-                                r32 groundPointMaxOffset = 0.5f;
-                                u32 groundPointPerTile = 4;
-                                r32 groundPointPerTileV = 1.0f;
-                                
-                                r32 pointMaxOffset = Min(0.5f * voxelSide, groundPointMaxOffset);
-                                
-                                u32 pointsPerTile = RoundReal32ToU32(groundPointPerTile + RandomBil(&seq) * groundPointPerTileV);
-                                
-                                pointsPerTile = Min(maxPointsPerTile, pointsPerTile);
-                                r32 tileLayoutNoise = tile->layoutNoise;
-                                
-#if 1
-                                for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
-                                {
-                                    points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
-                                    points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
-                                    
-                                    ++pointCount;
-                                }
-#else
-                                switch(tileDef->tilePointsLayout)
-                                {
-                                    case TilePoints_StraightLine:
-                                    {
-                                        Vec2 arm = Arm2(DegToRad(tileLayoutNoise * 360.0f));
-                                        r32 voxelUsableDim = 0.9f * voxelSide;
-                                        Vec2 startingOffset = arm * voxelUsableDim;
-                                        Vec2 totalDelta = 2.0f * startingOffset;
-                                        
-                                        Vec2 pointSeparationVector = totalDelta *= (1.0f / pointsPerTile);
-                                        
-                                        destP2D += startingOffset;
-                                        
-                                        for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
-                                        {
-                                            points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
-                                            points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
-                                            
-                                            ++pointCount;
-                                            
-                                            destP2D -= pointSeparationVector;
-                                        }
-                                    } break;
-                                    
-                                    case TilePoints_Random:
-                                    {
-                                        for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
-                                        {
-                                            points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
-                                            points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
-                                            
-                                            ++pointCount;
-                                        }
-                                    } break;
-                                    
-                                    case TilePoints_Pound:
-                                    {
-                                        for(u32 pointI = 0; pointI < pointsPerTile; ++pointI)
-                                        {
-                                            points[pointCount].x = destP2D.x + RandomBil(&seq) * pointMaxOffset;
-                                            points[pointCount].y = destP2D.y + RandomBil(&seq) * pointMaxOffset;
-                                            
-                                            ++pointCount;
-                                        }
-                                    } break;
-                                }
-#endif
-                                
-                            }
-                            
+                            ++pointCount;
                         }
-                    }                         
+                    }
                 }
             }
         }
-        
-        
         
         if(diagram == worldMode->activeDiagram)
         {
@@ -193,55 +126,13 @@ internal void GenerateVoronoi(GameState* gameState, GameModeWorld* worldMode, Un
     }
 }
 
-inline r32 GetChunkyness(WorldTile* t0, WorldTile* t1)
-{
-    r32 result = (t0->taxonomy == t1->taxonomy) ? t0->chunkynessSame : t0->chunkynessOther;
-    return result;
-}
-
-
-inline Vec3 GetTileColorDelta(WorldTile* tile, RandomSequence* seq)
-{
-    Vec4 delta = tile->colorDelta;
-    r32 noiseBilateral = (tile->layoutNoise - 0.5f) * 2.0f;
-    
-    Vec3 noisy;
-    noisy.r = delta.r * noiseBilateral;
-    noisy.g = delta.g * noiseBilateral;
-    noisy.b = delta.b * noiseBilateral;
-    
-    
-    Vec3 random;
-    random.r = delta.r * RandomBil(seq);
-    random.g = delta.g * RandomBil(seq);
-    random.b = delta.b * RandomBil(seq);
-    
-    
-    Vec3 result = Lerp(noisy, tile->colorRandomness, random);
-    
-    return result;
-}
-
-inline Vec4 GetTileColor(WorldTile* tile, b32 uniformColor, RandomSequence* seq)
-{
-    Vec4 color = tile->baseColor;
-    if(!uniformColor)
-    {
-        color.rgb += GetTileColorDelta(tile, seq);
-    }
-    
-    color = Clamp01(color);
-    color = SRGBLinearize(color);
-    return color;
-}
-
 inline Vec4 GetWaterColor(WorldTile* tile)
 {
     Vec4 waterColor = {};
-    if(tile->waterLevel < WATER_LEVEL)
+    if(tile->elevation < 0)
     {
-        r32 maxColorDisplacement = 0.4f * WATER_LEVEL;
-        r32 maxAlphaDisplacement = 0.3f * WATER_LEVEL;
+        r32 maxColorDisplacement = 0.4f;
+        r32 maxAlphaDisplacement = 0.3f;
         
         Vec3 minColorDeep = V3(0.0f, 0.03f, 0.05f);
         Vec3 maxColorDeep = V3(0.0f, 0.08f, 0.4f);
@@ -255,9 +146,9 @@ inline Vec4 GetWaterColor(WorldTile* tile)
         r32 maxAlphaSwallow = 1.0f;
         r32 minAlphaSwallow = 0.0f;
         
-        r32 sineWaterLevel = Clamp01MapToRange(0.85f * WATER_LEVEL, tile->waterLevel, WATER_LEVEL);
-        r32 normalizedWaterLevel = Clamp01MapToRange(0, tile->waterLevel, 0.95f * WATER_LEVEL);
-        normalizedWaterLevel = Pow(normalizedWaterLevel, 15.0f);
+        r32 sineWaterLevel = Clamp01MapToRange(0.05f * minHeight, tile->elevation, 0);
+        r32 normalizedWaterLevel = Clamp01MapToRange(minHeight, tile->elevation, 0);
+        normalizedWaterLevel = Pow(normalizedWaterLevel, 5.0f);
         
         Vec3 minColor = Lerp(minColorDeep, normalizedWaterLevel, minColorSwallow);
         Vec3 maxColor = Lerp(maxColorDeep, normalizedWaterLevel, maxColorSwallow);
@@ -281,11 +172,11 @@ inline Vec4 GetWaterColor(WorldTile* tile)
         r32 alphaDisplacement = alphaNoiseSine * maxAlphaDisplacement;
         
         
-        r32 blueLerp = Clamp01MapToRange(0, tile->waterLevel + blueDisplacement, WATER_LEVEL);
+        r32 blueLerp = Clamp01MapToRange(0, tile->elevation + blueDisplacement, 0);
         
-        r32 alphaLevel = tile->waterLevel + alphaDisplacement;
+        r32 alphaLevel = tile->elevation + alphaDisplacement;
         
-        r32 alphaLerp = Clamp01MapToRange(0, alphaLevel, WATER_LEVEL);
+        r32 alphaLerp = Clamp01MapToRange(-1.0f, alphaLevel, 0);
         alphaLerp = Pow(alphaLerp, 2.2f);
         
         Vec3 color = Lerp(minColor, blueLerp, maxColor);
@@ -319,6 +210,9 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
     jcv_edge* edge = work->edges;
     
     
+    WorldTile nullTile = {};
+    nullTile.elevation = minHeight;
+    
     ReservedVertexes* triangleVertexes = &work->triangleVertexes;
     ReservedVertexes* quadVertexes = &work->quadVertexes;
     while(counter < work->edgeCount)
@@ -329,11 +223,10 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
         Vec2 site0P = V2(site0->p.x, site0->p.y);
         Vec2 site1P = V2(site1->p.x, site1->p.y);
         
-        WorldTile* QSite0 = site0->tile;
-        WorldTile* QSite1 = site1->tile;
-        
-        WorldTile* QFrom = edge->tile[0];
-        WorldTile* QTo = edge->tile[1];
+        WorldTile* QSite0 = site0->tile ? site0->tile : &nullTile;
+        WorldTile* QSite1 = site1->tile ? site1->tile : &nullTile;
+        WorldTile* QFrom = edge->tile[0] ? edge->tile[0] : &nullTile;
+        WorldTile* QTo = edge->tile[1] ? edge->tile[1] : &nullTile;;
         
         Vec2 offsetFrom = V2(edge->pos[0].x, edge->pos[0].y);
         Vec2 offsetTo = V2(edge->pos[1].x, edge->pos[1].y);
@@ -359,8 +252,8 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
         Vec2 toTileOffset = offsetTo;
         
         
-        r32 chunkyness0 = GetChunkyness(QSite0, QSite1);
-        r32 chunkyness1 = GetChunkyness(QSite1, QSite0);
+        r32 chunkyness0 = 0.5f;
+        r32 chunkyness1 = 0.5f;
         
         r32 outer0 = Outer(offsetFrom, offsetTo, site0P);
         r32 probe0 = Outer(offsetFrom, offsetTo, offsetFrom - V2(1, 0));
@@ -370,78 +263,16 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
         
         r32 zBias = 0.01f;
         
-        Vec4 site0PCamera = V4(site0P + voronoi->deltaP.xy, QSite0->height, zBias);
-        Vec4 site1PCamera = V4(site1P + voronoi->deltaP.xy, QSite1->height, zBias);
-        
-        Vec4 offsetFromCamera = V4(offsetFrom + voronoi->deltaP.xy, QFrom->height, zBias);
-        Vec4 offsetToCamera = V4(offsetTo + voronoi->deltaP.xy, QTo->height, zBias);
+        Vec4 site0PCamera = V4(site0P + voronoi->deltaP.xy, 0, zBias);
+        Vec4 site1PCamera = V4(site1P + voronoi->deltaP.xy, 0, zBias);
+        Vec4 offsetFromCamera = V4(offsetFrom + voronoi->deltaP.xy, 0, zBias);
+        Vec4 offsetToCamera = V4(offsetTo + voronoi->deltaP.xy, 0, zBias);
         
         Vec4 smooth0From = Lerp(offsetFromCamera, chunkyness0, site0PCamera);
         Vec4 smooth1From = Lerp(offsetFromCamera, chunkyness1, site1PCamera);
         
         Vec4 smooth0To = Lerp(offsetToCamera, chunkyness0, site0PCamera);
         Vec4 smooth1To = Lerp(offsetToCamera, chunkyness1, site1PCamera);
-        
-        
-        RandomSequence seq = Seed((i32) (LengthSq(offsetTo - offsetFrom) * 1000.0f));
-        
-        
-        Vec4 color0 = GetTileColor(QSite0, false, &seq);
-        Vec4 color1 = GetTileColor(QSite1, false, &seq);
-        
-        Vec4 colorFrom = GetTileColor(QFrom, false, &seq);
-        Vec4 colorTo = GetTileColor(QTo, false, &seq);
-        
-        
-        Vec4 borderColor = Lerp(QSite0->borderColor, 0.5f, QSite1->borderColor);
-        if(!QSite0->borderColor.a)
-        {
-            borderColor = QSite1->borderColor;
-        }
-        else if(!QSite1->borderColor.a)
-        {
-            borderColor = QSite0->borderColor;
-        }
-        
-        
-#if 0        
-        if(borderColor.a)
-        {
-            PushLine(group, borderColor, offsetFromCamera.xyz, offsetToCamera.xyz, 0.02f);
-        }
-#endif
-        
-        
-#if 0        
-        if(zeroIsOnLeftSide)
-        {
-            PushTriangle(group, group->whiteTexture, QSite0->lights, triangleVertexes,  site0PCamera, color0, smooth0From, color0, smooth0To, color0, 0);
-            
-            PushTriangle(group, group->whiteTexture, QSite1->lights, triangleVertexes, site1PCamera, color1, smooth1To, color1, smooth1From, color1, 0);
-        }
-        else
-        {
-            PushTriangle(group, group->whiteTexture, QSite0->lights, triangleVertexes, site0PCamera, color0, smooth0To, color0, smooth0From, color0, 0);
-            
-            PushTriangle(group, group->whiteTexture, QSite1->lights, triangleVertexes, site1PCamera, color1, smooth1From, color1, smooth1To, color1, 0);
-        }
-        
-        if(zeroIsOnLeftSide)
-        {
-            PushQuad(group, group->whiteTexture, QSite0->lights, quadVertexes, smooth0From, {}, color0, offsetFromCamera, {}, colorFrom, offsetToCamera, {}, colorTo, smooth0To, {}, color0, 0);
-            
-            PushQuad(group, group->whiteTexture, QSite1->lights, quadVertexes, smooth1From, {}, color1, smooth1To, {}, color1, offsetToCamera, {}, colorTo, offsetFromCamera, {}, colorFrom, 0);
-        }
-        else
-        {
-            PushQuad(group, group->whiteTexture, QSite0->lights, quadVertexes, smooth0To, {}, color0, offsetToCamera, {}, colorTo, offsetFromCamera, {}, colorFrom, smooth0From, {}, color0, 0);
-            
-            PushQuad(group, group->whiteTexture, QSite1->lights, quadVertexes, smooth1To, {}, color1, smooth1From, {}, color1, offsetFromCamera, {}, colorFrom, offsetToCamera, {}, colorTo, 0);
-        }
-#endif
-        
-        
-        
         
         Vec4 waterColor0 = GetWaterColor(QSite0);
         Vec4 waterColor1 = GetWaterColor(QSite1);
@@ -450,7 +281,7 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
         
         Vec4 waterOffset = V4(0, 0, 0.01f, 0);
         
-        if(QSite0->waterLevel < WATER_LEVEL)
+        if(QSite0->elevation < 0)
         {
             if(zeroIsOnLeftSide)
             {
@@ -462,7 +293,7 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
             }
         }
         
-        if(QSite1->waterLevel < WATER_LEVEL)
+        if(QSite1->elevation < 0)
         {
             if(zeroIsOnLeftSide)
             {
@@ -480,88 +311,84 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
     }
 }
 
-internal void UpdateAndRenderGround(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, ClientPlayer* myPlayer, i32 chunkApron, r32 timeToAdvance)
+inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, UniversePos origin, UniversePos oldOrigin, r32 timeToAdvance)
 {
-    UniversePos voronoiP = myPlayer->universeP;
-    b32 changedChunk = (voronoiP.chunkX != myPlayer->oldVoronoiP.chunkX || voronoiP.chunkY != myPlayer->oldVoronoiP.chunkY);
-    myPlayer->oldVoronoiP = voronoiP;
+    u32 worldSeed = 1111;
     
-    i32 lateralChunkSpan = WORLD_CHUNK_SPAN;
-    i32 originChunkX = voronoiP.chunkX;
-    i32 originChunkY = voronoiP.chunkY;
+    i32 originChunkX = origin.chunkX;
+    i32 originChunkY = origin.chunkY;
+    i32 chunkApron = 2;
     
-    u64 seed = worldMode->worldSeed;
+    r32 chunkSide = CHUNK_DIM * VOXEL_SIZE;
+    r32 voxelSide = VOXEL_SIZE;
     
-    
-    RandomSequence generatorSeq = Seed((i32)seed);
-    // NOTE(Leonardo): animate water
     b32 forceVoronoiRegeneration = false;
-    if(true)
+    for(i32 Y = originChunkY - chunkApron - 1; Y <= originChunkY + chunkApron + 1; Y++)
     {
-        for(i32 Y = originChunkY - chunkApron - 1; Y <= originChunkY + chunkApron + 1; Y++)
+        for(i32 X = originChunkX - chunkApron - 1; X <= originChunkX + chunkApron + 1; X++)
         {
-            for(i32 X = originChunkX - chunkApron - 1; X <= originChunkX + chunkApron + 1; X++)
+            WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
+            
+            if(!chunk->initialized)
             {
-                if(ChunkValid(X, Y))
-                {	
-                    WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
-                    
-                    if(!chunk->initialized)
+                forceVoronoiRegeneration = true;
+                Assert(chunk->texture.textureHandle.width == 0);
+                Assert(chunk->texture.textureHandle.height == 0);
+                BuildChunk(group->assets, chunk, X, Y, worldSeed);
+            }
+        }
+    }
+    
+    b32 changedChunk = (origin.chunkX != oldOrigin.chunkX || origin.chunkY != oldOrigin.chunkY);
+    // NOTE(Leonardo): animate water
+    for(i32 Y = originChunkY - chunkApron - 1; Y <= originChunkY + chunkApron + 1; Y++)
+    {
+        for(i32 X = originChunkX - chunkApron - 1; X <= originChunkX + chunkApron + 1; X++)
+        {
+            WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
+            r32 waterSpeed = 0.12f;
+            r32 waterSineSpeed = 70.0f;
+            for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
+            {
+                for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
+                {
+                    WorldTile* tile = GetTile(chunk, tileX, tileY);
+                    if(tile->movingNegative)
                     {
-                        forceVoronoiRegeneration = true;
-                        BuildChunk(worldMode->table, worldMode->generator, chunk, X, Y, seed);
-                    }
-                    
-                    
-                    r32 waterSpeed = 0.12f;
-                    r32 waterSineSpeed = 70.0f;
-                    for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
-                    {
-                        for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
+                        tile->waterPhase -= waterSpeed * timeToAdvance;
+                        if(tile->waterPhase < 0)
                         {
-                            WorldTile* tile = GetTile(chunk, tileX, tileY);
-                            if(tile->movingNegative)
-                            {
-                                tile->waterPhase -= waterSpeed * timeToAdvance;
-                                if(tile->waterPhase < 0)
-                                {
-                                    tile->waterPhase = 0;
-                                    tile->movingNegative = false;
-                                }
-                            }
-                            else
-                            {
-                                tile->waterPhase += waterSpeed * timeToAdvance;
-                                if(tile->waterPhase > 1.0f)
-                                {
-                                    tile->waterPhase = 1.0f;
-                                    tile->movingNegative = true;
-                                }
-                            }
-                            
-                            RandomSequence seq = tile->waterSeq;
-                            NoiseParams waterParams = NoisePar(4.0f, 2, 0.0f, 1.0f);
-                            r32 blueNoise = Evaluate(tile->waterPhase, 0, waterParams, GetNextUInt32(&seq));
-                            r32 alphaNoise = Evaluate(tile->waterPhase, 0, waterParams, GetNextUInt32(&seq));
-                            tile->blueNoise = UnilateralToBilateral(blueNoise);
-                            tile->alphaNoise = UnilateralToBilateral(alphaNoise);
-                            
-                            
-                            tile->waterSine += waterSineSpeed * timeToAdvance;
+                            tile->waterPhase = 0;
+                            tile->movingNegative = false;
                         }
                     }
+                    else
+                    {
+                        tile->waterPhase += waterSpeed * timeToAdvance;
+                        if(tile->waterPhase > 1.0f)
+                        {
+                            tile->waterPhase = 1.0f;
+                            tile->movingNegative = true;
+                        }
+                    }
+                    
+                    RandomSequence seq = tile->waterSeq;
+                    NoiseParams waterParams = NoisePar(4.0f, 2, 0.0f, 1.0f);
+                    r32 blueNoise = Evaluate(tile->waterPhase, 0, waterParams, GetNextUInt32(&seq));
+                    r32 alphaNoise = Evaluate(tile->waterPhase, 0, waterParams, GetNextUInt32(&seq));
+                    tile->blueNoise = UnilateralToBilateral(blueNoise);
+                    tile->alphaNoise = UnilateralToBilateral(alphaNoise);
+                    tile->waterSine += waterSineSpeed * timeToAdvance;
                 }
             }
         }
     }
     
-    
-    
-    if(changedChunk || !worldMode->activeDiagram || forceVoronoiRegeneration)
+    if(changedChunk || forceVoronoiRegeneration || !worldMode->activeDiagram)
     {
         if(!worldMode->generatingVoronoi)
         {
-            GenerateVoronoi(gameState,worldMode, voronoiP, originChunkX, originChunkY, chunkApron, lateralChunkSpan);
+            GenerateVoronoi(worldMode, origin, originChunkX, originChunkY, chunkApron);
         }
     }
     
@@ -569,13 +396,11 @@ internal void UpdateAndRenderGround(GameState* gameState, GameModeWorld* worldMo
     r32 rippleThreesold = 0.78f;
     r32 waterRandomPercentage = 0.002f;
     r32 ripplesLifetime = 3.0f;
-    
     VoronoiDiagram* voronoi = worldMode->activeDiagram;
     if(voronoi)
     {
         TempMemory voronoiMemory = BeginTemporaryMemory(worldMode->temporaryPool);
         BEGIN_BLOCK("voronoi sites");
-        
         jcv_site* sites = jcv_diagram_get_sites(&voronoi->diagram);
         for(int i = 0; i < voronoi->diagram.numsites; ++i)
         {
@@ -585,16 +410,7 @@ internal void UpdateAndRenderGround(GameState* gameState, GameModeWorld* worldMo
             {
                 site->tile = GetTile(worldMode, voronoi->originP, siteP);
             }
-            
-            
-            WorldTile* tile = site->tile;
-            if(tile->waterLevel < rippleThreesold * WATER_LEVEL && RandomUni(&worldMode->waterRipplesSequence) < waterRandomPercentage)
-            {
-                Vec3 ripplesP = V3(siteP + voronoi->deltaP.xy, tile->height);
-                //SpawnWaterRipples(particleCache, ripplesP, V3(0, 0, 0), ripplesLifetime);
-            }
         }
-        
         END_BLOCK();
         
         
@@ -613,8 +429,7 @@ internal void UpdateAndRenderGround(GameState* gameState, GameModeWorld* worldMo
             {
                 edge->tile[0] = GetTile(worldMode, voronoi->originP, offsetFrom);
             }
-            
-            if(edge->sites[0]->tile->waterLevel < WATER_LEVEL)
+            if(edge->sites[0]->tile->elevation < 0)
             {
                 ++waterCounter;
             }
@@ -623,8 +438,7 @@ internal void UpdateAndRenderGround(GameState* gameState, GameModeWorld* worldMo
             {
                 edge->tile[1] = GetTile(worldMode, voronoi->originP, offsetTo);
             }
-            
-            if(edge->sites[1]->tile->waterLevel < WATER_LEVEL)
+            if(edge->sites[1]->tile->elevation < 0)
             {
                 ++waterCounter;
             }
@@ -637,13 +451,10 @@ internal void UpdateAndRenderGround(GameState* gameState, GameModeWorld* worldMo
                 work->voronoi = voronoi;
                 work->edges = toRender;
                 work->edgeCount = counter;
-                // NOTE(Leonardo): 2 standard and 2 water
                 work->triangleVertexes = ReserveTriangles(group, waterCounter);
-                // NOTE(Leonardo): 2 standard
-                //work->quadVertexes = ReserveQuads(group, counter * 2);
                 
-#if 1                                
-                platformAPI.PushWork(gameState->renderQueue, RenderVoronoiEdges, work);
+#if 0                     
+                platformAPI.PushWork(worldMode->gameState->renderQueue, RenderVoronoiEdges, work);
 #else
                 RenderVoronoiEdges(work);
 #endif
@@ -654,57 +465,54 @@ internal void UpdateAndRenderGround(GameState* gameState, GameModeWorld* worldMo
             }
         }
         
-        platformAPI.CompleteQueueWork(gameState->renderQueue);
+        platformAPI.CompleteQueueWork(worldMode->gameState->renderQueue);
         EndTemporaryMemory(voronoiMemory);
         END_BLOCK();
     }
-}
-#endif
-
-
-inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, UniversePos origin)
-{
-    u32 worldSeed = 1111;
     
-    i32 originChunkX = origin.chunkX;
-    i32 originChunkY = origin.chunkY;
-    i32 chunkApron = 2;
     
-    r32 chunkSide = CHUNK_DIM * VOXEL_SIZE;
-    r32 voxelSide = VOXEL_SIZE;
     
-    for(i32 Y = originChunkY - chunkApron - 1; Y <= originChunkY + chunkApron + 1; Y++)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    b32 generatedTextureThisFrame = false;
+    for(i32 chunkY = originChunkY - chunkApron; (chunkY <= originChunkY + chunkApron) && !generatedTextureThisFrame; chunkY++)
     {
-        for(i32 X = originChunkX - chunkApron - 1; X <= originChunkX + chunkApron + 1; X++)
+        for(i32 chunkX = originChunkX - chunkApron; 
+            (chunkX <= originChunkX + chunkApron) && !generatedTextureThisFrame; chunkX++)
         {
-            if(!ChunkOutsideWorld(X, Y))
-            {	
-                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
-                
-                if(!chunk->initialized)
-                {
-                    RandomSequence generatorSeq = Seed(worldSeed);
-                    GameProperties properties = {};
-                    
-                    AssetID ID = QueryDataFiles(group->assets, world_generator, 0, &generatorSeq, &properties);
-                    if(IsValid(ID))
-                    {
-                        RandomSequence seq = GetChunkSeed(chunk->worldX, chunk->worldY, worldSeed);
-                        world_generator* generator = GetData(group->assets, world_generator, ID);
-                        BuildChunk(generator, chunk, X, Y, worldSeed);
-                    }
-                }
-            }
-        }
-    }
-    
-    
-    
-    for(i32 chunkY = originChunkY - chunkApron; chunkY <= originChunkY + chunkApron; chunkY++)
-    {
-        for(i32 chunkX = originChunkX - chunkApron; chunkX <= originChunkX + chunkApron; chunkX++)
-        {
-            if(!ChunkOutsideWorld(chunkX, chunkY))
             {	
                 WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, worldMode->persistentPool);
                 
@@ -748,8 +556,6 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                         sTiles[index++] = GetTile(worldMode, chunk, tileX, tileY);
                                     }
                                 }
-                                
-                                
 #if 0                            
                                 Vec4 c0 = BlendTilesColor(sTiles[0], sTiles[1], sTiles[3], sTiles[4]);
                                 Vec4 c1 = BlendTilesColor(sTiles[1], sTiles[2], sTiles[4], sTiles[5]);
@@ -761,7 +567,6 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                 Vec4 c2 = V4(0, 1, 0, 1);
                                 Vec4 c3 = V4(0, 1, 0, 1);
 #endif
-                                
                                 PushRect4Colors(group, FlatTransform(), V3(tileCenter, 0), tileDim, 
                                                 c0, c1, c2, c3, {});
                             }
@@ -774,7 +579,6 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                 i32 splatX = chunk->worldX + deltaX;
                                 i32 splatY = chunk->worldY + deltaY;
                                 
-                                if(!ChunkOutsideWorld(splatX, splatY))
                                 {
                                     WorldChunk* splatChunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), splatX, splatY, 0);
                                     Assert(splatChunk->initialized);
@@ -835,6 +639,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                             }
                         }
                         PushSetup(group, &lastSetup);
+                        //generatedTextureThisFrame = true;
                     }
                     
                     Assert(IsValidSpecial(&chunk->texture));

@@ -9,8 +9,8 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_physics.cpp"
 #include "forg_world.cpp"
 //#include "forg_world_client.cpp"
-#include "forg_world_generation.cpp"
 #include "forg_asset.cpp"
+#include "forg_world_generation.cpp"
 #include "forg_render.cpp"
 #include "forg_sound.cpp"
 #include "forg_editor.cpp"
@@ -622,7 +622,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             }
             
             PreloadAllGroundBitmaps(group->assets);
-            UpdateAndRenderGround(worldMode, group, myPlayer->universeP);
+            UpdateAndRenderGround(worldMode, group, myPlayer->universeP, myPlayer->oldUniverseP, input->timeToAdvance);
             
             worldMode->particleCache->deltaParticleP = deltaP;
             UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
@@ -632,7 +632,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             EndDepthPeel(group);
             
             myPlayer->oldUniverseP = myPlayer->universeP;
-            
             
             
             RandomSequence seq = Seed(123);

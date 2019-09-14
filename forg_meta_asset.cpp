@@ -19,7 +19,6 @@ FieldDefinition* FindMetaField(FieldDefinition* fields, u32 fieldCount, Token fi
 FieldDefinition* FindMetaField(StructDefinition* definition, Token fieldName)
 {
     FieldDefinition* result = FindMetaField(definition->fields, definition->fieldCount, fieldName);
-    Assert(result);
     return result;
 }
 
@@ -783,17 +782,20 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
             
             default:
             {
-                StreamState beforeName = SaveStreamState(output);
-                if(!pointer)
-                {
-                    OutputToStream(output, "%s=", field->name);
-                }
-                StreamState afterName = SaveStreamState(output);
-                
-                
                 Assert(field->type > MetaType_FirstCustomMetaType);
+                
+                StreamState beforeName = {};
+                StreamState afterName = {};
+                
+                
                 if(operation == FieldOperation_Dump)
                 {
+                    beforeName = SaveStreamState(output);
+                    if(!pointer)
+                    {
+                        OutputToStream(output, "%s=", field->name);
+                    }
+                    afterName = SaveStreamState(output);
                     OutputToStream(output, "{");
                 }
                 
@@ -832,6 +834,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
             } break;
         }
         
+        result += op.size;
         if(op.deleted)
         {
             u32 offset = field->size * --*elementCount;
@@ -866,7 +869,6 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
             }
             else
             {
-                result += op.size;
                 Token t = GetToken(tokenizer);
                 if(t.type == Token_Comma)
                 {
@@ -885,6 +887,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
         }
         else
         {
+            result -= field->size;
             break;
         }
     }
@@ -1046,8 +1049,8 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                         if(elementCount)
                         {
                             Assert(sizeof(u64) == sizeof(void*));
-                            MetaArrayHeader* header = (MetaArrayHeader*) (*(u64*)fieldPtr);
-                            fieldPtr = (void*) (header + 1);
+                            fieldPtr = (void*) (*(u64*)fieldPtr);
+                            MetaArrayHeader* header = fieldPtr ? (MetaArrayHeader*) fieldPtr - 1 : 0;
 #ifndef FORG_SERVER                
                             if(operation == FieldOperation_Edit)
                             {
@@ -1069,17 +1072,15 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                                         void* oldArray = fieldPtr;
                                         u32 sizeToCopy = *elementCount * field->size;
                                         void* newArray = GetMemory(layout->context->pool, newElementCount, field->size);
-                                        InitMetaArray(newArray, newElementCount);
-                                        
-                                        header = (MetaArrayHeader*) newArray;
-                                        fieldPtr = header + 1;
+                                        fieldPtr = InitMetaArray(newArray, newElementCount);
                                         
                                         Copy(sizeToCopy, fieldPtr, oldArray);
                                         
                                         // TODO(Leonardo): free the block to avoid leaking memory!
-                                        //FreeBlock(oldArray, oldSize);
+                                        void* free = (u8*)oldArray - sizeof(MetaArrayHeader);
+                                        //FreeBlock(free, oldSize);
                                         
-                                        *(u64*)originalfieldPtr = (u64) newArray;
+                                        *(u64*)originalfieldPtr = (u64) fieldPtr;
                                     }
                                     
                                     u16 index = (*elementCount)++;
@@ -1129,27 +1130,30 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
     }
     else
     {
-        Token o = GetToken(tokenizer);
-        if(o.type != Token_EndOfFile)
+        for(;;)
         {
-            for(;;)
+            Token t = GetToken(tokenizer);
+            if(t.type == Token_CloseBraces)
             {
-                Token t = GetToken(tokenizer);
-                if(t.type == Token_CloseBraces)
+                break;
+            }
+            else if(t.type == Token_OpenBraces)
+            {
+                
+            }
+            else if(t.type == Token_SemiColon)
+            {
+            }
+            else if(t.type == Token_EndOfFile)
+            {
+                break;
+            }
+            else
+            {
+                Token fieldName = Stringize(t);
+                FieldDefinition* field = FindMetaField(definition, fieldName);
+                if(field)
                 {
-                    break;
-                }
-                else if(t.type == Token_SemiColon)
-                {
-                }
-                else if(t.type == Token_EndOfFile)
-                {
-                    break;
-                }
-                else
-                {
-                    Token fieldName = Stringize(t);
-                    FieldDefinition* field = FindMetaField(definition, fieldName);
                     Assert(field->type != MetaType_ArrayCounter);
                     
                     if(RequireToken(tokenizer, Token_EqualSign))
@@ -1161,7 +1165,6 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                             result.size += additionalSize;
                         }
                         
-                        b32 valid = true;
                         if(operation == FieldOperation_Parse && field->flags & MetaFlag_Pointer)
                         {
                             Tokenizer fake = {};
@@ -1180,7 +1183,7 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                                 void* headerPtr = ReserveSpace(reserved, elementCount * field->size + additionalSize);
                                 void* arrayPtr = InitMetaArray(headerPtr, elementCount);
                                 
-                                *(u64*) fieldPtr = (u64) headerPtr;
+                                *(u64*) fieldPtr = (u64) arrayPtr;
                                 fieldPtr = arrayPtr;
                             }
                             else
@@ -1189,10 +1192,40 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                             }
                         }
                         
-                        if(valid)
+                        u16 ignored = 1;
+                        result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, &ignored);
+                    }
+                    else
+                    {
+                        InvalidCodePath;
+                    }
+                }
+                else
+                {
+                    if(RequireToken(tokenizer, Token_EqualSign))
+                    {
+                        u32 currentDepth = 0;
+                        
+                        while(true)
                         {
-                            u16 ignored = 1;
-                            result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, &ignored);
+                            Token skip = GetToken(tokenizer);
+                            
+                            if(skip.type == Token_OpenBraces)
+                            {
+                                ++currentDepth;
+                            }
+                            else if(skip.type == Token_CloseBraces)
+                            {
+                                Assert(currentDepth > 0);
+                                --currentDepth;
+                            }
+                            if(skip.type == Token_SemiColon)
+                            {
+                                if(currentDepth == 0)
+                                {
+                                    break;
+                                }
+                            }
                         }
                     }
                     else
@@ -1200,7 +1233,6 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                         InvalidCodePath;
                     }
                 }
-                
             }
         }
     }

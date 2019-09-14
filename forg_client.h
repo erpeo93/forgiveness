@@ -91,7 +91,6 @@ struct ClientPlayer
     u32 identifier;
     UniversePos universeP;
     UniversePos oldUniverseP;
-    UniversePos oldVoronoiP;
     
     Vec3 acceleration;
     Vec3 velocity;

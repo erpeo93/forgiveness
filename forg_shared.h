@@ -803,8 +803,8 @@ internal StreamState SaveStreamState(Stream* stream)
 
 internal void RestoreStreamState(Stream* stream, StreamState state)
 {
-	Assert(state.left <= stream->left);
-	u32 delta = stream->left - state.left;
+	Assert(stream->left <= state.left);
+	u32 delta = state.left - stream->left;
 	stream->current -= delta;
 	stream->left += delta;
 	stream->written -= delta;
