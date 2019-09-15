@@ -118,6 +118,7 @@ struct PlatformInput
     
     b32 isDown[0xff];
     b32 wasDown[0xff];
+    
     b32 altDown, shiftDown, ctrlDown;
     union
     {

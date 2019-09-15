@@ -1,7 +1,7 @@
 #pragma once
-#define WORLD_CHUNK_SPAN 8
-#define CHUNK_DIM 8
 #define VOXEL_SIZE 2.0f
+#define CHUNK_DIM 8
+#define WORLD_CHUNK_SPAN 64
 #define CHUNK_SIDE CHUNK_DIM * VOXEL_SIZE
 
 struct GenerationData
@@ -31,6 +31,7 @@ struct WorldTile
     
     Vec4 color;
     GameProperty property;
+    GameAssetType asset;
     r32 elevation;
 };
 

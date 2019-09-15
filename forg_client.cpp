@@ -115,6 +115,9 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     
     
     gameState->world = result;
+    
+    result->chunkApron = 2;
+    result->worldTileView = false;
     result->defaultCameraZ = 34.0f;
     result->cameraWorldOffset = V3(0.0f, 0.0f, result->defaultCameraZ);
     result->cameraFocusID = 0;

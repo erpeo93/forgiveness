@@ -38,6 +38,17 @@ inline UniversePos Offset(UniversePos pos, Vec2 offset)
     
 }
 
+inline b32 ChunkValid(i32 chunkX, i32 chunkY)
+{
+    b32 result = true;
+    if(chunkX < -2 || chunkY < -2 || chunkX > (WORLD_CHUNK_SPAN + 1) || chunkY > (WORLD_CHUNK_SPAN + 1))
+    {
+        result = false;
+    }
+    
+    return result;
+}
+
 inline b32 ChunkOutsideWorld(i32 chunkX, i32 chunkY)
 {
     b32 result = false;
@@ -190,13 +201,13 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, WorldChunk* chunk, i32 tileX
     Assert(tileX >= 0 && tileX < CHUNK_DIM);
     Assert(tileY >= 0 && tileY < CHUNK_DIM);
     
-    WorldChunk* newChunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, worldMode->persistentPool);
-    if(!newChunk->initialized)
+    if(ChunkValid(chunkX, chunkY))
     {
-        InvalidCodePath;
+        WorldChunk* newChunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, worldMode->persistentPool);
+        Assert(newChunk->initialized);
+        result = GetTile(newChunk, (u32) tileX, (u32) tileY);
+        
     }
-    result = GetTile(newChunk, (u32) tileX, (u32) tileY);
-    
     return result;
 }
 #endif

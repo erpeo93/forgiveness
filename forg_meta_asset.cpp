@@ -210,7 +210,25 @@ internal StructDefinition* GetMetaStructDefinition(String name)
     return result;
 }
 
+internal AssetLabel Parse_AssetLabel(Tokenizer* tokenizer, AssetLabel defaultVal)
+{
+    AssetLabel result = defaultVal;
+    Token t = GetToken(tokenizer);
+    Assert(t.type == Token_String);
+    t = Stringize(t);
+    FormatString(result.name, sizeof(result.name), "%.*s", t.textLength, t.text);
+    return result;
+}
 
+
+internal void Dump_AssetLabel(Stream* output, FieldDefinition* field, AssetLabel label, b32 isInArray)
+{
+    Assert(!isInArray);
+    if(!StrEqual(label.name, "null"))
+    {
+        OutputToStream(output, "%s=\"%s\";", field->name, label.name);
+    }
+}
 
 internal u32 Parse_u32(Tokenizer* tokenizer, u32 defaultVal)
 {
@@ -565,6 +583,7 @@ internal b32 Edit_Hash64(EditorLayout* layout, char* name, Hash64* h, char* opti
 internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enumerator, StringArray options, b32 isInArray);
 internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* property, b32 isInArray);
 internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray);
+internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray);
 internal void NextRaw(EditorLayout* layout);
 internal void Nest(EditorLayout* layout);
 internal void Push(EditorLayout* layout);
@@ -614,6 +633,7 @@ STANDARD_OPERATION_FUNCTION(GameProperty);
 STANDARD_OPERATION_FUNCTION(Vec2);
 STANDARD_OPERATION_FUNCTION(Vec3);
 STANDARD_OPERATION_FUNCTION(Vec4);
+STANDARD_OPERATION_FUNCTION(AssetLabel);
 
 internal StructOperationResult EnumeratorOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
 {
@@ -779,6 +799,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
             DUMB_OPERATION(Enumerator);
             DUMB_OPERATION(GameProperty);
             DUMB_OPERATION(GameAssetType);
+            DUMB_OPERATION(AssetLabel);
             
             default:
             {
@@ -936,6 +957,7 @@ internal void CopyDefaultValue(FieldDefinition* field, void* ptr)
             DUMB_COPY_DEF(Enumerator);
             DUMB_COPY_DEF(GameProperty);
             DUMB_COPY_DEF(GameAssetType);
+            DUMB_COPY_DEF(AssetLabel);
             
             default:
             {

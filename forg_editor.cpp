@@ -86,17 +86,11 @@ internal void Pop(EditorLayout* layout)
     layout->currentP = layout->rawP;
 }
 
-internal Vec4 StandardTextColor()
-{
-    Vec4 result = V4(1, 1, 1, 1);
-    return result;
-}
+#define StandardTextColor() V4(1, 1, 1, 1)
+#define DefaultEditorStringColor() V4(1, 0, 1, 1)
+#define StandardNumberColor() V4(0, 0.5f, 1.0f, 1)
+#define HotNumberColor() V4(0, 1, 1.0f, 1)
 
-internal Vec4 DefaultEditorStringColor()
-{
-    Vec4 result = V4(1, 0, 1, 1);
-    return result;
-}
 internal Vec2 ButtonDim(EditorLayout* layout)
 {
     Vec2 result = layout->fontScale * V2(2.0f * layout->standardButtonDim, layout->standardButtonDim);
@@ -196,7 +190,7 @@ internal Rect2 EditorElementName_(EditorLayout* layout, char* name, b32 colon = 
     
     if(colon)
     {
-        EditorTextDraw(layout, color, 0, ":");
+        EditorTextDraw(layout, color, 0, " :");
     }
     
     return result;
@@ -294,16 +288,109 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, StringAr
 }
 
 
+internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray)
+{
+    EditorUIContext* context = layout->context;
+    
+    b32 result = false;
+    Assert(!isInArray);
+    
+    AUID ID = auID(label);
+    AUIDData* data = GetAUIDData(context, ID);
+    Vec4 color = DefaultEditorStringColor();
+    
+    if(!label->name[0])
+    {
+        FormatString(label->name, sizeof(label->name), "null");
+    }
+    
+    if(PointInRect(data->dim, layout->mouseP))
+    {
+        SetNextHotAUID(context, ID);
+        color = V4(1, 1, 0, 1);
+    }
+    
+    if(HotAUIDAndPressed(context, ID, mouseLeft))
+    {
+        ZeroSize(sizeof(context->keyboardBuffer), context->keyboardBuffer);
+        SetInteractiveAUID(context, ID);
+    }
+    
+    char* toShow = label->name;
+    
+    if(IsInteractiveAUID(context, ID))
+    {
+        u32 appendHere = StrLen(context->keyboardBuffer);
+        if(appendHere && Pressed(&context->input->backButton))
+        {
+            context->keyboardBuffer[--appendHere] = 0;
+        }
+        
+        for(u8 c = 0; c < 0xff; ++c)
+        {
+            if(context->input->isDown[c])
+            {
+                if(appendHere < sizeof(layout->context->keyboardBuffer))
+                {
+                    context->keyboardBuffer[appendHere++] = c;
+                }
+            }
+        }
+        
+        color = V4(0, 1, 0, 1);
+        if(layout->context->keyboardBuffer[0])
+        {
+            toShow = layout->context->keyboardBuffer;
+            color = V4(0, 1, 1, 1);
+        }
+        
+        if(UIPressed(layout->context, confirmButton))
+        {
+            EndInteraction(layout->context);
+            FormatString(label->name, sizeof(label->name), "%s", layout->context->keyboardBuffer);
+            result = true;
+        }
+    }
+    
+    data->dim = ShowString(layout, name, toShow, EditorText_StartingSpace, color);
+    
+    return result;
+}
+
 internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArray)
 {
     b32 result = false;
     
     AUID ID = auID(number);
+    AUIDData* data = GetAUIDData(layout->context, ID);
     
-    Vec4 color = V4(1, 0, 0, 1);
+    Vec4 color = StandardNumberColor();
+    
+    if(PointInRect(data->dim, layout->mouseP))
+    {
+        color = HotNumberColor();
+        SetNextHotAUID(layout->context, ID);
+    }
+    
+    if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
+    {
+        (*number)++;
+    }
+    
+    if(HotAUIDAndPressed(layout->context, ID, mouseRight))
+    {
+        if(*number > 0)
+        {
+            (*number)--;
+        }
+    }
+    
+    
     
     ShowName(layout, name);
-    ShowStandard(layout, color, "%d", *number);
+    Rect2 elementRect = ShowStandard(layout, color, "%d", *number);
+    data->dim = elementRect;
+    
     
     return result;
 }
@@ -321,6 +408,32 @@ internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArr
     return result;
 }
 
+internal b32 Edit_b32(EditorLayout* layout, char* name, b32* flag, b32 isInArray)
+{
+    b32 result = false;
+    
+    AUID ID = auID(flag);
+    AUIDData* data = GetAUIDData(layout->context, ID);
+    
+    Vec4 color = *flag ? V4(0, 0.7f, 0, 1) : V4(0.7f, 0, 0, 1);
+    
+    if(PointInRect(data->dim, layout->mouseP))
+    {
+        color = *flag ? V4(0, 1, 0, 1) : V4(1, 0, 0, 1);
+        SetNextHotAUID(layout->context, ID);
+    }
+    
+    if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
+    {
+        *flag = !*flag;
+    }
+    
+    ShowName(layout, name);
+    Rect2 elementRect = ShowStandard(layout, color, "%s", *flag ? "true" : "false");
+    data->dim = elementRect;
+    
+    return result;
+}
 
 internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray)
 {
@@ -988,6 +1101,15 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                             }
                         }
                     }
+                    
+                    NextRaw(&layout);
+                    Edit_Vec3(&layout, "camera offset", &worldMode->additionalCameraOffset, 0);
+                    NextRaw(&layout);
+                    Edit_b32(&layout, "tile view", &worldMode->worldTileView, 0);
+                    NextRaw(&layout);
+                    Edit_b32(&layout, "chunk view", &worldMode->worldChunkView, 0);
+                    NextRaw(&layout);
+                    Edit_u32(&layout, "chunk apron", &worldMode->chunkApron, 0);
                 } break;
             }
             

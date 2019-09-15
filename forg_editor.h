@@ -86,6 +86,8 @@ struct EditorUIContext
     
     b32 showEditor;
     EditorTabs activeTab;
+    
+    char keyboardBuffer[32];
 };
 
 struct EditorLayout

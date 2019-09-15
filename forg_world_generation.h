@@ -81,12 +81,14 @@ introspection() struct NoiseParams
 
 introspection() struct NoiseBucket
 {
+    AssetLabel name;
     r32 referencePoint;
     NoiseParams params;
 };
 
 introspection() struct PropertyBucket
 {
+    AssetLabel name;
     r32 referencePoint;
     GameProperty property;
 };
@@ -126,8 +128,9 @@ introspection() struct world_generator
     
     NoiseParams precipitationNoise;
     
+    NoiseParams elevationNoise;
     r32 elevationPower MetaDefault("1");
-    r32 elevationCoeff MetaDefault("1");
+    r32 elevationNormOffset MetaDefault("1");
     
     BiomePyramid biomePyramid;
 };

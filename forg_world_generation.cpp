@@ -6,7 +6,7 @@ internal r32 BilateralNoise(r32 dx, r32 dy, r32 frequency, u32 seed)
 
 inline r32 UnilateralNoise(r32 dx, r32 dy, r32 frequency, u32 seed)
 {
-    r32 result = BilateralToUnilateral(BilateralNoise(dx, dx, frequency, seed));
+    r32 result = BilateralToUnilateral(BilateralNoise(dx, dy, frequency, seed));
     return result;
 }
 
@@ -20,7 +20,14 @@ inline r32 Evaluate(r32 dx, r32 dy, NoiseParams params, u32 seed)
     {
         for(u32 octave = 0; octave < params.octaves; ++octave)
         {
-            totalNoise += UnilateralNoise(dx, dy, frequency, seed) * range;
+            if(octave == 0)
+            {
+                totalNoise += UnilateralNoise(dx, dy, frequency, seed) * range;
+            }
+            else
+            {
+                totalNoise += BilateralNoise(dx, dy, frequency, seed) * range;
+            }
             range *= params.persistance;
             frequency *= 2.0f;
         }
@@ -32,7 +39,7 @@ inline r32 Evaluate(r32 dx, r32 dy, NoiseParams params, u32 seed)
 }
 
 
-inline r32 Select(NoiseSelector* selector, r32 dx, r32 dy, r32 selectionValue, u32 seed)
+inline r32 Select(NoiseSelector* selector, r32 dx, r32 dy, r32 selectionValue, u32 seed, b32 lerpBuckets = true)
 {
     r32 result = 0;
     if(selector->bucketCount > 0)
@@ -42,7 +49,7 @@ inline r32 Select(NoiseSelector* selector, r32 dx, r32 dy, r32 selectionValue, u
         r32 bucketLerping = 0;
         
         b32 bucketFound = false;
-        r32 previousRef = 0;
+        r32 previousRef = R32_MIN;
         for(u32 bucketIndex = 0; bucketIndex < selector->bucketCount; ++bucketIndex)
         {
             currentBucket = selector->buckets + bucketIndex;
@@ -62,14 +69,20 @@ inline r32 Select(NoiseSelector* selector, r32 dx, r32 dy, r32 selectionValue, u
         if(!bucketFound)
         {
             NoiseBucket* lastBucket = currentBucket;
-            Assert(selectionValue >= lastBucket->referencePoint);
             previousBucket = lastBucket;
         }
         
-        r32 prev = Evaluate(dx, dy, previousBucket->params, seed);
         r32 current = Evaluate(dx, dy, currentBucket->params, seed);
         
-        result = Lerp(prev, bucketLerping, current);
+        if(lerpBuckets)
+        {
+            r32 prev = Evaluate(dx, dy, previousBucket->params, seed);
+            result = Lerp(prev, bucketLerping, current);
+        }
+        else
+        {
+            result = current;
+        }
     }
     
     return result;
@@ -85,7 +98,7 @@ inline GameProperty Select(PropertySelector* selector, r32 selectionValue, u32 s
         r32 bucketLerping = 0;
         
         b32 bucketFound = false;
-        r32 previousRef = 0;
+        r32 previousRef = R32_MIN;
         for(u32 bucketIndex = 0; bucketIndex < selector->bucketCount; ++bucketIndex)
         {
             currentBucket = selector->buckets + bucketIndex;
@@ -105,7 +118,6 @@ inline GameProperty Select(PropertySelector* selector, r32 selectionValue, u32 s
         if(!bucketFound)
         {
             PropertyBucket* lastBucket = currentBucket;
-            Assert(selectionValue >= lastBucket->referencePoint);
             previousBucket = lastBucket;
         }
         
@@ -128,34 +140,49 @@ inline GameProperty SelectFromBiomePyramid(BiomePyramid* pyramid, r32 precipitat
     return result;
 }
 
-global_variable r32 minHeight = -10.0f;
+global_variable r32 minHeight = -100.0f;
 global_variable r32 maxHeight = 1000.0f;
 
-inline WorldTile GenerateTile(world_generator* generator, r32 tileNormX, r32 tileNormY, u32 seed)
+inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 tileNormX, r32 tileNormY, RandomSequence* seq, u32 seed)
 {
     WorldTile result = {};
+    
+    // NOTE(Leonardo): elevation
     r32 landscape = Evaluate(tileNormX, tileNormY, generator->landscapeNoise, seed);
-    
     r32 standardElevation = Select(&generator->landscapeSelect, tileNormX, tileNormY, landscape, seed);
-    
+    // NOTE(Leonardo): modify elevation to match out island shapes
     r32 normalizedElevation = Clamp01MapToRange(minHeight, standardElevation, maxHeight);
+    r32 distanceFromCenter = Length(V2(tileNormX, tileNormY) - V2(0.5f, 0.5f));
     
-    r32 distanceFromCenter = Length(V2(tileNormX, tileNormY) - V2(0.5f, 0.5f)) * generator->elevationCoeff;
+    r32 elevationCoeff = Evaluate(tileNormX, tileNormY, generator->elevationNoise, seed);
     
-    normalizedElevation = (1 + normalizedElevation - distanceFromCenter) * 0.5f;
+    normalizedElevation = (generator->elevationNormOffset + normalizedElevation) - distanceFromCenter * elevationCoeff;
+    
+    normalizedElevation = Clamp01(normalizedElevation);
     normalizedElevation = Pow(normalizedElevation, generator->elevationPower);
+    standardElevation = Lerp(minHeight, normalizedElevation, maxHeight);
+    result.elevation = standardElevation;
     
-    result.elevation = Lerp(minHeight, normalizedElevation, maxHeight);
     
-    r32 temperatureVariance = Evaluate(tileNormX, tileNormY, generator->temperatureNoise, seed);
-    r32 temperatureDegrees = Select(&generator->temperatureSelect, temperatureVariance, temperatureVariance, standardElevation, seed);
+    r32 temperatureNoise = Evaluate(tileNormX, tileNormY, generator->temperatureNoise, seed);
+    r32 temperatureDegrees = Select(&generator->temperatureSelect, temperatureNoise, temperatureNoise, standardElevation, seed, false);
+    
+    // NOTE(Leonardo): precipitations
     r32 annualMMPrecipitation = Evaluate(tileNormX, tileNormY, generator->precipitationNoise, seed);
     
-    result.property = SelectFromBiomePyramid(&generator->biomePyramid, annualMMPrecipitation, temperatureDegrees, seed);
+    GameProperty property = SelectFromBiomePyramid(&generator->biomePyramid, annualMMPrecipitation, temperatureDegrees, seed);
     
-    
-    
-    
+    GameProperties properties = {};
+    properties.properties[0] = property;
+    AssetID ID = QueryDataFiles(assets, tile_definition, 0, seq, &properties);
+    if(IsValid(ID))
+    {
+        tile_definition* definition = GetData(assets, tile_definition, ID);
+        Assert(definition);
+        result.asset = definition->asset;
+        result.property = definition->property;
+        result.color = definition->color;
+    }
     
     
     
@@ -180,37 +207,34 @@ internal void BuildChunk(Assets* assets, WorldChunk* chunk, i32 chunkX, i32 chun
     AssetID ID = QueryDataFiles(assets, world_generator, 0, &generatorSeq, &properties);
     if(IsValid(ID))
     {
-        RandomSequence seq = GetChunkSeed(chunk->worldX, chunk->worldY, seed);
-        world_generator* generator = GetData(assets, world_generator, ID);
-        Assert(CHUNK_DIM % 2 == 0);
-        
         chunk->initialized = true;
         chunk->worldX = chunkX;
         chunk->worldY = chunkY;
         
-        i32 lateralChunkSpan = WORLD_CHUNK_SPAN;
+        RandomSequence seq = GetChunkSeed(chunk->worldX, chunk->worldY, seed);
+        world_generator* generator = GetData(assets, world_generator, ID);
+        Assert(CHUNK_DIM % 2 == 0);
         
-        chunkX = Wrap(0, chunkX, lateralChunkSpan);
-        chunkY = Wrap(0, chunkY, lateralChunkSpan);
+        chunkX = Wrap(0, chunkX, WORLD_CHUNK_SPAN);
+        chunkY = Wrap(0, chunkY, WORLD_CHUNK_SPAN);
         
-        u32 baseTileX = chunkX * CHUNK_DIM;
-        u32 baseTileY = chunkY * CHUNK_DIM;
+        u32 maxTile = WORLD_CHUNK_SPAN * CHUNK_DIM;
         
         for(u8 tileY = 0; tileY < CHUNK_DIM; ++tileY)
         {
             for(u8 tileX = 0; tileX < CHUNK_DIM; ++tileX)
             {
-                u32 realTileX = baseTileX + tileX;
-                u32 realTileY = baseTileY + tileY;
+                u32 realTileX = chunkX * CHUNK_DIM + tileX;
+                u32 realTileY = chunkY * CHUNK_DIM + tileY;
                 
                 // NOTE(Leonardo): normalized values
-                r32 tileNormX = (r32) realTileX / (lateralChunkSpan * CHUNK_DIM);
-                r32 tileNormY = (r32) realTileY / (lateralChunkSpan * CHUNK_DIM);
+                r32 tileNormX = (r32) realTileX / maxTile;
+                r32 tileNormY = (r32) realTileY / maxTile;
                 
                 Assert(Normalized(tileNormX));
                 Assert(Normalized(tileNormY));
                 
-                chunk->tiles[tileY][tileX] = GenerateTile(generator, tileNormX, tileNormY, seed);
+                chunk->tiles[tileY][tileX] = GenerateTile(assets, generator, tileNormX, tileNormY, &seq, seed);
             }
         }
     }

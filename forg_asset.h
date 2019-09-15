@@ -186,6 +186,12 @@ introspection() struct GameAssetType
     u16 subtype;
 };
 
+
+struct AssetLabel
+{
+    char name[16];
+};
+
 introspection() struct GroundColorationArrayTest
 {
     u32 p1 MetaDefault("2");
@@ -211,6 +217,7 @@ introspection() struct tile_definition
 {
     GameAssetType asset MetaDefault("{AssetType_Image, AssetImage_default}") MetaFixed(type);
     GameProperty property;
+    Vec4 color MetaDefault("V4(1, 1, 1, 1)");
 };
 
 introspection() struct TileMapping

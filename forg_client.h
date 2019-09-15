@@ -194,6 +194,10 @@ struct GameModeWorld
     Vec2 cameraEntityOffset;
     Vec2 destCameraEntityOffset;
     
+    u32 chunkApron;
+    b32 worldTileView;
+    b32 worldChunkView;
+    Vec3 additionalCameraOffset;
     r32 defaultCameraZ;
     u64 cameraFocusID;
     

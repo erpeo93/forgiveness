@@ -20,6 +20,7 @@ inline void MoveTowards_(GameModeWorld* worldMode, u64 id, Vec2 cameraWorldOffse
     worldMode->cameraFocusID = id;
     worldMode->destCameraEntityOffset = cameraEntityOffset;
     worldMode->destCameraWorldOffset = V3(cameraWorldOffset, worldMode->defaultCameraZ / zoomCoeff);
+    worldMode->destCameraWorldOffset += worldMode->additionalCameraOffset;
 }
 
 inline void MoveCameraTowards(GameModeWorld* worldMode, ClientEntity* entityC, Vec2 cameraWorldOffset = V2(0, 0), Vec2 cameraEntityOffset = V2(0, 0), r32 zoomCoeff = 1.0f)
@@ -32,7 +33,8 @@ inline void MoveCameraTowards(GameModeWorld* worldMode, ClientEntity* entityC, V
 inline ClientEntity* GetEntityClient(GameModeWorld* worldMode, u64 ID, b32 canAllocate);
 internal void UpdateAndSetupGameCamera(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
-#if 0
+    
+#if 0    
     if(input->altDown && IsDown(&input->mouseLeft))
     {
         r32 rotationSpeed = 0.001f * PI32;

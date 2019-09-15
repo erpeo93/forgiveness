@@ -20,7 +20,7 @@ enum MetaType
     MetaType_Hash64,
     MetaType_GameProperty,
     MetaType_GameAssetType,
-    
+    MetaType_AssetLabel,
     
     
     MetaType_FirstCustomMetaType = MetaType_GameAssetType,
@@ -66,6 +66,7 @@ union DefaultFieldValue
     Hash64 def_Hash64;
     GameProperty def_GameProperty;
     GameAssetType def_GameAssetType;
+    AssetLabel def_AssetLabel;
 };
 
 struct FieldDefinition
