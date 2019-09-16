@@ -33,16 +33,24 @@ inline AUID auID(void* p1, void* p2, void* p3)
     return result;
 }
 
+#define MAX_UNDOREDO_SIZE 32
 struct AUIDData
 {
     AUID ID;
     
     Rect2 dim;
+    char before[MAX_UNDOREDO_SIZE];
+    
     union
     {
         b32 show;
         u32 optionIndex;
-        r32 speed;
+        struct
+        {
+            b32 coldEdit;
+            r32 speed;
+            b32 increasing;
+        };
     };
     
     AUIDData* next;
@@ -69,6 +77,23 @@ enum EditorTabs
     EditorTab_Count,
 };
 
+struct UndoRedoRecord
+{
+	u32 sizeBefore;
+    char before[MAX_UNDOREDO_SIZE];
+    
+    u32 sizeAfter;
+	char after[MAX_UNDOREDO_SIZE];
+	void* ptr;
+	
+	union
+	{
+		UndoRedoRecord* next;
+		UndoRedoRecord* nextFree;
+	};
+	UndoRedoRecord* prev;
+};
+
 struct EditorUIContext
 {
     AUID nextHot;
@@ -88,6 +113,10 @@ struct EditorUIContext
     EditorTabs activeTab;
     
     char keyboardBuffer[32];
+    
+    UndoRedoRecord* firstFreeCommand;
+    UndoRedoRecord undoRedoSentinel;
+    UndoRedoRecord* currentCommand;
 };
 
 struct EditorLayout

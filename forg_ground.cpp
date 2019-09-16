@@ -320,6 +320,13 @@ internal Vec4 BlendTilesColor(WorldTile* t0, WorldTile* t1, WorldTile* t2, World
     return result;
 }
 
+internal Vec4 GetWaterColor(r32 elevation)
+{
+    r32 lerp = Clamp01MapToRange(minHeight, elevation, 0);
+    Vec4 result = Lerp(V4(0, 0, 1, 1), lerp, V4(0, 0, 1.0f, 0.1f));
+    return result;
+}
+
 inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, UniversePos origin, UniversePos oldOrigin, r32 timeToAdvance)
 {
     u32 worldSeed = 1111;
@@ -550,6 +557,8 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                     if(worldMode->worldChunkView)
                     {
                         Vec4 averageColor = {};
+                        u32 waterCount = 0;
+                        Vec4 waterColor = {};
                         
                         for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
                         {
@@ -557,12 +566,23 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                             {
                                 WorldTile* tile = GetTile(chunk, X, Y);
                                 averageColor += tile->color;
+                                
+                                if(tile->elevation < 0)
+                                {
+                                    ++waterCount;
+                                    waterColor += GetWaterColor(tile->elevation);
+                                }
                             }
                         }
                         
                         Vec4 finalColor = averageColor * (1.0f / Square(CHUNK_DIM));
                         PushRect(group, FlatTransform(), 
                                  chunkBaseCenterOffset, V2(chunkSide, chunkSide), finalColor, {});
+                        
+                        Vec4 finalWaterColor = waterColor * (1.0f / waterCount);
+                        PushRect(group, FlatTransform(), 
+                                 chunkBaseCenterOffset, V2(chunkSide, chunkSide), finalWaterColor, {});
+                        
                     }
                     else if(worldMode->worldTileView)
                     {
@@ -595,6 +615,12 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                 
                                 PushRect4Colors(group, FlatTransform(), finalTileP, tileDim, 
                                                 c0, c1, c2, c3, {});
+                                WorldTile* tile = sTiles[4];
+                                if(tile->elevation < 0)
+                                {
+                                    Vec4 waterColor = GetWaterColor(tile->elevation);
+                                    PushRect(group, FlatTransform(), finalTileP, tileDim, waterColor);
+                                }
                             }
                         }
                     }
@@ -710,48 +736,38 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                         
                         Assert(IsValidSpecial(&chunk->texture));
                         RefreshSpecialTexture(group->assets, &chunk->texture);
-                    }
-                }
-            }
-        }
-    }
-    
-    
-    
-    // NOTE(Leonardo): water rendering
-    for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
-    {
-        for(i32 X = originChunkX - chunkApron; X <= originChunkX + chunkApron; X++)
-        {
-            if(ChunkValid(X, Y))
-            {
-                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
-                Assert(chunk->initialized);
-                
-                Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - origin.chunkOffset;
-                Vec3 chunkBaseCenterOffset = chunkLowLeftCornerOffset + 0.5f * V3(chunkSide, chunkSide, 0);
-                
-                u32 waterCount = 0;
-                Vec4 waterColor = {};
-                for(u8 tileY = 0; tileY < CHUNK_DIM; ++tileY)
-                {
-                    for(u8 tileX = 0; tileX < CHUNK_DIM; ++tileX)
-                    {
-                        WorldTile* tile = GetTile(chunk, tileX, tileY);
                         
-                        if(tile->elevation < 0)
+                        
+                        
+                        
+                        
+                        for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
                         {
-                            ++waterCount;
-                            waterColor += V4(0, 0, 1, 1);
+                            for(u8 X = 0; X < CHUNK_DIM; ++X)
+                            {
+                                WorldTile* tile = GetTile(chunk, X, Y);
+                                
+                                if(tile->elevation < 0)
+                                {
+                                    
+                                    Vec3 tileMin = -0.5f * V3(chunkSide, chunkSide, 0) + V3(X * voxelSide, Y * voxelSide, 0);
+                                    Vec2 tileDim = V2(voxelSide, voxelSide);
+                                    
+                                    Rect2 tileSurface = RectMinDim(tileMin.xy, tileDim);
+                                    Vec2 tileCenter = GetCenter(tileSurface);
+                                    
+                                    Vec3 finalTileP = chunkBaseCenterOffset + V3(tileCenter, 0.02f);
+                                    Vec4 waterColor = GetWaterColor(tile->elevation);
+                                    PushRect(group, FlatTransform(), finalTileP, tileDim, waterColor);
+                                }
+                            }
                         }
+                        
+                        
+                        
                     }
                 }
-                
-                Vec4 finalColor = waterColor * (1.0f / waterCount);
-                PushRect(group, FlatTransform(), 
-                         chunkBaseCenterOffset, V2(chunkSide, chunkSide), finalColor, {});
             }
         }
     }
-    
 }

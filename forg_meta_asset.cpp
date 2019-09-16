@@ -274,7 +274,7 @@ internal r32 Parse_r32(Tokenizer* tokenizer, r32 defaultVal)
     
     Token t = GetToken(tokenizer);
     Assert(t.type == Token_Number);
-    result = (r32) StringToFloat(t.text);
+    result = (r32) StringToR32(t.text);
     
     return result;
 }
@@ -591,6 +591,7 @@ internal void Pop(EditorLayout* layout);
 internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char* format, ...);
 internal b32 EditorCollapsible(EditorLayout* layout, char* string, AUID ID);
 internal b32 StandardEditorButton(EditorLayout* layout, char* name, AUID ID, Vec4 color);
+internal void AddUndoRedoRecord(EditorUIContext* context, u32 sizeBefore, void* before, void* ptr, u32 sizeAfter, void* after);
 
 #define DUMB_OPERATION_BOILERPLATE_(type)\
 case FieldOperation_GetSize:{} break;\

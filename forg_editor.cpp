@@ -1,3 +1,58 @@
+internal void AddUndoRedoRecord(EditorUIContext* context, u32 sizeBefore, void* before, void* ptr, u32 sizeAfter, void* after)
+{
+    if(context->currentCommand->next != &context->undoRedoSentinel)
+    {
+        UndoRedoRecord* firstInList = context->currentCommand->next;
+        UndoRedoRecord* lastInList = context->undoRedoSentinel.prev;
+        
+        lastInList->nextFree = context->firstFreeCommand;
+        context->firstFreeCommand = firstInList;
+        context->currentCommand->next = &context->undoRedoSentinel;
+        context->undoRedoSentinel.prev = context->currentCommand;
+    }
+    
+    
+	UndoRedoRecord* record;
+	FREELIST_ALLOC(record, context->firstFreeCommand, PushStruct(context->pool, UndoRedoRecord));
+    
+    Assert(sizeBefore < sizeof(record->before));
+    Assert(sizeAfter < sizeof(record->after));
+    
+    record->sizeBefore = sizeBefore;
+    record->sizeAfter = sizeAfter;
+    Copy(sizeBefore, record->before, before);
+    Copy(sizeAfter, record->after, after);
+    record->ptr = ptr;
+    
+    DLLIST_REMOVE(record);
+	DLLIST_INSERT_AS_LAST(&context->undoRedoSentinel, record);
+	context->currentCommand = record;
+}
+
+internal void Undo(EditorUIContext* context)
+{
+	if(context->currentCommand != &context->undoRedoSentinel)
+	{
+		UndoRedoRecord* toExec = context->currentCommand;
+        
+        Copy(toExec->sizeBefore, toExec->ptr, toExec->before);
+        
+		context->currentCommand = context->currentCommand->prev;
+	}
+}
+
+internal void Redo(EditorUIContext* context)
+{
+	if(context->currentCommand->next != &context->undoRedoSentinel)
+	{
+		UndoRedoRecord* toExec = context->currentCommand->next;
+        Copy(toExec->sizeAfter, toExec->ptr, toExec->after);
+		context->currentCommand = toExec;
+	}
+}
+
+
+
 internal void EditStruct(EditorLayout* layout, String structName, void* structPtr)
 {
     ReservedSpace ignored = {};
@@ -90,6 +145,8 @@ internal void Pop(EditorLayout* layout)
 #define DefaultEditorStringColor() V4(1, 0, 1, 1)
 #define StandardNumberColor() V4(0, 0.5f, 1.0f, 1)
 #define HotNumberColor() V4(0, 1, 1.0f, 1)
+#define StandardFloatColor() V4(0.2f, 0.2f, 1.0f, 1)
+#define HotFloatColor() V4(1.0f, 0.5f, 1.0f, 1)
 
 internal Vec2 ButtonDim(EditorLayout* layout)
 {
@@ -230,6 +287,9 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID,
         
         if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
         {
+            u32 size = StrLen(string) + 1;
+            Assert(size < sizeof(data->before));
+            Copy(size, data->before, string);
             SetInteractiveAUID(layout->context, ID);
         }
         
@@ -259,6 +319,8 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID,
                 EndInteraction(layout->context);
                 FormatString(outputBuffer, outputLength, "%s", options.strings[data->optionIndex]);
                 result = true;
+                
+                AddUndoRedoRecord(layout->context, StrLen(data->before) + 1, data->before, string, StrLen(string) + 1, string);
             }
         }
     }
@@ -314,6 +376,10 @@ internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label
     {
         ZeroSize(sizeof(context->keyboardBuffer), context->keyboardBuffer);
         SetInteractiveAUID(context, ID);
+        
+        u32 size = StrLen(label->name) + 1;
+        Assert(size < sizeof(data->before));
+        Copy(size, data->before, label->name);
     }
     
     char* toShow = label->name;
@@ -324,11 +390,10 @@ internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label
         if(appendHere && Pressed(&context->input->backButton))
         {
             context->keyboardBuffer[--appendHere] = 0;
-        }
-        
+        }   
         for(u8 c = 0; c < 0xff; ++c)
         {
-            if(context->input->isDown[c])
+            if(context->input->isDown[c] && !context->input->wasDown[c])
             {
                 if(appendHere < sizeof(layout->context->keyboardBuffer))
                 {
@@ -349,6 +414,8 @@ internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label
             EndInteraction(layout->context);
             FormatString(label->name, sizeof(label->name), "%s", layout->context->keyboardBuffer);
             result = true;
+            
+            AddUndoRedoRecord(layout->context, StrLen(data->before) + 1, data->before, label->name, StrLen(label->name) + 1, label->name);
         }
     }
     
@@ -372,19 +439,56 @@ internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArr
         SetNextHotAUID(layout->context, ID);
     }
     
-    if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
+	if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
     {
-        (*number)++;
+		data->speed = 0;
+		data->increasing = true;
+        Copy(sizeof(u32), data->before, number);
+        SetInteractiveAUID(layout->context, ID);
+        *number = ++*number;
     }
     
-    if(HotAUIDAndPressed(layout->context, ID, mouseRight))
+	if(HotAUIDAndPressed(layout->context, ID, mouseRight))
     {
+		data->speed = 0;
+		data->increasing = false;
+        
+        Copy(sizeof(u32), data->before, number);
+        SetInteractiveAUID(layout->context, ID);
         if(*number > 0)
         {
-            (*number)--;
+            *number = --*number;
         }
     }
     
+    
+    if(IsInteractiveAUID(layout->context, ID))
+    {
+        r32 real = (r32) *number + data->speed;
+		real = Max(real, 0);
+		*number = RoundReal32ToU32(real);
+        
+		if(data->increasing)
+		{
+			data->speed += 0.02f;
+			if(UIReleased(layout->context, mouseLeft))
+			{
+                AddUndoRedoRecord(layout->context, sizeof(u32), data->before, number, sizeof(u32), number);
+				EndInteraction(layout->context);
+                result = true;
+			}
+		}
+        else
+        {
+            data->speed -= 0.02f;
+			if(UIReleased(layout->context, mouseRight))
+			{
+                AddUndoRedoRecord(layout->context, sizeof(u32), data->before, number, sizeof(u32), number);
+				EndInteraction(layout->context);
+                result = true;
+			}
+        }
+    }
     
     
     ShowName(layout, name);
@@ -425,7 +529,10 @@ internal b32 Edit_b32(EditorLayout* layout, char* name, b32* flag, b32 isInArray
     
     if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
     {
+        b32 before = *flag;
         *flag = !*flag;
+        AddUndoRedoRecord(layout->context, sizeof(b32), &before, flag, sizeof(b32), flag);
+        
     }
     
     ShowName(layout, name);
@@ -439,42 +546,125 @@ internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArr
 {
     b32 result = false;
     
+    EditorUIContext* context = layout->context;
     AUID ID = auID(number);
-    AUIDData* data = GetAUIDData(layout->context, ID);
+    AUIDData* data = GetAUIDData(context, ID);
     
     
-    Vec4 color = V4(1, 0.5f, 0, 1);
+    
+    Vec4 color = StandardFloatColor();
     if(PointInRect(data->dim, layout->mouseP))
     {
-        color = V4(1, 0.0f, 1.0f, 1.0f);
-        SetNextHotAUID(layout->context, ID);
+        color = HotFloatColor();
+        SetNextHotAUID(context, ID);
     }
     
-    if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
+    if(HotAUIDAndPressed(context, ID, mouseLeft))
     {
-        SetInteractiveAUID(layout->context, ID);
+        Copy(sizeof(r32), data->before, number);
+		data->coldEdit = false;
+        SetInteractiveAUID(context, ID);
     }
     
-    
-    if(IsInteractiveAUID(layout->context, ID))
+	if(HotAUIDAndPressed(context, ID, mouseRight))
     {
-        if(UIReleased(layout->context, mouseLeft))
-        {
-            EndInteraction(layout->context);
-        }
-        else
-        {
-            data->speed += 0.005f * layout->deltaMouseP.x;
-            data->speed = Clamp(0.01f, data->speed, 3.0f);
-            r32 delta = data->speed * layout->deltaMouseP.y;
-            *number += delta;
-        }
+        Copy(sizeof(r32), data->before, number);
+        ZeroSize(sizeof(context->keyboardBuffer), context->keyboardBuffer);
+		data->coldEdit = true;
+        SetInteractiveAUID(context, ID);
     }
     
     
+	b32 coldEditValid = false;
+    if(IsInteractiveAUID(context, ID))
+    {
+		if(data->coldEdit)
+		{
+			u32 appendHere = StrLen(context->keyboardBuffer);
+			if(appendHere && Pressed(&context->input->backButton))
+			{
+				context->keyboardBuffer[--appendHere] = 0;
+			}   
+            
+			for(u8 c = 0; c < 0xff; ++c)
+			{
+				b32 canParsePoint = !StringContains(context->keyboardBuffer, '.');
+				b32 canParseSign = (appendHere == 0);
+				if(context->input->isDown[c] && !context->input->wasDown[c])
+				{
+					b32 append = false;
+					if(c >= '0' && c <= '9')
+					{
+						append = true;
+					}
+					else if(c == '.')
+					{
+						if(canParsePoint)
+						{
+							append = true;
+						}
+					}
+					else if(c == '-' || c == '+')
+					{
+						if(canParseSign)
+						{
+							append = true;
+						}
+					}
+                    
+					if(appendHere < sizeof(layout->context->keyboardBuffer))
+					{
+						context->keyboardBuffer[appendHere++] = c;
+					}
+				}
+			}
+            
+			if(appendHere > 0)
+			{
+				coldEditValid = true;
+                color = V4(0, 1.0f, 0.0f, 1.0f);
+			}
+            else
+            {
+                color = V4(0, 0.7f, 0.0f, 1.0f);
+            }
+            
+			if(UIPressed(layout->context, confirmButton))
+			{
+				EndInteraction(layout->context);
+				*number = StringToR32(context->keyboardBuffer);
+				result = true;
+				AddUndoRedoRecord(context, sizeof(r32), data->before, number, sizeof(r32), number);
+			}
+		}
+		else
+		{
+			if(UIReleased(layout->context, mouseLeft))
+			{
+				AddUndoRedoRecord(context, sizeof(r32), data->before, number, sizeof(r32), number);
+                EndInteraction(context);
+			}
+			else
+			{	
+				data->speed += 0.005f * layout->deltaMouseP.x;
+				data->speed = Clamp(0.01f, data->speed, 3.0f);
+				r32 delta = data->speed * layout->deltaMouseP.y;
+				*number += delta;
+			}
+		}
+    }
     
     ShowName(layout, name);
-    Rect2 elementRect = ShowStandard(layout, color, "%f", *number);
+    
+    Rect2 elementRect = InvertedInfinityRect2();
+	if(coldEditValid)
+	{
+		elementRect = ShowStandard(layout, color, "%s", context->keyboardBuffer);
+	}
+	else
+	{
+		elementRect = ShowStandard(layout, color, "%f", *number);
+	}
     data->dim = elementRect;
     
     return result;
@@ -999,6 +1189,15 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
             MemoryPool editorPool = {};
             SetOrthographicTransformScreenDim(group);
             
+            if(Pressed(&context->input->undo))
+            {
+                Undo(context);
+            }
+            
+            if(Pressed(&context->input->redo))
+            {
+                Redo(context);
+            }
 #if 0        
             if(Pressed(&context->input->actionLeft))
             {

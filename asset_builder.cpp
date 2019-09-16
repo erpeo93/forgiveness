@@ -560,21 +560,21 @@ internal LoadedColoration LoadColoration(char* fileContent)
                 if(!parsedR)
                 {
                     parsedR = true;
-                    result.color.r = StringToFloat(t.text);
+                    result.color.r = StringToR32(t.text);
                 }
                 else if(!parsedG)
                 {
                     parsedG = true;
-                    result.color.g = StringToFloat(t.text);
+                    result.color.g = StringToR32(t.text);
                 }
                 else if(!parsedB)
                 {
                     parsedB = true;
-                    result.color.b = StringToFloat(t.text);
+                    result.color.b = StringToR32(t.text);
                 }
                 else
                 {
-                    result.color.a = StringToFloat(t.text);
+                    result.color.a = StringToR32(t.text);
                 }
             } break;
         }
@@ -749,16 +749,16 @@ internal char* ReadXMLParam( XMLParam* dest, char* source )
     {
         countChar++;
     }
-    StrCpy( source, countChar, dest->name, 
-           ArrayCount( dest->name ) );
+    StrCopy( source, countChar, dest->name, 
+            ArrayCount( dest->name ) );
     source = ++testChar;
     countChar = 0;
     while( *testChar++ != '\"' )
     {
         countChar++;
     }
-    StrCpy( source, countChar, dest->value, 
-           ArrayCount( dest->value ) );
+    StrCopy( source, countChar, dest->value, 
+            ArrayCount( dest->value ) );
     result = testChar;
     return result;
 }
@@ -790,7 +790,7 @@ internal char* ReadXMLTag( char* source, XMLTag* dest )
         countChar++;
     }
     
-    StrCpy( source, countChar, dest->title, ArrayCount( dest->title ) );
+    StrCopy( source, countChar, dest->title, ArrayCount( dest->title ) );
     source = testChar;
     
     while( *source != '>' && *source != '/' )
@@ -1019,7 +1019,7 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
                         tempSprite->flags |= Sprite_Entity;
                     }
                     
-                    StrCpy(pieceName, StrLen(pieceName), tempSprite->name);
+                    StrCopy(pieceName, StrLen(pieceName), tempSprite->name);
                 }
                 else if(StrEqual(currentTag.title, "animation"))
                 {
@@ -1556,11 +1556,11 @@ internal void FillPAKProperty(PAKAsset* asset, Token property, Token value)
     }
     else if(TokenEquals(property, IMAGE_PROPERTY_ALIGN_X))
     {
-        asset->bitmap.align[0] = (r32) StringToFloat(value.text);
+        asset->bitmap.align[0] = (r32) StringToR32(value.text);
     }
     else if(TokenEquals(property, IMAGE_PROPERTY_ALIGN_Y))
     {
-        asset->bitmap.align[1] = (r32) StringToFloat(value.text);
+        asset->bitmap.align[1] = (r32) StringToR32(value.text);
     }
     else
     {

@@ -151,6 +151,7 @@ inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 ti
     r32 landscape = Evaluate(tileNormX, tileNormY, generator->landscapeNoise, seed);
     
     r32 waterMargin = Clamp01(generator->waterSafetyMargin);
+    
     r32 standardElevation = minHeight;
     if(tileNormX < waterMargin || tileNormY < waterMargin || 
        tileNormX >= (1.0f - waterMargin) || tileNormY >= (1.0f - waterMargin))

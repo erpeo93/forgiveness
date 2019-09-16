@@ -119,7 +119,7 @@ internal PLATFORM_GET_ALL_SUBDIRECTORIES(Win32GetAllSubdirectories)
     }
     else
     {
-        StrCpy("*", 1, completePath, sizeof(completePath));
+        StrCopy("*", 1, completePath, sizeof(completePath));
     }
     
     output->count = 0;
@@ -136,7 +136,7 @@ internal PLATFORM_GET_ALL_SUBDIRECTORIES(Win32GetAllSubdirectories)
                 if(findData.cFileName[0] != '.')
                 {
                     char* dest = output->names[output->count++];
-                    StrCpy(findData.cFileName, StrLen(findData.cFileName), dest);
+                    StrCopy(findData.cFileName, StrLen(findData.cFileName), dest);
                 }
             }
         }
@@ -359,8 +359,8 @@ internal void Win32BuildFullPath(char* ExeFullPath, char* fileName,
     }
     
     i32 countPath = StrLen(ExeFullPath) - StrLen(onePastLastSlash);
-    StrCpy(ExeFullPath, countPath, fileName, StrLen(fileName),
-           dest, countDest);
+    StrCopy(ExeFullPath, countPath, fileName, StrLen(fileName),
+            dest, countDest);
     
 }
 

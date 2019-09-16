@@ -147,6 +147,10 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->editorUI.pool = &gameState->assetsPool;
     result->editorUI.soundState = result->soundState;
     
+    result->editorUI.firstFreeCommand = 0;
+    DLLIST_INIT(&result->editorUI.undoRedoSentinel);
+    result->editorUI.currentCommand = &result->editorUI.undoRedoSentinel;
+    
 }
 
 internal Vec3 HandleDaynightCycle(GameModeWorld* worldMode, PlatformInput* input)

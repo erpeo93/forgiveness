@@ -55,7 +55,7 @@ void GetAllSubdirectoriesNoSpaces(SubFolders* folders, char* folderPath)
     }
     else
     {
-        StrCpy("*", 1, completePath, sizeof(completePath));
+        StrCopy("*", 1, completePath, sizeof(completePath));
     }
     
     folders->count = 0;
@@ -72,7 +72,7 @@ void GetAllSubdirectoriesNoSpaces(SubFolders* folders, char* folderPath)
                 if(findData.cFileName[0] != '.')
                 {
                     char* dest = folders->names[folders->count++];
-                    StrCpy(findData.cFileName, StrLen(findData.cFileName), dest);
+                    StrCopy(findData.cFileName, StrLen(findData.cFileName), dest);
                     
                     for(u32 charIndex = 0; charIndex < StrLen(findData.cFileName); ++charIndex)
                     {

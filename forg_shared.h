@@ -50,7 +50,7 @@ internal u64 StringToUInt64(char* string, u32 length)
     return result;
 }
 
-internal r32 StringToFloat(char* string)
+internal r32 StringToR32(char* string)
 {
     r32 result = (r32) atof(string);
     return result;
@@ -160,7 +160,7 @@ inline b32 StrEqual(unm length, char* s1, char* s2, b32 notValidIfNotNull = fals
     return result;
 }
 
-inline void StrCpy( char* s1, i32 countS1, char* s2, i32 countS2, char* dest, i32 destCount )
+inline void StrCopy( char* s1, i32 countS1, char* s2, i32 countS2, char* dest, i32 destCount )
 {
     Assert( countS1 + countS2 < destCount );
     i32 count = 0;
@@ -177,7 +177,7 @@ inline void StrCpy( char* s1, i32 countS1, char* s2, i32 countS2, char* dest, i3
     *dest = 0;
 }
 
-inline void StrCpy(char* s1, i32 countS1, char* dest, i32 destCount = 10000 )
+inline void StrCopy(char* s1, i32 countS1, char* dest, i32 destCount = 10000 )
 {
     Assert( countS1 < destCount );
     i32 count = 0;
@@ -706,17 +706,30 @@ inline u32 FindFirstInString(char* string, char c)
     u32 result = 0xffffffff;
     char* test = string;
     u32 current = 0;
-    while(test)
+    
+    if(test)
     {
-        if(*test++ == c)
+        while(*test)
         {
-            result = current;
-            break;
+            if(*test++ == c)
+            {
+                result = current;
+                break;
+            }
+            
+            ++current;
         }
-        
-        ++current;
     }
     
+    return result;
+}
+
+inline b32 StringContains(char* string, char c)
+{
+    b32 result = false;
+    
+    u32 index = FindFirstInString(string, c);
+    result = (index != 0xffffffff);
     return result;
 }
 
