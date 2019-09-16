@@ -1,4 +1,5 @@
 #pragma once
+#define WORLD_CHUNK_APRON 2
 #define VOXEL_SIZE 2.0f
 #define CHUNK_DIM 8
 #define WORLD_CHUNK_SPAN 64

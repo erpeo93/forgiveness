@@ -132,6 +132,7 @@ introspection() struct world_generator
     r32 elevationPower MetaDefault("1");
     r32 elevationNormOffset MetaDefault("1");
     
+    r32 waterSafetyMargin MetaDefault("0.05f");
     BiomePyramid biomePyramid;
 };
 

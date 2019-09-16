@@ -715,4 +715,43 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
             }
         }
     }
+    
+    
+    
+    // NOTE(Leonardo): water rendering
+    for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
+    {
+        for(i32 X = originChunkX - chunkApron; X <= originChunkX + chunkApron; X++)
+        {
+            if(ChunkValid(X, Y))
+            {
+                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
+                Assert(chunk->initialized);
+                
+                Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - origin.chunkOffset;
+                Vec3 chunkBaseCenterOffset = chunkLowLeftCornerOffset + 0.5f * V3(chunkSide, chunkSide, 0);
+                
+                u32 waterCount = 0;
+                Vec4 waterColor = {};
+                for(u8 tileY = 0; tileY < CHUNK_DIM; ++tileY)
+                {
+                    for(u8 tileX = 0; tileX < CHUNK_DIM; ++tileX)
+                    {
+                        WorldTile* tile = GetTile(chunk, tileX, tileY);
+                        
+                        if(tile->elevation < 0)
+                        {
+                            ++waterCount;
+                            waterColor += V4(0, 0, 1, 1);
+                        }
+                    }
+                }
+                
+                Vec4 finalColor = waterColor * (1.0f / waterCount);
+                PushRect(group, FlatTransform(), 
+                         chunkBaseCenterOffset, V2(chunkSide, chunkSide), finalColor, {});
+            }
+        }
+    }
+    
 }
