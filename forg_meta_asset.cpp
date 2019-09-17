@@ -591,7 +591,8 @@ internal void Pop(EditorLayout* layout);
 internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char* format, ...);
 internal b32 EditorCollapsible(EditorLayout* layout, char* string, AUID ID);
 internal b32 StandardEditorButton(EditorLayout* layout, char* name, AUID ID, Vec4 color);
-internal void AddUndoRedoRecord(EditorUIContext* context, u32 sizeBefore, void* before, void* ptr, u32 sizeAfter, void* after);
+internal void AddUndoRedoAdd(EditorUIContext* context, ArrayCounter* counter, void* ptr, void* oldPtr, void* newPtr);
+internal void AddUndoRedoDelete(EditorUIContext* context, ArrayCounter* counter, void* deletedElement, void* ptr, void* lastElementPtr, u32 elementSize);
 
 #define DUMB_OPERATION_BOILERPLATE_(type)\
 case FieldOperation_GetSize:{} break;\
@@ -857,12 +858,16 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
         }
         
         result += op.size;
+        
+#ifndef FORG_SERVER
         if(op.deleted)
         {
             u32 offset = field->size * --*elementCount;
             void* targetPtr = AdvanceVoidPtrBytes(fieldPtr, offset);
             void* destPtr = fieldPtr;
             void* sourcePtr = AdvanceVoidPtrBytes(fieldPtr, field->size);
+            
+            AddUndoRedoDelete(layout->context, elementCount, fieldPtr, fieldPtr, targetPtr, field->size);
             
             while(destPtr != targetPtr)
             {
@@ -871,6 +876,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
                 sourcePtr = AdvanceVoidPtrBytes(sourcePtr, field->size);
             }
         }
+#endif
         
         if(pointer)
         {
@@ -1083,8 +1089,16 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                                 
                                 if(StandardEditorButton(layout, "add", auID(originalfieldPtr, "addButton"), V4(0, 1.0f, 1.0f, 1.0f)))
                                 {
+                                    
+                                    void* ptr = 0;
+                                    void* oldPtr = 0;
+                                    void* newPtr = 0;
+                                    
                                     if(*elementCount == 0 || (*elementCount > header->maxCount / 2))
                                     {
+                                        ptr = originalfieldPtr;
+                                        oldPtr = fieldPtr;
+                                        
                                         if(header)
                                         {
                                             u32 oldSize = header->maxCount * field->size;
@@ -1097,18 +1111,18 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                                         void* newArray = GetMemory(layout->context->pool, newElementCount, field->size);
                                         fieldPtr = InitMetaArray(newArray, newElementCount);
                                         
+                                        newPtr = fieldPtr;
+                                        
                                         Copy(sizeToCopy, fieldPtr, oldArray);
-                                        
-                                        // TODO(Leonardo): free the block to avoid leaking memory!
-                                        void* free = (u8*)oldArray - sizeof(MetaArrayHeader);
-                                        //FreeBlock(free, oldSize);
-                                        
                                         *(u64*)originalfieldPtr = (u64) fieldPtr;
                                     }
                                     
                                     u16 index = (*elementCount)++;
                                     void* here = (void*)((u8*)fieldPtr + index * field->size);
                                     InitFieldDefault(field, here);
+                                    
+                                    
+                                    AddUndoRedoAdd(layout->context, elementCount, ptr, oldPtr, newPtr);
                                 }
                             }
 #endif

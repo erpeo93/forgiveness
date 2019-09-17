@@ -69,22 +69,50 @@ internal b32 AreEqual(AUID i1, AUID i2)
     return result;
 }
 
-enum EditorTabs
+enum UndoRedoType
 {
-    EditorTab_Assets,
-    EditorTab_Misc,
-    
-    EditorTab_Count,
+    UndoRedo_Copy,
+    UndoRedo_Add,
+    UndoRedo_Delete
+};
+
+
+struct UndoRedoCopy
+{
+    u32 sizeBefore;
+    char before[MAX_UNDOREDO_SIZE];
+    u32 sizeAfter;
+    char after[MAX_UNDOREDO_SIZE];
+    void* ptr;
+};
+
+struct UndoRedoAdd
+{
+    ArrayCounter* counter;
+    void* fieldPtr;
+    void* oldPtr;
+    void* newPtr;
+};
+
+struct UndoRedoDelete
+{
+    ArrayCounter* counter;
+    void* deletedElement;
+    void* deletedElementPtr;
+    void* lastElementPtr;
+    u32 elementSize;
 };
 
 struct UndoRedoRecord
 {
-	u32 sizeBefore;
-    char before[MAX_UNDOREDO_SIZE];
+    UndoRedoType type;
     
-    u32 sizeAfter;
-	char after[MAX_UNDOREDO_SIZE];
-	void* ptr;
+    union
+    {
+        UndoRedoCopy copy;
+        UndoRedoAdd add;
+        UndoRedoDelete del;
+    };
 	
 	union
 	{
@@ -92,6 +120,14 @@ struct UndoRedoRecord
 		UndoRedoRecord* nextFree;
 	};
 	UndoRedoRecord* prev;
+};
+
+enum EditorTabs
+{
+    EditorTab_Assets,
+    EditorTab_Misc,
+    
+    EditorTab_Count,
 };
 
 struct EditorUIContext
@@ -150,7 +186,6 @@ enum EditorTextFlags
     EditorText_OnTop = (1 << 1),
     EditorText_DarkBackground = (1 << 2)
 };
-
 
 #define EditorRole_Everyone 0xffffffff
 printFlags(noPrefix) enum EditorRole

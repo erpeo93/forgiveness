@@ -1,4 +1,4 @@
-internal void AddUndoRedoRecord(EditorUIContext* context, u32 sizeBefore, void* before, void* ptr, u32 sizeAfter, void* after)
+internal UndoRedoRecord* FreeAndGetUndoRedoRecord(EditorUIContext* context)
 {
     if(context->currentCommand->next != &context->undoRedoSentinel)
     {
@@ -11,20 +11,56 @@ internal void AddUndoRedoRecord(EditorUIContext* context, u32 sizeBefore, void* 
         context->undoRedoSentinel.prev = context->currentCommand;
     }
     
-    
-	UndoRedoRecord* record;
+    UndoRedoRecord* record;
 	FREELIST_ALLOC(record, context->firstFreeCommand, PushStruct(context->pool, UndoRedoRecord));
+    return record;
+}
+
+internal void AddUndoRedoCopy(EditorUIContext* context, u32 sizeBefore, void* before, void* ptr, u32 sizeAfter, void* after)
+{
+    UndoRedoRecord* record = FreeAndGetUndoRedoRecord(context);
+    record->type = UndoRedo_Copy;
     
-    Assert(sizeBefore < sizeof(record->before));
-    Assert(sizeAfter < sizeof(record->after));
+    Assert(sizeBefore < sizeof(record->copy.before));
+    Assert(sizeAfter < sizeof(record->copy.after));
     
-    record->sizeBefore = sizeBefore;
-    record->sizeAfter = sizeAfter;
-    Copy(sizeBefore, record->before, before);
-    Copy(sizeAfter, record->after, after);
-    record->ptr = ptr;
+    record->copy.sizeBefore = sizeBefore;
+    record->copy.sizeAfter = sizeAfter;
+    Copy(sizeBefore, record->copy.before, before);
+    Copy(sizeAfter, record->copy.after, after);
+    record->copy.ptr = ptr;
     
-    DLLIST_REMOVE(record);
+	DLLIST_INSERT_AS_LAST(&context->undoRedoSentinel, record);
+	context->currentCommand = record;
+}
+
+internal void AddUndoRedoAdd(EditorUIContext* context, ArrayCounter* counter, void* fieldPtr, void* oldPtr, void* newPtr)
+{
+    UndoRedoRecord* record = FreeAndGetUndoRedoRecord(context);
+    record->type = UndoRedo_Add;
+    
+    record->add.counter = counter;
+    record->add.fieldPtr = fieldPtr;
+    record->add.oldPtr = oldPtr;
+    record->add.newPtr = newPtr;
+    
+	DLLIST_INSERT_AS_LAST(&context->undoRedoSentinel, record);
+	context->currentCommand = record;
+}
+
+internal void AddUndoRedoDelete(EditorUIContext* context, ArrayCounter* counter, void* deletedElement, void* deletedElementPtr, void* lastElementPtr, u32 elementSize)
+{
+    UndoRedoRecord* record = FreeAndGetUndoRedoRecord(context);
+    
+    record->type = UndoRedo_Delete;
+    
+    record->del.counter = counter;
+    record->del.deletedElement = PushSize(context->pool, elementSize);
+    Copy(elementSize, record->del.deletedElement, deletedElement); 
+    record->del.deletedElementPtr = deletedElementPtr;
+    record->del.lastElementPtr = lastElementPtr;
+    record->del.elementSize = elementSize;
+    
 	DLLIST_INSERT_AS_LAST(&context->undoRedoSentinel, record);
 	context->currentCommand = record;
 }
@@ -33,11 +69,50 @@ internal void Undo(EditorUIContext* context)
 {
 	if(context->currentCommand != &context->undoRedoSentinel)
 	{
+        Assert(context->currentCommand->next);
+        Assert(context->currentCommand->prev);
+        
 		UndoRedoRecord* toExec = context->currentCommand;
         
-        Copy(toExec->sizeBefore, toExec->ptr, toExec->before);
+        Assert(toExec->next);
+        Assert(toExec->prev);
+        
+		switch(toExec->type)
+		{
+			case UndoRedo_Copy:
+			{
+				Copy(toExec->copy.sizeBefore, toExec->copy.ptr, toExec->copy.before);
+			} break;
+            
+			case UndoRedo_Add:
+			{
+				if(toExec->add.fieldPtr)
+				{
+					Copy(sizeof(void*), toExec->add.fieldPtr, &(toExec->add.oldPtr));
+				}
+				--*toExec->add.counter;
+			} break;
+			
+            case UndoRedo_Delete:
+			{
+				void* ptr = toExec->del.deletedElementPtr;
+                void* endPtr = toExec->del.lastElementPtr;
+                
+                for(void* dest = endPtr; dest != ptr; dest = AdvanceVoidPtrBytes(dest, -(i32)toExec->del.elementSize))
+                {
+                    void* source = AdvanceVoidPtrBytes(dest, -(i32)toExec->del.elementSize);
+                    Copy(toExec->del.elementSize, dest, source);
+                }
+                
+				Copy(toExec->del.elementSize, ptr, toExec->del.deletedElement);
+				++*toExec->del.counter;
+			} break;
+		}
         
 		context->currentCommand = context->currentCommand->prev;
+        
+        Assert(context->currentCommand->next);
+        Assert(context->currentCommand->prev);
 	}
 }
 
@@ -45,9 +120,47 @@ internal void Redo(EditorUIContext* context)
 {
 	if(context->currentCommand->next != &context->undoRedoSentinel)
 	{
+        Assert(context->currentCommand->next);
+        Assert(context->currentCommand->prev);
+        
 		UndoRedoRecord* toExec = context->currentCommand->next;
-        Copy(toExec->sizeAfter, toExec->ptr, toExec->after);
+        
+        Assert(toExec->next);
+        Assert(toExec->prev);
+        
+		switch(toExec->type)
+		{
+			case UndoRedo_Copy:
+			{
+				Copy(toExec->copy.sizeAfter, toExec->copy.ptr, toExec->copy.after);
+			} break;
+            
+            case UndoRedo_Add:
+			{
+				if(toExec->add.fieldPtr)
+				{
+					Copy(sizeof(void*), toExec->add.fieldPtr, &(toExec->add.newPtr));
+				}
+				++*toExec->add.counter;
+			} break;
+            
+            case UndoRedo_Delete:
+			{
+				void* ptr = toExec->del.deletedElementPtr;
+                void* endPtr = toExec->del.lastElementPtr;
+                
+                for(void* dest = ptr; dest != endPtr; dest = AdvanceVoidPtrBytes(dest, toExec->del.elementSize))
+                {
+                    void* source = AdvanceVoidPtrBytes(dest, toExec->del.elementSize);
+                    Copy(toExec->del.elementSize, dest, source);
+                }
+				--*toExec->del.counter;
+			} break;
+		}
 		context->currentCommand = toExec;
+        
+        Assert(context->currentCommand->next);
+        Assert(context->currentCommand->prev);
 	}
 }
 
@@ -320,7 +433,7 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID,
                 FormatString(outputBuffer, outputLength, "%s", options.strings[data->optionIndex]);
                 result = true;
                 
-                AddUndoRedoRecord(layout->context, StrLen(data->before) + 1, data->before, string, StrLen(string) + 1, string);
+                AddUndoRedoCopy(layout->context, StrLen(data->before) + 1, data->before, string, StrLen(string) + 1, string);
             }
         }
     }
@@ -415,7 +528,7 @@ internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label
             FormatString(label->name, sizeof(label->name), "%s", layout->context->keyboardBuffer);
             result = true;
             
-            AddUndoRedoRecord(layout->context, StrLen(data->before) + 1, data->before, label->name, StrLen(label->name) + 1, label->name);
+            AddUndoRedoCopy(layout->context, StrLen(data->before) + 1, data->before, label->name, StrLen(label->name) + 1, label->name);
         }
     }
     
@@ -473,7 +586,7 @@ internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArr
 			data->speed += 0.02f;
 			if(UIReleased(layout->context, mouseLeft))
 			{
-                AddUndoRedoRecord(layout->context, sizeof(u32), data->before, number, sizeof(u32), number);
+                AddUndoRedoCopy(layout->context, sizeof(u32), data->before, number, sizeof(u32), number);
 				EndInteraction(layout->context);
                 result = true;
 			}
@@ -483,7 +596,7 @@ internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArr
             data->speed -= 0.02f;
 			if(UIReleased(layout->context, mouseRight))
 			{
-                AddUndoRedoRecord(layout->context, sizeof(u32), data->before, number, sizeof(u32), number);
+                AddUndoRedoCopy(layout->context, sizeof(u32), data->before, number, sizeof(u32), number);
 				EndInteraction(layout->context);
                 result = true;
 			}
@@ -531,7 +644,7 @@ internal b32 Edit_b32(EditorLayout* layout, char* name, b32* flag, b32 isInArray
     {
         b32 before = *flag;
         *flag = !*flag;
-        AddUndoRedoRecord(layout->context, sizeof(b32), &before, flag, sizeof(b32), flag);
+        AddUndoRedoCopy(layout->context, sizeof(b32), &before, flag, sizeof(b32), flag);
         
     }
     
@@ -634,14 +747,14 @@ internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArr
 				EndInteraction(layout->context);
 				*number = StringToR32(context->keyboardBuffer);
 				result = true;
-				AddUndoRedoRecord(context, sizeof(r32), data->before, number, sizeof(r32), number);
+				AddUndoRedoCopy(context, sizeof(r32), data->before, number, sizeof(r32), number);
 			}
 		}
 		else
 		{
 			if(UIReleased(layout->context, mouseLeft))
 			{
-				AddUndoRedoRecord(context, sizeof(r32), data->before, number, sizeof(r32), number);
+				AddUndoRedoCopy(context, sizeof(r32), data->before, number, sizeof(r32), number);
                 EndInteraction(context);
 			}
 			else
