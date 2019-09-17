@@ -896,7 +896,7 @@ internal void DumpColorationToStream(PAKColoration* coloration, Stream* stream)
                    coloration->color.a);
 }
 
-internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* basePath)
+internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* basePath, b32 editorMode)
 {
     u16 type = ID.type;
     u16 subtype = ID.subtype;
@@ -937,10 +937,29 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
                 DumpColorationToStream(&asset->paka.coloration, &file);
                 char* filename = asset->paka.sourceName;
                 
-                char filenameNoExtension[64];
-                TrimToFirstCharacter(filenameNoExtension, sizeof(filenameNoExtension), filename, '.');
+                char filenameNoExtension_[64];
+                char* filenameNoExtension = filenameNoExtension_;
+                u32 bufferSize = sizeof(filenameNoExtension_);
                 
-                platformAPI.ReplaceFile(PlatformFile_Coloration, path, filenameNoExtension, file.begin, file.written);
+				if(editorMode)
+				{
+                    u32 written = (u32) FormatString(filenameNoExtension, bufferSize, "__test__");
+                    filenameNoExtension += written;
+                    bufferSize -= written;
+				}
+                
+                TrimToFirstCharacter(filenameNoExtension, bufferSize, filename, '.');
+                
+                
+                while(true)
+                {
+                    b32 replaced = platformAPI.ReplaceFile(PlatformFile_Coloration, path, filenameNoExtension_, file.begin, file.written);
+                    
+                    if(!editorMode || replaced)
+                    {
+                        break;
+                    }
+                }
             }
         } break;
         
@@ -953,21 +972,49 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
             structName.length = StrLen(metaAssetType);
             
             DumpStructToStream(structName, &file, asset->data);
-            char filenameNoExtension[64];
-            TrimToFirstCharacter(filenameNoExtension, sizeof(filenameNoExtension),  asset->paka.sourceName, '.');
             
-            platformAPI.ReplaceFile(PlatformFile_data, path, filenameNoExtension, file.begin, file.written);
+            char filenameNoExtension_[64];
+            char* filenameNoExtension = filenameNoExtension_;
+            u32 bufferSize = sizeof(filenameNoExtension_);
+            
+            if(editorMode)
+            {
+                u32 written = (u32) FormatString(filenameNoExtension, bufferSize, "__test__");
+                filenameNoExtension += written;
+                bufferSize -= written;
+            }
+            
+            TrimToFirstCharacter(filenameNoExtension, bufferSize,  asset->paka.sourceName, '.');
+            
+            while(true)
+            {
+                b32 replaced = platformAPI.ReplaceFile(PlatformFile_data, path, filenameNoExtension_, file.begin, file.written);
+                if(!editorMode || replaced)
+                {
+                    break;
+                }
+            }
         } break;
         
     }
     
     EndTemporaryMemory(fileMemory);
     
-    char markupFilename[128];
-    FormatString(markupFilename, sizeof(markupFilename), "%s", asset->paka.sourceName);
+    char markupFilename_[128];
+    char* markupFilename = markupFilename_;
+    u32 bufferSize = sizeof(markupFilename_);
+    
+    if(editorMode)
+    {
+        u32 written = (u32) FormatString(markupFilename, bufferSize, TEST_FILE_PREFIX);
+        markupFilename += written;
+        bufferSize -= written;
+    }
+    
+    FormatString(markupFilename, bufferSize, "%s", asset->paka.sourceName);
     ReplaceAll(markupFilename, '.', '_');
     
-    platformAPI.ReplaceFile(PlatformFile_markup, path, markupFilename, metaDataStream.begin, metaDataStream.written);
+    platformAPI.ReplaceFile(PlatformFile_markup, path, markupFilename_, metaDataStream.begin, metaDataStream.written);
     Clear(&tempPool);
 }
 

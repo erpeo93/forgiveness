@@ -307,18 +307,17 @@ PLATFORM_DELETE_FILES(Win32DeleteFiles)
 
 PLATFORM_REPLACE_FILE(Win32ReplaceFile)
 {
+    b32 result = false;
+    
     FileExtension ext;
     ext.count = 0;
     GetFileExtensions(&ext, type);
-    
-    
     Assert(ext.count == 1);
     
     char* extension = GetExtension(&ext, 0);
     char fileName[128];
     FormatString(fileName, sizeof(fileName), "%s/%s.%s", path, file, extension);
     
-    b32 result = false;
     Assert(size <= 0xFFFFFFFF);
     
     HANDLE fileHandle = CreateFile(fileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);

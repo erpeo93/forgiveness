@@ -145,6 +145,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     
     result->editorUI.input = input;
     result->editorUI.pool = &gameState->assetsPool;
+    result->editorUI.assets = gameState->assets;
     result->editorUI.soundState = result->soundState;
     
     result->editorUI.firstFreeCommand = 0;

@@ -139,6 +139,7 @@ struct EditorUIContext
     PlatformInput* input;
     MemoryPool* pool;
     
+    Assets* assets;
     struct SoundState* soundState;
     struct PlayingSound* playingSound;
     

@@ -1720,6 +1720,10 @@ internal void SaveFileDateHash(SavedFileInfoHash* info, PlatformFileTimestamp ti
 
 internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* asset, char* name, PlatformFileGroup* markupFiles)
 {
+    if(StrEqual(StrLen(TEST_FILE_PREFIX), TEST_FILE_PREFIX, name))
+    {
+        name += StrLen(TEST_FILE_PREFIX);
+    }
     FormatString(asset->sourceName, sizeof(asset->sourceName), "%s", name);
     asset->dataOffset = ftell(out);
     for(u32 propertyIndex = 0; propertyIndex < MAX_PROPERTIES_PER_ASSET; ++propertyIndex)
@@ -1814,7 +1818,45 @@ internal u32 GetFileTypes(AssetType type)
     return fileTypes;
 }
 
-internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, char* sourceSubdir, char* outputPath, b32 propertiesChanged)
+internal b32 EditorFile(PlatformFileInfo* file)
+{
+    b32 result = StrEqual(StrLen(TEST_FILE_PREFIX), file->name, TEST_FILE_PREFIX);
+    return result;
+}
+
+internal b32 RelevantFile(b32 editorMode, PlatformFileInfo* file, PlatformFileGroup* group)
+{
+	b32 result = true;
+	if(editorMode)
+	{
+		if(!EditorFile(file))
+        {
+            for(PlatformFileInfo* test = group->firstFileInfo; test; test = test->next)
+            {
+                if(EditorFile(test))
+                {
+                    Assert(StrLen(test->name) > StrLen(TEST_FILE_PREFIX));
+                    char* testName = test->name + StrLen(TEST_FILE_PREFIX);
+                    if(StrEqual(testName, file->name))
+                    {
+                        result = false;
+                        break;
+                    }
+                }
+            }
+        }
+	}
+	else
+	{
+		if(EditorFile(file))
+		{
+			result = false;
+		}
+	}
+    return result;
+}
+
+internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, char* sourceSubdir, char* outputPath, b32 propertiesChanged, b32 editorMode)
 {
     MemoryPool tempPool = {};
     
@@ -1855,76 +1897,79 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     
     for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
     {
-        TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
-        PlatformFileHandle handle = platformAPI.OpenFile(&fileGroup, info);
-        
-        SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
-        if(!AreEqual(saved->timestamp, info->timestamp))
-        {
-            updatedFiles = true;
-        }
-        
-        u16 standard = 1;
-        u16 derived = 0;
-        
-        switch(type)
-        {
-            case AssetType_Font:
-            {
-                derived = SafeTruncateToU16(endingFontCodepoint - startingFontCodepoint);
-            } break;
+		if(RelevantFile(editorMode, info, &fileGroup))
+		{
+			TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+            PlatformFileHandle handle = platformAPI.OpenFile(&fileGroup, info);
             
-            case AssetType_Skeleton:
+            SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
+            if(!AreEqual(saved->timestamp, info->timestamp))
             {
-                u8* tempData = PushSize(&tempPool, info->size, NoClear());
-                platformAPI.ReadFromFile(&handle, 0, info->size, tempData);
-                derived = CountAnimations((char*) tempData);
-            } break;
+                updatedFiles = true;
+            }
             
-            case AssetType_Image:
+            u16 standard = 1;
+            u16 derived = 0;
+            
+            switch(type)
             {
-                if(IsColorationFile(info->name))
+                case AssetType_Font:
                 {
-                    standard = 0;
-                    derived = 0;
-                    
+                    derived = SafeTruncateToU16(endingFontCodepoint - startingFontCodepoint);
+                } break;
+                
+                case AssetType_Skeleton:
+                {
                     u8* tempData = PushSize(&tempPool, info->size, NoClear());
                     platformAPI.ReadFromFile(&handle, 0, info->size, tempData);
-                    LoadedColoration coloration = LoadColoration((char*) tempData);
-                    b32 found = false;
-                    for(PlatformFileInfo* testInfo = fileGroup.firstFileInfo; testInfo; testInfo = testInfo->next)
+                    derived = CountAnimations((char*) tempData);
+                } break;
+                
+                case AssetType_Image:
+                {
+                    if(IsColorationFile(info->name))
                     {
-                        if(!IsColorationFile(testInfo->name))
+                        standard = 0;
+                        derived = 0;
+                        
+                        u8* tempData = PushSize(&tempPool, info->size, NoClear());
+                        platformAPI.ReadFromFile(&handle, 0, info->size, tempData);
+                        LoadedColoration coloration = LoadColoration((char*) tempData);
+                        b32 found = false;
+                        for(PlatformFileInfo* testInfo = fileGroup.firstFileInfo; testInfo; testInfo = testInfo->next)
                         {
-                            if(StrEqual(testInfo->name, coloration.imageName))
+                            if(!IsColorationFile(testInfo->name))
                             {
-                                found = true;
-                                break;
+                                if(StrEqual(testInfo->name, coloration.imageName))
+                                {
+                                    found = true;
+                                    break;
+                                }
                             }
                         }
+                        
+                        if(found)
+                        {
+                            derived = 1;
+                        }
+                        
                     }
-                    
-                    if(found)
-                    {
-                        derived = 1;
-                    }
-                    
-                }
-            } break;
+                } break;
+                
+                default:
+                {
+                } break;
+            }
             
-            default:
-            {
-            } break;
-        }
-        
-        Assert(standardAssetCount < U16_MAX / 2);
-        Assert(derivedAssetCount < U16_MAX / 2);
-        
-        standardAssetCount += standard;
-        derivedAssetCount += derived;
-        
-        platformAPI.CloseFile(&handle);
-        EndTemporaryMemory(fileMemory);
+            Assert(standardAssetCount < U16_MAX / 2);
+            Assert(derivedAssetCount < U16_MAX / 2);
+            
+            standardAssetCount += standard;
+            derivedAssetCount += derived;
+            
+            platformAPI.CloseFile(&handle);
+            EndTemporaryMemory(fileMemory);
+		}
     }
     
     header.standardAssetCount = standardAssetCount;
@@ -1934,11 +1979,14 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     PlatformFileGroup markupFiles = platformAPI.GetAllFilesBegin(PlatformFile_markup, source);
     for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
     {
-        SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
-        if(!AreEqual(saved->timestamp, info->timestamp))
-        {
-            updatedFiles = true;
-        }
+		if(RelevantFile(editorMode, info, &markupFiles))
+		{
+			SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
+			if(!AreEqual(saved->timestamp, info->timestamp))
+			{
+				updatedFiles = true;
+			}
+		}
     }
     
     u16 assetCount = header.standardAssetCount + header.derivedAssetCount;
@@ -1961,21 +2009,26 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
         {
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
-                SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
-                if(!AreEqual(saved->timestamp, info->timestamp))
-                {
-                    SaveFileDateHash(saved, info->timestamp);
-                }
-                
+				if(RelevantFile(editorMode, info, &fileGroup))
+				{
+					SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
+					if(!AreEqual(saved->timestamp, info->timestamp))
+					{
+						SaveFileDateHash(saved, info->timestamp);
+					}
+				}   
             }
             
             for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
             {
-                SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
-                if(!AreEqual(saved->timestamp, info->timestamp))
-                {
-                    SaveFileDateHash(saved, info->timestamp);
-                }
+				if(RelevantFile(editorMode, info, &markupFiles))
+				{
+					SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
+					if(!AreEqual(saved->timestamp, info->timestamp))
+					{
+						SaveFileDateHash(saved, info->timestamp);
+					}
+				}
             }
             
             if(fileGroup.fileCount != savedCount->fileCount || 
@@ -2001,228 +2054,230 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
             fseek(out, assetArraySize, SEEK_CUR);
             
             PAKAsset* pakAssets = PushArray(&tempPool, PAKAsset, assetCount, NoClear());
-            
             u16 runningDerivedAssetIndex = derivedAssetCount ? header.standardAssetCount : 0;
             u16 runningAssetIndex = 0;
             
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
-                TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
-                u8* fileContent = ReadEntireFile(&tempPool, &fileGroup, info);
-                
-                Assert(runningAssetIndex < assetCount);
-                Assert(runningDerivedAssetIndex <= assetCount);
-                
-                PAKAsset* dest = pakAssets + runningAssetIndex++;
-                switch(type)
-                {
-                    case AssetType_Image:
+				if(RelevantFile(editorMode, info, &fileGroup))
+				{
+					TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+                    u8* fileContent = ReadEntireFile(&tempPool, &fileGroup, info);
+                    
+                    Assert(runningAssetIndex < assetCount);
+                    Assert(runningDerivedAssetIndex <= assetCount);
+                    
+                    PAKAsset* dest = pakAssets + runningAssetIndex++;
+                    switch(type)
                     {
-                        if(IsColorationFile(info->name))
+                        case AssetType_Image:
                         {
-                            LoadedColoration coloration = LoadColoration((char*) fileContent);
-                            b32 found = false;
-                            u16 bitmapIndex = 0;
-                            for(PlatformFileInfo* testInfo = fileGroup.firstFileInfo; testInfo; testInfo = testInfo->next)
+                            if(IsColorationFile(info->name))
                             {
-                                if(!IsColorationFile(testInfo->name))
+                                LoadedColoration coloration = LoadColoration((char*) fileContent);
+                                b32 found = false;
+                                u16 bitmapIndex = 0;
+                                for(PlatformFileInfo* testInfo = fileGroup.firstFileInfo; testInfo; testInfo = testInfo->next)
                                 {
-                                    if(StrEqual(testInfo->name, coloration.imageName))
+                                    if(!IsColorationFile(testInfo->name))
                                     {
-                                        found = true;
-                                        break;
+                                        if(StrEqual(testInfo->name, coloration.imageName))
+                                        {
+                                            found = true;
+                                            break;
+                                        }
+                                        
+                                        ++bitmapIndex;
                                     }
+                                }
+                                
+                                if(found)
+                                {
+                                    --runningAssetIndex;
+                                    PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;
+                                    FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, info->name, &markupFiles);
                                     
-                                    ++bitmapIndex;
+                                    Assert(StrLen(coloration.imageName) < sizeof(derivedAsset->coloration.imageName));
+                                    FormatString(derivedAsset->coloration.imageName, sizeof(derivedAsset->coloration.imageName), "%s", coloration.imageName);
+                                    derivedAsset->coloration.color = coloration.color;
+                                    derivedAsset->coloration.bitmapIndex = bitmapIndex;
+                                }
+                            }
+                            else
+                            {
+                                FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
+                                LoadedBitmap bitmap = LoadImage(source, info->name);
+                                
+                                dest->bitmap.dimension[0] = bitmap.width;
+                                dest->bitmap.dimension[1] = bitmap.height;
+                                
+                                dest->bitmap.align[0] = 0.5f;
+                                dest->bitmap.align[1] = 0.5f;
+                                
+                                dest->bitmap.nativeHeight =bitmap.downsampleFactor * bitmap.height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
+                                
+                                fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out);
+                                free(bitmap.free);
+                            }
+                        } break;
+                        
+                        case AssetType_Sound:
+                        {
+                            FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
+                            LoadedSound sound = LoadWAV((char*) fileContent);
+                            dest->sound.sampleCount = sound.countSamples;
+                            dest->sound.channelCount = sound.countChannels;
+                            dest->sound.maxSampleValue = sound.maxSampleValue;
+                            dest->sound.decibelLevel = sound.decibelLevel;
+                            
+                            for(u32 channelIndex = 0; channelIndex < sound.countChannels; channelIndex++ )
+                            {
+                                fwrite(sound.samples[channelIndex], sound.countSamples * sizeof(i16), 1, out); 
+                            }
+                        } break;
+                        
+                        case AssetType_Model:
+                        {
+                            FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
+                            LoadedModel model = LoadModel((char*) fileContent);
+                            
+                            dest->model.vertexCount = model.vertexCount;
+                            dest->model.faceCount = model.faceCount;
+                            dest->model.dim = model.dim;
+                            fwrite(model.vertexes, sizeof(ColoredVertex) * model.vertexCount, 1, out);
+                            fwrite(model.faces, sizeof(ModelFace) * model.faceCount, 1, out);
+                            
+                            free(model.vertexes);
+                            free(model.faces);
+                        } break;
+                        
+                        case AssetType_Font:
+                        {
+                            FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
+                            // TODO(Leonardo): how can we pass the font name here?
+                            char fontName[128];
+                            TrimToFirstCharacter(fontName, sizeof(fontName), info->name, '.');
+                            LoadedFont font = LoadFont(source, info->name, fontName, 64, startingFontCodepoint, endingFontCodepoint);
+                            
+                            dest->font.glyphCount = font.glyphsCount;
+                            dest->font.ascenderHeight = font.ascenderHeight;
+                            dest->font.descenderHeight = font.descenderHeight;
+                            dest->font.externalLeading = font.externalLeading;
+                            dest->font.onePastHighestCodePoint = font.onePastHighestCodePoint;
+                            dest->font.glyphAssetsFirstIndex = runningDerivedAssetIndex;
+                            
+                            u32 glyphsSize = font.glyphsCount * sizeof(u32);
+                            fwrite(font.glyphs, glyphsSize, 1, out);
+                            
+                            
+                            LoadedBitmap* glyphBitmaps = (LoadedBitmap*) malloc(sizeof(LoadedBitmap) * font.glyphsCount);
+                            
+                            for(u32 glyphIndex = 0; glyphIndex < font.glyphsCount; ++glyphIndex)
+                            {
+                                u32 codePoint = font.glyphs[glyphIndex];
+                                if(codePoint)
+                                {
+                                    glyphBitmaps[glyphIndex] = LoadGlyph(&font, codePoint);
                                 }
                             }
                             
-                            if(found)
+                            u8* horizontalAdvancePtr = (u8*) font.horizontalAdvancement;
+                            for(u32 glyphIndex = 0; glyphIndex < font.glyphsCount; glyphIndex++ )
                             {
-                                --runningAssetIndex;
-                                PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;
-                                FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, info->name, &markupFiles);
-                                
-                                Assert(StrLen(coloration.imageName) < sizeof(derivedAsset->coloration.imageName));
-                                FormatString(derivedAsset->coloration.imageName, sizeof(derivedAsset->coloration.imageName), "%s", coloration.imageName);
-                                derivedAsset->coloration.color = coloration.color;
-                                derivedAsset->coloration.bitmapIndex = bitmapIndex;
+                                u32 horizontalAdvanceSliceSize = sizeof(r32) * font.glyphsCount; 
+                                fwrite(horizontalAdvancePtr, horizontalAdvanceSliceSize, 1, out);
+                                horizontalAdvancePtr += sizeof(r32) * font.maximumGlyphsCount;
                             }
-                        }
-                        else
+                            
+                            for(u32 glyphIndex = 0; glyphIndex < font.glyphsCount; ++glyphIndex)
+                            {
+                                u32 codePoint = font.glyphs[glyphIndex];
+                                if(codePoint)
+                                {
+                                    LoadedBitmap* bitmap = glyphBitmaps + glyphIndex;
+                                    PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;
+                                    FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, "ignored", &markupFiles);
+                                    derivedAsset->bitmap.align[0] = bitmap->pivot.x;
+                                    derivedAsset->bitmap.align[1] = bitmap->pivot.y;
+                                    derivedAsset->bitmap.dimension[0] = bitmap->width;
+                                    derivedAsset->bitmap.dimension[1] = bitmap->height;
+                                    derivedAsset->bitmap.nativeHeight = 0;
+                                    
+                                    fwrite(bitmap->pixels, bitmap->width * bitmap->height * sizeof(u32), 1, out);
+                                    free(bitmap->free);
+                                }
+                            }
+                            
+                            
+                            free(glyphBitmaps);
+                            free(font.glyphs);
+                            free(font.horizontalAdvancement);
+                            free(font.glyphIndexForCodePoint);
+                        } break;
+                        
+                        case AssetType_Skeleton:
                         {
                             FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
-                            LoadedBitmap bitmap = LoadImage(source, info->name);
+                            u16 animationCount = CountAnimations((char*) fileContent);
+                            dest->skeleton.animationCount = animationCount;
+                            dest->skeleton.animationAssetsFirstIndex = runningDerivedAssetIndex;
                             
-                            dest->bitmap.dimension[0] = bitmap.width;
-                            dest->bitmap.dimension[1] = bitmap.height;
-                            
-                            dest->bitmap.align[0] = 0.5f;
-                            dest->bitmap.align[1] = 0.5f;
-                            
-                            dest->bitmap.nativeHeight =bitmap.downsampleFactor * bitmap.height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
-                            
-                            fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out);
-                            free(bitmap.free);
-                        }
-                    } break;
-                    
-                    case AssetType_Sound:
-                    {
-                        FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
-                        LoadedSound sound = LoadWAV((char*) fileContent);
-                        dest->sound.sampleCount = sound.countSamples;
-                        dest->sound.channelCount = sound.countChannels;
-                        dest->sound.maxSampleValue = sound.maxSampleValue;
-                        dest->sound.decibelLevel = sound.decibelLevel;
-                        
-                        for(u32 channelIndex = 0; channelIndex < sound.countChannels; channelIndex++ )
-                        {
-                            fwrite(sound.samples[channelIndex], sound.countSamples * sizeof(i16), 1, out); 
-                        }
-                    } break;
-                    
-                    case AssetType_Model:
-                    {
-                        FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
-                        LoadedModel model = LoadModel((char*) fileContent);
-                        
-                        dest->model.vertexCount = model.vertexCount;
-                        dest->model.faceCount = model.faceCount;
-                        dest->model.dim = model.dim;
-                        fwrite(model.vertexes, sizeof(ColoredVertex) * model.vertexCount, 1, out);
-                        fwrite(model.faces, sizeof(ModelFace) * model.faceCount, 1, out);
-                        
-                        free(model.vertexes);
-                        free(model.faces);
-                    } break;
-                    
-                    case AssetType_Font:
-                    {
-                        FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
-                        // TODO(Leonardo): how can we pass the font name here?
-                        char fontName[128];
-                        TrimToFirstCharacter(fontName, sizeof(fontName), info->name, '.');
-                        LoadedFont font = LoadFont(source, info->name, fontName, 64, startingFontCodepoint, endingFontCodepoint);
-                        
-                        dest->font.glyphCount = font.glyphsCount;
-                        dest->font.ascenderHeight = font.ascenderHeight;
-                        dest->font.descenderHeight = font.descenderHeight;
-                        dest->font.externalLeading = font.externalLeading;
-                        dest->font.onePastHighestCodePoint = font.onePastHighestCodePoint;
-                        dest->font.glyphAssetsFirstIndex = runningDerivedAssetIndex;
-                        
-                        u32 glyphsSize = font.glyphsCount * sizeof(u32);
-                        fwrite(font.glyphs, glyphsSize, 1, out);
-                        
-                        
-                        LoadedBitmap* glyphBitmaps = (LoadedBitmap*) malloc(sizeof(LoadedBitmap) * font.glyphsCount);
-                        
-                        for(u32 glyphIndex = 0; glyphIndex < font.glyphsCount; ++glyphIndex)
-                        {
-                            u32 codePoint = font.glyphs[glyphIndex];
-                            if(codePoint)
+                            for(u16 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
                             {
-                                glyphBitmaps[glyphIndex] = LoadGlyph(&font, codePoint);
-                            }
-                        }
-                        
-                        u8* horizontalAdvancePtr = (u8*) font.horizontalAdvancement;
-                        for(u32 glyphIndex = 0; glyphIndex < font.glyphsCount; glyphIndex++ )
-                        {
-                            u32 horizontalAdvanceSliceSize = sizeof(r32) * font.glyphsCount; 
-                            fwrite(horizontalAdvancePtr, horizontalAdvanceSliceSize, 1, out);
-                            horizontalAdvancePtr += sizeof(r32) * font.maximumGlyphsCount;
-                        }
-                        
-                        for(u32 glyphIndex = 0; glyphIndex < font.glyphsCount; ++glyphIndex)
-                        {
-                            u32 codePoint = font.glyphs[glyphIndex];
-                            if(codePoint)
-                            {
-                                LoadedBitmap* bitmap = glyphBitmaps + glyphIndex;
                                 PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;
-                                FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, "ignored", &markupFiles);
-                                derivedAsset->bitmap.align[0] = bitmap->pivot.x;
-                                derivedAsset->bitmap.align[1] = bitmap->pivot.y;
-                                derivedAsset->bitmap.dimension[0] = bitmap->width;
-                                derivedAsset->bitmap.dimension[1] = bitmap->height;
-                                derivedAsset->bitmap.nativeHeight = 0;
+                                LoadedAnimation animation = LoadAnimation((char*) fileContent, animationIndex);
                                 
-                                fwrite(bitmap->pixels, bitmap->width * bitmap->height * sizeof(u32), 1, out);
-                                free(bitmap->free);
+                                char trimmedFilename[128];
+                                TrimToFirstCharacter(trimmedFilename, sizeof(trimmedFilename), filename, '.');
+                                char animationName[128];
+                                FormatString(animationName, sizeof(animationName), "%s_%s", trimmedFilename, animation.name);
+                                FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, animationName, &markupFiles);
+                                
+                                u32 countTotalBones = 0;
+                                u32 countTotalAss = 0;
+                                for(u32 frameIndex = 0; frameIndex < animation.frameCount; frameIndex++)
+                                {
+                                    FrameData* data = animation.frames + frameIndex;
+                                    countTotalBones += data->countBones;
+                                    countTotalAss += data->countAss;
+                                }
+                                
+                                dest->animation.durationMS = animation.durationMS;
+                                dest->animation.syncThreesoldMS = 0;
+                                dest->animation.preparationThreesoldMS = 0;
+                                Assert(dest->animation.durationMS > 0);
+                                
+                                dest->animation.spriteCount = animation.spriteInfoCount;
+                                dest->animation.frameCount = animation.frameCount;
+                                dest->animation.boneCount = countTotalBones;
+                                dest->animation.assCount = countTotalAss;
+                                
+                                
+                                fwrite(animation.spriteInfos, sizeof(SpriteInfo) * animation.spriteInfoCount, 1, out);
+                                fwrite(animation.frames, sizeof(FrameData) * animation.frameCount, 1, out);
+                                fwrite(animation.bones, countTotalBones * sizeof(Bone), 1, out);
+                                fwrite(animation.ass, countTotalAss * sizeof(PieceAss), 1, out);
+                                
+                                free(animation.bones);
+                                free(animation.ass);
+                                free(animation.free);
                             }
-                        }
+                        } break;
                         
-                        
-                        free(glyphBitmaps);
-                        free(font.glyphs);
-                        free(font.horizontalAdvancement);
-                        free(font.glyphIndexForCodePoint);
-                    } break;
-                    
-                    case AssetType_Skeleton:
-                    {
-                        FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
-                        u16 animationCount = CountAnimations((char*) fileContent);
-                        dest->skeleton.animationCount = animationCount;
-                        dest->skeleton.animationAssetsFirstIndex = runningDerivedAssetIndex;
-                        
-                        for(u16 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
+                        case AssetType_Count:
                         {
-                            PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;
-                            LoadedAnimation animation = LoadAnimation((char*) fileContent, animationIndex);
-                            
-                            char trimmedFilename[128];
-                            TrimToFirstCharacter(trimmedFilename, sizeof(trimmedFilename), filename, '.');
-                            char animationName[128];
-                            FormatString(animationName, sizeof(animationName), "%s_%s", trimmedFilename, animation.name);
-                            FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, animationName, &markupFiles);
-                            
-                            u32 countTotalBones = 0;
-                            u32 countTotalAss = 0;
-                            for(u32 frameIndex = 0; frameIndex < animation.frameCount; frameIndex++)
-                            {
-                                FrameData* data = animation.frames + frameIndex;
-                                countTotalBones += data->countBones;
-                                countTotalAss += data->countAss;
-                            }
-                            
-                            dest->animation.durationMS = animation.durationMS;
-                            dest->animation.syncThreesoldMS = 0;
-                            dest->animation.preparationThreesoldMS = 0;
-                            Assert(dest->animation.durationMS > 0);
-                            
-                            dest->animation.spriteCount = animation.spriteInfoCount;
-                            dest->animation.frameCount = animation.frameCount;
-                            dest->animation.boneCount = countTotalBones;
-                            dest->animation.assCount = countTotalAss;
-                            
-                            
-                            fwrite(animation.spriteInfos, sizeof(SpriteInfo) * animation.spriteInfoCount, 1, out);
-                            fwrite(animation.frames, sizeof(FrameData) * animation.frameCount, 1, out);
-                            fwrite(animation.bones, countTotalBones * sizeof(Bone), 1, out);
-                            fwrite(animation.ass, countTotalAss * sizeof(PieceAss), 1, out);
-                            
-                            free(animation.bones);
-                            free(animation.ass);
-                            free(animation.free);
+                            InvalidCodePath;
                         }
-                    } break;
-                    
-                    case AssetType_Count:
-                    {
-                        InvalidCodePath;
+                        default:
+                        {
+                            FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
+                            dest->dataFile.rawSize = SafeTruncateUInt64ToU32(info->size);
+                            fwrite(fileContent, info->size, 1, out);
+                        } break;
                     }
-                    default:
-                    {
-                        FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
-                        dest->dataFile.rawSize = SafeTruncateUInt64ToU32(info->size);
-                        fwrite(fileContent, info->size, 1, out);
-                    } break;
-                }
-                
-                EndTemporaryMemory(fileMemory);
+                    
+                    EndTemporaryMemory(fileMemory);
+				}
             }
             
             fseek(out, (u32) sizeof(PAKFileHeader), SEEK_SET);
@@ -2243,7 +2298,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
 
 
 
-internal void BuildAssets(TimestampHash* hash, char* sourcePath, char* destPath)
+internal void BuildAssets(TimestampHash* hash, char* sourcePath, char* destPath, b32 editorMode)
 {
     b32 propertiesChanged = false;
     PlatformFileGroup propertiesFiles = platformAPI.GetAllFilesBegin(PlatformFile_properties, PROPERTIES_PATH);
@@ -2272,7 +2327,7 @@ internal void BuildAssets(TimestampHash* hash, char* sourcePath, char* destPath)
         for(u32 subsubDirIndex = 0; subsubDirIndex < subsubdir.count; ++subsubDirIndex)
         {
             char* subsubDirName = subsubdir.names[subsubDirIndex];
-            WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, propertiesChanged);
+            WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, propertiesChanged, editorMode);
         }
     }
 }
@@ -2303,12 +2358,15 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(fileTypes, fullpath);
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
-                SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
-                if(!AreEqual(info->timestamp, infoHash->timestamp))
-                {
-                    updatedFiles = true;
-                    
-                }
+				if(EditorFile(info))
+				{
+					SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
+					if(!AreEqual(info->timestamp, infoHash->timestamp))
+					{
+						updatedFiles = true;
+                        
+					}
+				}
             }
             platformAPI.GetAllFilesEnd(&fileGroup);
             
@@ -2316,11 +2374,14 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             PlatformFileGroup markupFiles = platformAPI.GetAllFilesBegin(PlatformFile_markup, fullpath);
             for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
             {
-                SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
-                if(!AreEqual(info->timestamp, infoHash->timestamp))
-                {
-                    updatedFiles = true;
-                }
+				if(EditorFile(info))
+				{
+					SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
+					if(!AreEqual(info->timestamp, infoHash->timestamp))
+					{
+						updatedFiles = true;
+					}
+				}
             }
             platformAPI.GetAllFilesEnd(&markupFiles);
             
@@ -2338,7 +2399,7 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             
             if(updatedFiles || deletedFiles)
             {
-                WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, false);
+                WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, false, true);
             }
         }
     }

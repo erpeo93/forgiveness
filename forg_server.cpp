@@ -444,7 +444,9 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             EndTemporaryMemory(fileMemory);
         }
         platformAPI.GetAllFilesEnd(&timestampFiles);
-        BuildAssets(hash, ASSETS_RAW_PATH, ASSETS_PATH);
+        
+        b32 editorMode = true;
+        BuildAssets(hash, ASSETS_RAW_PATH, ASSETS_PATH, editorMode);
         
         PlatformFileGroup pakFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, ASSETS_PATH);
         
@@ -543,41 +545,50 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
                 platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, nameNoExtension, uncompressedContent, SafeTruncateUInt64ToU32(info->size));
                 ReadCompressFile(file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
                 
+                u32 playerCount = 0;
                 for(u32 playerIndex = 0; 
                     playerIndex < MAXIMUM_SERVER_PLAYERS; 
                     playerIndex++ )
                 {
                     Player* player = server->players + playerIndex;
+                    
                     if(player->connectionSlot)
                     {
-                        FileToSend* toSend;
-                        FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
-                        
-                        toSend->acked = false;
-                        toSend->playerIndex = player->runningFileIndex++;
-                        toSend->serverFileIndex = fileIndex;
-                        toSend->sendingOffset = 0;
-                        
-                        ++file->counter;
-                        if(!player->firstReloadedFileToSend)
+                        ++playerCount;
+                        // TODO(Leonardo): send file to other players!
+                        if(false)
                         {
-                            player->firstReloadedFileToSend = toSend;
-                        }
-                        else
-                        {
-                            for(FileToSend* firstToSend = player->firstReloadedFileToSend;; firstToSend = firstToSend->next)
+                            FileToSend* toSend;
+                            FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
+                            
+                            toSend->acked = false;
+                            toSend->playerIndex = player->runningFileIndex++;
+                            toSend->serverFileIndex = fileIndex;
+                            toSend->sendingOffset = 0;
+                            
+                            ++file->counter;
+                            if(!player->firstReloadedFileToSend)
                             {
-                                if(!firstToSend->next)
+                                player->firstReloadedFileToSend = toSend;
+                            }
+                            else
+                            {
+                                for(FileToSend* firstToSend = player->firstReloadedFileToSend;; firstToSend = firstToSend->next)
                                 {
-                                    firstToSend->next = toSend;
-                                    break;
+                                    if(!firstToSend->next)
+                                    {
+                                        firstToSend->next = toSend;
+                                        break;
+                                    }
                                 }
                             }
+                            
+                            SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
                         }
-                        
-						SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
-                    }
+					}
                 }
+                
+                Assert(playerCount == 1);
             }
             
             EndTemporaryMemory(fileMemory);

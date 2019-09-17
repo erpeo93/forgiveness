@@ -573,17 +573,17 @@ enum FieldOperationType
 };
 
 struct EditorLayout;
-internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArray);
-internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArray);
-internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray);
-internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray);
-internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray);
-internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray);
-internal b32 Edit_Hash64(EditorLayout* layout, char* name, Hash64* h, char* optionsName, b32 isInArray);
-internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enumerator, StringArray options, b32 isInArray);
-internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* property, b32 isInArray);
-internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray);
-internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray);
+internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArray, AssetID assetID);
+internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArray, AssetID assetID);
+internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID);
+internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray, AssetID assetID);
+internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray, AssetID assetID);
+internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray, AssetID assetID);
+internal b32 Edit_Hash64(EditorLayout* layout, char* name, Hash64* h, char* optionsName, b32 isInArray, AssetID assetID);
+internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enumerator, StringArray options, b32 isInArray, AssetID assetID);
+internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* property, b32 isInArray, AssetID assetID);
+internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray, AssetID assetID);
+internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray, AssetID assetID);
 internal void NextRaw(EditorLayout* layout);
 internal void Nest(EditorLayout* layout);
 internal void Push(EditorLayout* layout);
@@ -591,8 +591,8 @@ internal void Pop(EditorLayout* layout);
 internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char* format, ...);
 internal b32 EditorCollapsible(EditorLayout* layout, char* string, AUID ID);
 internal b32 StandardEditorButton(EditorLayout* layout, char* name, AUID ID, Vec4 color);
-internal void AddUndoRedoAdd(EditorUIContext* context, ArrayCounter* counter, void* ptr, void* oldPtr, void* newPtr);
-internal void AddUndoRedoDelete(EditorUIContext* context, ArrayCounter* counter, void* deletedElement, void* ptr, void* lastElementPtr, u32 elementSize);
+internal void AddUndoRedoAdd(EditorUIContext* context, ArrayCounter* counter, void* ptr, void* oldPtr, void* newPtr, AssetID assetID);
+internal void AddUndoRedoDelete(EditorUIContext* context, ArrayCounter* counter, void* deletedElement, void* ptr, void* lastElementPtr, u32 elementSize, AssetID assetID);
 
 #define DUMB_OPERATION_BOILERPLATE_(type)\
 case FieldOperation_GetSize:{} break;\
@@ -603,7 +603,7 @@ case FieldOperation_Parse:{*((type*)ptr) = value;} break;
 #else
 #define DUMB_OPERATION_BOILERPLATE(type)\
 DUMB_OPERATION_BOILERPLATE_(type)\
-case FieldOperation_Edit:{result.deleted = Edit_##type(layout, field->name, (type*) ptr, isInArray);} break;
+case FieldOperation_Edit:{result.deleted = Edit_##type(layout, field->name, (type*) ptr, isInArray, assetID);} break;
 #endif
 
 #define DUMB_INIT_BOILERPLATE(type)\
@@ -612,7 +612,7 @@ type value = field->def.def_##type;\
 if(source){value = Parse_##type(source, value);}
 
 #define STANDARD_OPERATION_FUNCTION(type)\
-internal StructOperationResult type##Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)\
+internal StructOperationResult type##Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray, AssetID assetID)\
 {\
     StructOperationResult result = {};\
     DUMB_INIT_BOILERPLATE(type);\
@@ -637,7 +637,7 @@ STANDARD_OPERATION_FUNCTION(Vec3);
 STANDARD_OPERATION_FUNCTION(Vec4);
 STANDARD_OPERATION_FUNCTION(AssetLabel);
 
-internal StructOperationResult EnumeratorOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+internal StructOperationResult EnumeratorOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray, AssetID assetID)
 {
     StructOperationResult result = {};
     DUMB_INIT_BOILERPLATE(Enumerator);
@@ -650,7 +650,7 @@ internal StructOperationResult EnumeratorOperation(EditorLayout* layout, FieldDe
             StringArray options = {};
             options.strings = field->options;
             options.count = field->optionCount;
-            Edit_Enumerator(layout, field->name, (Enumerator*) ptr, options, isInArray);
+            Edit_Enumerator(layout, field->name, (Enumerator*) ptr, options, isInArray, assetID);
         } break;
 #endif
         case FieldOperation_Dump:
@@ -665,7 +665,7 @@ internal StructOperationResult EnumeratorOperation(EditorLayout* layout, FieldDe
     return result;
 }
 
-internal StructOperationResult Hash64Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+internal StructOperationResult Hash64Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray, AssetID assetID)
 {
     StructOperationResult result = {};
     DUMB_INIT_BOILERPLATE(Hash64);
@@ -675,7 +675,7 @@ internal StructOperationResult Hash64Operation(EditorLayout* layout, FieldDefini
 #ifndef FORG_SERVER
         case FieldOperation_Edit:
         {
-            Edit_Hash64(layout, field->name, (Hash64*) ptr, field->optionsName, isInArray);
+            Edit_Hash64(layout, field->name, (Hash64*) ptr, field->optionsName, isInArray, assetID);
         } break;
 #endif
         case FieldOperation_Dump:
@@ -690,7 +690,7 @@ internal StructOperationResult Hash64Operation(EditorLayout* layout, FieldDefini
     return result;
 }
 
-internal StructOperationResult GameAssetTypeOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray)
+internal StructOperationResult GameAssetTypeOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray, AssetID assetID)
 {
     StructOperationResult result = {};
     DUMB_INIT_BOILERPLATE(GameAssetType);
@@ -702,7 +702,7 @@ internal StructOperationResult GameAssetTypeOperation(EditorLayout* layout, Fiel
         {
             GameAssetType* type = (GameAssetType*) ptr;
             b32 typeEditable = !IsFixedField(field, type, type);
-            Edit_GameAssetType(layout, field->name, type, typeEditable, isInArray);
+            Edit_GameAssetType(layout, field->name, type, typeEditable, isInArray, assetID);
         } break;
 #endif
         
@@ -762,15 +762,12 @@ internal void* GetMemory(MemoryPool* pool, u32 elementCount, u32 elementSize)
 }
 
 
-internal StructOperationResult StructOperation(EditorLayout* layout, String structName, String name, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer);
-internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* fieldPtr, Tokenizer* tokenizer, Stream* output, ReservedSpace* reserved, u16* elementCount)
+internal StructOperationResult StructOperation(EditorLayout* layout, String structName, String name, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer, AssetID assetID);
+internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* fieldPtr, Tokenizer* tokenizer, Stream* output, ReservedSpace* reserved, u16* elementCount, AssetID assetID)
 {
     u32 result = 0;
     b32 pointer = (field->flags & MetaFlag_Pointer);
     u16 elements = 0;
-    
-    Assert(*elementCount);
-    
     
 	if(pointer && operation == FieldOperation_Dump)
 	{
@@ -789,7 +786,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
         
         StructOperationResult op = {};
         
-#define DUMB_OPERATION(type) case MetaType_##type:{op = type##Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer);} break;
+#define DUMB_OPERATION(type) case MetaType_##type:{op = type##Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer, assetID);} break;
         switch(field->type)
         {
             DUMB_OPERATION(u32);
@@ -835,7 +832,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
                 String structName = Stringize(field->typeName);
                 String name = Stringize(nameString);
                 
-                op = StructOperation(layout, structName, name, tokenizer, fieldPtr, operation, output, reserved, pointer);
+                op = StructOperation(layout, structName, name, tokenizer, fieldPtr, operation, output, reserved, pointer, assetID);
                 
                 if(operation == FieldOperation_Dump)
                 {
@@ -864,17 +861,18 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
         {
             u32 offset = field->size * --*elementCount;
             void* targetPtr = AdvanceVoidPtrBytes(fieldPtr, offset);
+            
+            
             void* destPtr = fieldPtr;
             void* sourcePtr = AdvanceVoidPtrBytes(fieldPtr, field->size);
-            
-            AddUndoRedoDelete(layout->context, elementCount, fieldPtr, fieldPtr, targetPtr, field->size);
-            
             while(destPtr != targetPtr)
             {
                 Copy(field->size, destPtr, sourcePtr);
                 destPtr = sourcePtr;
                 sourcePtr = AdvanceVoidPtrBytes(sourcePtr, field->size);
             }
+            
+            AddUndoRedoDelete(layout->context, elementCount, fieldPtr, fieldPtr, targetPtr, field->size, assetID);
         }
 #endif
         
@@ -1017,7 +1015,7 @@ internal void InitFieldDefault(FieldDefinition* field, void* dataPtr)
     }
 }
 
-internal StructOperationResult StructOperation(EditorLayout* layout, String structName, String name, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer = false)
+internal StructOperationResult StructOperation(EditorLayout* layout, String structName, String name, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer, AssetID assetID)
 {
     StructOperationResult result = {};
     StructDefinition* definition = GetMetaStructDefinition(structName);
@@ -1122,7 +1120,7 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                                     InitFieldDefault(field, here);
                                     
                                     
-                                    AddUndoRedoAdd(layout->context, elementCount, ptr, oldPtr, newPtr);
+                                    AddUndoRedoAdd(layout->context, elementCount, ptr, oldPtr, newPtr, assetID);
                                 }
                             }
 #endif
@@ -1145,7 +1143,7 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                         }
 #endif
                         
-                        result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, elementCount);
+                        result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, elementCount, assetID);
 #ifndef FORG_SERVER
                         if(pointer && operation == FieldOperation_Edit)
                         {
@@ -1208,7 +1206,7 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                             fake.at = tokenizer->at;
                             
                             u16 elementCount;
-                            FieldOperation(layout, field, FieldOperation_GetSize, fieldPtr, &fake, output, reserved, &elementCount);
+                            FieldOperation(layout, field, FieldOperation_GetSize, fieldPtr, &fake, output, reserved, &elementCount, assetID);
                             
                             ArrayCounter* counterPtr = GetMetaPtrElementCountForArray(definition, field, dataPtr);
                             Assert(counterPtr);
@@ -1230,7 +1228,7 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                         }
                         
                         u16 ignored = 1;
-                        result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, &ignored);
+                        result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, &ignored, assetID);
                     }
                     else
                     {
@@ -1280,7 +1278,7 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
 internal u32 GetStructSize(String structName, Tokenizer* tokenizer)
 {
     ReservedSpace ignored = {};
-    u32 result = StructOperation(0, structName, structName, tokenizer, 0, FieldOperation_GetSize, 0, &ignored).size;
+    u32 result = StructOperation(0, structName, structName, tokenizer, 0, FieldOperation_GetSize, 0, &ignored, false, {}).size;
     return result;
 }
 
@@ -1291,7 +1289,7 @@ internal void ParseBufferIntoStruct(String structName, Tokenizer* tokenizer, voi
     reserved.ptr = (void*) ((u8*) structPtr + definition->size);
     reserved.size = reservedSize - definition->size;
     
-    StructOperation(0, structName, structName, tokenizer, structPtr, FieldOperation_Parse, 0, &reserved);
+    StructOperation(0, structName, structName, tokenizer, structPtr, FieldOperation_Parse, 0, &reserved, false, {});
     
     Assert(reserved.size == 0);
 }
@@ -1300,6 +1298,6 @@ internal void DumpStructToStream(String structName, Stream* dest, void* structPt
 {
     ReservedSpace ignored = {};
     OutputToStream(dest, "{");
-    StructOperation(0, structName, structName, 0, structPtr, FieldOperation_Dump, dest, &ignored);
+    StructOperation(0, structName, structName, 0, structPtr, FieldOperation_Dump, dest, &ignored, false, {});
     OutputToStream(dest, "}");
 }

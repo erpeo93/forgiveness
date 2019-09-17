@@ -16,9 +16,14 @@ internal UndoRedoRecord* FreeAndGetUndoRedoRecord(EditorUIContext* context)
     return record;
 }
 
-internal void AddUndoRedoCopy(EditorUIContext* context, u32 sizeBefore, void* before, void* ptr, u32 sizeAfter, void* after)
+internal void AddUndoRedoCopy(EditorUIContext* context, u32 sizeBefore, void* before, void* ptr, u32 sizeAfter, void* after, AssetID ID)
 {
     UndoRedoRecord* record = FreeAndGetUndoRedoRecord(context);
+	if(IsValid(ID))
+	{
+        WritebackAssetToFileSystem(context->assets, ID, WRITEBACK_PATH, true);
+	}
+    
     record->type = UndoRedo_Copy;
     
     Assert(sizeBefore < sizeof(record->copy.before));
@@ -34,9 +39,16 @@ internal void AddUndoRedoCopy(EditorUIContext* context, u32 sizeBefore, void* be
 	context->currentCommand = record;
 }
 
-internal void AddUndoRedoAdd(EditorUIContext* context, ArrayCounter* counter, void* fieldPtr, void* oldPtr, void* newPtr)
+internal void AddUndoRedoAdd(EditorUIContext* context, ArrayCounter* counter, void* fieldPtr, void* oldPtr, void* newPtr, AssetID ID)
 {
     UndoRedoRecord* record = FreeAndGetUndoRedoRecord(context);
+    
+    
+	if(IsValid(ID))
+	{
+        WritebackAssetToFileSystem(context->assets, ID, WRITEBACK_PATH, true);
+	}
+    
     record->type = UndoRedo_Add;
     
     record->add.counter = counter;
@@ -48,8 +60,12 @@ internal void AddUndoRedoAdd(EditorUIContext* context, ArrayCounter* counter, vo
 	context->currentCommand = record;
 }
 
-internal void AddUndoRedoDelete(EditorUIContext* context, ArrayCounter* counter, void* deletedElement, void* deletedElementPtr, void* lastElementPtr, u32 elementSize)
+internal void AddUndoRedoDelete(EditorUIContext* context, ArrayCounter* counter, void* deletedElement, void* deletedElementPtr, void* lastElementPtr, u32 elementSize, AssetID ID)
 {
+	if(IsValid(ID))
+	{
+        WritebackAssetToFileSystem(context->assets, ID, WRITEBACK_PATH, true);
+	}
     UndoRedoRecord* record = FreeAndGetUndoRedoRecord(context);
     
     record->type = UndoRedo_Delete;
@@ -166,10 +182,10 @@ internal void Redo(EditorUIContext* context)
 
 
 
-internal void EditStruct(EditorLayout* layout, String structName, void* structPtr)
+internal void EditStruct(EditorLayout* layout, String structName, void* structPtr, AssetID ID)
 {
     ReservedSpace ignored = {};
-    StructOperation(layout, structName, structName, 0, structPtr, FieldOperation_Edit, 0, &ignored);
+    StructOperation(layout, structName, structName, 0, structPtr, FieldOperation_Edit, 0, &ignored, false, ID);
 }
 
 
@@ -383,7 +399,7 @@ internal Rect2 ShowLabel(EditorLayout* layout, char* name, Vec4 color = DefaultE
     return result;
 }
 
-internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID, StringArray options, char* outputBuffer, u32 outputLength)
+internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID, StringArray options, char* outputBuffer, u32 outputLength, AssetID assetID)
 {
     b32 result = false;
     b32 showOptions = false;
@@ -433,7 +449,7 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID,
                 FormatString(outputBuffer, outputLength, "%s", options.strings[data->optionIndex]);
                 result = true;
                 
-                AddUndoRedoCopy(layout->context, StrLen(data->before) + 1, data->before, string, StrLen(string) + 1, string);
+                AddUndoRedoCopy(layout->context, StrLen(data->before) + 1, data->before, string, StrLen(string) + 1, string, assetID);
             }
         }
     }
@@ -456,14 +472,14 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID,
     return result;
 }
 
-internal b32 EditString(EditorLayout* layout, char* name, char* string, StringArray options, char* output, u32 outputLength)
+internal b32 EditString(EditorLayout* layout, char* name, char* string, StringArray options, char* output, u32 outputLength, AssetID assetID)
 {
-    b32 result = EditString(layout, name, string, auID(string), options, output, outputLength);
+    b32 result = EditString(layout, name, string, auID(string), options, output, outputLength, assetID);
     return result;
 }
 
 
-internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray)
+internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray, AssetID assetID)
 {
     EditorUIContext* context = layout->context;
     
@@ -528,7 +544,7 @@ internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label
             FormatString(label->name, sizeof(label->name), "%s", layout->context->keyboardBuffer);
             result = true;
             
-            AddUndoRedoCopy(layout->context, StrLen(data->before) + 1, data->before, label->name, StrLen(label->name) + 1, label->name);
+            AddUndoRedoCopy(layout->context, StrLen(data->before) + 1, data->before, label->name, StrLen(label->name) + 1, label->name, assetID);
         }
     }
     
@@ -537,7 +553,7 @@ internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label
     return result;
 }
 
-internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArray)
+internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
     
@@ -586,7 +602,7 @@ internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArr
 			data->speed += 0.02f;
 			if(UIReleased(layout->context, mouseLeft))
 			{
-                AddUndoRedoCopy(layout->context, sizeof(u32), data->before, number, sizeof(u32), number);
+                AddUndoRedoCopy(layout->context, sizeof(u32), data->before, number, sizeof(u32), number, assetID);
 				EndInteraction(layout->context);
                 result = true;
 			}
@@ -596,7 +612,7 @@ internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArr
             data->speed -= 0.02f;
 			if(UIReleased(layout->context, mouseRight))
 			{
-                AddUndoRedoCopy(layout->context, sizeof(u32), data->before, number, sizeof(u32), number);
+                AddUndoRedoCopy(layout->context, sizeof(u32), data->before, number, sizeof(u32), number, assetID);
 				EndInteraction(layout->context);
                 result = true;
 			}
@@ -612,7 +628,7 @@ internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArr
     return result;
 }
 
-internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArray)
+internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
     
@@ -625,7 +641,7 @@ internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArr
     return result;
 }
 
-internal b32 Edit_b32(EditorLayout* layout, char* name, b32* flag, b32 isInArray)
+internal b32 Edit_b32(EditorLayout* layout, char* name, b32* flag, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
     
@@ -644,7 +660,7 @@ internal b32 Edit_b32(EditorLayout* layout, char* name, b32* flag, b32 isInArray
     {
         b32 before = *flag;
         *flag = !*flag;
-        AddUndoRedoCopy(layout->context, sizeof(b32), &before, flag, sizeof(b32), flag);
+        AddUndoRedoCopy(layout->context, sizeof(b32), &before, flag, sizeof(b32), flag, assetID);
         
     }
     
@@ -655,7 +671,7 @@ internal b32 Edit_b32(EditorLayout* layout, char* name, b32* flag, b32 isInArray
     return result;
 }
 
-internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray)
+internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
     
@@ -747,14 +763,14 @@ internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArr
 				EndInteraction(layout->context);
 				*number = StringToR32(context->keyboardBuffer);
 				result = true;
-				AddUndoRedoCopy(context, sizeof(r32), data->before, number, sizeof(r32), number);
+				AddUndoRedoCopy(context, sizeof(r32), data->before, number, sizeof(r32), number, assetID);
 			}
 		}
 		else
 		{
 			if(UIReleased(layout->context, mouseLeft))
 			{
-				AddUndoRedoCopy(context, sizeof(r32), data->before, number, sizeof(r32), number);
+				AddUndoRedoCopy(context, sizeof(r32), data->before, number, sizeof(r32), number, assetID);
                 EndInteraction(context);
 			}
 			else
@@ -783,49 +799,49 @@ internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArr
     return result;
 }
 
-internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray)
+internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
     
     AUID ID = auID(v);
     
     ShowName(layout, name);
-    Edit_r32(layout, "x", &v->x, false);
-    Edit_r32(layout, "y", &v->y, false);
+    Edit_r32(layout, "x", &v->x, false, assetID);
+    Edit_r32(layout, "y", &v->y, false, assetID);
     
     return result;
 }
 
-internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray)
+internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
     
     AUID ID = auID(v);
     
     ShowName(layout, name);
-    Edit_r32(layout, "x", &v->x, false);
-    Edit_r32(layout, "y", &v->y, false);
-    Edit_r32(layout, "z", &v->z, false);
+    Edit_r32(layout, "x", &v->x, false, assetID);
+    Edit_r32(layout, "y", &v->y, false, assetID);
+    Edit_r32(layout, "z", &v->z, false, assetID);
     
     return result;
 }
 
-internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray)
+internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
     
     AUID ID = auID(v);
     
     ShowName(layout, name);
-    Edit_r32(layout, "x", &v->x, false);
-    Edit_r32(layout, "y", &v->y, false);
-    Edit_r32(layout, "z", &v->z, false);
-    Edit_r32(layout, "w", &v->w, false);
+    Edit_r32(layout, "x", &v->x, false, assetID);
+    Edit_r32(layout, "y", &v->y, false, assetID);
+    Edit_r32(layout, "z", &v->z, false, assetID);
+    Edit_r32(layout, "w", &v->w, false, assetID);
     
     return result;
 }
 
-internal b32 Edit_Hash64(EditorLayout* layout, char* name, Hash64* hash, char* optionsName, b32 isInArray)
+internal b32 Edit_Hash64(EditorLayout* layout, char* name, Hash64* hash, char* optionsName, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
     ShowString(layout, "autocomplete", optionsName, EditorText_StartingSpace);
@@ -861,13 +877,13 @@ internal Enumerator GetValueFromOptions(StringArray options, char* value)
     return result;
 }
 
-internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enumerator, StringArray options, b32 isInArray)
+internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enumerator, StringArray options, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
     
     char* currentValue = GetStringFromOptions(options, *enumerator);
     char output[64];
-    if(EditString(layout, name, currentValue, options, output, sizeof(output)))
+    if(EditString(layout, name, currentValue, options, output, sizeof(output), assetID))
     {
         Enumerator newValue = GetValueFromOptions(options, output);
         *enumerator = newValue;
@@ -876,7 +892,7 @@ internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enume
     return result;
 }
 
-internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray)
+internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
     
@@ -896,7 +912,7 @@ internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType*
         typeOptions = GetAssetTypeList();
     }
     
-    if(EditString(layout, "type", typeString, auID(&type->type), typeOptions, output, sizeof(output)))
+    if(EditString(layout, "type", typeString, auID(&type->type), typeOptions, output, sizeof(output), assetID))
     {
         u16 newType = GetMetaAssetType(output);
         if(newType != type->type)
@@ -914,7 +930,7 @@ internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType*
     }
     
     StringArray subtypeOptions = GetAssetSubtypeList(type->type);
-    if(EditString(layout, "subtype", subtypeString, auID(&type->subtype), subtypeOptions, output, sizeof(output)))
+    if(EditString(layout, "subtype", subtypeString, auID(&type->subtype), subtypeOptions, output, sizeof(output), assetID))
     {
         u16 newSubtype = GetMetaAssetSubtype(type->type, output);
         
@@ -927,7 +943,7 @@ internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType*
     return result;
 }
 
-internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* property, b32 isInArray)
+internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* property, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
     
@@ -942,7 +958,7 @@ internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* p
     }
     
     StringArray typeOptions = GetPropertyTypeList();
-    if(EditString(layout, "type", typeString, auID(&property->property), typeOptions, output, sizeof(output)))
+    if(EditString(layout, "type", typeString, auID(&property->property), typeOptions, output, sizeof(output), assetID))
     {
         u16 newType = GetMetaPropertyType(Tokenize(output));
         if(newType != property->property)
@@ -960,7 +976,7 @@ internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* p
     }
     
     StringArray valueOptions = GetPropertyValueList(property->property);
-    if(EditString(layout, "value", valueString, auID(&property->value), valueOptions, output, sizeof(output)))
+    if(EditString(layout, "value", valueString, auID(&property->value), valueOptions, output, sizeof(output), assetID))
     {
         u16 newValue = ExistMetaPropertyValue(property->property, Tokenize(output));
         
@@ -1067,7 +1083,7 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
     b32 disabled = (!get.asset);
     if(EditorButton(layout, V2(0.25f, -0.1f), ButtonDim(layout), "save", saveID, disabled))
     {
-        WritebackAssetToFileSystem(assets, ID, "../server/assets/raw");
+        WritebackAssetToFileSystem(assets, ID, WRITEBACK_PATH, false);
     }
     
     
@@ -1185,7 +1201,7 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                 structName.length = StrLen(metaAssetType);
                 
                 Nest(layout);
-                EditStruct(layout, structName, asset->data);
+                EditStruct(layout, structName, asset->data, ID);
                 Pop(layout);
             } break;
         }
@@ -1201,7 +1217,7 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
             {
                 PAKProperty* property = info->properties + propertyIndex;
                 NextRaw(layout);
-                Edit_GameProperty(layout, 0, property, false);
+                Edit_GameProperty(layout, 0, property, false, ID);
             }
             Pop(layout);
         }
@@ -1415,13 +1431,13 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                     }
                     
                     NextRaw(&layout);
-                    Edit_Vec3(&layout, "camera offset", &worldMode->additionalCameraOffset, 0);
+                    Edit_Vec3(&layout, "camera offset", &worldMode->additionalCameraOffset, 0, {});
                     NextRaw(&layout);
-                    Edit_b32(&layout, "tile view", &worldMode->worldTileView, 0);
+                    Edit_b32(&layout, "tile view", &worldMode->worldTileView, 0, {});
                     NextRaw(&layout);
-                    Edit_b32(&layout, "chunk view", &worldMode->worldChunkView, 0);
+                    Edit_b32(&layout, "chunk view", &worldMode->worldChunkView, 0, {});
                     NextRaw(&layout);
-                    Edit_u32(&layout, "chunk apron", &worldMode->chunkApron, 0);
+                    Edit_u32(&layout, "chunk apron", &worldMode->chunkApron, 0, {});
                 } break;
             }
             
