@@ -546,7 +546,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                             
                             char newName[128];
                             FormatString(newName, sizeof(newName), "%s_%s", type, subtype);
-                            platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, newName, uncompressed, uncompressedSize);
+                            platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, newName, uncompressed, uncompressedSize, 0);
                             
                             char path[64];
                             PlatformFileGroup fake = {};

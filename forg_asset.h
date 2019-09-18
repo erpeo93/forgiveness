@@ -2,6 +2,7 @@
 
 #define ASSETS_PATH "assets"
 #define RELOAD_PATH "assets/reload"
+#define RELOAD_SEND_PATH "assets/reload_send"
 #define TIMESTAMP_PATH "assets/timestamps"
 #define ASSETS_RAW_PATH "assets/raw"
 #define PROPERTIES_PATH "../properties"

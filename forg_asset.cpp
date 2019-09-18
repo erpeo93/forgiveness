@@ -919,6 +919,8 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
     
     WriteAssetMarkupDataToStream(&metaDataStream, (AssetType) type, &asset->paka, derivedAsset);
     TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+    
+    u32 replaceFlags = editorMode ? PlatformFileReplace_Hidden : 0; 
     switch(type)
     {
         case AssetType_Font:
@@ -943,7 +945,7 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
                 
 				if(editorMode)
 				{
-                    u32 written = (u32) FormatString(filenameNoExtension, bufferSize, "__test__");
+                    u32 written = (u32) FormatString(filenameNoExtension, bufferSize, TEST_FILE_PREFIX);
                     filenameNoExtension += written;
                     bufferSize -= written;
 				}
@@ -953,7 +955,7 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
                 
                 while(true)
                 {
-                    b32 replaced = platformAPI.ReplaceFile(PlatformFile_Coloration, path, filenameNoExtension_, file.begin, file.written);
+                    b32 replaced = platformAPI.ReplaceFile(PlatformFile_Coloration, path, filenameNoExtension_, file.begin, file.written, replaceFlags);
                     
                     if(!editorMode || replaced)
                     {
@@ -979,7 +981,7 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
             
             if(editorMode)
             {
-                u32 written = (u32) FormatString(filenameNoExtension, bufferSize, "__test__");
+                u32 written = (u32) FormatString(filenameNoExtension, bufferSize, TEST_FILE_PREFIX);
                 filenameNoExtension += written;
                 bufferSize -= written;
             }
@@ -988,7 +990,7 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
             
             while(true)
             {
-                b32 replaced = platformAPI.ReplaceFile(PlatformFile_data, path, filenameNoExtension_, file.begin, file.written);
+                b32 replaced = platformAPI.ReplaceFile(PlatformFile_data, path, filenameNoExtension_, file.begin, file.written, replaceFlags);
                 if(!editorMode || replaced)
                 {
                     break;
@@ -1014,7 +1016,7 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
     FormatString(markupFilename, bufferSize, "%s", asset->paka.sourceName);
     ReplaceAll(markupFilename, '.', '_');
     
-    platformAPI.ReplaceFile(PlatformFile_markup, path, markupFilename_, metaDataStream.begin, metaDataStream.written);
+    platformAPI.ReplaceFile(PlatformFile_markup, path, markupFilename_, metaDataStream.begin, metaDataStream.written, replaceFlags);
     Clear(&tempPool);
 }
 

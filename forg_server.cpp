@@ -388,7 +388,7 @@ PLATFORM_WORK_CALLBACK(WatchForFileChanges)
     TimestampHash* hash = (TimestampHash*) param;
     while(true)
     {
-        WatchReloadFileChanges(hash, ASSETS_RAW_PATH, RELOAD_PATH);
+        WatchReloadFileChanges(hash, ASSETS_RAW_PATH, RELOAD_PATH, RELOAD_SEND_PATH);
     }
 }
 
@@ -404,6 +404,95 @@ inline void ReadCompressFile(GameFile* file, u32 uncompressedSize, u8* uncompres
     file->type = GetMetaAssetType(header->type);
     file->subtype = GetMetaAssetSubtype(file->type, header->subtype);
     file->dataHash = DataHash((char*) uncompressedContent, uncompressedSize);
+}
+
+internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, PlatformFileGroup* group, PlatformFileInfo* info, b32 sendToPlayers)
+{
+    b32 deleteFile = false;
+    TempMemory fileMemory = BeginTemporaryMemory(pool);
+    
+    PlatformFileHandle handle = platformAPI.OpenFile(group, info);
+    PAKFileHeader header;
+    platformAPI.ReadFromFile(&handle, 0, sizeof(PAKFileHeader), &header);
+    
+    u16 type = GetMetaAssetType(header.type);
+    u16 subtype = GetMetaAssetSubtype(type, header.subtype);
+    
+    u32 fileIndex = 0;
+    GameFile* file = 0;
+    
+    for(u32 testIndex = 0; testIndex < server->fileCount; ++testIndex)
+    {
+        GameFile* test = server->files + testIndex;
+        if(test->type == type && test->subtype == subtype)
+        {
+            file = test;
+            fileIndex = testIndex;
+            break;
+        }
+    }
+    
+    char nameNoExtension[128];
+    TrimToFirstCharacter(nameNoExtension, sizeof(nameNoExtension), info->name, '.');
+    if(file && (file->counter == 0))
+    {
+        deleteFile = true;
+        u8* uncompressedContent = (u8*) PushSize(pool, info->size);
+        platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
+        
+        platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, nameNoExtension, uncompressedContent, SafeTruncateUInt64ToU32(info->size), 0);
+        ReadCompressFile(file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
+        
+        if(sendToPlayers)
+        {
+            for(u32 playerIndex = 0; 
+                playerIndex < MAXIMUM_SERVER_PLAYERS; 
+                playerIndex++ )
+            {
+                Player* player = server->players + playerIndex;
+                
+                if(player->connectionSlot)
+                {
+                    FileToSend* toSend;
+                    FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
+                    
+                    toSend->acked = false;
+                    toSend->playerIndex = player->runningFileIndex++;
+                    toSend->serverFileIndex = fileIndex;
+                    toSend->sendingOffset = 0;
+                    
+                    ++file->counter;
+                    if(!player->firstReloadedFileToSend)
+                    {
+                        player->firstReloadedFileToSend = toSend;
+                    }
+                    else
+                    {
+                        for(FileToSend* firstToSend = player->firstReloadedFileToSend;; firstToSend = firstToSend->next)
+                        {
+                            if(!firstToSend->next)
+                            {
+                                firstToSend->next = toSend;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
+                }
+            }
+        }
+    }
+    
+    EndTemporaryMemory(fileMemory);
+    
+    platformAPI.CloseFile(&handle);
+    if(deleteFile)
+    {
+        char* path = sendToPlayers ? RELOAD_SEND_PATH : RELOAD_PATH;
+        platformAPI.ReplaceFile(PlatformFile_AssetPack, path, 
+                                nameNoExtension, 0, 0, 0);
+    }
 }
 
 extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
@@ -446,7 +535,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         platformAPI.GetAllFilesEnd(&timestampFiles);
         
         b32 editorMode = true;
-        BuildAssets(hash, ASSETS_RAW_PATH, ASSETS_PATH, editorMode);
+        BuildAssets(hash, ASSETS_RAW_PATH, ASSETS_PATH);
         
         PlatformFileGroup pakFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, ASSETS_PATH);
         
@@ -510,98 +599,21 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     {
         if(info->size)
         {
-            b32 deleteFile = false;
-            TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
-            
-            PlatformFileHandle handle = platformAPI.OpenFile(&reloadedFiles, info);
-            PAKFileHeader header;
-            platformAPI.ReadFromFile(&handle, 0, sizeof(PAKFileHeader), &header);
-            
-            u16 type = GetMetaAssetType(header.type);
-            u16 subtype = GetMetaAssetSubtype(type, header.subtype);
-            
-            u32 fileIndex = 0;
-            GameFile* file = 0;
-            
-            for(u32 testIndex = 0; testIndex < server->fileCount; ++testIndex)
-            {
-                GameFile* test = server->files + testIndex;
-                if(test->type == type && test->subtype == subtype)
-                {
-                    file = test;
-                    fileIndex = testIndex;
-                    break;
-                }
-            }
-            
-            char nameNoExtension[128];
-            TrimToFirstCharacter(nameNoExtension, sizeof(nameNoExtension), info->name, '.');
-            if(file && (file->counter == 0))
-            {
-                deleteFile = true;
-                u8* uncompressedContent = (u8*) PushSize(&tempPool, info->size);
-                platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
-                
-                platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, nameNoExtension, uncompressedContent, SafeTruncateUInt64ToU32(info->size));
-                ReadCompressFile(file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
-                
-                u32 playerCount = 0;
-                for(u32 playerIndex = 0; 
-                    playerIndex < MAXIMUM_SERVER_PLAYERS; 
-                    playerIndex++ )
-                {
-                    Player* player = server->players + playerIndex;
-                    
-                    if(player->connectionSlot)
-                    {
-                        ++playerCount;
-                        // TODO(Leonardo): send file to other players!
-                        if(false)
-                        {
-                            FileToSend* toSend;
-                            FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
-                            
-                            toSend->acked = false;
-                            toSend->playerIndex = player->runningFileIndex++;
-                            toSend->serverFileIndex = fileIndex;
-                            toSend->sendingOffset = 0;
-                            
-                            ++file->counter;
-                            if(!player->firstReloadedFileToSend)
-                            {
-                                player->firstReloadedFileToSend = toSend;
-                            }
-                            else
-                            {
-                                for(FileToSend* firstToSend = player->firstReloadedFileToSend;; firstToSend = firstToSend->next)
-                                {
-                                    if(!firstToSend->next)
-                                    {
-                                        firstToSend->next = toSend;
-                                        break;
-                                    }
-                                }
-                            }
-                            
-                            SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
-                        }
-					}
-                }
-                
-                Assert(playerCount == 1);
-            }
-            
-            EndTemporaryMemory(fileMemory);
-            
-            platformAPI.CloseFile(&handle);
-            if(deleteFile)
-            {
-                platformAPI.ReplaceFile(PlatformFile_AssetPack, RELOAD_PATH, 
-                                        nameNoExtension, 0, 0);
-            }
+            ProcessReloadedFile(server, &tempPool, &reloadedFiles, info, false);
         }
     }
     platformAPI.GetAllFilesEnd(&reloadedFiles);
+    
+    
+	PlatformFileGroup reloadedSendFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, RELOAD_SEND_PATH);
+	for(PlatformFileInfo* info = reloadedSendFiles.firstFileInfo; info; info = info->next)
+    {
+        if(info->size)
+        {
+            ProcessReloadedFile(server, &tempPool, &reloadedSendFiles, info, true);
+        }
+    }
+    platformAPI.GetAllFilesEnd(&reloadedSendFiles);
     
     // TODO(Leonardo): change the API of the network library to return a networkConnection*!
     u16 newConnections[16] = {};

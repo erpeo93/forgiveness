@@ -339,6 +339,12 @@ struct PlatformFileTimestamp
     u64 write;
 };
 
+inline b32 TimestampIsMoreRecent(PlatformFileTimestamp t1, PlatformFileTimestamp t2)
+{
+    b32 result = (t1.write > t2.write);
+    return result;
+};
+
 inline b32 AreEqual(PlatformFileTimestamp t1, PlatformFileTimestamp t2)
 {
     b32 result = (t1.access == t2.access && t1.write == t2.write);
@@ -393,7 +399,11 @@ typedef PLATFORM_FILE_ERROR(platform_file_error);
 #define PLATFORM_DELETE_FILES(name) void name(PlatformFileType type, char* path)
 typedef PLATFORM_DELETE_FILES(platform_delete_files);
 
-#define PLATFORM_REPLACE_FILE(name) b32 name(PlatformFileType type, char* path, char* file, u8* content, u32 size)
+enum PlatformFileReplaceFlags
+{
+    PlatformFileReplace_Hidden = (1 << 0),
+};
+#define PLATFORM_REPLACE_FILE(name) b32 name(PlatformFileType type, char* path, char* file, u8* content, u32 size, u32 flags)
 typedef PLATFORM_REPLACE_FILE(platform_replace_file);
 
 

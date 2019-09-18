@@ -320,7 +320,13 @@ PLATFORM_REPLACE_FILE(Win32ReplaceFile)
     
     Assert(size <= 0xFFFFFFFF);
     
-    HANDLE fileHandle = CreateFile(fileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+    int attributes = 0;
+    if(flags & PlatformFileReplace_Hidden)
+    {
+        attributes = FILE_ATTRIBUTE_HIDDEN;
+    }
+    
+    HANDLE fileHandle = CreateFile(fileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, attributes, 0);
     if(fileHandle != INVALID_HANDLE_VALUE)
     {
         DWORD bytesWritten;

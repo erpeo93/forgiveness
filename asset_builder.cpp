@@ -1659,7 +1659,7 @@ internal void SaveFileCountHash(SavedTypeSubtypeCountHash* info, u32 fileCount, 
     char* subtype = GetAssetSubtypeName(info->type, info->subtype);
     FormatString(name, sizeof(name), "%s_%s", type, subtype);
     
-    platformAPI.ReplaceFile(PlatformFile_timestamp, TIMESTAMP_PATH, name, fileContent, fileSize);
+    platformAPI.ReplaceFile(PlatformFile_timestamp, TIMESTAMP_PATH, name, fileContent, fileSize, 0);
 }
 
 internal SavedFileInfoHash* AddFileDateHash(TimestampHash* hash, char* pathAndName, PlatformFileTimestamp timestamp)
@@ -1715,7 +1715,7 @@ internal void SaveFileDateHash(SavedFileInfoHash* info, PlatformFileTimestamp ti
     
     u8* fileContent = (u8*) info;
     u32 fileSize = sizeof(SavedFileInfoHash);
-    platformAPI.ReplaceFile(PlatformFile_timestamp, TIMESTAMP_PATH, info->pathAndName, fileContent, fileSize);
+    platformAPI.ReplaceFile(PlatformFile_timestamp, TIMESTAMP_PATH, info->pathAndName, fileContent, fileSize, 0);
 }
 
 internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* asset, char* name, PlatformFileGroup* markupFiles)
@@ -1824,39 +1824,56 @@ internal b32 EditorFile(PlatformFileInfo* file)
     return result;
 }
 
-internal b32 RelevantFile(b32 editorMode, PlatformFileInfo* file, PlatformFileGroup* group)
+internal b32 RelevantFile(PlatformFileInfo* file, PlatformFileGroup* group)
 {
 	b32 result = true;
-	if(editorMode)
-	{
-		if(!EditorFile(file))
+    if(!EditorFile(file))
+    {
+        for(PlatformFileInfo* test = group->firstFileInfo; test; test = test->next)
         {
-            for(PlatformFileInfo* test = group->firstFileInfo; test; test = test->next)
+            if(EditorFile(test))
             {
-                if(EditorFile(test))
+                Assert(StrLen(test->name) > StrLen(TEST_FILE_PREFIX));
+                char* name = file->name;
+                char* testName = test->name + StrLen(TEST_FILE_PREFIX);
+                
+                if(StrEqual(testName, name))
                 {
-                    Assert(StrLen(test->name) > StrLen(TEST_FILE_PREFIX));
-                    char* testName = test->name + StrLen(TEST_FILE_PREFIX);
-                    if(StrEqual(testName, file->name))
+                    if(TimestampIsMoreRecent(test->timestamp, file->timestamp))
                     {
                         result = false;
-                        break;
                     }
+                    break;
                 }
             }
         }
-	}
-	else
-	{
-		if(EditorFile(file))
-		{
-			result = false;
-		}
-	}
+    }
+    else
+    {
+        for(PlatformFileInfo* test = group->firstFileInfo; test; test = test->next)
+        {
+            if(!EditorFile(test))
+            {
+                Assert(StrLen(file->name) > StrLen(TEST_FILE_PREFIX));
+                char* name = file->name + StrLen(TEST_FILE_PREFIX);
+                char* testName = test->name;
+                
+                if(StrEqual(testName, name))
+                {
+                    if(TimestampIsMoreRecent(test->timestamp, file->timestamp))
+                    {
+                        result = false;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+	
     return result;
 }
 
-internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, char* sourceSubdir, char* outputPath, b32 propertiesChanged, b32 editorMode)
+internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, char* sourceSubdir, char* outputPath, b32 propertiesChanged)
 {
     MemoryPool tempPool = {};
     
@@ -1897,7 +1914,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     
     for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
     {
-		if(RelevantFile(editorMode, info, &fileGroup))
+		if(RelevantFile(info, &fileGroup))
 		{
 			TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
             PlatformFileHandle handle = platformAPI.OpenFile(&fileGroup, info);
@@ -1979,14 +1996,11 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     PlatformFileGroup markupFiles = platformAPI.GetAllFilesBegin(PlatformFile_markup, source);
     for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
     {
-		if(RelevantFile(editorMode, info, &markupFiles))
-		{
-			SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
-			if(!AreEqual(saved->timestamp, info->timestamp))
-			{
-				updatedFiles = true;
-			}
-		}
+        SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
+        if(!AreEqual(saved->timestamp, info->timestamp))
+        {
+            updatedFiles = true;
+        }
     }
     
     u16 assetCount = header.standardAssetCount + header.derivedAssetCount;
@@ -2009,26 +2023,20 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
         {
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
-				if(RelevantFile(editorMode, info, &fileGroup))
-				{
-					SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
-					if(!AreEqual(saved->timestamp, info->timestamp))
-					{
-						SaveFileDateHash(saved, info->timestamp);
-					}
-				}   
+                SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
+                if(!AreEqual(saved->timestamp, info->timestamp))
+                {
+                    SaveFileDateHash(saved, info->timestamp);
+                }
             }
             
             for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
             {
-				if(RelevantFile(editorMode, info, &markupFiles))
-				{
-					SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
-					if(!AreEqual(saved->timestamp, info->timestamp))
-					{
-						SaveFileDateHash(saved, info->timestamp);
-					}
-				}
+                SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
+                if(!AreEqual(saved->timestamp, info->timestamp))
+                {
+                    SaveFileDateHash(saved, info->timestamp);
+                }
             }
             
             if(fileGroup.fileCount != savedCount->fileCount || 
@@ -2059,7 +2067,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
             
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
-				if(RelevantFile(editorMode, info, &fileGroup))
+				if(RelevantFile(info, &fileGroup))
 				{
 					TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
                     u8* fileContent = ReadEntireFile(&tempPool, &fileGroup, info);
@@ -2298,7 +2306,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
 
 
 
-internal void BuildAssets(TimestampHash* hash, char* sourcePath, char* destPath, b32 editorMode)
+internal void BuildAssets(TimestampHash* hash, char* sourcePath, char* destPath)
 {
     b32 propertiesChanged = false;
     PlatformFileGroup propertiesFiles = platformAPI.GetAllFilesBegin(PlatformFile_properties, PROPERTIES_PATH);
@@ -2327,12 +2335,12 @@ internal void BuildAssets(TimestampHash* hash, char* sourcePath, char* destPath,
         for(u32 subsubDirIndex = 0; subsubDirIndex < subsubdir.count; ++subsubDirIndex)
         {
             char* subsubDirName = subsubdir.names[subsubDirIndex];
-            WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, propertiesChanged, editorMode);
+            WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, propertiesChanged);
         }
     }
 }
 
-internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char* destPath)
+internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char* destPath, char* destSendPath)
 {
     PlatformSubdirNames subdir;
     platformAPI.GetAllSubdirectories(&subdir, sourcePath);
@@ -2346,8 +2354,10 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
         
         for(u32 subsubDirIndex = 0; subsubDirIndex < subsubdir.count; ++subsubDirIndex)
         {
+            b32 updatedStandardFiles = false;
+            b32 updatedTestFiles = false;
+            
             char* subsubDirName = subsubdir.names[subsubDirIndex];
-            b32 updatedFiles = false;
             char fullpath[128];
             FormatString(fullpath, sizeof(fullpath), "%s/%s/%s", sourcePath, subdirName, subsubDirName);
             
@@ -2363,8 +2373,14 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
 					SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
 					if(!AreEqual(info->timestamp, infoHash->timestamp))
 					{
-						updatedFiles = true;
-                        
+                        if(EditorFile(info))
+                        {
+                            updatedTestFiles = true;
+                        }
+                        else
+                        {
+                            updatedStandardFiles = true;
+                        }
 					}
 				}
             }
@@ -2374,17 +2390,21 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             PlatformFileGroup markupFiles = platformAPI.GetAllFilesBegin(PlatformFile_markup, fullpath);
             for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
             {
-				if(EditorFile(info))
-				{
-					SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
-					if(!AreEqual(info->timestamp, infoHash->timestamp))
-					{
-						updatedFiles = true;
-					}
-				}
+                SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
+                if(!AreEqual(info->timestamp, infoHash->timestamp))
+                {
+                    if(EditorFile(info))
+                    {
+                        updatedTestFiles = true;
+                    }
+                    else
+                    {
+                        updatedStandardFiles = true;
+                    }
+                }
             }
-            platformAPI.GetAllFilesEnd(&markupFiles);
             
+            platformAPI.GetAllFilesEnd(&markupFiles);
             
             SavedTypeSubtypeCountHash* countHash = GetCorrenspodingFileCountHash(hash, type, subtype);
             
@@ -2397,9 +2417,10 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
                 deletedFiles = true;
             }
             
-            if(updatedFiles || deletedFiles)
+            if(updatedStandardFiles || updatedTestFiles || deletedFiles)
             {
-                WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, false, true);
+                char* path = (updatedStandardFiles || deletedFiles) ? destSendPath : destPath;
+                WritePak(hash, sourcePath, subdirName, subsubDirName, path, false);
             }
         }
     }

@@ -146,9 +146,7 @@ inline Vec4 GetWaterColor(WorldTile* tile)
         r32 maxAlphaSwallow = 1.0f;
         r32 minAlphaSwallow = 0.0f;
         
-        r32 sineWaterLevel = Clamp01MapToRange(minHeight, tile->elevation, 0);
-        r32 initialNormalizedWaterLevel = Clamp01MapToRange(minHeight, tile->elevation, 0);
-        r32 normalizedWaterLevel = Pow(initialNormalizedWaterLevel, 1.5f);
+        r32 normalizedWaterLevel = Clamp01MapToRange(minHeight, tile->elevation, 0);
         
         Vec3 minColor = Lerp(minColorDeep, normalizedWaterLevel, minColorSwallow);
         Vec3 maxColor = Lerp(maxColorDeep, normalizedWaterLevel, maxColorSwallow);
@@ -158,23 +156,17 @@ inline Vec4 GetWaterColor(WorldTile* tile)
         
         r32 blueNoise = tile->blueNoise;
         r32 alphaNoise = tile->alphaNoise;
-        
         r32 sine = Sin(DegToRad(tile->waterSine));
-        r32 blueSine = sine;
-        r32 alphaSine = sine;
         
-        r32 blueNoiseSine = Lerp(blueNoise, sineWaterLevel, blueSine);
-        r32 alphaNoiseSine = Lerp(alphaNoise, sineWaterLevel, alphaSine);
-        
+        r32 blueNoiseSine = Lerp(blueNoise, normalizedWaterLevel, sine);
+        r32 alphaNoiseSine = Lerp(alphaNoise, normalizedWaterLevel, sine);
         
         r32 blueDisplacement = blueNoiseSine * maxColorDisplacement;
         r32 alphaDisplacement = alphaNoiseSine * maxAlphaDisplacement;
         
         
-        r32 blueLerp = Clamp01MapToRange(0, initialNormalizedWaterLevel + blueDisplacement, 0);
-        r32 alphaLerp = Clamp01MapToRange(0, initialNormalizedWaterLevel + alphaDisplacement, 0);
-        
-        alphaLerp = Pow(alphaLerp, 2.2f);
+        r32 blueLerp = Clamp01(normalizedWaterLevel + blueDisplacement);
+        r32 alphaLerp = Clamp01(normalizedWaterLevel + alphaDisplacement);
         
         Vec3 color = Lerp(minColor, blueLerp, maxColor);
         r32 alpha = Lerp(maxAlpha, alphaLerp, minAlpha);
@@ -320,10 +312,17 @@ internal Vec4 BlendTilesColor(WorldTile* t0, WorldTile* t1, WorldTile* t2, World
     return result;
 }
 
-internal Vec4 GetWaterColor(r32 elevation)
+internal Vec4 GetWaterColor(r32 elevation, RandomSequence* seq)
 {
     r32 lerp = Clamp01MapToRange(minHeight, elevation, 0);
-    Vec4 result = Lerp(V4(0, 0, 1, 1), lerp, V4(0, 0, 1.0f, 0.1f));
+    
+    if(seq)
+    {
+        lerp += 0.3f * RandomBil(seq);
+        lerp = Clamp01(lerp);
+    }
+    
+    Vec4 result = Lerp(V4(0, 0, 1, 0.7f), lerp, V4(0, 0.5f, 1.0f, 0.1f));
     return result;
 }
 
@@ -367,9 +366,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
         }
     }
     
-#if 0    
     b32 changedChunk = (origin.chunkX != oldOrigin.chunkX || origin.chunkY != oldOrigin.chunkY);
-    // NOTE(Leonardo): animate water
     for(i32 Y = originChunkY - chunkApron - 1; Y <= originChunkY + chunkApron + 1; Y++)
     {
         for(i32 X = originChunkX - chunkApron - 1; X <= originChunkX + chunkApron + 1; X++)
@@ -412,10 +409,8 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
             }
         }
     }
-#endif
     
     
-#if 0    
     if(changedChunk || forceVoronoiRegeneration || !worldMode->activeDiagram)
     {
         if(!worldMode->generatingVoronoi)
@@ -425,9 +420,6 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
     }
     
     
-    r32 rippleThreesold = 0.78f;
-    r32 waterRandomPercentage = 0.002f;
-    r32 ripplesLifetime = 3.0f;
     VoronoiDiagram* voronoi = worldMode->activeDiagram;
     if(voronoi)
     {
@@ -488,7 +480,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
 #if 0                     
                 platformAPI.PushWork(worldMode->gameState->renderQueue, RenderVoronoiEdges, work);
 #else
-                //RenderVoronoiEdges(work);
+                RenderVoronoiEdges(work);
 #endif
                 
                 toRender = edge;
@@ -501,7 +493,6 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
         EndTemporaryMemory(voronoiMemory);
         END_BLOCK();
     }
-#endif
     
     
     
@@ -570,7 +561,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                 if(tile->elevation < 0)
                                 {
                                     ++waterCount;
-                                    waterColor += GetWaterColor(tile->elevation);
+                                    waterColor += GetWaterColor(tile->elevation, 0);
                                 }
                             }
                         }
@@ -618,7 +609,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                 WorldTile* tile = sTiles[4];
                                 if(tile->elevation < 0)
                                 {
-                                    Vec4 waterColor = GetWaterColor(tile->elevation);
+                                    Vec4 waterColor = GetWaterColor(tile->elevation, 0);
                                     PushRect(group, FlatTransform(), finalTileP, tileDim, waterColor);
                                 }
                             }
@@ -736,35 +727,6 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                         
                         Assert(IsValidSpecial(&chunk->texture));
                         RefreshSpecialTexture(group->assets, &chunk->texture);
-                        
-                        
-                        
-                        
-                        
-                        for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
-                        {
-                            for(u8 X = 0; X < CHUNK_DIM; ++X)
-                            {
-                                WorldTile* tile = GetTile(chunk, X, Y);
-                                
-                                if(tile->elevation < 0)
-                                {
-                                    
-                                    Vec3 tileMin = -0.5f * V3(chunkSide, chunkSide, 0) + V3(X * voxelSide, Y * voxelSide, 0);
-                                    Vec2 tileDim = V2(voxelSide, voxelSide);
-                                    
-                                    Rect2 tileSurface = RectMinDim(tileMin.xy, tileDim);
-                                    Vec2 tileCenter = GetCenter(tileSurface);
-                                    
-                                    Vec3 finalTileP = chunkBaseCenterOffset + V3(tileCenter, 0.02f);
-                                    Vec4 waterColor = GetWaterColor(tile->elevation);
-                                    PushRect(group, FlatTransform(), finalTileP, tileDim, waterColor);
-                                }
-                            }
-                        }
-                        
-                        
-                        
                     }
                 }
             }
