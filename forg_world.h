@@ -28,6 +28,7 @@ struct WorldTile
     RandomSequence waterSeq;
     r32 blueNoise;
     r32 alphaNoise;
+    u32 waterSeed;
 #endif
     
     Vec4 color;

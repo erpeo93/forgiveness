@@ -45,3 +45,34 @@ struct TileDefinition
     
     TileDefinition* nextFree;
 };
+
+introspection() struct WaterPhase
+{
+    r32 referenceHeight;
+    
+    Vec3 minColor;
+    Vec3 maxColor;
+    
+    r32 maxAlpha;
+    r32 minAlpha;
+    
+    r32 maxColorDisplacement;
+    r32 maxAlphaDisplacement;
+    
+    r32 colorSpeed;
+    r32 colorSpeedV;
+    
+    r32 sineSpeed;
+    r32 sineSpeedV;
+    
+    r32 sineWeight;
+    
+    NoiseParams noise;
+};
+
+introspection() struct WaterParams
+{
+    WaterPhase deep;
+    WaterPhase swallow;
+    WaterPhase shore;
+};

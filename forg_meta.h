@@ -38,6 +38,7 @@ enum MetaType
     MetaType_MinMaxSelector,
     MetaType_PropertySelector,
     MetaType_BiomePyramid,
+    MetaType_WaterPhase,
 };
 
 enum FieldMetaFlags

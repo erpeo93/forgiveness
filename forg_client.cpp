@@ -140,6 +140,20 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->dayPhases[DayPhase_Night].next = DayPhase_Day;
 #endif
     
+    result->water.maxColorDisplacement = 0.4f;
+    result->water.maxAlphaDisplacement = 0.3f;
+    result->water.minColorDeep = V3(0.0f, 0.03f, 0.05f);
+    result->water.maxColorDeep = V3(0.0f, 0.08f, 0.4f);
+    result->water.maxAlphaDeep = 1.0f;
+    result->water.minAlphaDeep = 0.7f;
+    result->water.minColorSwallow = V3(0.0f, 0.1f, 0.78f);
+    result->water.maxColorSwallow = V3(0.65f, 0.75f, 1.0f);
+    result->water.maxAlphaSwallow = 1.0f;
+    result->water.minAlphaSwallow = 0.0f;
+    result->water.colorSpeed = 0.12f;
+    result->water.sineSpeed = 70.0f;
+    result->water.noise = NoisePar(4.0f, 2, 0.0f, 1.0f);
+    
     //result->currentPhase = DayPhase_Day;
     result->soundState = &gameState->soundState;
     

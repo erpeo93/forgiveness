@@ -80,6 +80,30 @@ char* MetaTable_SlotName[] =
 "Count",
 };
 
+FieldDefinition fieldDefinitionOfWaterPhase[] = 
+ {
+{0, MetaType_r32, "r32", "referenceHeight", (u32) (&((WaterPhase*)0)->referenceHeight), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_Vec3, "Vec3", "minColor", (u32) (&((WaterPhase*)0)->minColor), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
+{0, MetaType_Vec3, "Vec3", "maxColor", (u32) (&((WaterPhase*)0)->maxColor), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "maxAlpha", (u32) (&((WaterPhase*)0)->maxAlpha), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "minAlpha", (u32) (&((WaterPhase*)0)->minAlpha), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "maxColorDisplacement", (u32) (&((WaterPhase*)0)->maxColorDisplacement), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "maxAlphaDisplacement", (u32) (&((WaterPhase*)0)->maxAlphaDisplacement), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "colorSpeed", (u32) (&((WaterPhase*)0)->colorSpeed), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "colorSpeedV", (u32) (&((WaterPhase*)0)->colorSpeedV), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "sineSpeed", (u32) (&((WaterPhase*)0)->sineSpeed), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "sineSpeedV", (u32) (&((WaterPhase*)0)->sineSpeedV), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "sineWeight", (u32) (&((WaterPhase*)0)->sineWeight), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_NoiseParams, "NoiseParams", "noise", (u32) (&((WaterPhase*)0)->noise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
+};
+
+FieldDefinition fieldDefinitionOfWaterParams[] = 
+ {
+{0, MetaType_WaterPhase, "WaterPhase", "deep", (u32) (&((WaterParams*)0)->deep), {}, sizeof(WaterPhase),"invalid",0, 0, 0}, 
+{0, MetaType_WaterPhase, "WaterPhase", "swallow", (u32) (&((WaterParams*)0)->swallow), {}, sizeof(WaterPhase),"invalid",0, 0, 0}, 
+{0, MetaType_WaterPhase, "WaterPhase", "shore", (u32) (&((WaterParams*)0)->shore), {}, sizeof(WaterPhase),"invalid",0, 0, 0}, 
+};
+
 FieldDefinition fieldDefinitionOfNoiseParams[] = 
  {
 {0, MetaType_r32, "r32", "frequency", (u32) (&((NoiseParams*)0)->frequency), {}, sizeof(r32),"invalid",0, 0, 0}, 
@@ -252,7 +276,9 @@ AddToMetaDefinitions(PropertySelector, fieldDefinitionOfPropertySelector);\
 AddToMetaDefinitions(NoiseSelector, fieldDefinitionOfNoiseSelector);\
 AddToMetaDefinitions(PropertyBucket, fieldDefinitionOfPropertyBucket);\
 AddToMetaDefinitions(NoiseBucket, fieldDefinitionOfNoiseBucket);\
-AddToMetaDefinitions(NoiseParams, fieldDefinitionOfNoiseParams);
+AddToMetaDefinitions(NoiseParams, fieldDefinitionOfNoiseParams);\
+AddToMetaDefinitions(WaterParams, fieldDefinitionOfWaterParams);\
+AddToMetaDefinitions(WaterPhase, fieldDefinitionOfWaterPhase);
 
 #define META_PROPERTIES_ADD()\
 AddToMetaProperties(tileType, MetaProperties_tileType);\

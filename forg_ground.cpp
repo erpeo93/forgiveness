@@ -126,44 +126,33 @@ internal void GenerateVoronoi(GameModeWorld* worldMode, UniversePos originP, i32
     }
 }
 
-inline Vec4 GetWaterColor(WorldTile* tile)
+inline Vec4 GetWaterColor(WaterParams* params, WorldTile* tile)
 {
     Vec4 waterColor = {};
     if(tile->elevation < 0)
     {
-        r32 maxColorDisplacement = 0.4f;
-        r32 maxAlphaDisplacement = 0.3f;
+        WaterPhase* left = GetWaterPhaseLeft(params, tile->elevation);
+        WaterPhase* right = GetWaterPhaseRight(params, tile->elevation);
         
-        Vec3 minColorDeep = V3(0.0f, 0.03f, 0.05f);
-        Vec3 maxColorDeep = V3(0.0f, 0.08f, 0.4f);
+        r32 normalizedWaterLevel = Clamp01MapToRange(left->referenceHeight, tile->elevation, right->referenceHeight);
         
-        r32 maxAlphaDeep = 1.0f;
-        r32 minAlphaDeep = 0.7f;
+        Vec3 minColor = Lerp(left->minColor, normalizedWaterLevel, right->minColor);
+        Vec3 maxColor = Lerp(left->maxColor, normalizedWaterLevel, right->maxColor);
         
-        Vec3 minColorSwallow = V3(0.0f, 0.1f, 0.78f);
-        Vec3 maxColorSwallow = V3(0.65f, 0.75f, 1.0f);
+        r32 minAlpha = Lerp(left->minAlpha, normalizedWaterLevel, right->minAlpha);
+        r32 maxAlpha = Lerp(left->maxAlpha, normalizedWaterLevel, right->maxAlpha);
         
-        r32 maxAlphaSwallow = 1.0f;
-        r32 minAlphaSwallow = 0.0f;
+        // TODO(Leonardo): make this vary on waterSeed
+        r32 sineWeight = Lerp(left->sineWeight, normalizedWaterLevel, right->sineWeight);
         
-        r32 normalizedWaterLevel = Clamp01MapToRange(minHeight, tile->elevation, 0);
+        r32 maxColorDisplacement = Lerp(left->maxColorDisplacement, normalizedWaterLevel, right->maxColorDisplacement);
+        r32 maxAlphaDisplacement = Lerp(left->maxAlphaDisplacement, normalizedWaterLevel, right->maxAlphaDisplacement);
         
-        Vec3 minColor = Lerp(minColorDeep, normalizedWaterLevel, minColorSwallow);
-        Vec3 maxColor = Lerp(maxColorDeep, normalizedWaterLevel, maxColorSwallow);
+        r32 colorNoiseSine = Lerp(tile->blueNoise, sineWeight, tile->waterSine);
+        r32 alphaNoiseSine = Lerp(tile->alphaNoise, sineWeight, tile->waterSine);
         
-        r32 minAlpha = Lerp(minAlphaDeep, normalizedWaterLevel, minAlphaSwallow);
-        r32 maxAlpha = Lerp(maxAlphaDeep, normalizedWaterLevel, maxAlphaSwallow);
-        
-        r32 blueNoise = tile->blueNoise;
-        r32 alphaNoise = tile->alphaNoise;
-        r32 sine = Sin(DegToRad(tile->waterSine));
-        
-        r32 blueNoiseSine = Lerp(blueNoise, normalizedWaterLevel, sine);
-        r32 alphaNoiseSine = Lerp(alphaNoise, normalizedWaterLevel, sine);
-        
-        r32 blueDisplacement = blueNoiseSine * maxColorDisplacement;
+        r32 blueDisplacement = colorNoiseSine * maxColorDisplacement;
         r32 alphaDisplacement = alphaNoiseSine * maxAlphaDisplacement;
-        
         
         r32 blueLerp = Clamp01(normalizedWaterLevel + blueDisplacement);
         r32 alphaLerp = Clamp01(normalizedWaterLevel + alphaDisplacement);
@@ -181,6 +170,7 @@ struct RenderVoronoiWork
 {
     RenderGroup* group;
     VoronoiDiagram* voronoi;
+    WaterParams* water;
     jcv_edge* edges;
     u32 edgeCount;
     
@@ -263,10 +253,10 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
         Vec4 smooth0To = Lerp(offsetToCamera, chunkyness0, site0PCamera);
         Vec4 smooth1To = Lerp(offsetToCamera, chunkyness1, site1PCamera);
         
-        Vec4 waterColor0 = GetWaterColor(QSite0);
-        Vec4 waterColor1 = GetWaterColor(QSite1);
-        Vec4 waterColorFrom = GetWaterColor(QFrom);
-        Vec4 waterColorTo = GetWaterColor(QTo);
+        Vec4 waterColor0 = GetWaterColor(work->water, QSite0);
+        Vec4 waterColor1 = GetWaterColor(work->water, QSite1);
+        Vec4 waterColorFrom = GetWaterColor(work->water, QFrom);
+        Vec4 waterColorTo = GetWaterColor(work->water, QTo);
         
         Vec4 waterOffset = V4(0, 0, 0.01f, 0);
         
@@ -367,21 +357,25 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
     }
     
     b32 changedChunk = (origin.chunkX != oldOrigin.chunkX || origin.chunkY != oldOrigin.chunkY);
+    
+    WaterParams* water = &worldMode->water;
     for(i32 Y = originChunkY - chunkApron - 1; Y <= originChunkY + chunkApron + 1; Y++)
     {
         for(i32 X = originChunkX - chunkApron - 1; X <= originChunkX + chunkApron + 1; X++)
         {
             WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
-            r32 waterSpeed = 0.12f;
-            r32 waterSineSpeed = 70.0f;
+            
             for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
             {
                 for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
                 {
                     WorldTile* tile = GetTile(chunk, tileX, tileY);
+                    WaterPhase* phase = GetWaterPhaseLeft(worldMode->water, tile->elevation);
+                    
+                    r32 waterTileSpeed = phase->colorSpeed + RandomBil(&tile->waterSeq) * phase->colorSpeedV;
                     if(tile->movingNegative)
                     {
-                        tile->waterPhase -= waterSpeed * timeToAdvance;
+                        tile->waterPhase -= waterTileSpeed * timeToAdvance;
                         if(tile->waterPhase < 0)
                         {
                             tile->waterPhase = 0;
@@ -390,7 +384,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                     }
                     else
                     {
-                        tile->waterPhase += waterSpeed * timeToAdvance;
+                        tile->waterPhase += waterTileSpeed * timeToAdvance;
                         if(tile->waterPhase > 1.0f)
                         {
                             tile->waterPhase = 1.0f;
@@ -398,13 +392,13 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                         }
                     }
                     
-                    RandomSequence seq = tile->waterSeq;
-                    NoiseParams waterParams = NoisePar(4.0f, 2, 0.0f, 1.0f);
-                    r32 blueNoise = Evaluate(tile->waterPhase, 0, waterParams, GetNextUInt32(&seq));
-                    r32 alphaNoise = Evaluate(tile->waterPhase, 0, waterParams, GetNextUInt32(&seq));
+                    r32 blueNoise = Evaluate(tile->waterPhase, 0, phase->noise, tile->waterSeed);
+                    r32 alphaNoise = Evaluate(tile->waterPhase, 0, phase->noise, tile->waterSeed);
                     tile->blueNoise = UnilateralToBilateral(blueNoise);
                     tile->alphaNoise = UnilateralToBilateral(alphaNoise);
-                    tile->waterSine += waterSineSpeed * timeToAdvance;
+                    
+                    r32 waterTileSineSpeed = phase->sineSpeed + RandomBil(&tile->waterSeq) * phase->sineSpeedV;
+                    tile->waterSine += Sin(DegToRad(waterTileSineSpeed * timeToAdvance));
                 }
             }
         }
@@ -473,6 +467,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                 RenderVoronoiWork* work = PushStruct(worldMode->temporaryPool, RenderVoronoiWork);
                 work->group = group;
                 work->voronoi = voronoi;
+                work->water = &worldMode->water;
                 work->edges = toRender;
                 work->edgeCount = counter;
                 work->triangleVertexes = ReserveTriangles(group, waterCounter);

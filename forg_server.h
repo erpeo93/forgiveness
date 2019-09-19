@@ -36,6 +36,7 @@
 #include "forg_rock.h"
 #include "forg_network.h"
 #include "forg_meta.h"
+#include "forg_ground.h"
 #include "client_generated.h"
 
 PlatformAPI platformAPI;

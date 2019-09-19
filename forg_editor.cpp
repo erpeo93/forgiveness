@@ -1438,6 +1438,9 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                     Edit_b32(&layout, "chunk view", &worldMode->worldChunkView, 0, {});
                     NextRaw(&layout);
                     Edit_u32(&layout, "chunk apron", &worldMode->chunkApron, 0, {});
+                    
+                    String water = Stringize("WaterParams");
+                    EditStruct(&layout, water, &worldMode->water, {});
                 } break;
             }
             

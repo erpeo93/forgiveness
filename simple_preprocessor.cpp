@@ -494,6 +494,7 @@ int main( int argc, char** argv )
         "forg_action_effect.h",
         "forg_plant.h",
         "forg_inventory.h",
+        "forg_ground.h",
         "forg_world_generation.cpp",
         "forg_world_generation.h",
         "forg_AI.cpp",

@@ -192,12 +192,11 @@ inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 ti
     }
     
     
-    
-    result.waterPhase = 0;
+    result.waterPhase = RandomUni(seq);
     result.movingNegative = false;
-    result.waterSine = 0;
+    result.waterSine = global_time_elapsed + Length??(tileNormX, tileNormY);
     result.waterSeq = Seed((i32) (tileNormX * 1000.24f) + (i32)(tileNormY * 1223424.0f));
-    
+    result.waterSeed = GetNextUInt32(&result.waterSeq);
     return result;
 }
 

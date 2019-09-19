@@ -186,6 +186,7 @@ struct GameModeWorld
     VoronoiDiagram voronoiPingPong[2];
     VoronoiDiagram* activeDiagram;
     
+    WaterParams water;
     
     
     
