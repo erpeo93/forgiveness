@@ -144,6 +144,7 @@ struct GameModeWorld
     
     b32 gamePaused;
     r32 originalTimeToAdvance;
+    r32 totalRunningTime;
     
     MemoryPool* persistentPool;
     MemoryPool* temporaryPool;
@@ -158,6 +159,8 @@ struct GameModeWorld
     Plant* firstFreePlant;
     Rock* firstFreeRock;
     ClientAnimationEffect* firstFreeEffect;
+    
+    RandomSequence entropy;
     
     RandomSequence leafFlowerFruitSequence;
     ParticleCache* particleCache;
@@ -185,9 +188,6 @@ struct GameModeWorld
     b32 generatingVoronoi;
     VoronoiDiagram voronoiPingPong[2];
     VoronoiDiagram* activeDiagram;
-    
-    WaterParams water;
-    
     
     
     Vec3 cameraWorldOffset;

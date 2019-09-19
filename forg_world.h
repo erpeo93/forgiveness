@@ -22,13 +22,17 @@ struct WorldTile
 #ifndef FORG_SERVER
     Lights lights;
     
-    r32 waterPhase;
-    r32 waterSine;
+    RandomSequence entropy;
+    
+    r32 waterRandomization;
     b32 movingNegative;
-    RandomSequence waterSeq;
+    
+    r32 waterTime;
+    u32 waterSeed;
+    
     r32 blueNoise;
     r32 alphaNoise;
-    u32 waterSeed;
+    
 #endif
     
     Vec4 color;

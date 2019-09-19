@@ -126,6 +126,37 @@ internal void GenerateVoronoi(GameModeWorld* worldMode, UniversePos originP, i32
     }
 }
 
+internal WaterPhase* GetWaterPhaseLeft(WaterParams* params, r32 elevation)
+{
+    WaterPhase* result = 0;
+    for(u32 phaseIndex = 0; phaseIndex < params->phaseCount; ++phaseIndex)
+    {
+        WaterPhase* test = params->phases + phaseIndex;
+        if(test->currentHeight > elevation)
+        {
+            result = test;
+            break;
+        }
+    }
+    
+    return result;
+}
+
+internal WaterPhase* GetWaterPhaseRight(WaterParams* params, r32 elevation)
+{
+    WaterPhase* result = 0;
+    for(u32 phaseIndex = 0; phaseIndex < params->phaseCount; ++phaseIndex)
+    {
+        WaterPhase* test = params->phases + phaseIndex;
+        if(test->currentHeight <= elevation)
+        {
+            result = test;
+        }
+    }
+    
+    return result;
+}
+
 inline Vec4 GetWaterColor(WaterParams* params, WorldTile* tile)
 {
     Vec4 waterColor = {};
@@ -134,33 +165,37 @@ inline Vec4 GetWaterColor(WaterParams* params, WorldTile* tile)
         WaterPhase* left = GetWaterPhaseLeft(params, tile->elevation);
         WaterPhase* right = GetWaterPhaseRight(params, tile->elevation);
         
-        r32 normalizedWaterLevel = Clamp01MapToRange(left->referenceHeight, tile->elevation, right->referenceHeight);
-        
-        Vec3 minColor = Lerp(left->minColor, normalizedWaterLevel, right->minColor);
-        Vec3 maxColor = Lerp(left->maxColor, normalizedWaterLevel, right->maxColor);
-        
-        r32 minAlpha = Lerp(left->minAlpha, normalizedWaterLevel, right->minAlpha);
-        r32 maxAlpha = Lerp(left->maxAlpha, normalizedWaterLevel, right->maxAlpha);
-        
-        // TODO(Leonardo): make this vary on waterSeed
-        r32 sineWeight = Lerp(left->sineWeight, normalizedWaterLevel, right->sineWeight);
-        
-        r32 maxColorDisplacement = Lerp(left->maxColorDisplacement, normalizedWaterLevel, right->maxColorDisplacement);
-        r32 maxAlphaDisplacement = Lerp(left->maxAlphaDisplacement, normalizedWaterLevel, right->maxAlphaDisplacement);
-        
-        r32 colorNoiseSine = Lerp(tile->blueNoise, sineWeight, tile->waterSine);
-        r32 alphaNoiseSine = Lerp(tile->alphaNoise, sineWeight, tile->waterSine);
-        
-        r32 blueDisplacement = colorNoiseSine * maxColorDisplacement;
-        r32 alphaDisplacement = alphaNoiseSine * maxAlphaDisplacement;
-        
-        r32 blueLerp = Clamp01(normalizedWaterLevel + blueDisplacement);
-        r32 alphaLerp = Clamp01(normalizedWaterLevel + alphaDisplacement);
-        
-        Vec3 color = Lerp(minColor, blueLerp, maxColor);
-        r32 alpha = Lerp(maxAlpha, alphaLerp, minAlpha);
-        
-        waterColor = V4(color, alpha);
+        if(left && right)
+        {
+            r32 normalizedWaterLevel = Clamp01MapToRange(left->referenceHeight, tile->elevation, right->referenceHeight);
+            
+            Vec3 minColor = Lerp(left->minColor, normalizedWaterLevel, right->minColor);
+            Vec3 maxColor = Lerp(left->maxColor, normalizedWaterLevel, right->maxColor);
+            
+            r32 minAlpha = Lerp(left->minAlpha, normalizedWaterLevel, right->minAlpha);
+            r32 maxAlpha = Lerp(left->maxAlpha, normalizedWaterLevel, right->maxAlpha);
+            
+            // TODO(Leonardo): make this vary on waterSeed
+            r32 sineWeight = Lerp(left->sineWeight, normalizedWaterLevel, right->sineWeight);
+            
+            r32 maxColorDisplacement = Lerp(left->maxColorDisplacement, normalizedWaterLevel, right->maxColorDisplacement);
+            r32 maxAlphaDisplacement = Lerp(left->maxAlphaDisplacement, normalizedWaterLevel, right->maxAlphaDisplacement);
+            
+            r32 sine = Sin(tile->waterTime);
+            r32 colorNoiseSine = Lerp(tile->blueNoise, sineWeight, sine);
+            r32 alphaNoiseSine = Lerp(tile->alphaNoise, sineWeight, sine);
+            
+            r32 blueDisplacement = colorNoiseSine * maxColorDisplacement;
+            r32 alphaDisplacement = alphaNoiseSine * maxAlphaDisplacement;
+            
+            r32 blueLerp = Clamp01(normalizedWaterLevel + blueDisplacement);
+            r32 alphaLerp = Clamp01(normalizedWaterLevel + alphaDisplacement);
+            
+            Vec3 color = Lerp(minColor, blueLerp, maxColor);
+            r32 alpha = Lerp(maxAlpha, alphaLerp, minAlpha);
+            
+            waterColor = V4(color, alpha);
+        }
     }
     
     return waterColor;
@@ -350,7 +385,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                     forceVoronoiRegeneration = true;
                     Assert(chunk->texture.textureHandle.width == 0);
                     Assert(chunk->texture.textureHandle.height == 0);
-                    BuildChunk(group->assets, chunk, X, Y, worldSeed);
+                    BuildChunk(worldMode, group->assets, chunk, X, Y, worldSeed);
                 }
             }
         }
@@ -358,135 +393,154 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
     
     b32 changedChunk = (origin.chunkX != oldOrigin.chunkX || origin.chunkY != oldOrigin.chunkY);
     
-    WaterParams* water = &worldMode->water;
-    for(i32 Y = originChunkY - chunkApron - 1; Y <= originChunkY + chunkApron + 1; Y++)
+    RandomSequence assetSeq = Seed(worldSeed);
+    AssetID waterID = QueryDataFiles(group->assets, WaterParams, 0, &assetSeq, 0);
+    
+    if(IsValid(waterID))
     {
-        for(i32 X = originChunkX - chunkApron - 1; X <= originChunkX + chunkApron + 1; X++)
+        WaterParams* water = GetData(group->assets, WaterParams, waterID);
+        
+        for(u32 phaseIndex = 0; phaseIndex < water->phaseCount; ++phaseIndex)
         {
-            WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
+            WaterPhase* phase = water->phases + phaseIndex;
             
-            for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
+            r32 speed = phase->heightSpeed + RandomBil(&worldMode->entropy) * phase->heightSpeedV;
+            phase->runningTime += speed * timeToAdvance;
+            r32 sine = Sin(phase->runningTime);
+            phase->currentHeight = phase->referenceHeight + sine * phase->referenceHeightV;
+        }
+        
+        for(i32 Y = originChunkY - chunkApron - 1; Y <= originChunkY + chunkApron + 1; Y++)
+        {
+            for(i32 X = originChunkX - chunkApron - 1; X <= originChunkX + chunkApron + 1; X++)
             {
-                for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
+                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
+                
+                for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
                 {
-                    WorldTile* tile = GetTile(chunk, tileX, tileY);
-                    WaterPhase* phase = GetWaterPhaseLeft(worldMode->water, tile->elevation);
-                    
-                    r32 waterTileSpeed = phase->colorSpeed + RandomBil(&tile->waterSeq) * phase->colorSpeedV;
-                    if(tile->movingNegative)
+                    for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
                     {
-                        tile->waterPhase -= waterTileSpeed * timeToAdvance;
-                        if(tile->waterPhase < 0)
+                        WorldTile* tile = GetTile(chunk, tileX, tileY);
+                        WaterPhase* phase = GetWaterPhaseLeft(water, tile->elevation);
+                        if(phase)
                         {
-                            tile->waterPhase = 0;
-                            tile->movingNegative = false;
+                            r32 waterTileSpeed = phase->colorSpeed + RandomBil(&tile->entropy) * phase->colorSpeedV;
+                            if(tile->movingNegative)
+                            {
+                                tile->waterRandomization -= waterTileSpeed * timeToAdvance;
+                                if(tile->waterRandomization < 0)
+                                {
+                                    tile->waterRandomization = 0;
+                                    tile->movingNegative = false;
+                                }
+                            }
+                            else
+                            {
+                                tile->waterRandomization += waterTileSpeed * timeToAdvance;
+                                if(tile->waterRandomization > 1.0f)
+                                {
+                                    tile->waterRandomization = 1.0f;
+                                    tile->movingNegative = true;
+                                }
+                            }
+                            
+                            r32 blueNoise = Evaluate(tile->waterRandomization, 0, phase->noise, tile->waterSeed);
+                            r32 alphaNoise = Evaluate(tile->waterRandomization, 0, phase->noise, tile->waterSeed);
+                            tile->blueNoise = UnilateralToBilateral(blueNoise);
+                            tile->alphaNoise = UnilateralToBilateral(alphaNoise);
+                            
+                            tile->waterTime += timeToAdvance;
                         }
                     }
-                    else
-                    {
-                        tile->waterPhase += waterTileSpeed * timeToAdvance;
-                        if(tile->waterPhase > 1.0f)
-                        {
-                            tile->waterPhase = 1.0f;
-                            tile->movingNegative = true;
-                        }
-                    }
-                    
-                    r32 blueNoise = Evaluate(tile->waterPhase, 0, phase->noise, tile->waterSeed);
-                    r32 alphaNoise = Evaluate(tile->waterPhase, 0, phase->noise, tile->waterSeed);
-                    tile->blueNoise = UnilateralToBilateral(blueNoise);
-                    tile->alphaNoise = UnilateralToBilateral(alphaNoise);
-                    
-                    r32 waterTileSineSpeed = phase->sineSpeed + RandomBil(&tile->waterSeq) * phase->sineSpeedV;
-                    tile->waterSine += Sin(DegToRad(waterTileSineSpeed * timeToAdvance));
                 }
             }
         }
-    }
-    
-    
-    if(changedChunk || forceVoronoiRegeneration || !worldMode->activeDiagram)
-    {
-        if(!worldMode->generatingVoronoi)
+        
+        
+        if(changedChunk || forceVoronoiRegeneration || !worldMode->activeDiagram)
         {
-            GenerateVoronoi(worldMode, origin, originChunkX, originChunkY, chunkApron);
-        }
-    }
-    
-    
-    VoronoiDiagram* voronoi = worldMode->activeDiagram;
-    if(voronoi)
-    {
-        TempMemory voronoiMemory = BeginTemporaryMemory(worldMode->temporaryPool);
-        BEGIN_BLOCK("voronoi sites");
-        jcv_site* sites = jcv_diagram_get_sites(&voronoi->diagram);
-        for(int i = 0; i < voronoi->diagram.numsites; ++i)
-        {
-            jcv_site* site = sites + i;
-            Vec2 siteP = V2(site->p.x, site->p.y);
-            if(!site->tile)
+            if(!worldMode->generatingVoronoi)
             {
-                site->tile = GetTile(worldMode, voronoi->originP, siteP);
+                GenerateVoronoi(worldMode, origin, originChunkX, originChunkY, chunkApron);
             }
         }
-        END_BLOCK();
         
         
-        BEGIN_BLOCK("edge rendering");
-        jcv_edge* edge = jcv_diagram_get_edges(&voronoi->diagram);
-        
-        jcv_edge* toRender = edge;
-        u32 counter = 0;
-        u32 waterCounter = 0;
-        while(edge)
+        VoronoiDiagram* voronoi = worldMode->activeDiagram;
+        if(voronoi)
         {
-            Vec2 offsetFrom = V2(edge->pos[0].x, edge->pos[0].y);
-            Vec2 offsetTo = V2(edge->pos[1].x, edge->pos[1].y);
+            TempMemory voronoiMemory = BeginTemporaryMemory(worldMode->temporaryPool);
+            BEGIN_BLOCK("voronoi sites");
+            jcv_site* sites = jcv_diagram_get_sites(&voronoi->diagram);
+            for(int i = 0; i < voronoi->diagram.numsites; ++i)
+            {
+                jcv_site* site = sites + i;
+                Vec2 siteP = V2(site->p.x, site->p.y);
+                if(!site->tile)
+                {
+                    site->tile = GetTile(worldMode, voronoi->originP, siteP);
+                }
+            }
+            END_BLOCK();
             
-            if(!edge->tile[0])
-            {
-                edge->tile[0] = GetTile(worldMode, voronoi->originP, offsetFrom);
-            }
-            if(edge->sites[0]->tile->elevation < 0)
-            {
-                ++waterCounter;
-            }
             
-            if(!edge->tile[1])
-            {
-                edge->tile[1] = GetTile(worldMode, voronoi->originP, offsetTo);
-            }
-            if(edge->sites[1]->tile->elevation < 0)
-            {
-                ++waterCounter;
-            }
+            BEGIN_BLOCK("edge rendering");
+            jcv_edge* edge = jcv_diagram_get_edges(&voronoi->diagram);
             
-            edge = edge->next;
-            if(++counter == 512 || !edge)
+            jcv_edge* toRender = edge;
+            u32 counter = 0;
+            u32 waterCounter = 0;
+            while(edge)
             {
-                RenderVoronoiWork* work = PushStruct(worldMode->temporaryPool, RenderVoronoiWork);
-                work->group = group;
-                work->voronoi = voronoi;
-                work->water = &worldMode->water;
-                work->edges = toRender;
-                work->edgeCount = counter;
-                work->triangleVertexes = ReserveTriangles(group, waterCounter);
+                Vec2 offsetFrom = V2(edge->pos[0].x, edge->pos[0].y);
+                Vec2 offsetTo = V2(edge->pos[1].x, edge->pos[1].y);
                 
+                if(!edge->tile[0])
+                {
+                    edge->tile[0] = GetTile(worldMode, voronoi->originP, offsetFrom);
+                }
+                if(edge->sites[0]->tile->elevation < 0)
+                {
+                    ++waterCounter;
+                }
+                
+                if(!edge->tile[1])
+                {
+                    edge->tile[1] = GetTile(worldMode, voronoi->originP, offsetTo);
+                }
+                if(edge->sites[1]->tile->elevation < 0)
+                {
+                    ++waterCounter;
+                }
+                
+                edge = edge->next;
+                if(++counter == 512 || !edge)
+                {
+                    RenderVoronoiWork* work = PushStruct(worldMode->temporaryPool, RenderVoronoiWork);
+                    work->group = group;
+                    work->voronoi = voronoi;
+                    work->water = water;
+                    work->edges = toRender;
+                    work->edgeCount = counter;
+                    work->triangleVertexes = ReserveTriangles(group, waterCounter);
+                    
 #if 0                     
-                platformAPI.PushWork(worldMode->gameState->renderQueue, RenderVoronoiEdges, work);
+                    platformAPI.PushWork(worldMode->gameState->renderQueue, RenderVoronoiEdges, work);
 #else
-                RenderVoronoiEdges(work);
+                    RenderVoronoiEdges(work);
 #endif
-                
-                toRender = edge;
-                counter = 0;
-                waterCounter = 0;
+                    
+                    toRender = edge;
+                    counter = 0;
+                    waterCounter = 0;
+                }
             }
+            
+            platformAPI.CompleteQueueWork(worldMode->gameState->renderQueue);
+            EndTemporaryMemory(voronoiMemory);
+            END_BLOCK();
         }
         
-        platformAPI.CompleteQueueWork(worldMode->gameState->renderQueue);
-        EndTemporaryMemory(voronoiMemory);
-        END_BLOCK();
     }
     
     

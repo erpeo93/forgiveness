@@ -1116,28 +1116,31 @@ inline b32 MatchesProperties(Asset* asset, GameProperties* properties)
 {
     b32 result = true;
     
-    for(u32 propertyIndex = 0; propertyIndex < ArrayCount(properties->properties); ++propertyIndex)
+    if(properties)
     {
-        PAKProperty* property = properties->properties + propertyIndex;
-        if(property->property)
+        for(u32 propertyIndex = 0; propertyIndex < ArrayCount(properties->properties); ++propertyIndex)
         {
-            b32 hasProperty = false;
-            for(u32 assetPropertyIndex = 0; assetPropertyIndex < ArrayCount(asset->paka.properties); ++assetPropertyIndex)
+            PAKProperty* property = properties->properties + propertyIndex;
+            if(property->property)
             {
-                PAKProperty* assetProperty = asset->paka.properties + assetPropertyIndex;
-                if(assetProperty->property == property->property)
+                b32 hasProperty = false;
+                for(u32 assetPropertyIndex = 0; assetPropertyIndex < ArrayCount(asset->paka.properties); ++assetPropertyIndex)
                 {
-                    if(property->value == assetProperty->value)
+                    PAKProperty* assetProperty = asset->paka.properties + assetPropertyIndex;
+                    if(assetProperty->property == property->property)
                     {
-                        hasProperty = true;
+                        if(property->value == assetProperty->value)
+                        {
+                            hasProperty = true;
+                        }
+                        break;
                     }
+                }
+                if(!hasProperty)
+                {
+                    result = false;
                     break;
                 }
-            }
-            if(!hasProperty)
-            {
-                result = false;
-                break;
             }
         }
     }

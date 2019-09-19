@@ -48,22 +48,27 @@ struct TileDefinition
 
 introspection() struct WaterPhase
 {
-    r32 referenceHeight;
+    r32 referenceHeight MetaDefault("0");
     
-    Vec3 minColor;
-    Vec3 maxColor;
+    r32 heightSpeed;
+    r32 heightSpeedV;
     
-    r32 maxAlpha;
-    r32 minAlpha;
+    r32 runningTime;
+    r32 referenceHeightV;
+    
+    r32 currentHeight;
+    
+    Vec3 minColor MetaDefault("V3(0, 0, 1)");
+    Vec3 maxColor MetaDefault("V3(0, 0, 1)");
+    
+    r32 maxAlpha MetaDefault("1.0f");
+    r32 minAlpha MetaDefault("0.5f");
     
     r32 maxColorDisplacement;
     r32 maxAlphaDisplacement;
     
     r32 colorSpeed;
     r32 colorSpeedV;
-    
-    r32 sineSpeed;
-    r32 sineSpeedV;
     
     r32 sineWeight;
     
@@ -72,7 +77,6 @@ introspection() struct WaterPhase
 
 introspection() struct WaterParams
 {
-    WaterPhase deep;
-    WaterPhase swallow;
-    WaterPhase shore;
+    ArrayCounter phaseCount MetaCounter(phases);
+    WaterPhase* phases;
 };

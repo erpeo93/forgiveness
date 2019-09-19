@@ -7,6 +7,7 @@ AssetType_Model,
 AssetType_Skeleton,
 AssetType_Sound,
 AssetType_tile_definition,
+AssetType_WaterParams,
 AssetType_world_generator,
 AssetType_Count
 };
@@ -20,6 +21,7 @@ char* metaAsset_assetType[] =
 "Skeleton",
 "Sound",
 "tile_definition",
+"WaterParams",
 "world_generator",
 };
 
@@ -98,6 +100,15 @@ Assettile_definition_Count
 char* metaAsset_tile_definition[] = {
 "default",
 };
+enum AssetWaterParamsType
+{
+AssetWaterParams_default,
+AssetWaterParams_Count
+};
+
+char* metaAsset_WaterParams[] = {
+"default",
+};
 enum Assetworld_generatorType
 {
 Assetworld_generator_default,
@@ -116,6 +127,7 @@ MetaAssetType metaAsset_subTypes[AssetType_Count] =
 {1, metaAsset_Skeleton},
 {10, metaAsset_Sound},
 {1, metaAsset_tile_definition},
+{1, metaAsset_WaterParams},
 {1, metaAsset_world_generator},
 };
 

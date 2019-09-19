@@ -83,6 +83,11 @@ char* MetaTable_SlotName[] =
 FieldDefinition fieldDefinitionOfWaterPhase[] = 
  {
 {0, MetaType_r32, "r32", "referenceHeight", (u32) (&((WaterPhase*)0)->referenceHeight), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "heightSpeed", (u32) (&((WaterPhase*)0)->heightSpeed), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "heightSpeedV", (u32) (&((WaterPhase*)0)->heightSpeedV), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "runningTime", (u32) (&((WaterPhase*)0)->runningTime), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "referenceHeightV", (u32) (&((WaterPhase*)0)->referenceHeightV), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "currentHeight", (u32) (&((WaterPhase*)0)->currentHeight), {}, sizeof(r32),"invalid",0, 0, 0}, 
 {0, MetaType_Vec3, "Vec3", "minColor", (u32) (&((WaterPhase*)0)->minColor), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
 {0, MetaType_Vec3, "Vec3", "maxColor", (u32) (&((WaterPhase*)0)->maxColor), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
 {0, MetaType_r32, "r32", "maxAlpha", (u32) (&((WaterPhase*)0)->maxAlpha), {}, sizeof(r32),"invalid",0, 0, 0}, 
@@ -91,17 +96,14 @@ FieldDefinition fieldDefinitionOfWaterPhase[] =
 {0, MetaType_r32, "r32", "maxAlphaDisplacement", (u32) (&((WaterPhase*)0)->maxAlphaDisplacement), {}, sizeof(r32),"invalid",0, 0, 0}, 
 {0, MetaType_r32, "r32", "colorSpeed", (u32) (&((WaterPhase*)0)->colorSpeed), {}, sizeof(r32),"invalid",0, 0, 0}, 
 {0, MetaType_r32, "r32", "colorSpeedV", (u32) (&((WaterPhase*)0)->colorSpeedV), {}, sizeof(r32),"invalid",0, 0, 0}, 
-{0, MetaType_r32, "r32", "sineSpeed", (u32) (&((WaterPhase*)0)->sineSpeed), {}, sizeof(r32),"invalid",0, 0, 0}, 
-{0, MetaType_r32, "r32", "sineSpeedV", (u32) (&((WaterPhase*)0)->sineSpeedV), {}, sizeof(r32),"invalid",0, 0, 0}, 
 {0, MetaType_r32, "r32", "sineWeight", (u32) (&((WaterPhase*)0)->sineWeight), {}, sizeof(r32),"invalid",0, 0, 0}, 
 {0, MetaType_NoiseParams, "NoiseParams", "noise", (u32) (&((WaterPhase*)0)->noise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfWaterParams[] = 
  {
-{0, MetaType_WaterPhase, "WaterPhase", "deep", (u32) (&((WaterParams*)0)->deep), {}, sizeof(WaterPhase),"invalid",0, 0, 0}, 
-{0, MetaType_WaterPhase, "WaterPhase", "swallow", (u32) (&((WaterParams*)0)->swallow), {}, sizeof(WaterPhase),"invalid",0, 0, 0}, 
-{0, MetaType_WaterPhase, "WaterPhase", "shore", (u32) (&((WaterParams*)0)->shore), {}, sizeof(WaterPhase),"invalid",0, 0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "phaseCount", (u32) (&((WaterParams*)0)->phaseCount), {}, sizeof(ArrayCounter),"invalid","phases", (u32)(&((WaterParams*)0)->phases), 0}, 
+{MetaFlag_Pointer, MetaType_WaterPhase, "WaterPhase", "phases", (u32) (&((WaterParams*)0)->phases), {}, sizeof(WaterPhase),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfNoiseParams[] = 
@@ -299,5 +301,5 @@ meta_propertiesString[Property_test2 - 1] = "test2";\
 meta_propertiesString[Property_Test - 1] = "Test";\
 
 #define META_DEFAULT_VALUES_CPP_SUCKS()\
-fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfworld_generator[7].def.def_r32 =1;fieldDefinitionOfworld_generator[8].def.def_r32 =0.05f;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, AssetImage_default};fieldDefinitionOftile_definition[2].def.def_Vec4 =V4(1, 1, 1, 1);
+fieldDefinitionOfWaterPhase[0].def.def_r32 =0;fieldDefinitionOfWaterPhase[6].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[7].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[8].def.def_r32 =1.0f;fieldDefinitionOfWaterPhase[9].def.def_r32 =0.5f;fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfworld_generator[7].def.def_r32 =1;fieldDefinitionOfworld_generator[8].def.def_r32 =0.05f;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, AssetImage_default};fieldDefinitionOftile_definition[2].def.def_Vec4 =V4(1, 1, 1, 1);
 ;
