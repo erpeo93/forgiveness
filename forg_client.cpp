@@ -6,6 +6,7 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_token.cpp"
 #include "forg_meta.cpp"
 #include "forg_pool.cpp"
+#include "forg_resizable_array.cpp"
 #include "forg_physics.cpp"
 #include "forg_world.cpp"
 //#include "forg_world_client.cpp"
@@ -26,50 +27,10 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_particles.cpp"
 //#include "forg_bolt.cpp"
 //#include "forg_bound.cpp"
-//#include "forg_animation.cpp"
 #include "forg_cutscene.cpp"
 #include "forg_ground.cpp"
 #include "forg_UIcommon.cpp"
-
-inline ClientEntity* GetEntityClient(GameModeWorld* worldMode, u64 identifier, b32 allocate = false)
-{
-    ClientEntity* result = 0;
-    if(identifier)
-    {
-        u32 index = identifier & (ArrayCount(worldMode->entities) - 1);
-        
-        ClientEntity* entity = worldMode->entities[index];
-        ClientEntity* firstFree = 0;
-        
-        while(entity)
-        {
-            Assert(entity->identifier);
-            if(entity->identifier == identifier)
-            {
-                result = entity;
-                break;
-            }
-            
-            entity = entity->next;
-        }
-        
-        if(!result && allocate)
-        {
-            if(firstFree)
-            {
-                result = firstFree;
-            }
-            else
-            {
-                result = PushStruct(worldMode->persistentPool, ClientEntity);
-                result->next = worldMode->entities[index];
-                worldMode->entities[index] = result;
-            }
-        }
-    }
-    
-    return result;
-}
+#include "forg_animation.cpp"
 
 internal void PlayGame(GameState* gameState, PlatformInput* input)
 {
@@ -96,10 +57,6 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     
     LoginRequest(4444);
     
-    
-    u32 entityCount = ArrayCount(result->entities);
-    Assert(!(entityCount & (entityCount - 1)));
-    
     result->temporaryPool = &gameState->framePool;
     result->persistentPool = &gameState->persistentPool;
     
@@ -120,7 +77,6 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->worldTileView = false;
     result->defaultCameraZ = 34.0f;
     result->cameraWorldOffset = V3(0.0f, 0.0f, result->defaultCameraZ);
-    result->cameraFocusID = 0;
     
     result->firstFreeRock = 0;
     result->firstFreePlantSegment = 0;
@@ -152,6 +108,10 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     DLLIST_INIT(&result->editorUI.undoRedoSentinel);
     result->editorUI.currentCommand = &result->editorUI.undoRedoSentinel;
     
+    for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
+    {
+        InitArchetype(result, result->persistentPool, archetypeIndex, 0xff);
+    }
 }
 
 internal Vec3 HandleDaynightCycle(GameModeWorld* worldMode, PlatformInput* input)
@@ -216,157 +176,28 @@ internal Vec3 HandleDaynightCycle(GameModeWorld* worldMode, PlatformInput* input
     return ambientLightColor;
 }
 
-internal void RenderEntities(GameModeWorld* worldMode, RenderGroup* group, ClientPlayer* myPlayer, r32 timeToAdvance)
+internal void RenderCharacterAnimations(GameModeWorld* worldMode, RenderGroup* group,r32 timeToAdvance)
 {
-    for(u32 entityIndex = 0; entityIndex < ArrayCount(worldMode->entities); ++entityIndex)
+    for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
     {
-        ClientEntity* entity = worldMode->entities[entityIndex];
-        while(entity)
+        if(HasComponent(archetypeIndex, BaseComponent) && HasComponent(archetypeIndex, AnimationComponent))
         {
-            Vec3 P = GetRelativeP(worldMode, entity);
-            PushRect(group, UprightTransform(), P, V2(0.5f, 0.5f), V4(1, 0, 0, 1));
-            entity = entity->next;
-        }
-    }
-    
-#if 0    
-    for(u32 entityIndex = 0; 
-        entityIndex < ArrayCount(worldMode->entities); 
-        entityIndex++)
-    {
-        ClientEntity* entity = worldMode->entities[entityIndex];
-        while(entity)
-        {
-            ClientEntity* next = entity->next;
-            if(entity->identifier && !IsSet(entity, Flag_deleted | Flag_Attached))
+            for(ArchIterator iter = First(worldMode, archetypeIndex); 
+                IsValid(iter); 
+                iter = Next(iter))
             {
-                AnimationEntityParams params = StandardEntityParams();
-                if(entity->identifier == myPlayer->openedContainerID)
-                {
-                    params = ContainerEntityParams();
-                }
+                BaseComponent* base = GetComponent(worldMode, iter.ID, BaseComponent);AnimationComponent* animation = GetComponent(worldMode, iter.ID, AnimationComponent);
                 
                 
-#if RESTRUCTURING                
-                if(UI->mode == UIMode_Loot && entity->identifier == myPlayer->identifier)
-                {
-                    ClientEntity* container = GetEntityClient(worldMode, myPlayer->openedContainerID);
-                    if(container && container->P.y > 0)
-                    {
-                        params.transparent = true;
-                    }
-                }
-#endif
-                
-                entity->animation.output = RenderEntity(group, worldMode, entity, timeToAdvance, params);
-                
-                if(IsCreature(worldMode->table, entity->taxonomy))
-                {
-                    entity->lifePointsTriggerTime += timeToAdvance;
-                    entity->staminaTriggerTime += timeToAdvance;
-                    
-                    r32 HUD_FADE_TIME = 2.0f;
-                    r32 HUD_TRIGGER_TIME = 2.0f;
-                    if(entity->showHUD)
-                    {
-                        if(entity->lifePointsTriggerTime >= HUD_FADE_TIME)
-                        {
-                            entity->lifePointsTriggerTime = 0.5f * HUD_TRIGGER_TIME;
-                        }
-                        
-                        if(entity->staminaTriggerTime >= HUD_FADE_TIME)
-                        {
-                            entity->staminaTriggerTime = 0.5f * HUD_TRIGGER_TIME;
-                        }
-                        
-                        entity->lifePointsTriggerTime = Min(entity->lifePointsTriggerTime, HUD_TRIGGER_TIME);
-                        entity->staminaTriggerTime = Min(entity->lifePointsTriggerTime, HUD_TRIGGER_TIME);
-                    }
-                    
-                    r32 lifePointAlpha;
-                    r32 staminaAlpha;
-                    
-                    if(entity->lifePointsTriggerTime <= HUD_TRIGGER_TIME)
-                    {
-                        lifePointAlpha = Clamp01MapToRange(0.0f, entity->lifePointsTriggerTime, HUD_TRIGGER_TIME);
-                    }
-                    else
-                    {
-                        lifePointAlpha = 1.0f - Clamp01MapToRange(HUD_TRIGGER_TIME, entity->lifePointsTriggerTime, HUD_FADE_TIME);
-                    }
-                    
-                    if(entity->staminaTriggerTime <= HUD_TRIGGER_TIME)
-                    {
-                        staminaAlpha = Clamp01MapToRange(0.0f, entity->staminaTriggerTime, HUD_TRIGGER_TIME);
-                    }
-                    else
-                    {
-                        staminaAlpha = 1.0f - Clamp01MapToRange(HUD_TRIGGER_TIME, entity->staminaTriggerTime, HUD_FADE_TIME);
-                    }
-                    
-                    
-                    r32 yOffset = 0.18f;
-                    r32 maxBarWidth = 1.0f;
-                    r32 barHeight = 0.05f;
-                    
-                    
-                    ObjectTransform lifePointTransform = UprightTransform();
-                    lifePointTransform.additionalZBias = 3.0f;
-                    
-                    ObjectTransform backTransform = UprightTransform();
-                    backTransform.additionalZBias = 2.9f;
-                    
-                    Vec4 lifeColor = V4(0.5f, 0, 0, lifePointAlpha);
-                    Vec4 staminaColor = V4(0, 0.5f, 0, staminaAlpha);
-                    Vec4 backLifeColor = V4(0.2f, 0.2f, 0.2f, lifePointAlpha);
-                    Vec4 backStaminaColor = V4(0.2f, 0.2f, 0.2f, staminaAlpha);
-                    
-                    
-                    if(entity->maxLifePoints)
-                    {
-                        r32 lifePointRatio = entity->lifePoints / entity->maxLifePoints;
-                        Rect2 lifeRect = RectMinDim(entity->P.xy - V2(0.5f * maxBarWidth, yOffset), V2(lifePointRatio * maxBarWidth, barHeight));
-                        
-                        Rect2 backRect = RectMinDim(entity->P.xy - V2(0.5f * maxBarWidth, yOffset), V2(maxBarWidth, barHeight));
-                        
-                        PushRect(group, backTransform, backRect, backLifeColor);
-                        PushRect(group, lifePointTransform, lifeRect, lifeColor);
-                    }
-                    
-                    if(entity->maxStamina)
-                    {
-                        r32 staminaRatio = entity->maxStamina ? entity->stamina / entity->maxStamina : 0.0f;
-                        
-                        Rect2 staminaRect = RectMinDim(entity->P.xy - V2(0.5f * maxBarWidth, yOffset + 2.0f * barHeight), V2(staminaRatio * maxBarWidth, barHeight));
-                        Rect2 backRect = RectMinDim(entity->P.xy - V2(0.5f * maxBarWidth, yOffset + 2.0f * barHeight), V2(maxBarWidth, barHeight));
-                        
-                        PushRect(group, backTransform, backRect, backStaminaColor);
-                        PushRect(group, lifePointTransform, staminaRect, staminaColor);
-                    }
-                }
-                
-                if(entity->animation.output.entityPresent && entity->draggingID)
-                {
-                    // NOTE(Leonardo): render target entity here at specified angle and offset
-                    ClientEntity* targetEntity = GetEntityClient(worldMode, entity->draggingID);
-                    if(targetEntity)
-                    {
-                        targetEntity->animation.flipOnYAxis = entity->animation.flipOnYAxis;
-                        AnimationEntityParams targetParams = StandardEntityParams();
-                        targetParams.angle = entity->animation.output.entityAngle;
-                        targetParams.offset = entity->animation.output.entityOffset;
-                        
-                        targetEntity->P = entity->P;
-                        RenderEntity(group, worldMode, targetEntity, 0, targetParams);
-                    }
-                }
+                AnimationParams params = {};
+                params.elapsedTime = timeToAdvance;
+                params.angle = 0;
+                params.P = GetRelativeP(worldMode, base);
+                params.scale = V2(1, 1);
+                RenderCharacterAnimation(group, animation, &params);
             }
-            
-            entity = next;
         }
     }
-#endif
-    
 }
 
 internal void AddEntityLights(GameModeWorld* worldMode)
@@ -497,16 +328,9 @@ internal u64 DetectNearestEntities(GameModeWorld* worldMode, RenderGroup* group,
     return result;
 }
 
-internal void UpdateEntities(GameModeWorld* worldMode, r32 timeToAdvance, ClientEntity* player, ClientPlayer* myPlayer)
+internal void UpdateEntities(GameModeWorld* worldMode, r32 timeToAdvance, ClientPlayer* myPlayer)
 {
-    for(u32 entityIndex = 0; entityIndex < ArrayCount(worldMode->entities); ++entityIndex)
-    {
-        ClientEntity* entity = worldMode->entities[entityIndex];
-        while(entity)
-        {
-            entity = entity->next;
-        }
-    }
+    
 }
 
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
@@ -515,7 +339,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     
     Vec3 inputAcc = {};
     u64 targetEntityID = 0;
-    u32 desiredAction = Action_Idle;
+    u32 desiredAction = 0;
     u64 overlappingEntityID = 0;
     
     
@@ -560,113 +384,107 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     worldMode->relativeScreenMouseP = newMouseP;
     
     
-    if(myPlayer->identifier)
+    if(IsValid(myPlayer->ID))
     {
-        ClientEntity* player = GetEntityClient(worldMode, myPlayer->identifier);
-        if(player)
+        BaseComponent* player = GetComponent(worldMode, myPlayer->ID, BaseComponent);
+        if(IsDown(&input->moveLeft))
         {
-            if(IsDown(&input->moveLeft))
-            {
-                inputAcc.x = -1.0f;
-            }
-            
-            if(IsDown(&input->moveRight))
-            {
-                inputAcc.x = 1.0f;
-            }
-            
-            if(IsDown(&input->moveDown))
-            {
-                inputAcc.y = -1.0f;
-            }
-            if(IsDown(&input->moveUp))
-            {
-                inputAcc.y = 1.0f;
-            }
-            
-            
-            group->assets = gameState->assets;
-            player->identifier = myPlayer->identifier;
-            
-            
-#if 0            
-            if(!gameState->music)
-            {
-                RandomSequence seq = Seed(1111);
-                AssetLabels soundLabels = {};
-                SoundId testSound = QueryAssets(group->assets, AssetType_Sound, AssetSound_exploration, &seq, &soundLabels);
-                
-                gameState->music = PlaySound(&gameState->soundState, group->assets, testSound, 0);
-                
-            }
-#endif
-            
-            Clear(group, V4(0.1f, 0.1f, 0.1f, 1.0f));
-            //ResetLightGrid(worldMode);
-            
-            MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), 1.0f);
-            UpdateAndSetupGameCamera(worldMode, group, input);
-            UpdateEntities(worldMode, input->timeToAdvance, player, myPlayer);
-            
-            BeginDepthPeel(group);
-            
-            AddEntityLights(worldMode);
-            //FinalizeLightGrid(worldMode, group);
-            
-            Vec3 directionalLightColor = V3(1, 1, 1);
-            Vec3 directionalLightDirection = V3(0, 0, -1);
-            r32 directionalLightIntensity = 1.0f;
-            Vec3 ambientLightColor = HandleDaynightCycle(worldMode, input);
-            ambientLightColor = V3(0, 0, 0);
-            
-            PushAmbientLighting(group, ambientLightColor, directionalLightColor, directionalLightDirection, directionalLightIntensity);
-            RenderEntities(worldMode, group, myPlayer, input->timeToAdvance);
-            
-            myPlayer->universeP = player->universeP;
-            Vec3 deltaP = -Subtract(myPlayer->universeP, myPlayer->oldUniverseP);
-            
-            
-            for(u32 voronoiIndex = 0; voronoiIndex < ArrayCount(worldMode->voronoiPingPong); ++voronoiIndex)
-            {
-                worldMode->voronoiPingPong[voronoiIndex].deltaP += deltaP;
-            }
-            
-            PreloadAllGroundBitmaps(group->assets);
-            UpdateAndRenderGround(worldMode, group, myPlayer->universeP, myPlayer->oldUniverseP, input->timeToAdvance);
-            
-            worldMode->particleCache->deltaParticleP = deltaP;
-            UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
-            //worldMode->boltCache->deltaP = deltaP;
-            //UpdateAndRenderBolts(worldMode, worldMode->boltCache, input->timeToAdvance, group);
-            
-            EndDepthPeel(group);
-            
-            myPlayer->oldUniverseP = myPlayer->universeP;
-            
-            
-            RandomSequence seq = Seed(123);
-            GameProperties bitmapProperties = {};
-            bitmapProperties.properties[0].property = Property_Test;
-            bitmapProperties.properties[0].value = Value1;
-            
-            BitmapId test = QueryBitmaps(group->assets, 0, &seq, &bitmapProperties);
-            
-            if(IsValid(test))
-            {
-                PushBitmap(group, UprightTransform(), test, V3(0, 0, 0), 1.0f);
-            }
-            
-            
-            
-            
-            
-            RenderEditor(group, worldMode, deltaMouseScreenP);
-#if 0
-            Rect3 worldCameraBounds = GetScreenBoundsAtTargetDistance(group);
-            Rect2 screenBounds = RectCenterDim(V2(0, 0), V2(worldCameraBounds.max.x - worldCameraBounds.min.x, worldCameraBounds.max.y - worldCameraBounds.min.y));
-            PushRectOutline(group, FlatTransform(), screenBounds, V4(1.0f, 0.0f, 0.0f, 1.0f), 0.1f); 
-#endif
+            inputAcc.x = -1.0f;
         }
+        
+        if(IsDown(&input->moveRight))
+        {
+            inputAcc.x = 1.0f;
+        }
+        
+        if(IsDown(&input->moveDown))
+        {
+            inputAcc.y = -1.0f;
+        }
+        if(IsDown(&input->moveUp))
+        {
+            inputAcc.y = 1.0f;
+        }
+        
+        
+        group->assets = gameState->assets;
+#if 0            
+        if(!gameState->music)
+        {
+            RandomSequence seq = Seed(1111);
+            AssetLabels soundLabels = {};
+            SoundId testSound = QueryAssets(group->assets, AssetType_Sound, AssetSound_exploration, &seq, &soundLabels);
+            
+            gameState->music = PlaySound(&gameState->soundState, group->assets, testSound, 0);
+            
+        }
+#endif
+        
+        Clear(group, V4(0.1f, 0.1f, 0.1f, 1.0f));
+        //ResetLightGrid(worldMode);
+        
+        MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), 1.0f);
+        UpdateAndSetupGameCamera(worldMode, group, input);
+        UpdateEntities(worldMode, input->timeToAdvance, myPlayer);
+        
+        BeginDepthPeel(group);
+        
+        AddEntityLights(worldMode);
+        //FinalizeLightGrid(worldMode, group);
+        
+        Vec3 directionalLightColor = V3(1, 1, 1);
+        Vec3 directionalLightDirection = V3(0, 0, -1);
+        r32 directionalLightIntensity = 1.0f;
+        Vec3 ambientLightColor = HandleDaynightCycle(worldMode, input);
+        ambientLightColor = V3(0, 0, 0);
+        
+        PushAmbientLighting(group, ambientLightColor, directionalLightColor, directionalLightDirection, directionalLightIntensity);
+        
+        RenderCharacterAnimations(worldMode, group, input->timeToAdvance);
+        myPlayer->universeP = player->universeP;
+        Vec3 deltaP = -Subtract(myPlayer->universeP, myPlayer->oldUniverseP);
+        
+        
+        for(u32 voronoiIndex = 0; voronoiIndex < ArrayCount(worldMode->voronoiPingPong); ++voronoiIndex)
+        {
+            worldMode->voronoiPingPong[voronoiIndex].deltaP += deltaP;
+        }
+        
+        PreloadAllGroundBitmaps(group->assets);
+        UpdateAndRenderGround(worldMode, group, myPlayer->universeP, myPlayer->oldUniverseP, input->timeToAdvance);
+        
+        worldMode->particleCache->deltaParticleP = deltaP;
+        UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
+        //worldMode->boltCache->deltaP = deltaP;
+        //UpdateAndRenderBolts(worldMode, worldMode->boltCache, input->timeToAdvance, group);
+        
+        EndDepthPeel(group);
+        
+        myPlayer->oldUniverseP = myPlayer->universeP;
+        
+        
+        RandomSequence seq = Seed(123);
+        GameProperties bitmapProperties = {};
+        bitmapProperties.properties[0].property = Property_Test;
+        bitmapProperties.properties[0].value = Value1;
+        
+        BitmapId test = QueryBitmaps(group->assets, 0, &seq, &bitmapProperties);
+        
+        if(IsValid(test))
+        {
+            PushBitmap(group, UprightTransform(), test, V3(0, 0, 0), 1.0f);
+        }
+        
+        
+        
+        
+        
+        RenderEditor(group, worldMode, deltaMouseScreenP);
+#if 0
+        Rect3 worldCameraBounds = GetScreenBoundsAtTargetDistance(group);
+        Rect2 screenBounds = RectCenterDim(V2(0, 0), V2(worldCameraBounds.max.x - worldCameraBounds.min.x, worldCameraBounds.max.y - worldCameraBounds.min.y));
+        PushRectOutline(group, FlatTransform(), screenBounds, V4(1.0f, 0.0f, 0.0f, 1.0f), 0.1f); 
+#endif
         
     }
     SendUpdate(inputAcc);

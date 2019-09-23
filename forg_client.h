@@ -3,6 +3,7 @@
 #include "ll_net.h"
 #include "forg_platform.h"
 #include "forg_pool.h"
+#include "forg_resizable_array.h"
 #include "forg_debug_interface.h"
 #include "forg_shared.h"
 #include "forg_token.h"
@@ -41,6 +42,14 @@
 #include "forg_essence.h"
 #include "forg_skill.h"
 #include "forg_ground.h"
+
+struct BaseComponent
+{
+    UniversePos universeP;
+    Vec3 velocity;
+};
+
+#include "forg_ecs.h"
 
 
 global_variable PlatformAPI platformAPI;
@@ -88,7 +97,7 @@ struct ReceivingAssetFile
 
 struct ClientPlayer
 {
-    u32 identifier;
+    EntityID ID;
     UniversePos universeP;
     UniversePos oldUniverseP;
     
@@ -97,41 +106,16 @@ struct ClientPlayer
     r32 distanceCoeffFromServerP;
     
     u64 targetIdentifier;
-    PossibleActionType targetPossibleActions[Action_Count];
-    
     u64 overlappingIdentifier;
-    PossibleActionType overlappingPossibleActions[Action_Count];
     
     u64 openedContainerID;
     
     ReceivingAssetFile receiveFileSentinel;
 };
 
-
-
-
-
-
-
-
-struct ClientEntity
-{
-    u32 identifier;
-    UniversePos universeP;
-    Vec3 velocity;
-    
-    r32 timeFromLastUpdate;
-    
-    ClientEntity* next;
-};
-
 struct GameModeWorld
 {
     struct GameState* gameState;
-    
-    
-    ClientEntity* nearestEntities[8];
-    r32 nearestCameraZ[8];
     
     WorldSeason season;
     r32 seasonLerp;
@@ -149,16 +133,15 @@ struct GameModeWorld
     MemoryPool* persistentPool;
     MemoryPool* temporaryPool;
     
-    ClientEntity* entities[1024];
     WorldChunk* chunks[1024];
     
+    ResizableArray archetypes[Archetype_Count];
     
     TicketMutex plantMutex;
     PlantSegment* firstFreePlantSegment;
     PlantStem* firstFreePlantStem;
     Plant* firstFreePlant;
     Rock* firstFreeRock;
-    ClientAnimationEffect* firstFreeEffect;
     
     RandomSequence entropy;
     
@@ -200,7 +183,6 @@ struct GameModeWorld
     b32 worldChunkView;
     Vec3 additionalCameraOffset;
     r32 defaultCameraZ;
-    u64 cameraFocusID;
     
     b32 useDebugCamera;
     

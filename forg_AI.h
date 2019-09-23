@@ -50,7 +50,7 @@ union AIActionData
     u32 behaviorTaxonomy;
 	struct
 	{
-		EntityAction standardAction;
+        u32 standardAction;
 		u32 conceptTaxonomy;
 	};
     EntitySpecialAction specialAction;
@@ -123,7 +123,7 @@ struct Brain
     u64 bestTarget[MAX_CONCEPTS];
     
     
-    EntityAction oldAction;
+    u32 oldAction;
     u64 oldTargetID;
     
     r32 commandTime;

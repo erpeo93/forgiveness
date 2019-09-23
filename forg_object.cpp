@@ -44,11 +44,3 @@ inline b32 Owned(SimEntity* entity, u64 myID)
     return result;
 }
 #endif
-
-
-inline EntityAction CanConsume(TaxonomyTable* table, u32 taxonomy, u32 objectTaxonomy)
-{
-    EntityAction result = Action_None;
-    // TODO(Leonardo): search into target action tree
-    return result;
-}

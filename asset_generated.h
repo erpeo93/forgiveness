@@ -40,11 +40,13 @@ char* metaAsset_Font[] = {
 enum AssetImageType
 {
 AssetImage_default,
+AssetImage_wolf,
 AssetImage_Count
 };
 
 char* metaAsset_Image[] = {
 "default",
+"wolf",
 };
 enum AssetModelType
 {
@@ -58,11 +60,13 @@ char* metaAsset_Model[] = {
 enum AssetSkeletonType
 {
 AssetSkeleton_default,
+AssetSkeleton_wolf,
 AssetSkeleton_Count
 };
 
 char* metaAsset_Skeleton[] = {
 "default",
+"wolf",
 };
 enum AssetSoundType
 {
@@ -122,9 +126,9 @@ MetaAssetType metaAsset_subTypes[AssetType_Count] =
 {
 {0, NULL},
 {2, metaAsset_Font},
-{1, metaAsset_Image},
+{2, metaAsset_Image},
 {1, metaAsset_Model},
-{1, metaAsset_Skeleton},
+{2, metaAsset_Skeleton},
 {10, metaAsset_Sound},
 {1, metaAsset_tile_definition},
 {1, metaAsset_WaterParams},

@@ -70,8 +70,6 @@ struct LoadedAnimation
     struct PieceAss* ass;
     
     char name[64];
-    
-    void* free;
 };
 
 struct LoadedSkeleton

@@ -94,7 +94,7 @@ struct Bone
     u32 timeLineIndex;
     i32 id;
     Vec2 mainAxis;
-    i32 parentID;
+    i32 parentIndex;
     r32 parentAngle;
     
     r32 finalAngle;
@@ -109,7 +109,7 @@ struct PieceAss
 {
     u32 spriteIndex;
     u32 timeLineIndex;
-    i32 boneID;
+    i32 boneIndex;
     Vec2 boneOffset;
     r32 additionalZOffset;
     r32 angle;
@@ -122,10 +122,8 @@ struct PieceAss
 struct SpriteInfo
 {
     Vec2 pivot;
-    u64 stringHashID;
-    u8 index;
+    u64 nameHash;
     char name[32];
-    u32 flags;
 };
 
 struct FrameData

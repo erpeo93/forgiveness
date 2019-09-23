@@ -34,7 +34,7 @@ struct ClientPrediction
     
     r32 timeLeft;
     u32 slot;
-    EntityAction action;
+    u32 action;
     
     u32 taxonomy;
     //GenerationData gen;

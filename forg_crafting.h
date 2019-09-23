@@ -13,7 +13,7 @@ struct RecipeIngredients
 struct CraftingEffectLink
 {
     EssenceSlot essences[MAX_ESSENCES_PER_EFFECT];
-    EntityAction triggerAction;
+    u32 triggerAction;
     b32 target;
     EffectIdentifier effectID;
     

@@ -899,16 +899,23 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
     LoadedAnimation result = {};
     
     
-    u32 frameCountResult = 64;
-    TempFrame* frames = (TempFrame*) malloc(frameCountResult * sizeof(TempFrame));
-    memset(frames, 0, frameCountResult * sizeof(TempFrame));
+    u32 maxFrameCount = 64;
+    TempFrame* frames = (TempFrame*) malloc(maxFrameCount * sizeof(TempFrame));
+    memset(frames, 0, maxFrameCount * sizeof(TempFrame));
     
-    u32 boneCount = 1024;
-    u32 assCount = 1024;
-    result.bones = (Bone* ) malloc(boneCount * sizeof(Bone));
-    memset(result.bones, 0, boneCount * sizeof(Bone));
-    result.ass = (PieceAss* ) malloc(assCount * sizeof(PieceAss));
-    memset(result.ass, 0, assCount * sizeof(PieceAss));
+    result.frames = (FrameData*) malloc(maxFrameCount * sizeof(FrameData));
+    
+    u32 maxBoneCount = 1024;
+    u32 maxAssCount = 1024;
+    u32 maxSpriteCount = 64;
+    
+    result.bones = (Bone* ) malloc(maxBoneCount * sizeof(Bone));
+    memset(result.bones, 0, maxBoneCount * sizeof(Bone));
+    result.ass = (PieceAss* ) malloc(maxAssCount * sizeof(PieceAss));
+    memset(result.ass, 0, maxAssCount * sizeof(PieceAss));
+    result.spriteInfos = (SpriteInfo* ) malloc(maxSpriteCount * sizeof(SpriteInfo));
+    memset(result.spriteInfos, 0, maxSpriteCount * sizeof(SpriteInfo));
+    
     
     
     SpriteInfo tempSprites[64] = {};
@@ -933,7 +940,7 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
         i32 timeLineActive = 0;
         char* activeTimelineName = 0;
         
-        i32 frameCount = 0;
+        u32 frameCount = 0;
         TempFrame* tempFrame = 0;
         i32 realFrameIndex = 0;
         i32 currentSpin = 0;
@@ -960,66 +967,16 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
                     Assert(tempSpriteCount < ArrayCount(tempSprites));
                     SpriteInfo* tempSprite = tempSprites + tempSpriteCount++;
                     
-                    u8 flags = 0;
-                    b32 isComposed = false;
-                    b32 isEntity = false;
-                    
                     char* pieceName = GetXMLValues(&currentTag, "name");
-                    char* debug = pieceName;
                     Assert(pieceName);
-                    char* slash = AdvanceToLastSlash(pieceName);
-                    if(slash != pieceName)
-                    {
-                        isComposed = true;
-                        
-                        char* toCheck = "Dragging";
-                        
-                        if(StrEqual(StrLen(toCheck), toCheck, pieceName))
-                        {
-                            isComposed = false;
-                            isEntity = true;
-                        }
-                        
-                        pieceName = slash;
-                    }
+                    pieceName = AdvanceToLastSlash(pieceName);
+                    TrimToFirstCharacter(tempSprite->name, sizeof(tempSprite->name), pieceName, '.');
+                    tempSprite->nameHash = StringHash(tempSprite->name);
                     
                     Vec2 pivot;
                     GetXMLValuef(&currentTag, "pivot_x", &pivot.x );
                     GetXMLValuef(&currentTag, "pivot_y", &pivot.y );
-                    
-                    u64 stringHash;
-#if 1
-                    u32 namelength = 0;
-                    char* point = pieceName;
-                    while(*point)
-                    {
-                        if(*point == '.')
-                        {
-                            namelength = (u32) (point - pieceName);
-                            break;
-                        }
-                        ++point;
-                    }
-                    stringHash = StringHash(pieceName, namelength);
-#else
-                    stringHash = StringHash(pieceName);
-#endif
-                    
-                    tempSprite->stringHashID = stringHash;
                     tempSprite->pivot = pivot;
-                    
-                    tempSprite->flags = 0;
-                    if(isComposed)
-                    {
-                        tempSprite->flags |= Sprite_Composed;
-                    }
-                    
-                    if(isEntity)
-                    {
-                        tempSprite->flags |= Sprite_Entity;
-                    }
-                    
-                    StrCopy(pieceName, StrLen(pieceName), tempSprite->name);
                 }
                 else if(StrEqual(currentTag.title, "animation"))
                 {
@@ -1071,9 +1028,8 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
                 {
                     if(mainLineActive )
                     {
-                        Assert(frameCount < ArrayCount(result.frames ) );
+                        Assert(frameCount < maxFrameCount);
                         tempFrame = frames + frameCount++;
-                        Assert(frameCount < (i32 ) frameCountResult );
                         i32 timeLine = 0;
                         GetXMLValuei(&currentTag, "time", &timeLine );
                         tempFrame->timeLine = timeLine;
@@ -1088,7 +1044,7 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
                         timeline = timeline;
                         
                         b32 found = false;
-                        for(i32 frameIndex = 0; frameIndex < frameCount; ++frameIndex )
+                        for(u32 frameIndex = 0; frameIndex < frameCount; ++frameIndex )
                         {
                             TempFrame* testFrame = frames + frameIndex;
                             if(testFrame->timeLine == timeline )
@@ -1219,7 +1175,7 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
                     bone->parentAngle = angle;
                     bone->spin = currentSpin;
                     bone->id = boneID;
-                    bone->parentID = parentID;
+                    bone->parentIndex = parentID;
                     bone->timeLineIndex = timeLineActive;
                 }
                 else if(StrEqual(currentTag.title, "object" ) )
@@ -1258,7 +1214,7 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
                     Assert(zIndex >= 0 && zIndex < temp->countAss );
                     Assert(boneID >= 0 && boneID < temp->countBones );
                     PieceAss* ass = temp->ass + zIndex;
-                    ass->boneID = boneID;
+                    ass->boneIndex = boneID;
                     
                     i32 fileIndex = 0;
                     GetXMLValuei(&currentTag, "file", &fileIndex);
@@ -1290,6 +1246,7 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
                     
                     if(toAdd)
                     {
+                        Assert(definitiveSpriteCount < maxSpriteCount);
                         definitiveSpriteIndex = definitiveSpriteCount++;
                         SpriteInfo* dest = result.spriteInfos + definitiveSpriteIndex;
                         *dest = *source;
@@ -1313,23 +1270,21 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
     u32 boneIndexToCopy = 0;
     u32 assIndexToCopy = 0;
     
-    Assert(definitiveSpriteCount < ArrayCount(result.spriteInfos ) );
     result.spriteInfoCount = definitiveSpriteCount;
-    
     for(u32 frameIndex = 0; frameIndex < result.frameCount; frameIndex++ )
     {
-        Assert(frameIndex < ArrayCount(result.frames ) );
-        
         TempFrame* source = frames + frameIndex;
         FrameData* dest = result.frames + frameIndex;
         
         dest->timelineMS = SafeTruncateToU16(source->timeLine );
         dest->firstBoneIndex = boneIndexToCopy;
         dest->firstAssIndex = assIndexToCopy;
+        dest->countBones = 0;
+        dest->countAss = 0;
         
         for(i32 boneIndex = 0; boneIndex < source->countBones; boneIndex++ )
         {
-            Assert(boneIndexToCopy < boneCount );
+            Assert(boneIndexToCopy < maxBoneCount);
             Bone* sourceBone = source->bones + boneIndex;
             
             if(sourceBone->timeLineIndex > 0 )
@@ -1342,7 +1297,7 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
         
         for(i32 assIndex = 0; assIndex < source->countAss; assIndex++ )
         {
-            Assert(assIndexToCopy < assCount );
+            Assert(assIndexToCopy < maxAssCount);
             PieceAss* sourceAss = source->ass + assIndex;
             if(sourceAss->timeLineIndex > 0 )
             {
@@ -2116,6 +2071,11 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                 FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
                                 LoadedBitmap bitmap = LoadImage(source, info->name);
                                 
+                                char nameNoPoint[64];
+                                TrimToFirstCharacter(nameNoPoint, sizeof(nameNoPoint), info->name, '.');
+                                
+                                dest->bitmap.nameHash = StringHash(nameNoPoint);
+                                
                                 dest->bitmap.dimension[0] = bitmap.width;
                                 dest->bitmap.dimension[1] = bitmap.height;
                                 
@@ -2250,15 +2210,15 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                     countTotalAss += data->countAss;
                                 }
                                 
-                                dest->animation.durationMS = animation.durationMS;
-                                dest->animation.syncThreesoldMS = 0;
-                                dest->animation.preparationThreesoldMS = 0;
-                                Assert(dest->animation.durationMS > 0);
+                                derivedAsset->animation.durationMS = animation.durationMS;
+                                derivedAsset->animation.syncThreesoldMS = 0;
+                                derivedAsset->animation.preparationThreesoldMS = 0;
+                                Assert(derivedAsset->animation.durationMS > 0);
                                 
-                                dest->animation.spriteCount = animation.spriteInfoCount;
-                                dest->animation.frameCount = animation.frameCount;
-                                dest->animation.boneCount = countTotalBones;
-                                dest->animation.assCount = countTotalAss;
+                                derivedAsset->animation.spriteCount = animation.spriteInfoCount;
+                                derivedAsset->animation.frameCount = animation.frameCount;
+                                derivedAsset->animation.boneCount = countTotalBones;
+                                derivedAsset->animation.assCount = countTotalAss;
                                 
                                 
                                 fwrite(animation.spriteInfos, sizeof(SpriteInfo) * animation.spriteInfoCount, 1, out);
@@ -2266,9 +2226,10 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                 fwrite(animation.bones, countTotalBones * sizeof(Bone), 1, out);
                                 fwrite(animation.ass, countTotalAss * sizeof(PieceAss), 1, out);
                                 
+                                free(animation.spriteInfos);
+                                free(animation.frames);
                                 free(animation.bones);
                                 free(animation.ass);
-                                free(animation.free);
                             }
                         } break;
                         

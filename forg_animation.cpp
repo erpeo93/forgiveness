@@ -34,11 +34,11 @@ internal Bone BlendBones_(Bone* b1, r32 lerp, Bone* b2)
 {
     TIMED_FUNCTION();
     Assert(b1->timeLineIndex == b2->timeLineIndex);
-    Assert(b1->parentID == b2->parentID);
+    Assert(b1->parentIndex == b2->parentIndex);
     Bone result = {};
     
     result.id = b1->id;
-    result.parentID = b1->parentID;
+    result.parentIndex = b1->parentIndex;
     
     result.parentAngle = LerpAnglesWithSpin(b1->spin, b1->parentAngle, b2->parentAngle, lerp);
     result.parentOffset = Lerp(b1->parentOffset, lerp, b2->parentOffset);
@@ -50,11 +50,11 @@ internal Bone BlendBones_(Bone* b1, r32 lerp, Bone* b2)
 internal PieceAss BlendAss_(PieceAss* p1, r32 lerp, PieceAss* p2)
 {
     TIMED_FUNCTION();
-    Assert(p1->boneID == p2->boneID);
+    Assert(p1->boneIndex == p2->boneIndex);
     PieceAss result = {};
     
     result.spriteIndex = lerp <= 0.5f ? p1->spriteIndex : p2->spriteIndex;
-    result.boneID = p1->boneID;
+    result.boneIndex = p1->boneIndex;
     result.color = Lerp(p1->color, lerp, p2->color);
     result.spin = p1->spin;
     result.angle = LerpAnglesWithSpin(result.spin, p1->angle, p2->angle, lerp);
@@ -141,20 +141,29 @@ inline PieceAss* FindAss(Animation* animation, u32 timeLineIndex, u32 startingFr
     return result;
 }
 
-internal void BlendFrames_(MemoryPool* tempPool, Animation* animation, BlendResult* in, u32 lowerFrameIndex, u32 timelineMS, u32 upperFrameIndex)
+struct BlendedFrame
+{
+    u32 boneCount;
+    Bone* bones;
+    
+    u32 assCount;
+    PieceAss* ass;
+};
+
+internal void BlendFrames_(MemoryPool* tempPool, PAKAnimation* animationInfo, Animation* animation, BlendedFrame* in, u32 lowerFrameIndex, u32 timelineMS, u32 upperFrameIndex)
 {
     FrameData* reference = animation->frames + 0;
-    
     in->boneCount = reference->countBones;
-    in->bones = PushArray(tempPool, BlendedBone, in->boneCount);
     in->assCount = reference->countAss;
-    in->ass = PushArray(tempPool, BlendedAss, in->assCount);
+    
+    in->bones = PushArray(tempPool, Bone, in->boneCount);
+    in->ass = PushArray(tempPool, PieceAss, in->assCount);
     
     Bone* firstRefBone = animation->bones + reference->firstBoneIndex;
     for(u32 boneIndex = 0; boneIndex < in->boneCount; boneIndex++)
     {
         u32 lowerTimeLine = reference->timelineMS;
-        u32 upperTimeLine = reference->timelineMS + animation->header->durationMS;
+        u32 upperTimeLine = reference->timelineMS + animationInfo->durationMS;
         
         Bone* refBone = firstRefBone + boneIndex;
         Bone* b1 = FindBone(animation, refBone->timeLineIndex, lowerFrameIndex, true, &lowerTimeLine);
@@ -175,9 +184,8 @@ internal void BlendFrames_(MemoryPool* tempPool, Animation* animation, BlendResu
         u32 exceedingLower = timelineMS - lowerTimeLine;
         r32 lerp = SafeRatio1((r32) exceedingLower, (r32) (upperTimeLine - lowerTimeLine));
         
-        BlendedBone* dest = in->bones + boneIndex;
-        dest->bone = BlendBones_(b1, lerp, b2);
-        dest->alterations = {};
+        Bone* dest = in->bones + boneIndex;
+        *dest = BlendBones_(b1, lerp, b2);
     }
     
     
@@ -185,7 +193,7 @@ internal void BlendFrames_(MemoryPool* tempPool, Animation* animation, BlendResu
     for(u32 assIndex = 0; assIndex < in->assCount; assIndex++)
     {
         u32 lowerTimeLine = reference->timelineMS;
-        u32 upperTimeLine = reference->timelineMS + animation->header->durationMS;
+        u32 upperTimeLine = reference->timelineMS + animationInfo->durationMS;
         
         PieceAss* refAss = firstRefAss + assIndex;
         PieceAss* a1 = FindAss(animation, refAss->timeLineIndex, lowerFrameIndex, true, &lowerTimeLine);
@@ -206,30 +214,24 @@ internal void BlendFrames_(MemoryPool* tempPool, Animation* animation, BlendResu
         u32 exceedingLower = timelineMS - lowerTimeLine;
         r32 lerp = SafeRatio1((r32) exceedingLower, (r32) (upperTimeLine - lowerTimeLine));
         
-        BlendedAss* dest = in->ass + assIndex;
-        dest->ass = BlendAss_(a1, lerp, a2);
-        dest->equipmentAssCount = 0;
-        dest->alterations = {};
-        
-        Assert(dest->ass.spriteIndex < animation->spriteInfoCount);
-        
-        SpriteInfo* sprite = animation->spriteInfos + dest->ass.spriteIndex;
-        dest->sprite = *sprite;
+        PieceAss* dest = in->ass + assIndex;
+        *dest = BlendAss_(a1, lerp, a2);
+        Assert(dest->spriteIndex < animation->spriteInfoCount);
     }
 }
 
-internal Vec2 CalculateFinalBoneOffset_(AnimationFixedParams* input, BlendedBone* frameBones, i32 countBones, Bone* bone, AnimationVolatileParams* params)
+internal Vec2 CalculateFinalBoneOffset_(Bone* frameBones, i32 countBones, Bone* bone, AnimationParams* params)
 {
-    Assert(bone->parentID < countBones);
+    Assert(bone->parentIndex < countBones);
     Vec2 baseOffset = V2(0, 0);
     
     Vec2 XAxis;
     Vec2 YAxis;
     
     Vec2 offsetFromParentScale = V2(1, 1);
-    if(bone->parentID >= 0)
+    if(bone->parentIndex >= 0)
     {
-        Bone* parent = &frameBones[bone->parentID].bone;
+        Bone* parent = frameBones + bone->parentIndex;
         Assert(parent->id <= bone->id);
         
         baseOffset = parent->finalOriginOffset;
@@ -248,112 +250,15 @@ internal Vec2 CalculateFinalBoneOffset_(AnimationFixedParams* input, BlendedBone
     return result;
 }
 
-
-inline Vec3 AssOriginOffset(Bone* parentBone, PieceAss* ass, r32 zOffset, Vec2 scale)
+internal AnimationPiece* GetAnimationPiecesAndAdvanceState(MemoryPool* tempPool, PAKAnimation* animationInfo, Animation* animation,
+                                                           AnimationComponent* component, AnimationParams* params, u32* animationPieceCount)
 {
-    Vec2 boneXAxis = parentBone->mainAxis;
-    Vec2 boneYAxis = Perp(boneXAxis);
+    r32 oldTime = component->time;
+    r32 newTime = oldTime + params->elapsedTime;
+    component->time = newTime;
+    u32 timeline = (u32) (component->time * 1000.0f);
     
-    Vec2 boneOffset = Hadamart(ass->boneOffset, scale);
-    Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
-    Vec3 originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset);
-    
-    return originOffset;
-}
-
-inline b32 RequiresAnimationSync(EntityAction action)
-{
-    b32 result = (action == Action_Cast ||
-                  action == Action_Rolling);
-    return result;
-}
-
-inline void StartNextAction(AnimationState* state)
-{
-    state->stopAtNextBarrier = false;
-    state->totalTime = 0;
-    state->syncState = AnimationSync_None;
-    state->waitingForSyncTimer = 0;
-    state->action = state->nextAction;
-    state->lastSyncronizedAction = Action_None;
-    
-    if(RequiresAnimationSync((EntityAction) state->action))
-    {
-        state->syncState = AnimationSync_Preparing;
-    }
-}
-
-inline void PushNewAction(AnimationState* animation, u32 action)
-{
-    if(action != animation->action)
-    {
-        animation->stopAtNextBarrier = true;
-        animation->nextAction = action;
-    }
-}
-
-internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, BlendResult* blended, Animation* animation, AnimationState* state, r32 elapsedTime, AnimationVolatileParams* params)
-{
-    AnimationHeader* header = animation->header;
-    
-    r32 oldTime = state->totalTime;
-    r32 newTime = oldTime + elapsedTime;
-    
-    switch(state->syncState)
-    {
-        case AnimationSync_None:
-        {
-            state->totalTime = newTime;
-        } break;
-        
-        case AnimationSync_Preparing:
-        {
-            u32 oldTimeline = (u32) (oldTime * 1000.0f) % header->durationMS;
-            u32 newTimeline = (u32) (newTime * 1000.0f) & header->durationMS;
-            
-            u32 preparationThreesold = header->preparationThreesoldMS;
-            if(oldTimeline <= preparationThreesold && newTimeline > preparationThreesold)
-            {
-                state->waitingForSyncTimer += elapsedTime;
-            }
-            else
-            {
-                state->totalTime = newTime;
-            }
-        } break;
-        
-        case AnimationSync_WaitingForCompletion:
-        {
-            u32 oldTimeline = (u32) (oldTime * 1000.0f) % header->durationMS;
-            u32 newTimeline = (u32) (newTime * 1000.0f) & header->durationMS;
-            
-            u32 syncThreesold = header->syncThreesoldMS;
-            if(oldTimeline <= syncThreesold && newTimeline > syncThreesold)
-            {
-                state->waitingForSyncTimer += elapsedTime;
-            }
-            else
-            {
-                state->totalTime = newTime;
-            }
-        } break;
-    }
-    
-    
-    u32 timeline = (u32) (state->totalTime * 1000.0f);
-    
-	u32 animTimeMod;
-	if(input->debug.ortho)
-	{
-        Assert(Normalized(input->debug.modTime));
-		animTimeMod = (u32) (input->debug.modTime * header->durationMS);
-	}
-	else
-	{
-		animTimeMod = timeline % header->durationMS;
-	}
-    state->normalizedTime = (r32) animTimeMod / (r32) header->durationMS;
-    
+	u32 animTimeMod = timeline % animationInfo->durationMS;
     
     u32 lowerFrameIndex = 0;
     for(u32 frameIndex = 0; frameIndex < animation->frameCount; frameIndex++)
@@ -374,46 +279,15 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
         upperFrameIndex = 0;
     }
     
+    BlendedFrame blended = {};
+    BlendFrames_(tempPool, animationInfo, animation, &blended, lowerFrameIndex, animTimeMod, upperFrameIndex);
     
-    
-    BlendFrames_(input->tempPool, animation, blended, lowerFrameIndex, animTimeMod, upperFrameIndex);
-    
-    
-    
-#if 0    
-    TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, input->entity->taxonomy);
-    BoneAlterations* boneAlterations = GetSlotData(slot, boneAlterations);
-    for(EditorBoneAlteration* boneAlt = boneAlterations->firstBoneAlteration; boneAlt; boneAlt = boneAlt->next)
+    for(u32 boneIndex = 0; boneIndex < blended.boneCount; boneIndex++)
     {
-        if(boneAlt->boneIndex < blended->boneCount)
+        Bone* bone = blended.bones + boneIndex;
+        if(bone->parentIndex != -1)
         {
-            BlendedBone* bone = blended->bones + boneAlt->boneIndex;
-            bone->alterations = boneAlt->alt;
-        }
-    }
-    
-    AssAlterations* assAlterations = GetSlotData(slot, assAlterations);
-    for(EditorAssAlteration* assAlt = assAlterations->firstAssAlteration; assAlt; assAlt = assAlt->next)
-    {
-        if(assAlt->assIndex < blended->assCount)
-        {
-            BlendedAss* ass = blended->ass + assAlt->assIndex;
-            ass->alterations = assAlt->alt;
-        }
-    }
-#endif
-    
-    for(u32 boneIndex = 0; boneIndex < blended->boneCount; boneIndex++)
-    {
-        BlendedBone* blendedBone = blended->bones + boneIndex;
-        
-        Bone* bone = &blendedBone->bone;
-        BoneAlteration* boneAlt = &blendedBone->alterations;
-        
-        if(bone->parentID != -1)
-        {
-            BlendedBone* parentBlended = blended->bones + bone->parentID;
-            Bone* parent = &parentBlended->bone;
+            Bone* parent = blended.bones + bone->parentIndex;
             bone->finalAngle += parent->finalAngle;
         }
         else
@@ -421,24 +295,56 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
             bone->finalAngle += params->angle;
         }
         r32 totalAngleRad = DegToRad(bone->finalAngle);
-        bone->finalOriginOffset = CalculateFinalBoneOffset_(input, blended->bones, blended->boneCount, bone, params);
+        bone->finalOriginOffset = CalculateFinalBoneOffset_(blended.bones, blended.boneCount, bone, params);
         
         Vec2 scale = V2(1.0f, 1.0f);
+#if 0        
         if(boneAlt->valid)
         {
             scale = boneAlt->scale;
         }
+#endif
+        
         bone->mainAxis = Hadamart(scale, V2(Cos(totalAngleRad), Sin(totalAngleRad))); 
     }
     
+    *animationPieceCount = blended.assCount;
+    AnimationPiece* result = PushArray(tempPool, AnimationPiece, blended.assCount);
+    
+    r32 zOffset = 0.0f;
+    for(u32 assIndex = 0; assIndex < blended.assCount; ++assIndex)
+    {
+        AnimationPiece* dest = result + assIndex;
+        
+        PieceAss* ass = blended.ass + assIndex;
+        SpriteInfo* sprite = animation->spriteInfos + ass->spriteIndex;
+        
+        dest->pivot = sprite->pivot;
+        dest->nameHash = sprite->nameHash;
+        
+        Assert(ass->boneIndex >= 0);
+        Bone* parentBone = blended.bones + ass->boneIndex;
+        Vec2 boneXAxis = parentBone->mainAxis;
+        Vec2 boneYAxis = Perp(boneXAxis);
+        Vec2 boneOffset = Hadamart(ass->boneOffset, params->scale);
+        Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
+        dest->originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset);
+        
+        dest->angle = parentBone->finalAngle + ass->angle;
+        dest->scale = ass->scale;
+        dest->color = ass->color;
+        
+        zOffset += 0.01f;
+    }
     
     
+#if 0    
     r32 waitingForSyncThreesold = 0.8f;
-    
     if(timeline >= header->durationMS || (state->stopAtNextBarrier && !RequiresAnimationSync((EntityAction) state->action)) || state->waitingForSyncTimer >= waitingForSyncThreesold)
     {
         StartNextAction(state);
     }
+#endif
     
 #if 0    
     if(state->stopAtNextBarrier)
@@ -471,6 +377,8 @@ internal void GetAnimationPiecesAndAdvanceState(AnimationFixedParams* input, Ble
         }
     }
 #endif
+    
+    return result;
 }
 
 inline Vec2 GetBoneAxisOffsetfromXY(Bone* bone, Vec2 alignedOffset)
@@ -485,1083 +393,14 @@ inline Vec2 GetBoneAxisOffsetfromXY(Bone* bone, Vec2 alignedOffset)
     return result;
 }
 
-inline r32 AssFinalAngle(Bone* parentBone, PieceAss* ass)
-{
-    r32 finalAngle = parentBone->finalAngle + ass->angle;
-    return finalAngle;
-}
-
-inline PieceAss* GetAss(BlendResult* blended, u32 assIndex)
-{
-    Assert(assIndex < blended->assCount);
-    BlendedAss* ass = blended->ass + assIndex;
-    PieceAss* result = &ass->ass;
-    
-    return result;
-}
-
-inline Bone* GetBone(BlendResult* blended, u32 boneIndex)
-{
-    Assert(boneIndex < blended->boneCount);
-    BlendedBone* bone = blended->bones + boneIndex;
-    Bone* result = &bone->bone;
-    
-    return result;
-}
-
-inline SpriteInfo* GetSprite(BlendResult* blended, u32 spriteIndex)
-{
-    Assert(spriteIndex < blended->assCount);
-    BlendedAss* ass = blended->ass + spriteIndex;
-    SpriteInfo* result = &ass->sprite;
-    
-    return result;
-}
-
-internal void GetEquipmentPieces(BlendResult* blended, TaxonomyTable* table, TaxonomyTree* equipmentMappings, EquipmentAnimationSlot* slots)
-{
-    
-#if RESTRUCTURING    
-    u64 inserted[Slot_Count] = {};
-    for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
-    {
-        EquipmentAnimationSlot* slot = slots + slotIndex;
-        b32 alreadyInserted = false;
-        for(u32 slotIndexTest = 0; slotIndexTest < Slot_Count; ++slotIndexTest)
-        {
-            if(inserted[slotIndexTest] == slot->ID)
-            {
-                alreadyInserted = true;
-                break;
-            }
-        }
-        
-        if(!alreadyInserted)
-        {
-            inserted[slotIndex] = slot->ID;
-            
-            ObjectState state = slot->isOpen ? ObjectState_Open : ObjectState_Default;
-            
-            TaxonomyNode* node = FindInTaxonomyTree(table, equipmentMappings->root, slot->taxonomy);
-            if(node && node->data.equipmentMapping)
-            {
-                ObjectLayout* reference = slot->layout;
-                
-                for(EquipmentLayout* layout = node->data.equipmentMapping->firstEquipmentLayout; layout; layout = layout->next)
-                {
-                    if(layout->layoutHashID == reference->nameHashID)
-                    {
-                        for(LayoutPiece* piece = reference->firstPiece; piece; piece = piece->next)
-                        {
-                            LayoutPieceParams* params = GetParams(piece, state);
-                            u64 componentHashID = piece->componentHashID;
-                            u8 index = piece->index;
-                            b32 decorativePiece = false;
-                            
-							if(piece->parent)
-							{
-                                componentHashID = piece->parent->componentHashID;
-								index = piece->parent->index;
-                                decorativePiece = true;
-                            }
-                            
-                            for(EquipmentAss* eq = layout->firstEquipmentAss; eq; eq = eq->next)
-                            {
-                                u32 assIndex = eq->assIndex;
-                                BlendedAss* blendedAss = blended->ass + assIndex;
-                                PieceAss* ass = &blendedAss->ass;
-                                Bone* parentBone = GetBone(blended, ass->boneID);
-                                
-                                if(eq->index == 0xff || (eq->stringHashID == componentHashID && eq->index == index))
-                                {
-                                    Assert(blendedAss->equipmentAssCount < ArrayCount(blendedAss->associatedEquipment));
-                                    
-                                    EquipmentAnimationPiece* dest = blendedAss->associatedEquipment + blendedAss->equipmentAssCount++;
-                                    
-                                    PieceAss* destAss = &dest->ass;
-                                    SpriteInfo* destSprite = &dest->sprite;
-                                    
-                                    *destAss = {};
-                                    *destSprite = {};
-                                    
-                                    
-                                    destAss->additionalZOffset = eq->zOffset;
-                                    destAss->angle = ass->angle + eq->angle;
-                                    destAss->scale = Hadamart(ass->scale, eq->scale);
-                                    
-                                    r32 zOffset = 0;
-                                    r32 angle = 0;
-                                    Vec2 scale = V2(1, 1);
-                                    Vec2 offset = {};
-                                    
-                                    if(eq->index == 0xff)
-                                    {
-                                        zOffset = params->parentOffset.z;
-                                        angle = params->parentAngle;
-                                        scale = params->scale;
-                                        offset = params->parentOffset.xy;
-                                        
-                                        if(decorativePiece)
-                                        {
-                                            LayoutPieceParams* parentParams = GetParams(piece->parent, state);
-                                            zOffset += parentParams->parentOffset.z;
-                                            angle += parentParams->parentAngle;
-                                            offset += parentParams->parentOffset.xy;
-                                        }
-                                    }
-                                    else if(decorativePiece)
-                                    {
-                                        zOffset = params->parentOffset.z;
-                                        angle = params->parentAngle;
-                                        scale = params->scale;
-                                        offset = params->parentOffset.xy;
-                                    }
-                                    
-                                    
-                                    destAss->additionalZOffset += zOffset;
-                                    destAss->angle += angle;
-                                    destAss->scale = Hadamart(destAss->scale, scale);
-                                    
-                                    
-                                    r32 finalAngle = DegToRad(AssFinalAngle(parentBone, ass) + eq->angle + angle);
-                                    Vec2 layoutX = V2(Cos(finalAngle), Sin(finalAngle));
-                                    Vec2 layoutY = Perp(layoutX);
-                                    layoutX *= eq->scale.x;
-                                    layoutY *= eq->scale.y;
-                                    Vec2 layoutOffset =  offset.x * layoutX + offset.y * layoutY;
-                                    
-                                    destAss->boneOffset = ass->boneOffset + GetBoneAxisOffsetfromXY(parentBone, eq->assOffset + layoutOffset);
-                                    
-                                    
-                                    
-                                    
-                                    destAss->color = V4(1, 1, 1, 1.0f);
-                                    
-                                    destSprite->pivot = params->pivot;
-                                    destSprite->stringHashID = piece->componentHashID;
-                                    destSprite->index = piece->index;
-                                    destSprite->flags = 0;
-                                    
-                                    dest->status = slot->status;
-                                    dest->properties = &slot->properties;
-                                    dest->slot = slot->slot;
-                                    dest->drawModulated = slot->drawModulated;
-                                }
-                            }
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-    }
-#endif
-    
-}
-
-
-
-inline void SignalAnimationSyncCompleted(AnimationState* animation, u32 action, AnimationSyncState state)
-{
-    if(action != animation->action)
-    {
-        PushNewAction(animation, action);
-        StartNextAction(animation);
-    }
-    
-    if(RequiresAnimationSync((EntityAction) action))
-    {
-        switch(state)
-        {
-            case AnimationSync_None:
-            {
-            } break;
-            
-            case AnimationSync_Preparing:
-            {
-                animation->syncState = AnimationSync_WaitingForCompletion;
-                animation->waitingForSyncTimer = 0;
-            } break;
-            
-            case AnimationSync_WaitingForCompletion:
-            {
-                animation->syncState = AnimationSync_None;
-                animation->waitingForSyncTimer = 0;
-                animation->lastSyncronizedAction = action;
-            } break;
-        }
-    }
-}
-
-inline void SetLabel(VisualLabel* dest, u64 ID, r32 value)
-{
-    u32 hash = (u32) (ID >> 32);
-    dest->ID = (hash & (LABEL_HASH_COUNT - 1)) + Tag_count;
-    dest->value = value;
-}
-
-
-#if 0
-internal void GetVisualProperties(ComponentsProperties* dest, TaxonomyTable* table, u32 taxonomy, GenerationData gen)
-{
-    dest->componentCount = 0;
-    TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
-    
-    ObjectLayout* layout = GetLayout(table, taxonomy);
-    if(layout)
-    {
-        RandomSequence seq = Seed(gen.ingredientSeed);
-        for(LayoutPiece* piece = layout->firstPiece; piece; piece = piece->next)
-        {
-            Assert(dest->componentCount < ArrayCount(dest->components));
-            VisualComponent* visualComponent = dest->components + dest->componentCount++;
-            
-            visualComponent->stringHashID = piece->componentHashID;
-            visualComponent->index = piece->index;
-            visualComponent->labelCount = 0;
-            
-            LayoutPiece* visualPiece = piece;
-            if(piece->parent)
-            {
-                visualPiece = piece->parent;
-            }
-            
-            for(u32 ingredientIndex = 0; ingredientIndex < visualPiece->ingredientCount; ++ingredientIndex)
-            {
-                u32 ingredientTaxonomy = piece->ingredientTaxonomies[ingredientIndex];
-                u32 choosenTaxonomy = GetRandomChild(table, &seq, ingredientTaxonomy);
-                TaxonomySlot* ingredientSlot = GetSlotForTaxonomy(table, choosenTaxonomy);
-                
-                for(TaxonomyEssence* essenceSlot = ingredientSlot->firstEssence; essenceSlot; essenceSlot = essenceSlot->next)
-                {
-                    EssenceSlot essence = essenceSlot->essence;
-                    essence.quantity *= piece->ingredientQuantities[ingredientIndex];
-                    
-                    TaxonomySlot* essenceS = GetSlotForTaxonomy(table, essence.taxonomy);
-                    u64 labelID = essenceS->stringHashID;
-                    
-                    VisualLabel newLabel;
-                    SetLabel(&newLabel, labelID, (r32) essence.quantity);
-                    
-                    b32 alreadyPresent = false;
-                    for(u32 labelIndex = 0; labelIndex < visualComponent->labelCount; ++labelIndex)
-                    {
-                        VisualLabel* testLabel = visualComponent->labels + labelIndex;
-                        if(testLabel->ID == newLabel.ID)
-                        {
-                            alreadyPresent = true;
-                            testLabel->value += newLabel.value;
-                        }
-                    }
-                    if(!alreadyPresent)
-                    {
-                        VisualLabel* label = visualComponent->labels + visualComponent->labelCount++;
-                        *label = newLabel;
-                    }
-                }
-            }
-        }
-    }
-}
-#endif
-
-inline BitmapId GetBitmapID(RenderGroup* group, SpriteInfo* sprite, u64 skeletonSkinHashID, ComponentsProperties* properties)
-{
-    BitmapId result = {};
-    
-    TagVector match = {};
-    TagVector weight = {};
-    
-    match.E[Tag_SkeletonSkinFirstHalf] = (r32) (skeletonSkinHashID >> 32);
-    match.E[Tag_SkeletonSkinSecondHalf] = (r32) (skeletonSkinHashID & 0xFFFFFFFF);
-    weight.E[Tag_SkeletonSkinFirstHalf] = 1.0f;
-    weight.E[Tag_SkeletonSkinSecondHalf] = 1.0f;
-    
-    u32 assetIndex = GetAssetIndex(sprite->stringHashID);
-    
-    if(properties && properties->componentCount)
-    {
-        LabelVector labels;
-        labels.labelCount = 0;
-        
-        for(u32 componentIndex = 0; componentIndex < properties->componentCount; ++componentIndex)
-        {
-            VisualComponent* component = properties->components + componentIndex;
-            if(component->stringHashID == sprite->stringHashID && component->index == sprite->index)
-            {
-                for(u32 labelIndex = 0; labelIndex < component->labelCount; ++labelIndex)
-                {
-                    if(labels.labelCount < ArrayCount(labels.IDs))
-                    {
-                        VisualLabel* label = component->labels + labelIndex;
-                        u32 labelI = labels.labelCount++;
-                        labels.IDs[labelI] = label->ID;
-                        labels.values[labelI] = label->value;
-                    }
-                }
-                
-                break;
-            }
-        }
-        result = GetMatchingBitmap(group->assets, assetIndex, sprite->stringHashID, &match, &weight, &labels);
-        
-    }
-    else
-    {
-        result = GetMatchingBitmap(group->assets, assetIndex, sprite->stringHashID, &match, &weight, 0);
-    }
-    
-    return result;
-}
-
-
-#if 0
-inline void GetLayoutAnimationPieces(AnimationFixedParams* input, BlendResult* output, ObjectLayout* layout, AnimationVolatileParams* params, ObjectState state)
-{
-    output->boneCount = 1;
-    output->bones = PushArray(input->tempPool, BlendedBone, output->boneCount);
-    
-    output->assCount = layout->pieceCount;
-    output->ass = PushArray(input->tempPool, BlendedAss, output->assCount);
-    
-    BlendedBone* bone = output->bones + 0;
-    bone->bone.mainAxis = V2(1, 0);
-    bone->bone.parentID = -1;
-    
-    u32 pieceIndex = 0;
-    for(LayoutPiece* source = layout->firstPiece; source; source = source->next)
-    {
-        LayoutPieceParams* pieceParams = GetParams(source, state);
-        
-        if(pieceParams->valid)
-        {
-            BlendedAss* ass = output->ass + pieceIndex++;
-            PieceAss* destAss = &ass->ass;
-            
-            ass->equipmentAssCount = 0;
-            
-            AssAlteration* destAlt = &ass->alterations;
-            destAlt->valid = false;
-            
-            SpriteInfo* destSprite = &ass->sprite;
-            
-            destAss->spriteIndex = pieceIndex;
-            destAss->boneOffset = pieceParams->parentOffset.xy;
-            destAss->additionalZOffset = pieceParams->parentOffset.z;
-            destAss->angle = pieceParams->parentAngle;
-            
-            if(source->parent)
-            {
-                LayoutPieceParams* parentParams = GetParams(source->parent, state);
-                destAss->boneOffset += parentParams->parentOffset.xy;
-                destAss->additionalZOffset += parentParams->parentOffset.z;
-                destAss->angle += parentParams->parentAngle;
-            }
-            
-            destAss->scale = pieceParams->scale;
-            destAss->color = pieceParams->color;
-            
-            destSprite->pivot = pieceParams->pivot;
-            destSprite->stringHashID = source->componentHashID;
-            destSprite->index = source->index;
-            destSprite->flags = 0;
-        }
-    }
-}
-#endif
-
-inline Rect2 GetBitmapRect(Bitmap* bitmap, Vec2 pivot, Vec3 originOffset, r32 angle, b32 flipOnYAxis, Vec2 scale)
-{
-    r32 angleRad = DegToRad(angle);
-    Vec3 XAxis = V3(Cos(angleRad), Sin(angleRad), 0.0f);
-    Vec3 YAxis  = V3(Perp(XAxis.xy), 0.0f);
-    
-    if(flipOnYAxis)
-    {
-        originOffset.x = -originOffset.x;
-    }
-    
-    BitmapDim dim = GetBitmapDim(bitmap, pivot, originOffset, XAxis, YAxis, bitmap->nativeHeight, scale);
-    Rect2 bitmapRect = RectMinMax(dim.P.xy, dim.P.xy + (dim.size.x * dim.XAxis.xy) + (dim.size.y * dim.YAxis.xy));
-    return bitmapRect;
-}
-
-inline Rect2 GetPiecesBound(RenderGroup* group, BlendResult* blended, AnimationVolatileParams* params)
-{
-    Rect2 result = InvertedInfinityRect2();
-    for(u32 assIndex = 0; assIndex < blended->assCount; ++assIndex)
-    {
-        PieceAss* ass = GetAss(blended, assIndex);
-        Bone* parentBone = GetBone(blended, + ass->boneID);
-        SpriteInfo* sprite = GetSprite(blended, assIndex);
-        
-        Vec3 originOffset = AssOriginOffset(parentBone, ass, params->zOffset, params->scale);
-        r32 finalAngle = AssFinalAngle(parentBone, ass);
-        
-        if(!(sprite->flags & Sprite_Composed))
-        {	        
-            BitmapId BID = GetBitmapID(group, sprite, params->skeletonSkinHashID, params->properties);
-            Vec2 pivot = sprite->pivot;
-            
-            if(IsValid(BID))
-            {
-                Bitmap* bitmap = GetBitmap(group->assets, BID);
-                if(bitmap)
-                {
-                    Rect2 bitmapRect = GetBitmapRect(bitmap, pivot, originOffset, finalAngle, params->flipOnYAxis, Hadamart(ass->scale, params->scale));
-                    result = Union(result, bitmapRect);
-                    
-                }
-                else
-                {
-                    LoadBitmap(group->assets, BID, false);
-                }
-            }
-        }
-        else
-        {
-            //TODO(leonardo): get the rect of the sub animation and marge it with the parent one
-        }
-    }
-    
-    return result;
-}
-
-
-#if 0
-inline Rect2 GetLayoutBounds(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, AnimationVolatileParams* params, ObjectState state)
-{
-    BlendResult blended;
-    GetLayoutAnimationPieces(input, &blended, layout, params, state);
-    Rect2 result = GetPiecesBound(group, &blended, params);
-    
-    return result;
-}
-
-
-internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, Vec3 P, AnimationVolatileParams* params, ObjectState state);
-
-inline b32 DrawModularPiece(AnimationFixedParams* input, RenderGroup* group, Vec3 P, u32 pieceTaxonomy, AnimationVolatileParams* params, ObjectState state, b32 dontRender)
-{
-    b32 result = false;
-    ObjectLayout* layout = GetLayout(input->taxTable, pieceTaxonomy);
-    if(layout)
-    {
-        Vec3 offset = params->cameraOffset;
-        if(params->flipOnYAxis)
-        {
-            offset.x = -offset.x;
-        }
-        Vec3 offsetRealP = offset.x * group->gameCamera.X + offset.y * group->gameCamera.Y + offset.z * group->gameCamera.Z;
-        
-        Vec3 groundP = P + ProjectOnGround(offsetRealP, group->gameCamera.P);
-        r32 distanceSq = LengthSq(groundP - input->mousePOnGround);
-        if(distanceSq < input->minFocusSlotDistanceSq)
-        {
-            result = true;
-            input->minFocusSlotDistanceSq = distanceSq;
-        }
-        
-        if(!dontRender)
-        {
-            AnimationState pieceState = {};
-            RenderObjectLayout(input, group, layout, P, params, state);
-        }
-    }
-    
-    return result;
-}
-#endif
-
-
-#if 0
-inline void DispatchClientAnimationEffect(GameModeWorld* worldMode, RenderGroup* group,  ClientAnimationEffect* clientEffect, ClientEntity* entity, Vec3 P,Vec4* colorIn, r32 timeToAdvance)
-{
-    AnimationEffect* effect = &clientEffect->effect;
-    ParticleCache* particleCache = worldMode->particleCache;
-    BoltCache* boltCache = worldMode->boltCache;
-    switch(effect->type)
-    {
-        case AnimationEffect_ChangeColor:
-        {
-            effect->inTimer = Min(effect->inTimer, effect->fadeTime);
-            r32 effectPower = Clamp01(effect->inTimer / effect->fadeTime);
-            Vec4 effectColor = Lerp(V4(1, 1, 1, 1), effectPower, effect->color);
-            *colorIn = Hadamart(*colorIn, effectColor);
-        } break;
-        
-        case AnimationEffect_SpawnParticles:
-        {
-            
-            ParticleEffect* particleEffect = clientEffect->particleRef;
-            if(!particleEffect)
-            {
-                TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, effect->particleEffectTaxonomy);
-                
-                if(slot->particleEffectDefinition)
-                {
-                    particleEffect = GetNewParticleEffect(particleCache, slot->particleEffectDefinition);
-                    clientEffect->particleRef = particleEffect;
-                }
-            }
-            
-            if(particleEffect)
-            {
-                FillParticleEffectData(particleEffect, P, P);
-            }
-        } break;
-        
-        case AnimationEffect_Light:
-        {
-            AddLightToGridNextFrame(worldMode, P + V3(0, 0, 0.01f), effect->lightColor, effect->lightIntensity);
-        } break;
-        
-        case AnimationEffect_Bolt:
-        {
-            clientEffect->boltTimer += timeToAdvance;
-            if(clientEffect->boltTimer >= effect->boltTargetTimer)
-            {
-                clientEffect->boltTimer = 0;
-                SpawnBolt(worldMode, group, boltCache, P, P + V3(2, 0, 0), effect->boltTaxonomy);
-            }
-        } break;
-    }
-}
-
-inline void SetEquipmentReferenceAction(GameModeWorld* worldMode, ClientEntity* entityC)
-{
-    if(!IsSet(entityC, Flag_Attached))
-    {
-        for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
-        {
-            EquipmentSlot* slot = entityC->equipment + slotIndex;
-            if(slot->ID)
-            {
-                ClientEntity* entity = GetEntityClient(worldMode, slot->ID);
-                if(entity)
-                {
-                    entity->ownerAction = (EntityAction) entityC->animation.action;
-                    entity->ownerSlot = (SlotName) slotIndex;
-                }
-            }
-        }
-    }
-}
-
-inline void AddAnimationEffectToEntity(GameModeWorld* worldMode, ClientEntity* entity, AnimationEffect* effect, SlotName slot)
-{
-    ClientAnimationEffect* newEffect;
-    FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(worldMode->persistentPool, ClientAnimationEffect, NoClear()));
-    
-    newEffect->effect = *effect;
-    newEffect->referenceSlot = slot;
-    
-    if(IsSet(entity, Flag_Attached))
-    {
-        Assert(entity->ownerSlot);
-        newEffect->referenceSlot = entity->ownerSlot;
-    }
-    newEffect->particleRef = 0;
-    
-    FREELIST_INSERT(newEffect, entity->firstActiveEffect);
-}
-
-inline void AddSkillAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, u32 skillTaxonomy, u64 targetID, u32 animationEffectFlags)
-{
-    TaxonomySlot* skillSlot = GetSlotForTaxonomy(worldMode->table, skillTaxonomy);
-    AnimationEffects* effects = GetSlotData(skillSlot, animationEffects);
-    for(AnimationEffect* effect = effects->firstAnimationEffect; effect; effect = effect->next)
-    {
-        if((effect->flags & animationEffectFlags) == animationEffectFlags)
-        {
-            AddAnimationEffectToEntity(worldMode, entity, effect, Slot_None);
-        }
-    }
-}
-
-inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, EntityAction action, u64 targetID, u32 animationEffectFlags)
-{
-    u32 currentTaxonomy = entity->taxonomy;
-    while(currentTaxonomy)
-    {
-        TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, currentTaxonomy);
-        AnimationEffects* effects = GetSlotData(slot, animationEffects);
-        for(AnimationEffect* effect = effects->firstAnimationEffect; effect; effect = effect->next)
-        {
-            if((effect->triggerAction == Action_Count ||
-                effect->triggerAction == (u32) action) && 
-               ((effect->flags & animationEffectFlags) == animationEffectFlags))
-            {
-                AddAnimationEffectToEntity(worldMode, entity, effect, Slot_None);
-            }
-        }
-        currentTaxonomy = GetParentTaxonomy(worldMode->table, currentTaxonomy);
-    }
-    
-    
-    for(u32 slotIndex = 0; slotIndex < Slot_Count; ++slotIndex)
-    {
-        u64 equipmentID = entity->equipment[slotIndex].ID;
-        ClientEntity* object = GetEntityClient(worldMode, equipmentID);
-        
-        if(object)
-        {
-            TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, object->taxonomy);
-            AnimationEffects* effects = GetSlotData(slot, animationEffects);
-            for(AnimationEffect* effect = effects->firstAnimationEffect; effect; effect = effect->next)
-            {
-                if((effect->triggerAction == Action_Count ||
-                    effect->triggerAction == (u32) action) && 
-                   ((effect->flags & animationEffectFlags) == animationEffectFlags))
-                {
-                    AddAnimationEffectToEntity(worldMode, entity, effect, (SlotName) slotIndex);
-                }
-            }
-        }
-    }
-}
-
-internal void UpdateAnimationEffects(GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToAdvance)
-{
-    u32 newAction = entityC->action;
-    
-    if(newAction != entityC->effectReferenceAction ||
-       (!newAction && !entityC->firstActiveEffect))
-    {
-        for(ClientAnimationEffect** effectPtr = &entityC->firstActiveEffect; *effectPtr;)
-        {
-            ClientAnimationEffect* effect = *effectPtr;
-            
-            if(effect->effect.triggerAction == Action_Count || effect->effect.triggerAction == entityC->effectReferenceAction ||
-               (effect->effect.flags & AnimationEffect_DeleteWhenActionChanges))
-            {
-                if(effect->effect.type == AnimationEffect_SpawnParticles && effect->particleRef)
-                {
-                    FreeParticleEffect(effect->particleRef);
-                }
-                
-                if(effect->effect.fadeTime > 0)
-                {
-                    effect->effect.timer = effect->effect.fadeTime;
-                    effectPtr = &effect->next;
-                }
-                else
-                {
-                    *effectPtr = effect->next;
-                    FREELIST_DEALLOC(effect, worldMode->firstFreeEffect);
-                }
-            }
-            else
-            {
-                effectPtr = &effect->next;
-            }
-        }
-        
-        // TODO(Leonardo): fill the target reasonably here!
-        AddAnimationEffects(worldMode, entityC, (EntityAction) newAction, 0, 0);
-        entityC->effectReferenceAction = newAction;
-    }
-    
-    
-    
-    
-    for(ClientAnimationEffect** effectPtr = &entityC->firstActiveEffect; *effectPtr;)
-    {
-        ClientAnimationEffect* effect = *effectPtr;
-        if(effect->effect.timer > 0)
-        {
-            effect->effect.inTimer -= timeToAdvance;
-            effect->effect.timer -= timeToAdvance;
-            if(effect->effect.timer <= 0)
-            {
-                if(effect->effect.type == AnimationEffect_SpawnParticles && effect->particleRef)
-                {
-                    FreeParticleEffect(effect->particleRef);
-                }
-                
-                *effectPtr = effect->next;
-                FREELIST_DEALLOC(effect, worldMode->firstFreeEffect);
-            }
-            else
-            {
-                effectPtr = &effect->next;
-            }
-        }
-        else
-        {
-            effect->effect.inTimer += timeToAdvance;
-            effectPtr = &effect->next;
-        }
-    }
-}
-#endif
-
 inline r32 ArrangeObjects(u8 gridDimX,u8 gridDimY, Vec3 originalGridDim)
 {
     r32 result = Min(originalGridDim.x / gridDimX, originalGridDim.y / gridDimY);
     return result;
 }
 
-struct RenderAssResult
-{
-    b32 onFocus;
-    b32 screenInRect;
-    r32 distanceFromAssCenter;
-};
 
-inline RenderAssResult RenderPieceAss_(AnimationFixedParams* input, RenderGroup* group, Vec3 P, SpriteInfo* sprite, u32 spriteReferenceSlot, Bone* parentBone, PieceAss* ass, AnimationVolatileParams* params, b32 dontRender, b32 isEquipmentAss, Vec4 proceduralColor = V4(1, 1, 1, 1))
-{
-    RenderAssResult result = {};
-    
-    AnimationVolatileParams pieceParams = *params;
-    pieceParams.color = Hadamart(pieceParams.color, proceduralColor);
-    
-    Vec3 originOffset = AssOriginOffset(parentBone, ass, pieceParams.zOffset, pieceParams.scale);
-    r32 finalAngle = AssFinalAngle(parentBone, ass);
-    
-    pieceParams.angle = finalAngle;
-    pieceParams.cameraOffset += originOffset;
-    pieceParams.skinHashID = sprite->stringHashID;
-    
-    
-    u64 emptySpaceHashID = StringHash("emptySpace");
-    
-    if(sprite->flags & Sprite_Entity)
-    {
-        input->output->entityPresent = true;
-        Vec3 offset = pieceParams.cameraOffset;
-        input->output->entityOffset = offset;
-        input->output->entityAngle = pieceParams.angle;
-    }
-    else
-    {
-        BitmapId BID = GetBitmapID(group, sprite, params->skeletonSkinHashID, params->properties);
-        if(sprite->flags & Sprite_Composed)
-        {
-#if 0            
-            InvalidCodePath;
-            pieceParams.scale = Hadamart(pieceParams.scale, ass->scale);
-            pieceParams.color.a *= ass->alpha;
-            
-            ComponentsProperties pieceProperties;
-            pieceProperties.componentCount = 0;
-            pieceParams.properties = &pieceProperties;
-            pieceParams.entityHashID = sprite->stringHashID;
-            
-            if(!input->ortho)
-            {
-                if(slot->drawOpened)
-                {
-                    pieceParams.drawEmptySpaces = false;
-                }
-                GetVisualProperties(&pieceProperties, input->taxTable, slot->taxonomy, slot->recipeIndex, false, slot->drawOpened);
-                result.onFocus = DrawModularPiece(input, group, P, slot->taxonomy, &pieceParams, false, slot->drawOpened, dontRender);
-            }
-            else
-            {
-                ShortcutSlot* shortcut = GetShortcut(input->taxTable, sprite->stringHashID);
-                if(shortcut)
-                {
-                    DrawModularPiece(input, group, P, shortcut->taxonomy, &pieceParams, false, false, false);
-                }
-            }
-#endif
-        }
-        else if(sprite->stringHashID == emptySpaceHashID)
-        {
-            Assert(IsValid(BID));
-            if(params->drawEmptySpaces)
-            {
-                Vec2 finalScale = Hadamart(pieceParams.scale, ass->scale);
-                Bitmap* bitmap = GetBitmap(group->assets, BID);
-                
-                if(bitmap)
-                {
-                    r32 zOffset = 0.0f;
-                    
-                    Vec3 originalGridDim = V3(Hadamart(finalScale, V2(bitmap->widthOverHeight * bitmap->nativeHeight, bitmap->nativeHeight)), 0);
-                    
-                    u8 gridDimX = input->objectGridDimX;
-                    u8 gridDimY = input->objectGridDimY;
-                    r32 cellDim =ArrangeObjects(gridDimX, gridDimY, originalGridDim);
-                    
-                    r32 zoomCoeff = 1.0f / cellDim;
-                    input->output->additionalZoomCoeff = Max(input->output->additionalZoomCoeff, zoomCoeff);
-                    
-                    
-                    Vec3 gridDim = cellDim * V3(gridDimX, gridDimY, 0);
-                    Vec3 halfGridDim = 0.5f * gridDim;
-                    Vec3 lowLeftCorner = pieceParams.cameraOffset - halfGridDim + 0.5f * V3(cellDim, cellDim, 0);
-                    
-                    
-                    if(input->debug.ortho)
-                    {
-                        ObjectTransform debugCell = FlatTransform();
-                        debugCell.additionalZBias = params->additionalZbias;
-                        Rect2 cellDebugRect = RectCenterDim(P.xy + pieceParams.cameraOffset.xy, originalGridDim.xy);
-                        PushRect(group, debugCell, cellDebugRect, V4(0, 0, 0, 0.7f));
-                    }
-                    
-                    
-#if 0                    
-                    for(u8 Y = 0; Y < gridDimY; ++Y)
-                    {
-                        for(u8 X = 0; X < gridDimX; ++X)
-                        {
-                            i32 objectIndex = Y * gridDimX + X; 
-                            Object* object = input->objects + objectIndex;
-                            
-                            Vec3 objectP = lowLeftCorner + cellDim * V3(X, Y, 0);
-                            r32 objectScale = 1.0f;
-                            Vec4 objectColor = V4(1, 1, 1, 1);
-                            if(object->status < 0)
-                            {
-                                objectColor = V4(0.5f, 0.5f, 0.5f, 0.5f);
-                            }
-                            else
-                            {
-                                r32 ratio = Clamp01MapToRange(0, (r32) object->status, (r32) I16_MAX);
-                                Vec4 statusColor = V4(1, 1, 1, 1);
-                                objectColor = statusColor;
-                            }
-                            
-                            Rect2 cellRect = ProjectOnGround(group, P, objectP, V3(cellDim, cellDim, 0));
-                            
-                            if(input->debug.ortho)
-                            {
-                                ObjectTransform debugCell = FlatTransform();
-                                debugCell.additionalZBias = params->additionalZbias;
-                                Rect2 cellDebugRect = RectCenterDim(P.xy + objectP.xy, V2(cellDim, cellDim));
-                                PushRect(group, debugCell, cellDebugRect, V4(1, 1, 1, 0.7f));
-                            }
-                            else
-                            {
-                                Vec4 cellColor = V4(pieceParams.color.rgb, 0.5f);
-                                if(PointInRect(cellRect, input->mousePOnGround.xy))
-                                {
-                                    if(!input->draggingEntity->taxonomy || input->draggingEntity->objects.objectCount == 0)
-                                    {
-                                        input->output->focusObjectIndex = objectIndex;
-                                        if(!input->draggingEntity)
-                                        {
-                                            objectScale = 2.5f;
-                                        }
-                                        zOffset = 0.01f;
-                                        
-                                        if(input->draggingEntity->objects.objectCount == 0)
-                                        {
-                                            cellColor.a = 0.8f;
-                                        }
-                                    }
-                                }
-                                
-                                ObjectTransform spaceTransform = UprightTransform();
-                                spaceTransform.additionalZBias += params->additionalZbias;
-                                spaceTransform.cameraOffset = objectP;
-                                
-                                PushRect(group, spaceTransform, P, V2(cellDim, cellDim), cellColor, pieceParams.lights);
-                            }
-                            
-                            pieceParams.cameraOffset = objectP;
-                            
-                            u32 taxonomy = object->taxonomy;
-                            GenerationData gen = object->gen;
-                            
-                            if(taxonomy)
-                            {
-                                if(IsRecipe(object))
-                                {
-                                    taxonomy = input->taxTable->recipeTaxonomy;
-                                    gen = RecipeGenerationData();
-                                }
-                                TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, taxonomy);
-                                AnimationVolatileParams objectParams = pieceParams;
-                                objectParams.skinHashID = slot->stringHashID;
-                                
-                                ObjectLayout* layout = GetLayout(input->taxTable, taxonomy);
-                                ObjectState objectState = ObjectState_Default;
-                                
-                                Rect2 animationBounds = GetLayoutBounds(input, group, layout, &objectParams, objectState);
-                                if(HasArea(animationBounds))
-                                {
-                                    r32 cellFillPercentage = 0.9f;
-                                    Vec2 boundsDim = GetDim(animationBounds);
-                                    r32 scaleX = cellDim / boundsDim.x * cellFillPercentage;
-                                    r32 scaleY = cellDim / boundsDim.y * cellFillPercentage;
-                                    
-                                    r32 cellScale = Min(scaleX, scaleY);
-                                    objectParams.cameraOffset -= cellScale * V3(GetCenter(animationBounds), 0);
-                                    objectParams.scale *= Min(scaleX, scaleY);
-                                    objectParams.scale *= objectScale;
-                                    objectParams.color = objectColor;
-                                    objectParams.zOffset += zOffset;
-                                    objectParams.additionalZbias += 0.01f;
-                                    
-                                    ComponentsProperties objectProperties;
-                                    objectParams.properties = &objectProperties;
-                                    GetVisualProperties(&objectProperties, input->taxTable, taxonomy, gen);
-                                    
-                                    DrawModularPiece(input, group, P, slot->taxonomy, &objectParams, objectState, false);
-                                }
-                            }
-                        }
-                    }
-#endif
-                }
-                else
-                {
-                    LoadBitmap(group->assets, BID, false);
-                }
-            }
-        }
-        else
-        {
-            if(IsValid(BID))
-            {
-                if(!dontRender)
-                {
-                    ObjectTransform objectTransform;
-                    if(input->debug.ortho)
-                    {
-                        objectTransform = FlatTransform();
-                    }
-                    else
-                    {
-                        objectTransform = UprightTransform();
-                    }
-                    
-                    objectTransform.flipOnYAxis = pieceParams.flipOnYAxis;
-                    objectTransform.cameraOffset = pieceParams.cameraOffset;
-                    objectTransform.angle = pieceParams.angle;
-                    objectTransform.modulationPercentage = pieceParams.modulationWithFocusColor;
-                    
-                    objectTransform.additionalZBias += params->additionalZbias;
-                    Vec2 finalScale = Hadamart(pieceParams.scale, ass->scale);
-                    
-                    Vec4 color = Hadamart(pieceParams.color, ass->color);
-                    
-                    
-#if 0                    
-                    for(ClientAnimationEffect* effect = input->firstActiveEffect; effect; effect = effect->next)
-                    {
-                        if(effect->referenceSlot == (u32) spriteReferenceSlot)
-                        {
-                            if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
-                            {
-                                DispatchClientAnimationEffect(input->worldMode, group, effect, input->entity, P, &color, input->timeToAdvance);
-                            }
-                        }
-                    }
-                    
-                    if(spriteReferenceSlot)
-                    {
-                        for(ClientAnimationEffect* effect = input->firstActiveEquipmentLightEffect; effect; effect = effect->next)
-                        {
-                            if(effect->referenceSlot == (u32) spriteReferenceSlot)
-                            {
-                                if((effect->effect.stringHashID == 0xffffffffffffffff) ||(effect->effect.stringHashID == sprite->stringHashID))
-                                {
-                                    DispatchClientAnimationEffect(input->worldMode, group, effect, input->entity, P, &color, input->timeToAdvance);
-                                }
-                            }
-                        }
-                    }
-#endif
-                    
-                    Vec2 pivot = sprite->pivot;
-                    BitmapDim dim = PushBitmapWithPivot(group, objectTransform, BID, P, pivot, 0, finalScale, color, pieceParams.lights);
-                    
-                    if(input->debug.ortho)
-                    {
-                        Vec2 XAxis = dim.XAxis.xy * dim.size.x;
-                        Vec2 YAxis = dim.YAxis.xy * dim.size.y;
-                        Vec2 startP = dim.P.xy;
-                        if(PointInUnalignedRect(startP, XAxis, YAxis, input->relativeScreenMouseP))
-                        {
-                            Vec2 centerP = startP + 0.5f * XAxis + 0.5f * YAxis;
-                            result.distanceFromAssCenter = Length(centerP - input->relativeScreenMouseP);
-                            result.screenInRect = true;
-                        }
-                    }
-                }
-                
-                
-                Vec3 offsetRealP = pieceParams.cameraOffset.x * group->gameCamera.X + pieceParams.cameraOffset.y * group->gameCamera.Y + pieceParams.cameraOffset.z * group->gameCamera.Z;
-                if(pieceParams.flipOnYAxis)
-                {
-                    offsetRealP.x = -offsetRealP.x;
-                }
-                
-                Vec3 groundP = P + ProjectOnGround(offsetRealP, group->gameCamera.P);
-                r32 distanceSq = LengthSq(groundP - input->mousePOnGround);
-                
-                if(isEquipmentAss)
-                {
-                    if(distanceSq < input->minFocusSlotDistanceSq)
-                    {
-                        result.onFocus = true;
-                        input->minFocusSlotDistanceSq = distanceSq;
-                    }
-                }
-                else
-                {
-                    if(distanceSq < input->minHotAssDistanceSq)
-                    {
-                        result.onFocus = true;
-                        input->minHotAssDistanceSq = distanceSq;
-                    }
-                }
-            }
-        }
-        
-    }
-    
-    params->zOffset += 0.01f;
-    return result;
-}
-
-inline r32 GetAssAlphaFade(u64 identifier, u32 assIndex, r32 goOutTime, r32 cameInTime, r32 status)
-{
-    RandomSequence seqCameIn = Seed((u32) identifier * assIndex);
-    RandomSequence seqGoOut = Seed((u32) identifier * assIndex);
-    RandomSequence seqStatus = Seed((u32) identifier * assIndex);
-    
-    
-    r32 maxAlphaOutTime = ALPHA_GO_OUT_SECONDS;
-    r32 goOutAlphaThreeSold = RandomRangeFloat(&seqGoOut, 0.8f, 1.0f) * maxAlphaOutTime;
-    r32 goOutAlpha = 1.0f - Clamp01MapToRange(0, goOutTime, goOutAlphaThreeSold);
-    
-    
-    r32 maxAlphaInTime = ALPHA_CAME_IN_SECONDS;
-    r32 cameInAlphaThreeSold = RandomRangeFloat(&seqCameIn, 0.8f, 1.0f) * maxAlphaInTime;
-    r32 cameInAlpha = Clamp01MapToRange(0, cameInTime, cameInAlphaThreeSold);
-    
-    
-    r32 statusAlpha = 1.0f;
-    if(status < 0)
-    {
-        r32 statusAlphaThreesold = RandomRangeFloat(&seqStatus, MIN_STATUS_ALPHA, 0);
-        r32 lerp = Clamp01MapToRange(statusAlphaThreesold, status, 0);
-        statusAlpha = Lerp(0.4f, lerp, 1.0f);
-    }
-    else
-    {
-        r32 statusAlphaThreesold = RandomRangeFloat(&seqStatus, 1, MAX_STATUS_ALPHA);
-        statusAlpha = Clamp01MapToRange(0, status, statusAlphaThreesold);
-    }
-    
-    r32 result = goOutAlpha * cameInAlpha * statusAlpha;
-    
-    return result;
-}
-
-enum CycleAssOperation
-{
-    CycleAss_Render,
-    CycleAss_RenderPivots,
-};
-
-
+#if 0
 inline void ApplyAssAlterations(PieceAss* ass, AssAlteration* assAlt, Bone* parentBone, Vec4* proceduralColor)
 {
     if(assAlt->valid)
@@ -1576,650 +415,63 @@ inline void ApplyAssAlterations(PieceAss* ass, AssAlteration* assAlt, Bone* pare
     }
     
 }
-
-inline void AnimationPiecesOperation(AnimationFixedParams* input, RenderGroup* group, BlendResult* blended, Vec3 P, AnimationVolatileParams* params, CycleAssOperation operation)
-{
-    PieceAss* currentEquipmentRig = 0;
-    r32 bestAssDistance = R32_MAX;
-    u32 progressiveEquipmentIndex = 0;
-    
-    for(u32 assIndex = 0;assIndex < blended->assCount; ++assIndex)
-    {
-        BlendedAss* blendedAss = blended->ass + assIndex;
-        PieceAss currentAss = *(GetAss(blended, assIndex));
-        
-        AssAlteration* assAlt = &blendedAss->alterations;
-        Bone* parentBone = GetBone(blended, currentAss.boneID);
-        SpriteInfo* sprite = GetSprite(blended, assIndex);
-        
-        Vec4 proceduralColor = input->defaultColoration;
-        ApplyAssAlterations(&currentAss, assAlt, parentBone, &proceduralColor);
-        switch(operation)
-        {
-            case CycleAss_Render:
-            {
-                r32 alpha = GetAssAlphaFade(input->entity->identifier, assIndex, 
-                                            input->goOutTime, input->cameInTime, input->entity->status);
-                proceduralColor.a *= alpha;
-                
-                RenderAssResult render = RenderPieceAss_(input, group, P, sprite, 0, parentBone, &currentAss, params, false, true,  proceduralColor);
-                
-                if(render.onFocus)
-                {
-                    input->output->nearestAss = (i16) assIndex;
-                }
-                
-                if(render.screenInRect && render.distanceFromAssCenter < bestAssDistance)
-                {
-                    bestAssDistance = render.distanceFromAssCenter;
-                    input->output->hotAssIndex = (i16) assIndex;
-                }
-            } break;
-            
-            case CycleAss_RenderPivots:
-            {
-                Vec3 pivotP = AssOriginOffset(parentBone, &currentAss, params->zOffset, params->scale);
-                
-                ObjectTransform pivotTranform = FlatTransform();
-                pivotTranform.additionalZBias = 30.0f;
-                PushRect(group, pivotTranform, RectCenterDim(pivotP.xy + params->cameraOffset.xy, V2(4, 4)), V4(1, 1, 1, 1));
-            } break;
-        }
-        
-        
-        for(u32 equipmentIndex = 0; equipmentIndex < blendedAss->equipmentAssCount; ++equipmentIndex)
-        {
-            EquipmentAnimationPiece* equipment = blendedAss->associatedEquipment + equipmentIndex;
-            PieceAss* equipmentAss = &equipment->ass;
-            SpriteInfo* spriteInfo = &equipment->sprite;
-            i16 status = equipment->status;
-            ComponentsProperties* properties = equipment->properties;
-            
-            switch(operation)
-            {
-                case CycleAss_Render:
-                {
-                    r32 alpha = GetAssAlphaFade(input->entity->identifier, (u32) spriteInfo->stringHashID,
-                                                input->goOutTime, input->cameInTime, input->entity->status);
-                    
-                    equipmentAss->color.a *= alpha;
-                    
-                    AnimationVolatileParams pieceParams = *params;
-                    
-                    r32 ratio = Clamp01MapToRange(0, (r32) status, (r32) I16_MAX);
-                    Vec4 statusColor = V4(1, 1, 1, 1);
-                    pieceParams.color = statusColor;
-                    
-                    pieceParams.properties = properties;
-                    
-                    if(equipment->drawModulated)
-                    {
-                        pieceParams.modulationWithFocusColor = input->defaultModulatonWithFocusColor;
-                    }
-                    
-                    if(RenderPieceAss_(input, group, P, spriteInfo, equipment->slot, parentBone, equipmentAss, &pieceParams, false, true).onFocus)
-                    {
-                        input->output->focusSlots = equipment->slot;
-                    }
-                    params->zOffset = pieceParams.zOffset;
-                } break;
-            }
-        }
-    }
-    
-    
-    
-    
-    i16 hotAssIndex = input->output->hotAssIndex;
-    if(hotAssIndex >= 0)
-    {
-        BlendedAss* blendedAss = blended->ass + hotAssIndex;
-        PieceAss currentAss = *(GetAss(blended, hotAssIndex));
-        AssAlteration* assAlt = &blendedAss->alterations;
-        Bone* parentBone = GetBone(blended, currentAss.boneID);
-        SpriteInfo* sprite = GetSprite(blended, hotAssIndex);
-        
-        Vec4 proceduralColor = input->defaultColoration;
-        ApplyAssAlterations(&currentAss, assAlt, parentBone, &proceduralColor);
-        
-        RenderPieceAss_(input, group, P, sprite, 0, parentBone, &currentAss, params, false, false, Hadamart(proceduralColor, V4(0.1f, 0.1f, 0.1f, 1)));
-        
-        if(input->debug.showPivots)
-        {
-            Vec3 pivotP = AssOriginOffset(parentBone, &currentAss, params->zOffset, params->scale);
-            
-            ObjectTransform pivotTranform = FlatTransform();
-            pivotTranform.additionalZBias = 30.1f;
-            PushRect(group, pivotTranform, RectCenterDim(pivotP.xy + params->cameraOffset.xy, V2(4, 4)), V4(0, 1, 0, 1));
-        }
-    }
-}
-
-
-inline AnimationId GetAnimationRecursive(Assets* assets, TaxonomyTable* table, u32 taxonomy, u64 animationTypeHash, u64* stringHashID)
-{
-    u32 assetID = GetAssetIndex(animationTypeHash);
-    AnimationId result = {};
-    
-    TagVector match = {};
-    TagVector weight = {};
-    
-    u32 currentTaxonomy = taxonomy;
-    do
-    {
-        TaxonomySlot* slot = GetSlotForTaxonomy(table, currentTaxonomy);
-        u64 testHash = slot->stringHashID;
-        
-        AnimationId ID = GetMatchingAnimation(assets, assetID, testHash, &match, &weight);
-        if(IsValid(ID))
-        {
-            *stringHashID = testHash;
-            result = ID;
-            break;
-        }
-        currentTaxonomy = GetParentTaxonomy(slot);
-        
-    }while(currentTaxonomy);
-    
-    return result;
-}
-
-internal void UpdateAndRenderAnimation(AnimationFixedParams* input, RenderGroup* group, Animation* animation, u64 skeletonHashID, Vec3 P, AnimationState* animationState, AnimationVolatileParams* params, r32 timeToAdvance)
-{
-    BlendResult blended = {};
-    
-    GetAnimationPiecesAndAdvanceState(input, &blended, animation, animationState, timeToAdvance, params);
-    
-    TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, input->entity->taxonomy);
-    GetEquipmentPieces(&blended, input->taxTable, &slot->equipmentMappings, input->equipment);
-    
-    FrameData* referenceFrame = animation->frames + 0;
-    Assert(referenceFrame->countBones == blended.boneCount);
-    Assert(referenceFrame->countAss == blended.assCount);
-    
-    if(!input->debug.hideBitmaps)
-    {
-        AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_Render);
-    }
-    
-    
-    
-    if(input->debug.ortho && input->debug.showBones)
-    {
-        for(u32 boneIndex = 0; boneIndex < blended.boneCount; ++boneIndex)
-        {
-            Bone* bone = GetBone(&blended, boneIndex);
-            Vec2 startP = P.xy + params->cameraOffset.xy + bone->finalOriginOffset;
-            
-            r32 thickness = 2.5f;
-            
-            Vec2 XAxis = 0.6f * Hadamart(params->scale, bone->mainAxis);
-            Vec2 YAxis = Perp(XAxis);
-            YAxis = 2.0f * thickness * Normalize(YAxis);
-            
-            Vec2 toP = startP + XAxis;
-            
-            Vec4 boneColor = V4(1, 0, 0, 1);
-            if(PointInUnalignedRect(startP - 0.5f * YAxis, XAxis, YAxis, input->relativeScreenMouseP))
-            {
-                input->output->hotBoneIndex = (i16) boneIndex;
-                boneColor = V4(0, 0, 0, 1);
-            }
-            
-            PushLine(group, boneColor, V3(startP, params->additionalZbias + 1.0f), V3(toP, params->additionalZbias + 1.0f), thickness);
-        }
-    }
-    
-    if(input->debug.ortho && input->debug.showPivots)
-    {
-        AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_RenderPivots);
-    }
-}
-
-
-internal void RenderObjectLayout(AnimationFixedParams* input, RenderGroup* group, ObjectLayout* layout, Vec3 P, AnimationVolatileParams* params, ObjectState state)
-{
-    BlendResult blended;
-    GetLayoutAnimationPieces(input, &blended, layout, params, state);
-    
-    if(!input->debug.hideBitmaps)
-    {
-        AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_Render);
-    }
-    
-    if(input->debug.ortho && input->debug.showPivots)
-    {
-        AnimationPiecesOperation(input, group, &blended, P, params, CycleAss_RenderPivots);
-    }
-}
-
-inline void InitializeAnimationInputOutput(AnimationFixedParams* input, MemoryPool* tempPool, AnimationOutput* output, GameModeWorld* worldMode, ClientEntity* entityC, r32 timeToAdvance, ClientEntity* fakeEquipment = 0)
-{
-    AnimationState* animationState = &entityC->animation;
-    
-    input->tempPool = tempPool;
-    input->timeToAdvance = timeToAdvance;
-    input->worldMode = worldMode;
-    input->taxTable = worldMode->table;
-    input->defaultModulatonWithFocusColor = worldMode->modulationWithFocusColor;
-    r32 slotMaxDistance = 0.6f;
-    input->minFocusSlotDistanceSq = Square(slotMaxDistance);
-    r32 hotAssMaxDistance = 0.3f;
-    input->minHotAssDistanceSq = Square(hotAssMaxDistance);
-    
-    input->mousePOnGround = worldMode->worldMouseP;
-    input->relativeScreenMouseP = worldMode->relativeScreenMouseP;
-    
-    
-    
-    input->cameInTime = entityC->animation.cameInTime;
-    input->goOutTime = entityC->animation.goOutTime;
-    
-    if(timeToAdvance == 0 && input->cameInTime == 0)
-    {
-        input->cameInTime = R32_MAX;
-    }
-    
-    input->entity = entityC;
-    input->firstActiveEffect = entityC->firstActiveEffect;
-    input->firstActiveEquipmentLightEffect = 0;
-    
-    
-    u32 slotCount = 0;
-    for(u32 slotIndex = Slot_None; slotIndex < Slot_Count; ++slotIndex)
-    {
-        input->equipment[slotIndex] = {};
-        if(fakeEquipment)
-        {
-            ClientEntity* objectEntity = fakeEquipment + slotIndex;
-            if(objectEntity->taxonomy)
-            {
-                EquipmentAnimationSlot* dest = input->equipment + slotCount++;
-                
-                dest->ID = objectEntity->identifier;
-                dest->layout = GetLayout(worldMode->table, objectEntity->taxonomy);
-                dest->taxonomy = objectEntity->taxonomy;
-                dest->status = I16_MAX;
-                GetVisualProperties(&dest->properties, worldMode->table, objectEntity->taxonomy, objectEntity->gen);
-                
-                dest->slot = (SlotName) slotIndex;
-            }
-        }
-        else
-        {
-            u64 objectEntityID = entityC->equipment[slotIndex].ID;
-            if(objectEntityID)
-            {
-                ClientEntity* objectEntity;
-                
-                if(objectEntityID == 0xffffffffffffffff - 1)
-                {
-                    InvalidCodePath;
-                    objectEntity = 0;
-                    //objectEntity = &worldMode->UI->draggingEntity;
-                }
-                else
-                {
-                    objectEntity = GetEntityClient(worldMode, objectEntityID);
-                }
-                if(objectEntity)
-                {
-                    u32 taxonomy;
-                    GenerationData gen;
-                    if(objectEntityID == 0xffffffffffffffff)
-                    {
-                        taxonomy = entityC->prediction.taxonomy;
-                        gen = entityC->prediction.gen;
-                    }
-                    else
-                    {
-                        taxonomy = objectEntity->taxonomy;
-                        gen = objectEntity->gen;
-                        
-                        TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, taxonomy);
-                        if(slot->hasLight)
-                        {
-                            ClientAnimationEffect* lightEffect = PushStruct(tempPool, ClientAnimationEffect);
-                            lightEffect->referenceSlot = (SlotName) slotIndex;
-                            lightEffect->effect.type = AnimationEffect_Light;
-                            lightEffect->effect.stringHashID = slot->lightPieceHashID;
-                            lightEffect->effect.lightColor = slot->lightColor;
-                            lightEffect->effect.lightIntensity = objectEntity->lightIntensity;
-                            
-                            FREELIST_INSERT(lightEffect, input->firstActiveEquipmentLightEffect);
-                        }
-                    }
-                    
-                    EquipmentAnimationSlot* dest = input->equipment + slotCount++;
-                    
-                    dest->ID = objectEntityID;
-                    dest->layout = GetLayout(worldMode->table, taxonomy);
-                    dest->taxonomy = taxonomy;
-                    dest->status = (i16) objectEntity->status;
-                    GetVisualProperties(&dest->properties, worldMode->table, taxonomy, gen);
-                    dest->slot = (SlotName) slotIndex;
-                    
-                    dest->drawModulated = (dest->slot == entityC->animation.output.focusSlots ||
-                                           dest->slot == entityC->animation.nearestCompatibleSlotForDragging);
-                    
-                    dest->isOpen = false;
-                    
-#if 0                    
-                    if(worldMode->UI->mode == UIMode_Equipment)
-                    {
-                        dest->isOpen = (objectEntityID == worldMode->UI->lockedInventoryID1 ||
-                                        objectEntityID == worldMode->UI->lockedInventoryID2);
-                    }
 #endif
-                    
-                }
-            }
-        }
-    }
-    
-    input->objectCount = entityC->objects.objectCount;
-    input->objects = entityC->objects.objects;
-    
-    TaxonomySlot* slot = GetSlotForTaxonomy(input->taxTable, entityC->taxonomy);
-    input->objectGridDimX = slot->gridDimX;
-    input->objectGridDimY = slot->gridDimY;
-    
-    //input->draggingEntity = &worldMode->UI->draggingEntity;
-    
-    
-    input->output = output;
-    output->focusSlots = {};
-    output->focusObjectIndex = -1;
-    output->additionalZoomCoeff = 1.0f;
-    output->hotBoneIndex = -1;
-    output->hotAssIndex = -1;
-    
-}
 
-inline SkeletonInfo GetSkeletonForTaxonomy(TaxonomyTable* table, TaxonomySlot* slot)
+internal void RenderCharacterAnimation(RenderGroup* group, AnimationComponent* component, AnimationParams* params)
 {
-    SkeletonInfo result = {};
-    while(slot->taxonomy)
-    {
-        AnimationGeneralParams* params = GetSlotData(slot, animationGeneralParams);
-        if(params->skeletonHashID)
-        {
-            result.skeletonSkinHashID = params->skeletonSkinHashID;
-            result.skeletonHashID = params->skeletonHashID;
-            result.skinHashID = params->skinHashID;
-            result.coloration = params->defaultColoration;
-            result.originOffset = params->originOffset;
-            result.flippedOnYAxis = params->flippedOnYAxis;
-            break;
-        }
-        
-        slot = GetParentSlot(table, slot);
-    }
-    
-    return result;
-}
-
-struct GetAIDResult
-{
-    AnimationId AID;
-    u64 skeletonSkinHashID;
-    u64 skinHashID;
-    u64 skeletonHashID;
-    Vec4 coloration;
-    Vec2 originOffset;
-    b32 flippedOnYAxis;
-};
-
-inline GetAIDResult GetAID(Assets* assets, TaxonomyTable* taxTable, u32 taxonomy, u32 action,b32 dragging, r32 tileHeight, u64 forcedNameHashID = 0)
-{
-    GetAIDResult result = {};
-    result.coloration = V4(1, 1, 1, 1);
-    
-    TaxonomySlot* slot = GetSlotForTaxonomy(taxTable, taxonomy);
-    
-    
-    SkeletonInfo skeletonInfo = GetSkeletonForTaxonomy(taxTable, slot);
-    result.skeletonSkinHashID = skeletonInfo.skeletonSkinHashID;
-    result.skeletonHashID = skeletonInfo.skeletonHashID;
-    result.skinHashID = skeletonInfo.skinHashID;
-    result.coloration = skeletonInfo.coloration;
-    result.originOffset = skeletonInfo.originOffset;
-    result.flippedOnYAxis = skeletonInfo.flippedOnYAxis;
-    
-    if(forcedNameHashID)
-    {
-        FindAnimationResult find = FindAnimationByName(assets, result.skeletonHashID, forcedNameHashID);
-        //result.assetID = find.assetType;
-        result.AID = find.ID;	
-    }
-    else
-    {
-        
-        u64 animationNameHash = GetAssetHashForEntity(assets, taxTable, taxonomy, action, dragging, tileHeight);
-        if(!result.skeletonSkinHashID)
-        {
-            result.AID = GetAnimationRecursive(assets, taxTable, taxonomy, animationNameHash, &result.skeletonHashID);
-        }
-        else
-        {
-            TagVector match = {};
-            TagVector weight = {};
-            result.AID = GetMatchingAnimation(assets, animationNameHash, result.skeletonHashID, &match, &weight);
-            
-            if(!IsValid(result.AID))
-            {
-                result.AID = GetMatchingAnimation(assets, StringHash(Asset_rig), result.skeletonHashID, &match, &weight);
-                result.coloration = V4(0, 0, 0, 1);
-            }
-            
-        }
-    }
-    
-    return result;
-}
-
-internal AnimationOutput PlayAndDrawEntity(GameModeWorld* worldMode, RenderGroup* group, Lights lights, ClientEntity* entityC, Vec3 P, Vec2 scale, r32 angle, Vec3 offset, r32 timeToAdvance, Vec4 color, b32 drawOpened, b32 onTop, Rect2 bounds, r32 additionalZbias, AnimationDebugParams debugParams = {})
-{
-    AnimationOutput result = {};
-    TaxonomyTable* taxTable = worldMode->table;
-    AnimationState* animationState = &entityC->animation;
-    animationState->cameInTime += timeToAdvance;
-    
-    AnimationFixedParams input;
-    
     MemoryPool tempPool = {};
     
-    InitializeAnimationInputOutput(&input, &tempPool, &result, worldMode, entityC, timeToAdvance, debugParams.fakeEquipment);
-    input.debug = debugParams;
-    
-    AnimationVolatileParams params;
-    params.flipOnYAxis = animationState->flipOnYAxis;
-    params.drawEmptySpaces = true;
-    params.recipeIndex = 0;
-    params.skinHashID = 0;
-    params.additionalZbias = additionalZbias;
-    params.modulationWithFocusColor = entityC->modulationWithFocusColor;
-    params.cameraOffset = offset;
-    params.lights = lights;
-    params.color = color;
-    params.angle = angle;
-    params.scale = scale;
-    params.zOffset = 0;
-    params.properties = 0;
-    
-    TaxonomySlot* entitySlot = GetSlotForTaxonomy(worldMode->table, entityC->taxonomy);
-    AnimationGeneralParams* animParams = GetSlotData(entitySlot, animationGeneralParams);
-    
-    if(animParams->animationIn3d)
+    RandomSequence seq = {};
+    AssetID animationID = QueryAnimations(group->assets, component->skeleton, &seq, &component->skeletonProperties);
+    if(IsValid(animationID))
     {
-        ModelId MID = FindModelByName(group->assets, animParams->modelTypeID, animParams->modelNameID);
-        
-        PakModel* modelInfo = GetModelInfo(group->assets, MID);
-        Vec3 modelScale = Hadamart(modelInfo->dim, animParams->modelScale);
-        
-        if(entityC->boundType)
+        Animation* animation = GetAnimation(group->assets, animationID);
+        if(animation)
         {
-            Vec3 desiredDim = GetDim(entityC->bounds);
+            PAKAnimation* animationInfo = GetAnimationInfo(group->assets, animationID);
+            u32 bitmapCount = 0;
+            AssetID* bitmaps = GetAllSkinBitmaps(&tempPool, group->assets, component->skin, &component->skinProperties, &bitmapCount);
             
-            modelScale.x = desiredDim.x / modelScale.x;
-            modelScale.y = desiredDim.y / modelScale.y;
-            modelScale.z = desiredDim.z / modelScale.z;
+            u32 pieceCount;
+            AnimationPiece* pieces = GetAnimationPiecesAndAdvanceState(&tempPool, animationInfo, animation, component, params, &pieceCount);
             
-        }
-        
-        PushModel(group, MID, Identity(), P + animParams->modelOffset, lights, modelScale, animParams->modelColoration, entityC->modulationWithFocusColor);
-    }
-    else if(IsObject(worldMode->table, entityC->taxonomy))
-    {
-        ObjectState state = drawOpened ? ObjectState_GroundOpen : ObjectState_Ground;
-        input.defaultColoration = V4(1, 1, 1, 1);
-        ComponentsProperties properties;
-        params.properties = &properties;
-        
-        GetVisualProperties(&properties, taxTable, entityC->taxonomy, entityC->gen);
-        
-        ObjectLayout* layout = GetLayout(taxTable, entityC->taxonomy);
-        if(layout)
-        {
-            Rect2 animationBounds = GetLayoutBounds(&input, group, layout, &params, state);
-            if(HasArea(bounds))
+            ObjectTransform transform = UprightTransform();
+            for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
             {
-                Vec2 boundsDim = GetDim(bounds);
-                r32 boundsFillPercentage = 0.9f;
-                Vec2 animationDim = GetDim(animationBounds);
-                r32 boundScaleX = boundsDim.x / animationDim.x * boundsFillPercentage;
-                r32 boundScaleY = boundsDim.y / animationDim.y * boundsFillPercentage;
+                AnimationPiece* piece = pieces + pieceIndex;
                 
-                r32 boundScale = Min(boundScaleX, boundScaleY);
-                Vec2 animationCenter = GetCenter(animationBounds);
-                params.cameraOffset = -boundScale * V3(animationCenter, 0);
-                params.scale *= Min(boundScaleX, boundScaleY);
-                
-                animationBounds = RectCenterDim(animationCenter, Hadamart(animationDim, V2(boundScaleX, boundScaleY)));
-            }
-            
-            if(!debugParams.ortho)
-            {
-                animationState->bounds = animationBounds;
-                if(entityC->action <= Action_Idle)
+                for(u32 bitmapIndex = 0; bitmapIndex < bitmapCount; ++bitmapIndex)
                 {
-                    animationState->cameraEntityOffset = GetCenter(animationState->bounds);
-                }
-            }
-            
-            RenderObjectLayout(&input, group, layout, P, &params, state);
-        }
-    }
-    else
-    {
-        PushNewAction(animationState, entityC->action);
-        
-        b32 dragging = (entityC->draggingID != 0);
-        
-        WorldTile* tile = GetTile(worldMode, worldMode->player.universeP, P.xy);
-        r32 tileHeight = tile->waterLevel;
-        GetAIDResult prefetchAID = GetAID(group->assets, taxTable, entityC->taxonomy, entityC->action, dragging, tileHeight);
-        PrefetchAnimation(group->assets, prefetchAID.AID);
-        
-        GetAIDResult AID = GetAID(group->assets, taxTable, entityC->taxonomy, animationState->action, dragging, tileHeight,  debugParams.forcedNameHashID);
-        
-        input.defaultColoration = AID.coloration;
-        //input.combatAnimation = (AID.assetID == Asset_attacking);
-        params.cameraOffset.xy += AID.originOffset;
-        
-        if(AID.flippedOnYAxis)
-        {
-            params.flipOnYAxis = !params.flipOnYAxis;
-        }
-        
-        if(IsValid(AID.AID))
-        {
-            Animation* animation = GetAnimation(group->assets, AID.AID);
-            if(animation)
-            {
-                result.playedAnimationNameHash = animation->header->nameHash;
-                
-                r32 quicknessCoeff = 1.0f;
-                timeToAdvance *= quicknessCoeff;
-                params.skeletonSkinHashID = AID.skeletonSkinHashID;
-                params.skeletonHashID = AID.skeletonHashID;
-                params.skinHashID = AID.skinHashID;
-                
-                BlendResult blended;
-                AnimationState dummyState = {};
-                GetAnimationPiecesAndAdvanceState(&input, &blended, animation, &dummyState, 0, &params);
-                Rect2 animationBounds = GetPiecesBound(group, &blended, &params);
-                if(HasArea(bounds))
-                {
-                    Vec2 boundsDim = GetDim(bounds);
-                    r32 boundsFillPercentage = 0.9f;
-                    Vec2 animationDim = GetDim(animationBounds);
-                    r32 boundScaleX = boundsDim.x / animationDim.x * boundsFillPercentage;
-                    r32 boundScaleY = boundsDim.y / animationDim.y * boundsFillPercentage;
-                    
-                    r32 boundScale = Min(boundScaleX, boundScaleY);
-                    Vec2 animationCenter = GetCenter(animationBounds);
-                    params.cameraOffset = -boundScale * V3(animationCenter, 0);
-                    params.scale *= Min(boundScaleX, boundScaleY);
-                    
-                    animationBounds = RectCenterDim(animationCenter, Hadamart(animationDim, V2(boundScaleX, boundScaleY)));
-                }
-                
-                if(!debugParams.ortho)
-                {
-                    animationState->bounds = Offset(animationBounds, AID.originOffset);
-                    if(entityC->action <= Action_Idle)
+                    AssetID bitmap = bitmaps[bitmapIndex];
+                    if(IsValid(bitmap))
                     {
-                        animationState->cameraEntityOffset = GetCenter(animationState->bounds);
+                        PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, bitmap);
+                        if(bitmapInfo->nameHash == piece->nameHash)
+                        {
+                            transform.angle = piece->angle;
+                            Vec3 P = params->P;
+                            
+                            transform.cameraOffset = piece->originOffset;
+                            
+                            PushBitmapWithPivot(group, transform, bitmap, P, piece->pivot, 0, piece->scale, piece->color);
+                        }
                     }
                 }
-                
-                UpdateAndRenderAnimation(&input, group, animation, AID.skeletonHashID, P, animationState, &params, timeToAdvance);
             }
-            else
-            {
-                LoadAnimation(group->assets, AID.AID);
-            }
+        }
+        else
+        {
+            LoadAnimation(group->assets, animationID);
         }
     }
     
     Clear(&tempPool);
-    
-    return result;
-}
-
-inline Vec4 BlendTilesColor(WorldTile* t0, WorldTile* t1, WorldTile* t2, WorldTile* t3)
-{
-    Vec4 result = V4(t0->baseColor.rgb + t1->baseColor.rgb + t2->baseColor.rgb + t3->baseColor.rgb * (1.0f / 4.0f), 1.0f);
-    return result;
-}
-
-inline Vec4 ComputeWeightedChunkColor(WorldChunk* chunk)
-{
-    Vec4 result = {};
-    
-    for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
-    {
-        for(u8 X = 0; X < CHUNK_DIM; ++X)
-        {
-            WorldTile* tile = GetTile(chunk, X, Y);
-            result += GetTileColor(tile, false, 0);
-        }
-    }
-    
-    result *= (1.0f / Square(CHUNK_DIM));
-    return result;
 }
 
 
-
-
-
-
+#if 0
 inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, TaxonomySlot* slot, u64 nameHash, r32 oldSoundTime, r32 soundTime)
 {
-    
-#if RESTRUCTURING    
     SoundState* soundState = worldMode->soundState;
     u32 soundTaxonomy = slot->taxonomy;
     b32 found = false;
@@ -2275,10 +527,11 @@ inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, Taxo
         
         soundTaxonomy = GetParentTaxonomy(worldMode->table, soundTaxonomy);
     }
-#endif
-    
 }
+#endif
 
+
+#if 0
 JOB_DEFINITION(InitAnimation)
 {
     
@@ -2354,46 +607,6 @@ JOB_DEFINITION(InitAnimation)
     GetPhysicalProperties(worldMode->table, entityC->taxonomy, entityC->identifier, &entityC->boundType, &bounds, entityC->generationIntensity);
     entityC->bounds = Offset(bounds, animationP);
 }
-
-JOB_DEFINITION(Render2dAnimation)
-{
-    oldSoundTime = entityC->animation.normalizedTime;
-    Vec2 animationScale = params.scale * V2(0.33f, 0.33f);
-    r32 additionalZbias = params.additionalZbias;
-    if(params.onTop)
-    {
-        additionalZbias = 5.0f;
-    }
-    
-    additionalZbias += 0.4f * GetDim(entityC->animation.bounds).y;
-    
-    SlotName dragging = (SlotName) entityC->animation.nearestCompatibleSlotForDragging;
-    
-#if 0        
-    if(IsValid(dragging) && worldMode->UI->animationGhostAllowed)
-    {
-        u64 ID = worldMode->UI->draggingEntity.identifier;
-        MarkAllSlotsAsOccupied(entityC->equipment, dragging, ID);
-    }
-#endif
-    
-    AnimationGeneralParams* animParams = GetSlotData(slot, animationGeneralParams);
-    if(animParams->animationFollowsVelocity)
-    {
-        r32 velocityAngle = AArm2(entityC->velocity.xy);
-        params.angle += RadToDeg(velocityAngle);
-    }
-    result = PlayAndDrawEntity(worldMode, group, lights, entityC, animationP, animationScale, params.angle, params.offset, timeToUpdate, bodyColor, params.drawOpened, params.onTop, params.bounds, additionalZbias);
-    
-    if(IsValid(dragging))
-    {
-        MarkAllSlotsAsNull(entityC->equipment, dragging);
-    }
-    
-    soundAction = (EntityAction) entityC->animation.action;
-    soundTime = entityC->animation.normalizedTime;
-}
-
 
 JOB_DEFINITION(RenderPlant)
 {
@@ -2504,54 +717,4 @@ JOB_DEFINITION(RenderRocks)
         }
     }
 }
-
-JOB_DEFINITION(PlaysoundForAnimation)
-{
-    PlaySoundForAnimation(worldMode, group->assets, slot, result.playedAnimationNameHash, oldSoundTime, soundTime);
-}
-
-
-internal AnimationOutput RenderEntity(RenderGroup* group, GameModeWorld* worldMode, ClientEntity* clientEntity, Vec3 P, Vec2 dim, r32 additionalZbias)
-{
-    Vec3 oldP = clientEntity->P;
-    clientEntity->P = P;
-    AnimationEntityParams params = StandardEntityParams();
-    params.bounds = RectCenterDim(V2(0, 0), dim);
-    params.additionalZbias = additionalZbias;
-    
-    AnimationOutput result = RenderEntity(group, worldMode, clientEntity, 0, params);
-    
-    
-    clientEntity->P = oldP;
-    
-    return result;
-}
-
-internal Rect2 RenderObject(RenderGroup* group, GameModeWorld* worldMode, Object* object, Vec3 P, Vec2 dim, r32 additionalZbias)
-{
-    ClientEntity clientEntity = {};
-    clientEntity.animation.cameInTime = R32_MAX;
-    
-    clientEntity.taxonomy = object->taxonomy;
-    clientEntity.gen = object->gen;
-    clientEntity.P = P;
-    clientEntity.status = object->status;
-    
-    AnimationEntityParams params = StandardEntityParams();
-    params.bounds = RectCenterDim(V2(0, 0), dim);
-    params.additionalZbias = additionalZbias;
-    RenderEntity(group, worldMode, &clientEntity, 0, params);
-    
-    Rect2 result = clientEntity.animation.bounds;
-    return result;
-}
-
-inline b32 AnimatedIn3d(TaxonomyTable* table, u32 taxonomy)
-{
-    TaxonomySlot* slot = GetSlotForTaxonomy(table, taxonomy);
-    
-    AnimationGeneralParams* params = GetSlotData(slot, animationGeneralParams);
-    b32 result = params->animationIn3d;
-    return result;
-}
-
+#endif

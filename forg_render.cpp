@@ -457,7 +457,6 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTra
     BitmapDim result = {};
     GameRenderCommands* commands = renderGroup->commands;
     
-    
     Bitmap* bitmap = coloredBitmap.bitmap;
     color = Hadamart(color, coloredBitmap.coloration);
     

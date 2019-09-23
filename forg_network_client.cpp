@@ -318,16 +318,12 @@ inline SavedNameSlot* GetNameSlot( DebugTable* debugTable, u64 pointer )
 }
 #endif
 
-inline ClientEntity* GetEntityClient(GameModeWorld* worldMode, u64 ID, b32 canAllocate);
-inline void SignalAnimationSyncCompleted(AnimationState* animation, u32 action, AnimationSyncState state);
-inline void AddAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, EntityAction action, u64 targetID, u32 animationEffectFlags);
-inline void AddSkillAnimationEffects(GameModeWorld* worldMode, ClientEntity* entity, u32 skillTaxonomy, u64 targetID, u32 animationEffectFlags);
 internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
     ClientPlayer* player = &worldMode->player;
+    EntityID currentID = {};
     
-    ClientEntity* currentEntity = 0;
-    ClientEntity* currentContainer = 0;
+    
     u16 readSize = 0;
     u16 toReadSize = dataSize;
     
@@ -399,7 +395,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             
             case Type_gameAccess:
             {
-                Unpack("QL", &worldMode->worldSeed, &worldMode->player.identifier);
+                Unpack("QHL", &worldMode->worldSeed, 
+                       &player->ID.archetype, &player->ID.archetypeIndex);
             } break;
             
             case Type_worldInfo:
@@ -409,45 +406,49 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             
             case Type_entityHeader:
             {
-                u32 identifier;
-                Unpack("L", &identifier);
+                EntityID ID;
+                Unpack("LH", &ID.archetype, &ID.archetypeIndex);
                 
-                currentEntity = GetEntityClient(worldMode, identifier, true);
-                currentEntity->identifier = identifier;
-                currentEntity->timeFromLastUpdate = 0.0f;
+                Assert(ID.archetype < Archetype_Count);
+                GetOrAcquire(worldMode, ID);
+                currentID = ID;
             } break;
             
             case Type_entityBasics:
             {
                 UniversePos P;
-                ClientEntity* e = currentEntity;
-                Assert(e);
-                
                 Unpack("llV", &P.chunkX, &P.chunkY, &P.chunkOffset);
                 
-                r32 maxDistancePrediction = 2.5f;
-                Vec3 deltaP = Subtract(P, e->universeP);
-                r32 deltaLength = Length(deltaP);
-                if(true)
+                BaseComponent* base = GetComponent(worldMode, currentID, BaseComponent);
+                if(base)
                 {
-                    e->universeP = P;
-                    e->velocity = {};
-                }
-                else
-                {
-                    e->velocity = deltaP * clientNetwork->serverFPS;
-                    if(e->identifier == worldMode->player.identifier)
+                    r32 maxDistancePrediction = 2.5f;
+                    Vec3 deltaP = Subtract(P, base->universeP);
+                    r32 deltaLength = Length(deltaP);
+                    base->universeP = P;
+                    base->velocity = {};
+                    
+                    if(AreEqual(currentID, player->ID))
                     {
-                        worldMode->player.distanceCoeffFromServerP = deltaLength / maxDistancePrediction;
+                        player->universeP = P;
                     }
-                }
-                
-                if(e->identifier == worldMode->player.identifier)
-                {
-                    worldMode->player.universeP = P;
                 }
             } break;
             
+            case Type_animationComponent:
+            {
+                u16 skeleton;
+                u16 skin;
+                Unpack("HH", &skeleton, &skin);
+                AnimationComponent* animation = GetComponent(worldMode, currentID, AnimationComponent);
+                if(animation)
+                {
+                    animation->skeleton = (AssetSkeletonType) skeleton;
+                    animation->skin = (AssetImageType) skin;
+                    animation->skeletonProperties = {};
+                    animation->skinProperties = {};
+                }
+            } break;
             
             case Type_FileHeader:
             {

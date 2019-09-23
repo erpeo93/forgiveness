@@ -753,7 +753,7 @@ internal void LoadAssetFile(Assets* assets, AssetFile* file, AssetSubtypeArray* 
         u16 assetType = GetMetaAssetType(file->header.type);
         Assert(assetType < AssetType_Count);
         
-        if(assetType == AssetType_Skeleton ||
+        if((assetType == AssetType_Skeleton && assetIndex < file->header.standardAssetCount) ||
            (assetType == AssetType_Image && assetIndex >= file->header.standardAssetCount))
         {
             dest->state = Asset_loadedNoData;
@@ -1148,30 +1148,28 @@ inline b32 MatchesProperties(Asset* asset, GameProperties* properties)
     return result;
 }
 
-#define QueryBitmaps(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Image, subtype, seq, properties)
+#define QueryBitmaps(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Image, subtype, seq, properties, true)
+
+#define QuerySkeletons(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Skeleton, subtype, seq, properties)
 #define QueryFonts(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Font, subtype, seq, properties)
 #define QueryDataFiles(assets, type, sub, seq, properties) QueryAssets_(assets, AssetType_##type, sub, seq, properties)
 
-internal AssetID QueryAssets_(Assets* assets, AssetType type, u32 subtype, RandomSequence* seq, GameProperties* properties, u16 startingIndex = 0, u16 onePastEndingIndex = 0)
+internal AssetID QueryAssets_(Assets* assets, AssetType type, u32 subtype, RandomSequence* seq, GameProperties* properties, b32 derivedAssets = false, u16 startingIndex = 0, u16 onePastEndingIndex = 0)
 {
     AssetID result = {};
     if(type)
     {
         AssetArray* array = assets->assets + type;
-        
         if(subtype < array->subtypeCount)
         {
             AssetSubtypeArray* subtypeArray = array->subtypes + subtype;
-            
             if(subtypeArray->standardAssetCount > 0)
             {
                 u16 matching = 0;
                 u16 matchingAssets[32];
                 
                 u16 maximumAssetIndexAllowed = subtypeArray->standardAssetCount;
-                
-                // NOTE(Leonardo): colorations!
-                if(type == AssetType_Image)
+                if(derivedAssets)
                 {
                     maximumAssetIndexAllowed += subtypeArray->derivedAssetCount;
                 }
@@ -1207,6 +1205,32 @@ internal AssetID QueryAssets_(Assets* assets, AssetType type, u32 subtype, Rando
     return result;
 }
 
+
+internal AssetID* GetAllSkinBitmaps(MemoryPool* tempPool, Assets* assets, AssetImageType skin, GameProperties* skinProperties, u32* bitmapCount)
+{
+    AssetID* result = 0;
+    *bitmapCount = 0;
+    
+    AssetArray* array = assets->assets + AssetType_Image;
+    if((u32) skin < array->subtypeCount)
+    {
+        AssetSubtypeArray* skinBitmaps = array->subtypes + skin;
+        
+        u16 totalAssetCount = skinBitmaps->standardAssetCount + skinBitmaps->derivedAssetCount;
+        *bitmapCount = totalAssetCount;
+        
+        result = PushArray(tempPool, AssetID, totalAssetCount);
+        for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
+        {
+            AssetID* dest = result + assetIndex;
+            dest->type = AssetType_Image;
+            dest->subtype = SafeTruncateToU16(skin);
+            dest->index = assetIndex;
+        }
+    }
+    
+    return result;
+}
 
 inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
 {
@@ -1459,6 +1483,14 @@ inline PAKSkeleton* GetSkeletonInfo(Assets* assets, AssetID ID)
     return result;
 }
 
+inline PAKAnimation* GetAnimationInfo(Assets* assets, AssetID ID)
+{
+    Assert(IsValid(ID));
+    PAKAsset* asset = GetPakAsset(assets, ID);
+    PAKAnimation* result = &asset->animation;
+    return result;
+}
+
 inline PAKModel* GetModelInfo(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
@@ -1526,16 +1558,30 @@ inline AssetID GetBitmapForGlyph(Assets* assets, AssetID fontID, u32 desiredCode
 inline AssetID GetMatchingAnimationForSkeleton(Assets* assets, AssetID skeletonID, RandomSequence* seq, GameProperties* properties)
 {
     AssetID result = {};
-    
     Asset* asset = GetAssetRaw(assets, skeletonID).asset;
-    
     if(asset)
     {
         PAKSkeleton* info = GetSkeletonInfo(assets, skeletonID);
-        u16 startingIndex = info->animationAssetsFirstIndex;
-        u16 endingIndex = startingIndex + info->animationCount;
-        
-        result = QueryAssets_(assets, (AssetType) skeletonID.type, skeletonID.subtype, seq, properties, startingIndex,endingIndex);
+        if(info->animationCount > 0)
+        {
+            u16 startingIndex = info->animationAssetsFirstIndex;
+            u16 endingIndex = startingIndex + info->animationCount;
+            
+            result = QueryAssets_(assets, (AssetType) skeletonID.type, skeletonID.subtype, seq, properties, true, startingIndex, endingIndex);
+            
+        }
+    }
+    
+    return result;
+}
+
+internal AssetID QueryAnimations(Assets* assets, AssetSkeletonType skeleton, RandomSequence* seq, GameProperties* properties)
+{
+    AssetID result = {};
+    AssetID skeletonID = QuerySkeletons(assets, skeleton, seq, properties);
+    if(IsValid(skeletonID))
+    {
+        result = GetMatchingAnimationForSkeleton(assets, skeletonID, seq, properties);
     }
     
     return result;

@@ -1,23 +1,3 @@
-char* MetaTable_EntityAction[] = 
- {
-"None",
-"Idle",
-"Move",
-"Protecting",
-"Rolling",
-"Attack",
-"Drag",
-"Cast",
-"Eat",
-"Drink",
-"Pick",
-"Equip",
-"Open",
-"Craft",
-"Die",
-"Count",
-};
-
 char* MetaTable_EffectIdentifier[] = 
  {
 "Damage",
@@ -172,22 +152,6 @@ MetaFlag MetaFlags_EditorRole[] =
 {"Artist", (1 << 6)},
 {"WebDeveloper", (1 << 7)},
 {"3DModeller", (1 << 8)},
-};
-
-char* MetaTable_AnimationEffectType[] = 
- {
-"None",
-"ChangeColor",
-"SpawnParticles",
-"Light",
-"Bolt",
-};
-
-MetaFlag MetaFlags_AnimationEffectFlags[] = 
- {
-{"ActionStart", (1 << 1)},
-{"ActionCompleted", (1 << 2)},
-{"DeleteWhenActionChanges", (1 << 3)},
 };
 
 char* MetaTable_ParticleUpdaterType[] = 

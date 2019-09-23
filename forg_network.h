@@ -187,6 +187,7 @@ enum Packet_Type
     
     Type_entityHeader,
     Type_entityBasics,
+    Type_animationComponent,
     Type_plantUpdate,
     Type_equipmentSlot,
     Type_deletedEntity,

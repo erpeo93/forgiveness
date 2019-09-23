@@ -1,25 +1,4 @@
 #pragma once
-printTable(noPrefix) enum EntityAction
-{
-    Action_None,
-    Action_Idle,
-    Action_Move,
-    Action_Protecting,
-    Action_Rolling,
-    Action_Attack,
-    Action_Drag,
-    Action_Cast,
-    Action_Eat,
-    Action_Drink,
-    Action_Pick,
-    Action_Equip,
-    Action_Open,
-    Action_Craft,
-    Action_Die,
-    
-    Action_Count,
-};
-
 enum PossibleActionType
 {
     PossibleAction_CantBeDone,
@@ -87,7 +66,7 @@ printFlags(noPrefix) enum EffectFlags
 
 struct Effect
 {
-    EntityAction triggerAction;
+    u32 triggerAction;
     u32 flags;
     
     EffectIdentifier ID;
@@ -135,7 +114,7 @@ struct PossibleActionData
 
 struct PossibleAction
 {
-    EntityAction action;
+    u32 action;
     u32 flags;
     struct TaxonomyTree* tree;
     r32 distance;

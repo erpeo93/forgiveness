@@ -237,25 +237,6 @@ internal PlayingSound* PlaySound(SoundState* soundState, Assets* assets, SoundId
     return newSound;
 }
 
-inline SoundContainer* GetSoundEvent(TaxonomyTable* table, u64 eventHash)
-{
-    SoundContainer* result = 0;
-    
-#if RESTRUCTURING
-    for(u32 eventIndex = 0; eventIndex < table->eventCount; ++eventIndex)
-    {
-        SoundContainer* event = table->events + eventIndex;
-        if(event->eventNameHash == eventHash)
-        {
-            result = event;
-            break;
-        }
-    }
-#endif
-    
-    return result;
-}
-
 #if 0
 inline void PlaySoundEvent(SoundState* soundState, Assets* assets, SoundContainer* event, u32 labelCount, SoundLabel* labels, RandomSequence* sequence, r32 distanceFromPlayer)
 {

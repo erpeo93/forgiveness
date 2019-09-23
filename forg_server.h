@@ -38,6 +38,7 @@
 #include "forg_meta.h"
 #include "forg_ground.h"
 #include "client_generated.h"
+#include "forg_resizable_array.h"
 
 PlatformAPI platformAPI;
 
@@ -76,13 +77,19 @@ struct PlayerRequest
     u8 data[512];
 };
 
-struct Player
+struct PhysicComponent
+{
+    UniversePos P;
+    Vec3 speed;
+    Vec3 acc;
+};
+
+struct PlayerComponent
 {
     b32 connectionClosed;
     u16 connectionSlot;
     
     ForgNetworkPacketQueue queues[GuaranteedDelivery_Count];
-    
     ForgNetworkReceiver receiver;
     
     u32 requestCount;
@@ -93,24 +100,24 @@ struct Player
     FileToSend* firstReloadedFileToSend;
 };
 
+struct OptionalComponent
+{
+    u32 placeHolder;
+};
+
+struct ServerAnimationComponent
+{
+    AssetSkeletonType skeleton;
+    AssetImageType skin;
+};
+
 struct ReceiveNetworkPacketWork
 {
     NetworkInterface* network;
     network_platform_receive_data* ReceiveData;
 };
 
-struct Entity
-{
-    u32 ID;
-    UniversePos P;
-    
-    Vec3 speed;
-    Vec3 acc;
-    
-    u32 playerID;
-};
-
-#define MAXIMUM_SERVER_PLAYERS 0xff
+#include "forg_ecs.h"
 struct ServerState
 {
     WorldSeason season;
@@ -122,12 +129,8 @@ struct ServerState
     PlatformWorkQueue* fastQueue;
     PlatformWorkQueue* slowQueue;
     
-    u32 playerCount;
-    Player players[MAXIMUM_SERVER_PLAYERS];
-    
-    u32 entityCount;
-    Entity entities[0xffff];
-    
+    ResizableArray archetypes[Archetype_Count];
+    ResizableArray PlayerComponent_;
     //SpacePartition collisionPartition;
     //SpacePartition playerPartition;
     

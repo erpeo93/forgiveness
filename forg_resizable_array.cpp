@@ -1,26 +1,47 @@
-struct DynamicArray
+internal void* Acquire_(ResizableArray* array, u32* index)
 {
-    MemoryPool pool;
-    u32 currentSize;
-    u32 elementCount;
-    u32 elementSize;
-    u8* data;
-};
-
-internal void Allocate()
-{
-    if()
+    Assert(array->count < array->maxCount);
+    Assert(array->count);
+    
+    u32 newIndex = array->count++;
+    if(index)
     {
-        Reallocate;
+        *index = newIndex;
     }
+    
+    void* result = AdvanceVoidPtrBytes(array->memory, newIndex * array->elementSize);
+    return result;
 }
 
-internal void Remove()
+internal void* Get_(ResizableArray* array, u32 index)
 {
-    SwitchWithLastone;
-    
-    if()
+    void* result = 0;
+    if(index && index < array->count)
     {
-        Reallocate;
+        result = AdvanceVoidPtrBytes(array->memory, index * array->elementSize);
     }
-};
+    
+    return result;
+}
+
+internal void* GetOrAcquire_(ResizableArray* array, u32 index)
+{
+    void* result = Get_(array, index);
+    if(!result)
+    {
+        InvalidCodePath;
+        // TODO(Leonardo): reallocate entire array!
+    }
+    return result;
+}
+
+internal ResizableArray InitResizableArray_(MemoryPool* pool, u32 elementSize, u32 maxElementCount)
+{
+    ResizableArray result = {};
+    result.elementSize = elementSize;
+    result.count = 1;
+    result.maxCount = maxElementCount;
+    result.memory = PushSize(pool, elementSize * maxElementCount, NoClear());
+    
+    return result;
+}

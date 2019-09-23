@@ -1,4 +1,4 @@
-inline u8* ForgReserveSpace(Player* player, GuaranteedDelivery deliveryType, u8 flags, u16 size, u64 identifier)
+inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery deliveryType, u8 flags, u16 size, EntityID ID)
 {
     ForgNetworkPacketQueue* queue = player->queues + deliveryType; 
     
@@ -40,7 +40,7 @@ inline u8* ForgReserveSpace(Player* player, GuaranteedDelivery deliveryType, u8 
         packet->size += sizeof(ForgNetworkApplicationData);
         queue->nextSendApplicationData.index++;
         
-        if(identifier)
+        if(IsValid(ID))
         {
             writeEntityHeader = true;
         }
@@ -53,7 +53,7 @@ inline u8* ForgReserveSpace(Player* player, GuaranteedDelivery deliveryType, u8 
         {
             unsigned char* oldResult = result;
             result = ForgPackHeader(result, Type_entityHeader);
-            result += pack(result, "Q", identifier);
+            result += pack(result, "HL", ID.archetype, ID.archetypeIndex);
             packet->size += (u16) (result - oldResult);
         }
         packet->size += size;
@@ -73,10 +73,10 @@ inline u8* ForgReserveSpace(Player* player, GuaranteedDelivery deliveryType, u8 
 
 #define CloseAndStoreOrderedPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_Ordered, ForgNetworkFlag_Ordered, __VA_ARGS__)
 
-inline void CloseAndStore(Player* player, unsigned char* buff_, unsigned char* buff, GuaranteedDelivery deliveryType, u8 flags, u64 identifier = 0)
+inline void CloseAndStore(PlayerComponent* player, unsigned char* buff_, unsigned char* buff, GuaranteedDelivery deliveryType, u8 flags, EntityID ID = {})
 {
     u16 totalSize = ForgEndPacket_(buff_, buff);
-    u8* writeHere = ForgReserveSpace(player, deliveryType, flags, totalSize, identifier);
+    u8* writeHere = ForgReserveSpace(player, deliveryType, flags, totalSize, ID);
     Assert(writeHere);
     if(writeHere)
     {
@@ -84,7 +84,7 @@ inline void CloseAndStore(Player* player, unsigned char* buff_, unsigned char* b
     }
 }
 
-inline void QueueAndFlushAllPackets(ServerState* server, Player* player, ForgNetworkPacketQueue* queue, GuaranteedDelivery deliveryType)
+inline void QueueAndFlushAllPackets(ServerState* server, PlayerComponent* player, ForgNetworkPacketQueue* queue, GuaranteedDelivery deliveryType)
 {
     NetworkSendParams params = {};
     params.guaranteedDelivery = deliveryType;
@@ -99,7 +99,7 @@ inline void QueueAndFlushAllPackets(ServerState* server, Player* player, ForgNet
     Clear(&queue->tempPool);
 }
 
-inline void QueueAndFlushAllPackets(ServerState* server, Player* player, r32 timeToAdvance)
+inline void QueueAndFlushAllPackets(ServerState* server, PlayerComponent* player, r32 timeToAdvance)
 {
     for(u32 deliveryType = GuaranteedDelivery_None; deliveryType < GuaranteedDelivery_Count; ++deliveryType)
     {
@@ -113,30 +113,30 @@ inline void QueueAndFlushAllPackets(ServerState* server, Player* player, r32 tim
 
 #define Pack(formatString, ...) buff += pack(buff, formatString, ##__VA_ARGS__)
 
-internal void SendLoginResponse(Player* player, u16 port, u32 challenge, b32 editingEnabled)
+internal void SendLoginResponse(PlayerComponent* player, u16 port, u32 challenge, b32 editingEnabled)
 {
     StartPacket(player, login);
     Pack("HLl", port, challenge, editingEnabled);
     CloseAndStoreOrderedPacket(player);
 }
 
-internal void SendGameAccessConfirm(Player* player, u64 worldSeed, u32 identifier)
+internal void SendGameAccessConfirm(PlayerComponent* player, u64 worldSeed, EntityID ID)
 {
     StartPacket(player, gameAccess);
-    Pack("QL", worldSeed, identifier);
+    Pack("QHL", worldSeed, ID.archetype, ID.archetypeIndex);
     CloseAndStoreOrderedPacket(player);
 }
 
-internal void SendWorldInfo(Player* player, WorldSeason season, r32 seasonLerp)
+internal void SendWorldInfo(PlayerComponent* player, WorldSeason season, r32 seasonLerp)
 {
     StartPacket(player, worldInfo);
     Pack("Cd", SafeTruncateToU8(season), seasonLerp);
     CloseAndStoreStandardPacket(player);
 }
 
-internal u16 PrepareEntityUpdate(ServerState* server, Entity* entity, unsigned char* buff_)
+internal u16 PrepareEntityUpdate(ServerState* server, PhysicComponent* physic, unsigned char* buff_)
 {
-    UniversePos P = entity->P;
+    UniversePos P = physic->P;
     unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
     Pack("llV", P.chunkX, P.chunkY, P.chunkOffset);
     u16 totalSize = ForgEndPacket_( buff_, buff );
@@ -149,7 +149,7 @@ inline b32 EntityCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* tar
 internal void SendPossibleActions(SimRegion* region, SimEntity* actor, SimEntity* target, b32 overlapping)
 {
     ServerState* server = region->server;
-    ServerPlayer* player = server->players + actor->playerID;
+    ServerPlayerComponent* player = server->players + actor->playerID;
     
     StartPacket(player, possibleActions);
     unsigned char* actionCountDest = buff;
@@ -189,7 +189,7 @@ internal void SendDeleteMessage(SimRegion* region, SimEntity* entity)
             SimEntity* entityToSend = GetRegionEntity(region, collider->entityIndex);
             if(entityToSend->playerID)
             {
-                ServerPlayer* player = server->players + entityToSend->playerID;
+                ServerPlayerComponent* player = server->players + entityToSend->playerID;
                 StartPacket(player, deletedEntity);
                 
                 Pack("Q", entity->identifier);
@@ -201,22 +201,29 @@ internal void SendDeleteMessage(SimRegion* region, SimEntity* entity)
 }
 #endif
 
-inline void SendEntityHeader(Player* player, u32 ID)
+inline void SendEntityHeader(PlayerComponent* player, EntityID ID)
 {
     StartPacket(player, entityHeader);
-    Pack("L", ID);
+    Pack("HL", ID.archetype, ID.archetypeIndex);
     CloseAndStoreStandardPacket(player);
 }
 
-inline void SendEntityHeaderReliably(Player* player, u32 ID)
+inline void SendEntityHeaderReliably(PlayerComponent* player, EntityID ID)
 {
     StartPacket(player, entityHeader);
-    Pack("L", ID);
+    Pack("HL", ID.archetype, ID.archetypeIndex);
     CloseAndStoreOrderedPacket(player);
 }
 
+internal void SendAnimationComponent(PlayerComponent* player, EntityID ID, ServerAnimationComponent* component)
+{
+    StartPacket(player, animationComponent);
+    Pack("HH", SafeTruncateToU16(component->skeleton), SafeTruncateToU16(component->skin));
+    CloseAndStoreStandardPacket(player, ID);
+}
+
 #if 0
-inline void SendPlantUpdate(Player* player, u64 entityID, PlantComponent* plant)
+inline void SendPlantUpdate(PlayerComponent* player, u64 entityID, PlantComponent* plant)
 {
     StartPacket(player, plantUpdate);
     Pack("ddddd", plant->age, plant->life, plant->leafDensity,
@@ -225,35 +232,37 @@ inline void SendPlantUpdate(Player* player, u64 entityID, PlantComponent* plant)
 }
 #endif
 
-inline void SendEquipmentID(Player* player, u64 entityID, u8 slotIndex, u64 ID)
+#if 0
+inline void SendEquipmentID(PlayerComponent* player, u64 entityID, u8 slotIndex, u64 ID)
 {
     StartPacket(player, equipmentSlot);
     Pack("CQ", slotIndex, ID);
     CloseAndStoreStandardPacket(player, entityID);
 }
 
-inline void SendStartedAction(Player* player, u64 entityID, u8 actionIndex, u64 targetID)
+inline void SendStartedAction(PlayerComponent* player, u64 entityID, u8 actionIndex, u64 targetID)
 {
     StartPacket(player, StartedAction);
     Pack("CQ", actionIndex, targetID);
     CloseAndStoreStandardPacket(player, entityID);
 }
 
-inline void SendCompletedAction(Player* player, u64 entityID, u8 actionIndex, u64 targetID)
+inline void SendCompletedAction(PlayerComponent* player, u64 entityID, u8 actionIndex, u64 targetID)
 {
     StartPacket(player, CompletedAction);
     Pack("CQ", actionIndex, targetID);
     CloseAndStoreStandardPacket(player, entityID);
 }
+#endif
 
-inline void SendFileHeader(Player* player, u32 index, u16 type, u16 subtype, u32 uncompressedSize, u32 compressedSize)
+inline void SendFileHeader(PlayerComponent* player, u32 index, u16 type, u16 subtype, u32 uncompressedSize, u32 compressedSize)
 {
     StartPacket(player, FileHeader);
     Pack("LHHLL", index, type, subtype, uncompressedSize, compressedSize);
     CloseAndStoreOrderedPacket(player);
 }
 
-inline void SendFileChunks(Player* player, u32 index, char* source, u32 offset, u32 sizeToSend, u32 chunkSize)
+inline void SendFileChunks(PlayerComponent* player, u32 index, char* source, u32 offset, u32 sizeToSend, u32 chunkSize)
 {
     u32 sentSize = 0;
     u8* runningSource = (u8*) source + offset;
@@ -276,7 +285,7 @@ inline void SendFileChunks(Player* player, u32 index, char* source, u32 offset, 
     Assert(sentSize == sizeToSend);
 }
 
-internal u32 SendAllPossibleData(ServerState* server, Player* player, FileToSend** toSendPtr, u32 toSendSize)
+internal u32 SendAllPossibleData(ServerState* server, PlayerComponent* player, FileToSend** toSendPtr, u32 toSendSize)
 {
     while(*toSendPtr && (toSendSize > 0))
     {
@@ -322,7 +331,7 @@ internal u32 SendAllPossibleData(ServerState* server, Player* player, FileToSend
 }
 
 #if FORGIVENESS_INTERNAL
-internal void SendDebugEvent(Player* player, DebugEvent* event)
+internal void SendDebugEvent(PlayerComponent* player, DebugEvent* event)
 {
     b32 result = false;
     
@@ -332,7 +341,7 @@ internal void SendDebugEvent(Player* player, DebugEvent* event)
     CloseAndStoreStandardPacket(player, ReliableOrdered);
 }
 
-internal void SendMemStats( Player* player )
+internal void SendMemStats(PlayerComponent* player )
 {
     DebugPlatformMemoryStats stats = platformAPI.DEBUGMemoryStats();
     b32 result = false;

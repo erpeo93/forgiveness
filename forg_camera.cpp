@@ -1,36 +1,39 @@
-inline b32 ActionRequiresZooming(EntityAction action, r32* zoomLevel)
+inline b32 ActionRequiresZooming(u32 action, r32* zoomLevel)
 {
     b32 result = false;
+    
+#if 0    
     if(action == Action_Open)
     {
         result = true;
         *zoomLevel = Max(*zoomLevel, 3.8f);
     }
+#endif
+    
     return result;
 }
 
-inline Vec3 GetRelativeP(GameModeWorld* worldMode, ClientEntity* entity)
+inline Vec3 GetRelativeP(GameModeWorld* worldMode, BaseComponent* base)
 {
-    Vec3 result = Subtract(entity->universeP, worldMode->player.universeP);
+    Vec3 result = Subtract(base->universeP, worldMode->player.universeP);
     return result;
 }
 
-inline void MoveTowards_(GameModeWorld* worldMode, u64 id, Vec2 cameraWorldOffset, Vec2 cameraEntityOffset, r32 zoomCoeff = 1.0f)
+inline void MoveTowards_(GameModeWorld* worldMode, Vec2 cameraWorldOffset, Vec2 cameraEntityOffset, r32 zoomCoeff = 1.0f)
 {
-    worldMode->cameraFocusID = id;
     worldMode->destCameraEntityOffset = cameraEntityOffset;
     worldMode->destCameraWorldOffset = V3(cameraWorldOffset, worldMode->defaultCameraZ / zoomCoeff);
     worldMode->destCameraWorldOffset += worldMode->additionalCameraOffset;
 }
 
-inline void MoveCameraTowards(GameModeWorld* worldMode, ClientEntity* entityC, Vec2 cameraWorldOffset = V2(0, 0), Vec2 cameraEntityOffset = V2(0, 0), r32 zoomCoeff = 1.0f)
+inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, Vec2 cameraWorldOffset = V2(0, 0), Vec2 cameraEntityOffset = V2(0, 0), r32 zoomCoeff = 1.0f)
 {
-    cameraWorldOffset += GetRelativeP(worldMode, entityC).xy;
+    cameraWorldOffset += GetRelativeP(worldMode, base).xy;
     //cameraEntityOffset += entityC->animation.cameraEntityOffset;
-    MoveTowards_(worldMode, entityC->identifier, cameraWorldOffset, cameraEntityOffset, zoomCoeff);
+    
+    MoveTowards_(worldMode, cameraWorldOffset, cameraEntityOffset, zoomCoeff);
 }
 
-inline ClientEntity* GetEntityClient(GameModeWorld* worldMode, u64 ID, b32 canAllocate);
 internal void UpdateAndSetupGameCamera(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
     
@@ -72,13 +75,6 @@ internal void UpdateAndSetupGameCamera(GameModeWorld* worldMode, RenderGroup* gr
         SetCameraTransform(group, Camera_Debug, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal, worldMode->cameraEntityOffset);
     }
     
-    if(worldMode->cameraFocusID)
-    {
-        ClientEntity* entity = GetEntityClient(worldMode, worldMode->cameraFocusID, false);
-        if(entity)
-        {
-            worldMode->cameraWorldOffset += 6.0f * input->timeToAdvance * (worldMode->destCameraWorldOffset - worldMode->cameraWorldOffset);
-            worldMode->cameraEntityOffset += 6.0f * input->timeToAdvance * (worldMode->destCameraEntityOffset - worldMode->cameraEntityOffset);
-        } 
-    }
+    worldMode->cameraWorldOffset += 6.0f * input->timeToAdvance * (worldMode->destCameraWorldOffset - worldMode->cameraWorldOffset);
+    worldMode->cameraEntityOffset += 6.0f * input->timeToAdvance * (worldMode->destCameraEntityOffset - worldMode->cameraEntityOffset);
 }

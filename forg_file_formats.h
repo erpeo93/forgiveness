@@ -29,6 +29,7 @@ struct PAKProperty
 
 struct PAKBitmap
 {
+    u64 nameHash;
     u32 dimension[2];
     r32 align[2];
     r32 nativeHeight;

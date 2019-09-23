@@ -9,7 +9,7 @@
 #include "forg_pool.cpp"
 #include "forg_meta.cpp"
 #include "forg_physics.cpp"
-
+#include "forg_resizable_array.cpp"
 #if 0
 //#include "physics_server.cpp"
 //#include "forg_bound.cpp"
@@ -73,7 +73,7 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
     }
 }
 
-internal void DispatchApplicationPacket(ServerState* server, Player* player, u32 playerID,  unsigned char* packetPtr, u16 dataSize)
+internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* player,  unsigned char* packetPtr, u16 dataSize)
 {
     u32 challenge = 1111;
     
@@ -140,11 +140,8 @@ internal void DispatchApplicationPacket(ServerState* server, Player* player, u32
                 P.chunkX = 1;
                 P.chunkY = 1;
                 
-                u32 ID = AddEntity(server, P, playerID);
+                EntityID ID = AddEntity(server, P, Archetype_First, player);
                 SendGameAccessConfirm(player, server->worldSeed, ID);
-                
-                P.chunkOffset.x = 1.0f;
-                AddEntity(server, P, 0);
             }
             else
             {
@@ -256,12 +253,10 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
 {
     MemoryPool scratchPool = {};
     
-    for( u32 playerIndex = 0; 
-        playerIndex < MAXIMUM_SERVER_PLAYERS; 
-        playerIndex++ )
+    for(CompIterator iter = FirstComponent(server, PlayerComponent); 
+        IsValid(iter); iter = Next(iter))
     {
-        u32 playerID = playerIndex;
-        Player* player = server->players + playerIndex;
+        PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
         if(player->connectionSlot)
         {
             QueueAndFlushAllPackets(server, player, elapsedTime);
@@ -344,7 +339,7 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
                         NetworkPacketReceived* test = receiver->orderedWindow + index;
                         if(test->dataSize)
                         {
-                            DispatchApplicationPacket(server, player, playerID, test->data + sizeof(ForgNetworkApplicationData), test->dataSize - sizeof(ForgNetworkApplicationData));
+                            DispatchApplicationPacket(server, player, test->data + sizeof(ForgNetworkApplicationData), test->dataSize - sizeof(ForgNetworkApplicationData));
                             test->dataSize = 0;
                             ++dispatched;
                         }
@@ -362,26 +357,13 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
                     if(ApplicationIndexGreater(applicationData, receiver->unorderedBiggestReceived))
                     {
                         receiver->unorderedBiggestReceived = applicationData;
-                        DispatchApplicationPacket(server, player, playerID, packetPtr, received.dataSize - sizeof(ForgNetworkApplicationData));
+                        DispatchApplicationPacket(server, player, packetPtr, received.dataSize - sizeof(ForgNetworkApplicationData));
                     }
                 }
             }
         }
-        
     }
 }
-
-
-internal Player* FirstFreePlayer(ServerState* server)
-{
-    Assert(server->playerCount < ArrayCount(server->players));
-    Player* result = server->players + server->playerCount++;
-    *result = {};
-    ResetReceiver(&result->receiver);
-    
-    return result;
-}
-
 
 PLATFORM_WORK_CALLBACK(WatchForFileChanges)
 {
@@ -445,40 +427,45 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
         
         if(sendToPlayers)
         {
-            for(u32 playerIndex = 0; 
-                playerIndex < MAXIMUM_SERVER_PLAYERS; 
-                playerIndex++ )
+            for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
             {
-                Player* player = server->players + playerIndex;
-                
-                if(player->connectionSlot)
+                if(HasComponent(archetypeIndex, PlayerComponent))
                 {
-                    FileToSend* toSend;
-                    FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
-                    
-                    toSend->acked = false;
-                    toSend->playerIndex = player->runningFileIndex++;
-                    toSend->serverFileIndex = fileIndex;
-                    toSend->sendingOffset = 0;
-                    
-                    ++file->counter;
-                    if(!player->firstReloadedFileToSend)
+                    for(ArchIterator iter = First(server, archetypeIndex); 
+                        IsValid(iter); 
+                        iter = Next(iter))
                     {
-                        player->firstReloadedFileToSend = toSend;
-                    }
-                    else
-                    {
-                        for(FileToSend* firstToSend = player->firstReloadedFileToSend;; firstToSend = firstToSend->next)
+                        PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
+                        if(player->connectionSlot)
                         {
-                            if(!firstToSend->next)
+                            FileToSend* toSend;
+                            FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
+                            
+                            toSend->acked = false;
+                            toSend->playerIndex = player->runningFileIndex++;
+                            toSend->serverFileIndex = fileIndex;
+                            toSend->sendingOffset = 0;
+                            
+                            ++file->counter;
+                            if(!player->firstReloadedFileToSend)
                             {
-                                firstToSend->next = toSend;
-                                break;
+                                player->firstReloadedFileToSend = toSend;
                             }
+                            else
+                            {
+                                for(FileToSend* firstToSend = player->firstReloadedFileToSend;; firstToSend = firstToSend->next)
+                                {
+                                    if(!firstToSend->next)
+                                    {
+                                        firstToSend->next = toSend;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
                         }
                     }
-                    
-                    SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
                 }
             }
         }
@@ -586,8 +573,15 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         server->worldSeed = (u32) time(0);
         
-        server->playerCount = 1;
-        server->entityCount = 1;
+        u32 maxEntityCount = 0xffff;
+        
+        MemoryPool* compPool = &server->gamePool;
+        for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
+        {
+            InitArchetype(server, compPool, archetypeIndex, 0xff);
+        }
+        InitComponentArray(server, compPool, PlayerComponent, 0xff);
+        
         
         platformAPI.PushWork(server->slowQueue, WatchForFileChanges, hash);
         //Assets* assets = InitAssets(JustEntityDefinitionFiles);
@@ -622,7 +616,10 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     for(u32 newConnectionIndex = 0; newConnectionIndex < accepted; ++newConnectionIndex)
     {
         u16 connectionSlot = newConnections[newConnectionIndex];
-        Player* player = FirstFreePlayer(server);
+        u32 ignored;
+        PlayerComponent* player = AcquireComponent(server, PlayerComponent, &ignored);
+        *player = {};
+        ResetReceiver(&player->receiver);
         player->connectionSlot = connectionSlot;
     }
     
