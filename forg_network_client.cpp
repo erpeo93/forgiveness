@@ -407,7 +407,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             case Type_entityHeader:
             {
                 EntityID ID;
-                Unpack("LH", &ID.archetype, &ID.archetypeIndex);
+                Unpack("HL", &ID.archetype, &ID.archetypeIndex);
                 
                 Assert(ID.archetype < Archetype_Count);
                 GetOrAcquire(worldMode, ID);

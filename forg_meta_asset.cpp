@@ -1006,259 +1006,261 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
 {
     StructOperationResult result = {};
     StructDefinition* definition = GetMetaStructDefinition(structName);
-    result.size += definition->size;
-    
-    if(operation == FieldOperation_Parse)
+    if(definition)
     {
-        InitStructDefault(definition, dataPtr);
-    }
-    
-    if(operation == FieldOperation_Dump || operation == FieldOperation_Edit)
-    {
-        b32 canProceed = true;
-        
-#ifndef FORG_SERVER
-        if(operation == FieldOperation_Edit)
+        result.size += definition->size;
+        if(operation == FieldOperation_Parse)
         {
-            canProceed = EditorCollapsible(layout, 0, auID(dataPtr, structName.ptr, "structCollapse"));
-            EditorTextDraw(layout, V4(1, 1, 1, 1), EditorText_StartingSpace, "%.*s {}", name.length, name.ptr);
-            
-            if(parentWasPointer)
-            {
-                if(StandardEditorButton(layout, "canc", auID(dataPtr, "cancButton"), V4(0, 0.5f, 1.0f, 1.0f)))
-                {
-                    result.deleted = true;
-                }
-            }
+            InitStructDefault(definition, dataPtr);
         }
-#endif
         
-        if(canProceed)
+        if(operation == FieldOperation_Dump || operation == FieldOperation_Edit)
         {
-#ifndef FORG_SERVER
-            if(operation == FieldOperation_Edit)
-            {
-                Push(layout);
-            }
-#endif
-            for(u32 fieldIndex = 0; fieldIndex < definition->fieldCount; ++fieldIndex)
-            {
-                FieldDefinition* field = definition->fields + fieldIndex;
-                b32 pointer = (field->flags & MetaFlag_Pointer);
-                
-                // NOTE(Leonardo): we can't dump nor edit counters!
-                if(field->type != MetaType_ArrayCounter)
-                {
-                    void* originalfieldPtr = (void*) ((u8*) dataPtr + field->offset);
-                    void* fieldPtr = originalfieldPtr;
-                    
-                    u16 fakeElementCount = 1;
-                    ArrayCounter* elementCount = &fakeElementCount;
-                    b32 show = true;
-                    
-                    if(pointer)
-                    {
-                        result.size += sizeof(MetaArrayHeader);
-                        elementCount = GetMetaPtrElementCountForArray(definition, field, dataPtr);
-                        if(elementCount)
-                        {
-                            Assert(sizeof(u64) == sizeof(void*));
-                            fieldPtr = (void*) (*(u64*)fieldPtr);
-                            MetaArrayHeader* header = fieldPtr ? (MetaArrayHeader*) fieldPtr - 1 : 0;
-#ifndef FORG_SERVER                
-                            if(operation == FieldOperation_Edit)
-                            {
-                                NextRaw(layout);
-                                show = EditorCollapsible(layout, 0, auID(originalfieldPtr, "collapsible"));
-                                EditorTextDraw(layout, V4(1, 1, 1, 1), 0, "%s [%d]", field->name, *elementCount);
-                                
-                                if(StandardEditorButton(layout, "add", auID(originalfieldPtr, "addButton"), V4(0, 1.0f, 1.0f, 1.0f)))
-                                {
-                                    
-                                    void* ptr = 0;
-                                    void* oldPtr = 0;
-                                    void* newPtr = 0;
-                                    
-                                    if(*elementCount == 0 || (*elementCount > header->maxCount / 2))
-                                    {
-                                        ptr = originalfieldPtr;
-                                        oldPtr = fieldPtr;
-                                        
-                                        if(header)
-                                        {
-                                            u32 oldSize = header->maxCount * field->size;
-                                            void* toFree = header;
-                                        }
-                                        
-                                        u32 newElementCount = header ? (header->maxCount * 2) : 16;
-                                        void* oldArray = fieldPtr;
-                                        u32 sizeToCopy = *elementCount * field->size;
-                                        void* newArray = GetMemory(layout->context->pool, newElementCount, field->size);
-                                        fieldPtr = InitMetaArray(newArray, newElementCount);
-                                        
-                                        newPtr = fieldPtr;
-                                        
-                                        Copy(sizeToCopy, fieldPtr, oldArray);
-                                        *(u64*)originalfieldPtr = (u64) fieldPtr;
-                                    }
-                                    
-                                    u16 index = (*elementCount)++;
-                                    void* here = (void*)((u8*)fieldPtr + index * field->size);
-                                    InitFieldDefault(field, here);
-                                    
-                                    
-                                    AddUndoRedoAdd(layout->context, elementCount, ptr, oldPtr, newPtr, assetID);
-                                }
-                            }
-#endif
-                        }
-                        else
-                        {
-                            show = false;
-                            InvalidCodePath;
-                            // TODO(Leonardo): show something on the editor here, like "error: field doesn't have a counter!
-                        }
-                        
-                    }
-                    
-                    if(show && *elementCount)
-                    {
-#ifndef FORG_SERVER
-                        if(pointer && operation == FieldOperation_Edit)
-                        {
-                            Push(layout);
-                        }
-#endif
-                        
-                        result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, elementCount, assetID);
-#ifndef FORG_SERVER
-                        if(pointer && operation == FieldOperation_Edit)
-                        {
-                            Pop(layout);
-                        }
-#endif
-                        
-                    }
-                }
-            }
+            b32 canProceed = true;
             
 #ifndef FORG_SERVER
             if(operation == FieldOperation_Edit)
             {
-                Pop(layout);
+                canProceed = EditorCollapsible(layout, 0, auID(dataPtr, structName.ptr, "structCollapse"));
+                EditorTextDraw(layout, V4(1, 1, 1, 1), EditorText_StartingSpace, "%.*s {}", name.length, name.ptr);
+                
+                if(parentWasPointer)
+                {
+                    if(StandardEditorButton(layout, "canc", auID(dataPtr, "cancButton"), V4(0, 0.5f, 1.0f, 1.0f)))
+                    {
+                        result.deleted = true;
+                    }
+                }
             }
 #endif
-        }
-    }
-    else
-    {
-        for(;;)
-        {
-            Token t = GetToken(tokenizer);
-            if(t.type == Token_CloseBraces)
+            
+            if(canProceed)
             {
-                break;
-            }
-            else if(t.type == Token_OpenBraces)
-            {
-                
-            }
-            else if(t.type == Token_SemiColon)
-            {
-            }
-            else if(t.type == Token_EndOfFile)
-            {
-                break;
-            }
-            else
-            {
-                Token fieldName = Stringize(t);
-                FieldDefinition* field = FindMetaField(definition, fieldName);
-                if(field)
+#ifndef FORG_SERVER
+                if(operation == FieldOperation_Edit)
                 {
-                    Assert(field->type != MetaType_ArrayCounter);
+                    Push(layout);
+                }
+#endif
+                for(u32 fieldIndex = 0; fieldIndex < definition->fieldCount; ++fieldIndex)
+                {
+                    FieldDefinition* field = definition->fields + fieldIndex;
+                    b32 pointer = (field->flags & MetaFlag_Pointer);
                     
-                    if(RequireToken(tokenizer, Token_EqualSign))
+                    // NOTE(Leonardo): we can't dump nor edit counters!
+                    if(field->type != MetaType_ArrayCounter)
                     {
-                        void* fieldPtr = (void*) ((u8*) dataPtr + field->offset);
-                        u32 additionalSize = sizeof(MetaArrayHeader);
-                        if(field->flags & MetaFlag_Pointer)
-                        {
-                            result.size += additionalSize;
-                        }
+                        void* originalfieldPtr = (void*) ((u8*) dataPtr + field->offset);
+                        void* fieldPtr = originalfieldPtr;
                         
-                        if(operation == FieldOperation_Parse && field->flags & MetaFlag_Pointer)
+                        u16 fakeElementCount = 1;
+                        ArrayCounter* elementCount = &fakeElementCount;
+                        b32 show = true;
+                        
+                        if(pointer)
                         {
-                            Tokenizer fake = {};
-                            fake.at = tokenizer->at;
-                            
-                            u16 elementCount;
-                            FieldOperation(layout, field, FieldOperation_GetSize, fieldPtr, &fake, output, reserved, &elementCount, assetID);
-                            
-                            ArrayCounter* counterPtr = GetMetaPtrElementCountForArray(definition, field, dataPtr);
-                            Assert(counterPtr);
-                            *counterPtr = elementCount;
-                            
-                            Assert(sizeof(u64) == sizeof(void*));
+                            result.size += sizeof(MetaArrayHeader);
+                            elementCount = GetMetaPtrElementCountForArray(definition, field, dataPtr);
                             if(elementCount)
                             {
-                                void* headerPtr = ReserveSpace(reserved, elementCount * field->size + additionalSize);
-                                void* arrayPtr = InitMetaArray(headerPtr, elementCount);
-                                
-                                *(u64*) fieldPtr = (u64) arrayPtr;
-                                fieldPtr = arrayPtr;
+                                Assert(sizeof(u64) == sizeof(void*));
+                                fieldPtr = (void*) (*(u64*)fieldPtr);
+                                MetaArrayHeader* header = fieldPtr ? (MetaArrayHeader*) fieldPtr - 1 : 0;
+#ifndef FORG_SERVER                
+                                if(operation == FieldOperation_Edit)
+                                {
+                                    NextRaw(layout);
+                                    show = EditorCollapsible(layout, 0, auID(originalfieldPtr, "collapsible"));
+                                    EditorTextDraw(layout, V4(1, 1, 1, 1), 0, "%s [%d]", field->name, *elementCount);
+                                    
+                                    if(StandardEditorButton(layout, "add", auID(originalfieldPtr, "addButton"), V4(0, 1.0f, 1.0f, 1.0f)))
+                                    {
+                                        
+                                        void* ptr = 0;
+                                        void* oldPtr = 0;
+                                        void* newPtr = 0;
+                                        
+                                        if(*elementCount == 0 || (*elementCount > header->maxCount / 2))
+                                        {
+                                            ptr = originalfieldPtr;
+                                            oldPtr = fieldPtr;
+                                            
+                                            if(header)
+                                            {
+                                                u32 oldSize = header->maxCount * field->size;
+                                                void* toFree = header;
+                                            }
+                                            
+                                            u32 newElementCount = header ? (header->maxCount * 2) : 16;
+                                            void* oldArray = fieldPtr;
+                                            u32 sizeToCopy = *elementCount * field->size;
+                                            void* newArray = GetMemory(layout->context->pool, newElementCount, field->size);
+                                            fieldPtr = InitMetaArray(newArray, newElementCount);
+                                            
+                                            newPtr = fieldPtr;
+                                            
+                                            Copy(sizeToCopy, fieldPtr, oldArray);
+                                            *(u64*)originalfieldPtr = (u64) fieldPtr;
+                                        }
+                                        
+                                        u16 index = (*elementCount)++;
+                                        void* here = (void*)((u8*)fieldPtr + index * field->size);
+                                        InitFieldDefault(field, here);
+                                        
+                                        
+                                        AddUndoRedoAdd(layout->context, elementCount, ptr, oldPtr, newPtr, assetID);
+                                    }
+                                }
+#endif
                             }
                             else
                             {
-                                *(u64*) fieldPtr = 0;
+                                show = false;
+                                InvalidCodePath;
+                                // TODO(Leonardo): show something on the editor here, like "error: field doesn't have a counter!
                             }
+                            
                         }
                         
-                        u16 ignored = 1;
-                        result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, &ignored, assetID);
+                        if(show && *elementCount)
+                        {
+#ifndef FORG_SERVER
+                            if(pointer && operation == FieldOperation_Edit)
+                            {
+                                Push(layout);
+                            }
+#endif
+                            
+                            result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, elementCount, assetID);
+#ifndef FORG_SERVER
+                            if(pointer && operation == FieldOperation_Edit)
+                            {
+                                Pop(layout);
+                            }
+#endif
+                            
+                        }
                     }
-                    else
-                    {
-                        InvalidCodePath;
-                    }
+                }
+                
+#ifndef FORG_SERVER
+                if(operation == FieldOperation_Edit)
+                {
+                    Pop(layout);
+                }
+#endif
+            }
+        }
+        else
+        {
+            for(;;)
+            {
+                Token t = GetToken(tokenizer);
+                if(t.type == Token_CloseBraces)
+                {
+                    break;
+                }
+                else if(t.type == Token_OpenBraces)
+                {
+                    
+                }
+                else if(t.type == Token_SemiColon)
+                {
+                }
+                else if(t.type == Token_EndOfFile)
+                {
+                    break;
                 }
                 else
                 {
-                    if(RequireToken(tokenizer, Token_EqualSign))
+                    Token fieldName = Stringize(t);
+                    FieldDefinition* field = FindMetaField(definition, fieldName);
+                    if(field)
                     {
-                        u32 currentDepth = 0;
+                        Assert(field->type != MetaType_ArrayCounter);
                         
-                        while(true)
+                        if(RequireToken(tokenizer, Token_EqualSign))
                         {
-                            Token skip = GetToken(tokenizer);
+                            void* fieldPtr = (void*) ((u8*) dataPtr + field->offset);
+                            u32 additionalSize = sizeof(MetaArrayHeader);
+                            if(field->flags & MetaFlag_Pointer)
+                            {
+                                result.size += additionalSize;
+                            }
                             
-                            if(skip.type == Token_OpenBraces)
+                            if(operation == FieldOperation_Parse && field->flags & MetaFlag_Pointer)
                             {
-                                ++currentDepth;
-                            }
-                            else if(skip.type == Token_CloseBraces)
-                            {
-                                Assert(currentDepth > 0);
-                                --currentDepth;
-                            }
-                            if(skip.type == Token_SemiColon)
-                            {
-                                if(currentDepth == 0)
+                                Tokenizer fake = {};
+                                fake.at = tokenizer->at;
+                                
+                                u16 elementCount;
+                                FieldOperation(layout, field, FieldOperation_GetSize, fieldPtr, &fake, output, reserved, &elementCount, assetID);
+                                
+                                ArrayCounter* counterPtr = GetMetaPtrElementCountForArray(definition, field, dataPtr);
+                                Assert(counterPtr);
+                                *counterPtr = elementCount;
+                                
+                                Assert(sizeof(u64) == sizeof(void*));
+                                if(elementCount)
                                 {
-                                    break;
+                                    void* headerPtr = ReserveSpace(reserved, elementCount * field->size + additionalSize);
+                                    void* arrayPtr = InitMetaArray(headerPtr, elementCount);
+                                    
+                                    *(u64*) fieldPtr = (u64) arrayPtr;
+                                    fieldPtr = arrayPtr;
+                                }
+                                else
+                                {
+                                    *(u64*) fieldPtr = 0;
                                 }
                             }
+                            
+                            u16 ignored = 1;
+                            result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, &ignored, assetID);
+                        }
+                        else
+                        {
+                            InvalidCodePath;
                         }
                     }
                     else
                     {
-                        InvalidCodePath;
+                        if(RequireToken(tokenizer, Token_EqualSign))
+                        {
+                            u32 currentDepth = 0;
+                            
+                            while(true)
+                            {
+                                Token skip = GetToken(tokenizer);
+                                
+                                if(skip.type == Token_OpenBraces)
+                                {
+                                    ++currentDepth;
+                                }
+                                else if(skip.type == Token_CloseBraces)
+                                {
+                                    Assert(currentDepth > 0);
+                                    --currentDepth;
+                                }
+                                if(skip.type == Token_SemiColon)
+                                {
+                                    if(currentDepth == 0)
+                                    {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            InvalidCodePath;
+                        }
                     }
                 }
             }
         }
+        
     }
-    
     return result;
 }
 

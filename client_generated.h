@@ -209,6 +209,17 @@ FieldDefinition fieldDefinitionOfground_generator[] =
 {MetaFlag_Pointer, MetaType_TileMapping, "TileMapping", "tiles", (u32) (&((ground_generator*)0)->tiles), {}, sizeof(TileMapping),"invalid",0, 0, 0}, 
 };
 
+FieldDefinition fieldDefinitionOfEntityInitParams[] = 
+ {
+{0, MetaType_Enumerator, "Enumerator", "skeleton", (u32) (&((EntityInitParams*)0)->skeleton), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_AssetSkeletonType, ArrayCount(MetaTable_AssetSkeletonType)}, 
+{0, MetaType_Enumerator, "Enumerator", "skin", (u32) (&((EntityInitParams*)0)->skin), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_AssetImageType, ArrayCount(MetaTable_AssetImageType)}, 
+};
+
+FieldDefinition fieldDefinitionOfEntityDefinition[] = 
+ {
+{0, MetaType_EntityInitParams, "EntityInitParams", "params", (u32) (&((EntityDefinition*)0)->params), {}, sizeof(EntityInitParams),"invalid",0, 0, 0}, 
+};
+
 char* MetaProperties_Test[] = 
  {
 "Value0",
@@ -230,6 +241,8 @@ char* MetaProperties_tileType[] =
 };
 
 #define META_HANDLE_ADD_TO_DEFINITION_HASH()\
+AddToMetaDefinitions(EntityDefinition, fieldDefinitionOfEntityDefinition);\
+AddToMetaDefinitions(EntityInitParams, fieldDefinitionOfEntityInitParams);\
 AddToMetaDefinitions(ground_generator, fieldDefinitionOfground_generator);\
 AddToMetaDefinitions(TileMapping, fieldDefinitionOfTileMapping);\
 AddToMetaDefinitions(tile_definition, fieldDefinitionOftile_definition);\

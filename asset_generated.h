@@ -33,19 +33,21 @@ AssetFont_game,
 AssetFont_Count
 };
 
-char* metaAsset_Font[] = {
+char* MetaTable_AssetFontType[] = {
 "debug",
 "game",
 };
 enum AssetImageType
 {
 AssetImage_default,
+AssetImage_turtle,
 AssetImage_wolf,
 AssetImage_Count
 };
 
-char* metaAsset_Image[] = {
+char* MetaTable_AssetImageType[] = {
 "default",
+"turtle",
 "wolf",
 };
 enum AssetModelType
@@ -54,18 +56,20 @@ AssetModel_default,
 AssetModel_Count
 };
 
-char* metaAsset_Model[] = {
+char* MetaTable_AssetModelType[] = {
 "default",
 };
 enum AssetSkeletonType
 {
 AssetSkeleton_default,
+AssetSkeleton_turtle,
 AssetSkeleton_wolf,
 AssetSkeleton_Count
 };
 
-char* metaAsset_Skeleton[] = {
+char* MetaTable_AssetSkeletonType[] = {
 "default",
+"turtle",
 "wolf",
 };
 enum AssetSoundType
@@ -83,7 +87,7 @@ AssetSound_thunder,
 AssetSound_Count
 };
 
-char* metaAsset_Sound[] = {
+char* MetaTable_AssetSoundType[] = {
 "bloop",
 "crack",
 "default",
@@ -101,7 +105,7 @@ Assettile_definition_default,
 Assettile_definition_Count
 };
 
-char* metaAsset_tile_definition[] = {
+char* MetaTable_Assettile_definitionType[] = {
 "default",
 };
 enum AssetWaterParamsType
@@ -110,7 +114,7 @@ AssetWaterParams_default,
 AssetWaterParams_Count
 };
 
-char* metaAsset_WaterParams[] = {
+char* MetaTable_AssetWaterParamsType[] = {
 "default",
 };
 enum Assetworld_generatorType
@@ -119,20 +123,20 @@ Assetworld_generator_default,
 Assetworld_generator_Count
 };
 
-char* metaAsset_world_generator[] = {
+char* MetaTable_Assetworld_generatorType[] = {
 "default",
 };
 MetaAssetType metaAsset_subTypes[AssetType_Count] = 
 {
 {0, NULL},
-{2, metaAsset_Font},
-{2, metaAsset_Image},
-{1, metaAsset_Model},
-{2, metaAsset_Skeleton},
-{10, metaAsset_Sound},
-{1, metaAsset_tile_definition},
-{1, metaAsset_WaterParams},
-{1, metaAsset_world_generator},
+{2, MetaTable_AssetFontType},
+{3, MetaTable_AssetImageType},
+{1, MetaTable_AssetModelType},
+{3, MetaTable_AssetSkeletonType},
+{10, MetaTable_AssetSoundType},
+{1, MetaTable_Assettile_definitionType},
+{1, MetaTable_AssetWaterParamsType},
+{1, MetaTable_Assetworld_generatorType},
 };
 
 

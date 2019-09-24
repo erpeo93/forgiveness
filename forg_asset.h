@@ -254,9 +254,6 @@ introspection() struct ground_generator
 
 
 
-
-
-
 enum AssetState
 {
     Asset_unloaded,

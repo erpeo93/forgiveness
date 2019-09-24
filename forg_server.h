@@ -37,7 +37,6 @@
 #include "forg_network.h"
 #include "forg_meta.h"
 #include "forg_ground.h"
-#include "client_generated.h"
 #include "forg_resizable_array.h"
 
 PlatformAPI platformAPI;
@@ -111,13 +110,17 @@ struct ServerAnimationComponent
     AssetImageType skin;
 };
 
+#include "forg_ecs.h"
+#include "forg_archetypes.h"
+#include "client_generated.h"
+global_variable ArchetypeLayout archetypeLayouts[Archetype_Count];
+
 struct ReceiveNetworkPacketWork
 {
     NetworkInterface* network;
     network_platform_receive_data* ReceiveData;
 };
 
-#include "forg_ecs.h"
 struct ServerState
 {
     WorldSeason season;
@@ -140,14 +143,17 @@ struct ServerState
     ReceiveNetworkPacketWork receivePacketWork;
     NetworkInterface clientInterface;
     
-    RandomSequence instantiateSequence;
-    RandomSequence randomSequence;
-    RandomSequence objectSequence;
+    RandomSequence entropy;
     
     u32 fileCount;
     GameFile* files;
     
     FileToSend* firstFreeToSendFile;
+    
+    u32 entityDefinitionCount;
+    EntityDefinition entityDefinitions[64];
+    
+    Assets* assets;
 };
 
 #define SERVER_SIMULATE_WORLDS(name) void name(PlatformServerMemory* memory, r32 secondElapsed)

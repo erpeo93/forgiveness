@@ -1242,8 +1242,6 @@ inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
     
     Buffer tempBuffer = CopyBuffer(&tempPool, sourceBuffer);
     
-    FreeAsset(assets, asset);
-    
     Tokenizer tokenizer = {};;
     tokenizer.at = (char*) tempBuffer.ptr;
     
@@ -1251,22 +1249,16 @@ inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
     String structName = {};
     structName.ptr = assetType;
     structName.length = StrLen(assetType);
-    
-    
     u32 finalSize = GetStructSize(structName, &tokenizer);
-    asset->data = AcquireAssetMemory(assets, finalSize, asset);
     
-    tokenizer.at = (char*) tempBuffer.ptr;
-    ParseBufferIntoStruct(structName, &tokenizer, asset->data, finalSize);
-    
-    
-#if 0    
-    Stream test = PushStream(&tempPool, sourceBuffer.size + 1000);
-    DumpStructToStream(structName, &test, asset->data);
-#endif
-    
-    
-    asset->state = Asset_loaded;
+    if(finalSize > 0)
+    {
+        FreeAsset(assets, asset);
+        asset->data = AcquireAssetMemory(assets, finalSize, asset);
+        tokenizer.at = (char*) tempBuffer.ptr;
+        ParseBufferIntoStruct(structName, &tokenizer, asset->data, finalSize);
+        asset->state = Asset_loaded;
+    }
     
     Clear(&tempPool);
 }

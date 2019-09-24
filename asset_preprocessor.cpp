@@ -138,7 +138,7 @@ int main(int argc, char** argv)
         sprintf(subpath, "%s/%s", path, folderName);
         GetAllSubdirectoriesNoSpaces(subFolders, subpath);
         
-        metaSubtypesPtr += sprintf(metaSubtypesPtr, "{%d, metaAsset_%s},\n", subFolders->count, folderName);
+        metaSubtypesPtr += sprintf(metaSubtypesPtr, "{%d, MetaTable_Asset%sType},\n", subFolders->count, folderName);
     }
     
     printf("AssetType_Count\n");
@@ -158,7 +158,7 @@ int main(int argc, char** argv)
         char* metaSubAssetPtr = metaSubAssetTable;
         char* folderName = folders.names[folderIndex];
         
-        metaSubAssetPtr += sprintf(metaSubAssetPtr, "char* metaAsset_%s[] = {\n", folderName);
+        metaSubAssetPtr += sprintf(metaSubAssetPtr, "char* MetaTable_Asset%sType[] = {\n", folderName);
         
         
         printf("enum Asset%sType", folderName);

@@ -12,8 +12,8 @@
 //#include "forg_bound.cpp"
 #include "forg_network_server.cpp"
 #include "forg_world.cpp"
+#include "forg_archetypes_server.cpp"
 #include "forg_world_server.cpp"
-
 #include "forg_meta_asset.cpp"
 #include "forg_meta.cpp"
 #include "asset_builder.cpp"
@@ -123,7 +123,11 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                 P.chunkX = 1;
                 P.chunkY = 1;
                 
-                EntityID ID = AddEntity(server, P, Archetype_FirstEntityArchetype, player);
+                Assert(server->entityDefinitionCount > 0);
+                u32 choice = RandomChoice(&server->entropy, server->entityDefinitionCount);
+                EntityDefinition* definition = server->entityDefinitions + choice;
+                
+                EntityID ID = AddEntity(server, P, definition, player);
                 SendGameAccessConfirm(player, server->worldSeed, ID);
             }
             else
@@ -567,8 +571,9 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         
         platformAPI.PushWork(server->slowQueue, WatchForFileChanges, hash);
-        //Assets* assets = InitAssets(JustEntityDefinitionFiles);
         //BuildWorld(server, GenerateWorld_OnlyChunks);
+        
+        LoadAllEntityDefinitionsFromfile(?);
     }
     
 	PlatformFileGroup reloadedFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, RELOAD_PATH);

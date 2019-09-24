@@ -39,6 +39,7 @@ enum MetaType
     MetaType_PropertySelector,
     MetaType_BiomePyramid,
     MetaType_WaterPhase,
+    MetaType_EntityInitParams,
 };
 
 enum FieldMetaFlags

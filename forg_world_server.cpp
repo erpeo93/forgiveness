@@ -10,20 +10,21 @@ internal void UpdateSeasonTimer(ServerState* server, r32 elapsedTime)
     server->seasonLerp = Clamp01MapToRange(0.5f * SEASON_DURATION, server->seasonTime, SEASON_DURATION);
 }
 
-internal EntityID AddEntity(ServerState* server, UniversePos P, EntityArchetype type, PlayerComponent* player = 0)
+internal EntityID AddEntity(ServerState* server, UniversePos P, EntityDefinition* definition, PlayerComponent* player = 0)
 {
     EntityID ID = {};
-    Acquire(server, SafeTruncateToU16(type), (&ID));
+    Acquire(server, Archetype_FirstEntityArchetype, (&ID));
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     physic->P = P;
     physic->speed = {};
     physic->acc = {};
     
-    ServerAnimationComponent* animation = GetComponent(server, ID, ServerAnimationComponent);
-    animation->skeleton = AssetSkeleton_wolf;
-    animation->skin = AssetImage_wolf;
+    InitFirstEntityArchetype(server, ID, &definition->params);
     
-    SetComponent(server, ID, PlayerComponent, player);
+    if(HasComponent(Archetype_FirstEntityArchetype, PlayerComponent))
+    {
+        SetComponent(server, ID, PlayerComponent, player);
+    }
     
     return ID;
 }

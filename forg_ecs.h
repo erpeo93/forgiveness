@@ -18,24 +18,13 @@ struct ArchetypeLayout
     ArchetypeComponent hasOptionalComponent;
 };
 
-global_variable ArchetypeLayout archetypeLayouts[Archetype_Count];
-
-
-
-#if 0 
-{
-    {0, {true, 0},{true, 0},{true, 0},{true, 0},{true, true, 0},{true, 0}},
-    {0, {true, 0},{true, 0},{true, 0},{true, 0},{true, true, 0},{false, 0}}
-};
-#endif
-
 #define HasComponent(arch, component) archetypeLayouts[arch].has##component.exists
 #define GetPtr(state, ID) Get_(state->archetypes + ID.archetype, ID.archetypeIndex)
-#define GetComponent(state, ID, component) (archetypeLayouts[ID.archetype].has##component.pointer) ? (component*) (*(u64*) AdvanceVoidPtrBytes(GetPtr(state, ID), archetypeLayouts[ID.archetype].has##component.offset)) : (component*) AdvanceVoidPtrBytes(GetPtr(state, ID), archetypeLayouts[ID.archetype].has##component.offset)
+#define GetComponent(state, ID, component) HasComponent(ID.archetype, component) ?((archetypeLayouts[ID.archetype].has##component.pointer) ? (component*) (*(u64*) AdvanceVoidPtrBytes(GetPtr(state, ID), archetypeLayouts[ID.archetype].has##component.offset)) : (component*) AdvanceVoidPtrBytes(GetPtr(state, ID), archetypeLayouts[ID.archetype].has##component.offset)) : 0
 
 #define GetComponentPtr(state, ID, component) AdvanceVoidPtrBytes(GetPtr(state, ID), archetypeLayouts[ID.archetype].has##component.offset)
 
-#define SetComponent(state, ID, component, value) *(u64*) GetComponentPtr(state, ID, component) = (u64) value 
+#define SetComponent(state, ID, component, value) if(HasComponent(ID.archetype, component)){*(u64*) GetComponentPtr(state, ID, component) = (u64) value;}else{InvalidCodePath;}
 
 #define InitArchetype(state, pool, arch, maxCount) state->archetypes[arch] = InitResizableArray_(pool, archetypeLayouts[arch].totalSize, maxCount)
 #define InitComponentArray(state, pool, component, maxCount) state->component##_ = InitResizableArray_(pool, sizeof(component), maxCount)
@@ -122,28 +111,3 @@ inline b32 AreEqual(EntityID i1, EntityID i2)
     b32 result = (i1.archetype == i2.archetype && i1.archetypeIndex == i2.archetypeIndex);
     return result;
 }
-
-Archetype() struct FirstEntityArchetype
-{
-#ifdef FORG_SERVER
-    PhysicComponent physic;
-    ServerAnimationComponent animation;
-    PlayerComponent* player;
-#else
-    BaseComponent base;
-    AnimationComponent animation;
-#endif
-};
-
-Archetype() struct SecondEntityArchetype
-{
-#ifdef FORG_SERVER
-    PhysicComponent physic;
-    ServerAnimationComponent animation;
-    OptionalComponent optional;
-    PlayerComponent* player;
-#else
-    BaseComponent base;
-    AnimationComponent animation;
-#endif
-};

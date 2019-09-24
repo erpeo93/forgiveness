@@ -42,7 +42,6 @@
 #include "forg_essence.h"
 #include "forg_skill.h"
 #include "forg_ground.h"
-#include "client_generated.h"
 
 struct BaseComponent
 {
@@ -51,8 +50,9 @@ struct BaseComponent
 };
 
 #include "forg_ecs.h"
-
-
+#include "forg_archetypes.h"
+#include "client_generated.h"
+global_variable ArchetypeLayout archetypeLayouts[Archetype_Count];
 global_variable PlatformAPI platformAPI;
 
 

@@ -642,6 +642,7 @@ int main(int argc, char** argv)
         "forg_particles.h",
         "forg_asset.h",
         "forg_ecs.h",
+        "forg_archetypes.h",
         "../properties/test.properties",
     };
     for( int fileIndex = 0; fileIndex < sizeof( fileNames ) / sizeof( fileNames[0] ); ++fileIndex )
