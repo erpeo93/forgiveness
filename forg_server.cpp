@@ -7,32 +7,15 @@
 #include "forg_server.h"
 #include "forg_token.cpp"
 #include "forg_pool.cpp"
-#include "forg_meta.cpp"
 #include "forg_physics.cpp"
 #include "forg_resizable_array.cpp"
-#if 0
-//#include "physics_server.cpp"
 //#include "forg_bound.cpp"
-//#include "forg_object.cpp"
-#include "forg_crafting.cpp"
-#include "forg_world_generation.cpp"
-#include "forg_world_server.cpp"
-#include "forg_network_server.cpp"
-#include "forg_import.cpp"
-#include "forg_inventory.cpp"
-//#include "forg_memory.cpp"
-#include "forg_AI.cpp"
-#include "forg_action_effect.cpp"
-#include "forg_essence.cpp"
-#endif
-
 #include "forg_network_server.cpp"
 #include "forg_world.cpp"
 #include "forg_world_server.cpp"
 
-#pragma comment(lib, "wsock32.lib")
-
 #include "forg_meta_asset.cpp"
+#include "forg_meta.cpp"
 #include "asset_builder.cpp"
 #include "miniz.c"
 
@@ -140,7 +123,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                 P.chunkX = 1;
                 P.chunkY = 1;
                 
-                EntityID ID = AddEntity(server, P, Archetype_First, player);
+                EntityID ID = AddEntity(server, P, Archetype_FirstEntityArchetype, player);
                 SendGameAccessConfirm(player, server->worldSeed, ID);
             }
             else
@@ -436,7 +419,7 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
                         iter = Next(iter))
                     {
                         PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
-                        if(player->connectionSlot)
+                        if(player && player->connectionSlot)
                         {
                             FileToSend* toSend;
                             FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));

@@ -26,6 +26,8 @@ internal void* Get_(ResizableArray* array, u32 index)
 
 internal void* GetOrAcquire_(ResizableArray* array, u32 index)
 {
+    Assert(index < array->maxCount);
+    array->count = index + 1;
     void* result = Get_(array, index);
     if(!result)
     {

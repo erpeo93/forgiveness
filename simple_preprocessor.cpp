@@ -288,9 +288,8 @@ struct MetaProperty
     char* name;
     MetaProperty* next;
 };
-
-
 global_variable MetaProperty* firstPropertyList;
+
 void ParseProperties(Tokenizer* tokenizer)
 {
     if(RequireToken(tokenizer, Token_OpenParen))
@@ -485,7 +484,146 @@ void ParseFlags( Tokenizer* tokenizer )
 }
 
 
-int main( int argc, char** argv )
+struct MetaArchetype
+{
+    char* name;
+    MetaArchetype* next;
+};
+global_variable MetaArchetype* firstMetaArchetype;
+
+
+char metaArchetypesServer[KiloBytes(16)] = {};
+char* metaArchetypesServerPtr = metaArchetypesServer;
+
+char metaArchetypesClient[KiloBytes(16)] = {};
+char* metaArchetypesClientPtr = metaArchetypesClient;
+
+char metaArchetypesBoth[KiloBytes(16)] = {};
+char* metaArchetypesBothPtr = metaArchetypesBoth;
+
+void ParseArchetype(Tokenizer* tokenizer)
+{
+    if(RequireToken(tokenizer, Token_OpenParen))
+    {
+        if(RequireToken(tokenizer, Token_CloseParen))
+        {
+            if(RequireToken(tokenizer, Token_Identifier))
+            {
+                Token name = GetToken(tokenizer);
+                MetaArchetype* meta = ( MetaArchetype* ) malloc( sizeof( MetaArchetype ) );
+                meta->name = ( char* ) malloc(name.textLength + 1);
+                memcpy(meta->name, name.text, name.textLength);
+                meta->name[name.textLength] = 0;
+                
+                meta->next = firstMetaArchetype;
+                firstMetaArchetype = meta;
+                
+                metaArchetypesBothPtr += sprintf(metaArchetypesBothPtr, "archetypeLayouts[Archetype_%s].totalSize = sizeof(%s); ", meta->name, meta->name);
+                
+                
+                b32 parsing = true;
+                
+                b32 server = false;
+                b32 client = false;
+                b32 both = true;
+                
+                while(parsing)
+                {
+                    Token t = GetToken(tokenizer);
+                    
+                    
+                    switch(t.type)
+                    {
+                        case Token_Pound:
+                        {
+                            Token def = GetToken(tokenizer);
+                            if(TokenEquals(def, "ifdef"))
+                            {
+                                Token definition = GetToken(tokenizer);
+                                if(TokenEquals(definition, "FORG_SERVER"))
+                                {
+                                    server = true;
+                                    client = false;
+                                }
+                            }
+                            else if(TokenEquals(def, "ifndef"))
+                            {
+                                Token definition = GetToken(tokenizer);
+                                if(TokenEquals(definition, "FORG_SERVER"))
+                                {
+                                    client = true;
+                                    server = false;
+                                }
+                            }
+                            else if(TokenEquals(def, "else"))
+                            {
+                                if(server)
+                                {
+                                    server = false;
+                                    client = true;
+                                }
+                                else if(client)
+                                {
+                                    server = true;
+                                    client = false;
+                                }
+                            }
+                            else if(TokenEquals(def, "endif"))
+                            {
+                                server = false;
+                                client = false;
+                            }
+                            
+                        } break;
+                        
+                        case Token_Identifier:
+                        {
+                            char** active = &metaArchetypesBothPtr;
+                            
+                            if(server)
+                            {
+                                Assert(!client);
+                                active = &metaArchetypesServerPtr;
+                            }
+                            
+                            if(client)
+                            {
+                                Assert(!server)
+                                {
+                                    active = &metaArchetypesClientPtr;
+                                }
+                            }
+                            
+                            (*active) += sprintf(*active, "archetypeLayouts[Archetype_%s].has%.*s.exists = true; ", meta->name, t.textLength, t.text);
+                            
+                            if(NextTokenIs(tokenizer, Token_Asterisk))
+                            {
+                                Token asterisk = GetToken(tokenizer);
+                                (*active) += sprintf(*active, "archetypeLayouts[Archetype_%s].has%.*s.pointer = true; ", meta->name, t.textLength, t.text);
+                            }
+                            Token comp = GetToken(tokenizer);
+                            Token semi = GetToken(tokenizer);
+                            
+                            (*active) += sprintf(*active, "archetypeLayouts[Archetype_%s].has%.*s.offset = OffsetOf(%s, %.*s);  ", meta->name, t.textLength, t.text, meta->name, comp.textLength, comp.text);
+                        } break;
+                        
+                        case Token_SemiColon:
+                        {
+                            parsing = false;
+                        } break;
+                        
+                        case Token_EndOfFile:
+                        {
+                            parsing = false;
+                        } break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+int main(int argc, char** argv)
 {
     char* fileNames[] =
     {
@@ -503,6 +641,7 @@ int main( int argc, char** argv )
         "forg_animation.h",
         "forg_particles.h",
         "forg_asset.h",
+        "forg_ecs.h",
         "../properties/test.properties",
     };
     for( int fileIndex = 0; fileIndex < sizeof( fileNames ) / sizeof( fileNames[0] ); ++fileIndex )
@@ -546,10 +685,14 @@ int main( int argc, char** argv )
                         ParseProperties(&tokenizer);
                     }
                     
-					else if(TokenEquals(token, "printFlags"))
-					{
-						ParseFlags(&tokenizer);
-					}
+                    else if(TokenEquals(token, "printFlags"))
+                    {
+                        ParseFlags(&tokenizer);
+                    }
+                    else if(TokenEquals(token, "Archetype"))
+                    {
+                        ParseArchetype(&tokenizer);
+                    }
                 } break;
                 
                 default:
@@ -603,5 +746,31 @@ int main( int argc, char** argv )
     printf(fieldDefaultValues);
     printf("\n;");
     printf("\n");
+    
+    
+    
+    printf("enum EntityArchetype\n{");
+    for(MetaArchetype* arch = firstMetaArchetype; arch; arch = arch->next)
+    {
+        printf("Archetype_%s,\n", arch->name);
+    }
+    printf("Archetype_Count\n");
+    printf("};\n");
+    
+    printf("#define META_ARCHETYPES_BOTH()\\\n");
+    printf(metaArchetypesBoth);
+    printf("\n;");
+    printf("\n");
+    
+    printf("#define META_ARCHETYPES_SERVER()\\\n");
+    printf(metaArchetypesServer);
+    printf("\n;");
+    printf("\n");
+    
+    printf("#define META_ARCHETYPES_CLIENT()\\\n");
+    printf(metaArchetypesClient);
+    printf("\n;");
+    printf("\n");
+    
 }
 

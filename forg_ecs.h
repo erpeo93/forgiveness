@@ -1,11 +1,4 @@
 #pragma once
-enum EntityArchetype
-{
-    Archetype_First,
-    Archetype_Second,
-    Archetype_Count,
-};
-
 struct ArchetypeComponent
 {
     b32 exists;
@@ -25,11 +18,16 @@ struct ArchetypeLayout
     ArchetypeComponent hasOptionalComponent;
 };
 
-global_variable ArchetypeLayout archetypeLayouts[] = 
+global_variable ArchetypeLayout archetypeLayouts[Archetype_Count];
+
+
+
+#if 0 
 {
     {0, {true, 0},{true, 0},{true, 0},{true, 0},{true, true, 0},{true, 0}},
     {0, {true, 0},{true, 0},{true, 0},{true, 0},{true, true, 0},{false, 0}}
 };
+#endif
 
 #define HasComponent(arch, component) archetypeLayouts[arch].has##component.exists
 #define GetPtr(state, ID) Get_(state->archetypes + ID.archetype, ID.archetypeIndex)
@@ -125,7 +123,7 @@ inline b32 AreEqual(EntityID i1, EntityID i2)
     return result;
 }
 
-struct FirstEntityArchetype
+Archetype() struct FirstEntityArchetype
 {
 #ifdef FORG_SERVER
     PhysicComponent physic;
@@ -137,7 +135,7 @@ struct FirstEntityArchetype
 #endif
 };
 
-struct SecondEntityArchetype
+Archetype() struct SecondEntityArchetype
 {
 #ifdef FORG_SERVER
     PhysicComponent physic;

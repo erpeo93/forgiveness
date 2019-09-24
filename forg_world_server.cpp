@@ -70,18 +70,21 @@ internal void SendEntityUpdates(ServerState* server, EntityID ID, PhysicComponen
                 iter = Next(iter))
             {
                 PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
-                SendEntityHeader(player, ID);
-                u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, ID);
-                Assert(writeHere);
-                if(writeHere)
+                if(player)
                 {
-                    Copy(totalSize, writeHere, buff_);
-                }
-                
-                if(HasComponent(archetypeIndex, ServerAnimationComponent))
-                {
-                    ServerAnimationComponent* animationComponent = GetComponent(server, iter.ID, ServerAnimationComponent);
-                    SendAnimationComponent(player, ID, animationComponent);
+                    SendEntityHeader(player, ID);
+                    u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, ID);
+                    Assert(writeHere);
+                    if(writeHere)
+                    {
+                        Copy(totalSize, writeHere, buff_);
+                    }
+                    
+                    if(HasComponent(archetypeIndex, ServerAnimationComponent))
+                    {
+                        ServerAnimationComponent* animationComponent = GetComponent(server, iter.ID, ServerAnimationComponent);
+                        SendAnimationComponent(player, ID, animationComponent);
+                    }
                 }
             }
         }
@@ -100,29 +103,33 @@ internal void HandlePlayersRequest(ServerState* server)
                 iter = Next(iter))
             {
                 PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
-                for(u32 requestIndex = 0; requestIndex < player->requestCount; ++requestIndex)
+                if(player)
                 {
-                    PlayerRequest* request = player->requests + requestIndex;
-                    unsigned char* data = request->data;
-                    ForgNetworkHeader header;
-                    data = ForgUnpackHeader(data, &header);
-                    switch(header.packetType)
+                    for(u32 requestIndex = 0; requestIndex < player->requestCount; ++requestIndex)
                     {
-                        case Type_ActionRequest:
+                        PlayerRequest* request = player->requests + requestIndex;
+                        unsigned char* data = request->data;
+                        ForgNetworkHeader header;
+                        data = ForgUnpackHeader(data, &header);
+                        switch(header.packetType)
                         {
-                            Vec3 acc;
-                            unpack(data, "V", &acc);
-                            
-                            if(HasComponent(archetypeIndex, PhysicComponent))
+                            case Type_ActionRequest:
                             {
-                                PhysicComponent* physic = GetComponent(server, iter.ID, PhysicComponent);physic->acc = acc;
-                            }
-                        } break;
-                        
-                        InvalidDefaultCase;
+                                Vec3 acc;
+                                unpack(data, "V", &acc);
+                                
+                                if(HasComponent(archetypeIndex, PhysicComponent))
+                                {
+                                    PhysicComponent* physic = GetComponent(server, iter.ID, PhysicComponent);
+                                    physic->acc = acc;
+                                }
+                            } break;
+                            
+                            InvalidDefaultCase;
+                        }
                     }
+                    player->requestCount = 0;
                 }
-                player->requestCount = 0;
             }
         }
     }

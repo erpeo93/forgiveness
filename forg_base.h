@@ -163,7 +163,7 @@ union Vec4
 #define MetaCounter(...)
 #define MetaEnumerator(...)
 #define MetaFixed(...)
-
+#define Archetype(...)
 #include <float.h>
 #include <limits.h>
 #include <stdio.h>

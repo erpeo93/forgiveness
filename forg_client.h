@@ -42,6 +42,7 @@
 #include "forg_essence.h"
 #include "forg_skill.h"
 #include "forg_ground.h"
+#include "client_generated.h"
 
 struct BaseComponent
 {
