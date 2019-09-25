@@ -210,11 +210,13 @@ internal void SendPassiveSkillRequest(u32 taxonomy)
     CloseAndSendOrderedPacket();
 }
 
+#if 0
 internal void SendReleaseDraggingRequest()
 {
     StartPacket(ReleaseDraggingRequest);
     CloseAndSendOrderedPacket();
 }
+#endif
 
 internal void SendUnlockSkillCategoryRequest(u32 taxonomy)
 {
@@ -250,20 +252,6 @@ internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
     CloseAndSendOrderedPacket();
 }
 
-
-inline void SendPatchServerRequest()
-{
-    StartPacket(PatchLocalServer);
-    CloseAndSendOrderedPacket();
-}
-
-inline void SendPatchCheckRequest()
-{
-    StartPacket(PatchCheck);
-    CloseAndSendOrderedPacket();
-}
-
-
 inline void SendMovePlayerRequest(Vec3 offset)
 {
     StartPacket(MovePlayerInOtherRegion);
@@ -288,6 +276,13 @@ internal void SendFileHeaderAck(u32 index)
 {
     StartPacket(FileHeader);
     Pack("L", index);
+    CloseAndSendGuaranteedPacket();
+}
+
+internal void SendSpawnRequest(UniversePos P)
+{
+    StartPacket(SpawnEntity);
+    Pack("llV", P.chunkX, P.chunkY, P.chunkOffset);
     CloseAndSendGuaranteedPacket();
 }
 
@@ -534,11 +529,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 packetPtr += sizeToCopy;
             } break;
             
+#if 0                
             case Type_plantUpdate:
             {
                 InvalidCodePath;
                 
-#if 0                
                 r32 age;
                 r32 life;
                 
@@ -558,9 +553,9 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     plant->flowerDensity = flowerDensity;
                     plant->fruitDensity = fruitDensity;
                 }
-#endif
                 
             } break;
+#endif
             
             
 #if 0            

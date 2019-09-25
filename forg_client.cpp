@@ -407,6 +407,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 inputAcc.y = 1.0f;
             }
             
+            if(Pressed(&input->actionUp))
+            {
+                SendSpawnRequest(player->universeP);
+            }
             
             group->assets = gameState->assets;
 #if 0            

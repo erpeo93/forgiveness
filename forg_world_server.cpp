@@ -83,7 +83,7 @@ internal void SendEntityUpdates(ServerState* server, EntityID ID, PhysicComponen
                     
                     if(HasComponent(archetypeIndex, ServerAnimationComponent))
                     {
-                        ServerAnimationComponent* animationComponent = GetComponent(server, iter.ID, ServerAnimationComponent);
+                        ServerAnimationComponent* animationComponent = GetComponent(server, ID, ServerAnimationComponent);
                         SendAnimationComponent(player, ID, animationComponent);
                     }
                 }

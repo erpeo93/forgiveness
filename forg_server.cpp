@@ -163,6 +163,16 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             
 		} break;
         
+        case Type_SpawnEntity:
+        {
+            UniversePos P = {};
+            unpack(packetPtr, "llV", &P.chunkX, &P.chunkY, &P.chunkOffset);
+            
+            AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, 0, &server->entropy, 0);
+            EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
+            AddEntity(server, P, definition, 0);
+        } break;
+        
 #if 0        
         case Type_RegenerateWorldChunks:
         {

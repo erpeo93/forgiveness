@@ -16,6 +16,7 @@ internal UndoRedoRecord* FreeAndGetUndoRedoRecord(EditorUIContext* context)
     return record;
 }
 
+#define AddUndoRedoCopyStruct(struct, context, before, ptr, after, ID) AddUndoRedoCopy(context, sizeof(struct), before, ptr, sizeof(struct), after, ID)
 internal void AddUndoRedoCopy(EditorUIContext* context, u32 sizeBefore, void* before, void* ptr, u32 sizeAfter, void* after, AssetID ID)
 {
     UndoRedoRecord* record = FreeAndGetUndoRedoRecord(context);
@@ -448,8 +449,6 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID,
                 EndInteraction(layout->context);
                 FormatString(outputBuffer, outputLength, "%s", options.strings[data->optionIndex]);
                 result = true;
-                
-                AddUndoRedoCopy(layout->context, StrLen(data->before) + 1, data->before, string, StrLen(string) + 1, string, assetID);
             }
         }
     }
@@ -885,8 +884,11 @@ internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enume
     char output[64];
     if(EditString(layout, name, currentValue, options, output, sizeof(output), assetID))
     {
+        Enumerator oldValue = *enumerator;
         Enumerator newValue = GetValueFromOptions(options, output);
         *enumerator = newValue;
+        
+        AddUndoRedoCopyStruct(Enumerator, layout->context, &oldValue, enumerator, &newValue, assetID);
         result = true;
     }
     return result;
@@ -917,8 +919,11 @@ internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType*
         u16 newType = GetMetaAssetType(output);
         if(newType != type->type)
         {
+            GameAssetType oldStruct = *type;
             type->type = newType;
             type->subtype = 0;
+            AddUndoRedoCopyStruct(GameAssetType, layout->context, &oldStruct, type, type, assetID);
+            
         }
     }
     
@@ -933,10 +938,11 @@ internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType*
     if(EditString(layout, "subtype", subtypeString, auID(&type->subtype), subtypeOptions, output, sizeof(output), assetID))
     {
         u16 newSubtype = GetMetaAssetSubtype(type->type, output);
-        
         if(newSubtype != INVALID_ASSET_SUBTYPE)
         {
+            u16 oldType = type->subtype;
             type->subtype = newSubtype;
+            AddUndoRedoCopyStruct(u16, layout->context, &oldType, &type->subtype, &newSubtype, assetID);
         }
     }
     
@@ -963,8 +969,10 @@ internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* p
         u16 newType = GetMetaPropertyType(Tokenize(output));
         if(newType != property->property)
         {
+            GameProperty oldStruct = *property;
             property->property = newType;
             property->value = 0;
+            AddUndoRedoCopyStruct(GameProperty, layout->context, &oldStruct, property, property, assetID);
         }
     }
     
@@ -982,7 +990,11 @@ internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* p
         
         if(newValue != INVALID_PROPERTY_VALUE)
         {
+            u16 oldValue = property->value;
             property->value = newValue;
+            
+            AddUndoRedoCopyStruct(u16, layout->context, &oldValue, &property->value, &newValue, assetID);
+            
         }
     }
     

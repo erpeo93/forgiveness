@@ -156,8 +156,6 @@ enum Packet_Type
     Type_gameAccess,
     Type_worldInfo,
     
-    
-    
     Type_ActionRequest,
     Type_EquipRequest,
     Type_DisequipRequest,
@@ -176,10 +174,6 @@ enum Packet_Type
     Type_CraftFromInventoryRequest,
     Type_CustomTargetPRequest,
     
-    Type_StartedDragging,
-    Type_EndedDragging,
-    Type_ReleaseDraggingRequest,
-    
     Type_containerHeader,
     Type_containerInfo,
     Type_objectRemoved,
@@ -188,28 +182,14 @@ enum Packet_Type
     Type_entityHeader,
     Type_entityBasics,
     Type_animationComponent,
-    Type_plantUpdate,
-    Type_equipmentSlot,
-    Type_deletedEntity,
-    Type_essenceDelta,
-    Type_effectTriggered,
-    Type_possibleActions,
-    Type_AvailableRecipes,
-    Type_NewRecipe,
-    Type_SkillCategories,
-    Type_SkillLevel,
-    Type_StartedAction,
-    Type_CompletedAction,
     
     Type_FileHeader,
     Type_FileChunk,
-    
     Type_FileHash,
     
+    Type_SpawnEntity,
     Type_MovePlayerInOtherRegion,
     Type_PauseToggle,
-    Type_PatchLocalServer,
-    Type_PatchCheck,
     Type_RegenerateWorldChunks,
     
 #if FORGIVENESS_INTERNAL
