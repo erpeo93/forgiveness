@@ -13,14 +13,13 @@ internal void UpdateSeasonTimer(ServerState* server, r32 elapsedTime)
 internal EntityID AddEntity(ServerState* server, UniversePos P, EntityDefinition* definition, PlayerComponent* player = 0)
 {
     EntityID ID = {};
-    Acquire(server, Archetype_FirstEntityArchetype, (&ID));
+    Acquire(server, SafeTruncateToU16(definition->archetype), (&ID));
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     physic->P = P;
     physic->speed = {};
     physic->acc = {};
     
-    InitFirstEntityArchetype(server, ID, &definition->params);
-    
+    InitFunc[ID.archetype](server, ID, &definition->params); 
     if(HasComponent(Archetype_FirstEntityArchetype, PlayerComponent))
     {
         SetComponent(server, ID, PlayerComponent, player);
@@ -56,11 +55,30 @@ internal void MoveEntity(ServerState* server, PhysicComponent* physic, r32 elaps
     }
 }
 
-internal void SendEntityUpdates(ServerState* server, EntityID ID, PhysicComponent* physic)
+internal void SendAnimationUpdate(ServerState* server, EntityID ID, ServerAnimationComponent* animation)
+{
+    for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
+    {
+        if(HasComponent(archetypeIndex, PlayerComponent))
+        {
+            for(ArchIterator iter = First(server, archetypeIndex); 
+                IsValid(iter); 
+                iter = Next(iter))
+            {
+                PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
+                if(player)
+                {
+                    SendAnimationComponent(player, ID, animation);
+                }
+            }
+        }
+    }
+}
+
+internal void SendBasicUpdate(ServerState* server, EntityID ID, PhysicComponent* physic)
 {
     unsigned char buff_[KiloBytes(2)];
     Assert(sizeof(EntityUpdate) < ArrayCount(buff_));
-    
     u16 totalSize = PrepareEntityUpdate(server, physic, buff_);
     for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
     {
@@ -79,12 +97,6 @@ internal void SendEntityUpdates(ServerState* server, EntityID ID, PhysicComponen
                     if(writeHere)
                     {
                         Copy(totalSize, writeHere, buff_);
-                    }
-                    
-                    if(HasComponent(archetypeIndex, ServerAnimationComponent))
-                    {
-                        ServerAnimationComponent* animationComponent = GetComponent(server, ID, ServerAnimationComponent);
-                        SendAnimationComponent(player, ID, animationComponent);
                     }
                 }
             }
@@ -136,8 +148,7 @@ internal void HandlePlayersRequest(ServerState* server)
     }
 }
 
-
-internal void MoveEntitiesAndSendUpdates(ServerState* server, r32 elapsedTime)
+internal void MoveEntitiesAndSendPhysicUpdates(ServerState* server, r32 elapsedTime)
 {
     for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
     {
@@ -149,7 +160,24 @@ internal void MoveEntitiesAndSendUpdates(ServerState* server, r32 elapsedTime)
             {
                 PhysicComponent* physic = GetComponent(server, iter.ID, PhysicComponent);
                 MoveEntity(server, physic, elapsedTime);
-                SendEntityUpdates(server, iter.ID, physic);
+                SendBasicUpdate(server, iter.ID, physic);
+            }
+        }
+    }
+}
+
+internal void SendAnimationUpdates(ServerState* server, r32 elapsedTime)
+{
+    for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
+    {
+        if(HasComponent(archetypeIndex, ServerAnimationComponent))
+        {
+            for(ArchIterator iter = First(server, archetypeIndex); 
+                IsValid(iter); 
+                iter = Next(iter))
+            {
+                ServerAnimationComponent* animation = GetComponent(server, iter.ID, ServerAnimationComponent);
+                SendAnimationUpdate(server, iter.ID, animation);
             }
         }
     }

@@ -454,7 +454,6 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID,
     }
     
     data->dim = ShowString(layout, name, string, EditorText_StartingSpace, color);
-    
     if(showOptions)
     {
         EditorLayout optionLayout = *layout;
@@ -882,7 +881,7 @@ internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enume
     
     char* currentValue = GetStringFromOptions(options, *enumerator);
     char output[64];
-    if(EditString(layout, name, currentValue, options, output, sizeof(output), assetID))
+    if(EditString(layout, name, currentValue, auID(enumerator), options, output, sizeof(output), assetID))
     {
         Enumerator oldValue = *enumerator;
         Enumerator newValue = GetValueFromOptions(options, output);

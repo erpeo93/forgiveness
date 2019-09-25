@@ -627,7 +627,8 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     
     HandlePlayersNetwork(server, elapsedTime);
     HandlePlayersRequest(server);
-    MoveEntitiesAndSendUpdates(server, elapsedTime);
+    MoveEntitiesAndSendPhysicUpdates(server, elapsedTime);
+    SendAnimationUpdates(server, elapsedTime);
 }
 
 

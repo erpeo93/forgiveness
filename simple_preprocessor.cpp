@@ -645,6 +645,75 @@ int main(int argc, char** argv)
         "forg_archetypes.h",
         "../properties/test.properties",
     };
+    
+    
+    
+    for( int fileIndex = 0; fileIndex < sizeof( fileNames ) / sizeof( fileNames[0] ); ++fileIndex )
+    {
+        char* file = ReadEntireFileAndNullTerminate( fileNames[fileIndex] );
+        
+        bool parsing = true;
+        
+        Tokenizer tokenizer = {};
+        tokenizer.at = file;
+        
+        bool buildingNodes = false;
+        bool parsingRecipe = false;
+        while( parsing )
+        {
+            Token token = GetToken( &tokenizer );
+            switch( token.type )
+            {
+                case Token_EndOfFile:
+                {
+                    parsing = false;
+                } break;
+                
+                case Token_Unknown:
+                {
+                    
+                } break;
+                
+                case Token_Identifier:
+                {
+                    if(TokenEquals(token, "Archetype"))
+                    {
+                        ParseArchetype(&tokenizer);
+                    }
+                } break;
+                
+                default:
+                {
+                    //printf( "%d: %.*s\n", token.type, token.textLength, token.text );
+                } break;
+            }
+        }
+    }
+    
+    
+    printf("enum EntityArchetype\n{");
+    for(MetaArchetype* arch = firstMetaArchetype; arch; arch = arch->next)
+    {
+        printf("Archetype_%s,\n", arch->name);
+    }
+    printf("Archetype_Count\n");
+    printf("};\n");
+    
+    printf("char* MetaTable_EntityArchetype[] = \n{");
+    for(MetaArchetype* arch = firstMetaArchetype; arch; arch = arch->next)
+    {
+        printf("\"%s\",\n", arch->name);
+    }
+    printf("};\n");
+    
+    printf("#define META_ARCHETYPES_INIT_FUNC()\\\n");
+    for(MetaArchetype* arch = firstMetaArchetype; arch; arch = arch->next)
+    {
+        printf("InitFunc[Archetype_%s] = Init%s;", arch->name, arch->name);
+    }
+    printf("\n;");
+    printf("\n");
+    
     for( int fileIndex = 0; fileIndex < sizeof( fileNames ) / sizeof( fileNames[0] ); ++fileIndex )
     {
         char* file = ReadEntireFileAndNullTerminate( fileNames[fileIndex] );
@@ -689,10 +758,6 @@ int main(int argc, char** argv)
                     else if(TokenEquals(token, "printFlags"))
                     {
                         ParseFlags(&tokenizer);
-                    }
-                    else if(TokenEquals(token, "Archetype"))
-                    {
-                        ParseArchetype(&tokenizer);
                     }
                 } break;
                 
@@ -747,16 +812,6 @@ int main(int argc, char** argv)
     printf(fieldDefaultValues);
     printf("\n;");
     printf("\n");
-    
-    
-    
-    printf("enum EntityArchetype\n{");
-    for(MetaArchetype* arch = firstMetaArchetype; arch; arch = arch->next)
-    {
-        printf("Archetype_%s,\n", arch->name);
-    }
-    printf("Archetype_Count\n");
-    printf("};\n");
     
     printf("#define META_ARCHETYPES_BOTH()\\\n");
     printf(metaArchetypesBoth);

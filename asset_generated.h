@@ -50,6 +50,7 @@ char* MetaTable_AssetFontType[] = {
 };
 enum AssetImageType
 {
+AssetImage_crocodile,
 AssetImage_default,
 AssetImage_turtle,
 AssetImage_wolf,
@@ -57,6 +58,7 @@ AssetImage_Count
 };
 
 char* MetaTable_AssetImageType[] = {
+"crocodile",
 "default",
 "turtle",
 "wolf",
@@ -72,6 +74,7 @@ char* MetaTable_AssetModelType[] = {
 };
 enum AssetSkeletonType
 {
+AssetSkeleton_crocodile,
 AssetSkeleton_default,
 AssetSkeleton_turtle,
 AssetSkeleton_wolf,
@@ -79,6 +82,7 @@ AssetSkeleton_Count
 };
 
 char* MetaTable_AssetSkeletonType[] = {
+"crocodile",
 "default",
 "turtle",
 "wolf",
@@ -142,9 +146,9 @@ MetaAssetType metaAsset_subTypes[AssetType_Count] =
 {0, NULL},
 {1, MetaTable_AssetEntityDefinitionType},
 {2, MetaTable_AssetFontType},
-{3, MetaTable_AssetImageType},
+{4, MetaTable_AssetImageType},
 {1, MetaTable_AssetModelType},
-{3, MetaTable_AssetSkeletonType},
+{4, MetaTable_AssetSkeletonType},
 {10, MetaTable_AssetSoundType},
 {1, MetaTable_Assettile_definitionType},
 {1, MetaTable_AssetWaterParamsType},

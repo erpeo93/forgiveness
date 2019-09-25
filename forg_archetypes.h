@@ -35,5 +35,6 @@ typedef INIT_ENTITY(entity);
 
 introspection() struct EntityDefinition
 {
+    Enumerator archetype MetaEnumerator(EntityArchetype);
     EntityInitParams params;
 };

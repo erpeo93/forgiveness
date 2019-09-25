@@ -14,6 +14,7 @@ internal void LoadMetaData()
     
 #ifdef FORG_SERVER
     META_ARCHETYPES_SERVER();
+    META_ARCHETYPES_INIT_FUNC();
 #else
     META_ARCHETYPES_CLIENT();
 #endif

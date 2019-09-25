@@ -1,3 +1,15 @@
+enum EntityArchetype
+{Archetype_SecondEntityArchetype,
+Archetype_FirstEntityArchetype,
+Archetype_Count
+};
+char* MetaTable_EntityArchetype[] = 
+{"SecondEntityArchetype",
+"FirstEntityArchetype",
+};
+#define META_ARCHETYPES_INIT_FUNC()\
+InitFunc[Archetype_SecondEntityArchetype] = InitSecondEntityArchetype;InitFunc[Archetype_FirstEntityArchetype] = InitFirstEntityArchetype;
+;
 char* MetaTable_EffectIdentifier[] = 
  {
 "Damage",
@@ -217,6 +229,7 @@ FieldDefinition fieldDefinitionOfEntityInitParams[] =
 
 FieldDefinition fieldDefinitionOfEntityDefinition[] = 
  {
+{0, MetaType_Enumerator, "Enumerator", "archetype", (u32) (&((EntityDefinition*)0)->archetype), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_EntityArchetype, ArrayCount(MetaTable_EntityArchetype)}, 
 {0, MetaType_EntityInitParams, "EntityInitParams", "params", (u32) (&((EntityDefinition*)0)->params), {}, sizeof(EntityInitParams),"invalid",0, 0, 0}, 
 };
 
@@ -280,11 +293,6 @@ meta_propertiesString[Property_Test - 1] = "Test";\
 #define META_DEFAULT_VALUES_CPP_SUCKS()\
 fieldDefinitionOfWaterPhase[0].def.def_r32 =0;fieldDefinitionOfWaterPhase[6].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[7].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[8].def.def_r32 =1.0f;fieldDefinitionOfWaterPhase[9].def.def_r32 =0.5f;fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfworld_generator[7].def.def_r32 =1;fieldDefinitionOfworld_generator[8].def.def_r32 =0.05f;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, AssetImage_default};fieldDefinitionOftile_definition[2].def.def_Vec4 =V4(1, 1, 1, 1);
 ;
-enum EntityArchetype
-{Archetype_SecondEntityArchetype,
-Archetype_FirstEntityArchetype,
-Archetype_Count
-};
 #define META_ARCHETYPES_BOTH()\
 archetypeLayouts[Archetype_FirstEntityArchetype].totalSize = sizeof(FirstEntityArchetype); archetypeLayouts[Archetype_SecondEntityArchetype].totalSize = sizeof(SecondEntityArchetype); 
 ;
