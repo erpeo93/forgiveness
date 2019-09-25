@@ -14,7 +14,9 @@
 #include "forg_world.cpp"
 #include "forg_archetypes_server.cpp"
 #include "forg_world_server.cpp"
-#include "forg_meta_asset.cpp"
+
+#define ONLY_DATA_FILES
+#include "forg_asset.cpp"
 #include "forg_meta.cpp"
 #include "asset_builder.cpp"
 #include "miniz.c"
@@ -123,9 +125,9 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                 P.chunkX = 1;
                 P.chunkY = 1;
                 
-                Assert(server->entityDefinitionCount > 0);
-                u32 choice = RandomChoice(&server->entropy, server->entityDefinitionCount);
-                EntityDefinition* definition = server->entityDefinitions + choice;
+                
+                AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, 0, &server->entropy, 0);
+                EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
                 
                 EntityID ID = AddEntity(server, P, definition, player);
                 SendGameAccessConfirm(player, server->worldSeed, ID);
@@ -409,7 +411,12 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
         u8* uncompressedContent = (u8*) PushSize(pool, info->size);
         platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
         
-        platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, nameNoExtension, uncompressedContent, SafeTruncateUInt64ToU32(info->size), 0);
+        
+        u32 destFileIndex = 0;
+        AssetFile* destFile = CloseAssetFileFor(server->assets, type, subtype, &destFileIndex);
+        Assert(destFile);
+        ReopenReloadAssetFile(server->assets, destFile, destFileIndex, type, subtype, uncompressedContent, SafeTruncateUInt64ToU32(info->size), pool);
+        
         ReadCompressFile(file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
         
         if(sendToPlayers)
@@ -522,12 +529,9 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             PlatformFileHandle handle = platformAPI.OpenFile(&pakFiles, info);
             GameFile* file = server->files + fileIndex++;
             TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
-            
             u8* uncompressedContent = (u8*) PushSize(&tempPool, info->size);
             platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
-            
 			ReadCompressFile(file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
-            
             platformAPI.CloseFile(&handle);        
             
             EndTemporaryMemory(fileMemory);
@@ -572,8 +576,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         platformAPI.PushWork(server->slowQueue, WatchForFileChanges, hash);
         //BuildWorld(server, GenerateWorld_OnlyChunks);
-        
-        LoadAllEntityDefinitionsFromfile(?);
+        server->assets = InitAssets(server->slowQueue, server->tasks, ArrayCount(server->tasks), &server->gamePool, 0, MegaBytes(16));
     }
     
 	PlatformFileGroup reloadedFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, RELOAD_PATH);

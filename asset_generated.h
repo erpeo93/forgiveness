@@ -1,6 +1,7 @@
 enum AssetType
 {
 AssetType_Invalid,
+AssetType_EntityDefinition,
 AssetType_Font,
 AssetType_Image,
 AssetType_Model,
@@ -15,6 +16,7 @@ AssetType_Count
 char* metaAsset_assetType[] = 
 {
 "Invalid", 
+"EntityDefinition",
 "Font",
 "Image",
 "Model",
@@ -26,6 +28,15 @@ char* metaAsset_assetType[] =
 };
 
 
+enum AssetEntityDefinitionType
+{
+AssetEntityDefinition_default,
+AssetEntityDefinition_Count
+};
+
+char* MetaTable_AssetEntityDefinitionType[] = {
+"default",
+};
 enum AssetFontType
 {
 AssetFont_debug,
@@ -129,6 +140,7 @@ char* MetaTable_Assetworld_generatorType[] = {
 MetaAssetType metaAsset_subTypes[AssetType_Count] = 
 {
 {0, NULL},
+{1, MetaTable_AssetEntityDefinitionType},
 {2, MetaTable_AssetFontType},
 {3, MetaTable_AssetImageType},
 {1, MetaTable_AssetModelType},

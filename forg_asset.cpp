@@ -1,4 +1,6 @@
 #include "forg_meta_asset.cpp"
+
+#ifndef ONLY_DATA_FILES
 // NOTE(Leonardo): all the functions here can be called just by the main thread!
 inline Assets* DEBUGGetGameAssets(PlatformClientMemory* memory)
 {
@@ -6,6 +8,7 @@ inline Assets* DEBUGGetGameAssets(PlatformClientMemory* memory)
     Assets* result = gameState->assets;
     return result;
 }
+#endif
 
 internal AssetFile* GetAssetFile(Assets* assets, u32 fileIndex)
 {
@@ -270,7 +273,6 @@ internal void* AcquireAssetMemory(Assets* assets, u32 size, Asset* destAsset)
     
     return result;
 }
-
 struct LoadAssetWork
 {
     PlatformFileHandle* handle;
@@ -297,6 +299,7 @@ enum FinalizeAssetOperation
     Finalize_Bitmap,
 };
 
+#ifndef ONLY_DATA_FILES
 inline void AddOp(PlatformTextureOpQueue* queue, TextureOp op)
 {
     BeginTicketMutex(&queue->mutex);
@@ -365,6 +368,32 @@ internal void LoadAsset(LoadAssetWork* work)
     CompletePastWritesBeforeFutureWrites;
     *work->threadsReading = *work->threadsReading - 1;
 }
+#else
+
+
+internal void LoadAsset(LoadAssetWork* work)
+{
+    platformAPI.ReadFromFile(work->handle, work->dataOffset, work->memorySize, work->dest);
+    if(PlatformNoFileErrors(work->handle))
+    {
+        switch(work->finalizeOperation)
+        {
+            case Finalize_none:
+            {
+                
+            } break;
+            
+            InvalidDefaultCase;
+        }
+        
+        CompletePastWritesBeforeFutureWrites;
+        work->asset->state = work->finalState;
+    }
+    
+    CompletePastWritesBeforeFutureWrites;
+    *work->threadsReading = *work->threadsReading - 1;
+}
+#endif
 
 PLATFORM_WORK_CALLBACK(LoadAssetThreaded)
 {
@@ -374,6 +403,7 @@ PLATFORM_WORK_CALLBACK(LoadAssetThreaded)
     EndTaskWithMemory(work->task);
 }
 
+#ifndef ONLY_DATA_FILES
 inline u32 AcquireTextureHandle(Assets* assets)
 {
     u32 result = 0;
@@ -461,6 +491,8 @@ inline void RefreshSpecialTexture(Assets* assets, SpecialTexture* texture)
     DLLIST_REMOVE(&texture->LRU);
     DLLIST_INSERT_AS_LAST(&assets->specialLRUSentinel, &texture->LRU);
 }
+
+#endif
 
 internal AssetSubtypeArray* GetAssetSubtype(Assets* assets, u16 type, u16 subtype)
 {
@@ -571,7 +603,7 @@ internal void EndAssetBoilerplate(Assets* assets, AssetBoilerplate boilerplate, 
     }
 }
 
-
+#ifndef ONLY_DATA_FILES
 void LoadBitmap(Assets* assets, AssetID ID, b32 immediate = false)
 {
     AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID, immediate);
@@ -716,6 +748,8 @@ void LoadModel(Assets* assets, AssetID ID)
     }
     
 }
+#endif
+
 
 void LoadDataFile(Assets* assets, AssetID ID, b32 immediate = false)
 {
@@ -787,8 +821,48 @@ internal b32 InitFileAssetHeader(AssetFile* file)
     return result;
 }
 
-internal void ReloadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, MemoryPool* pool)
+internal AssetFile* CloseAssetFileFor(Assets* assets, u16 closeType, u16 closeSubtype, u32* fileIndex)
 {
+    AssetFile* result = 0;
+    for(u32 assetFileIndex = 0; assetFileIndex < assets->fileCount; ++assetFileIndex)
+    {
+        AssetFile* file = GetAssetFile(assets, assetFileIndex);
+        u16 type = GetMetaAssetType(file->header.type);
+        u16 subtype = GetMetaAssetSubtype(type, file->header.subtype);
+        
+        if(closeType == type && closeSubtype == subtype)
+        {
+            platformAPI.CloseFile(&file->handle);
+            result = file;
+            *fileIndex = assetFileIndex;
+            
+            break;
+        }
+    }
+    
+    return result;
+}
+
+internal void ReopenReloadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, u16 typeIn, u16 subtypeIn, u8* content, u32 size, MemoryPool* pool)
+{
+    char* type = GetAssetTypeName(typeIn);
+    char* subtype = GetAssetSubtypeName(typeIn, subtypeIn);
+    char newName[128];
+    FormatString(newName, sizeof(newName), "%s_%s", type, subtype);
+    platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, newName, content, size, 0);
+    
+    char path[64];
+    PlatformFileGroup fake = {};
+    fake.path = path;
+    FormatString(fake.path, sizeof(path), "%s", ASSETS_PATH);
+    
+    char name[64];
+    PlatformFileInfo fakeInfo = {};
+    fakeInfo.name = name;
+    FormatString(fakeInfo.name, sizeof(name), "%s.upak", newName);
+    
+    file->handle = platformAPI.OpenFile(&fake, &fakeInfo);
+    
     if(InitFileAssetHeader(file))
     {
         AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, &file->header);
@@ -799,11 +873,13 @@ internal void ReloadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, Me
             Asset* asset = GetAsset(assetSubtypeArray, assetIndex);
             if(asset->state == Asset_loaded || asset->state == Asset_preloaded || asset->state == Asset_locked)
             {
+#ifndef ONLY_DATA_FILES
 				if(IsValid(&asset->textureHandle))
 				{
                     DLLIST_REMOVE(&asset->LRU);
 					DLLIST_INSERT_AS_LAST(&assets->LRUFreeSentinel, &asset->LRU);
 				}
+#endif
                 FreeAsset(assets, asset);
             }
         }
@@ -886,6 +962,7 @@ internal void WriteAssetMarkupDataToStream(Stream* stream, AssetType type, PAKAs
     }
 }
 
+#ifndef ONLY_DATA_FILES
 internal void DumpColorationToStream(PAKColoration* coloration, Stream* stream)
 {
     OutputToStream(stream, "\"%s\";", coloration->imageName);
@@ -1019,6 +1096,7 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
     platformAPI.ReplaceFile(PlatformFile_markup, path, markupFilename_, metaDataStream.begin, metaDataStream.written, replaceFlags);
     Clear(&tempPool);
 }
+#endif
 
 internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks, u32 taskCount, MemoryPool* pool, PlatformTextureOpQueue* textureQueue, memory_index size)
 {
@@ -1036,8 +1114,9 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
     assets->blockSentinel.size = 0;
     
     InsertBlock(&assets->blockSentinel, size, (AssetMemoryBlock*)PushSize(pool, size, NoClear()));
-    assets->textureQueue = textureQueue;
     
+#ifndef ONLY_DATA_FILES
+    assets->textureQueue = textureQueue;
     assets->whitePixel = 0xFFFFFFFF;
     TextureOp op = {};
     op.update.data = &assets->whitePixel;
@@ -1049,6 +1128,7 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
     
     assets->nextFreeSpecialTextureHandle = MAX_TEXTURE_COUNT;
     assets->maxSpecialTextureHandleIndex = MAX_TEXTURE_COUNT + MAX_SPECIAL_TEXTURE_COUNT - 1;
+#endif
     
     assets->assetSentinel.next = &assets->assetSentinel;
     assets->assetSentinel.prev = &assets->assetSentinel;
@@ -1148,12 +1228,14 @@ inline b32 MatchesProperties(Asset* asset, GameProperties* properties)
     return result;
 }
 
+#ifndef ONLY_DATA_FILES
 #define QueryBitmaps(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Image, subtype, seq, properties, true)
 
 #define QuerySkeletons(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Skeleton, subtype, seq, properties)
 #define QueryFonts(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Font, subtype, seq, properties)
-#define QueryDataFiles(assets, type, sub, seq, properties) QueryAssets_(assets, AssetType_##type, sub, seq, properties)
+#endif
 
+#define QueryDataFiles(assets, type, sub, seq, properties) QueryAssets_(assets, AssetType_##type, sub, seq, properties)
 internal AssetID QueryAssets_(Assets* assets, AssetType type, u32 subtype, RandomSequence* seq, GameProperties* properties, b32 derivedAssets = false, u16 startingIndex = 0, u16 onePastEndingIndex = 0)
 {
     AssetID result = {};
@@ -1206,32 +1288,6 @@ internal AssetID QueryAssets_(Assets* assets, AssetType type, u32 subtype, Rando
 }
 
 
-internal AssetID* GetAllSkinBitmaps(MemoryPool* tempPool, Assets* assets, AssetImageType skin, GameProperties* skinProperties, u32* bitmapCount)
-{
-    AssetID* result = 0;
-    *bitmapCount = 0;
-    
-    AssetArray* array = assets->assets + AssetType_Image;
-    if((u32) skin < array->subtypeCount)
-    {
-        AssetSubtypeArray* skinBitmaps = array->subtypes + skin;
-        
-        u16 totalAssetCount = skinBitmaps->standardAssetCount + skinBitmaps->derivedAssetCount;
-        *bitmapCount = totalAssetCount;
-        
-        result = PushArray(tempPool, AssetID, totalAssetCount);
-        for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
-        {
-            AssetID* dest = result + assetIndex;
-            dest->type = AssetType_Image;
-            dest->subtype = SafeTruncateToU16(skin);
-            dest->index = assetIndex;
-        }
-    }
-    
-    return result;
-}
-
 inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
 {
     MemoryPool tempPool = {};
@@ -1263,6 +1319,7 @@ inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
     Clear(&tempPool);
 }
 
+#ifndef ONLY_DATA_FILES
 internal void PreloadAll(Assets* assets, u16 type, u16 subtype, b32 immediate)
 {
     AssetSubtypeArray* assetArray = GetAssetSubtype(assets, type, subtype);
@@ -1286,10 +1343,37 @@ internal void PreloadAll(Assets* assets, u16 type, u16 subtype, b32 immediate)
     }
 }
 
+internal AssetID* GetAllSkinBitmaps(MemoryPool* tempPool, Assets* assets, AssetImageType skin, GameProperties* skinProperties, u32* bitmapCount)
+{
+    AssetID* result = 0;
+    *bitmapCount = 0;
+    
+    AssetArray* array = assets->assets + AssetType_Image;
+    if((u32) skin < array->subtypeCount)
+    {
+        AssetSubtypeArray* skinBitmaps = array->subtypes + skin;
+        
+        u16 totalAssetCount = skinBitmaps->standardAssetCount + skinBitmaps->derivedAssetCount;
+        *bitmapCount = totalAssetCount;
+        
+        result = PushArray(tempPool, AssetID, totalAssetCount);
+        for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
+        {
+            AssetID* dest = result + assetIndex;
+            dest->type = AssetType_Image;
+            dest->subtype = SafeTruncateToU16(skin);
+            dest->index = assetIndex;
+        }
+    }
+    
+    return result;
+}
+
 inline void PreloadAllGroundBitmaps(Assets* assets)
 {
     PreloadAll(assets, AssetType_Image, AssetImage_default, true);
 }
+#endif
 
 struct GetGameAssetResult
 {
@@ -1318,11 +1402,14 @@ inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID)
         if(asset->state == Asset_loaded || asset->state == Asset_locked)
         {
             result.asset = asset;
+            
+#ifndef ONLY_DATA_FILES
             if(IsValid(&asset->textureHandle))
             {
                 DLLIST_REMOVE(&asset->LRU);
                 DLLIST_INSERT_AS_LAST(&assets->LRUSentinel, &asset->LRU);
             }
+#endif
             
             DLLIST_REMOVE(asset);
             DLLIST_INSERT(&assets->assetSentinel, asset);
@@ -1333,6 +1420,7 @@ inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID)
     return result;
 }
 
+#ifndef ONLY_DATA_FILES
 struct ColoredBitmap
 {
     Bitmap* bitmap;
@@ -1412,6 +1500,7 @@ inline VertexModel* GetModel(Assets* assets, AssetID ID)
     
     return result;
 }
+#endif
 
 #define GetData(assets, type, ID) (type*)GetDataDefinition_(assets, AssetType_##type, ID)
 inline void* GetDataDefinition_(Assets* assets, AssetType type, AssetID ID, b32 immediate = true)
@@ -1442,6 +1531,7 @@ inline PAKAsset* GetPakAsset(Assets* assets, AssetID ID)
     return result;
 }
 
+#ifndef ONLY_DATA_FILES
 inline PAKBitmap* GetBitmapInfo(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
@@ -1490,8 +1580,6 @@ inline PAKModel* GetModelInfo(Assets* assets, AssetID ID)
     PAKModel* result = &asset->model;
     return result;
 }
-
-
 
 inline u32 GetGlyphIndexForCodePoint(Font* font, PAKFont* info, u32 desired)
 {
@@ -1578,3 +1666,4 @@ internal AssetID QueryAnimations(Assets* assets, AssetSkeletonType skeleton, Ran
     
     return result;
 }
+#endif

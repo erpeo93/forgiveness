@@ -504,26 +504,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         {
                             Assert(receiving->receivedSize == receiving->compressedSize);
                             Assets* assets = gameState->assets;
-                            AssetFile* destFile = 0;
                             u32 destFileIndex = 0;
-                            
-                            for(u32 assetFileIndex = 0; assetFileIndex < assets->fileCount; ++assetFileIndex)
-                            {
-                                AssetFile* file = GetAssetFile(assets, assetFileIndex);
-                                u16 type = GetMetaAssetType(file->header.type);
-                                u16 subtype = GetMetaAssetSubtype(type, file->header.subtype);
-                                
-                                if(receiving->type == type && receiving->subtype == subtype)
-                                {
-                                    platformAPI.CloseFile(&file->handle);
-                                    destFile = file;
-                                    destFileIndex = assetFileIndex;
-                                    
-                                    break;
-                                }
-                            }
-                            
-                            
+                            AssetFile* destFile = CloseAssetFileFor(assets, receiving->type, receiving->subtype, &destFileIndex);
                             
                             if(!destFile)
                             {
@@ -532,9 +514,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                                 destFile = GetAssetFile(assets, destFileIndex);
                             }
                             //platformAPI.deletefile(preexisting);
-                            char* type = GetAssetTypeName(receiving->type);
-                            char* subtype = GetAssetSubtypeName(receiving->type, receiving->subtype);
-                            
                             u8* compressed = receiving->content;
                             u32 compressedSize = receiving->compressedSize;
                             
@@ -545,22 +524,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                             Assert(cmp_status == Z_OK);
                             Assert(uncompressedSize == receiving->uncompressedSize);
                             
-                            char newName[128];
-                            FormatString(newName, sizeof(newName), "%s_%s", type, subtype);
-                            platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, newName, uncompressed, uncompressedSize, 0);
-                            
-                            char path[64];
-                            PlatformFileGroup fake = {};
-                            fake.path = path;
-                            FormatString(fake.path, sizeof(path), "%s", ASSETS_PATH);
-                            
-                            char name[64];
-                            PlatformFileInfo fakeInfo = {};
-                            fakeInfo.name = name;
-                            FormatString(fakeInfo.name, sizeof(name), "%s.upak", newName);
-                            
-                            destFile->handle = platformAPI.OpenFile(&fake, &fakeInfo);
-                            ReloadAssetFile(assets, destFile, destFileIndex, &receiving->memory);
+                            ReopenReloadAssetFile(assets, destFile, destFileIndex, receiving->type, receiving->subtype, uncompressed, uncompressedSize, &receiving->memory);
                             
                             DLLIST_REMOVE(receiving);
                             Clear(&receiving->memory);

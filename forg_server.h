@@ -150,9 +150,6 @@ struct ServerState
     
     FileToSend* firstFreeToSendFile;
     
-    u32 entityDefinitionCount;
-    EntityDefinition entityDefinitions[64];
-    
     Assets* assets;
 };
 
