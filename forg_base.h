@@ -165,6 +165,7 @@ union Vec4
 #define MetaAutocomplete(...)
 #define MetaCounter(...)
 #define MetaEnumerator(...)
+#define MetaUneditable(...)
 #define MetaFixed(...)
 #define Archetype(...)
 #include <float.h>

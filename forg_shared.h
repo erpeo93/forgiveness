@@ -701,6 +701,12 @@ inline void AppendString(char* original, u32 size, char* toAppend, u32 toAppendC
     *copyHere = 0;
 }
 
+inline void AppendString(char* original, u32 size, char* toAppend)
+{
+    u32 toAppendCount = StrLen(toAppend);
+    AppendString(original, size, toAppend, toAppendCount);
+}
+
 inline u32 FindFirstInString(char* string, char c)
 {
     u32 result = 0xffffffff;

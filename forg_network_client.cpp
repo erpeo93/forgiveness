@@ -171,6 +171,7 @@ internal void SendEquipDraggingRequest(u32 slotIndex)
 }
 
 
+#if 0
 internal void SendCraftRequest(u32 taxonomy, GenerationData gen)
 {
     StartPacket(CraftRequest);
@@ -179,6 +180,7 @@ internal void SendCraftRequest(u32 taxonomy, GenerationData gen)
     
     CloseAndSendOrderedPacket();
 }
+#endif
 
 internal void SendCraftFromInventoryRequest(u64 containerID, u32 objectIndex)
 {
@@ -435,7 +437,9 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             case Type_entityHeader:
             {
                 EntityID serverID;
-                Unpack("HL", &serverID.archetype, &serverID.archetypeIndex);
+                u32 seed;
+                
+                Unpack("HLL", &serverID.archetype, &serverID.archetypeIndex, &seed);
                 Assert(serverID.archetype < Archetype_Count);
                 
                 EntityID clientID = GetClientIDMapping(worldMode, serverID);
@@ -443,6 +447,16 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 {
                     clientID = {};
                     Acquire(worldMode, serverID.archetype, (&clientID));
+                    
+                    RandomSequence seq = Seed(seed);
+                    Assets* assets = gameState->assets;
+                    AssetID definitionID = QueryDataFiles(assets, EntityDefinition, 0, &seq, 0);
+                    EntityDefinition* definition = GetData(assets, EntityDefinition, definitionID);
+                    
+                    ClientEntityInitParams params = definition->client;
+                    params.ID = serverID;
+                    
+                    InitFunc[serverID.archetype](worldMode, clientID, &params); 
                     AddClientIDMapping(worldMode, serverID, clientID);
                 }
                 currentID = clientID;

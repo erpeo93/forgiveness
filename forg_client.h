@@ -52,6 +52,7 @@ struct BaseComponent
 #include "forg_ecs.h"
 #include "forg_archetypes.h"
 #include "client_generated.h"
+global_variable Initentity* InitFunc[Archetype_Count];
 global_variable ArchetypeLayout archetypeLayouts[Archetype_Count];
 global_variable PlatformAPI platformAPI;
 

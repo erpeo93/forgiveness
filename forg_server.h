@@ -79,6 +79,7 @@ struct PlayerRequest
 struct PhysicComponent
 {
     UniversePos P;
+    u32 seed;
     Vec3 speed;
     Vec3 acc;
 };
@@ -97,17 +98,6 @@ struct PlayerComponent
     u32 runningFileIndex;
     FileToSend* firstLoginFileToSend;
     FileToSend* firstReloadedFileToSend;
-};
-
-struct OptionalComponent
-{
-    u32 placeHolder;
-};
-
-struct ServerAnimationComponent
-{
-    AssetSkeletonType skeleton;
-    AssetImageType skin;
 };
 
 #include "forg_ecs.h"

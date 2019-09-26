@@ -47,6 +47,7 @@ void ParseField(Tokenizer* tokenizer, Token structToken, Token fieldNameToken, u
 {
     bool parsing = true;
     bool isPointer = false;
+    bool uneditable = false;
     bool nameParsed = false;
     Token defaultValue = {};
     bool hasDefault = false;
@@ -122,6 +123,17 @@ void ParseField(Tokenizer* tokenizer, Token structToken, Token fieldNameToken, u
                         InvalidCodePath;
                     }
                 }
+                else if(TokenEquals(token, "MetaUneditable"))
+                {
+                    uneditable = true;
+                    if(RequireToken(tokenizer, Token_OpenParen))
+                    {
+                        if(!RequireToken(tokenizer, Token_CloseParen))
+                        {
+                            InvalidCodePath;
+                        }
+                    }
+                }
                 else if(TokenEquals(token, "MetaFixed"))
                 {
                     Assert(fixedFieldCount == 0);
@@ -148,9 +160,30 @@ void ParseField(Tokenizer* tokenizer, Token structToken, Token fieldNameToken, u
             
             case Token_SemiColon:
             {
+                char flags[128] = {};
+                bool something = false;
+                
+                if(isPointer)
+                {
+                    something = true;
+                    AppendString(flags, sizeof(flags), "MetaFlag_Pointer");
+                }
+                
+                if(uneditable)
+                {
+                    something = true;
+                    AppendString(flags, sizeof(flags), "MetaFlag_Uneditable");
+                }
+                
+                if(!something)
+                {
+                    AppendString(flags, sizeof(flags), "0");
+                }
+                
+                
                 parsing = false;
                 printf("{%s, MetaType_%.*s, \"%.*s\", \"%.*s\", (u32) (&((%.*s*)0)->%.*s), {}, sizeof(%.*s),\"%.*s\"",
-                       isPointer ? "MetaFlag_Pointer" : "0", 
+                       flags, 
                        fieldNameToken.textLength, fieldNameToken.text, 
                        fieldNameToken.textLength, fieldNameToken.text,
                        nameToken.textLength, nameToken.text, 
@@ -634,6 +667,7 @@ int main(int argc, char** argv)
         "forg_inventory.h",
         "forg_ground.h",
         "forg_world_generation.cpp",
+        "forg_world.h",
         "forg_world_generation.h",
         "forg_AI.cpp",
         "forg_AI.h",

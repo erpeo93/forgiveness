@@ -220,11 +220,9 @@ internal void Dump_AssetLabel(Stream* output, FieldDefinition* field, AssetLabel
 internal u32 Parse_u32(Tokenizer* tokenizer, u32 defaultVal)
 {
     u32 result = defaultVal;
-    
     Token t = GetToken(tokenizer);
     Assert(t.type == Token_Number);
     result = StringToUInt32(t.text);
-    
     return result;
 }
 
@@ -237,6 +235,56 @@ internal void Dump_u32(Stream* output, FieldDefinition* field, u32 value, b32 is
     else
     {
         if(value != field->def.def_u32)
+        {
+            OutputToStream(output, "%s=%d;", field->name, value);
+        }
+    }
+}
+
+internal u16 Parse_u16(Tokenizer* tokenizer, u16 defaultVal)
+{
+    u16 result = defaultVal;
+    Token t = GetToken(tokenizer);
+    Assert(t.type == Token_Number);
+    result = (u16) StringToUInt32(t.text);
+    return result;
+}
+
+internal void Dump_u16(Stream* output, FieldDefinition* field, u16 value, b32 isInArray)
+{
+    if(isInArray)
+    {
+        OutputToStream(output, "%d", value);
+    }
+    else
+    {
+        if(value != field->def.def_u16)
+        {
+            OutputToStream(output, "%s=%d;", field->name, value);
+        }
+    }
+}
+
+internal i32 Parse_i32(Tokenizer* tokenizer, i32 defaultVal)
+{
+    i32 result = defaultVal;
+    
+    Token t = GetToken(tokenizer);
+    Assert(t.type == Token_Number);
+    result = StringToInt32(t.text);
+    
+    return result;
+}
+
+internal void Dump_i32(Stream* output, FieldDefinition* field, i32 value, b32 isInArray)
+{
+    if(isInArray)
+    {
+        OutputToStream(output, "%d", value);
+    }
+    else
+    {
+        if(value != field->def.def_i32)
         {
             OutputToStream(output, "%s=%d;", field->name, value);
         }
@@ -579,6 +627,7 @@ enum FieldOperationType
 
 struct EditorLayout;
 internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArray, AssetID assetID);
+internal b32 Edit_i32(EditorLayout* layout, char* name, i32* number, b32 isInArray, AssetID assetID);
 internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArray, AssetID assetID);
 internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID);
 internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray, AssetID assetID);
@@ -634,7 +683,9 @@ internal StructOperationResult type##Operation(EditorLayout* layout, FieldDefini
     return result;\
 }
 
+STANDARD_OPERATION_FUNCTION(u16);
 STANDARD_OPERATION_FUNCTION(u32);
+STANDARD_OPERATION_FUNCTION(i32);
 STANDARD_OPERATION_FUNCTION(r32);
 STANDARD_OPERATION_FUNCTION(GameProperty);
 STANDARD_OPERATION_FUNCTION(Vec2);
@@ -794,7 +845,9 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
 #define DUMB_OPERATION(type) case MetaType_##type:{op = type##Operation(layout, field, operation, fieldPtr, tokenizer, output, pointer, assetID);} break;
         switch(field->type)
         {
+            DUMB_OPERATION(u16);
             DUMB_OPERATION(u32);
+            DUMB_OPERATION(i32);
             DUMB_OPERATION(r32);
             DUMB_OPERATION(Vec2);
             DUMB_OPERATION(Vec3);
@@ -1142,21 +1195,26 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                         
                         if(show && *elementCount)
                         {
-#ifndef FORG_SERVER
-                            if(pointer && operation == FieldOperation_Edit)
+                            if(operation == FieldOperation_Edit && (field->flags & MetaFlag_Uneditable))
                             {
-                                Push(layout);
+                                
                             }
-#endif
-                            
-                            result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, elementCount, assetID);
-#ifndef FORG_SERVER
-                            if(pointer && operation == FieldOperation_Edit)
+                            else
                             {
-                                Pop(layout);
-                            }
+#ifndef FORG_SERVER
+                                if(pointer && operation == FieldOperation_Edit)
+                                {
+                                    Push(layout);
+                                }
 #endif
-                            
+                                result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, elementCount, assetID);
+#ifndef FORG_SERVER
+                                if(pointer && operation == FieldOperation_Edit)
+                                {
+                                    Pop(layout);
+                                }
+#endif
+                            }
                         }
                     }
                 }

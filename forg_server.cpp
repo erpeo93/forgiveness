@@ -12,8 +12,7 @@
 //#include "forg_bound.cpp"
 #include "forg_network_server.cpp"
 #include "forg_world.cpp"
-#include "forg_archetypes_server.cpp"
-#include "forg_world_server.cpp"
+#include "forg_archetypes.cpp"
 
 #define ONLY_DATA_FILES
 #include "forg_asset.cpp"
@@ -21,6 +20,7 @@
 #include "asset_builder.cpp"
 #include "miniz.c"
 
+#include "forg_world_server.cpp"
 #if FORGIVENESS_INTERNAL
 DebugTable* globalDebugTable;
 internal void HandleDebugMessage(PlatformServerMemory* memory, ServerPlayer* player, u32 packetType, unsigned char* packetPtr)
@@ -125,11 +125,8 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                 P.chunkX = 1;
                 P.chunkY = 1;
                 
-                
-                AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, 0, &server->entropy, 0);
-                EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
-                
-                EntityID ID = AddEntity(server, P, definition, player);
+                u32 seed = GetNextUInt32(&server->entropy);
+                EntityID ID = AddEntity(server, P, seed, player);
                 SendGameAccessConfirm(player, server->worldSeed, ID);
             }
             else
@@ -168,9 +165,9 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             UniversePos P = {};
             unpack(packetPtr, "llV", &P.chunkX, &P.chunkY, &P.chunkOffset);
             
-            AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, 0, &server->entropy, 0);
-            EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
-            AddEntity(server, P, definition, 0);
+            u32 seed = GetNextUInt32(&server->entropy);
+            RandomSequence seq = Seed(seed);
+            AddEntity(server, P, seed, 0);
         } break;
         
 #if 0        
@@ -578,9 +575,9 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         MemoryPool* compPool = &server->gamePool;
         for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
         {
-            InitArchetype(server, compPool, archetypeIndex, 0xff);
+            InitArchetype(server, archetypeIndex, 16);
         }
-        InitComponentArray(server, compPool, PlayerComponent, 0xff);
+        InitComponentArray(server, PlayerComponent, 16);
         
         
         platformAPI.PushWork(server->slowQueue, WatchForFileChanges, hash);
@@ -627,7 +624,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     HandlePlayersNetwork(server, elapsedTime);
     EXECUTE_JOB(server, HandlePlayerRequests, ArchetypeHas(PlayerComponent), elapsedTime);
     EXECUTE_JOB(server, MoveAndSendUpdate, ArchetypeHas(PhysicComponent), elapsedTime);
-    EXECUTE_JOB(server, SendAnimationUpdate, ArchetypeHas(ServerAnimationComponent), elapsedTime);
 }
 
 

@@ -10,18 +10,21 @@ internal void UpdateSeasonTimer(ServerState* server, r32 elapsedTime)
     server->seasonLerp = Clamp01MapToRange(0.5f * SEASON_DURATION, server->seasonTime, SEASON_DURATION);
 }
 
-internal EntityID AddEntity(ServerState* server, UniversePos P, EntityDefinition* definition, PlayerComponent* player = 0)
+internal EntityID AddEntity(ServerState* server, UniversePos P, u32 seed,PlayerComponent* player = 0)
 {
     EntityID ID = {};
     
+    RandomSequence seq = Seed(seed);
+    AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, 0, &seq, 0);
+    EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
+    
+    ServerEntityInitParams params = definition->server;
+    params.P = P;
+    params.seed = seed;
+    
     u16 archetype = SafeTruncateToU16(ConvertEnumerator(EntityArchetype, definition->archetype));
     Acquire(server, archetype, (&ID));
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    physic->P = P;
-    physic->speed = {};
-    physic->acc = {};
-    
-    InitFunc[ID.archetype](server, ID, &definition->params); 
+    InitFunc[ID.archetype](server, ID, &params); 
     if(HasComponent(Archetype_FirstEntityArchetype, PlayerComponent))
     {
         SetComponent(server, ID, PlayerComponent, player);
@@ -103,7 +106,7 @@ internal void SendBasicUpdate(ServerState* server, EntityID ID, PhysicComponent*
                 PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
                 if(player)
                 {
-                    SendEntityHeader(player, ID);
+                    SendEntityHeader(player, ID, physic->seed);
                     u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, ID);
                     Assert(writeHere);
                     if(writeHere)
@@ -123,25 +126,4 @@ internal void MoveAndSendUpdate(ServerState* server, EntityID ID, r32 elapsedTim
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     MoveEntity(server, physic, elapsedTime);
     SendBasicUpdate(server, ID, physic);
-}
-
-internal void SendAnimationUpdate(ServerState* server, EntityID ID, r32 elapsedTime)
-{
-    ServerAnimationComponent* animation = GetComponent(server, ID, ServerAnimationComponent);
-    for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
-    {
-        if(HasComponent(archetypeIndex, PlayerComponent))
-        {
-            for(ArchIterator iter = First(server, archetypeIndex); 
-                IsValid(iter); 
-                iter = Next(iter))
-            {
-                PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
-                if(player)
-                {
-                    SendAnimationComponent(player, ID, animation);
-                }
-            }
-        }
-    }
 }

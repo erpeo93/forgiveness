@@ -5,12 +5,7 @@
 #define WORLD_CHUNK_SPAN 64
 #define CHUNK_SIDE CHUNK_DIM * VOXEL_SIZE
 
-struct GenerationData
-{
-    u64 generic;
-};
-
-struct UniversePos
+introspection() struct UniversePos
 {
     i32 chunkX;
     i32 chunkY;

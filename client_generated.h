@@ -98,6 +98,13 @@ FieldDefinition fieldDefinitionOfWaterParams[] =
 {MetaFlag_Pointer, MetaType_WaterPhase, "WaterPhase", "phases", (u32) (&((WaterParams*)0)->phases), {}, sizeof(WaterPhase),"invalid",0, 0, 0}, 
 };
 
+FieldDefinition fieldDefinitionOfUniversePos[] = 
+ {
+{0, MetaType_i32, "i32", "chunkX", (u32) (&((UniversePos*)0)->chunkX), {}, sizeof(i32),"invalid",0, 0, 0}, 
+{0, MetaType_i32, "i32", "chunkY", (u32) (&((UniversePos*)0)->chunkY), {}, sizeof(i32),"invalid",0, 0, 0}, 
+{0, MetaType_Vec3, "Vec3", "chunkOffset", (u32) (&((UniversePos*)0)->chunkOffset), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
+};
+
 FieldDefinition fieldDefinitionOfNoiseParams[] = 
  {
 {0, MetaType_r32, "r32", "frequency", (u32) (&((NoiseParams*)0)->frequency), {}, sizeof(r32),"invalid",0, 0, 0}, 
@@ -221,16 +228,30 @@ FieldDefinition fieldDefinitionOfground_generator[] =
 {MetaFlag_Pointer, MetaType_TileMapping, "TileMapping", "tiles", (u32) (&((ground_generator*)0)->tiles), {}, sizeof(TileMapping),"invalid",0, 0, 0}, 
 };
 
-FieldDefinition fieldDefinitionOfEntityInitParams[] = 
+FieldDefinition fieldDefinitionOfEntityID[] = 
  {
-{0, MetaType_Enumerator, "Enumerator", "skeleton", (u32) (&((EntityInitParams*)0)->skeleton), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_AssetSkeletonType, ArrayCount(MetaTable_AssetSkeletonType)}, 
-{0, MetaType_Enumerator, "Enumerator", "skin", (u32) (&((EntityInitParams*)0)->skin), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_AssetImageType, ArrayCount(MetaTable_AssetImageType)}, 
+{0, MetaType_u16, "u16", "archetype", (u32) (&((EntityID*)0)->archetype), {}, sizeof(u16),"invalid",0, 0, 0}, 
+{0, MetaType_u32, "u32", "archetypeIndex", (u32) (&((EntityID*)0)->archetypeIndex), {}, sizeof(u32),"invalid",0, 0, 0}, 
+};
+
+FieldDefinition fieldDefinitionOfServerEntityInitParams[] = 
+ {
+{MetaFlag_Uneditable, MetaType_UniversePos, "UniversePos", "P", (u32) (&((ServerEntityInitParams*)0)->P), {}, sizeof(UniversePos),"invalid",0, 0, 0}, 
+{MetaFlag_Uneditable, MetaType_u32, "u32", "seed", (u32) (&((ServerEntityInitParams*)0)->seed), {}, sizeof(u32),"invalid",0, 0, 0}, 
+};
+
+FieldDefinition fieldDefinitionOfClientEntityInitParams[] = 
+ {
+{MetaFlag_Uneditable, MetaType_EntityID, "EntityID", "ID", (u32) (&((ClientEntityInitParams*)0)->ID), {}, sizeof(EntityID),"invalid",0, 0, 0}, 
+{0, MetaType_Enumerator, "Enumerator", "skeleton", (u32) (&((ClientEntityInitParams*)0)->skeleton), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_AssetSkeletonType, ArrayCount(MetaTable_AssetSkeletonType)}, 
+{0, MetaType_Enumerator, "Enumerator", "skin", (u32) (&((ClientEntityInitParams*)0)->skin), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_AssetImageType, ArrayCount(MetaTable_AssetImageType)}, 
 };
 
 FieldDefinition fieldDefinitionOfEntityDefinition[] = 
  {
 {0, MetaType_Enumerator, "Enumerator", "archetype", (u32) (&((EntityDefinition*)0)->archetype), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_EntityArchetype, ArrayCount(MetaTable_EntityArchetype)}, 
-{0, MetaType_EntityInitParams, "EntityInitParams", "params", (u32) (&((EntityDefinition*)0)->params), {}, sizeof(EntityInitParams),"invalid",0, 0, 0}, 
+{0, MetaType_ServerEntityInitParams, "ServerEntityInitParams", "server", (u32) (&((EntityDefinition*)0)->server), {}, sizeof(ServerEntityInitParams),"invalid",0, 0, 0}, 
+{0, MetaType_ClientEntityInitParams, "ClientEntityInitParams", "client", (u32) (&((EntityDefinition*)0)->client), {}, sizeof(ClientEntityInitParams),"invalid",0, 0, 0}, 
 };
 
 char* MetaProperties_Test[] = 
@@ -255,7 +276,9 @@ char* MetaProperties_tileType[] =
 
 #define META_HANDLE_ADD_TO_DEFINITION_HASH()\
 AddToMetaDefinitions(EntityDefinition, fieldDefinitionOfEntityDefinition);\
-AddToMetaDefinitions(EntityInitParams, fieldDefinitionOfEntityInitParams);\
+AddToMetaDefinitions(ClientEntityInitParams, fieldDefinitionOfClientEntityInitParams);\
+AddToMetaDefinitions(ServerEntityInitParams, fieldDefinitionOfServerEntityInitParams);\
+AddToMetaDefinitions(EntityID, fieldDefinitionOfEntityID);\
 AddToMetaDefinitions(ground_generator, fieldDefinitionOfground_generator);\
 AddToMetaDefinitions(TileMapping, fieldDefinitionOfTileMapping);\
 AddToMetaDefinitions(tile_definition, fieldDefinitionOftile_definition);\
@@ -269,6 +292,7 @@ AddToMetaDefinitions(NoiseSelector, fieldDefinitionOfNoiseSelector);\
 AddToMetaDefinitions(PropertyBucket, fieldDefinitionOfPropertyBucket);\
 AddToMetaDefinitions(NoiseBucket, fieldDefinitionOfNoiseBucket);\
 AddToMetaDefinitions(NoiseParams, fieldDefinitionOfNoiseParams);\
+AddToMetaDefinitions(UniversePos, fieldDefinitionOfUniversePos);\
 AddToMetaDefinitions(WaterParams, fieldDefinitionOfWaterParams);\
 AddToMetaDefinitions(WaterPhase, fieldDefinitionOfWaterPhase);
 
@@ -297,7 +321,7 @@ fieldDefinitionOfWaterPhase[0].def.def_r32 =0;fieldDefinitionOfWaterPhase[6].def
 archetypeLayouts[Archetype_FirstEntityArchetype].totalSize = sizeof(FirstEntityArchetype); archetypeLayouts[Archetype_SecondEntityArchetype].totalSize = sizeof(SecondEntityArchetype); 
 ;
 #define META_ARCHETYPES_SERVER()\
-archetypeLayouts[Archetype_FirstEntityArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasPhysicComponent.offset = OffsetOf(FirstEntityArchetype, physic);  archetypeLayouts[Archetype_FirstEntityArchetype].hasServerAnimationComponent.exists = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasServerAnimationComponent.offset = OffsetOf(FirstEntityArchetype, animation);  archetypeLayouts[Archetype_FirstEntityArchetype].hasPlayerComponent.exists = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasPlayerComponent.pointer = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasPlayerComponent.offset = OffsetOf(FirstEntityArchetype, player);  archetypeLayouts[Archetype_SecondEntityArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasPhysicComponent.offset = OffsetOf(SecondEntityArchetype, physic);  archetypeLayouts[Archetype_SecondEntityArchetype].hasServerAnimationComponent.exists = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasServerAnimationComponent.offset = OffsetOf(SecondEntityArchetype, animation);  archetypeLayouts[Archetype_SecondEntityArchetype].hasOptionalComponent.exists = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasOptionalComponent.offset = OffsetOf(SecondEntityArchetype, optional);  archetypeLayouts[Archetype_SecondEntityArchetype].hasPlayerComponent.exists = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasPlayerComponent.pointer = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasPlayerComponent.offset = OffsetOf(SecondEntityArchetype, player);  
+archetypeLayouts[Archetype_FirstEntityArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasPhysicComponent.offset = OffsetOf(FirstEntityArchetype, physic);  archetypeLayouts[Archetype_FirstEntityArchetype].hasPlayerComponent.exists = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasPlayerComponent.pointer = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasPlayerComponent.offset = OffsetOf(FirstEntityArchetype, player);  archetypeLayouts[Archetype_SecondEntityArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasPhysicComponent.offset = OffsetOf(SecondEntityArchetype, physic);  archetypeLayouts[Archetype_SecondEntityArchetype].hasPlayerComponent.exists = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasPlayerComponent.pointer = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasPlayerComponent.offset = OffsetOf(SecondEntityArchetype, player);  
 ;
 #define META_ARCHETYPES_CLIENT()\
 archetypeLayouts[Archetype_FirstEntityArchetype].hasBaseComponent.exists = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasBaseComponent.offset = OffsetOf(FirstEntityArchetype, base);  archetypeLayouts[Archetype_FirstEntityArchetype].hasAnimationComponent.exists = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasAnimationComponent.offset = OffsetOf(FirstEntityArchetype, animation);  archetypeLayouts[Archetype_SecondEntityArchetype].hasBaseComponent.exists = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasBaseComponent.offset = OffsetOf(SecondEntityArchetype, base);  archetypeLayouts[Archetype_SecondEntityArchetype].hasAnimationComponent.exists = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasAnimationComponent.offset = OffsetOf(SecondEntityArchetype, animation);  

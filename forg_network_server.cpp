@@ -201,25 +201,18 @@ internal void SendDeleteMessage(SimRegion* region, SimEntity* entity)
 }
 #endif
 
-inline void SendEntityHeader(PlayerComponent* player, EntityID ID)
+inline void SendEntityHeader(PlayerComponent* player, EntityID ID, u32 seed)
 {
     StartPacket(player, entityHeader);
-    Pack("HL", ID.archetype, ID.archetypeIndex);
+    Pack("HLL", ID.archetype, ID.archetypeIndex, seed);
     CloseAndStoreStandardPacket(player);
 }
 
-inline void SendEntityHeaderReliably(PlayerComponent* player, EntityID ID)
+inline void SendEntityHeaderReliably(PlayerComponent* player, EntityID ID, u32 seed)
 {
     StartPacket(player, entityHeader);
-    Pack("HL", ID.archetype, ID.archetypeIndex);
+    Pack("HLL", ID.archetype, ID.archetypeIndex, seed);
     CloseAndStoreOrderedPacket(player);
-}
-
-internal void SendAnimationComponent(PlayerComponent* player, EntityID ID, ServerAnimationComponent* component)
-{
-    StartPacket(player, animationComponent);
-    Pack("HH", SafeTruncateToU16(component->skeleton), SafeTruncateToU16(component->skin));
-    CloseAndStoreStandardPacket(player, ID);
 }
 
 #if 0

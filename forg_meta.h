@@ -39,13 +39,17 @@ enum MetaType
     MetaType_PropertySelector,
     MetaType_BiomePyramid,
     MetaType_WaterPhase,
-    MetaType_EntityInitParams,
+    MetaType_ServerEntityInitParams,
+    MetaType_ClientEntityInitParams,
+    MetaType_UniversePos,
+    MetaType_EntityID,
 };
 
 enum FieldMetaFlags
 {
     MetaFlag_Pointer = (1 << 0),
     MetaFlag_Hashed = (1 << 1),
+    MetaFlag_Uneditable = (1 << 2),
 };
 
 union DefaultFieldValue

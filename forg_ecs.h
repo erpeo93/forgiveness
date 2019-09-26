@@ -26,18 +26,17 @@ struct ArchetypeLayout
 
 #define SetComponent(state, ID, component, value) if(HasComponent(ID.archetype, component)){*(u64*) GetComponentPtr(state, ID, component) = (u64) value;}else{InvalidCodePath;}
 
-#define InitArchetype(state, pool, arch, maxCount) state->archetypes[arch] = InitResizableArray_(pool, archetypeLayouts[arch].totalSize, maxCount)
-#define InitComponentArray(state, pool, component, maxCount) state->component##_ = InitResizableArray_(pool, sizeof(component), maxCount)
+#define InitArchetype(state, arch, maxCount) state->archetypes[arch] = InitResizableArray_(archetypeLayouts[arch].totalSize, maxCount)
+#define InitComponentArray(state, component, maxCount) state->component##_ = InitResizableArray_(sizeof(component), maxCount)
 #define First(state, arch) First_(&state->archetypes[arch], arch)
 #define FirstComponent(state, component) FirstComponent_(&state->component##_)
 #define GetComponentRaw(state, iter, component) (component*) Get_(&state->component##_, iter.index)
 #define AcquireComponent(state, component, idAddress) (component*) Acquire_(&state->component##_, idAddress)
 
 #define Acquire(state, arch, idAddress) idAddress->archetype = arch; Acquire_(&state->archetypes[arch], &(idAddress)->archetypeIndex)
-#define GetOrAcquire(state, ID) GetOrAcquire_(&state->archetypes[ID.archetype], ID.archetypeIndex) 
 
 
-struct EntityID
+introspection() struct EntityID
 {
     u16 archetype;
     u32 archetypeIndex;

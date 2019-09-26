@@ -9,7 +9,6 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_world.cpp"
 //#include "forg_world_client.cpp"
 #include "forg_asset.cpp"
-#include "forg_meta.cpp"
 #include "forg_world_generation.cpp"
 #include "forg_render.cpp"
 #include "forg_sound.cpp"
@@ -30,7 +29,8 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_ground.cpp"
 #include "forg_UIcommon.cpp"
 #include "forg_animation.cpp"
-
+#include "forg_archetypes.cpp"
+#include "forg_meta.cpp"
 internal void PlayGame(GameState* gameState, PlatformInput* input)
 {
     SetGameMode(gameState, GameMode_Playing);
@@ -109,7 +109,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     
     for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
     {
-        InitArchetype(result, result->persistentPool, archetypeIndex, 0xff);
+        InitArchetype(result, archetypeIndex, 16);
     }
 }
 

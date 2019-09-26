@@ -626,6 +626,78 @@ internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArr
     return result;
 }
 
+
+internal b32 Edit_i32(EditorLayout* layout, char* name, i32* number, b32 isInArray, AssetID assetID)
+{
+    b32 result = false;
+    
+    AUID ID = auID(number);
+    AUIDData* data = GetAUIDData(layout->context, ID);
+    
+    Vec4 color = StandardNumberColor();
+    
+    if(PointInRect(data->dim, layout->mouseP))
+    {
+        color = HotNumberColor();
+        SetNextHotAUID(layout->context, ID);
+    }
+    
+	if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
+    {
+		data->speed = 0;
+		data->increasing = true;
+        Copy(sizeof(i32), data->before, number);
+        SetInteractiveAUID(layout->context, ID);
+        *number = ++*number;
+    }
+    
+	if(HotAUIDAndPressed(layout->context, ID, mouseRight))
+    {
+		data->speed = 0;
+		data->increasing = false;
+        
+        Copy(sizeof(i32), data->before, number);
+        SetInteractiveAUID(layout->context, ID);
+        *number = --*number;
+    }
+    
+    
+    if(IsInteractiveAUID(layout->context, ID))
+    {
+        r32 real = (r32) *number + data->speed;
+		*number = RoundReal32ToI32(real);
+        
+		if(data->increasing)
+		{
+			data->speed += 0.02f;
+			if(UIReleased(layout->context, mouseLeft))
+			{
+                AddUndoRedoCopy(layout->context, sizeof(i32), data->before, number, sizeof(i32), number, assetID);
+				EndInteraction(layout->context);
+                result = true;
+			}
+		}
+        else
+        {
+            data->speed -= 0.02f;
+			if(UIReleased(layout->context, mouseRight))
+			{
+                AddUndoRedoCopy(layout->context, sizeof(i32), data->before, number, sizeof(i32), number, assetID);
+				EndInteraction(layout->context);
+                result = true;
+			}
+        }
+    }
+    
+    
+    ShowName(layout, name);
+    Rect2 elementRect = ShowStandard(layout, color, "%d", *number);
+    data->dim = elementRect;
+    
+    
+    return result;
+}
+
 internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArray, AssetID assetID)
 {
     b32 result = false;

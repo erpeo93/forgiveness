@@ -60,7 +60,6 @@ struct BookElement
     u32 taxonomy;
     union
     {
-        GenerationData gen;
         struct
         {
             u32 skillLevel;

@@ -1805,6 +1805,7 @@ internal b32 RelevantFile(PlatformFileInfo* file, PlatformFileGroup* group)
     }
     else
     {
+        b32 foundStandardFile = false;
         for(PlatformFileInfo* test = group->firstFileInfo; test; test = test->next)
         {
             if(!EditorFile(test))
@@ -1815,6 +1816,7 @@ internal b32 RelevantFile(PlatformFileInfo* file, PlatformFileGroup* group)
                 
                 if(StrEqual(testName, name))
                 {
+                    foundStandardFile = true;
                     if(TimestampIsMoreRecent(test->timestamp, file->timestamp))
                     {
                         result = false;
@@ -1822,6 +1824,11 @@ internal b32 RelevantFile(PlatformFileInfo* file, PlatformFileGroup* group)
                     break;
                 }
             }
+        }
+        
+        if(!foundStandardFile)
+        {
+            result = false;
         }
     }
 	
@@ -2372,15 +2379,15 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             u32 currentFileCount = fileGroup.fileCount;
             u32 currentMarkupFileCount = fileGroup.fileCount;
             
-            b32 deletedFiles = false;
-            if(currentFileCount < countHash->fileCount || currentMarkupFileCount < countHash->markupCount)
+            b32 numberOfFilesChanged = false;
+            if(currentFileCount != countHash->fileCount || currentMarkupFileCount != countHash->markupCount)
             {
-                deletedFiles = true;
+                numberOfFilesChanged = true;
             }
             
-            if(updatedStandardFiles || updatedTestFiles || deletedFiles)
+            if(updatedStandardFiles || updatedTestFiles || numberOfFilesChanged)
             {
-                char* path = (updatedStandardFiles || deletedFiles) ? destSendPath : destPath;
+                char* path = (updatedStandardFiles || numberOfFilesChanged) ? destSendPath : destPath;
                 WritePak(hash, sourcePath, subdirName, subsubDirName, path, false);
             }
         }
