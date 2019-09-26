@@ -21,7 +21,10 @@ typedef i32 b32;
 
 typedef u64 Hash64;
 typedef u16 ArrayCounter;
-typedef u32 Enumerator;
+struct Enumerator
+{
+    char value[32];
+};
 
 typedef size_t memory_index;
 typedef uintptr_t unm;

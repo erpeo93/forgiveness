@@ -313,6 +313,39 @@ inline SavedNameSlot* GetNameSlot( DebugTable* debugTable, u64 pointer )
 }
 #endif
 
+internal u32 ServerClientIDMappingHashIndex(GameModeWorld* worldMode, EntityID ID)
+{
+    u32 result = 0;
+    return result;
+}
+
+internal EntityID GetClientIDMapping(GameModeWorld* worldMode, EntityID serverID)
+{
+    EntityID result = {};
+    u32 hashIndex = ServerClientIDMappingHashIndex(worldMode, serverID);
+    for(ServerClientIDMapping* mapping = worldMode->mappings[hashIndex]; mapping; mapping = mapping->next)
+    {
+        if(AreEqual(mapping->serverID, serverID))
+        {
+            result = mapping->clientID;
+            break;
+        }
+    }
+    
+    return result;
+}
+
+internal void AddClientIDMapping(GameModeWorld* worldMode, EntityID serverID, EntityID clientID)
+{
+    ServerClientIDMapping* mapping;
+    FREELIST_ALLOC(mapping, worldMode->firstFreeMapping, PushStruct(worldMode->persistentPool, ServerClientIDMapping));
+    mapping->serverID = serverID;
+    mapping->clientID = clientID;
+    
+    u32 hashIndex = ServerClientIDMappingHashIndex(worldMode, serverID);
+    FREELIST_INSERT(mapping, worldMode->mappings[hashIndex]);
+}
+
 internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
     ClientPlayer* player = &worldMode->player;
@@ -401,12 +434,18 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             
             case Type_entityHeader:
             {
-                EntityID ID;
-                Unpack("HL", &ID.archetype, &ID.archetypeIndex);
+                EntityID serverID;
+                Unpack("HL", &serverID.archetype, &serverID.archetypeIndex);
+                Assert(serverID.archetype < Archetype_Count);
                 
-                Assert(ID.archetype < Archetype_Count);
-                GetOrAcquire(worldMode, ID);
-                currentID = ID;
+                EntityID clientID = GetClientIDMapping(worldMode, serverID);
+                if(!IsValid(clientID))
+                {
+                    clientID = {};
+                    Acquire(worldMode, serverID.archetype, (&clientID));
+                    AddClientIDMapping(worldMode, serverID, clientID);
+                }
+                currentID = clientID;
             } break;
             
             case Type_entityBasics:

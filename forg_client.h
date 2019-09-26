@@ -114,6 +114,18 @@ struct ClientPlayer
     ReceivingAssetFile receiveFileSentinel;
 };
 
+struct ServerClientIDMapping
+{
+    EntityID serverID;
+    EntityID clientID;
+    
+    union
+    {
+        ServerClientIDMapping* next;
+        ServerClientIDMapping* nextFree;
+    };
+};
+
 struct GameModeWorld
 {
     struct GameState* gameState;
@@ -135,6 +147,8 @@ struct GameModeWorld
     MemoryPool* temporaryPool;
     
     WorldChunk* chunks[1024];
+    ServerClientIDMapping* mappings[1024];
+    ServerClientIDMapping* firstFreeMapping;
     
     ResizableArray archetypes[Archetype_Count];
     

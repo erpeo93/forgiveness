@@ -27,8 +27,8 @@ internal void AddUndoRedoCopy(EditorUIContext* context, u32 sizeBefore, void* be
     
     record->type = UndoRedo_Copy;
     
-    Assert(sizeBefore < sizeof(record->copy.before));
-    Assert(sizeAfter < sizeof(record->copy.after));
+    Assert(sizeBefore <= sizeof(record->copy.before));
+    Assert(sizeAfter <= sizeof(record->copy.after));
     
     record->copy.sizeBefore = sizeBefore;
     record->copy.sizeAfter = sizeAfter;
@@ -866,7 +866,7 @@ internal Enumerator GetValueFromOptions(StringArray options, char* value)
     {
         if(StrEqual(options.strings[stringIndex], value))
         {
-            result = stringIndex;
+            FormatString(result.value, sizeof(result.value), "%s", options.strings[stringIndex]);
             break;
         }
     }
@@ -879,7 +879,9 @@ internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enume
 {
     b32 result = false;
     
-    char* currentValue = GetStringFromOptions(options, *enumerator);
+    char* defaultVal = "null";
+    char* currentValue = enumerator->value[0] ? enumerator->value : defaultVal;
+    
     char output[64];
     if(EditString(layout, name, currentValue, auID(enumerator), options, output, sizeof(output), assetID))
     {

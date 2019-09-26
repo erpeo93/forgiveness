@@ -111,3 +111,21 @@ inline b32 AreEqual(EntityID i1, EntityID i2)
     b32 result = (i1.archetype == i2.archetype && i1.archetypeIndex == i2.archetypeIndex);
     return result;
 }
+
+
+#define STANDARD_ECS_JOB_SERVER(name) internal void name(ServerState* server, EntityID ID, r32 elapsedTime)
+
+#define ArchetypeHas(component) HasComponent(archetypeIndex, component)
+#define EXECUTE_JOB(server, job, query, elapsedTime)\
+for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)\
+{\
+    if(query)\
+    {\
+        for(ArchIterator iter = First(server, archetypeIndex); \
+        IsValid(iter); \
+        iter = Next(iter))\
+        {\
+            job(server, iter.ID, elapsedTime);\
+        }\
+    }\
+}

@@ -251,7 +251,6 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
 internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
 {
     MemoryPool scratchPool = {};
-    
     for(CompIterator iter = FirstComponent(server, PlayerComponent); 
         IsValid(iter); iter = Next(iter))
     {
@@ -626,9 +625,9 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     
     
     HandlePlayersNetwork(server, elapsedTime);
-    HandlePlayersRequest(server);
-    MoveEntitiesAndSendPhysicUpdates(server, elapsedTime);
-    SendAnimationUpdates(server, elapsedTime);
+    EXECUTE_JOB(server, HandlePlayerRequests, ArchetypeHas(PlayerComponent), elapsedTime);
+    EXECUTE_JOB(server, MoveAndSendUpdate, ArchetypeHas(PhysicComponent), elapsedTime);
+    EXECUTE_JOB(server, SendAnimationUpdate, ArchetypeHas(ServerAnimationComponent), elapsedTime);
 }
 
 

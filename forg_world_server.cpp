@@ -13,7 +13,9 @@ internal void UpdateSeasonTimer(ServerState* server, r32 elapsedTime)
 internal EntityID AddEntity(ServerState* server, UniversePos P, EntityDefinition* definition, PlayerComponent* player = 0)
 {
     EntityID ID = {};
-    Acquire(server, SafeTruncateToU16(definition->archetype), (&ID));
+    
+    u16 archetype = SafeTruncateToU16(ConvertEnumerator(EntityArchetype, definition->archetype));
+    Acquire(server, archetype, (&ID));
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     physic->P = P;
     physic->speed = {};
@@ -28,10 +30,40 @@ internal EntityID AddEntity(ServerState* server, UniversePos P, EntityDefinition
     return ID;
 }
 
+STANDARD_ECS_JOB_SERVER(HandlePlayerRequests)
+{
+    PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
+    if(player)
+    {
+        for(u32 requestIndex = 0; requestIndex < player->requestCount; ++requestIndex)
+        {
+            PlayerRequest* request = player->requests + requestIndex;
+            unsigned char* data = request->data;
+            ForgNetworkHeader header;
+            data = ForgUnpackHeader(data, &header);
+            switch(header.packetType)
+            {
+                case Type_ActionRequest:
+                {
+                    Vec3 acc;
+                    unpack(data, "V", &acc);
+                    
+                    if(HasComponent(ID.archetype, PhysicComponent))
+                    {
+                        PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+                        physic->acc = acc;
+                    }
+                } break;
+                
+                InvalidDefaultCase;
+            }
+        }
+        player->requestCount = 0;
+    }
+}
+
 internal void MoveEntity(ServerState* server, PhysicComponent* physic, r32 elapsedTime)
 {
-    
-    
     UniversePos oldP = physic->P;
     
     r32 accelerationCoeff = 27.0f;
@@ -52,26 +84,6 @@ internal void MoveEntity(ServerState* server, PhysicComponent* physic, r32 elaps
     if(!PositionInsideWorld(&physic->P))
     {
         physic->P = oldP;
-    }
-}
-
-internal void SendAnimationUpdate(ServerState* server, EntityID ID, ServerAnimationComponent* animation)
-{
-    for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
-    {
-        if(HasComponent(archetypeIndex, PlayerComponent))
-        {
-            for(ArchIterator iter = First(server, archetypeIndex); 
-                IsValid(iter); 
-                iter = Next(iter))
-            {
-                PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
-                if(player)
-                {
-                    SendAnimationComponent(player, ID, animation);
-                }
-            }
-        }
     }
 }
 
@@ -105,8 +117,17 @@ internal void SendBasicUpdate(ServerState* server, EntityID ID, PhysicComponent*
 }
 
 
-internal void HandlePlayersRequest(ServerState* server)
+
+internal void MoveAndSendUpdate(ServerState* server, EntityID ID, r32 elapsedTime)
 {
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    MoveEntity(server, physic, elapsedTime);
+    SendBasicUpdate(server, ID, physic);
+}
+
+internal void SendAnimationUpdate(ServerState* server, EntityID ID, r32 elapsedTime)
+{
+    ServerAnimationComponent* animation = GetComponent(server, ID, ServerAnimationComponent);
     for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
     {
         if(HasComponent(archetypeIndex, PlayerComponent))
@@ -118,66 +139,8 @@ internal void HandlePlayersRequest(ServerState* server)
                 PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
                 if(player)
                 {
-                    for(u32 requestIndex = 0; requestIndex < player->requestCount; ++requestIndex)
-                    {
-                        PlayerRequest* request = player->requests + requestIndex;
-                        unsigned char* data = request->data;
-                        ForgNetworkHeader header;
-                        data = ForgUnpackHeader(data, &header);
-                        switch(header.packetType)
-                        {
-                            case Type_ActionRequest:
-                            {
-                                Vec3 acc;
-                                unpack(data, "V", &acc);
-                                
-                                if(HasComponent(archetypeIndex, PhysicComponent))
-                                {
-                                    PhysicComponent* physic = GetComponent(server, iter.ID, PhysicComponent);
-                                    physic->acc = acc;
-                                }
-                            } break;
-                            
-                            InvalidDefaultCase;
-                        }
-                    }
-                    player->requestCount = 0;
+                    SendAnimationComponent(player, ID, animation);
                 }
-            }
-        }
-    }
-}
-
-internal void MoveEntitiesAndSendPhysicUpdates(ServerState* server, r32 elapsedTime)
-{
-    for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
-    {
-        if(HasComponent(archetypeIndex, PhysicComponent))
-        {
-            for(ArchIterator iter = First(server, archetypeIndex); 
-                IsValid(iter); 
-                iter = Next(iter))
-            {
-                PhysicComponent* physic = GetComponent(server, iter.ID, PhysicComponent);
-                MoveEntity(server, physic, elapsedTime);
-                SendBasicUpdate(server, iter.ID, physic);
-            }
-        }
-    }
-}
-
-internal void SendAnimationUpdates(ServerState* server, r32 elapsedTime)
-{
-    for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
-    {
-        if(HasComponent(archetypeIndex, ServerAnimationComponent))
-        {
-            for(ArchIterator iter = First(server, archetypeIndex); 
-                IsValid(iter); 
-                iter = Next(iter))
-            {
-                ServerAnimationComponent* animation = GetComponent(server, iter.ID, ServerAnimationComponent);
-                SendAnimationUpdate(server, iter.ID, animation);
             }
         }
     }

@@ -243,15 +243,33 @@ internal void Dump_u32(Stream* output, FieldDefinition* field, u32 value, b32 is
     }
 }
 
-internal u32 Parse_Enumerator(Tokenizer* tokenizer, Enumerator defaultVal)
+internal Enumerator Parse_Enumerator(Tokenizer* tokenizer, Enumerator defaultVal)
 {
-    u32 result = Parse_u32(tokenizer, defaultVal);
+    Enumerator result = defaultVal;
+    Token t = GetToken(tokenizer);
+    if(t.type == Token_String)
+    {
+        t = Stringize(t);
+        Assert(t.textLength <= sizeof(result.value));
+        FormatString(result.value, sizeof(result.value), "%.*s", t.textLength, t.text);
+    }
+    
     return result;
 }
 
 internal void Dump_Enumerator(Stream* output, FieldDefinition* field, Enumerator value, b32 isInArray)
 {
-    Dump_u32(output, field, value, isInArray);
+    if(isInArray)
+    {
+        InvalidCodePath;
+    }
+    else
+    {
+        if(value.value[0])
+        {
+            OutputToStream(output, "%s=\"%s\";", field->name, value.value);
+        }
+    }
 }
 
 

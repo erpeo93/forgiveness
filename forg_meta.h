@@ -54,7 +54,7 @@ union DefaultFieldValue
     i8 def_i8;
     u16 def_u16;
     u16 def_ArrayCounter;
-    u32 def_Enumerator;
+    Enumerator def_Enumerator;
     i16 def_i16;
     u32 def_u32;
     i32 def_i32;
@@ -133,3 +133,43 @@ FieldDefinition fieldDefinitionOfVec4[] =
     {0, MetaType_r32, "r32", "b", (u32) (&((Vec4*)0)->z)}, 
     {0, MetaType_r32, "r32", "a", (u32) (&((Vec4*)0)->w)}, 
 };
+
+#define ConvertEnumerator(enum, v) (enum) GetValuePreprocessor_(MetaTable_##enum, ArrayCount(MetaTable_##enum), v.value)
+
+#define GetValuePreprocessor(table, test) GetValuePreprocessor_(MetaTable_##table, ArrayCount(MetaTable_##table), test) 
+inline u32 GetValuePreprocessor_(char** values, u32 count, char* test)
+{
+    u32 result = 0;
+    if(test)
+    {
+        for(u32 valueIndex = 0; valueIndex < count; ++valueIndex)
+        {
+            if(StrEqual(test, values[valueIndex]))
+            {
+                result = valueIndex;
+                break;
+            }
+        }
+        
+    }
+    return result;
+}
+
+
+#define GetFlagPreprocessor(flagName, test) GetFlagPreprocessor_(MetaFlags_##flagName, ArrayCount(MetaFlags_##flagName), test)
+inline u32 GetFlagPreprocessor_(MetaFlag* values, u32 count, char* test)
+{
+	u32 result = 0;
+    
+    for(u32 valueIndex = 0; valueIndex < count; ++valueIndex)
+    {
+		MetaFlag* flag = values + valueIndex;
+        if(StrEqual(test, flag->name))
+        {
+            result = flag->value;
+            break;
+        }
+    }
+    
+    return result;
+}
