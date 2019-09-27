@@ -1927,11 +1927,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                             }
                         }
                         
-                        if(found)
-                        {
-                            derived = 1;
-                        }
-                        
+                        derived = 1;
                     }
                 } break;
                 
@@ -2061,7 +2057,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                     }
                                 }
                                 
-                                if(found)
+                                if(true)
                                 {
                                     --runningAssetIndex;
                                     PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;

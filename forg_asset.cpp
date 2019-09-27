@@ -1433,7 +1433,6 @@ inline ColoredBitmap GetBitmap(Assets* assets, AssetID ID)
     ColoredBitmap result = {};
     
     GetGameAssetResult get = GetGameAsset(assets, ID);
-    
     if(ID.type == AssetType_Image && get.derived)
     {
         AssetID parentID = ID;

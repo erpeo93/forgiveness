@@ -1293,21 +1293,15 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
             
             r32 height = data->height;
             r32 backgroundScale = 1.1f;
-            if(get.derived)
-            {
-                
-            }
-            else
-            {
-                Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, 0);
-                BitmapDim dim = PushBitmapWithPivot(layout->group, FlatTransform(0.1f), ID, P, V2(0, 0), height);
-                
-                Rect2 rect = Scale(RectMinDim(P.xy, dim.size), backgroundScale);
-                PushRect(layout->group, FlatTransform(), rect, V4(0, 0, 0, 1));
-                
-                Vec2 resizableP = V2(rect.max.x, rect.min.y);
-                EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
-            }
+            
+            Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, 0);
+            BitmapDim dim = PushBitmapWithPivot(layout->group, FlatTransform(0.1f), ID, P, V2(0, 0), height);
+            
+            Rect2 rect = Scale(RectMinDim(P.xy, dim.size), backgroundScale);
+            PushRect(layout->group, FlatTransform(), rect, V4(0, 0, 0, 1));
+            
+            Vec2 resizableP = V2(rect.max.x, rect.min.y);
+            EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
             
             VerticalAdvance(layout, height * backgroundScale);
             NextRaw(layout);
@@ -1347,7 +1341,6 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                 r32 minPixelHeight = 40;
                 
                 NextRaw(layout);
-                
                 b32 increaseTime = false;
                 if(EditorCheckbox(layout, "play", auID(info, "play")))
                 {
@@ -1427,10 +1420,9 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
             {
                 if(get.derived)
                 {
-                    
-                }
-                else
-                {
+                    Nest(layout);
+                    Edit_Color(layout, "color", &info->coloration.color, false, ID);
+                    Pop(layout);
                 }
             } break;
             

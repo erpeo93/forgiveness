@@ -42,7 +42,7 @@ struct PAKBitmap
 struct PAKColoration
 {
     char imageName[32];
-    Vec4 color;
+    Color color;
     u16 bitmapIndex;
 };
 
