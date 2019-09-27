@@ -59,6 +59,8 @@ struct ObjectTransform
     r32 angle;
     b32 upright;
     b32 flipOnYAxis;
+    
+    b32 dontRender;
 };
 
 struct CameraTransform

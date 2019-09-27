@@ -238,12 +238,16 @@ r32 RawHeight(EditorLayout* layout)
     return result;
 }
 
+internal void VerticalAdvance(EditorLayout* layout, r32 height)
+{
+    layout->rawP.y -= height;
+    layout->lastP = layout->currentP;
+    layout->currentP = layout->rawP;
+}
+
 internal void NextRaw(EditorLayout* layout)
 {
-    layout->rawP.y -= RawHeight(layout);
-    layout->lastP = layout->currentP;
-    
-    layout->currentP = layout->rawP;
+    VerticalAdvance(layout, RawHeight(layout));
 }
 
 internal void SetRawP(EditorLayout* layout, r32 X)
@@ -288,6 +292,19 @@ internal Vec2 CollapsibleDim(EditorLayout* layout)
 {
     Vec2 result = layout->fontScale * 0.5f * V2(layout->standardButtonDim, layout->standardButtonDim);
     
+    return result;
+}
+
+internal Vec2 ResizableDim(EditorLayout* layout)
+{
+    Vec2 result = layout->fontScale * 0.5f * V2(layout->standardButtonDim, layout->standardButtonDim);
+    return result;
+}
+
+
+internal Vec2 CheckboxDim(EditorLayout* layout)
+{
+    Vec2 result = layout->fontScale * 1.2f * V2(layout->standardButtonDim, layout->standardButtonDim);
     return result;
 }
 
@@ -741,15 +758,13 @@ internal b32 Edit_b32(EditorLayout* layout, char* name, b32* flag, b32 isInArray
     return result;
 }
 
-internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID)
+
+internal b32 Edit_r32_(EditorLayout* layout, char* name, r32* number, AUID ID, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
-    
     EditorUIContext* context = layout->context;
-    AUID ID = auID(number);
+    
     AUIDData* data = GetAUIDData(context, ID);
-    
-    
     
     Vec4 color = StandardFloatColor();
     if(PointInRect(data->dim, layout->mouseP))
@@ -865,6 +880,13 @@ internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArr
 		elementRect = ShowStandard(layout, color, "%f", *number);
 	}
     data->dim = elementRect;
+    return result;
+}
+
+internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID)
+{
+    AUID ID = auID(number);
+    b32 result = Edit_r32_(layout, name, number, ID, isInArray, assetID);
     
     return result;
 }
@@ -1150,6 +1172,53 @@ internal b32 EditorCollapsible(EditorLayout* layout, char* name, AUID ID)
     return result;
 }
 
+internal b32 EditorCheckbox(EditorLayout* layout, char* name, AUID ID)
+{
+    AUIDData* data = GetAUIDData(layout->context, ID);
+    
+    Vec4 checkboxColor = data->active ? V4(0, 1, 0, 1) : V4(0, 0, 1, 1);
+    Vec2 checkboxDim = CheckboxDim(layout);
+    if(StandardEditorButton(layout, name, ID, checkboxColor))
+    {
+        data->active = !data->active;
+    }
+    
+    b32 result = data->active;
+    return result;
+}
+
+internal void EditorResize(EditorLayout* layout, Vec2 P, AUID ID, r32* dim)
+{
+    AUIDData* data = GetAUIDData(layout->context, ID);
+    
+    Vec4 resizeColor = V4(1, 0, 0, 1);
+    Vec2 resizeDim = ResizableDim(layout);
+    Rect2 resizableRect = RectCenterDim(P, resizeDim);
+    
+    if(PointInRect(resizableRect, layout->mouseP))
+    {
+        SetNextHotAUID(layout->context, ID);
+        resizeColor = V4(1, 1, 0, 1);
+    }
+    
+    if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
+    {
+        SetInteractiveAUID(layout->context, ID);
+    }
+    
+    if(IsInteractiveAUID(layout->context, ID))
+    {
+        (*dim) += -layout->deltaMouseP.y;
+        
+        if(UIReleased(layout->context, mouseLeft))
+        {
+            EndInteraction(layout->context);
+        }
+    }
+    
+    PushRect(layout->group, FlatTransform(0.2f), resizableRect, resizeColor);
+}
+
 internal b32 EditorCollapsible(EditorLayout* layout, char* string)
 {
     b32 result = EditorCollapsible(layout, string, auID(string));
@@ -1171,18 +1240,38 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
         WritebackAssetToFileSystem(assets, ID, WRITEBACK_PATH, false);
     }
     
-    
     switch(ID.type)
     {
         case AssetType_Image:
         {
+            AUID auid = auID(info, "image");
+            AUIDData* data = GetAUIDData(layout->context, auid);
+            
+            r32 minPixelHeight = 20;
+            data->height = Max(data->height, minPixelHeight);
+            
+            NextRaw(layout);
+            
+            r32 height = data->height;
+            r32 backgroundScale = 1.1f;
             if(get.derived)
             {
                 
             }
             else
             {
+                Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, 0);
+                BitmapDim dim = PushBitmapWithPivot(layout->group, FlatTransform(0.1f), ID, P, V2(0, 0), height);
+                
+                Rect2 rect = Scale(RectMinDim(P.xy, dim.size), backgroundScale);
+                PushRect(layout->group, FlatTransform(), rect, V4(0, 0, 0, 1));
+                
+                Vec2 resizableP = V2(rect.max.x, rect.min.y);
+                EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
             }
+            
+            VerticalAdvance(layout, height * backgroundScale);
+            NextRaw(layout);
         } break;
         
         case AssetType_Sound:
@@ -1211,7 +1300,73 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
         
         case AssetType_Skeleton:
         {
-            
+            if(get.derived)
+            {
+                AUID auid = auID(info, "animation");
+                AUIDData* data = GetAUIDData(layout->context, auid);
+                
+                r32 minPixelHeight = 40;
+                
+                NextRaw(layout);
+                
+                b32 increaseTime = false;
+                if(EditorCheckbox(layout, "play", auID(info, "play")))
+                {
+                    increaseTime = true;
+                }
+                
+                Edit_r32_(layout, "speed", &data->speed, auID(info, "speed"), false, {});
+                Edit_r32_(layout, "time", &data->time, auID(info, "time"), false, {});
+                
+                StringArray options;
+                options.strings = MetaTable_AssetImageType;
+                options.count = ArrayCount(MetaTable_AssetImageType);
+                Edit_Enumerator(layout, "skin", &data->skin, options, false, {});
+                
+                if(increaseTime)
+                {
+                    data->time += data->speed * layout->context->input->timeToAdvance;
+                }
+                
+                data->height = Max(data->height, minPixelHeight);
+                
+                NextRaw(layout);
+                r32 height = data->height;
+                r32 backgroundScale = 1.1f;
+                if(get.derived)
+                {
+                    Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, 0);
+                    
+                    AnimationComponent component = {};
+                    component.time = data->time;
+                    component.skin = ConvertEnumerator(AssetImageType, data->skin);
+                    
+                    AnimationParams params = {};
+                    params.P = P;
+                    params.scale = minPixelHeight;
+                    params.transform = FlatTransform();
+                    
+                    Rect2 animationDim = GetAnimationDim(layout->group, ID, &component, &params);
+                    
+                    r32 coeff = height / GetDim(animationDim).y;
+                    params.scale *= coeff;
+                    
+                    Rect2 animationDimCorrect = GetAnimationDim(layout->group, ID, &component, &params);
+                    
+                    
+                    Vec2 offset = P.xy - animationDimCorrect.min;
+                    params.P.xy += offset;
+                    Rect2 dim = RenderAnimation_(layout->group, ID, &component, &params);
+                    
+                    PushRect(layout->group, FlatTransform(), dim, V4(0, 0, 0, 1));
+                    
+                    Vec2 resizableP = dim.min;
+                    EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
+                }
+                
+                VerticalAdvance(layout, height * backgroundScale);
+                NextRaw(layout);
+            }
         } break;
         
         case AssetType_Invalid:

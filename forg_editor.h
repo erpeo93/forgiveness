@@ -44,7 +44,16 @@ struct AUIDData
     union
     {
         b32 show;
+        b32 active;
         u32 optionIndex;
+        
+        struct
+        {
+            r32 height;
+            r32 speed;
+            r32 time;
+            Enumerator skin;
+        };
         struct
         {
             b32 coldEdit;

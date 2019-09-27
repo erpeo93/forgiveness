@@ -506,7 +506,10 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTra
         XAxis= XAxis * dim.size.x;
         YAxis = YAxis * dim.size.y;
         
-        PushTexture(renderGroup, bitmap->textureHandle, P, XAxis, YAxis, color, lights, objectTransform.modulationPercentage, objectTransform.additionalZBias);
+        if(!objectTransform.dontRender)
+        {
+            PushTexture(renderGroup, bitmap->textureHandle, P, XAxis, YAxis, color, lights, objectTransform.modulationPercentage, objectTransform.additionalZBias);
+        }
     }
     
     return result;

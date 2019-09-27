@@ -16,7 +16,6 @@
 #include "../properties/test.properties"
 #include "forg_asset.h"
 #include "forg_editor.h"
-#include "forg_animation.h"
 #include "asset_builder.h"
 #include "forg_random.h"
 #include "forg_physics.h"

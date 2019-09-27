@@ -1,5 +1,4 @@
 #pragma once
-
 enum AnimationLoopingType
 {
     Loop_none,
@@ -46,5 +45,6 @@ struct AnimationParams
     r32 elapsedTime;
     r32 angle;
     Vec3 P;
-    Vec2 scale;
+    r32 scale;
+    ObjectTransform transform;
 };

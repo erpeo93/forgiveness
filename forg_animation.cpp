@@ -245,7 +245,7 @@ internal Vec2 CalculateFinalBoneOffset_(Bone* frameBones, i32 countBones, Bone* 
         YAxis = Perp(XAxis);
     }
     
-    Vec2 parentOffset = Hadamart(Hadamart(bone->parentOffset, offsetFromParentScale), params->scale);
+    Vec2 parentOffset = Hadamart(bone->parentOffset, offsetFromParentScale) * params->scale;
     Vec2 result = baseOffset + (parentOffset.x * XAxis + parentOffset.y * YAxis);
     return result;
 }
@@ -326,7 +326,7 @@ internal AnimationPiece* GetAnimationPiecesAndAdvanceState(MemoryPool* tempPool,
         Bone* parentBone = blended.bones + ass->boneIndex;
         Vec2 boneXAxis = parentBone->mainAxis;
         Vec2 boneYAxis = Perp(boneXAxis);
-        Vec2 boneOffset = Hadamart(ass->boneOffset, params->scale);
+        Vec2 boneOffset = ass->boneOffset * params->scale;
         Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
         dest->originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset);
         
@@ -417,55 +417,86 @@ inline void ApplyAssAlterations(PieceAss* ass, AssAlteration* assAlt, Bone* pare
 }
 #endif
 
-internal void RenderCharacterAnimation(RenderGroup* group, AnimationComponent* component, AnimationParams* params)
+
+internal Rect2 RenderAnimation_(RenderGroup* group, AssetID animationID, AnimationComponent* component, AnimationParams* params, b32 render = true)
 {
     MemoryPool tempPool = {};
     
-    RandomSequence seq = {};
-    AssetID animationID = QueryAnimations(group->assets, component->skeleton, &seq, &component->skeletonProperties);
-    if(IsValid(animationID))
+    Rect2 result = InvertedInfinityRect2();
+    
+    Animation* animation = GetAnimation(group->assets, animationID);
+    if(animation)
     {
-        Animation* animation = GetAnimation(group->assets, animationID);
-        if(animation)
+        PAKAnimation* animationInfo = GetAnimationInfo(group->assets, animationID);
+        u32 bitmapCount = 0;
+        AssetID* bitmaps = GetAllSkinBitmaps(&tempPool, group->assets, component->skin, &component->skinProperties, &bitmapCount);
+        
+        u32 pieceCount;
+        AnimationPiece* pieces = GetAnimationPiecesAndAdvanceState(&tempPool, animationInfo, animation, component, params, &pieceCount);
+        
+        ObjectTransform transform = params->transform;
+        for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
         {
-            PAKAnimation* animationInfo = GetAnimationInfo(group->assets, animationID);
-            u32 bitmapCount = 0;
-            AssetID* bitmaps = GetAllSkinBitmaps(&tempPool, group->assets, component->skin, &component->skinProperties, &bitmapCount);
+            AnimationPiece* piece = pieces + pieceIndex;
             
-            u32 pieceCount;
-            AnimationPiece* pieces = GetAnimationPiecesAndAdvanceState(&tempPool, animationInfo, animation, component, params, &pieceCount);
-            
-            ObjectTransform transform = UprightTransform();
-            for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
+            for(u32 bitmapIndex = 0; bitmapIndex < bitmapCount; ++bitmapIndex)
             {
-                AnimationPiece* piece = pieces + pieceIndex;
-                
-                for(u32 bitmapIndex = 0; bitmapIndex < bitmapCount; ++bitmapIndex)
+                AssetID bitmap = bitmaps[bitmapIndex];
+                if(IsValid(bitmap))
                 {
-                    AssetID bitmap = bitmaps[bitmapIndex];
-                    if(IsValid(bitmap))
+                    PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, bitmap);
+                    if(bitmapInfo->nameHash == piece->nameHash)
                     {
-                        PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, bitmap);
-                        if(bitmapInfo->nameHash == piece->nameHash)
+                        transform.angle = piece->angle;
+                        Vec3 P = params->P;
+                        
+                        transform.cameraOffset = piece->originOffset;
+                        if(!render)
                         {
-                            transform.angle = piece->angle;
-                            Vec3 P = params->P;
-                            
-                            transform.cameraOffset = piece->originOffset;
-                            
-                            PushBitmapWithPivot(group, transform, bitmap, P, piece->pivot, 0, piece->scale, piece->color);
+                            transform.dontRender = true;
                         }
+                        r32 height = bitmapInfo->nativeHeight * params->scale;
+                        BitmapDim dim = PushBitmapWithPivot(group, transform, bitmap, P, piece->pivot, height, V2(1, 1), piece->color);
+                        result = Union(result, RectMinDim(dim.P.xy, dim.size));
                     }
                 }
             }
         }
-        else
-        {
-            LoadAnimation(group->assets, animationID);
-        }
+    }
+    else
+    {
+        LoadAnimation(group->assets, animationID);
     }
     
     Clear(&tempPool);
+    
+    return result;
+}
+
+internal Rect2 RenderAnimation(RenderGroup* group, AnimationComponent* component, AnimationParams* params, b32 render = true)
+{
+    Rect2 result = InvertedInfinityRect2();
+    RandomSequence seq = {};
+    AssetID animationID = QueryAnimations(group->assets, component->skeleton, &seq, &component->skeletonProperties);
+    if(IsValid(animationID))
+    {
+        result = RenderAnimation_(group, animationID, component, params, render);
+    }
+    
+    return result;
+}
+
+
+internal Rect2 GetAnimationDim(RenderGroup* group, AnimationComponent* component, AnimationParams* params)
+{
+    Rect2 result = RenderAnimation(group, component, params, false);
+    return result;
+}
+
+internal Rect2 GetAnimationDim(RenderGroup* group, AssetID ID, AnimationComponent* component, AnimationParams* params)
+{
+    Rect2 result = RenderAnimation_(group, ID, component, params, false);
+    return result;
 }
 
 

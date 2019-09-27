@@ -12,6 +12,7 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_world_generation.cpp"
 #include "forg_render.cpp"
 #include "forg_sound.cpp"
+#include "forg_animation.cpp"
 #include "forg_editor.cpp"
 #include "forg_camera.cpp"
 //#include "forg_light.cpp"
@@ -28,7 +29,6 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_cutscene.cpp"
 #include "forg_ground.cpp"
 #include "forg_UIcommon.cpp"
-#include "forg_animation.cpp"
 #include "forg_archetypes.cpp"
 #include "forg_meta.cpp"
 internal void PlayGame(GameState* gameState, PlatformInput* input)
@@ -175,8 +175,9 @@ internal Vec3 HandleDaynightCycle(GameModeWorld* worldMode, PlatformInput* input
     return ambientLightColor;
 }
 
-internal void RenderCharacterAnimations(GameModeWorld* worldMode, RenderGroup* group,r32 timeToAdvance)
+internal Rect2 RenderCharacterAnimations(GameModeWorld* worldMode, RenderGroup* group,r32 timeToAdvance)
 {
+    Rect2 result = InvertedInfinityRect2();
     for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
     {
         if(HasComponent(archetypeIndex, BaseComponent) && HasComponent(archetypeIndex, AnimationComponent))
@@ -187,16 +188,18 @@ internal void RenderCharacterAnimations(GameModeWorld* worldMode, RenderGroup* g
             {
                 BaseComponent* base = GetComponent(worldMode, iter.ID, BaseComponent);AnimationComponent* animation = GetComponent(worldMode, iter.ID, AnimationComponent);
                 
-                
                 AnimationParams params = {};
                 params.elapsedTime = timeToAdvance;
                 params.angle = 0;
                 params.P = GetRelativeP(worldMode, base);
-                params.scale = V2(1, 1);
-                RenderCharacterAnimation(group, animation, &params);
+                params.scale = 1;
+                params.transform = UprightTransform();
+                result = RenderAnimation(group, animation, &params);
             }
         }
     }
+    
+    return result;
 }
 
 internal void AddEntityLights(GameModeWorld* worldMode)
