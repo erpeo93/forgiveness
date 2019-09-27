@@ -609,6 +609,17 @@ internal void Dump_Vec4(Stream* output, FieldDefinition* field, Vec4 value, b32 
     }
 }
 
+internal Color Parse_Color(Tokenizer* tokenizer, Color defaultVal)
+{
+    Vec4 result = Parse_Vec4(tokenizer, defaultVal);
+    return result;
+}
+
+internal void Dump_Color(Stream* output, FieldDefinition* field, Color value, b32 isInArray)
+{
+    Dump_Vec4(output, field, value, isInArray);
+}
+
 
 
 struct StructOperationResult
@@ -629,7 +640,8 @@ struct EditorLayout;
 internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArray, AssetID assetID);
 internal b32 Edit_i32(EditorLayout* layout, char* name, i32* number, b32 isInArray, AssetID assetID);
 internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArray, AssetID assetID);
-internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID);
+internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID, b32 clamp01 = false);
+internal b32 Edit_Color(EditorLayout* layout, char* name, Color* color, b32 isInArray, AssetID assetID);
 internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray, AssetID assetID);
 internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray, AssetID assetID);
 internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray, AssetID assetID);
@@ -687,6 +699,7 @@ STANDARD_OPERATION_FUNCTION(u16);
 STANDARD_OPERATION_FUNCTION(u32);
 STANDARD_OPERATION_FUNCTION(i32);
 STANDARD_OPERATION_FUNCTION(r32);
+STANDARD_OPERATION_FUNCTION(Color);
 STANDARD_OPERATION_FUNCTION(GameProperty);
 STANDARD_OPERATION_FUNCTION(Vec2);
 STANDARD_OPERATION_FUNCTION(Vec3);
@@ -852,6 +865,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
             DUMB_OPERATION(Vec2);
             DUMB_OPERATION(Vec3);
             DUMB_OPERATION(Vec4);
+            DUMB_OPERATION(Color);
             DUMB_OPERATION(Hash64);
             DUMB_OPERATION(Enumerator);
             DUMB_OPERATION(GameProperty);
@@ -1015,6 +1029,7 @@ internal void CopyDefaultValue(FieldDefinition* field, void* ptr)
             DUMB_COPY_DEF(Vec2);
             DUMB_COPY_DEF(Vec3);
             DUMB_COPY_DEF(Vec4);
+            DUMB_COPY_DEF(Color);
             DUMB_COPY_DEF(Hash64);
             DUMB_COPY_DEF(ArrayCounter);
             DUMB_COPY_DEF(Enumerator);
@@ -1024,6 +1039,7 @@ internal void CopyDefaultValue(FieldDefinition* field, void* ptr)
             
             default:
             {
+                Assert(field->type > MetaType_FirstCustomMetaType);
                 String structName = Stringize(field->typeName);
                 StructDefinition* structDefinition = GetMetaStructDefinition(structName);
                 InitStructDefault(structDefinition, ptr);

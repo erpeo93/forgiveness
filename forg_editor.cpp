@@ -288,6 +288,12 @@ internal Vec2 ButtonDim(EditorLayout* layout)
     return result;
 }
 
+internal Vec2 ColorDim(EditorLayout* layout)
+{
+    Vec2 result = layout->fontScale * V2(2.0f * layout->standardButtonDim, 1.5f * layout->standardButtonDim);
+    return result;
+}
+
 internal Vec2 CollapsibleDim(EditorLayout* layout)
 {
     Vec2 result = layout->fontScale * 0.5f * V2(layout->standardButtonDim, layout->standardButtonDim);
@@ -759,7 +765,7 @@ internal b32 Edit_b32(EditorLayout* layout, char* name, b32* flag, b32 isInArray
 }
 
 
-internal b32 Edit_r32_(EditorLayout* layout, char* name, r32* number, AUID ID, b32 isInArray, AssetID assetID)
+internal b32 Edit_r32_(EditorLayout* layout, char* name, r32* number, AUID ID, b32 isInArray, AssetID assetID, b32 clamp01 = false)
 {
     b32 result = false;
     EditorUIContext* context = layout->context;
@@ -847,6 +853,10 @@ internal b32 Edit_r32_(EditorLayout* layout, char* name, r32* number, AUID ID, b
 			{
 				EndInteraction(layout->context);
 				*number = StringToR32(context->keyboardBuffer);
+                if(clamp01)
+                {
+                    *number = Clamp01(*number);
+                }
 				result = true;
 				AddUndoRedoCopy(context, sizeof(r32), data->before, number, sizeof(r32), number, assetID);
 			}
@@ -864,6 +874,11 @@ internal b32 Edit_r32_(EditorLayout* layout, char* name, r32* number, AUID ID, b
 				data->speed = Clamp(0.01f, data->speed, 3.0f);
 				r32 delta = data->speed * layout->deltaMouseP.y;
 				*number += delta;
+                
+                if(clamp01)
+                {
+                    *number = Clamp01(*number);
+                }
 			}
 		}
     }
@@ -883,10 +898,10 @@ internal b32 Edit_r32_(EditorLayout* layout, char* name, r32* number, AUID ID, b
     return result;
 }
 
-internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID)
+internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID, b32 clamp01)
 {
     AUID ID = auID(number);
-    b32 result = Edit_r32_(layout, name, number, ID, isInArray, assetID);
+    b32 result = Edit_r32_(layout, name, number, ID, isInArray, assetID, clamp01);
     
     return result;
 }
@@ -929,6 +944,30 @@ internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray
     Edit_r32(layout, "y", &v->y, false, assetID);
     Edit_r32(layout, "z", &v->z, false, assetID);
     Edit_r32(layout, "w", &v->w, false, assetID);
+    
+    return result;
+}
+
+internal b32 Edit_Color(EditorLayout* layout, char* name, Color* c, b32 isInArray, AssetID assetID)
+{
+    b32 result = false;
+    
+    AUID ID = auID(c);
+    
+    ShowName(layout, name);
+    Edit_r32(layout, "red", &c->r, false, assetID, true);
+    Edit_r32(layout, "green", &c->g, false, assetID, true);
+    Edit_r32(layout, "blue", &c->b, false, assetID, true);
+    Edit_r32(layout, "alpha", &c->a, false, assetID, true);
+    
+    Vec2 rawOffset = V2(0.25f, -0.1f);
+    Vec2 colorDim = ColorDim(layout);
+    Vec2 colorMin = layout->currentP + Hadamart(rawOffset, V2(RawHeight(layout), RawHeight(layout)));
+    
+    Rect2 dim = RectMinDim(colorMin, colorDim);
+    layout->currentP.x += 1.2f* colorDim.x;
+    PushRect(layout->group, FlatTransform(), dim, *c);
+    
     
     return result;
 }

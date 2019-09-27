@@ -13,6 +13,7 @@ enum MetaType
     MetaType_Vec2,
     MetaType_Vec3,
     MetaType_Vec4,
+    MetaType_Color,
     MetaType_r32,
     MetaType_b32,
     MetaType_ArrayCounter, // NOTE(Leonardo): u16
@@ -59,6 +60,7 @@ union DefaultFieldValue
     u16 def_u16;
     u16 def_ArrayCounter;
     Enumerator def_Enumerator;
+    Color def_Color;
     i16 def_i16;
     u32 def_u32;
     i32 def_i32;

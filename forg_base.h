@@ -139,7 +139,7 @@ union Vec4
     inline Vec4& operator += ( Vec4 v );
     inline Vec4& Vec4::operator -= ( Vec4 v );
 };
-
+typedef Vec4 Color;
 
 
 #if FORGIVENESS_SLOW
