@@ -7,7 +7,6 @@ internal void* Acquire_(ResizableArray* array, u32* index)
     {
         MemoryPool* newPool = &array->p2;
         MemoryPool* toFree = &array->p1;
-        
         if(array->currentPool == &array->p2)
         {
             newPool = &array->p1;

@@ -41,8 +41,6 @@ introspection() struct EntityDefinition
 {
     Enumerator archetype MetaEnumerator(EntityArchetype);
     
-    Color test MetaDefault("V4(1, 0, 0, 1)");
-    
     ServerEntityInitParams server;
     ClientEntityInitParams client;
 };

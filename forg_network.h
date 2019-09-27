@@ -181,7 +181,6 @@ enum Packet_Type
     
     Type_entityHeader,
     Type_entityBasics,
-    Type_animationComponent,
     
     Type_FileHeader,
     Type_FileChunk,

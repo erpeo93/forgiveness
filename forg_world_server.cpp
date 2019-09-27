@@ -107,7 +107,7 @@ internal void SendBasicUpdate(ServerState* server, EntityID ID, PhysicComponent*
                 if(player)
                 {
                     SendEntityHeader(player, ID, physic->seed);
-                    u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, ID);
+                    u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, ID, physic->seed);
                     Assert(writeHere);
                     if(writeHere)
                     {

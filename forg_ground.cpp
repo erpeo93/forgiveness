@@ -399,7 +399,6 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
     if(IsValid(waterID))
     {
         WaterParams* water = GetData(group->assets, WaterParams, waterID);
-        
         for(u32 phaseIndex = 0; phaseIndex < water->phaseCount; ++phaseIndex)
         {
             WaterPhase* phase = water->phases + phaseIndex;

@@ -483,21 +483,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 }
             } break;
             
-            case Type_animationComponent:
-            {
-                u16 skeleton;
-                u16 skin;
-                Unpack("HH", &skeleton, &skin);
-                AnimationComponent* animation = GetComponent(worldMode, currentID, AnimationComponent);
-                if(animation)
-                {
-                    animation->skeleton = (AssetSkeletonType) skeleton;
-                    animation->skin = (AssetImageType) skin;
-                    animation->skeletonProperties = {};
-                    animation->skinProperties = {};
-                }
-            } break;
-            
             case Type_FileHeader:
             {
                 ReceivingAssetFile* newFile = BootstrapPushStruct(ReceivingAssetFile, memory);
