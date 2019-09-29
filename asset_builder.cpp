@@ -1649,7 +1649,7 @@ internal b32 EditorFile(PlatformFileInfo* file)
     return result;
 }
 
-internal b32 RelevantFile(PlatformFileInfo* file, PlatformFileGroup* group)
+internal b32 RelevantFile(PlatformFileInfo* file, PlatformFileGroup* group, b32 invalidWhenNotFound)
 {
 	b32 result = true;
     if(!EditorFile(file))
@@ -1696,7 +1696,7 @@ internal b32 RelevantFile(PlatformFileInfo* file, PlatformFileGroup* group)
             }
         }
         
-        if(!foundStandardFile)
+        if(invalidWhenNotFound && !foundStandardFile)
         {
             result = false;
         }
@@ -1720,7 +1720,7 @@ internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* as
     
     for(PlatformFileInfo* info = markupFiles->firstFileInfo; info; info = info->next)
     {
-        if(RelevantFile(info, markupFiles))
+        if(RelevantFile(info, markupFiles, false))
         {
             u8* fileContent = ReadEntireFile(tempPool, markupFiles, info);
             Tokenizer tokenizer = {};
@@ -1850,7 +1850,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     
     for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
     {
-		if(RelevantFile(info, &fileGroup))
+		if(RelevantFile(info, &fileGroup, true))
 		{
             ++validFileCount;
             
@@ -1930,7 +1930,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     PlatformFileGroup markupFiles = platformAPI.GetAllFilesBegin(PlatformFile_markup, source);
     for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
     {
-        if(RelevantFile(info, &markupFiles))
+        if(RelevantFile(info, &markupFiles, false))
         {
             ++validMarkupCount;
             SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, source, info->name);
@@ -1974,7 +1974,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
             
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
-				if(RelevantFile(info, &fileGroup))
+				if(RelevantFile(info, &fileGroup, false))
 				{
 					TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
                     u8* fileContent = ReadEntireFile(&tempPool, &fileGroup, info);
