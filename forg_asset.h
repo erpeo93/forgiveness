@@ -377,6 +377,8 @@ struct Assets
     AssetArray assets[AssetType_Count];
     AssetBlock* firstFreeAssetBlock;
     MemoryPool* blockPool;
+    
+    TicketMutex fileMutex;
 };
 
 

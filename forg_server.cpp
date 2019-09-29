@@ -473,6 +473,7 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
     
     EndTemporaryMemory(fileMemory);
     
+    BeginTicketMutex(&server->fileHash.fileMutex);
     platformAPI.CloseFile(&handle);
     if(deleteFile)
     {
@@ -480,6 +481,7 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
         platformAPI.ReplaceFile(PlatformFile_AssetPack, path, 
                                 nameNoExtension, 0, 0, 0);
     }
+    EndTicketMutex(&server->fileHash.fileMutex);
 }
 
 extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
@@ -498,13 +500,12 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         server = memory->server = BootstrapPushStruct(ServerState, gamePool);
         
-        TimestampHash* hash = BootstrapPushStruct(TimestampHash, pool);
+        TimestampHash* hash = &server->fileHash;
         
         PlatformFileGroup timestampFiles = platformAPI.GetAllFilesBegin(PlatformFile_timestamp, TIMESTAMP_PATH);
         for(PlatformFileInfo* info = timestampFiles.firstFileInfo; info; info = info->next)
         {
             TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
-            
             u8* fileContent = ReadEntireFile(&tempPool, &timestampFiles, info);
             if(sizeof(SavedFileInfoHash) == info->size)
             {
@@ -514,7 +515,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             else if(sizeof(SavedTypeSubtypeCountHash) == info->size)
             {
                 SavedTypeSubtypeCountHash* countHash = (SavedTypeSubtypeCountHash*) fileContent;
-                AddFileCountHash(hash, countHash->type, countHash->subtype, countHash->fileCount, countHash->markupCount);
+                AddFileCountHash(hash, countHash->typeSubtype, countHash->fileCount, countHash->markupCount);
             }
             
             EndTemporaryMemory(fileMemory);

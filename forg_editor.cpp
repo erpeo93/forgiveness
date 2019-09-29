@@ -1270,7 +1270,6 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
     PAKAsset* info = get.info;
     
     b32 showAssetInfo = EditorCollapsible(layout, info->sourceName);
-    
     AUID saveID = auID(info, "saveButton");
     
     b32 disabled = (!get.asset);
@@ -1279,138 +1278,6 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
         WritebackAssetToFileSystem(assets, ID, WRITEBACK_PATH, false);
     }
     
-    switch(ID.type)
-    {
-        case AssetType_Image:
-        {
-            AUID auid = auID(info, "image");
-            AUIDData* data = GetAUIDData(layout->context, auid);
-            
-            r32 minPixelHeight = 20;
-            data->height = Max(data->height, minPixelHeight);
-            
-            NextRaw(layout);
-            
-            r32 height = data->height;
-            r32 backgroundScale = 1.1f;
-            
-            Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, 0);
-            BitmapDim dim = PushBitmapWithPivot(layout->group, FlatTransform(0.1f), ID, P, V2(0, 0), height);
-            
-            Rect2 rect = Scale(RectMinDim(P.xy, dim.size), backgroundScale);
-            PushRect(layout->group, FlatTransform(), rect, V4(0, 0, 0, 1));
-            
-            Vec2 resizableP = V2(rect.max.x, rect.min.y);
-            EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
-            
-            VerticalAdvance(layout, height * backgroundScale);
-            NextRaw(layout);
-        } break;
-        
-        case AssetType_Sound:
-        {
-            AUID auid = auID(info, "sound");
-            if(StandardEditorButton(layout, "play", auid))
-            {
-                EditorUIContext* UI = layout->context;
-                if(UI->playingSound)
-                {
-                    ChangeVolume(UI->soundState, UI->playingSound, 0, V2(0, 0));
-                }
-                UI->playingSound = PlaySound(UI->soundState, assets, ID, 0);
-            }
-        } break;
-        
-        case AssetType_Font:
-        {
-            
-        } break;
-        
-        case AssetType_Model:
-        {
-            
-        } break;
-        
-        case AssetType_Skeleton:
-        {
-            if(get.derived)
-            {
-                AUID auid = auID(info, "animation");
-                AUIDData* data = GetAUIDData(layout->context, auid);
-                
-                r32 minPixelHeight = 40;
-                
-                NextRaw(layout);
-                b32 increaseTime = false;
-                if(EditorCheckbox(layout, "play", auID(info, "play")))
-                {
-                    increaseTime = true;
-                }
-                
-                Edit_r32_(layout, "speed", &data->speed, auID(info, "speed"), false, {});
-                Edit_r32_(layout, "time", &data->time, auID(info, "time"), false, {});
-                
-                StringArray options;
-                options.strings = MetaTable_AssetImageType;
-                options.count = ArrayCount(MetaTable_AssetImageType);
-                Edit_Enumerator(layout, "skin", &data->skin, options, false, {});
-                
-                if(increaseTime)
-                {
-                    data->time += data->speed * layout->context->input->timeToAdvance;
-                }
-                
-                data->height = Max(data->height, minPixelHeight);
-                
-                NextRaw(layout);
-                r32 height = data->height;
-                r32 backgroundScale = 1.1f;
-                if(get.derived)
-                {
-                    Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, 0);
-                    
-                    AnimationComponent component = {};
-                    component.time = data->time;
-                    component.skin = ConvertEnumerator(AssetImageType, data->skin);
-                    
-                    AnimationParams params = {};
-                    params.P = P;
-                    params.scale = minPixelHeight;
-                    params.transform = FlatTransform();
-                    
-                    Rect2 animationDim = GetAnimationDim(layout->group, ID, &component, &params);
-                    
-                    r32 coeff = height / GetDim(animationDim).y;
-                    params.scale *= coeff;
-                    
-                    Rect2 animationDimCorrect = GetAnimationDim(layout->group, ID, &component, &params);
-                    
-                    
-                    Vec2 offset = P.xy - animationDimCorrect.min;
-                    params.P.xy += offset;
-                    Rect2 dim = RenderAnimation_(layout->group, ID, &component, &params);
-                    
-                    PushRect(layout->group, FlatTransform(), dim, V4(0, 0, 0, 1));
-                    
-                    Vec2 resizableP = dim.min;
-                    EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
-                }
-                
-                VerticalAdvance(layout, height * backgroundScale);
-                NextRaw(layout);
-            }
-        } break;
-        
-        case AssetType_Invalid:
-        case AssetType_Count:
-        {
-            InvalidCodePath;
-        } break;
-        
-        default:
-        {
-        } break;
-    }
     
     if(showAssetInfo)
     {
@@ -1492,8 +1359,140 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
             }
             Pop(layout);
         }
+        
+        NextRaw(layout);
+        switch(ID.type)
+        {
+            case AssetType_Image:
+            {
+                AUID auid = auID(info, "image");
+                AUIDData* data = GetAUIDData(layout->context, auid);
+                
+                r32 minPixelHeight = 20;
+                data->height = Max(data->height, minPixelHeight);
+                
+                r32 height = data->height;
+                r32 backgroundScale = 1.1f;
+                
+                Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, 0);
+                BitmapDim dim = PushBitmapWithPivot(layout->group, FlatTransform(0.1f), ID, P, V2(0, 0), height);
+                
+                Rect2 rect = Scale(RectMinDim(P.xy, dim.size), backgroundScale);
+                PushRect(layout->group, FlatTransform(), rect, V4(0, 0, 0, 1));
+                
+                Vec2 resizableP = V2(rect.max.x, rect.min.y);
+                EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
+                
+                VerticalAdvance(layout, height * backgroundScale);
+            } break;
+            
+            case AssetType_Sound:
+            {
+                AUID auid = auID(info, "sound");
+                if(StandardEditorButton(layout, "play", auid))
+                {
+                    EditorUIContext* UI = layout->context;
+                    if(UI->playingSound)
+                    {
+                        ChangeVolume(UI->soundState, UI->playingSound, 0, V2(0, 0));
+                    }
+                    UI->playingSound = PlaySound(UI->soundState, assets, ID, 0);
+                }
+            } break;
+            
+            case AssetType_Font:
+            {
+                
+            } break;
+            
+            case AssetType_Model:
+            {
+                
+            } break;
+            
+            case AssetType_Skeleton:
+            {
+                if(get.derived)
+                {
+                    AUID auid = auID(info, "animation");
+                    AUIDData* data = GetAUIDData(layout->context, auid);
+                    
+                    r32 minPixelHeight = 40;
+                    
+                    b32 increaseTime = false;
+                    if(EditorCheckbox(layout, "play", auID(info, "play")))
+                    {
+                        increaseTime = true;
+                    }
+                    
+                    Edit_r32_(layout, "speed", &data->speed, auID(info, "speed"), false, {});
+                    Edit_r32_(layout, "time", &data->time, auID(info, "time"), false, {});
+                    
+                    StringArray options;
+                    options.strings = MetaTable_AssetImageType;
+                    options.count = ArrayCount(MetaTable_AssetImageType);
+                    Edit_Enumerator(layout, "skin", &data->skin, options, false, {});
+                    
+                    if(increaseTime)
+                    {
+                        data->time += data->speed * layout->context->input->timeToAdvance;
+                    }
+                    
+                    data->height = Max(data->height, minPixelHeight);
+                    
+                    NextRaw(layout);
+                    r32 height = data->height;
+                    r32 backgroundScale = 1.1f;
+                    if(get.derived)
+                    {
+                        Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, 0);
+                        
+                        AnimationComponent component = {};
+                        component.time = data->time;
+                        component.skin = ConvertEnumerator(AssetImageType, data->skin);
+                        
+                        AnimationParams params = {};
+                        params.P = P;
+                        params.scale = minPixelHeight;
+                        params.transform = FlatTransform();
+                        
+                        Rect2 animationDim = GetAnimationDim(layout->group, ID, &component, &params);
+                        
+                        r32 coeff = height / GetDim(animationDim).y;
+                        params.scale *= coeff;
+                        
+                        Rect2 animationDimCorrect = GetAnimationDim(layout->group, ID, &component, &params);
+                        
+                        
+                        Vec2 offset = P.xy - animationDimCorrect.min;
+                        params.P.xy += offset;
+                        Rect2 dim = RenderAnimation_(layout->group, ID, &component, &params);
+                        
+                        PushRect(layout->group, FlatTransform(), dim, V4(0, 0, 0, 1));
+                        
+                        Vec2 resizableP = dim.min;
+                        EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
+                    }
+                    
+                    VerticalAdvance(layout, height * backgroundScale);
+                }
+            } break;
+            
+            case AssetType_Invalid:
+            case AssetType_Count:
+            {
+                InvalidCodePath;
+            } break;
+            
+            default:
+            {
+            } break;
+        }
+        
         Pop(layout);
     }
+    
+    
 }
 
 internal void RenderEditAssetFile(EditorLayout* layout, Assets* assets, PAKFileHeader* header)

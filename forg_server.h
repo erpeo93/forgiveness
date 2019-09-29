@@ -111,6 +111,34 @@ struct ReceiveNetworkPacketWork
     network_platform_receive_data* ReceiveData;
 };
 
+struct SavedFileInfoHash
+{
+    char pathAndName[256];
+    
+    PlatformFileTimestamp timestamp;
+    
+    SavedFileInfoHash* next;
+};
+
+struct SavedTypeSubtypeCountHash
+{
+    char typeSubtype[256];
+    
+    u32 fileCount;
+    u32 markupCount;
+    
+    SavedTypeSubtypeCountHash* next;
+};
+
+struct TimestampHash
+{
+    TicketMutex fileMutex;
+    
+    MemoryPool pool;
+    SavedFileInfoHash* hashSlots[1024];
+    SavedTypeSubtypeCountHash* countHashSlots[128];
+};
+
 struct ServerState
 {
     WorldSeason season;
@@ -137,6 +165,8 @@ struct ServerState
     
     u32 fileCount;
     GameFile* files;
+    
+    TimestampHash fileHash;
     
     FileToSend* firstFreeToSendFile;
     

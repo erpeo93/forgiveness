@@ -1386,7 +1386,6 @@ inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID)
 {
     GetGameAssetResult result = {};
     GetAssetResult get = GetAssetRaw(assets, ID);
-    
     Asset* asset = get.asset;
     if(asset)
     {
@@ -1399,7 +1398,7 @@ inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID)
             asset->state = Asset_loaded;
         }
         
-        if(asset->state == Asset_loaded || asset->state == Asset_locked)
+        if(asset->state == Asset_loaded || asset->state == Asset_locked || asset->state == Asset_loadedNoData)
         {
             result.asset = asset;
             

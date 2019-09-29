@@ -742,7 +742,7 @@ inline b32 StringContains(char* string, char c)
 inline void TrimToFirstCharacter(char* buffer, u32 bufferSize, char* string, char trimHere)
 {
     u32 find = FindFirstInString(string, trimHere);
-    if(find)
+    if(find != 0xffffffff)
     {
         FormatString(buffer, bufferSize, "%.*s", find, string);
     }

@@ -107,6 +107,11 @@ internal void GetFileExtensions(FileExtension* ext, u32 types)
     {
         AddExtension(ext, "properties");
     }
+    
+    if(types & PlatformFile_Temp)
+    {
+        AddExtension(ext, "tmp");
+    }
 }
 
 //void name(PlatformSubdirNames* output, char* folderPath)
