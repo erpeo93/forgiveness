@@ -1,5 +1,5 @@
 #ifdef FORG_SERVER
-INIT_ENTITY(FirstEntityArchetype)
+INIT_ENTITY(AnimalArchetype)
 {
     ServerState* server = (ServerState*) state;
     ServerEntityInitParams* params = (ServerEntityInitParams*) par;
@@ -12,7 +12,7 @@ INIT_ENTITY(FirstEntityArchetype)
     
 }
 
-INIT_ENTITY(SecondEntityArchetype)
+INIT_ENTITY(RockArchetype)
 {
     ServerState* server = (ServerState*) state;
     ServerEntityInitParams* params = (ServerEntityInitParams*) par;
@@ -25,7 +25,7 @@ INIT_ENTITY(SecondEntityArchetype)
     
 }
 #else
-INIT_ENTITY(FirstEntityArchetype)
+INIT_ENTITY(AnimalArchetype)
 {
     GameModeWorld* worldMode = (GameModeWorld*) state;
     ClientEntityInitParams* params = (ClientEntityInitParams*) par;
@@ -35,13 +35,26 @@ INIT_ENTITY(FirstEntityArchetype)
     animation->skin = ConvertEnumerator(AssetImageType, params->skin);
 }
 
-INIT_ENTITY(SecondEntityArchetype)
+INIT_ENTITY(RockArchetype)
 {
     GameModeWorld* worldMode = (GameModeWorld*) state;
     ClientEntityInitParams* params = (ClientEntityInitParams*) par;
     
-    AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
-    animation->skeleton = (AssetSkeletonType) AssetSkeleton_crocodile;
-    animation->skin = (AssetImageType) AssetImage_crocodile;
+    Assets* assets = worldMode->gameState->assets;
+    
+    RockComponent* dest = GetComponent(worldMode, ID, RockComponent);
+    
+    MemoryPool tempPool = {};
+    RandomSequence seq = Seed(1234);
+    AssetID model = QueryModels(assets, AssetModel_default, &seq, 0);
+    AssetID rock = QueryDataFiles(assets, RockDefinition, 0, &seq, 0);
+    if(IsValid(model) && IsValid(rock))
+    {
+        LoadModel(assets, model, true);
+        VertexModel* m = GetModel(assets, model);
+        RockDefinition* r = GetData(assets, RockDefinition, rock);
+        GenerateRock(dest, m, &tempPool, &seq, r);
+    }
+    Clear(&tempPool);
 }
 #endif

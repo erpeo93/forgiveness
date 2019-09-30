@@ -157,7 +157,6 @@ struct GameModeWorld
     PlantSegment* firstFreePlantSegment;
     PlantStem* firstFreePlantStem;
     Plant* firstFreePlant;
-    Rock* firstFreeRock;
     
     RandomSequence entropy;
     
@@ -170,6 +169,7 @@ struct GameModeWorld
     
     ClientPlayer player;
     
+    RockComponent test;
     
 #if FORGIVENESS_INTERNAL
     b32 replayingInput;

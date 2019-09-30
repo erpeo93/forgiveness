@@ -10,27 +10,48 @@ internal void UpdateSeasonTimer(ServerState* server, r32 elapsedTime)
     server->seasonLerp = Clamp01MapToRange(0.5f * SEASON_DURATION, server->seasonTime, SEASON_DURATION);
 }
 
-internal EntityID AddEntity(ServerState* server, UniversePos P, u32 seed,PlayerComponent* player = 0)
+internal EntityID AddEntity(ServerState* server, UniversePos P, EntityDefinition* definition,PlayerComponent* player = 0)
 {
-    EntityID ID = {};
+    u32 seed = GetNextUInt32(&server->entropy);
     
-    RandomSequence seq = Seed(seed);
-    AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, 0, &seq, 0);
-    EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
-    
+    EntityID result = {};
     ServerEntityInitParams params = definition->server;
     params.P = P;
     params.seed = seed;
     
     u16 archetype = SafeTruncateToU16(ConvertEnumerator(EntityArchetype, definition->archetype));
-    Acquire(server, archetype, (&ID));
-    InitFunc[ID.archetype](server, ID, &params); 
-    if(HasComponent(Archetype_FirstEntityArchetype, PlayerComponent))
+    Acquire(server, archetype, (&result));
+    InitFunc[result.archetype](server, result, &params); 
+    if(HasComponent(result.archetype, PlayerComponent))
     {
-        SetComponent(server, ID, PlayerComponent, player);
+        SetComponent(server, result, PlayerComponent, player);
     }
     
-    return ID;
+    return result;
+}
+
+internal EntityID AddRandomEntity(ServerState* server, UniversePos P, PlayerComponent* player = 0)
+{
+    AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, 0, &server->entropy, 0);
+    EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
+    
+    EntityID result = AddEntity(server, P, definition, player);
+    
+    return result;
+}
+
+internal EntityID AddEntity(ServerState* server, UniversePos P, u32 type,PlayerComponent* player = 0)
+{
+    GameProperties properties = {};
+    AddOptionalGameProperty(&properties, spawnEntityType, type);
+    
+    AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, 0, &server->entropy, &properties);
+    
+    EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
+    
+    EntityID result = AddEntity(server, P, definition, player);
+    
+    return result;
 }
 
 STANDARD_ECS_JOB_SERVER(HandlePlayerRequests)

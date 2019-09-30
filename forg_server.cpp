@@ -125,8 +125,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                 P.chunkX = 1;
                 P.chunkY = 1;
                 
-                u32 seed = GetNextUInt32(&server->entropy);
-                EntityID ID = AddEntity(server, P, seed, player);
+                EntityID ID = AddEntity(server, P, Spawn_Animal, player);
                 SendGameAccessConfirm(player, server->worldSeed, ID);
             }
             else
@@ -165,9 +164,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             UniversePos P = {};
             unpack(packetPtr, "llV", &P.chunkX, &P.chunkY, &P.chunkOffset);
             
-            u32 seed = GetNextUInt32(&server->entropy);
-            RandomSequence seq = Seed(seed);
-            AddEntity(server, P, seed, 0);
+            AddEntity(server, P, Spawn_Rock, 0);
         } break;
         
 #if 0        

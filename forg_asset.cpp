@@ -717,9 +717,9 @@ void LoadAnimation(Assets* assets, AssetID ID)
     }
 }
 
-void LoadModel(Assets* assets, AssetID ID)
+void LoadModel(Assets* assets, AssetID ID, b32 immediate = false)
 {
-    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID);
+    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID, immediate);
     if(boilerplate.task)
     {
         Asset* asset = boilerplate.asset;
@@ -1195,31 +1195,50 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
 inline b32 MatchesProperties(Asset* asset, GameProperties* properties)
 {
     b32 result = true;
-    
     if(properties)
     {
         for(u32 propertyIndex = 0; propertyIndex < ArrayCount(properties->properties); ++propertyIndex)
         {
             PAKProperty* property = properties->properties + propertyIndex;
+            u32 flags = properties->flags[propertyIndex];
+            
             if(property->property)
             {
                 b32 hasProperty = false;
+                b32 propertyMatches = false;
+                
                 for(u32 assetPropertyIndex = 0; assetPropertyIndex < ArrayCount(asset->paka.properties); ++assetPropertyIndex)
                 {
                     PAKProperty* assetProperty = asset->paka.properties + assetPropertyIndex;
                     if(assetProperty->property == property->property)
                     {
+                        hasProperty = true;
                         if(property->value == assetProperty->value)
                         {
-                            hasProperty = true;
+                            propertyMatches = true;
                         }
                         break;
                     }
                 }
+                
                 if(!hasProperty)
                 {
-                    result = false;
-                    break;
+                    if(flags & GameProperty_Optional)
+                    {
+                    }
+                    else
+                    {
+                        result = false;
+                        break;
+                    }
+                }
+                else
+                {
+                    if(!propertyMatches)
+                    {
+                        result = false;
+                        break;
+                    }
                 }
             }
         }
@@ -1233,9 +1252,32 @@ inline b32 MatchesProperties(Asset* asset, GameProperties* properties)
 
 #define QuerySkeletons(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Skeleton, subtype, seq, properties)
 #define QueryFonts(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Font, subtype, seq, properties)
+#define QueryModels(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Model, subtype, seq, properties)
 #endif
 
 #define QueryDataFiles(assets, type, sub, seq, properties) QueryAssets_(assets, AssetType_##type, sub, seq, properties)
+
+
+
+#define AddGameProperty(properties, property, value) AddGameProperty_(properties, Property_##property, value, 0)
+#define AddOptionalGameProperty(properties, property, value) AddGameProperty_(properties, Property_##property, value, GameProperty_Optional)
+inline void AddGameProperty_(GameProperties* properties, PropertyType property, u32 value, u32 flags)
+{
+    for(u32 propertyIndex = 0; propertyIndex < ArrayCount(properties->properties); ++propertyIndex)
+    {
+        GameProperty* prop = properties->properties + propertyIndex;
+        if(!prop->property)
+        {
+            prop->property = SafeTruncateToU16(property);
+            prop->value = SafeTruncateToU16(value);
+            properties->flags[propertyIndex] = flags;
+            break;
+        }
+    }
+}
+
+
+
 internal AssetID QueryAssets_(Assets* assets, AssetType type, u32 subtype, RandomSequence* seq, GameProperties* properties, b32 derivedAssets = false, u16 startingIndex = 0, u16 onePastEndingIndex = 0)
 {
     AssetID result = {};
@@ -1314,6 +1356,10 @@ inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
         tokenizer.at = (char*) tempBuffer.ptr;
         ParseBufferIntoStruct(structName, &tokenizer, asset->data, finalSize);
         asset->state = Asset_loaded;
+    }
+    else
+    {
+        InvalidCodePath;
     }
     
     Clear(&tempPool);

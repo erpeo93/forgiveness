@@ -677,6 +677,7 @@ int main(int argc, char** argv)
         "forg_asset.h",
         "forg_ecs.h",
         "forg_archetypes.h",
+        "forg_rock.h",
         "../properties/test.properties",
     };
     
@@ -823,7 +824,7 @@ int main(int argc, char** argv)
     }
     printf( "\n" );
     
-    printf("enum Propertys\n{\n");
+    printf("enum PropertyType\n{\n");
     printf("Property_Invalid,\n");
     for(MetaProperty* meta = firstPropertyList; meta; meta = meta->next)
     {

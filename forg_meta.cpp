@@ -11,7 +11,6 @@ internal void LoadMetaData()
     META_ASSET_PROPERTIES_STRINGS();
     
     META_ARCHETYPES_BOTH();
-    
 #ifdef FORG_SERVER
     META_ARCHETYPES_SERVER();
 #else

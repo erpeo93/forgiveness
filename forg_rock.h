@@ -1,63 +1,45 @@
 #pragma once
 
 
-struct RockMineral
+introspection() struct RockMineral
 {
     r32 lerp;
     r32 lerpDelta;
-    
     Vec4 color;
-    
-    union
-    {
-        RockMineral* next;
-        RockMineral* nextFree;
-    };
 };
 
-struct RockDefinition
+introspection() struct RockDefinition
 {
     b32 collides;
     
-    u64 modelTypeHash;
-    u64 modelNameHash;
-    
-    Vec4 color;
+    Vec4 color MetaDefault("V4(1, 1, 1, 1)");
     Vec4 startingColorDelta;
-    
     Vec4 perVertexColorDelta;
     
-    Vec3 scale;
+    Vec3 scale MetaDefault("V3(1, 1, 1)");
     Vec3 scaleDelta;
     
-    r32 smoothness;
+    r32 smoothness MetaDefault("0.5f");
     r32 smoothnessDelta;
     r32 normalSmoothness;
     
-    u32 iterationCount;
+    u32 iterationCount MetaDefault("1");
     
+    r32 minDisplacementY MetaDefault("0.5f");
+    r32 maxDisplacementY MetaDefault("0.5f");
     
-    r32 minDisplacementY;
-    r32 maxDisplacementY;
-    
-    r32 minDisplacementZ;
-    r32 maxDisplacementZ;
-    
+    r32 minDisplacementZ MetaDefault("0.6f");
+    r32 maxDisplacementZ MetaDefault("0.6f");
     
     r32 percentageOfMineralVertexes;
-    u32 mineralCount;
-    RockMineral* firstPossibleMineral;
     
-    u32 renderingRocksCount;
+    ArrayCounter mineralCount MetaCounter(minerals);
+    RockMineral* minerals;
+    
+    u32 renderingRocksCount MetaDefault("1");
     u32 renderingRocksDelta;
     Vec3 renderingRocksRandomOffset;
     r32 scaleRandomness;
-    
-    union
-    {
-        RockDefinition* nextFree;
-        RockDefinition* next;
-    };
 };
 
 
@@ -69,7 +51,7 @@ inline Vec3 GetRockDim(RockDefinition* rock, RandomSequence* sequence)
 
 
 #ifndef FORG_SERVER
-struct Rock
+struct RockComponent
 {
     Vec3 dim;
     
@@ -78,8 +60,5 @@ struct Rock
     
     u32 faceCount;
     ModelFace faces[1024];
-    
-    
-    Rock* nextFree;
 };
 #endif

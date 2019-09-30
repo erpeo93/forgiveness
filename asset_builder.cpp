@@ -1483,7 +1483,6 @@ internal u8* ReadEntireFile(MemoryPool* pool, PlatformFileGroup* group, Platform
 internal void AddProperty(PAKAsset* asset, u16 property, u16 value)
 {
     b32 found = false;
-    
     for(u32 propertyIndex = 0; propertyIndex < ArrayCount(asset->properties); ++propertyIndex)
     {
         PAKProperty* dest = asset->properties + propertyIndex;
@@ -2320,10 +2319,17 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             
             u32 fileTypes = GetFileTypes((AssetType)type);
             PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(fileTypes, fullpath);
+            
+            
+            u32 currentFileCount = 0;
+            u32 currentMarkupFileCount = 0;
+            
+            
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
-				if(EditorFile(info))
+				if(RelevantFile(info, &fileGroup, true))
 				{
+                    ++currentFileCount;
 					SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
 					if(!AreEqual(info->timestamp, infoHash->timestamp))
 					{
@@ -2340,20 +2346,23 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             }
             platformAPI.GetAllFilesEnd(&fileGroup);
             
-            
             PlatformFileGroup markupFiles = platformAPI.GetAllFilesBegin(PlatformFile_markup, fullpath);
             for(PlatformFileInfo* info = markupFiles.firstFileInfo; info; info = info->next)
             {
-                SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
-                if(!AreEqual(info->timestamp, infoHash->timestamp))
+                if(RelevantFile(info, &markupFiles, false))
                 {
-                    if(EditorFile(info))
+                    ++currentMarkupFileCount;
+                    SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
+                    if(!AreEqual(info->timestamp, infoHash->timestamp))
                     {
-                        updatedTestFiles = true;
-                    }
-                    else
-                    {
-                        updatedStandardFiles = true;
+                        if(EditorFile(info))
+                        {
+                            updatedTestFiles = true;
+                        }
+                        else
+                        {
+                            updatedStandardFiles = true;
+                        }
                     }
                 }
             }
@@ -2364,9 +2373,6 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             char* subtypeStr = GetAssetSubtypeName(type, subtype);
             
             SavedTypeSubtypeCountHash* countHash = GetCorrenspodingFileCountHash(hash, typeStr, subtypeStr);
-            
-            u32 currentFileCount = fileGroup.fileCount;
-            u32 currentMarkupFileCount = fileGroup.fileCount;
             
             b32 numberOfFilesChanged = false;
             if(currentFileCount != countHash->fileCount || currentMarkupFileCount != countHash->markupCount)

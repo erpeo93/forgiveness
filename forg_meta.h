@@ -44,6 +44,8 @@ enum MetaType
     MetaType_ClientEntityInitParams,
     MetaType_UniversePos,
     MetaType_EntityID,
+    MetaType_RockDefinition,
+    MetaType_RockMineral,
 };
 
 enum FieldMetaFlags

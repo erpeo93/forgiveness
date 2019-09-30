@@ -20,18 +20,9 @@ inline void CreateRockVertex(RockDefinition* rockDefinition, ColoredVertex* vert
     if(RandomUni(seq) < rockDefinition->percentageOfMineralVertexes)
     {
         u32 mineralIndex = RandomChoice(seq, rockDefinition->mineralCount);
-        
-        u32 running = 0;
-        for(RockMineral* mineral = rockDefinition->firstPossibleMineral; mineral; mineral = mineral->next)
-        {
-            if(running++ == mineralIndex)
-            {
-                r32 lerp = mineral->lerp + RandomBil(seq) * mineral->lerpDelta;
-                newVertex->color = Lerp(newVertex->color, lerp, mineral->color);
-                
-                break;
-            }
-        }
+        RockMineral* mineral = rockDefinition->minerals + mineralIndex;
+        r32 lerp = mineral->lerp + RandomBil(seq) * mineral->lerpDelta;
+        newVertex->color = Lerp(newVertex->color, lerp, mineral->color);
     }
 }
 
@@ -39,8 +30,10 @@ inline void CreateRockVertex(RockDefinition* rockDefinition, ColoredVertex* vert
 
 
 // NOTE(Leonardo): API
-internal void GenerateRock(Rock* dest, VertexModel* model, MemoryPool* tempPool, RandomSequence* seq, RockDefinition* rockDefinition)
+internal void GenerateRock(RockComponent* dest, VertexModel* model, MemoryPool* tempPool, RandomSequence* seq, RockDefinition* rockDefinition)
 {
+    dest->dim = GetRockDim(rockDefinition, seq);
+    
     m4x4 rotationMatrix = ZRotation(RandomUni(seq) * TAU32);
     
     u32 iterationCount = rockDefinition->iterationCount;

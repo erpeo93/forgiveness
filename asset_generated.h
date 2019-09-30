@@ -5,6 +5,7 @@ AssetType_EntityDefinition,
 AssetType_Font,
 AssetType_Image,
 AssetType_Model,
+AssetType_RockDefinition,
 AssetType_Skeleton,
 AssetType_Sound,
 AssetType_tile_definition,
@@ -20,6 +21,7 @@ char* metaAsset_assetType[] =
 "Font",
 "Image",
 "Model",
+"RockDefinition",
 "Skeleton",
 "Sound",
 "tile_definition",
@@ -70,6 +72,15 @@ AssetModel_Count
 };
 
 char* MetaTable_AssetModelType[] = {
+"default",
+};
+enum AssetRockDefinitionType
+{
+AssetRockDefinition_default,
+AssetRockDefinition_Count
+};
+
+char* MetaTable_AssetRockDefinitionType[] = {
 "default",
 };
 enum AssetSkeletonType
@@ -148,6 +159,7 @@ MetaAssetType metaAsset_subTypes[AssetType_Count] =
 {2, MetaTable_AssetFontType},
 {4, MetaTable_AssetImageType},
 {1, MetaTable_AssetModelType},
+{1, MetaTable_AssetRockDefinitionType},
 {4, MetaTable_AssetSkeletonType},
 {10, MetaTable_AssetSoundType},
 {1, MetaTable_Assettile_definitionType},

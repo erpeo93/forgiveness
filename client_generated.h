@@ -1,14 +1,14 @@
 enum EntityArchetype
-{Archetype_SecondEntityArchetype,
-Archetype_FirstEntityArchetype,
+{Archetype_RockArchetype,
+Archetype_AnimalArchetype,
 Archetype_Count
 };
 char* MetaTable_EntityArchetype[] = 
-{"SecondEntityArchetype",
-"FirstEntityArchetype",
+{"RockArchetype",
+"AnimalArchetype",
 };
 #define META_ARCHETYPES_INIT_FUNC()\
-InitFunc[Archetype_SecondEntityArchetype] = InitSecondEntityArchetype;InitFunc[Archetype_FirstEntityArchetype] = InitFirstEntityArchetype;
+InitFunc[Archetype_RockArchetype] = InitRockArchetype;InitFunc[Archetype_AnimalArchetype] = InitAnimalArchetype;
 ;
 char* MetaTable_EffectIdentifier[] = 
  {
@@ -254,6 +254,38 @@ FieldDefinition fieldDefinitionOfEntityDefinition[] =
 {0, MetaType_ClientEntityInitParams, "ClientEntityInitParams", "client", (u32) (&((EntityDefinition*)0)->client), {}, sizeof(ClientEntityInitParams),"invalid",0, 0, 0}, 
 };
 
+FieldDefinition fieldDefinitionOfRockMineral[] = 
+ {
+{0, MetaType_r32, "r32", "lerp", (u32) (&((RockMineral*)0)->lerp), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "lerpDelta", (u32) (&((RockMineral*)0)->lerpDelta), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_Vec4, "Vec4", "color", (u32) (&((RockMineral*)0)->color), {}, sizeof(Vec4),"invalid",0, 0, 0}, 
+};
+
+FieldDefinition fieldDefinitionOfRockDefinition[] = 
+ {
+{0, MetaType_b32, "b32", "collides", (u32) (&((RockDefinition*)0)->collides), {}, sizeof(b32),"invalid",0, 0, 0}, 
+{0, MetaType_Vec4, "Vec4", "color", (u32) (&((RockDefinition*)0)->color), {}, sizeof(Vec4),"invalid",0, 0, 0}, 
+{0, MetaType_Vec4, "Vec4", "startingColorDelta", (u32) (&((RockDefinition*)0)->startingColorDelta), {}, sizeof(Vec4),"invalid",0, 0, 0}, 
+{0, MetaType_Vec4, "Vec4", "perVertexColorDelta", (u32) (&((RockDefinition*)0)->perVertexColorDelta), {}, sizeof(Vec4),"invalid",0, 0, 0}, 
+{0, MetaType_Vec3, "Vec3", "scale", (u32) (&((RockDefinition*)0)->scale), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
+{0, MetaType_Vec3, "Vec3", "scaleDelta", (u32) (&((RockDefinition*)0)->scaleDelta), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "smoothness", (u32) (&((RockDefinition*)0)->smoothness), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "smoothnessDelta", (u32) (&((RockDefinition*)0)->smoothnessDelta), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "normalSmoothness", (u32) (&((RockDefinition*)0)->normalSmoothness), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_u32, "u32", "iterationCount", (u32) (&((RockDefinition*)0)->iterationCount), {}, sizeof(u32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "minDisplacementY", (u32) (&((RockDefinition*)0)->minDisplacementY), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "maxDisplacementY", (u32) (&((RockDefinition*)0)->maxDisplacementY), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "minDisplacementZ", (u32) (&((RockDefinition*)0)->minDisplacementZ), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "maxDisplacementZ", (u32) (&((RockDefinition*)0)->maxDisplacementZ), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "percentageOfMineralVertexes", (u32) (&((RockDefinition*)0)->percentageOfMineralVertexes), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "mineralCount", (u32) (&((RockDefinition*)0)->mineralCount), {}, sizeof(ArrayCounter),"invalid","minerals", (u32)(&((RockDefinition*)0)->minerals), 0}, 
+{MetaFlag_Pointer, MetaType_RockMineral, "RockMineral", "minerals", (u32) (&((RockDefinition*)0)->minerals), {}, sizeof(RockMineral),"invalid",0, 0, 0}, 
+{0, MetaType_u32, "u32", "renderingRocksCount", (u32) (&((RockDefinition*)0)->renderingRocksCount), {}, sizeof(u32),"invalid",0, 0, 0}, 
+{0, MetaType_u32, "u32", "renderingRocksDelta", (u32) (&((RockDefinition*)0)->renderingRocksDelta), {}, sizeof(u32),"invalid",0, 0, 0}, 
+{0, MetaType_Vec3, "Vec3", "renderingRocksRandomOffset", (u32) (&((RockDefinition*)0)->renderingRocksRandomOffset), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "scaleRandomness", (u32) (&((RockDefinition*)0)->scaleRandomness), {}, sizeof(r32),"invalid",0, 0, 0}, 
+};
+
 char* MetaProperties_Test[] = 
  {
 "Value0",
@@ -274,7 +306,15 @@ char* MetaProperties_tileType[] =
 "sand",
 };
 
+char* MetaProperties_spawnEntityType[] = 
+ {
+"Animal",
+"Rock",
+};
+
 #define META_HANDLE_ADD_TO_DEFINITION_HASH()\
+AddToMetaDefinitions(RockDefinition, fieldDefinitionOfRockDefinition);\
+AddToMetaDefinitions(RockMineral, fieldDefinitionOfRockMineral);\
 AddToMetaDefinitions(EntityDefinition, fieldDefinitionOfEntityDefinition);\
 AddToMetaDefinitions(ClientEntityInitParams, fieldDefinitionOfClientEntityInitParams);\
 AddToMetaDefinitions(ServerEntityInitParams, fieldDefinitionOfServerEntityInitParams);\
@@ -297,32 +337,35 @@ AddToMetaDefinitions(WaterParams, fieldDefinitionOfWaterParams);\
 AddToMetaDefinitions(WaterPhase, fieldDefinitionOfWaterPhase);
 
 #define META_PROPERTIES_ADD()\
+AddToMetaProperties(spawnEntityType, MetaProperties_spawnEntityType);\
 AddToMetaProperties(tileType, MetaProperties_tileType);\
 AddToMetaProperties(test2, MetaProperties_test2);\
 AddToMetaProperties(Test, MetaProperties_Test);
 
-enum Propertys
+enum PropertyType
 {
 Property_Invalid,
+Property_spawnEntityType,
 Property_tileType,
 Property_test2,
 Property_Test,
 Property_Count,
 };
 #define META_ASSET_PROPERTIES_STRINGS()\
+meta_propertiesString[Property_spawnEntityType - 1] = "spawnEntityType";\
 meta_propertiesString[Property_tileType - 1] = "tileType";\
 meta_propertiesString[Property_test2 - 1] = "test2";\
 meta_propertiesString[Property_Test - 1] = "Test";\
 
 #define META_DEFAULT_VALUES_CPP_SUCKS()\
-fieldDefinitionOfWaterPhase[0].def.def_r32 =0;fieldDefinitionOfWaterPhase[6].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[7].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[8].def.def_r32 =1.0f;fieldDefinitionOfWaterPhase[9].def.def_r32 =0.5f;fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfworld_generator[7].def.def_r32 =1;fieldDefinitionOfworld_generator[8].def.def_r32 =0.05f;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, AssetImage_default};fieldDefinitionOftile_definition[2].def.def_Vec4 =V4(1, 1, 1, 1);
+fieldDefinitionOfWaterPhase[0].def.def_r32 =0;fieldDefinitionOfWaterPhase[6].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[7].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[8].def.def_r32 =1.0f;fieldDefinitionOfWaterPhase[9].def.def_r32 =0.5f;fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfworld_generator[7].def.def_r32 =1;fieldDefinitionOfworld_generator[8].def.def_r32 =0.05f;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, AssetImage_default};fieldDefinitionOftile_definition[2].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfRockDefinition[1].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfRockDefinition[4].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[6].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[9].def.def_u32 =1;fieldDefinitionOfRockDefinition[10].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[11].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[12].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[13].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[17].def.def_u32 =1;
 ;
 #define META_ARCHETYPES_BOTH()\
-archetypeLayouts[Archetype_FirstEntityArchetype].totalSize = sizeof(FirstEntityArchetype); archetypeLayouts[Archetype_SecondEntityArchetype].totalSize = sizeof(SecondEntityArchetype); 
+archetypeLayouts[Archetype_AnimalArchetype].totalSize = sizeof(AnimalArchetype); archetypeLayouts[Archetype_RockArchetype].totalSize = sizeof(RockArchetype); 
 ;
 #define META_ARCHETYPES_SERVER()\
-archetypeLayouts[Archetype_FirstEntityArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasPhysicComponent.offset = OffsetOf(FirstEntityArchetype, physic);  archetypeLayouts[Archetype_FirstEntityArchetype].hasPlayerComponent.exists = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasPlayerComponent.pointer = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasPlayerComponent.offset = OffsetOf(FirstEntityArchetype, player);  archetypeLayouts[Archetype_SecondEntityArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasPhysicComponent.offset = OffsetOf(SecondEntityArchetype, physic);  archetypeLayouts[Archetype_SecondEntityArchetype].hasPlayerComponent.exists = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasPlayerComponent.pointer = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasPlayerComponent.offset = OffsetOf(SecondEntityArchetype, player);  
+archetypeLayouts[Archetype_AnimalArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_AnimalArchetype].hasPhysicComponent.offset = OffsetOf(AnimalArchetype, physic);  archetypeLayouts[Archetype_AnimalArchetype].hasPlayerComponent.exists = true; archetypeLayouts[Archetype_AnimalArchetype].hasPlayerComponent.pointer = true; archetypeLayouts[Archetype_AnimalArchetype].hasPlayerComponent.offset = OffsetOf(AnimalArchetype, player);  archetypeLayouts[Archetype_RockArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_RockArchetype].hasPhysicComponent.offset = OffsetOf(RockArchetype, physic);  archetypeLayouts[Archetype_RockArchetype].hasPlayerComponent.exists = true; archetypeLayouts[Archetype_RockArchetype].hasPlayerComponent.pointer = true; archetypeLayouts[Archetype_RockArchetype].hasPlayerComponent.offset = OffsetOf(RockArchetype, player);  
 ;
 #define META_ARCHETYPES_CLIENT()\
-archetypeLayouts[Archetype_FirstEntityArchetype].hasBaseComponent.exists = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasBaseComponent.offset = OffsetOf(FirstEntityArchetype, base);  archetypeLayouts[Archetype_FirstEntityArchetype].hasAnimationComponent.exists = true; archetypeLayouts[Archetype_FirstEntityArchetype].hasAnimationComponent.offset = OffsetOf(FirstEntityArchetype, animation);  archetypeLayouts[Archetype_SecondEntityArchetype].hasBaseComponent.exists = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasBaseComponent.offset = OffsetOf(SecondEntityArchetype, base);  archetypeLayouts[Archetype_SecondEntityArchetype].hasAnimationComponent.exists = true; archetypeLayouts[Archetype_SecondEntityArchetype].hasAnimationComponent.offset = OffsetOf(SecondEntityArchetype, animation);  
+archetypeLayouts[Archetype_AnimalArchetype].hasBaseComponent.exists = true; archetypeLayouts[Archetype_AnimalArchetype].hasBaseComponent.offset = OffsetOf(AnimalArchetype, base);  archetypeLayouts[Archetype_AnimalArchetype].hasAnimationComponent.exists = true; archetypeLayouts[Archetype_AnimalArchetype].hasAnimationComponent.offset = OffsetOf(AnimalArchetype, animation);  archetypeLayouts[Archetype_RockArchetype].hasBaseComponent.exists = true; archetypeLayouts[Archetype_RockArchetype].hasBaseComponent.offset = OffsetOf(RockArchetype, base);  archetypeLayouts[Archetype_RockArchetype].hasRockComponent.exists = true; archetypeLayouts[Archetype_RockArchetype].hasRockComponent.offset = OffsetOf(RockArchetype, rock);  
 ;

@@ -77,7 +77,6 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->defaultCameraZ = 34.0f;
     result->cameraWorldOffset = V3(0.0f, 0.0f, result->defaultCameraZ);
     
-    result->firstFreeRock = 0;
     result->firstFreePlantSegment = 0;
     
     
@@ -175,31 +174,30 @@ internal Vec3 HandleDaynightCycle(GameModeWorld* worldMode, PlatformInput* input
     return ambientLightColor;
 }
 
-internal Rect2 RenderCharacterAnimations(GameModeWorld* worldMode, RenderGroup* group,r32 timeToAdvance)
+RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
 {
-    Rect2 result = InvertedInfinityRect2();
-    for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
-    {
-        if(HasComponent(archetypeIndex, BaseComponent) && HasComponent(archetypeIndex, AnimationComponent))
-        {
-            for(ArchIterator iter = First(worldMode, archetypeIndex); 
-                IsValid(iter); 
-                iter = Next(iter))
-            {
-                BaseComponent* base = GetComponent(worldMode, iter.ID, BaseComponent);AnimationComponent* animation = GetComponent(worldMode, iter.ID, AnimationComponent);
-                
-                AnimationParams params = {};
-                params.elapsedTime = timeToAdvance;
-                params.angle = 0;
-                params.P = GetRelativeP(worldMode, base);
-                params.scale = 1;
-                params.transform = UprightTransform();
-                result = RenderAnimation(group, animation, &params);
-            }
-        }
-    }
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
     
-    return result;
+    AnimationParams params = {};
+    params.elapsedTime = elapsedTime;
+    params.angle = 0;
+    params.P = GetRelativeP(worldMode, base);
+    params.scale = 1;
+    params.transform = UprightTransform();
+    RenderAnimation(group, animation, &params);
+}
+
+RENDERING_ECS_JOB_CLIENT(RenderRock)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    RockComponent* rock = GetComponent(worldMode, ID, RockComponent);
+    VertexModel model = {};
+    model.dim = rock->dim;
+    model.vertexCount = rock->vertexCount;
+    model.faceCount = rock->faceCount;
+    model.vertexes = rock->vertexes;
+    model.faces = rock->faces;
+    PushModel(group, &model, Identity(), GetRelativeP(worldMode, base), {});
 }
 
 internal void AddEntityLights(GameModeWorld* worldMode)
@@ -448,7 +446,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             PushAmbientLighting(group, ambientLightColor, directionalLightColor, directionalLightDirection, directionalLightIntensity);
             
-            RenderCharacterAnimations(worldMode, group, input->timeToAdvance);
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderCharacterAnimation, ArchetypeHas(BaseComponent) && ArchetypeHas(AnimationComponent), input->timeToAdvance);
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderRock, ArchetypeHas(BaseComponent) && ArchetypeHas(RockComponent), input->timeToAdvance);
             myPlayer->universeP = player->universeP;
             Vec3 deltaP = -Subtract(myPlayer->universeP, myPlayer->oldUniverseP);
             

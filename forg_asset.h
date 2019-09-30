@@ -50,10 +50,17 @@ typedef AssetID ModelId;
 typedef AssetID SkeletonId;
 typedef AssetID SoundId;
 
+enum GamePropertyFlags
+{
+    GameProperty_Optional = (1 << 0),
+};
+
 struct GameProperties
 {
     GameProperty properties[MAX_PROPERTIES_PER_ASSET];
+    u32 flags[MAX_PROPERTIES_PER_ASSET];
 };
+
 
 struct RenderTexture
 {

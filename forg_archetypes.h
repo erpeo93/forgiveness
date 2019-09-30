@@ -1,5 +1,5 @@
 #pragma once
-Archetype() struct FirstEntityArchetype
+Archetype() struct AnimalArchetype
 {
 #ifdef FORG_SERVER
     PhysicComponent physic;
@@ -10,14 +10,14 @@ Archetype() struct FirstEntityArchetype
 #endif
 };
 
-Archetype() struct SecondEntityArchetype
+Archetype() struct RockArchetype
 {
 #ifdef FORG_SERVER
     PhysicComponent physic;
     PlayerComponent* player;
 #else
     BaseComponent base;
-    AnimationComponent animation;
+    RockComponent rock;
 #endif
 };
 

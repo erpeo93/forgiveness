@@ -12,6 +12,7 @@ struct ArchetypeLayout
     
     ArchetypeComponent hasBaseComponent;
     ArchetypeComponent hasAnimationComponent;
+    ArchetypeComponent hasRockComponent;
     ArchetypeComponent hasPhysicComponent;
     ArchetypeComponent hasServerAnimationComponent;
     ArchetypeComponent hasPlayerComponent;
@@ -113,18 +114,35 @@ inline b32 AreEqual(EntityID i1, EntityID i2)
 
 
 #define STANDARD_ECS_JOB_SERVER(name) internal void name(ServerState* server, EntityID ID, r32 elapsedTime)
+#define STANDARD_ECS_JOB_CLIENT(name) internal void name(GameModeWorld* worldMode, EntityID ID, r32 elapsedTime)
+#define RENDERING_ECS_JOB_CLIENT(name) internal void name(GameModeWorld* worldMode, RenderGroup* group, EntityID ID, r32 elapsedTime)
+
 
 #define ArchetypeHas(component) HasComponent(archetypeIndex, component)
-#define EXECUTE_JOB(server, job, query, elapsedTime)\
+#define EXECUTE_JOB(state, job, query, elapsedTime)\
 for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)\
 {\
     if(query)\
     {\
-        for(ArchIterator iter = First(server, archetypeIndex); \
+        for(ArchIterator iter = First(state, archetypeIndex); \
         IsValid(iter); \
         iter = Next(iter))\
         {\
-            job(server, iter.ID, elapsedTime);\
+            job(state, iter.ID, elapsedTime);\
+        }\
+    }\
+}
+
+#define EXECUTE_RENDERING_JOB(state, group, job, query, elapsedTime)\
+for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)\
+{\
+    if(query)\
+    {\
+        for(ArchIterator iter = First(state, archetypeIndex); \
+        IsValid(iter); \
+        iter = Next(iter))\
+        {\
+            job(state, group, iter.ID, elapsedTime);\
         }\
     }\
 }
