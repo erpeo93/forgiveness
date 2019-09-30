@@ -152,6 +152,8 @@ struct EditorUIContext
     struct SoundState* soundState;
     struct PlayingSound* playingSound;
     
+    UniversePos playerP;
+    
     r32 fontScale;
     Vec2 offset;
     

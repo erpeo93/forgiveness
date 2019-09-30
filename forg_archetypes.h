@@ -25,6 +25,7 @@ introspection() struct ServerEntityInitParams
 {
     UniversePos P MetaUneditable();
     u32 seed MetaUneditable();
+    AssetID definitionID MetaUneditable();
 };
 
 introspection() struct ClientEntityInitParams

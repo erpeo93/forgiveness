@@ -1,4 +1,4 @@
-inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery deliveryType, u8 flags, u16 size, EntityID ID, u32 entitySeed)
+inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery deliveryType, u8 flags, u16 size, AssetID definitionID, EntityID ID, u32 entitySeed)
 {
     ForgNetworkPacketQueue* queue = player->queues + deliveryType; 
     
@@ -53,7 +53,7 @@ inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery delivery
         {
             unsigned char* oldResult = result;
             result = ForgPackHeader(result, Type_entityHeader);
-            result += pack(result, "HLL", ID.archetype, ID.archetypeIndex);
+            result += pack(result, "HHLHLL", definitionID.type, definitionID.subtype, definitionID.index, ID.archetype, ID.archetypeIndex);
             packet->size += (u16) (result - oldResult);
         }
         packet->size += size;
@@ -73,10 +73,10 @@ inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery delivery
 
 #define CloseAndStoreOrderedPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_Ordered, ForgNetworkFlag_Ordered, __VA_ARGS__)
 
-inline void CloseAndStore(PlayerComponent* player, unsigned char* buff_, unsigned char* buff, GuaranteedDelivery deliveryType, u8 flags, EntityID ID = {}, u32 seed = 0)
+inline void CloseAndStore(PlayerComponent* player, unsigned char* buff_, unsigned char* buff, GuaranteedDelivery deliveryType, u8 flags, AssetID definitionID = {},EntityID ID = {}, u32 seed = 0)
 {
     u16 totalSize = ForgEndPacket_(buff_, buff);
-    u8* writeHere = ForgReserveSpace(player, deliveryType, flags, totalSize, ID, seed);
+    u8* writeHere = ForgReserveSpace(player, deliveryType, flags, totalSize, definitionID, ID, seed);
     Assert(writeHere);
     if(writeHere)
     {
@@ -201,17 +201,17 @@ internal void SendDeleteMessage(SimRegion* region, SimEntity* entity)
 }
 #endif
 
-inline void SendEntityHeader(PlayerComponent* player, EntityID ID, u32 seed)
+inline void SendEntityHeader(PlayerComponent* player, AssetID definitionID, EntityID ID, u32 seed)
 {
     StartPacket(player, entityHeader);
-    Pack("HLL", ID.archetype, ID.archetypeIndex, seed);
+    Pack("HHLHLL", definitionID.type, definitionID.subtype, definitionID.index, ID.archetype, ID.archetypeIndex, seed);
     CloseAndStoreStandardPacket(player);
 }
 
-inline void SendEntityHeaderReliably(PlayerComponent* player, EntityID ID, u32 seed)
+inline void SendEntityHeaderReliably(PlayerComponent* player, AssetID definitionID, EntityID ID, u32 seed)
 {
     StartPacket(player, entityHeader);
-    Pack("HLL", ID.archetype, ID.archetypeIndex, seed);
+    Pack("HHLHLL", definitionID.type, definitionID.subtype, definitionID.index, ID.archetype, ID.archetypeIndex, seed);
     CloseAndStoreOrderedPacket(player);
 }
 

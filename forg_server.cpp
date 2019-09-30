@@ -162,9 +162,11 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
         case Type_SpawnEntity:
         {
             UniversePos P = {};
-            unpack(packetPtr, "llV", &P.chunkX, &P.chunkY, &P.chunkOffset);
             
-            AddEntity(server, P, Spawn_Rock, 0);
+            AssetID ID;
+            ID.type = AssetType_EntityDefinition;
+            unpack(packetPtr, "HHllV", &ID.subtype, &ID.index, &P.chunkX, &P.chunkY, &P.chunkOffset);
+            AddEntity(server, P, ID, 0);
         } break;
         
 #if 0        

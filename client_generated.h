@@ -186,6 +186,13 @@ char* MetaTable_ParticleUpdaterEndPosition[] =
 "DestPos",
 };
 
+FieldDefinition fieldDefinitionOfAssetID[] = 
+ {
+{0, MetaType_u16, "u16", "type", (u32) (&((AssetID*)0)->type), {}, sizeof(u16),"invalid",0, 0, 0}, 
+{0, MetaType_u16, "u16", "subtype", (u32) (&((AssetID*)0)->subtype), {}, sizeof(u16),"invalid",0, 0, 0}, 
+{0, MetaType_u16, "u16", "index", (u32) (&((AssetID*)0)->index), {}, sizeof(u16),"invalid",0, 0, 0}, 
+};
+
 FieldDefinition fieldDefinitionOfGameAssetType[] = 
  {
 {0, MetaType_u16, "u16", "type", (u32) (&((GameAssetType*)0)->type), {}, sizeof(u16),"invalid",0, 0, 0}, 
@@ -238,6 +245,7 @@ FieldDefinition fieldDefinitionOfServerEntityInitParams[] =
  {
 {MetaFlag_Uneditable, MetaType_UniversePos, "UniversePos", "P", (u32) (&((ServerEntityInitParams*)0)->P), {}, sizeof(UniversePos),"invalid",0, 0, 0}, 
 {MetaFlag_Uneditable, MetaType_u32, "u32", "seed", (u32) (&((ServerEntityInitParams*)0)->seed), {}, sizeof(u32),"invalid",0, 0, 0}, 
+{MetaFlag_Uneditable, MetaType_AssetID, "AssetID", "definitionID", (u32) (&((ServerEntityInitParams*)0)->definitionID), {}, sizeof(AssetID),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfClientEntityInitParams[] = 
@@ -325,6 +333,7 @@ AddToMetaDefinitions(tile_definition, fieldDefinitionOftile_definition);\
 AddToMetaDefinitions(ground_coloration, fieldDefinitionOfground_coloration);\
 AddToMetaDefinitions(GroundColorationArrayTest, fieldDefinitionOfGroundColorationArrayTest);\
 AddToMetaDefinitions(GameAssetType, fieldDefinitionOfGameAssetType);\
+AddToMetaDefinitions(AssetID, fieldDefinitionOfAssetID);\
 AddToMetaDefinitions(world_generator, fieldDefinitionOfworld_generator);\
 AddToMetaDefinitions(BiomePyramid, fieldDefinitionOfBiomePyramid);\
 AddToMetaDefinitions(PropertySelector, fieldDefinitionOfPropertySelector);\

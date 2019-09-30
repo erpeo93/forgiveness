@@ -6,6 +6,7 @@ INIT_ENTITY(AnimalArchetype)
     
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     physic->P = params->P;
+    physic->definitionID = params->definitionID;
     physic->seed = params->seed;
     physic->speed = {};
     physic->acc = {};
@@ -19,6 +20,7 @@ INIT_ENTITY(RockArchetype)
     
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     physic->P = params->P;
+    physic->definitionID = params->definitionID;
     physic->seed = params->seed;
     physic->speed = {};
     physic->acc = {};

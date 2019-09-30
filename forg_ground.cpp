@@ -395,8 +395,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
     
     RandomSequence assetSeq = Seed(worldSeed);
     AssetID waterID = QueryDataFiles(group->assets, WaterParams, 0, &assetSeq, 0);
-    
-    if(IsValid(waterID))
+    if(false && IsValid(waterID))
     {
         WaterParams* water = GetData(group->assets, WaterParams, waterID);
         for(u32 phaseIndex = 0; phaseIndex < water->phaseCount; ++phaseIndex)
@@ -761,7 +760,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                                     transform.angle = RandomUni(&seq) * TAU32;
                                                     if(!PushBitmap(group, transform, groundID, splatP, height * voxelSide, scale, color))
                                                     {
-                                                        InvalidCodePath;
+                                                        //InvalidCodePath;
                                                     }
                                                 }
                                             }

@@ -13,11 +13,11 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_render.cpp"
 #include "forg_sound.cpp"
 #include "forg_animation.cpp"
-#include "forg_editor.cpp"
 #include "forg_camera.cpp"
 //#include "forg_light.cpp"
 #include "miniz.c"
 #include "forg_network_client.cpp"
+#include "forg_editor.cpp"
 #include "forg_plant.cpp"
 #include "forg_mesh.cpp"
 #include "forg_rock.cpp"
@@ -408,11 +408,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 inputAcc.y = 1.0f;
             }
             
-            if(Pressed(&input->actionUp))
-            {
-                SendSpawnRequest(player->universeP);
-            }
-            
+            worldMode->editorUI.playerP = player->universeP;
             group->assets = gameState->assets;
 #if 0            
             if(!gameState->music)
@@ -458,7 +454,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             }
             
             PreloadAllGroundBitmaps(group->assets);
-            //UpdateAndRenderGround(worldMode, group, myPlayer->universeP, myPlayer->oldUniverseP, input->timeToAdvance);
+            UpdateAndRenderGround(worldMode, group, myPlayer->universeP, myPlayer->oldUniverseP, input->timeToAdvance);
             
             worldMode->particleCache->deltaParticleP = deltaP;
             UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);

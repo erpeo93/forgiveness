@@ -10,13 +10,17 @@ internal void UpdateSeasonTimer(ServerState* server, r32 elapsedTime)
     server->seasonLerp = Clamp01MapToRange(0.5f * SEASON_DURATION, server->seasonTime, SEASON_DURATION);
 }
 
-internal EntityID AddEntity(ServerState* server, UniversePos P, EntityDefinition* definition,PlayerComponent* player = 0)
+internal EntityID AddEntity(ServerState* server, UniversePos P, AssetID definitionID,PlayerComponent* player = 0)
 {
     u32 seed = GetNextUInt32(&server->entropy);
+    
+    Assert(IsValid(definitionID));
+    EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
     
     EntityID result = {};
     ServerEntityInitParams params = definition->server;
     params.P = P;
+    params.definitionID = definitionID;
     params.seed = seed;
     
     u16 archetype = SafeTruncateToU16(ConvertEnumerator(EntityArchetype, definition->archetype));
@@ -30,16 +34,6 @@ internal EntityID AddEntity(ServerState* server, UniversePos P, EntityDefinition
     return result;
 }
 
-internal EntityID AddRandomEntity(ServerState* server, UniversePos P, PlayerComponent* player = 0)
-{
-    AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, 0, &server->entropy, 0);
-    EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
-    
-    EntityID result = AddEntity(server, P, definition, player);
-    
-    return result;
-}
-
 internal EntityID AddEntity(ServerState* server, UniversePos P, u32 type,PlayerComponent* player = 0)
 {
     GameProperties properties = {};
@@ -47,10 +41,7 @@ internal EntityID AddEntity(ServerState* server, UniversePos P, u32 type,PlayerC
     
     AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, 0, &server->entropy, &properties);
     
-    EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
-    
-    EntityID result = AddEntity(server, P, definition, player);
-    
+    EntityID result = AddEntity(server, P, definitionID, player);
     return result;
 }
 
@@ -127,8 +118,8 @@ internal void SendBasicUpdate(ServerState* server, EntityID ID, PhysicComponent*
                 PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
                 if(player)
                 {
-                    SendEntityHeader(player, ID, physic->seed);
-                    u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, ID, physic->seed);
+                    SendEntityHeader(player, physic->definitionID, ID, physic->seed);
+                    u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, physic->definitionID, ID, physic->seed);
                     Assert(writeHere);
                     if(writeHere)
                     {

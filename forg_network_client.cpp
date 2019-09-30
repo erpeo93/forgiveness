@@ -281,10 +281,10 @@ internal void SendFileHeaderAck(u32 index)
     CloseAndSendGuaranteedPacket();
 }
 
-internal void SendSpawnRequest(UniversePos P)
+internal void SendSpawnRequest(UniversePos P, AssetID definitionID)
 {
     StartPacket(SpawnEntity);
-    Pack("llV", P.chunkX, P.chunkY, P.chunkOffset);
+    Pack("HHllV", definitionID.subtype, definitionID.index, P.chunkX, P.chunkY, P.chunkOffset);
     CloseAndSendGuaranteedPacket();
 }
 
@@ -436,10 +436,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             
             case Type_entityHeader:
             {
+                AssetID definitionID;
                 EntityID serverID;
                 u32 seed;
                 
-                Unpack("HLL", &serverID.archetype, &serverID.archetypeIndex, &seed);
+                Unpack("HHLHLL", &definitionID.type, &definitionID.subtype, &definitionID.index, &serverID.archetype, &serverID.archetypeIndex, &seed);
                 Assert(serverID.archetype < Archetype_Count);
                 
                 EntityID clientID = GetClientIDMapping(worldMode, serverID);
@@ -450,7 +451,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     
                     RandomSequence seq = Seed(seed);
                     Assets* assets = gameState->assets;
-                    AssetID definitionID = QueryDataFiles(assets, EntityDefinition, 0, &seq, 0);
                     EntityDefinition* definition = GetData(assets, EntityDefinition, definitionID);
                     
                     ClientEntityInitParams params = definition->client;

@@ -46,6 +46,7 @@ enum MetaType
     MetaType_EntityID,
     MetaType_RockDefinition,
     MetaType_RockMineral,
+    MetaType_AssetID,
 };
 
 enum FieldMetaFlags

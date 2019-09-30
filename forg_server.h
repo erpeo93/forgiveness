@@ -15,6 +15,7 @@
 #define Property(name) enum Property_##name
 #include "../properties/test.properties"
 #include "forg_asset.h"
+#include "forg_world.h"
 #include "forg_editor.h"
 #include "asset_builder.h"
 #include "forg_random.h"
@@ -29,7 +30,6 @@
 #include "forg_crafting.h"
 //#include "forg_entity.h"
 //#include "forg_memory.h"
-#include "forg_world.h"
 #include "forg_world_generation.h"
 #include "forg_plant.h"
 #include "forg_rock.h"
@@ -78,6 +78,7 @@ struct PlayerRequest
 struct PhysicComponent
 {
     UniversePos P;
+    AssetID definitionID;
     u32 seed;
     Vec3 speed;
     Vec3 acc;

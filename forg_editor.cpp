@@ -1295,6 +1295,17 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
             
             case AssetType_Sound:
             {
+                AUID auid = auID(info, "sound");
+                if(StandardEditorButton(layout, "play", auid))
+                {
+                    EditorUIContext* UI = layout->context;
+                    if(UI->playingSound)
+                    {
+                        ChangeVolume(UI->soundState, UI->playingSound, 0, V2(0, 0));
+                    }
+                    UI->playingSound = PlaySound(UI->soundState, assets, ID, 0);
+                }
+                
                 Nest(layout);
                 PAKSound* sound = &info->sound;
                 ShowName(layout, "total samples");
@@ -1326,6 +1337,16 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                 InvalidCodePath;
             } break;
             
+            
+            case AssetType_EntityDefinition:
+            {
+                AUID auid = auID(info, "entityDef");
+                if(StandardEditorButton(layout, "spawn", auid))
+                {
+                    SendSpawnRequest(layout->context->playerP, ID);
+                }
+                
+            }
             default:
             {
                 LoadDataFile(assets, ID, true);
@@ -1360,11 +1381,11 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
             Pop(layout);
         }
         
-        NextRaw(layout);
         switch(ID.type)
         {
             case AssetType_Image:
             {
+                NextRaw(layout);
                 AUID auid = auID(info, "image");
                 AUIDData* data = GetAUIDData(layout->context, auid);
                 
@@ -1386,23 +1407,13 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                 VerticalAdvance(layout, height * backgroundScale);
             } break;
             
-            case AssetType_Sound:
-            {
-                AUID auid = auID(info, "sound");
-                if(StandardEditorButton(layout, "play", auid))
-                {
-                    EditorUIContext* UI = layout->context;
-                    if(UI->playingSound)
-                    {
-                        ChangeVolume(UI->soundState, UI->playingSound, 0, V2(0, 0));
-                    }
-                    UI->playingSound = PlaySound(UI->soundState, assets, ID, 0);
-                }
-            } break;
-            
             case AssetType_Font:
             {
                 
+            } break;
+            
+            case AssetType_Sound:
+            {
             } break;
             
             case AssetType_Model:
@@ -1414,6 +1425,7 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
             {
                 if(get.derived)
                 {
+                    NextRaw(layout);
                     AUID auid = auID(info, "animation");
                     AUIDData* data = GetAUIDData(layout->context, auid);
                     

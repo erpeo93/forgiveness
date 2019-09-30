@@ -37,7 +37,7 @@ struct MetaPropertyList
 
 #include "asset_generated.h"
 
-struct AssetID
+introspection() struct AssetID
 {
     u16 type;
     u16 subtype;
