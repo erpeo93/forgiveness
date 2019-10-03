@@ -42,6 +42,7 @@ enum MetaType
     MetaType_WaterPhase,
     MetaType_ServerEntityInitParams,
     MetaType_ClientEntityInitParams,
+    MetaType_CommonEntityInitParams,
     MetaType_UniversePos,
     MetaType_EntityID,
     MetaType_RockDefinition,

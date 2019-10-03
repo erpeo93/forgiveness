@@ -14,11 +14,38 @@ Archetype() struct RockArchetype
 {
 #ifdef FORG_SERVER
     PhysicComponent physic;
-    PlayerComponent* player;
 #else
     BaseComponent base;
     RockComponent rock;
 #endif
+};
+
+Archetype() struct PlantArchetype
+{
+#ifdef FORG_SERVER
+    PhysicComponent physic;
+    PlayerComponent* player;
+#else
+    BaseComponent base;
+    PlantComponent rock;
+#endif
+};
+
+Archetype() struct GrassArchetype
+{
+#ifdef FORG_SERVER
+    PhysicComponent physic;
+    PlayerComponent* player;
+#else
+    BaseComponent base;
+    GrassComponent rock;
+#endif
+};
+
+introspection() struct CommonEntityInitParams
+{
+    Vec3 boundOffset;
+    Vec3 boundDim MetaDefault("V3(1, 1, 1)");
 };
 
 introspection() struct ServerEntityInitParams
@@ -31,17 +58,19 @@ introspection() struct ServerEntityInitParams
 introspection() struct ClientEntityInitParams
 {
     EntityID ID MetaUneditable();
+    u32 seed MetaUneditable();
     Enumerator skeleton MetaEnumerator(AssetSkeletonType);
     Enumerator skin MetaEnumerator(AssetImageType);
 };
 
-#define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, void* par)
+#define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)
 typedef INIT_ENTITY(entity);
 
 introspection() struct EntityDefinition
 {
     Enumerator archetype MetaEnumerator(EntityArchetype);
     
+    CommonEntityInitParams common;
     ServerEntityInitParams server;
     ClientEntityInitParams client;
 };

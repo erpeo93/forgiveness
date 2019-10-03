@@ -2,8 +2,9 @@
 #define WORLD_CHUNK_APRON 2
 #define VOXEL_SIZE 2.0f
 #define CHUNK_DIM 8
-#define WORLD_CHUNK_SPAN 64
+#define WORLD_CHUNK_SPAN 4
 #define CHUNK_SIDE CHUNK_DIM * VOXEL_SIZE
+#define WORLD_SIDE WORLD_CHUNK_SPAN * CHUNK_SIDE
 
 introspection() struct UniversePos
 {

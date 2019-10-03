@@ -439,8 +439,15 @@ internal LoadedBitmap LoadImage(char* path, char* filename)
         Assert(xFinal <= MAX_IMAGE_DIM);
         Assert(yFinal <= MAX_IMAGE_DIM);
         
-        result.pixels = ( u8* ) malloc( xFinal * yFinal * n );
+        result.pixels = (u8*) malloc(xFinal * yFinal * n);
         stbir_resize_uint8(data, x, y, 0, (unsigned char* )result.pixels, xFinal, yFinal, 0, 4);
+        
+        u32 attachmentPointCount = 1;
+        result.attachmentPointCount = attachmentPointCount;
+        result.attachmentPoints = (PAKAttachmentPoint*) malloc(sizeof(PAKAttachmentPoint) * attachmentPointCount);
+        
+        PAKAttachmentPoint* point = result.attachmentPoints + 0;
+        point->nameHash = StringHash("test");
         
         stbi_image_free( data );
         result.width = SafeTruncateToU16(xFinal);
@@ -1736,7 +1743,6 @@ internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* as
                         
                         if(p.type == Token_Comma)
                         {
-                            continue;
                         }
                         else if(p.type == Token_EndOfFile)
                         {
@@ -1744,7 +1750,6 @@ internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* as
                         }
                         else if(p.type == Token_SemiColon)
                         {
-                            break;
                         }
                         else
                         {
@@ -1807,7 +1812,63 @@ internal u32 GetFileTypes(AssetType type)
     return fileTypes;
 }
 
-internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, char* sourceSubdir, char* outputPath, b32 propertiesChanged)
+internal u32 GetSavedVersion(char* basePath, char* type)
+{
+    char path[128];
+    FormatString(path, sizeof(path), "%s/%s", basePath, type);
+    u32 result = 0xffffffff;
+    PlatformFileGroup group = platformAPI.GetAllFilesBegin(PlatformFile_AssetVersion, path);
+    if(group.fileCount)
+    {
+        Assert(group.fileCount == 1);
+        PlatformFileInfo* info = group.firstFileInfo;
+        PlatformFileHandle handle = platformAPI.OpenFile(&group, info);
+        
+        platformAPI.ReadFromFile(&handle, 0, sizeof(u32), &result);
+        platformAPI.CloseFile(&handle);
+    }
+    
+    platformAPI.GetAllFilesEnd(&group);
+    
+    return result;
+}
+
+internal void SaveVersion(char* basePath, char* type)
+{
+    u32 version = MetaGetCurrentVersion(type);
+    char outputPath[128];
+    FormatString(outputPath, sizeof(outputPath), "%s/%s", basePath, type);
+    platformAPI.ReplaceFile(PlatformFile_AssetVersion, outputPath, "version", (u8*) &version, sizeof(u32), PlatformFileReplace_Hidden);
+}
+
+
+internal u32 GetSavedPakVersion(char* basePath)
+{
+    char path[128];
+    FormatString(path, sizeof(path), "%s", basePath);
+    u32 result = 0xffffffff;
+    PlatformFileGroup group = platformAPI.GetAllFilesBegin(PlatformFile_AssetVersion, path);
+    if(group.fileCount)
+    {
+        Assert(group.fileCount == 1);
+        PlatformFileInfo* info = group.firstFileInfo;
+        PlatformFileHandle handle = platformAPI.OpenFile(&group, info);
+        platformAPI.ReadFromFile(&handle, 0, sizeof(u32), &result);
+        platformAPI.CloseFile(&handle);
+    }
+    
+    platformAPI.GetAllFilesEnd(&group);
+    
+    return result;
+}
+
+internal void SavePakVersion(char* basePath)
+{
+    u32 version = PAK_VERSION;
+    platformAPI.ReplaceFile(PlatformFile_AssetVersion, basePath, "version", (u8*) &version, sizeof(u32), PlatformFileReplace_Hidden);
+}
+
+internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, char* sourceSubdir, char* outputPath, b32 propertiesChanged, b32 checkVersion)
 {
     MemoryPool tempPool = {};
     
@@ -1825,6 +1886,15 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     FormatString(header.name, sizeof(header.name), "%s.upak", filename);
     header.magicValue = PAK_MAGIC_NUMBER;
     header.version = PAK_VERSION;
+    header.assetVersion = MetaGetCurrentVersion(sourceDir);
+    
+    b32 changedVersion = false;
+    if(checkVersion)
+    {
+        u32 oldPakVersion = GetSavedPakVersion(basePath);
+        u32 oldVersion = GetSavedVersion(basePath, sourceDir);
+        changedVersion = (oldPakVersion != header.version || oldVersion != header.assetVersion);
+    }
     
     FormatString(header.type, sizeof(header.type), "%s", sourceDir);
     FormatString(header.subtype, sizeof(header.subtype), "%s", sourceSubdir);
@@ -1832,7 +1902,6 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     header.derivedAssetCount = 0;
     
     u32 fileTypes = GetFileTypes((AssetType) type);
-    
     
     u32 startingFontCodepoint = ' ';
     u32 endingFontCodepoint = '~';
@@ -1957,7 +2026,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     
     
     
-    if(assetCount && (updatedFiles || changedFiles))
+    if(assetCount && (updatedFiles || changedFiles || changedVersion))
     {
         FILE* out = fopen("temp.tmp", "wb");
         if(out)
@@ -2019,6 +2088,9 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                             }
                             else
                             {
+                                dest->bitmap.align[0] = 0.5f;
+                                dest->bitmap.align[1] = 0.5f;
+                                
                                 FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
                                 LoadedBitmap bitmap = LoadImage(source, info->name);
                                 
@@ -2026,17 +2098,18 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                 TrimToFirstCharacter(nameNoPoint, sizeof(nameNoPoint), info->name, '.');
                                 
                                 dest->bitmap.nameHash = StringHash(nameNoPoint);
+                                dest->bitmap.attachmentPointCount = bitmap.attachmentPointCount;
                                 
                                 dest->bitmap.dimension[0] = bitmap.width;
                                 dest->bitmap.dimension[1] = bitmap.height;
                                 
-                                dest->bitmap.align[0] = 0.5f;
-                                dest->bitmap.align[1] = 0.5f;
-                                
                                 dest->bitmap.nativeHeight =bitmap.downsampleFactor * bitmap.height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
                                 
                                 fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out);
+                                fwrite(bitmap.attachmentPoints, bitmap.attachmentPointCount * sizeof(PAKAttachmentPoint), 1, out);
+                                
                                 free(bitmap.free);
+                                free(bitmap.attachmentPoints);
                             }
                         } break;
                         
@@ -2147,9 +2220,11 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                 LoadedAnimation animation = LoadAnimation((char*) fileContent, animationIndex);
                                 
                                 char trimmedFilename[128];
-                                TrimToFirstCharacter(trimmedFilename, sizeof(trimmedFilename), filename, '.');
+                                TrimToFirstCharacter(trimmedFilename, sizeof(trimmedFilename), info->name, '.');
+                                
                                 char animationName[128];
                                 FormatString(animationName, sizeof(animationName), "%s_%s", trimmedFilename, animation.name);
+                                
                                 FillPAKAssetBaseInfo(out, &tempPool, derivedAsset, animationName, &markupFiles);
                                 
                                 u32 countTotalBones = 0;
@@ -2288,9 +2363,13 @@ internal void BuildAssets(TimestampHash* hash, char* sourcePath, char* destPath)
         for(u32 subsubDirIndex = 0; subsubDirIndex < subsubdir.count; ++subsubDirIndex)
         {
             char* subsubDirName = subsubdir.names[subsubDirIndex];
-            WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, propertiesChanged);
+            WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, propertiesChanged, true);
         }
+        
+        SaveVersion(sourcePath, subdirName);
     }
+    
+    SavePakVersion(sourcePath);
 }
 
 internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char* destPath, char* destSendPath)
@@ -2383,7 +2462,7 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             if(updatedStandardFiles || updatedTestFiles || numberOfFilesChanged)
             {
                 char* path = (updatedStandardFiles || numberOfFilesChanged) ? destSendPath : destPath;
-                WritePak(hash, sourcePath, subdirName, subsubDirName, path, false);
+                WritePak(hash, sourcePath, subdirName, subsubDirName, path, false, false);
             }
         }
     }

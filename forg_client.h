@@ -45,8 +45,21 @@
 
 struct BaseComponent
 {
+    u32 seed;
     UniversePos universeP;
     Vec3 velocity;
+    Rect3 bounds;
+    GameProperty action;
+};
+
+struct PlantComponent
+{
+    
+};
+
+struct GrassComponent
+{
+    
 };
 
 #include "forg_ecs.h"
@@ -99,7 +112,8 @@ struct ReceivingAssetFile
 
 struct ClientPlayer
 {
-    EntityID ID;
+    EntityID serverID;
+    EntityID clientID;
     UniversePos universeP;
     UniversePos oldUniverseP;
     
@@ -168,8 +182,6 @@ struct GameModeWorld
     BoltCache* boltCache;
     
     ClientPlayer player;
-    
-    RockComponent test;
     
 #if FORGIVENESS_INTERNAL
     b32 replayingInput;

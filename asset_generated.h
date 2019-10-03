@@ -54,6 +54,10 @@ enum AssetImageType
 {
 AssetImage_crocodile,
 AssetImage_default,
+AssetImage_grass,
+AssetImage_mushroom,
+AssetImage_rock,
+AssetImage_tree,
 AssetImage_turtle,
 AssetImage_wolf,
 AssetImage_Count
@@ -62,6 +66,10 @@ AssetImage_Count
 char* MetaTable_AssetImageType[] = {
 "crocodile",
 "default",
+"grass",
+"mushroom",
+"rock",
+"tree",
 "turtle",
 "wolf",
 };
@@ -157,7 +165,7 @@ MetaAssetType metaAsset_subTypes[AssetType_Count] =
 {0, NULL},
 {1, MetaTable_AssetEntityDefinitionType},
 {2, MetaTable_AssetFontType},
-{4, MetaTable_AssetImageType},
+{8, MetaTable_AssetImageType},
 {1, MetaTable_AssetModelType},
 {1, MetaTable_AssetRockDefinitionType},
 {4, MetaTable_AssetSkeletonType},

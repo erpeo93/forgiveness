@@ -1,14 +1,18 @@
 enum EntityArchetype
-{Archetype_RockArchetype,
+{Archetype_GrassArchetype,
+Archetype_PlantArchetype,
+Archetype_RockArchetype,
 Archetype_AnimalArchetype,
 Archetype_Count
 };
 char* MetaTable_EntityArchetype[] = 
-{"RockArchetype",
+{"GrassArchetype",
+"PlantArchetype",
+"RockArchetype",
 "AnimalArchetype",
 };
 #define META_ARCHETYPES_INIT_FUNC()\
-InitFunc[Archetype_RockArchetype] = InitRockArchetype;InitFunc[Archetype_AnimalArchetype] = InitAnimalArchetype;
+InitFunc[Archetype_GrassArchetype] = InitGrassArchetype;InitFunc[Archetype_PlantArchetype] = InitPlantArchetype;InitFunc[Archetype_RockArchetype] = InitRockArchetype;InitFunc[Archetype_AnimalArchetype] = InitAnimalArchetype;
 ;
 char* MetaTable_EffectIdentifier[] = 
  {
@@ -241,6 +245,12 @@ FieldDefinition fieldDefinitionOfEntityID[] =
 {0, MetaType_u32, "u32", "archetypeIndex", (u32) (&((EntityID*)0)->archetypeIndex), {}, sizeof(u32),"invalid",0, 0, 0}, 
 };
 
+FieldDefinition fieldDefinitionOfCommonEntityInitParams[] = 
+ {
+{0, MetaType_Vec3, "Vec3", "boundOffset", (u32) (&((CommonEntityInitParams*)0)->boundOffset), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
+{0, MetaType_Vec3, "Vec3", "boundDim", (u32) (&((CommonEntityInitParams*)0)->boundDim), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
+};
+
 FieldDefinition fieldDefinitionOfServerEntityInitParams[] = 
  {
 {MetaFlag_Uneditable, MetaType_UniversePos, "UniversePos", "P", (u32) (&((ServerEntityInitParams*)0)->P), {}, sizeof(UniversePos),"invalid",0, 0, 0}, 
@@ -251,6 +261,7 @@ FieldDefinition fieldDefinitionOfServerEntityInitParams[] =
 FieldDefinition fieldDefinitionOfClientEntityInitParams[] = 
  {
 {MetaFlag_Uneditable, MetaType_EntityID, "EntityID", "ID", (u32) (&((ClientEntityInitParams*)0)->ID), {}, sizeof(EntityID),"invalid",0, 0, 0}, 
+{MetaFlag_Uneditable, MetaType_u32, "u32", "seed", (u32) (&((ClientEntityInitParams*)0)->seed), {}, sizeof(u32),"invalid",0, 0, 0}, 
 {0, MetaType_Enumerator, "Enumerator", "skeleton", (u32) (&((ClientEntityInitParams*)0)->skeleton), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_AssetSkeletonType, ArrayCount(MetaTable_AssetSkeletonType)}, 
 {0, MetaType_Enumerator, "Enumerator", "skin", (u32) (&((ClientEntityInitParams*)0)->skin), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_AssetImageType, ArrayCount(MetaTable_AssetImageType)}, 
 };
@@ -258,6 +269,7 @@ FieldDefinition fieldDefinitionOfClientEntityInitParams[] =
 FieldDefinition fieldDefinitionOfEntityDefinition[] = 
  {
 {0, MetaType_Enumerator, "Enumerator", "archetype", (u32) (&((EntityDefinition*)0)->archetype), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_EntityArchetype, ArrayCount(MetaTable_EntityArchetype)}, 
+{0, MetaType_CommonEntityInitParams, "CommonEntityInitParams", "common", (u32) (&((EntityDefinition*)0)->common), {}, sizeof(CommonEntityInitParams),"invalid",0, 0, 0}, 
 {0, MetaType_ServerEntityInitParams, "ServerEntityInitParams", "server", (u32) (&((EntityDefinition*)0)->server), {}, sizeof(ServerEntityInitParams),"invalid",0, 0, 0}, 
 {0, MetaType_ClientEntityInitParams, "ClientEntityInitParams", "client", (u32) (&((EntityDefinition*)0)->client), {}, sizeof(ClientEntityInitParams),"invalid",0, 0, 0}, 
 };
@@ -320,12 +332,26 @@ char* MetaProperties_spawnEntityType[] =
 "Rock",
 };
 
+char* MetaProperties_action[] = 
+ {
+"idle",
+"move",
+"attack",
+};
+
+char* MetaProperties_test222[] = 
+ {
+"blabla",
+"blabla2",
+};
+
 #define META_HANDLE_ADD_TO_DEFINITION_HASH()\
 AddToMetaDefinitions(RockDefinition, fieldDefinitionOfRockDefinition);\
 AddToMetaDefinitions(RockMineral, fieldDefinitionOfRockMineral);\
 AddToMetaDefinitions(EntityDefinition, fieldDefinitionOfEntityDefinition);\
 AddToMetaDefinitions(ClientEntityInitParams, fieldDefinitionOfClientEntityInitParams);\
 AddToMetaDefinitions(ServerEntityInitParams, fieldDefinitionOfServerEntityInitParams);\
+AddToMetaDefinitions(CommonEntityInitParams, fieldDefinitionOfCommonEntityInitParams);\
 AddToMetaDefinitions(EntityID, fieldDefinitionOfEntityID);\
 AddToMetaDefinitions(ground_generator, fieldDefinitionOfground_generator);\
 AddToMetaDefinitions(TileMapping, fieldDefinitionOfTileMapping);\
@@ -346,6 +372,8 @@ AddToMetaDefinitions(WaterParams, fieldDefinitionOfWaterParams);\
 AddToMetaDefinitions(WaterPhase, fieldDefinitionOfWaterPhase);
 
 #define META_PROPERTIES_ADD()\
+AddToMetaProperties(test222, MetaProperties_test222);\
+AddToMetaProperties(action, MetaProperties_action);\
 AddToMetaProperties(spawnEntityType, MetaProperties_spawnEntityType);\
 AddToMetaProperties(tileType, MetaProperties_tileType);\
 AddToMetaProperties(test2, MetaProperties_test2);\
@@ -354,6 +382,8 @@ AddToMetaProperties(Test, MetaProperties_Test);
 enum PropertyType
 {
 Property_Invalid,
+Property_test222,
+Property_action,
 Property_spawnEntityType,
 Property_tileType,
 Property_test2,
@@ -361,20 +391,22 @@ Property_Test,
 Property_Count,
 };
 #define META_ASSET_PROPERTIES_STRINGS()\
+meta_propertiesString[Property_test222 - 1] = "test222";\
+meta_propertiesString[Property_action - 1] = "action";\
 meta_propertiesString[Property_spawnEntityType - 1] = "spawnEntityType";\
 meta_propertiesString[Property_tileType - 1] = "tileType";\
 meta_propertiesString[Property_test2 - 1] = "test2";\
 meta_propertiesString[Property_Test - 1] = "Test";\
 
 #define META_DEFAULT_VALUES_CPP_SUCKS()\
-fieldDefinitionOfWaterPhase[0].def.def_r32 =0;fieldDefinitionOfWaterPhase[6].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[7].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[8].def.def_r32 =1.0f;fieldDefinitionOfWaterPhase[9].def.def_r32 =0.5f;fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfworld_generator[7].def.def_r32 =1;fieldDefinitionOfworld_generator[8].def.def_r32 =0.05f;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, AssetImage_default};fieldDefinitionOftile_definition[2].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfRockDefinition[1].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfRockDefinition[4].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[6].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[9].def.def_u32 =1;fieldDefinitionOfRockDefinition[10].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[11].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[12].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[13].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[17].def.def_u32 =1;
+fieldDefinitionOfWaterPhase[0].def.def_r32 =0;fieldDefinitionOfWaterPhase[6].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[7].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[8].def.def_r32 =1.0f;fieldDefinitionOfWaterPhase[9].def.def_r32 =0.5f;fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfworld_generator[7].def.def_r32 =1;fieldDefinitionOfworld_generator[8].def.def_r32 =0.05f;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, AssetImage_default};fieldDefinitionOftile_definition[2].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfCommonEntityInitParams[1].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[1].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfRockDefinition[4].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[6].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[9].def.def_u32 =1;fieldDefinitionOfRockDefinition[10].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[11].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[12].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[13].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[17].def.def_u32 =1;
 ;
 #define META_ARCHETYPES_BOTH()\
-archetypeLayouts[Archetype_AnimalArchetype].totalSize = sizeof(AnimalArchetype); archetypeLayouts[Archetype_RockArchetype].totalSize = sizeof(RockArchetype); 
+archetypeLayouts[Archetype_AnimalArchetype].totalSize = sizeof(AnimalArchetype); archetypeLayouts[Archetype_RockArchetype].totalSize = sizeof(RockArchetype); archetypeLayouts[Archetype_PlantArchetype].totalSize = sizeof(PlantArchetype); archetypeLayouts[Archetype_GrassArchetype].totalSize = sizeof(GrassArchetype); 
 ;
 #define META_ARCHETYPES_SERVER()\
-archetypeLayouts[Archetype_AnimalArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_AnimalArchetype].hasPhysicComponent.offset = OffsetOf(AnimalArchetype, physic);  archetypeLayouts[Archetype_AnimalArchetype].hasPlayerComponent.exists = true; archetypeLayouts[Archetype_AnimalArchetype].hasPlayerComponent.pointer = true; archetypeLayouts[Archetype_AnimalArchetype].hasPlayerComponent.offset = OffsetOf(AnimalArchetype, player);  archetypeLayouts[Archetype_RockArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_RockArchetype].hasPhysicComponent.offset = OffsetOf(RockArchetype, physic);  archetypeLayouts[Archetype_RockArchetype].hasPlayerComponent.exists = true; archetypeLayouts[Archetype_RockArchetype].hasPlayerComponent.pointer = true; archetypeLayouts[Archetype_RockArchetype].hasPlayerComponent.offset = OffsetOf(RockArchetype, player);  
+archetypeLayouts[Archetype_AnimalArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_AnimalArchetype].hasPhysicComponent.offset = OffsetOf(AnimalArchetype, physic);  archetypeLayouts[Archetype_AnimalArchetype].hasPlayerComponent.exists = true; archetypeLayouts[Archetype_AnimalArchetype].hasPlayerComponent.pointer = true; archetypeLayouts[Archetype_AnimalArchetype].hasPlayerComponent.offset = OffsetOf(AnimalArchetype, player);  archetypeLayouts[Archetype_RockArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_RockArchetype].hasPhysicComponent.offset = OffsetOf(RockArchetype, physic);  archetypeLayouts[Archetype_PlantArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_PlantArchetype].hasPhysicComponent.offset = OffsetOf(PlantArchetype, physic);  archetypeLayouts[Archetype_PlantArchetype].hasPlayerComponent.exists = true; archetypeLayouts[Archetype_PlantArchetype].hasPlayerComponent.pointer = true; archetypeLayouts[Archetype_PlantArchetype].hasPlayerComponent.offset = OffsetOf(PlantArchetype, player);  archetypeLayouts[Archetype_GrassArchetype].hasPhysicComponent.exists = true; archetypeLayouts[Archetype_GrassArchetype].hasPhysicComponent.offset = OffsetOf(GrassArchetype, physic);  archetypeLayouts[Archetype_GrassArchetype].hasPlayerComponent.exists = true; archetypeLayouts[Archetype_GrassArchetype].hasPlayerComponent.pointer = true; archetypeLayouts[Archetype_GrassArchetype].hasPlayerComponent.offset = OffsetOf(GrassArchetype, player);  
 ;
 #define META_ARCHETYPES_CLIENT()\
-archetypeLayouts[Archetype_AnimalArchetype].hasBaseComponent.exists = true; archetypeLayouts[Archetype_AnimalArchetype].hasBaseComponent.offset = OffsetOf(AnimalArchetype, base);  archetypeLayouts[Archetype_AnimalArchetype].hasAnimationComponent.exists = true; archetypeLayouts[Archetype_AnimalArchetype].hasAnimationComponent.offset = OffsetOf(AnimalArchetype, animation);  archetypeLayouts[Archetype_RockArchetype].hasBaseComponent.exists = true; archetypeLayouts[Archetype_RockArchetype].hasBaseComponent.offset = OffsetOf(RockArchetype, base);  archetypeLayouts[Archetype_RockArchetype].hasRockComponent.exists = true; archetypeLayouts[Archetype_RockArchetype].hasRockComponent.offset = OffsetOf(RockArchetype, rock);  
+archetypeLayouts[Archetype_AnimalArchetype].hasBaseComponent.exists = true; archetypeLayouts[Archetype_AnimalArchetype].hasBaseComponent.offset = OffsetOf(AnimalArchetype, base);  archetypeLayouts[Archetype_AnimalArchetype].hasAnimationComponent.exists = true; archetypeLayouts[Archetype_AnimalArchetype].hasAnimationComponent.offset = OffsetOf(AnimalArchetype, animation);  archetypeLayouts[Archetype_RockArchetype].hasBaseComponent.exists = true; archetypeLayouts[Archetype_RockArchetype].hasBaseComponent.offset = OffsetOf(RockArchetype, base);  archetypeLayouts[Archetype_RockArchetype].hasRockComponent.exists = true; archetypeLayouts[Archetype_RockArchetype].hasRockComponent.offset = OffsetOf(RockArchetype, rock);  archetypeLayouts[Archetype_PlantArchetype].hasBaseComponent.exists = true; archetypeLayouts[Archetype_PlantArchetype].hasBaseComponent.offset = OffsetOf(PlantArchetype, base);  archetypeLayouts[Archetype_PlantArchetype].hasPlantComponent.exists = true; archetypeLayouts[Archetype_PlantArchetype].hasPlantComponent.offset = OffsetOf(PlantArchetype, rock);  archetypeLayouts[Archetype_GrassArchetype].hasBaseComponent.exists = true; archetypeLayouts[Archetype_GrassArchetype].hasBaseComponent.offset = OffsetOf(GrassArchetype, base);  archetypeLayouts[Archetype_GrassArchetype].hasGrassComponent.exists = true; archetypeLayouts[Archetype_GrassArchetype].hasGrassComponent.offset = OffsetOf(GrassArchetype, rock);  
 ;

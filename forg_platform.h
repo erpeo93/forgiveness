@@ -322,6 +322,7 @@ typedef enum PlatformFileType
     PlatformFile_timestamp = (1 << 12),
     PlatformFile_properties = (1 << 13),
     PlatformFile_Temp = (1 << 14),
+    PlatformFile_AssetVersion = (1 << 15),
     
     PlatformFile_count,
 } PlatformFileType;

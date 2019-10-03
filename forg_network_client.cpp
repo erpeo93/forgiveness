@@ -398,21 +398,24 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         for(u32 fileIndex = 0; fileIndex < assets->fileCount; ++fileIndex)
                         {
                             AssetFile* file = GetAssetFile(assets, fileIndex);
-                            PAKFileHeader* fileHeader = GetFileInfo(assets, fileIndex);
-                            PlatformFileHandle* fileHandle = GetHandleFor(assets, fileIndex);
-                            
-                            u16 fileType = GetMetaAssetType(fileHeader->type);
-                            u16 fileSubtype = GetMetaAssetSubtype(type, fileHeader->subtype);
-                            
-                            if(fileType == type && fileSubtype == subtype)
+                            if(file->valid)
                             {
-                                TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+                                PAKFileHeader* fileHeader = GetFileInfo(assets, fileIndex);
+                                PlatformFileHandle* fileHandle = GetHandleFor(assets, fileIndex);
                                 
-                                u8* content = (u8*) PushSize(&tempPool, file->size);
-                                platformAPI.ReadFromFile(fileHandle, 0, file->size, content);
+                                u16 fileType = GetMetaAssetType(fileHeader->type);
+                                u16 fileSubtype = GetMetaAssetSubtype(type, fileHeader->subtype);
                                 
-                                dataHash = DataHash((char*) content, file->size);
-                                EndTemporaryMemory(fileMemory);
+                                if(fileType == type && fileSubtype == subtype)
+                                {
+                                    TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+                                    
+                                    u8* content = (u8*) PushSize(&tempPool, file->size);
+                                    platformAPI.ReadFromFile(fileHandle, 0, file->size, content);
+                                    
+                                    dataHash = DataHash((char*) content, file->size);
+                                    EndTemporaryMemory(fileMemory);
+                                }
                             }
                         }
                         SendFileHash(type, subtype, dataHash);
@@ -426,7 +429,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             case Type_gameAccess:
             {
                 Unpack("QHL", &worldMode->worldSeed, 
-                       &player->ID.archetype, &player->ID.archetypeIndex);
+                       &player->serverID.archetype, &player->serverID.archetypeIndex);
             } break;
             
             case Type_worldInfo:
@@ -446,26 +449,35 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 EntityID clientID = GetClientIDMapping(worldMode, serverID);
                 if(!IsValid(clientID))
                 {
-                    clientID = {};
-                    Acquire(worldMode, serverID.archetype, (&clientID));
-                    
-                    RandomSequence seq = Seed(seed);
                     Assets* assets = gameState->assets;
                     EntityDefinition* definition = GetData(assets, EntityDefinition, definitionID);
                     
-                    ClientEntityInitParams params = definition->client;
-                    params.ID = serverID;
-                    
-                    InitFunc[serverID.archetype](worldMode, clientID, &params); 
-                    AddClientIDMapping(worldMode, serverID, clientID);
+                    if(definition)
+                    {
+                        clientID = {};
+                        Acquire(worldMode, serverID.archetype, (&clientID));
+                        
+                        ClientEntityInitParams params = definition->client;
+                        params.ID = serverID;
+                        params.seed = seed;
+                        
+                        InitFunc[serverID.archetype](worldMode, clientID, &definition->common, &params);
+                        AddClientIDMapping(worldMode, serverID, clientID);
+                    }
                 }
                 currentID = clientID;
+                if(AreEqual(serverID, player->serverID))
+                {
+                    player->clientID = clientID;
+                }
             } break;
             
             case Type_entityBasics:
             {
                 UniversePos P;
-                Unpack("llV", &P.chunkX, &P.chunkY, &P.chunkOffset);
+                Vec3 speed;
+                GameProperty action;
+                Unpack("llVVHH", &P.chunkX, &P.chunkY, &P.chunkOffset, &speed, &action.property, &action.value);
                 
                 BaseComponent* base = GetComponent(worldMode, currentID, BaseComponent);
                 if(base)
@@ -474,9 +486,10 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     Vec3 deltaP = Subtract(P, base->universeP);
                     r32 deltaLength = Length(deltaP);
                     base->universeP = P;
-                    base->velocity = {};
+                    base->velocity = speed;
+                    base->action = action;
                     
-                    if(AreEqual(currentID, player->ID))
+                    if(AreEqual(currentID, player->clientID))
                     {
                         player->universeP = P;
                     }

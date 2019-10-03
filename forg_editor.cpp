@@ -1291,6 +1291,13 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                     Edit_Color(layout, "color", &info->coloration.color, false, ID);
                     Pop(layout);
                 }
+                else
+                {
+                    Nest(layout);
+                    Edit_r32(layout, "alignX", info->bitmap.align + 0, false, ID, true);
+                    Edit_r32(layout, "alignY", info->bitmap.align + 1, false, ID, true);
+                    Pop(layout);
+                }
             } break;
             
             case AssetType_Sound:
@@ -1397,6 +1404,12 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                 
                 Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, 0);
                 BitmapDim dim = PushBitmapWithPivot(layout->group, FlatTransform(0.1f), ID, P, V2(0, 0), height);
+                
+                Vec2 pivot = V2(info->bitmap.align[0], info->bitmap.align[1]);
+                Vec2 pivotP = P.xy + Hadamart(pivot, dim.size);
+                Rect2 pivotRect = RectCenterDim(pivotP, layout->fontScale * V2(8, 8));
+                
+                PushRect(layout->group, FlatTransform(0.2f), pivotRect, V4(1, 0, 0, 1));
                 
                 Rect2 rect = Scale(RectMinDim(P.xy, dim.size), backgroundScale);
                 PushRect(layout->group, FlatTransform(), rect, V4(0, 0, 0, 1));
@@ -1712,6 +1725,8 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                         }
                     }
                     
+                    NextRaw(&layout);
+                    Edit_b32(&layout, "entity bounds", &layout.context->renderEntityBounds, 0, {});
                     NextRaw(&layout);
                     Edit_Vec3(&layout, "camera offset", &worldMode->additionalCameraOffset, 0, {});
                     NextRaw(&layout);

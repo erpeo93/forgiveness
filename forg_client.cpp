@@ -174,9 +174,27 @@ internal Vec3 HandleDaynightCycle(GameModeWorld* worldMode, PlatformInput* input
     return ambientLightColor;
 }
 
+internal r32 GetHeight(BaseComponent* base)
+{
+    r32 height = GetDim(base->bounds).z;
+    return height;
+}
+
 RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
 {
-    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    r32 height = GetHeight(base);
+    AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
+    
+    if(base->velocity.x != 0.0f)
+    {
+        animation->flipOnYAxis = (base->velocity.x < 0);
+    }
+    Clear(&animation->skeletonProperties);
+    AddOptionalGamePropertyRaw(&animation->skeletonProperties, base->action);
+    
+    
+    
     
     AnimationParams params = {};
     params.elapsedTime = elapsedTime;
@@ -184,20 +202,59 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
     params.P = GetRelativeP(worldMode, base);
     params.scale = 1;
     params.transform = UprightTransform();
-    RenderAnimation(group, animation, &params);
+    params.flipOnYAxis = animation->flipOnYAxis;
+    
+    
+    RenderAnimationWithHeight(group, animation, &params, height);
 }
 
 RENDERING_ECS_JOB_CLIENT(RenderRock)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    
+    r32 height = GetHeight(base);
     RockComponent* rock = GetComponent(worldMode, ID, RockComponent);
-    VertexModel model = {};
-    model.dim = rock->dim;
-    model.vertexCount = rock->vertexCount;
-    model.faceCount = rock->faceCount;
-    model.vertexes = rock->vertexes;
-    model.faces = rock->faces;
-    PushModel(group, &model, Identity(), GetRelativeP(worldMode, base), {});
+    
+    RandomSequence seq = Seed(base->seed);
+    BitmapId rockID = QueryBitmaps(group->assets, AssetImage_rock, &seq, 0);
+    if(IsValid(rockID))
+    {
+        PushBitmap(group, UprightTransform(), rockID, GetRelativeP(worldMode, base), height);
+    }
+}
+
+RENDERING_ECS_JOB_CLIENT(RenderPlant)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    r32 height = GetHeight(base);
+    PlantComponent* plant = GetComponent(worldMode, ID, PlantComponent);
+    
+    RandomSequence seq = Seed(base->seed);
+    BitmapId plantID = QueryBitmaps(group->assets, AssetImage_tree, &seq, 0);
+    if(IsValid(plantID))
+    {
+        PushBitmap(group, UprightTransform(), plantID, GetRelativeP(worldMode, base), height);
+    }
+}
+
+RENDERING_ECS_JOB_CLIENT(RenderGrass)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    r32 height = GetHeight(base);
+    GrassComponent* grass = GetComponent(worldMode, ID, GrassComponent);
+    
+    RandomSequence seq = Seed(base->seed);
+    BitmapId grassID = QueryBitmaps(group->assets, AssetImage_grass, &seq, 0);
+    if(IsValid(grassID))
+    {
+        PushBitmap(group, UprightTransform(), grassID, GetRelativeP(worldMode, base), height);
+    }
+}
+
+RENDERING_ECS_JOB_CLIENT(RenderBound)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    PushCubeOutline(group, Offset(base->bounds, GetRelativeP(worldMode, base)), V4(1, 0, 0, 1), 0.05f);
 }
 
 internal void AddEntityLights(GameModeWorld* worldMode)
@@ -384,9 +441,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     worldMode->relativeScreenMouseP = newMouseP;
     
     
-    if(IsValid(myPlayer->ID))
+    if(IsValid(myPlayer->clientID))
     {
-        BaseComponent* player = GetComponent(worldMode, myPlayer->ID, BaseComponent);
+        BaseComponent* player = GetComponent(worldMode, myPlayer->clientID, BaseComponent);
         if(player)
         {
             if(IsDown(&input->moveLeft))
@@ -444,6 +501,16 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderCharacterAnimation, ArchetypeHas(BaseComponent) && ArchetypeHas(AnimationComponent), input->timeToAdvance);
             EXECUTE_RENDERING_JOB(worldMode, group, RenderRock, ArchetypeHas(BaseComponent) && ArchetypeHas(RockComponent), input->timeToAdvance);
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderPlant, ArchetypeHas(BaseComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderGrass, ArchetypeHas(BaseComponent) && ArchetypeHas(GrassComponent), input->timeToAdvance);
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderPlant, ArchetypeHas(BaseComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
+            
+            
+            if(worldMode->editorUI.renderEntityBounds)
+            {
+                EXECUTE_RENDERING_JOB(worldMode, group, RenderBound, ArchetypeHas(BaseComponent), input->timeToAdvance);
+            }
+            
             myPlayer->universeP = player->universeP;
             Vec3 deltaP = -Subtract(myPlayer->universeP, myPlayer->oldUniverseP);
             
@@ -464,23 +531,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             EndDepthPeel(group);
             
             myPlayer->oldUniverseP = myPlayer->universeP;
-            
-            
-            RandomSequence seq = Seed(123);
-            GameProperties bitmapProperties = {};
-            bitmapProperties.properties[0].property = Property_Test;
-            bitmapProperties.properties[0].value = Value1;
-            
-            BitmapId test = QueryBitmaps(group->assets, 0, &seq, &bitmapProperties);
-            
-            if(IsValid(test))
-            {
-                PushBitmap(group, UprightTransform(), test, V3(0, 0, 0), 1.0f);
-            }
-            
-            
-            
-            
             
             RenderEditor(group, worldMode, deltaMouseScreenP);
 #if 0

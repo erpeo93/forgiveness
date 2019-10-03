@@ -13,10 +13,10 @@ struct ArchetypeLayout
     ArchetypeComponent hasBaseComponent;
     ArchetypeComponent hasAnimationComponent;
     ArchetypeComponent hasRockComponent;
+    ArchetypeComponent hasPlantComponent;
+    ArchetypeComponent hasGrassComponent;
     ArchetypeComponent hasPhysicComponent;
-    ArchetypeComponent hasServerAnimationComponent;
     ArchetypeComponent hasPlayerComponent;
-    ArchetypeComponent hasOptionalComponent;
 };
 
 #define HasComponent(arch, component) archetypeLayouts[arch].has##component.exists

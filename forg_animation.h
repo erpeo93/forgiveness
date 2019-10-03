@@ -28,6 +28,8 @@ struct AnimationComponent
     
     AssetSkeletonType skeleton;
     GameProperties skeletonProperties;
+    
+    b32 flipOnYAxis;
 };
 
 struct AnimationPiece
@@ -46,5 +48,6 @@ struct AnimationParams
     r32 angle;
     Vec3 P;
     r32 scale;
+    b32 flipOnYAxis;
     ObjectTransform transform;
 };

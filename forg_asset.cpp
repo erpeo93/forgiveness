@@ -171,12 +171,12 @@ inline GetAssetResult GetAssetRaw(Assets* assets, AssetID ID)
     Assert(ID.subtype < array->subtypeCount);
     AssetSubtypeArray* subtype = array->subtypes + ID.subtype;
     
-    Assert(ID.index < (subtype->standardAssetCount + subtype->derivedAssetCount));
-    Asset* asset = GetAsset(subtype, ID.index);
-    
-    result.asset = asset;
-    result.derived = (ID.index >= subtype->standardAssetCount);
-    
+    if(ID.index < (subtype->standardAssetCount + subtype->derivedAssetCount))
+    {
+        Asset* asset = GetAsset(subtype, ID.index);
+        result.asset = asset;
+        result.derived = (ID.index >= subtype->standardAssetCount);
+    }
     return result;
 }
 
@@ -611,7 +611,9 @@ void LoadBitmap(Assets* assets, AssetID ID, b32 immediate = false)
     {
         Asset* asset = boilerplate.asset;
         PAKBitmap* info = &asset->paka.bitmap;
-        u32 size = info->dimension[0] * info->dimension[1] * 4;
+        u32 pixelSize = info->dimension[0] * info->dimension[1] * 4;
+        u32 attachmentSize = info->attachmentPointCount * sizeof(PAKAttachmentPoint);
+        u32 size = pixelSize + attachmentSize;
         
         asset->data = AcquireAssetMemory(assets, size, asset);
         Bitmap* bitmap = &asset->bitmap;
@@ -619,9 +621,9 @@ void LoadBitmap(Assets* assets, AssetID ID, b32 immediate = false)
         bitmap->width = SafeTruncateToU16(info->dimension[0]);
         bitmap->height = SafeTruncateToU16(info->dimension[1]);
         bitmap->nativeHeight = info->nativeHeight;
-        bitmap->pivot = V2(info->align[0], info->align[1]);
         bitmap->widthOverHeight = (r32) bitmap->width / (r32) bitmap->height;
         bitmap->pixels = asset->data;
+        bitmap->attachmentPoints = (PAKAttachmentPoint*) AdvanceVoidPtrBytes(asset->data, pixelSize);
         
         u32 textureHandle = AcquireTextureHandle(assets);
         asset->textureHandle = TextureHandle(textureHandle, bitmap->width, bitmap->height);
@@ -796,29 +798,40 @@ internal void LoadAssetFile(Assets* assets, AssetFile* file, AssetSubtypeArray* 
     EndTemporaryMemory(assetMemory);
 }
 
-internal b32 InitFileAssetHeader(AssetFile* file)
+internal void InitFileAssetHeader(AssetFile* file)
 {
-    b32 result = false;
+    b32 valid = true;
     ZeroStruct(file->header);
-    platformAPI.ReadFromFile(&file->handle, 0, sizeof(file->header), &file->header);
-    if(PlatformNoFileErrors(&file->handle))
-    {
-        result = true;
-    }
-    PAKFileHeader* header = &file->header;
-    if(header->magicValue != PAK_MAGIC_NUMBER)
-    {
-        result = false;
-        platformAPI.FileError(&file->handle, "magic number not valid");
-    }
     
-    if(header->version != PAK_VERSION)
-    {
-        result = false;
-        platformAPI.FileError(&file->handle, "pak file version not valid");
-    }
+    u32 pakVersion;
+    platformAPI.ReadFromFile(&file->handle, 0, sizeof(u32), &pakVersion);
     
-    return result;
+    if(pakVersion == PAK_VERSION)
+    {
+        platformAPI.ReadFromFile(&file->handle, 0, sizeof(file->header), &file->header);
+        if(!PlatformNoFileErrors(&file->handle))
+        {
+            valid = false;
+        }
+        
+        PAKFileHeader* header = &file->header;
+        if(header->magicValue != PAK_MAGIC_NUMBER)
+        {
+            valid = false;
+            platformAPI.FileError(&file->handle, "magic number not valid");
+        }
+        
+        u32 expectedAssetVersion = MetaGetCurrentVersion(file->header.type);
+        if(header->assetVersion != expectedAssetVersion)
+        {
+            valid = false;
+        }
+    }
+    else
+    {
+        valid = false;
+    }
+    file->valid = valid;
 }
 
 internal AssetFile* CloseAssetFileFor(Assets* assets, u16 closeType, u16 closeSubtype, u32* fileIndex)
@@ -862,8 +875,8 @@ internal void ReopenReloadAssetFile(Assets* assets, AssetFile* file, u32 fileInd
     FormatString(fakeInfo.name, sizeof(name), "%s.upak", newName);
     
     file->handle = platformAPI.OpenFile(&fake, &fakeInfo);
-    
-    if(InitFileAssetHeader(file))
+    InitFileAssetHeader(file);
+    if(file->valid)
     {
         AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, &file->header);
         Assert(assetSubtypeArray);
@@ -892,6 +905,10 @@ internal void ReopenReloadAssetFile(Assets* assets, AssetFile* file, u32 fileInd
         assetSubtypeArray->firstAssetBlock = AcquireAssetBlocks(assets, newAssetCount);
         assetSubtypeArray->fileIndex = fileIndex;
         LoadAssetFile(assets, file, assetSubtypeArray, pool);
+    }
+    else
+    {
+        platformAPI.CloseFile(&file->handle);
     }
 }
 
@@ -922,12 +939,12 @@ internal void WriteAssetMarkupDataToStream(Stream* stream, AssetType type, PAKAs
         {
             if(!derivedAsset)
             {
-                if(asset->bitmap.align[0] != 0)
+                if(asset->bitmap.align[0] != 0.5f)
                 {
                     OutputToStream(stream, "%s=%f;", IMAGE_PROPERTY_ALIGN_X, asset->bitmap.align[0]);
                     nothingWrote = false;
                 }
-                if(asset->bitmap.align[1] != 0)
+                if(asset->bitmap.align[1] != 0.5f)
                 {
                     OutputToStream(stream, "%s=%f;", IMAGE_PROPERTY_ALIGN_Y, asset->bitmap.align[1]);
                     nothingWrote = false;
@@ -971,6 +988,11 @@ internal void DumpColorationToStream(PAKColoration* coloration, Stream* stream)
                    coloration->color.g,
                    coloration->color.b,
                    coloration->color.a);
+}
+
+internal void DumpPivotToStream(PAKBitmap* bitmap, Stream* stream)
+{
+    OutputToStream(stream, "%s=%f;%s=%f;", IMAGE_PROPERTY_ALIGN_X, IMAGE_PROPERTY_ALIGN_Y, bitmap->align[0], bitmap->align[1]);
 }
 
 internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* basePath, b32 editorMode)
@@ -1160,9 +1182,9 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
         AssetFile* file = assets->files + fileIndex;
         file->handle = platformAPI.OpenFile(&fileGroup, info);
         file->size = SafeTruncateUInt64ToU32(info->size);
-        
         PAKFileHeader* header = &file->header;
-        if(InitFileAssetHeader(file))
+        InitFileAssetHeader(file);
+        if(file->valid)
         {
             u16 assetCount = (header->standardAssetCount + header->derivedAssetCount);
             AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, header);
@@ -1181,8 +1203,8 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
         }
         else
         {
+            platformAPI.CloseFile(&file->handle);
             // TODO(Leonardo): notify user! so that he can download the file again.
-            InvalidCodePath;
         }
         
         ++fileIndex;
@@ -1192,9 +1214,11 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
     return assets;
 }
 
-inline b32 MatchesProperties(Asset* asset, GameProperties* properties)
+inline b32 MatchesProperties(Asset* asset, GameProperties* properties, b32* exactMatch)
 {
     b32 result = true;
+    b32 exactMatching = true;
+    
     if(properties)
     {
         for(u32 propertyIndex = 0; propertyIndex < ArrayCount(properties->properties); ++propertyIndex)
@@ -1225,6 +1249,7 @@ inline b32 MatchesProperties(Asset* asset, GameProperties* properties)
                 {
                     if(flags & GameProperty_Optional)
                     {
+                        exactMatching = false;
                     }
                     else
                     {
@@ -1243,7 +1268,7 @@ inline b32 MatchesProperties(Asset* asset, GameProperties* properties)
             }
         }
     }
-    
+    *exactMatch = exactMatching;
     return result;
 }
 
@@ -1260,23 +1285,40 @@ inline b32 MatchesProperties(Asset* asset, GameProperties* properties)
 
 
 #define AddGameProperty(properties, property, value) AddGameProperty_(properties, Property_##property, value, 0)
+#define AddGamePropertyRaw(properties, property) AddGameProperty_(properties, property, 0)
 #define AddOptionalGameProperty(properties, property, value) AddGameProperty_(properties, Property_##property, value, GameProperty_Optional)
-inline void AddGameProperty_(GameProperties* properties, PropertyType property, u32 value, u32 flags)
+#define AddOptionalGamePropertyRaw(properties, property) AddGameProperty_(properties, property, GameProperty_Optional)
+
+inline void AddGameProperty_(GameProperties* properties, GameProperty property, u32 flags)
 {
     for(u32 propertyIndex = 0; propertyIndex < ArrayCount(properties->properties); ++propertyIndex)
     {
         GameProperty* prop = properties->properties + propertyIndex;
         if(!prop->property)
         {
-            prop->property = SafeTruncateToU16(property);
-            prop->value = SafeTruncateToU16(value);
+            *prop = property;
             properties->flags[propertyIndex] = flags;
             break;
         }
     }
 }
 
+inline void AddGameProperty_(GameProperties* properties, PropertyType property, u32 value, u32 flags)
+{
+    GameProperty prop = {};
+    prop.property = SafeTruncateToU16(property);
+    prop.value = SafeTruncateToU16(value);
+    
+    AddGameProperty_(properties, prop, flags);
+}
 
+inline void Clear(GameProperties* properties)
+{
+    for(u32 propertyIndex = 0; propertyIndex < ArrayCount(properties->properties); ++propertyIndex)
+    {
+        properties->properties[propertyIndex].property = 0;
+    }
+}
 
 internal AssetID QueryAssets_(Assets* assets, AssetType type, u32 subtype, RandomSequence* seq, GameProperties* properties, b32 derivedAssets = false, u16 startingIndex = 0, u16 onePastEndingIndex = 0)
 {
@@ -1289,8 +1331,11 @@ internal AssetID QueryAssets_(Assets* assets, AssetType type, u32 subtype, Rando
             AssetSubtypeArray* subtypeArray = array->subtypes + subtype;
             if(subtypeArray->standardAssetCount > 0)
             {
-                u16 matching = 0;
-                u16 matchingAssets[32];
+                u16 matchingOptional = 0;
+                u16 matchingAssetsOptional[32];
+                
+                u16 matchingExact = 0;
+                u16 matchingAssetsExact[32];
                 
                 u16 maximumAssetIndexAllowed = subtypeArray->standardAssetCount;
                 if(derivedAssets)
@@ -1308,19 +1353,42 @@ internal AssetID QueryAssets_(Assets* assets, AssetType type, u32 subtype, Rando
                 for(u16 assetIndex = startingIndex; assetIndex < onePastEndingIndex; ++assetIndex)
                 {
                     Asset* asset = GetAsset(subtypeArray, assetIndex);
-                    if(MatchesProperties(asset, properties))
+                    
+                    b32 exactMatch;
+                    if(MatchesProperties(asset, properties, &exactMatch))
                     {
-                        matchingAssets[matching++] = assetIndex;
+                        if(exactMatch)
+                        {
+                            if(matchingExact < ArrayCount(matchingAssetsExact))
+                            {
+                                matchingAssetsExact[matchingExact++] = assetIndex;
+                            }
+                        }
+                        else
+                        {
+                            if(matchingOptional < ArrayCount(matchingAssetsOptional))
+                            {
+                                matchingAssetsOptional[matchingOptional++] = assetIndex;
+                            }
+                        }
                     }
                 }
                 
-                if(matching > 0)
+                if(matchingExact > 0 || matchingOptional > 0)
                 {
                     result.type = SafeTruncateToU16(type);
                     result.subtype = SafeTruncateToU16(subtype);
                     
-                    u32 choice = RandomChoice(seq, matching);
-                    result.index = matchingAssets[choice];
+                    if(matchingExact > 0)
+                    {
+                        u32 choice = RandomChoice(seq, matchingExact);
+                        result.index = matchingAssetsExact[choice];
+                    }
+                    else
+                    {
+                        u32 choice = RandomChoice(seq, matchingOptional);
+                        result.index = matchingAssetsOptional[choice];
+                    }
                 }
             }
         }
@@ -1415,6 +1483,37 @@ internal AssetID* GetAllSkinBitmaps(MemoryPool* tempPool, Assets* assets, AssetI
     return result;
 }
 
+#define GetAllSkinBitmaps(pool, assets, skin, properties, count) GetAllAssets_(pool, assets, SafeTruncateToU16(AssetType_Image), skin, properties, count)
+#define GetAllDataAsset(pool, assets, type, subtype, properties, count) GetAllAssets_(pool, assets, SafeTruncateToU16(type), subtype, properties, count)
+
+internal AssetID* GetAllAssets_(MemoryPool* tempPool, Assets* assets, u16 assetType, u16 subtype, GameProperties* properties, u16* count)
+{
+    AssetID* result = 0;
+    *count = 0;
+    
+    AssetArray* array = assets->assets + assetType;
+    if(subtype < array->subtypeCount)
+    {
+        AssetSubtypeArray* assetArray = array->subtypes + subtype;
+        
+        u16 totalAssetCount = assetArray->standardAssetCount + assetArray->derivedAssetCount;
+        *count = totalAssetCount;
+        
+        result = PushArray(tempPool, AssetID, totalAssetCount);
+        for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
+        {
+            AssetID* dest = result + assetIndex;
+            dest->type = assetType;
+            dest->subtype = subtype;
+            dest->index = assetIndex;
+        }
+    }
+    
+    return result;
+}
+
+
+
 inline void PreloadAllGroundBitmaps(Assets* assets)
 {
     PreloadAll(assets, AssetType_Image, AssetImage_default, true);
@@ -1468,6 +1567,7 @@ inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID)
 #ifndef ONLY_DATA_FILES
 struct ColoredBitmap
 {
+    Vec2 pivot;
     Bitmap* bitmap;
     Vec4 coloration;
 };
@@ -1484,12 +1584,26 @@ inline ColoredBitmap GetBitmap(Assets* assets, AssetID ID)
         parentID.index = get.info->coloration.bitmapIndex;
         GetGameAssetResult getParent = GetGameAsset(assets, parentID);
         result.bitmap = getParent.asset ? &getParent.asset->bitmap : 0;
+        result.pivot = V2(getParent.info->bitmap.align[0], getParent.info->bitmap.align[1]);
         result.coloration = get.info->coloration.color;
     }
     else
     {
         result.bitmap = get.asset ? &get.asset->bitmap : 0;
+        result.pivot = V2(get.info->bitmap.align[0], get.info->bitmap.align[1]);
         result.coloration = V4(1, 1, 1, 1);
+    }
+    
+    return result;
+}
+
+internal PAKAttachmentPoint* GetAttachmentPoint(Assets* assets, AssetID ID, u32 attachmentPointIndex)
+{
+    PAKAttachmentPoint* result = 0;
+    ColoredBitmap bitmap = GetBitmap(assets, ID);
+    if(bitmap.bitmap)
+    {
+        result = bitmap.bitmap->attachmentPoints + attachmentPointIndex;
     }
     
     return result;
@@ -1557,10 +1671,13 @@ inline void* GetDataDefinition_(Assets* assets, AssetType type, AssetID ID, b32 
     
     if(!result && immediate)
     {
-        LoadDataFile(assets, ID, immediate);
-        get = GetGameAsset(assets, ID);
-        Assert(get.asset);
-        result = get.asset->data;
+        if(get.info)
+        {
+            LoadDataFile(assets, ID, immediate);
+            get = GetGameAsset(assets, ID);
+            Assert(get.asset);
+            result = get.asset->data;
+        }
     }
     
     return result;

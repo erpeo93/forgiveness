@@ -247,18 +247,22 @@ internal Vec2 CalculateFinalBoneOffset_(Bone* frameBones, i32 countBones, Bone* 
     
     Vec2 parentOffset = Hadamart(bone->parentOffset, offsetFromParentScale) * params->scale;
     Vec2 result = baseOffset + (parentOffset.x * XAxis + parentOffset.y * YAxis);
+    
     return result;
 }
 
 internal AnimationPiece* GetAnimationPiecesAndAdvanceState(MemoryPool* tempPool, PAKAnimation* animationInfo, Animation* animation,
-                                                           AnimationComponent* component, AnimationParams* params, u32* animationPieceCount)
+                                                           AnimationComponent* component, AnimationParams* params, u32* animationPieceCount, b32 render)
 {
-    r32 oldTime = component->time;
-    r32 newTime = oldTime + params->elapsedTime;
-    component->time = newTime;
-    u32 timeline = (u32) (component->time * 1000.0f);
-    
-	u32 animTimeMod = timeline % animationInfo->durationMS;
+    u32 animTimeMod = 0;
+    if(render)
+    {
+        r32 oldTime = component->time;
+        r32 newTime = oldTime + params->elapsedTime;
+        component->time = newTime;
+        u32 timeline = (u32) (component->time * 1000.0f);
+        animTimeMod = timeline % animationInfo->durationMS;
+    }
     
     u32 lowerFrameIndex = 0;
     for(u32 frameIndex = 0; frameIndex < animation->frameCount; frameIndex++)
@@ -326,7 +330,9 @@ internal AnimationPiece* GetAnimationPiecesAndAdvanceState(MemoryPool* tempPool,
         Bone* parentBone = blended.bones + ass->boneIndex;
         Vec2 boneXAxis = parentBone->mainAxis;
         Vec2 boneYAxis = Perp(boneXAxis);
+        
         Vec2 boneOffset = ass->boneOffset * params->scale;
+        
         Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
         dest->originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset);
         
@@ -423,18 +429,19 @@ internal Rect2 RenderAnimation_(RenderGroup* group, AssetID animationID, Animati
     MemoryPool tempPool = {};
     
     Rect2 result = InvertedInfinityRect2();
-    
     Animation* animation = GetAnimation(group->assets, animationID);
     if(animation)
     {
         PAKAnimation* animationInfo = GetAnimationInfo(group->assets, animationID);
-        u32 bitmapCount = 0;
-        AssetID* bitmaps = GetAllSkinBitmaps(&tempPool, group->assets, component->skin, &component->skinProperties, &bitmapCount);
+        u16 bitmapCount = 0;
+        AssetID* bitmaps = GetAllSkinBitmaps(&tempPool, group->assets, SafeTruncateToU16(component->skin), &component->skinProperties, &bitmapCount);
         
         u32 pieceCount;
-        AnimationPiece* pieces = GetAnimationPiecesAndAdvanceState(&tempPool, animationInfo, animation, component, params, &pieceCount);
+        AnimationPiece* pieces = GetAnimationPiecesAndAdvanceState(&tempPool, animationInfo, animation, component, params, &pieceCount, render);
         
         ObjectTransform transform = params->transform;
+        transform.flipOnYAxis = params->flipOnYAxis;
+        
         for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
         {
             AnimationPiece* piece = pieces + pieceIndex;
@@ -455,9 +462,26 @@ internal Rect2 RenderAnimation_(RenderGroup* group, AssetID animationID, Animati
                         {
                             transform.dontRender = true;
                         }
+                        
                         r32 height = bitmapInfo->nativeHeight * params->scale;
                         BitmapDim dim = PushBitmapWithPivot(group, transform, bitmap, P, piece->pivot, height, V2(1, 1), piece->color);
                         result = Union(result, RectMinDim(dim.P.xy, dim.size));
+                        
+                        
+                        for(u32 attachmentPointIndex = 0; attachmentPointIndex < bitmapInfo->attachmentPointCount; ++attachmentPointIndex)
+                        {
+                            PAKAttachmentPoint* point = GetAttachmentPoint(group->assets, bitmap, attachmentPointIndex);
+                            if(point)
+                            {
+                                if(point->nameHash == StringHash("test"))
+                                {
+                                    ObjectTransform testT = transform;
+                                    testT.additionalZBias = 0.1f;
+                                    PushBitmapWithPivot(group, testT, bitmap, P, piece->pivot, height, V2(1, 1), V4(1, 0, 0, 1));
+                                }
+                            }
+                        }
+                        
                     }
                 }
             }
@@ -478,6 +502,7 @@ internal Rect2 RenderAnimation(RenderGroup* group, AnimationComponent* component
     Rect2 result = InvertedInfinityRect2();
     RandomSequence seq = {};
     AssetID animationID = QueryAnimations(group->assets, component->skeleton, &seq, &component->skeletonProperties);
+    
     if(IsValid(animationID))
     {
         result = RenderAnimation_(group, animationID, component, params, render);
@@ -497,6 +522,15 @@ internal Rect2 GetAnimationDim(RenderGroup* group, AssetID ID, AnimationComponen
 {
     Rect2 result = RenderAnimation_(group, ID, component, params, false);
     return result;
+}
+
+internal void RenderAnimationWithHeight(RenderGroup* group, AnimationComponent* component, AnimationParams* params, r32 height)
+{
+    Rect2 animationDefaultDim = GetAnimationDim(group, component, params);
+    r32 defaultHeight = GetDim(animationDefaultDim).y;
+    r32 scale = height / defaultHeight;
+    params->scale = scale;
+    RenderAnimation(group, component, params);
 }
 
 
@@ -563,82 +597,6 @@ inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, Taxo
 
 
 #if 0
-JOB_DEFINITION(InitAnimation)
-{
-    
-    Vec4 ashAlive = {};
-    Vec4 bodyAlive = {};
-    
-    Vec4 ashDead = {};
-    Vec4 bodyDead = {};
-    
-    Vec3 animationP = entityC->P;
-    WorldTile* tile = GetTile(worldMode, worldMode->player.universeP, entityC->P.xy);
-    if(tile->waterLevel <= WATER_LEVEL)
-    {
-        r32 z = 0.5f * Clamp01MapToRange(WATER_LEVEL, tile->waterLevel, SWALLOW_WATER_LEVEL);
-        if(tile->waterLevel < SWALLOW_WATER_LEVEL)
-        {
-            z = 0.3f;
-        }
-        animationP.z -= z;
-    }
-    
-    r32 ratio;
-    if(entityC->maxLifePoints > 0)
-    {
-        ratio = entityC->lifePoints / entityC->maxLifePoints;
-    }
-    else
-    {
-        if(entityC->status < 0)
-        {
-            ashAlive = V4(0.5f, 0.5f, 0.5f, 1.0f);
-            bodyAlive = ashAlive;
-            ratio = 1.0f;
-        }
-        else
-        {
-            ratio = Clamp01MapToRange(0, (r32) entityC->status, (r32) I16_MAX);
-        }
-    }
-    
-    Vec4 bodyColor = Lerp(bodyDead, ratio, bodyAlive);
-    if(params.transparent)
-    {
-        bodyColor.a *= 0.2f;
-    }
-    
-    Vec4 ashColor = Lerp(ashDead, ratio, ashAlive);
-    
-    
-    
-    
-    AnimationOutput result = {};
-    
-    ClientEntity* player = GetEntityClient(worldMode, worldMode->player.identifier);
-    
-    Lights lights = GetLights(worldMode, entityC->P);
-    TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, entityC->taxonomy);
-    
-    for(ClientAnimationEffect* effect = entityC->firstActiveEffect; effect; effect = effect->next)
-    {
-        if(!effect->effect.stringHashID)
-        {
-            Vec4 ignored;
-            DispatchClientAnimationEffect(worldMode, group, effect, entityC, animationP, &ignored, timeToUpdate);
-        }
-    }
-    
-    EntityAction soundAction = entityC->action;
-    r32 oldSoundTime = entityC->actionTime - timeToUpdate;
-    r32 soundTime = entityC->actionTime;
-    
-    Rect3 bounds = InvertedInfinityRect3();
-    GetPhysicalProperties(worldMode->table, entityC->taxonomy, entityC->identifier, &entityC->boundType, &bounds, entityC->generationIntensity);
-    entityC->bounds = Offset(bounds, animationP);
-}
-
 JOB_DEFINITION(RenderPlant)
 {
     if(!entityC->plant)
@@ -684,68 +642,4 @@ JOB_DEFINITION(RenderPlant)
     }
 }
 
-JOB_DEFINITION(RenderRocks)
-{
-    for(every rock component)
-    {
-        RockDefinition* rockDefinition = slot->rockDefinition;
-        if(!entityC->rock)
-        {
-            ModelId ID = FindModelByName(group->assets, rockDefinition->modelTypeHash, rockDefinition->modelNameHash);
-            VertexModel* tetraModel = GetModel(group->assets, ID);
-            if(tetraModel)
-            {
-                Rock* newRock = worldMode->firstFreeRock;
-                if(!newRock)
-                {
-                    newRock = PushStruct(worldMode->persistentPool, Rock);
-                }
-                else
-                {
-                    worldMode->firstFreeRock = newRock->nextFree;
-                }
-                entityC->rock = newRock;
-                
-                
-                RandomSequence rockSeq = Seed((u32)entityC->identifier);
-                newRock->dim = GetRockDim(rockDefinition, &rockSeq); 
-                
-                MemoryPool tempPool = {};
-                TempMemory rockMemory = BeginTemporaryMemory(&tempPool);
-                GenerateRock(newRock, tetraModel, &tempPool, &rockSeq, rockDefinition);
-                EndTemporaryMemory(rockMemory);
-            }
-            else
-            {
-                LoadModel(group->assets, ID);
-            }
-        }
-        
-        Rock* rock = entityC->rock;
-        if(rock)
-        {
-            VertexModel onTheFly;
-            
-            onTheFly.vertexCount = rock->vertexCount;
-            onTheFly.vertexes = rock->vertexes;
-            
-            onTheFly.faceCount = rock->faceCount;
-            onTheFly.faces = rock->faces;
-            
-            RandomSequence rockRenderSeq = Seed((u32)entityC->identifier);
-            u32 rockCount = Max(1, rockDefinition->renderingRocksCount + RandomChoice(&rockRenderSeq, rockDefinition->renderingRocksDelta));
-            for(u32 rockIndex = 0; rockIndex < rockCount; ++rockIndex)
-            {
-                Vec3 finalP =animationP +Hadamart(RandomBilV3(&rockRenderSeq), rockDefinition->renderingRocksRandomOffset);
-                m4x4 rotation = ZRotation(RandomUni(&rockRenderSeq) * TAU32);
-                Vec3 finalScale = rock->dim + rockDefinition->scaleRandomness *Hadamart(RandomBilV3(&rockRenderSeq), rock->dim);
-                
-                PushModel(group, &onTheFly, rotation, finalP, lights, finalScale, V4(1, 1, 1, 1), entityC->modulationWithFocusColor);
-                
-                Rect3 rockBounds = Offset(bounds, finalP);
-                entityC->bounds = Union(entityC->bounds, rockBounds);
-            }
-        }
-    }
-}
 #endif

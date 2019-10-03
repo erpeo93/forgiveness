@@ -157,6 +157,7 @@ struct EditorUIContext
     r32 fontScale;
     Vec2 offset;
     
+    b32 renderEntityBounds;
     b32 showEditor;
     EditorTabs activeTab;
     

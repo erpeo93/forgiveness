@@ -411,12 +411,6 @@ inline BitmapDim GetBitmapDim(Bitmap* bitmap, Vec2 pivot, Vec3 P, Vec3 XAxis, Ve
     return result;
 }
 
-inline BitmapDim GetBitmapDim(Bitmap* bitmap, Vec3 P, Vec3 XAxis, Vec3 YAxis, r32 height, Vec2 scale = V2(1.0f, 1.0f))
-{
-    BitmapDim result = GetBitmapDim(bitmap, bitmap->pivot, P, XAxis, YAxis, height, scale);
-    return result;
-}
-
 inline void PushTexture(RenderGroup* group, RenderTexture texture, Vec3 P, Vec3 XAxis = V3(1, 0, 0), Vec3 YAxis = V3(0, 1, 0), Vec4 color = V4(1, 1, 1, 1), Lights lights = {}, r32 modulationPercentage = 0.0f, r32 ZBias = 0.0f)
 {
     r32 oneTexelU = 1.0f / texture.width;
@@ -524,7 +518,7 @@ inline b32 PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTransform,
     if(bitmap.bitmap)
     {
         result = true;
-        PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, bitmap.bitmap->pivot);
+        PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, bitmap.pivot);
     }
     else
     {
@@ -883,9 +877,10 @@ internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont*
                     if(op == TextOp_getSize)
                     {
                         Bitmap* bitmap = GetBitmap(group->assets, ID).bitmap;
+                        PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, ID);
                         if(bitmap)
                         {
-                            BitmapDim dim = GetBitmapDim( bitmap, P, V3( 1.0f, 0.0f, 0.0f ), V3( 0.0f, 1.0f, 0.0f ), glyphHeight );
+                            BitmapDim dim = GetBitmapDim(bitmap, V2(bitmapInfo->align[0], bitmapInfo->align[1]), P, V3( 1.0f, 0.0f, 0.0f ), V3( 0.0f, 1.0f, 0.0f ), glyphHeight );
                             Rect2 glyphRect = RectMinDim(dim.P.xy, dim.size);
                             result = Union(result, glyphRect);
                         }

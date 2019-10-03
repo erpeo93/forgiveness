@@ -185,7 +185,6 @@ inline WorldTile GenerateTile(GameModeWorld* worldMode, Assets* assets, world_ge
     if(IsValid(ID))
     {
         tile_definition* definition = GetData(assets, tile_definition, ID);
-        Assert(definition);
         result.asset = definition->asset;
         result.property = definition->property;
         result.color = definition->color;
@@ -218,12 +217,14 @@ internal void BuildChunk(GameModeWorld* worldMode, Assets* assets, WorldChunk* c
     AssetID ID = QueryDataFiles(assets, world_generator, 0, &generatorSeq, &properties);
     if(IsValid(ID))
     {
+        RandomSequence seq = GetChunkSeed(chunk->worldX, chunk->worldY, seed);
+        world_generator* generator = GetData(assets, world_generator, ID);
+        Assert(generator);
+        
+        
         chunk->initialized = true;
         chunk->worldX = chunkX;
         chunk->worldY = chunkY;
-        
-        RandomSequence seq = GetChunkSeed(chunk->worldX, chunk->worldY, seed);
-        world_generator* generator = GetData(assets, world_generator, ID);
         
         u32 maxTile = (WORLD_CHUNK_SPAN  + 2 * WORLD_CHUNK_APRON)* CHUNK_DIM;
         

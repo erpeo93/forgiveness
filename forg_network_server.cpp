@@ -138,7 +138,7 @@ internal u16 PrepareEntityUpdate(ServerState* server, PhysicComponent* physic, u
 {
     UniversePos P = physic->P;
     unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
-    Pack("llV", P.chunkX, P.chunkY, P.chunkOffset);
+    Pack("llVVHH", P.chunkX, P.chunkY, P.chunkOffset, physic->speed, physic->action.property, physic->action.value);
     u16 totalSize = ForgEndPacket_( buff_, buff );
     return totalSize;
 }
@@ -305,6 +305,7 @@ internal u32 SendAllPossibleData(ServerState* server, PlayerComponent* player, F
             
             if(toSend->sendingOffset >= file->compressedSize)
             {
+                Assert(file->counter > 0);
                 file->counter = file->counter - 1;
                 *toSendPtr = toSend->next;
                 FREELIST_DEALLOC(toSend, server->firstFreeToSendFile);

@@ -18,7 +18,7 @@
 
 
 
-typedef PAKProperty GameProperty;
+
 
 struct MetaAssetType
 {
@@ -55,6 +55,7 @@ enum GamePropertyFlags
     GameProperty_Optional = (1 << 0),
 };
 
+typedef PAKProperty GameProperty;
 struct GameProperties
 {
     GameProperty properties[MAX_PROPERTIES_PER_ASSET];
@@ -75,9 +76,10 @@ struct Bitmap
     u16 width;
     u16 height;
     
-    Vec2 pivot;
     r32 nativeHeight;
     r32 widthOverHeight;
+    
+    PAKAttachmentPoint* attachmentPoints;
     
     RenderTexture textureHandle;
 };
@@ -347,6 +349,7 @@ struct AssetFile
 {
     PlatformFileHandle handle;
     u32 size;
+    b32 valid;
     PAKFileHeader header;
 };
 

@@ -4,15 +4,15 @@
 #define PAK_CODE( a, b, c, d ) ((u32) ( ( a ) << 0 ) | ( u32 ) ( ( b ) << 8 ) | ( u32 ) ( ( c ) << 16 ) | ( u32 ) ( ( d ) << 24 ) ) 
 
 #define PAK_MAGIC_NUMBER PAK_CODE('h', 'h', 'a', 'f')
-#define PAK_VERSION 0
+#define PAK_VERSION 1
 
 struct PAKFileHeader
 {
-    char name[32];
-    
-    u32 magicValue;
     u32 version;
+    u32 assetVersion;
+    u32 magicValue;
     
+    char name[32];
     char type[32];
     char subtype[32];
     
@@ -27,14 +27,22 @@ struct PAKProperty
 };
 
 
+struct PAKAttachmentPoint
+{
+    u64 nameHash;
+};
+
+#define PAK_BITMAP_VERSION 0
 struct PAKBitmap
 {
     u64 nameHash;
     u32 dimension[2];
     r32 align[2];
     r32 nativeHeight;
+    u32 attachmentPointCount;
     // NOTE( Leonardo ): data is:
     /*
+    AttachmentPoint* points;
     u32* pixels;
     */
 };
@@ -46,6 +54,7 @@ struct PAKColoration
     u16 bitmapIndex;
 };
 
+#define PAK_FONT_VERSION 0
 struct PAKFont
 {
     u32 glyphCount;
@@ -61,6 +70,7 @@ struct PAKFont
     */
 };
 
+#define PAK_SOUND_VERSION 0
 struct PAKSound
 {
     u32 sampleCount;
@@ -74,6 +84,7 @@ struct PAKSound
     */
 };
 
+#define PAK_ANIMATION_VERSION 0
 struct PAKAnimation
 {
     u32 spriteCount;
@@ -102,6 +113,7 @@ struct PAKSkeleton
     u16 animationAssetsFirstIndex;
 };
 
+#define PAK_MODEL_VERSION 0
 struct PAKModel
 {
     u32 vertexCount;
@@ -114,6 +126,7 @@ struct PAKModel
 };
 
 
+#define PAK_DATA_VERSION 0
 struct PAKDataFile
 {
     u32 rawSize;

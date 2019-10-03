@@ -12,6 +12,9 @@ struct LoadedBitmap
     r32 widthOverHeight;
     r32 downsampleFactor;
     
+    u32 attachmentPointCount;
+    PAKAttachmentPoint* attachmentPoints;
+    
     void* free;
 };
 

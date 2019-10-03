@@ -16,7 +16,6 @@ internal EntityID AddEntity(ServerState* server, UniversePos P, AssetID definiti
     
     Assert(IsValid(definitionID));
     EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
-    
     EntityID result = {};
     ServerEntityInitParams params = definition->server;
     params.P = P;
@@ -25,7 +24,7 @@ internal EntityID AddEntity(ServerState* server, UniversePos P, AssetID definiti
     
     u16 archetype = SafeTruncateToU16(ConvertEnumerator(EntityArchetype, definition->archetype));
     Acquire(server, archetype, (&result));
-    InitFunc[result.archetype](server, result, &params); 
+    InitFunc[result.archetype](server, result, &definition->common, &params); 
     if(HasComponent(result.archetype, PlayerComponent))
     {
         SetComponent(server, result, PlayerComponent, player);
@@ -107,6 +106,9 @@ internal void SendBasicUpdate(ServerState* server, EntityID ID, PhysicComponent*
     unsigned char buff_[KiloBytes(2)];
     Assert(sizeof(EntityUpdate) < ArrayCount(buff_));
     u16 totalSize = PrepareEntityUpdate(server, physic, buff_);
+    
+    
+    r32 maxDistanceSq = Square(10.0f);
     for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
     {
         if(HasComponent(archetypeIndex, PlayerComponent))
@@ -118,12 +120,18 @@ internal void SendBasicUpdate(ServerState* server, EntityID ID, PhysicComponent*
                 PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
                 if(player)
                 {
-                    SendEntityHeader(player, physic->definitionID, ID, physic->seed);
-                    u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, physic->definitionID, ID, physic->seed);
-                    Assert(writeHere);
-                    if(writeHere)
+                    PhysicComponent* playerPhysic = GetComponent(server, iter.ID, PhysicComponent);
+                    
+                    Vec3 distance = Subtract(physic->P, playerPhysic->P);
+                    if(LengthSq(distance) < maxDistanceSq)
                     {
-                        Copy(totalSize, writeHere, buff_);
+                        SendEntityHeader(player, physic->definitionID, ID, physic->seed);
+                        u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, physic->definitionID, ID, physic->seed);
+                        Assert(writeHere);
+                        if(writeHere)
+                        {
+                            Copy(totalSize, writeHere, buff_);
+                        }
                     }
                 }
             }
@@ -132,10 +140,32 @@ internal void SendBasicUpdate(ServerState* server, EntityID ID, PhysicComponent*
 }
 
 
+#define GameProp(property, value) GameProp_(Property_##property, value)
+internal GameProperty GameProp_(u16 property, u16 value)
+{
+    GameProperty result;
+    result.property = property;
+    result.value = value;
+    
+    return result;
+}
 
 internal void MoveAndSendUpdate(ServerState* server, EntityID ID, r32 elapsedTime)
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    
     MoveEntity(server, physic, elapsedTime);
+    
+    physic->action = {};
+    if(LengthSq(physic->speed) > 0.1f)
+    {
+        physic->action = GameProp(action, move);
+    }
+    else
+    {
+        physic->action = GameProp(action, idle);
+    }
+    
+    
     SendBasicUpdate(server, ID, physic);
 }

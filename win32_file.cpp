@@ -112,6 +112,11 @@ internal void GetFileExtensions(FileExtension* ext, u32 types)
     {
         AddExtension(ext, "tmp");
     }
+    
+    if(types & PlatformFile_AssetVersion)
+    {
+        AddExtension(ext, "ver");
+    }
 }
 
 //void name(PlatformSubdirNames* output, char* folderPath)
@@ -249,10 +254,12 @@ internal PLATFORM_OPEN_FILE(Win32OpenFile)
 internal PLATFORM_CLOSE_FILE(Win32CloseFile)
 {
     HANDLE toClose = (HANDLE) handle->platform;
-    Assert(toClose);
-    if(!CloseHandle(toClose))
+    if(toClose)
     {
-        Win32FileError(handle, "Error while closing file handle!");
+        if(!CloseHandle(toClose))
+        {
+            Win32FileError(handle, "Error while closing file handle!");
+        }
     }
     handle->platform = 0;
 }

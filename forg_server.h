@@ -78,10 +78,12 @@ struct PlayerRequest
 struct PhysicComponent
 {
     UniversePos P;
+    Rect3 bounds;
     AssetID definitionID;
     u32 seed;
     Vec3 speed;
     Vec3 acc;
+    GameProperty action;
 };
 
 struct PlayerComponent
@@ -140,12 +142,32 @@ struct TimestampHash
     SavedTypeSubtypeCountHash* countHashSlots[128];
 };
 
+
+struct SpawnerOption
+{
+    u32 type;
+};
+
+struct Spawner
+{
+    r32 time;
+    r32 targetTime;
+    
+    r32 cellDim;
+    
+    u32 optionCount;
+    SpawnerOption options[4];
+};
+
 struct ServerState
 {
     WorldSeason season;
     r32 seasonLerp;
     r32 seasonTime;
     u32 worldSeed;
+    
+    u32 spawnerCount;
+    Spawner spawners[4];
     
     TaskWithMemory tasks[6];
     PlatformWorkQueue* fastQueue;

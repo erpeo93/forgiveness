@@ -12,9 +12,7 @@ FieldDefinition* FindMetaField(FieldDefinition* fields, u32 fieldCount, Token fi
             break;
         }
     }
-    
     return result;
-    
 }
 FieldDefinition* FindMetaField(StructDefinition* definition, Token fieldName)
 {
@@ -117,6 +115,37 @@ struct StringArray
     char** strings;
     u32 count;
 };
+
+internal u32 MetaGetCurrentVersion(char* assetType)
+{
+    u32 result = 0;
+    if(StrEqual(assetType, "Image"))
+    {
+        result = PAK_BITMAP_VERSION;
+    }
+    else if(StrEqual(assetType, "Font"))
+    {
+        result = PAK_FONT_VERSION;
+    }
+    else if(StrEqual(assetType, "Sound"))
+    {
+        result = PAK_SOUND_VERSION;
+    }
+    else if(StrEqual(assetType, "Skeleton"))
+    {
+        result = PAK_ANIMATION_VERSION;
+    }
+    else if(StrEqual(assetType, "Model"))
+    {
+        result = PAK_MODEL_VERSION;
+    }
+    else
+    {
+        result = PAK_DATA_VERSION;
+    }
+    
+    return result;
+}
 
 internal StringArray GetAssetTypeList()
 {
@@ -374,92 +403,102 @@ internal void Dump_Hash64(Stream* output, FieldDefinition* field, Hash64 value, 
     }
 }
 
-internal u32 PackProperty(GameProperty property)
-{
-    u32 result = (u32) (property.property << 16) | (u32) (property.value);
-    return result;
-}
-
-internal GameProperty UnpackProperty(u32 packed)
-{
-    GameProperty result;
-    result.property = (u16) (packed >> 16);
-    result.value = (u16) (packed & 0xffff);
-    
-    return result;
-}
-
-internal u32 PackAssetType(GameAssetType type)
-{
-    u32 result = (u32) (type.type << 16) | (u32) (type.subtype);
-    return result;
-}
-
-internal GameAssetType UnpackAssetType(u32 packed)
-{
-    GameAssetType result;
-    result.type = (u16) (packed >> 16);
-    result.subtype = (u16) (packed & 0xffff);
-    
-    return result;
-}
-
 internal GameProperty Parse_GameProperty(Tokenizer* tokenizer, GameProperty defaultVal)
 {
     GameProperty result = defaultVal;
     
     Token t = GetToken(tokenizer);
-    Assert(t.type == Token_Number);
-    u32 packed = StringToUInt32(t.text);
-    result = UnpackProperty(packed);
+    if(t.type == Token_String)
+    {
+        t = Stringize(t);
+    }
+    
+    Token name = {};
+    name.text = t.text;
+    name.textLength = FindFirstInString(t.text, '|');
+    
+    if(name.textLength != 0xffffffff)
+    {
+        Token value = {};
+        value.text = name.text + name.textLength + 1;
+        value.textLength = t.textLength - name.textLength - 1;
+        
+        result.property = GetMetaPropertyType(name);
+        result.value = ExistMetaPropertyValue(result.property, value);
+    }
+    
     return result;
 }
 
 internal void Dump_GameProperty(Stream* output, FieldDefinition* field, GameProperty value, b32 isInArray)
 {
-    u32 packed = PackProperty(value);
-    if(isInArray)
+    if(value.property && value.value)
     {
-        OutputToStream(output, "%d", packed);
-    }
-    else
-    {
-        u32 def = PackProperty(field->def.def_GameProperty);
-        if(packed != def)
+        char* propertyType = GetMetaPropertyTypeName(value.property);
+        char* propertyValue = GetMetaPropertyValueName(value.property, value.value);
+        
+        if(isInArray)
         {
-            OutputToStream(output, "%s=%d;", field->name, packed);
+            OutputToStream(output, "\"%s|%s\"", propertyType, propertyValue);
+        }
+        else
+        {
+            OutputToStream(output, "%s=\"%s|%s\";", field->name, propertyType, propertyValue);
         }
     }
 }
+
 
 internal GameAssetType Parse_GameAssetType(Tokenizer* tokenizer, GameAssetType defaultVal)
 {
     GameAssetType result = defaultVal;
     
     Token t = GetToken(tokenizer);
-    Assert(t.type == Token_Number);
-    u32 packed = StringToUInt32(t.text);
-    result = UnpackAssetType(packed);
+    if(t.type == Token_String)
+    {
+        t = Stringize(t);
+    }
+    
+    Token type = {};
+    type.text = t.text;
+    type.textLength = FindFirstInString(t.text, '|');
+    
+    if(type.textLength != 0xffffffff)
+    {
+        Token subtype = {};
+        subtype.text = type.text + type.textLength + 1;
+        subtype.textLength = t.textLength - type.textLength - 1;
+        
+        char type_[32];
+        char subtype_[32];
+        
+        FormatString(type_, sizeof(type_), "%.*s", type.textLength, type.text);
+        FormatString(subtype_, sizeof(subtype_), "%.*s", subtype.textLength, subtype.text);
+        
+        result.type = GetMetaAssetType(type_);
+        result.subtype = GetMetaAssetSubtype(result.type, subtype_);
+    }
+    
     return result;
 }
 
 internal void Dump_GameAssetType(Stream* output, FieldDefinition* field, GameAssetType value, b32 isInArray)
 {
-    u32 packed = PackAssetType(value);
-    if(isInArray)
+    if(value.type)
     {
-        OutputToStream(output, "%d", packed);
-    }
-    else
-    {
-        u32 def = PackAssetType(field->def.def_GameAssetType);
-        if(packed != def)
+        char* type = GetAssetTypeName(value.type);
+        char* subtype = GetAssetSubtypeName(value.type, value.subtype);
+        
+        if(isInArray)
         {
-            OutputToStream(output, "%s=%d;", field->name, packed);
+            OutputToStream(output, "\"%s|%s\"", type, subtype);
+        }
+        else
+        {
+            OutputToStream(output, "%s=\"%s|%s\";", field->name, type, subtype);
         }
     }
 }
-
 
 internal void ParseVectorMembers(Tokenizer* tokenizer, FieldDefinition* fields, u32 fieldCount, void* ptr)
 {
