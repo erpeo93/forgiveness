@@ -394,7 +394,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
     b32 changedChunk = (origin.chunkX != oldOrigin.chunkX || origin.chunkY != oldOrigin.chunkY);
     
     RandomSequence assetSeq = Seed(worldSeed);
-    AssetID waterID = QueryDataFiles(group->assets, WaterParams, 0, &assetSeq, 0);
+    AssetID waterID = QueryDataFiles(group->assets, WaterParams, "default", &assetSeq, 0);
     if(false && IsValid(waterID))
     {
         WaterParams* water = GetData(group->assets, WaterParams, waterID);

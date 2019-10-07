@@ -181,7 +181,7 @@ inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 ti
     
     GameProperties properties = {};
     properties.properties[0] = property;
-    AssetID ID = QueryDataFiles(assets, tile_definition, 0, seq, &properties);
+    AssetID ID = QueryDataFiles(assets, tile_definition, "default", seq, &properties);
     if(IsValid(ID))
     {
         tile_definition* definition = GetData(assets, tile_definition, ID);
@@ -214,7 +214,7 @@ internal void BuildChunk(Assets* assets, WorldChunk* chunk, i32 chunkX, i32 chun
 {
     RandomSequence generatorSeq = Seed(seed);
     GameProperties properties = {};
-    AssetID ID = QueryDataFiles(assets, world_generator, 0, &generatorSeq, &properties);
+    AssetID ID = QueryDataFiles(assets, world_generator, "default", &generatorSeq, &properties);
     if(IsValid(ID))
     {
         RandomSequence seq = GetChunkSeed(chunk->worldX, chunk->worldY, seed);

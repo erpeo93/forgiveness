@@ -515,9 +515,12 @@ internal AssetSubtypeArray* GetAssetSubtypeArray(Assets* assets, u16 type, u16 s
 
 internal u16 GetAssetSubtype(Assets* assets, u16 type, u64 hash)
 {
-    Assert(type < AssetType_Count);
-    AssetArray* array = assets->assets + type;
-    u16 result  = (hash & (ArrayCount(array->subtypes) - 1));
+    u16 result = 0xffff;
+    if(type < AssetType_Count)
+    {
+        AssetArray* array = assets->assets + type;
+        result  = (hash & (ArrayCount(array->subtypes) - 1));
+    }
     return result;
 }
 
@@ -1455,7 +1458,7 @@ inline b32 MatchesProperties(Asset* asset, GameProperties* properties, b32* exac
 #define QueryModels(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Model, subtype, seq, properties)
 #endif
 
-#define QueryDataFiles(assets, type, sub, seq, properties) QueryAssets_(assets, AssetType_##type, sub, seq, properties)
+#define QueryDataFiles(assets, type, sub, seq, properties) QueryAssets_(assets, AssetType_##type, GetAssetSubtype(assets, AssetType_##type, sub), seq, properties)
 
 
 
@@ -1662,7 +1665,7 @@ inline void PreloadAllGroundBitmaps(Assets* assets)
 }
 #endif
 
-#define GetAllDataAsset(pool, assets, type, sub, properties, count) GetAllAssets_(pool, assets, SafeTruncateToU16(AssetType_##type), sub, properties, count)
+#define GetAllDataAsset(pool, assets, type, sub, properties, count) GetAllAssets_(pool, assets, SafeTruncateToU16(AssetType_##type), GetAssetSubtype(assets, AssetType_##type, StringHash(sub)), properties, count)
 
 internal AssetID* GetAllAssets_(MemoryPool* tempPool, Assets* assets, u16 assetType, u16 subtype, GameProperties* properties, u16* count)
 {
@@ -1671,7 +1674,6 @@ internal AssetID* GetAllAssets_(MemoryPool* tempPool, Assets* assets, u16 assetT
     
     AssetArray* array = assets->assets + assetType;
     AssetSubtypeArray* assetArray = GetSubtype(array, subtype);
-    
     u16 totalAssetCount = assetArray->standardAssetCount + assetArray->derivedAssetCount;
     *count = totalAssetCount;
     

@@ -65,9 +65,9 @@ internal void InitBaseComponent(BaseComponent* base, Vec3 boundOffset, Vec3 boun
     base->bounds = StandardBounds(boundDim, boundOffset);
 }
 
-internal void InitImageComponent(ImageComponent* image, u64 type, ImageProperty* properties, u16 propertyCount)
+internal void InitImageComponent(Assets* assets, ImageComponent* image, u64 type, ImageProperty* properties, u16 propertyCount)
 {
-    image->typeHash = type;
+    image->imageType = GetAssetSubtype(assets, AssetType_Image, type);
     image->properties = {};
     for(u16 propertyIndex = 0; propertyIndex < propertyCount; ++propertyIndex)
     {
@@ -112,7 +112,7 @@ INIT_ENTITY(RockArchetype)
     RockComponent* dest = GetComponent(worldMode, ID, RockComponent);
     
     ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
-    InitImageComponent(image, StringHash("rock"), params->properties, params->propertyCount);
+    InitImageComponent(assets, image, StringHash("rock"), params->properties, params->propertyCount);
 }
 
 
@@ -122,6 +122,7 @@ INIT_ENTITY(PlantArchetype)
     ClientEntityInitParams* params = (ClientEntityInitParams*) par;
     CommonEntityInitParams* common = (CommonEntityInitParams*) com;
     
+    Assets* assets = worldMode->gameState->assets;
     
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed);
@@ -129,12 +130,13 @@ INIT_ENTITY(PlantArchetype)
     PlantComponent* dest = GetComponent(worldMode, ID, PlantComponent);
     
     ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
-    InitImageComponent(image, StringHash("tree"), params->properties, params->propertyCount);
+    InitImageComponent(assets, image, StringHash("tree"), params->properties, params->propertyCount);
 }
 
 INIT_ENTITY(GrassArchetype)
 {
     GameModeWorld* worldMode = (GameModeWorld*) state;
+    Assets* assets = worldMode->gameState->assets;
     ClientEntityInitParams* params = (ClientEntityInitParams*) par;
     
     CommonEntityInitParams* common = (CommonEntityInitParams*) com;
@@ -145,6 +147,6 @@ INIT_ENTITY(GrassArchetype)
     GrassComponent* dest = GetComponent(worldMode, ID, GrassComponent);
     
     ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
-    InitImageComponent(image, StringHash("grass"), params->properties, params->propertyCount);
+    InitImageComponent(assets, image, StringHash("grass"), params->properties, params->propertyCount);
 }
 #endif

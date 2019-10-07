@@ -64,6 +64,8 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 internal void SpawnPlayer_(ServerState* server, PlayerComponent* player, UniversePos P, b32 deleteEntities)
 {
     EntityRef type = {};
+    type.subtype = GetAssetSubtype(server->assets, AssetType_EntityDefinition, "default");
+    
     EntityID ID = AddEntity(server, P, &server->entropy, type, player);
     
     ResetQueue(player->queues + GuaranteedDelivery_None);

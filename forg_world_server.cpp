@@ -33,7 +33,7 @@ internal EntityID AddEntity_(ServerState* server, UniversePos P, AssetID definit
 
 internal EntityID AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, GameProperties* definitionProperties, PlayerComponent* player = 0)
 {
-    AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, 0, seq, definitionProperties);
+    AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, "default", seq, definitionProperties);
     
     u32 seed = GetNextUInt32(seq);
     EntityID result = AddEntity_(server, P, definitionID, seed, player);
@@ -316,7 +316,7 @@ internal void SpawnEntities(ServerState* server, r32 elapsedTime)
 {
     MemoryPool tempPool = {};
     u16 spawnerCount;
-    AssetID* spawners = GetAllDataAsset(&tempPool, server->assets, Spawner, 0, 0, &spawnerCount);
+    AssetID* spawners = GetAllDataAsset(&tempPool, server->assets, Spawner, "default", 0, &spawnerCount);
     for(u32 spawnerIndex = 0; spawnerIndex < spawnerCount; ++spawnerIndex)
     {
         AssetID sID = spawners[spawnerIndex];
@@ -358,7 +358,7 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
     {
         MemoryPool tempPool = {};
         u16 spawnerCount;
-        AssetID* spawners = GetAllDataAsset(&tempPool, server->assets, Spawner, 0, 0, &spawnerCount);
+        AssetID* spawners = GetAllDataAsset(&tempPool, server->assets, Spawner, "default", 0, &spawnerCount);
         
         for(u32 spawnerIndex = 0; spawnerIndex < spawnerCount; ++spawnerIndex)
         {
