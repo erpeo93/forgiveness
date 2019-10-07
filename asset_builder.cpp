@@ -1872,7 +1872,6 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     MemoryPool tempPool = {};
     
     u16 type = GetMetaAssetType(sourceDir);
-    u16 subtype = GetMetaAssetSubtype(type, sourceSubdir);
     
     char source[128];
     char filename[128];
@@ -2013,7 +2012,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     b32 changedFiles = false;
     
     char* typeStr = GetAssetTypeName(type);
-    char* subtypeStr = GetAssetSubtypeName(type, subtype);
+    char* subtypeStr = sourceSubdir;
     
     SavedTypeSubtypeCountHash* savedCount = GetCorrenspodingFileCountHash(hash, typeStr, subtypeStr);
     if(validFileCount != savedCount->fileCount || 
@@ -2358,6 +2357,17 @@ internal void BuildAssets(TimestampHash* hash, char* sourcePath, char* destPath)
     SavePakVersion(sourcePath);
 }
 
+internal b32 HotReload(u16 type)
+{
+    b32 result = true;
+    if(type == AssetType_EntityDefinition)
+    {
+        result = false;
+    }
+    
+    return result;
+}
+
 internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char* destPath, char* destSendPath)
 {
     PlatformSubdirNames subdir;
@@ -2380,7 +2390,6 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             FormatString(fullpath, sizeof(fullpath), "%s/%s/%s", sourcePath, subdirName, subsubDirName);
             
             u16 type = GetMetaAssetType(subdirName);
-            u16 subtype = GetMetaAssetSubtype(type, subsubDirName);
             
             u32 fileTypes = GetFileTypes((AssetType)type);
             PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(fileTypes, fullpath);
@@ -2392,12 +2401,12 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
-				if(RelevantFile(info, &fileGroup, true))
-				{
+                if(RelevantFile(info, &fileGroup, true))
+                {
                     ++currentFileCount;
-					SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
-					if(!AreEqual(info->timestamp, infoHash->timestamp))
-					{
+                    SavedFileInfoHash* infoHash = GetCorrenspodingFileDateHash(hash, fullpath, info->name);
+                    if(!AreEqual(info->timestamp, infoHash->timestamp))
+                    {
                         if(EditorFile(info))
                         {
                             updatedTestFiles = true;
@@ -2406,8 +2415,8 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
                         {
                             updatedStandardFiles = true;
                         }
-					}
-				}
+                    }
+                }
             }
             platformAPI.GetAllFilesEnd(&fileGroup);
             
@@ -2435,7 +2444,7 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             platformAPI.GetAllFilesEnd(&markupFiles);
             
             char* typeStr = GetAssetTypeName(type);
-            char* subtypeStr = GetAssetSubtypeName(type, subtype);
+            char* subtypeStr = subsubDirName;
             
             SavedTypeSubtypeCountHash* countHash = GetCorrenspodingFileCountHash(hash, typeStr, subtypeStr);
             
@@ -2447,8 +2456,11 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             
             if(updatedStandardFiles || updatedTestFiles || numberOfFilesChanged)
             {
-                char* path = (updatedStandardFiles || numberOfFilesChanged) ? destSendPath : destPath;
-                WritePak(hash, sourcePath, subdirName, subsubDirName, path, false);
+                if(HotReload(type) || (!numberOfFilesChanged))
+                {
+                    char* path = (updatedStandardFiles || numberOfFilesChanged) ? destSendPath : destPath;
+                    WritePak(hash, sourcePath, subdirName, subsubDirName, path, false);
+                }
             }
         }
     }

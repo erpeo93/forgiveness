@@ -153,13 +153,24 @@ introspection() struct EntityRef
     u16 index;
 };
 
-introspection() struct SpawnerOption
+introspection() struct SpawnerEntity
 {
     EntityRef type;
+    Vec2 maxClusterOffset;
     Vec2 maxOffset;
-    r32 weight MetaDefault("1.0f");
+    r32 minClusterDistance MetaDefault("1");
+    r32 minEntityDistance MetaDefault("1");
+    i32 clusterCount MetaDefault("1");
+    i32 clusterCountV MetaDefault("0");
     i32 count MetaDefault("1");
     i32 countV;
+};
+
+introspection() struct SpawnerOption
+{
+    r32 weight MetaDefault("1.0f");
+    ArrayCounter entityCount MetaCounter(entities);
+    SpawnerEntity* entities;
 };
 
 introspection() struct Spawner

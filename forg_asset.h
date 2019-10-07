@@ -20,11 +20,13 @@
 
 
 
+#if ASSET_SUBTYPE_RESTRUCTURING
 struct MetaAssetType
 {
     u16 subtypeCount;
     char** names;
 };
+#endif
 
 #define INVALID_PROPERTY_VALUE 0xffff
 #define INVALID_ASSET_SUBTYPE 0xffff
@@ -218,7 +220,7 @@ introspection() struct ground_coloration
     ArrayCounter testCounter MetaCounter(a1);
     GroundColorationArrayTest* a1;
     
-    GameAssetType asset MetaDefault("{AssetType_Font, AssetFont_debug}") MetaFixed(type);
+    GameAssetType asset MetaDefault("{AssetType_Font, 0}") MetaFixed(type);
     
     ArrayCounter propertyCount MetaCounter(properties);
     GameProperty* properties;
@@ -226,7 +228,7 @@ introspection() struct ground_coloration
 
 introspection() struct tile_definition
 {
-    GameAssetType asset MetaDefault("{AssetType_Image, AssetImage_default}") MetaFixed(type);
+    GameAssetType asset MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
     GameProperty property;
     Vec4 color MetaDefault("V4(1, 1, 1, 1)");
 };
@@ -341,8 +343,7 @@ struct AssetSubtypeArray
 
 struct AssetArray
 {
-    u32 subtypeCount;
-    AssetSubtypeArray* subtypes;
+    AssetSubtypeArray subtypes[32];
 };
 
 struct AssetFile
@@ -460,45 +461,6 @@ internal char* GetAssetTypeName(u16 type)
     else
     {
         InvalidCodePath;
-    }
-    
-    return result;
-}
-
-internal u16 GetMetaAssetSubtype(u16 type, char* subtype)
-{
-    u16 result = 0xffff;
-    
-    if(type < AssetType_Count)
-    {
-        MetaAssetType sub = metaAsset_subTypes[type];
-        result = GetValueFromNames_(sub.names, sub.subtypeCount, subtype);
-    }
-    
-    return result;
-}
-
-internal u16 GetMetaAssetSubtype(u16 type, Token subtype)
-{
-    u16 result = 0xffff;
-    
-    if(type < AssetType_Count)
-    {
-        MetaAssetType sub = metaAsset_subTypes[type];
-        result = GetValueFromNames_(sub.names, sub.subtypeCount, subtype);
-    }
-    
-    return result;
-}
-
-internal char* GetAssetSubtypeName(u16 type, u16 subtype)
-{
-    char* result = 0;
-    
-    if(type < AssetType_Count)
-    {
-        MetaAssetType sub = metaAsset_subTypes[type];
-        result = GetNameFromNames_(sub.names, sub.subtypeCount, subtype);
     }
     
     return result;

@@ -160,7 +160,7 @@ internal AssetBlock* AcquireAssetBlocks(Assets* assets, u16 assetCount)
 
 internal AssetSubtypeArray* GetSubtype(AssetArray* array, u16 subtype)
 {
-    Assert(subtype < array->subtypeCount);
+    Assert(subtype < ArrayCount(array->subtypes));
     AssetSubtypeArray* result = array->subtypes + subtype;
     
     return result;
@@ -174,7 +174,7 @@ inline GetAssetResult GetAssetRaw(Assets* assets, AssetID ID)
     Assert(ID.type < AssetType_Count);
     AssetArray* array = assets->assets + ID.type;
     
-    Assert(ID.subtype < array->subtypeCount);
+    Assert(ID.subtype < ArrayCount(array->subtypes));
     AssetSubtypeArray* subtype = GetSubtype(array, ID.subtype);
     
     if(ID.index < (subtype->standardAssetCount + subtype->derivedAssetCount))
@@ -504,15 +504,91 @@ inline void RefreshSpecialTexture(Assets* assets, SpecialTexture* texture)
 
 #endif
 
-internal AssetSubtypeArray* GetAssetSubtype(Assets* assets, u16 type, u16 subtype)
+internal AssetSubtypeArray* GetAssetSubtypeArray(Assets* assets, u16 type, u16 subtype)
 {
     Assert(type < AssetType_Count);
     AssetArray* assetTypeArray = assets->assets + type;
-    Assert(subtype < assetTypeArray->subtypeCount);
+    Assert(subtype < ArrayCount(assetTypeArray->subtypes));
     AssetSubtypeArray* result = GetSubtype(assetTypeArray, subtype);
     return result;
 }
 
+internal u16 GetAssetSubtype(Assets* assets, u16 type, u64 hash)
+{
+    Assert(type < AssetType_Count);
+    AssetArray* array = assets->assets + type;
+    u16 result  = (hash & (ArrayCount(array->subtypes) - 1));
+    return result;
+}
+
+internal u16 GetAssetSubtype(Assets* assets, u16 type, char* subtype)
+{
+    u16 result = GetAssetSubtype(assets, type, StringHash(subtype));
+    return result;
+}
+
+internal u16 GetAssetSubtype(Assets* assets, u16 type, Token subtype)
+{
+    u16 result = GetAssetSubtype(assets, type, StringHash(subtype.text, subtype.textLength));
+    return result;
+}
+
+internal u16 GetAssetSubtype(Assets* assets, u16 type, Enumerator subtype)
+{
+    u64 hash = StringHash(subtype.value);
+    u16 result = GetAssetSubtype(assets, type, hash);
+    return result;
+}
+
+internal StringArray GetAssetSubtypeList(Assets* assets, MemoryPool* pool, u16 type)
+{
+    StringArray result = {};
+    
+    Assert(type < AssetType_Count);
+    AssetArray* array = assets->assets + type;
+    
+    u32 counter = 0;
+    for(u32 hashIndex = 0; hashIndex < ArrayCount(array->subtypes); ++hashIndex)
+    {
+        AssetSubtypeArray* subtypeArray = array->subtypes + hashIndex;
+        AssetFile* file = GetAssetFile(assets, subtypeArray->fileIndex);
+        
+        if(file->valid)
+        {
+            ++counter;
+        }
+    }
+    
+    result.strings = PushArray(pool, char*, counter);
+    for(u32 hashIndex = 0; hashIndex < ArrayCount(array->subtypes); ++hashIndex)
+    {
+        AssetSubtypeArray* subtypeArray = array->subtypes + hashIndex;
+        AssetFile* file = GetAssetFile(assets, subtypeArray->fileIndex);
+        if(file->valid)
+        {
+            result.strings[result.count++] = PushString(pool, file->header.subtype);
+        }
+    }
+    
+    
+    return result;
+}
+
+internal char* GetAssetSubtypeName(Assets* assets, u16 type, u16 subtype)
+{
+    char* result = 0;
+    AssetSubtypeArray* subtypeArray = GetAssetSubtypeArray(assets, type, subtype);
+    if(subtypeArray)
+    {
+        AssetFile* file = GetAssetFile(assets, subtypeArray->fileIndex);
+        if(file->valid)
+        {
+            result = file->header.subtype;
+        }
+    }
+    
+    return result;
+}
 
 internal AssetSubtypeArray* GetAssetSubtype(Assets* assets, char* typeString, char* subtypeString)
 {
@@ -521,12 +597,8 @@ internal AssetSubtypeArray* GetAssetSubtype(Assets* assets, char* typeString, ch
     if(type < AssetType_Count)
     {
         AssetArray* assetTypeArray = assets->assets + type;
-        u16 subtype = GetMetaAssetSubtype(type, subtypeString);
-        if(subtype < assetTypeArray->subtypeCount)
-        {
-            result = GetAssetSubtype(assets, type, subtype);
-            
-        }
+        u16 subtype = GetAssetSubtype(assets, type, subtypeString);
+        result = GetAssetSubtypeArray(assets, type, subtype);
     }
     return result;
     
@@ -575,7 +647,7 @@ internal AssetBoilerplate BeginAssetBoilerplate(Assets* assets, AssetID ID, b32 
                 result.asset = asset;
                 asset->data = 0;
                 
-                AssetSubtypeArray* subtype = GetAssetSubtype(assets, ID.type, ID.subtype);
+                AssetSubtypeArray* subtype = GetAssetSubtypeArray(assets, ID.type, ID.subtype);
                 result.fileIndex = subtype->fileIndex;
             }
             else
@@ -901,7 +973,7 @@ internal AssetFile* CloseAssetFileFor(Assets* assets, u16 closeType, u16 closeSu
     {
         AssetFile* file = GetAssetFile(assets, assetFileIndex);
         u16 type = GetMetaAssetType(file->header.type);
-        u16 subtype = GetMetaAssetSubtype(type, file->header.subtype);
+        u16 subtype = GetAssetSubtype(assets, type, file->header.subtype);
         
         if(closeType == type && closeSubtype == subtype)
         {
@@ -919,7 +991,7 @@ internal AssetFile* CloseAssetFileFor(Assets* assets, u16 closeType, u16 closeSu
 internal void ReopenReloadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, u16 typeIn, u16 subtypeIn, u8* content, u32 size, MemoryPool* pool)
 {
     char* type = GetAssetTypeName(typeIn);
-    char* subtype = GetAssetSubtypeName(typeIn, subtypeIn);
+    char* subtype = GetAssetSubtypeName(assets, typeIn, subtypeIn);
     char newName[128];
     FormatString(newName, sizeof(newName), "%s_%s", type, subtype);
     platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, newName, content, size, 0);
@@ -947,11 +1019,11 @@ internal void ReopenReloadAssetFile(Assets* assets, AssetFile* file, u32 fileInd
             if(asset->state == Asset_loaded || asset->state == Asset_preloaded || asset->state == Asset_locked)
             {
 #ifndef ONLY_DATA_FILES
-				if(IsValid(&asset->textureHandle))
-				{
+                if(IsValid(&asset->textureHandle))
+                {
                     DLLIST_REMOVE(&asset->LRU);
-					DLLIST_INSERT_AS_LAST(&assets->LRUFreeSentinel, &asset->LRU);
-				}
+                    DLLIST_INSERT_AS_LAST(&assets->LRUFreeSentinel, &asset->LRU);
+                }
 #endif
                 FreeAsset(assets, asset);
             }
@@ -1062,7 +1134,7 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
     u16 index = ID.index;
     
     char* assetType = GetAssetTypeName(type);
-    char* assetSubtype = GetAssetSubtypeName(type, subtype);
+    char* assetSubtype = GetAssetSubtypeName(assets, type, subtype);
     
     char path[128];
     FormatString(path, sizeof(path), "%s/%s/%s", basePath, assetType, assetSubtype);
@@ -1102,12 +1174,12 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
                 char* filenameNoExtension = filenameNoExtension_;
                 u32 bufferSize = sizeof(filenameNoExtension_);
                 
-				if(editorMode)
-				{
+                if(editorMode)
+                {
                     u32 written = (u32) FormatString(filenameNoExtension, bufferSize, TEST_FILE_PREFIX);
                     filenameNoExtension += written;
                     bufferSize -= written;
-				}
+                }
                 
                 TrimToFirstCharacter(filenameNoExtension, bufferSize, filename, '.');
                 
@@ -1132,7 +1204,7 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
             structName.ptr = metaAssetType;
             structName.length = StrLen(metaAssetType);
             
-            DumpStructToStream(structName, &file, asset->data);
+            DumpStructToStream(assets, structName, &file, asset->data);
             
             char filenameNoExtension_[64];
             char* filenameNoExtension = filenameNoExtension_;
@@ -1180,14 +1252,31 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
 }
 #endif
 
+internal StringArray BuildAssetIndexNames(Assets* assets, MemoryPool* pool, u16 type, u16 subtype)
+{
+    StringArray result = {};
+    AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeArray(assets, type, subtype);
+    if(assetSubtypeArray)
+    {
+        u16 assetCount = assetSubtypeArray->standardAssetCount + assetSubtypeArray->derivedAssetCount;
+        
+        result.strings = PushArray(pool, char*, assetCount);
+        for(u16 assetIndex = 0; assetIndex < assetCount; ++assetIndex)
+        {
+            Asset* asset = GetAsset(assetSubtypeArray, assetIndex);
+            result.strings[result.count++] = PushString(pool, asset->paka.sourceName);
+        }
+    }
+    
+    return result;
+}
+
 internal u16 GetAssetIndex(Assets* assets, u16 type, u16 subtype, Token indexName)
 {
     u16 result = 0;
-    
-    AssetSubtypeArray* assetSubtypeArray = GetAssetSubtype(assets, type, subtype);
+    AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeArray(assets, type, subtype);
     if(assetSubtypeArray)
     {
-        
         u16 assetCount = assetSubtypeArray->standardAssetCount;
         for(u16 assetIndex = 0; assetIndex < assetCount; ++assetIndex)
         {
@@ -1208,6 +1297,11 @@ internal char* GetAssetIndexName(Assets* assets, AssetID ID)
     char* result = asset->paka.sourceName;
     return result;
 }
+
+
+
+
+
 
 internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks, u32 taskCount, MemoryPool* pool, PlatformTextureOpQueue* textureQueue, memory_index size)
 {
@@ -1250,15 +1344,6 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
     
     assets->firstFreeAssetBlock = 0;
     assets->blockPool = pool;
-    
-    
-    for(u32 assetTypeIndex = 0; assetTypeIndex < AssetType_Count; ++assetTypeIndex)
-    {
-        MetaAssetType metaType = metaAsset_subTypes[assetTypeIndex];
-        AssetArray* assetArray = assets->assets + assetTypeIndex;
-        assetArray->subtypeCount = metaType.subtypeCount;
-        assetArray->subtypes = PushArray(pool, AssetSubtypeArray, assetArray->subtypeCount);
-    }
     
     PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, ASSETS_PATH);
     
@@ -1416,69 +1501,67 @@ internal AssetID QueryAssets_(Assets* assets, AssetType type, u32 subtype, Rando
     if(type)
     {
         AssetArray* array = assets->assets + type;
-        if(subtype < array->subtypeCount)
+        
+        AssetSubtypeArray* subtypeArray = GetSubtype(array, SafeTruncateToU16(subtype));
+        if(subtypeArray->standardAssetCount > 0)
         {
-            AssetSubtypeArray* subtypeArray = GetSubtype(array, SafeTruncateToU16(subtype));
-            if(subtypeArray->standardAssetCount > 0)
+            u16 matchingOptional = 0;
+            u16 matchingAssetsOptional[32];
+            
+            u16 matchingExact = 0;
+            u16 matchingAssetsExact[32];
+            
+            u16 maximumAssetIndexAllowed = subtypeArray->standardAssetCount;
+            if(derivedAssets)
             {
-                u16 matchingOptional = 0;
-                u16 matchingAssetsOptional[32];
+                maximumAssetIndexAllowed += subtypeArray->derivedAssetCount;
+            }
+            
+            if(!onePastEndingIndex)
+            {
+                onePastEndingIndex = maximumAssetIndexAllowed;
+            }
+            onePastEndingIndex = Min(onePastEndingIndex, maximumAssetIndexAllowed);
+            
+            Assert(startingIndex <= onePastEndingIndex);
+            for(u16 assetIndex = startingIndex; assetIndex < onePastEndingIndex; ++assetIndex)
+            {
+                Asset* asset = GetAsset(subtypeArray, assetIndex);
                 
-                u16 matchingExact = 0;
-                u16 matchingAssetsExact[32];
-                
-                u16 maximumAssetIndexAllowed = subtypeArray->standardAssetCount;
-                if(derivedAssets)
+                b32 exactMatch;
+                if(MatchesProperties(asset, properties, &exactMatch))
                 {
-                    maximumAssetIndexAllowed += subtypeArray->derivedAssetCount;
-                }
-                
-                if(!onePastEndingIndex)
-                {
-                    onePastEndingIndex = maximumAssetIndexAllowed;
-                }
-                onePastEndingIndex = Min(onePastEndingIndex, maximumAssetIndexAllowed);
-                
-                Assert(startingIndex <= onePastEndingIndex);
-                for(u16 assetIndex = startingIndex; assetIndex < onePastEndingIndex; ++assetIndex)
-                {
-                    Asset* asset = GetAsset(subtypeArray, assetIndex);
-                    
-                    b32 exactMatch;
-                    if(MatchesProperties(asset, properties, &exactMatch))
+                    if(exactMatch)
                     {
-                        if(exactMatch)
+                        if(matchingExact < ArrayCount(matchingAssetsExact))
                         {
-                            if(matchingExact < ArrayCount(matchingAssetsExact))
-                            {
-                                matchingAssetsExact[matchingExact++] = assetIndex;
-                            }
+                            matchingAssetsExact[matchingExact++] = assetIndex;
                         }
-                        else
-                        {
-                            if(matchingOptional < ArrayCount(matchingAssetsOptional))
-                            {
-                                matchingAssetsOptional[matchingOptional++] = assetIndex;
-                            }
-                        }
-                    }
-                }
-                
-                if(matchingExact > 0 || matchingOptional > 0)
-                {
-                    result.type = SafeTruncateToU16(type);
-                    result.subtype = SafeTruncateToU16(subtype);
-                    
-                    if(matchingExact > 0)
-                    {
-                        u32 choice = RandomChoice(seq, matchingExact);
-                        result.index = matchingAssetsExact[choice];
                     }
                     else
                     {
-                        u32 choice = RandomChoice(seq, matchingOptional);
-                        result.index = matchingAssetsOptional[choice];
+                        if(matchingOptional < ArrayCount(matchingAssetsOptional))
+                        {
+                            matchingAssetsOptional[matchingOptional++] = assetIndex;
+                        }
                     }
+                }
+            }
+            
+            if(matchingExact > 0 || matchingOptional > 0)
+            {
+                result.type = SafeTruncateToU16(type);
+                result.subtype = SafeTruncateToU16(subtype);
+                
+                if(matchingExact > 0)
+                {
+                    u32 choice = RandomChoice(seq, matchingExact);
+                    result.index = matchingAssetsExact[choice];
+                }
+                else
+                {
+                    u32 choice = RandomChoice(seq, matchingOptional);
+                    result.index = matchingAssetsOptional[choice];
                 }
             }
         }
@@ -1512,7 +1595,7 @@ inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
         FreeAsset(assets, asset);
         asset->data = AcquireAssetMemory(assets, finalSize, asset);
         tokenizer.at = (char*) tempBuffer.ptr;
-        ParseBufferIntoStruct(structName, &tokenizer, asset->data, finalSize);
+        ParseBufferIntoStruct(assets, structName, &tokenizer, asset->data, finalSize);
         asset->state = Asset_loaded;
     }
     else
@@ -1526,7 +1609,7 @@ inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
 #ifndef ONLY_DATA_FILES
 internal void PreloadAll(Assets* assets, u16 type, u16 subtype, b32 immediate)
 {
-    AssetSubtypeArray* assetArray = GetAssetSubtype(assets, type, subtype);
+    AssetSubtypeArray* assetArray = GetAssetSubtypeArray(assets, type, subtype);
     Assert(assetArray);
     BitmapId ID = {};
     ID.type = type;
@@ -1553,21 +1636,18 @@ internal AssetID* GetAllSkinBitmaps(MemoryPool* tempPool, Assets* assets, u16 sk
     *bitmapCount = 0;
     
     AssetArray* array = assets->assets + AssetType_Image;
-    if((u32) skin < array->subtypeCount)
+    AssetSubtypeArray* skinBitmaps = GetSubtype(array, skin);
+    
+    u16 totalAssetCount = skinBitmaps->standardAssetCount + skinBitmaps->derivedAssetCount;
+    *bitmapCount = totalAssetCount;
+    
+    result = PushArray(tempPool, AssetID, totalAssetCount);
+    for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
     {
-        AssetSubtypeArray* skinBitmaps = GetSubtype(array, skin);
-        
-        u16 totalAssetCount = skinBitmaps->standardAssetCount + skinBitmaps->derivedAssetCount;
-        *bitmapCount = totalAssetCount;
-        
-        result = PushArray(tempPool, AssetID, totalAssetCount);
-        for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
-        {
-            AssetID* dest = result + assetIndex;
-            dest->type = AssetType_Image;
-            dest->subtype = SafeTruncateToU16(skin);
-            dest->index = assetIndex;
-        }
+        AssetID* dest = result + assetIndex;
+        dest->type = AssetType_Image;
+        dest->subtype = SafeTruncateToU16(skin);
+        dest->index = assetIndex;
     }
     
     return result;
@@ -1590,21 +1670,18 @@ internal AssetID* GetAllAssets_(MemoryPool* tempPool, Assets* assets, u16 assetT
     *count = 0;
     
     AssetArray* array = assets->assets + assetType;
-    if(subtype < array->subtypeCount)
+    AssetSubtypeArray* assetArray = GetSubtype(array, subtype);
+    
+    u16 totalAssetCount = assetArray->standardAssetCount + assetArray->derivedAssetCount;
+    *count = totalAssetCount;
+    
+    result = PushArray(tempPool, AssetID, totalAssetCount);
+    for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
     {
-        AssetSubtypeArray* assetArray = GetSubtype(array, subtype);
-        
-        u16 totalAssetCount = assetArray->standardAssetCount + assetArray->derivedAssetCount;
-        *count = totalAssetCount;
-        
-        result = PushArray(tempPool, AssetID, totalAssetCount);
-        for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
-        {
-            AssetID* dest = result + assetIndex;
-            dest->type = assetType;
-            dest->subtype = subtype;
-            dest->index = assetIndex;
-        }
+        AssetID* dest = result + assetIndex;
+        dest->type = assetType;
+        dest->subtype = subtype;
+        dest->index = assetIndex;
     }
     
     return result;

@@ -377,7 +377,7 @@ PLATFORM_WORK_CALLBACK(WatchForFileChanges)
     }
 }
 
-inline void ReadCompressFile(GameFile* file, u32 uncompressedSize, u8* uncompressedContent)
+inline void ReadCompressFile(ServerState* server, GameFile* file, u32 uncompressedSize, u8* uncompressedContent)
 {
     Clear(&file->pool);
 	file->uncompressedSize = uncompressedSize;          
@@ -387,7 +387,7 @@ inline void ReadCompressFile(GameFile* file, u32 uncompressedSize, u8* uncompres
     Assert(cmp_status == Z_OK);
     PAKFileHeader* header = (PAKFileHeader*) uncompressedContent;
     file->type = GetMetaAssetType(header->type);
-    file->subtype = GetMetaAssetSubtype(file->type, header->subtype);
+    file->subtype = GetAssetSubtype(server->assets, file->type, header->subtype);
     file->dataHash = DataHash((char*) uncompressedContent, uncompressedSize);
 }
 
@@ -401,7 +401,7 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
     platformAPI.ReadFromFile(&handle, 0, sizeof(PAKFileHeader), &header);
     
     u16 type = GetMetaAssetType(header.type);
-    u16 subtype = GetMetaAssetSubtype(type, header.subtype);
+    u16 subtype = GetAssetSubtype(server->assets, type, header.subtype);
     
     u32 fileIndex = 0;
     GameFile* file = 0;
@@ -431,7 +431,7 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
         Assert(destFile);
         ReopenReloadAssetFile(server->assets, destFile, destFileIndex, type, subtype, uncompressedContent, SafeTruncateUInt64ToU32(info->size), pool);
         
-        ReadCompressFile(file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
+        ReadCompressFile(server, file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
         
         if(sendToPlayers)
         {
@@ -546,7 +546,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
             u8* uncompressedContent = (u8*) PushSize(&tempPool, info->size);
             platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
-			ReadCompressFile(file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
+			ReadCompressFile(server, file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
             platformAPI.CloseFile(&handle);        
             
             EndTemporaryMemory(fileMemory);

@@ -404,7 +404,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 for(u16 type = 0; type < AssetType_Count; ++type)
                 {
                     AssetArray* assetTypeArray = assets->assets + type;
-                    for(u16 subtype = 0; subtype < assetTypeArray->subtypeCount; ++subtype)
+                    for(u16 subtype = 0; subtype < ArrayCount(assetTypeArray->subtypes); ++subtype)
                     {
                         u64 dataHash = 0;
                         for(u32 fileIndex = 0; fileIndex < assets->fileCount; ++fileIndex)
@@ -416,7 +416,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                                 PlatformFileHandle* fileHandle = GetHandleFor(assets, fileIndex);
                                 
                                 u16 fileType = GetMetaAssetType(fileHeader->type);
-                                u16 fileSubtype = GetMetaAssetSubtype(type, fileHeader->subtype);
+                                u16 fileSubtype = GetAssetSubtype(assets, type, fileHeader->subtype);
                                 
                                 if(fileType == type && fileSubtype == subtype)
                                 {

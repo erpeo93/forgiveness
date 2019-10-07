@@ -116,7 +116,6 @@ int main(int argc, char** argv)
     metaSubtypesPtr += sprintf(metaSubtypesPtr, "{%d, NULL},\n", 0);
     
     printf("AssetType_Invalid,\n");
-    
     char* path = "../server/assets/raw";
     
     SubFolders folders;
@@ -129,15 +128,12 @@ int main(int argc, char** argv)
         printf("AssetType_%s", folderName);
         Enum();
         
-        
-        
         metaAssetPtr += sprintf(metaAssetPtr, "\"%s\",\n", folderName);
         
         SubFolders* subFolders = allSubFolders + folderIndex;
         char subpath[128];
         sprintf(subpath, "%s/%s", path, folderName);
         GetAllSubdirectoriesNoSpaces(subFolders, subpath);
-        
         metaSubtypesPtr += sprintf(metaSubtypesPtr, "{%d, MetaTable_Asset%sType},\n", subFolders->count, folderName);
     }
     
@@ -152,6 +148,7 @@ int main(int argc, char** argv)
     
     
     
+#if 0    
     char metaSubAssetTable[2048];
     for(int folderIndex = 0; folderIndex < folders.count; ++folderIndex)
     {
@@ -187,5 +184,7 @@ int main(int argc, char** argv)
     sprintf(metaSubtypesPtr, "};\n\n");
     printf(metaSubtypesTable);
     printf("\n");
+#endif
+    
 }
 

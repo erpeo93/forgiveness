@@ -186,13 +186,24 @@ FieldDefinition fieldDefinitionOfEntityRef[] =
 {0, MetaType_u16, "u16", "index", (u32) (&((EntityRef*)0)->index), {}, sizeof(u16),"invalid",0, 0, 0}, 
 };
 
+FieldDefinition fieldDefinitionOfSpawnerEntity[] = 
+ {
+{0, MetaType_EntityRef, "EntityRef", "type", (u32) (&((SpawnerEntity*)0)->type), {}, sizeof(EntityRef),"invalid",0, 0, 0}, 
+{0, MetaType_Vec2, "Vec2", "maxClusterOffset", (u32) (&((SpawnerEntity*)0)->maxClusterOffset), {}, sizeof(Vec2),"invalid",0, 0, 0}, 
+{0, MetaType_Vec2, "Vec2", "maxOffset", (u32) (&((SpawnerEntity*)0)->maxOffset), {}, sizeof(Vec2),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "minClusterDistance", (u32) (&((SpawnerEntity*)0)->minClusterDistance), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_r32, "r32", "minEntityDistance", (u32) (&((SpawnerEntity*)0)->minEntityDistance), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_i32, "i32", "clusterCount", (u32) (&((SpawnerEntity*)0)->clusterCount), {}, sizeof(i32),"invalid",0, 0, 0}, 
+{0, MetaType_i32, "i32", "clusterCountV", (u32) (&((SpawnerEntity*)0)->clusterCountV), {}, sizeof(i32),"invalid",0, 0, 0}, 
+{0, MetaType_i32, "i32", "count", (u32) (&((SpawnerEntity*)0)->count), {}, sizeof(i32),"invalid",0, 0, 0}, 
+{0, MetaType_i32, "i32", "countV", (u32) (&((SpawnerEntity*)0)->countV), {}, sizeof(i32),"invalid",0, 0, 0}, 
+};
+
 FieldDefinition fieldDefinitionOfSpawnerOption[] = 
  {
-{0, MetaType_EntityRef, "EntityRef", "type", (u32) (&((SpawnerOption*)0)->type), {}, sizeof(EntityRef),"invalid",0, 0, 0}, 
-{0, MetaType_Vec2, "Vec2", "maxOffset", (u32) (&((SpawnerOption*)0)->maxOffset), {}, sizeof(Vec2),"invalid",0, 0, 0}, 
 {0, MetaType_r32, "r32", "weight", (u32) (&((SpawnerOption*)0)->weight), {}, sizeof(r32),"invalid",0, 0, 0}, 
-{0, MetaType_i32, "i32", "count", (u32) (&((SpawnerOption*)0)->count), {}, sizeof(i32),"invalid",0, 0, 0}, 
-{0, MetaType_i32, "i32", "countV", (u32) (&((SpawnerOption*)0)->countV), {}, sizeof(i32),"invalid",0, 0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "entityCount", (u32) (&((SpawnerOption*)0)->entityCount), {}, sizeof(ArrayCounter),"invalid","entities", (u32)(&((SpawnerOption*)0)->entities), 0}, 
+{MetaFlag_Pointer, MetaType_SpawnerEntity, "SpawnerEntity", "entities", (u32) (&((SpawnerOption*)0)->entities), {}, sizeof(SpawnerEntity),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfSpawner[] = 
@@ -372,6 +383,7 @@ AddToMetaDefinitions(GameAssetType, fieldDefinitionOfGameAssetType);\
 AddToMetaDefinitions(AssetID, fieldDefinitionOfAssetID);\
 AddToMetaDefinitions(Spawner, fieldDefinitionOfSpawner);\
 AddToMetaDefinitions(SpawnerOption, fieldDefinitionOfSpawnerOption);\
+AddToMetaDefinitions(SpawnerEntity, fieldDefinitionOfSpawnerEntity);\
 AddToMetaDefinitions(EntityRef, fieldDefinitionOfEntityRef);\
 AddToMetaDefinitions(world_generator, fieldDefinitionOfworld_generator);\
 AddToMetaDefinitions(BiomePyramid, fieldDefinitionOfBiomePyramid);\
@@ -400,7 +412,7 @@ meta_propertiesString[Property_action] = "action";\
 meta_propertiesString[Property_tileType] = "tileType";\
 
 #define META_DEFAULT_VALUES_CPP_SUCKS()\
-fieldDefinitionOfWaterPhase[0].def.def_r32 =0;fieldDefinitionOfWaterPhase[6].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[7].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[8].def.def_r32 =1.0f;fieldDefinitionOfWaterPhase[9].def.def_r32 =0.5f;fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfworld_generator[7].def.def_r32 =1;fieldDefinitionOfworld_generator[8].def.def_r32 =0.05f;fieldDefinitionOfSpawnerOption[2].def.def_r32 =1.0f;fieldDefinitionOfSpawnerOption[3].def.def_i32 =1;fieldDefinitionOfSpawner[2].def.def_r32 =1.0f;fieldDefinitionOfSpawner[3].def.def_r32 =1.0f;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, AssetFont_debug};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, AssetImage_default};fieldDefinitionOftile_definition[2].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfCommonEntityInitParams[1].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[1].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfRockDefinition[4].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[6].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[9].def.def_u32 =1;fieldDefinitionOfRockDefinition[10].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[11].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[12].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[13].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[17].def.def_u32 =1;
+fieldDefinitionOfWaterPhase[0].def.def_r32 =0;fieldDefinitionOfWaterPhase[6].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[7].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[8].def.def_r32 =1.0f;fieldDefinitionOfWaterPhase[9].def.def_r32 =0.5f;fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfworld_generator[7].def.def_r32 =1;fieldDefinitionOfworld_generator[8].def.def_r32 =0.05f;fieldDefinitionOfSpawnerEntity[3].def.def_r32 =1;fieldDefinitionOfSpawnerEntity[4].def.def_r32 =1;fieldDefinitionOfSpawnerEntity[5].def.def_i32 =1;fieldDefinitionOfSpawnerEntity[6].def.def_i32 =0;fieldDefinitionOfSpawnerEntity[7].def.def_i32 =1;fieldDefinitionOfSpawnerOption[0].def.def_r32 =1.0f;fieldDefinitionOfSpawner[2].def.def_r32 =1.0f;fieldDefinitionOfSpawner[3].def.def_r32 =1.0f;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, 0};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, 0};fieldDefinitionOftile_definition[2].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfCommonEntityInitParams[1].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[1].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfRockDefinition[4].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[6].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[9].def.def_u32 =1;fieldDefinitionOfRockDefinition[10].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[11].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[12].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[13].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[17].def.def_u32 =1;
 ;
 #define META_ARCHETYPES_BOTH()\
 archetypeLayouts[Archetype_AnimalArchetype].totalSize = sizeof(AnimalArchetype); archetypeLayouts[Archetype_RockArchetype].totalSize = sizeof(RockArchetype); archetypeLayouts[Archetype_PlantArchetype].totalSize = sizeof(PlantArchetype); archetypeLayouts[Archetype_GrassArchetype].totalSize = sizeof(GrassArchetype); 

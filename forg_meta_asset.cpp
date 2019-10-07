@@ -155,23 +155,6 @@ internal StringArray GetAssetTypeList()
     return result;
 }
 
-internal StringArray GetAssetSubtypeList(u16 type)
-{
-    StringArray result = {};
-    
-    Assert(type < AssetType_Count);
-    
-    
-#if 0    
-    MetaAssetType* typeArray = metaAsset_subTypes + type;
-    
-    result.strings = typeArray->names;
-    result.count = typeArray->subtypeCount;
-#endif
-    
-    return result;
-}
-
 internal StringArray GetPropertyTypeList()
 {
     StringArray result = {};
@@ -195,7 +178,6 @@ internal StringArray GetPropertyValueList(u16 propertyType)
     
     return result;
 }
-
 
 #define AddToMetaProperties(name, properties) AddToMetaProperties_(#name, ArrayCount(properties), properties)
 internal void AddToMetaProperties_(char* name, u16 propertyCount, char** properties)
@@ -230,6 +212,7 @@ internal StructDefinition* GetMetaStructDefinition(String name)
     return result;
 }
 
+global_variable Assets* meta_assets;
 internal AssetLabel Parse_AssetLabel(Tokenizer* tokenizer, AssetLabel defaultVal)
 {
     AssetLabel result = defaultVal;
@@ -408,7 +391,11 @@ internal void Dump_Hash64(Stream* output, FieldDefinition* field, Hash64 value, 
 
 internal u16 GetAssetIndex(Assets* assets, u16 type, u16 subtype, Token indexName);
 internal char* GetAssetIndexName(Assets* assets, AssetID ID);
-internal EntityRef Parse_EntityRef(Assets* assets, Tokenizer* tokenizer, EntityRef defaultVal)
+internal u16 GetAssetSubtype(Assets* assets, u16 type, Token subtype);
+internal u16 GetAssetSubtype(Assets* assets, u16 type, char* subtype);
+internal char* GetAssetSubtypeName(Assets* assets, u16 type, u16 subtype);
+
+internal EntityRef Parse_EntityRef(Tokenizer* tokenizer, EntityRef defaultVal)
 {
     EntityRef result = defaultVal;
     
@@ -428,24 +415,24 @@ internal EntityRef Parse_EntityRef(Assets* assets, Tokenizer* tokenizer, EntityR
         index.text = kind.text + kind.textLength + 1;
         index.textLength = t.textLength - kind.textLength - 1;
         
-        result.subtype = GetMetaAssetSubtype(AssetType_EntityDefinition, kind);
-        result.index = GetAssetIndex(assets, AssetType_EntityDefinition, result.subtype, index);
+        result.subtype = GetAssetSubtype(meta_assets, AssetType_EntityDefinition, kind);
+        result.index = GetAssetIndex(meta_assets, AssetType_EntityDefinition, result.subtype, index);
     }
     
     return result;
 }
 
-internal void Dump_EntityRef(Assets* assets, Stream* output, FieldDefinition* field, EntityRef value, b32 isInArray)
+internal void Dump_EntityRef(Stream* output, FieldDefinition* field, EntityRef value, b32 isInArray)
 {
-    if(value.subtype)
+    if(value.subtype || value.index)
     {
-        char* subtypeName = GetAssetSubtypeName(AssetType_EntityDefinition, value.subtype);
+        char* subtypeName = GetAssetSubtypeName(meta_assets, AssetType_EntityDefinition, value.subtype);
         
         AssetID ID;
         ID.type = AssetType_EntityDefinition;
         ID.subtype = value.subtype;
         ID.index = value.index;
-        char* indexName = GetAssetIndexName(assets, ID);
+        char* indexName = GetAssetIndexName(meta_assets, ID);
         
         if(isInArray)
         {
@@ -531,7 +518,7 @@ internal GameAssetType Parse_GameAssetType(Tokenizer* tokenizer, GameAssetType d
         FormatString(subtype_, sizeof(subtype_), "%.*s", subtype.textLength, subtype.text);
         
         result.type = GetMetaAssetType(type_);
-        result.subtype = GetMetaAssetSubtype(result.type, subtype_);
+        result.subtype = GetAssetSubtype(meta_assets, result.type, subtype_);
     }
     
     return result;
@@ -542,7 +529,7 @@ internal void Dump_GameAssetType(Stream* output, FieldDefinition* field, GameAss
     if(value.type)
     {
         char* type = GetAssetTypeName(value.type);
-        char* subtype = GetAssetSubtypeName(value.type, value.subtype);
+        char* subtype = GetAssetSubtypeName(meta_assets, value.type, value.subtype);
         
         if(isInArray)
         {
@@ -773,11 +760,6 @@ type value = field->def.def_##type;\
 if(source){value = Parse_##type(source, value);}
 
 
-#define ASSET_INIT_BOILERPLATE(type)\
-result.size = sizeof(type);\
-type value = field->def.def_##type;\
-if(source){value = Parse_##type(layout->context->assets, source, value);}
-
 #define STANDARD_OPERATION_FUNCTION(type)\
 internal StructOperationResult type##Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray, AssetID assetID)\
 {\
@@ -797,24 +779,6 @@ internal StructOperationResult type##Operation(EditorLayout* layout, FieldDefini
 }
 
 
-#define ASSET_OPERATION_FUNCTION(type)\
-internal StructOperationResult type##Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray, AssetID assetID)\
-{\
-    StructOperationResult result = {};\
-    ASSET_INIT_BOILERPLATE(type);\
-    switch(operation)\
-    {\
-        DUMB_OPERATION_BOILERPLATE(type);\
-        case FieldOperation_Dump:\
-        {\
-            value = *(type*) ptr;\
-            Dump_##type(layout->context->assets, output, field, value, isInArray);\
-        } break;\
-        InvalidDefaultCase;\
-    }\
-    return result;\
-}
-
 STANDARD_OPERATION_FUNCTION(u16);
 STANDARD_OPERATION_FUNCTION(u32);
 STANDARD_OPERATION_FUNCTION(i32);
@@ -825,7 +789,7 @@ STANDARD_OPERATION_FUNCTION(Vec2);
 STANDARD_OPERATION_FUNCTION(Vec3);
 STANDARD_OPERATION_FUNCTION(Vec4);
 STANDARD_OPERATION_FUNCTION(AssetLabel);
-ASSET_OPERATION_FUNCTION(EntityRef);
+STANDARD_OPERATION_FUNCTION(EntityRef);
 
 internal StructOperationResult EnumeratorOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray, AssetID assetID)
 {
@@ -951,6 +915,10 @@ internal void* GetMemory(MemoryPool* pool, u32 elementCount, u32 elementSize)
     return result;
 }
 
+internal void SetMetaAssets(Assets* assets)
+{
+    meta_assets = assets;
+}
 
 internal StructOperationResult StructOperation(EditorLayout* layout, String structName, String name, Tokenizer* tokenizer, void* dataPtr, FieldOperationType operation, Stream* output, ReservedSpace* reserved, b32 parentWasPointer, AssetID assetID);
 internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* fieldPtr, Tokenizer* tokenizer, Stream* output, ReservedSpace* reserved, u16* elementCount, AssetID assetID)
@@ -1486,8 +1454,10 @@ internal u32 GetStructSize(String structName, Tokenizer* tokenizer)
     return result;
 }
 
-internal void ParseBufferIntoStruct(String structName, Tokenizer* tokenizer, void* structPtr, u32 reservedSize)
+internal void ParseBufferIntoStruct(Assets* assets, String structName, Tokenizer* tokenizer, void* structPtr, u32 reservedSize)
 {
+    SetMetaAssets(assets);
+    
     ReservedSpace reserved = {};
     StructDefinition* definition = GetMetaStructDefinition(structName);
     reserved.ptr = (void*) ((u8*) structPtr + definition->size);
@@ -1498,8 +1468,10 @@ internal void ParseBufferIntoStruct(String structName, Tokenizer* tokenizer, voi
     Assert(reserved.size == 0);
 }
 
-internal void DumpStructToStream(String structName, Stream* dest, void* structPtr)
+internal void DumpStructToStream(Assets* assets, String structName, Stream* dest, void* structPtr)
 {
+    SetMetaAssets(assets);
+    
     ReservedSpace ignored = {};
     OutputToStream(dest, "{");
     StructOperation(0, structName, structName, 0, structPtr, FieldOperation_Dump, dest, &ignored, false, {});

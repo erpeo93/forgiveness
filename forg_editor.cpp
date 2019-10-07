@@ -1031,6 +1031,8 @@ internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType*
 {
     b32 result = false;
     
+    Assets* assets = layout->context->assets;
+    
     ShowNameNoColon(layout, name);
     char output[64];
     
@@ -1060,17 +1062,19 @@ internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType*
         }
     }
     
-    char* subtypeString = GetAssetSubtypeName(type->type, type->subtype);
+    
+    char* subtypeString = GetAssetSubtypeName(assets, type->type, type->subtype);
     if(!subtypeString)
     {
         type->subtype = 0;
-        subtypeString = GetAssetSubtypeName(type->type, type->subtype);
+        subtypeString = GetAssetSubtypeName(assets, type->type, type->subtype);
     }
     
-    StringArray subtypeOptions = GetAssetSubtypeList(type->type);
+    MemoryPool tempPool = {};
+    StringArray subtypeOptions = GetAssetSubtypeList(layout->context->assets, &tempPool, type->type);
     if(EditString(layout, "subtype", subtypeString, auID(&type->subtype), subtypeOptions, output, sizeof(output), assetID))
     {
-        u16 newSubtype = GetMetaAssetSubtype(type->type, output);
+        u16 newSubtype = GetAssetSubtype(assets, type->type, output);
         if(newSubtype != INVALID_ASSET_SUBTYPE)
         {
             u16 oldType = type->subtype;
@@ -1079,6 +1083,7 @@ internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType*
         }
     }
     
+    Clear(&tempPool);
     return result;
 }
 
@@ -1146,45 +1151,55 @@ internal b32 Edit_EntityRef(EditorLayout* layout, char* name, EntityRef* ref, b3
 {
     b32 result = false;
     
+    Assets* assets = layout->context->assets;
     ShowNameNoColon(layout, name);
     char output[64];
     
-    char* typeString = ?;
+    char* typeString = GetAssetSubtypeName(assets, AssetType_EntityDefinition, ref->subtype); 
     if(!typeString)
     {
-        ref->kind = 0;
-        typeString = ?;
+        ref->subtype = 0;
+        typeString = GetAssetSubtypeName(assets, AssetType_EntityDefinition, ref->subtype);
     }
     
-    StringArray kindOptions = BuildEntityKindOptions();
-    if(EditString(layout, "type", typeString, auID(&ref->kind), kindOptions, output, sizeof(output), assetID))
+    MemoryPool tempPool = {};
+    
+    StringArray kindOptions = GetAssetSubtypeList(assets, &tempPool, AssetType_EntityDefinition);
+    if(EditString(layout, "type", typeString, auID(&ref->subtype), kindOptions, output, sizeof(output), assetID))
     {
-        u16 newKind = GetSubtype(Tokenize(output));
-        if(newKind != ref->kind)
+        u16 newSubtype = GetAssetSubtype(assets, AssetType_EntityDefinition, Tokenize(output));
+        if(newSubtype != ref->subtype)
         {
             EntityRef oldStruct = *ref;
-            ref->kind = newKind;
+            ref->subtype = newSubtype;
             ref->index = 0;
-            AddUndoRedoCopyStruct(ÈntityRef, layout->context, &oldStruct, ref, ref, assetID);
+            AddUndoRedoCopyStruct(EntityRef, layout->context, &oldStruct, ref, ref, assetID);
         }
     }
     
-    char* indexString = GetAssetName(ref->subtype, ref->index);
+    AssetID ID;
+    ID.type = AssetType_EntityDefinition;
+    ID.subtype = ref->subtype;
+    ID.index = ref->index;
+    char* indexString = GetAssetIndexName(layout->context->assets, ID);
     if(!indexString)
     {
         ref->index = 0;
-        indexString = GetAssetName(ref->subtype, ref->index);
+        ID.index = 0;
+        indexString = GetAssetIndexName(layout->context->assets, ID);
     }
     
-    StringArray indexOptions = BuildAssetIndexNames();
+    StringArray indexOptions = BuildAssetIndexNames(layout->context->assets, &tempPool, AssetType_EntityDefinition, ref->subtype);
     if(EditString(layout, "value", indexString, auID(&ref->index), indexOptions, output, sizeof(output), assetID))
     {
-        u16 newIndex = GetAssetIndex(output);
-        u16 oldValue = property->value;
-        ref->index = newValue;
+        u16 newIndex = GetAssetIndex(layout->context->assets, AssetType_EntityDefinition, ref->subtype, Tokenize(output));
+        u16 oldIndex = ref->index;
+        ref->index = newIndex;
         
-        AddUndoRedoCopyStruct(u16, layout->context, &oldValue, &ref->index, &newIndex, assetID);
+        AddUndoRedoCopyStruct(u16, layout->context, &oldIndex, &ref->index, &newIndex, assetID);
     }
+    
+    Clear(&tempPool);
     
     if(isInArray)
     {
@@ -1529,7 +1544,7 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                         
                         AnimationComponent component = {};
                         component.time = data->time;
-                        component.skin = (u16) ConvertEnumerator(AssetImageType, data->skin);
+                        component.skin = (u16) GetAssetSubtype(assets, AssetType_Image, data->skin);
                         
                         AnimationParams params = {};
                         params.P = P;
@@ -1579,7 +1594,7 @@ internal void RenderEditAssetFile(EditorLayout* layout, Assets* assets, PAKFileH
 {
     b32 showAssetData = EditorCollapsible(layout, header->name);
     u16 type = GetMetaAssetType(header->type);
-    u16 subtype = GetMetaAssetSubtype(type, header->subtype);
+    u16 subtype = GetAssetSubtype(assets, type, header->subtype);
     
     if(showAssetData)
     {

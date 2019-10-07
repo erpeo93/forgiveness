@@ -189,6 +189,38 @@ internal UniversePos BuildPFromSpawnerGrid(r32 cellDim, u32 cellX, u32 cellY)
     return result;
 }
 
+struct PoissonP
+{
+    UniversePos P;
+    PoissonP* next;
+};
+
+internal b32 Valid(PoissonP* positions, UniversePos P, r32 maxDelta)
+{
+    b32 result = true;
+    
+    r32 maxDistanceSq = Square(maxDelta);
+    for(PoissonP* poisson = positions; poisson; poisson = poisson->next)
+    {
+        Vec3 delta = Subtract(P, poisson->P);
+        if(LengthSq(delta) < maxDistanceSq)
+        {
+            result = false;
+            break;
+        }
+    }
+    
+    return result;
+}
+
+internal void AddToPoission(PoissonP** positions, MemoryPool* pool, UniversePos P)
+{
+    PoissonP* newP = PushStruct(pool, PoissonP);
+    newP->P = P;
+    newP->next = *positions;
+    *positions = newP;
+}
+
 internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos referenceP, RandomSequence* seq)
 {
     if(spawner->optionCount)
@@ -215,16 +247,68 @@ internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos 
             }
         }
         
-        i32 count = option->count + RoundReal32ToI32(option->countV * RandomBil(seq));
+        PoissonP* entities = 0;
+        PoissonP* clusters = 0;
         
-        for(i32 index = 0; index < count; ++index)
+        MemoryPool tempPool = {};
+        for(u32 entityIndex = 0; entityIndex < option->entityCount; ++entityIndex)
         {
-            Vec3 maxOffset = V3(VOXEL_SIZE * option->maxOffset, 0);
-            UniversePos P = referenceP;
-            P.chunkOffset += Hadamart(maxOffset, RandomBilV3(seq));
-            P = NormalizePosition(P);
-            AddEntity(server, P, seq, option->type, 0);
+            SpawnerEntity* spawn = option->entities + entityIndex;
+            i32 clusterCount = spawn->clusterCount + RoundReal32ToI32(spawn->clusterCountV * RandomBil(seq));
+            
+            for(i32 clusterIndex = 0; clusterIndex < clusterCount; ++clusterIndex)
+            {
+                UniversePos P = referenceP;
+                Vec3 maxClusterOffset = V3(VOXEL_SIZE * spawn->maxClusterOffset, 0);
+                
+                b32 valid = false;
+                u32 tries = 0;
+                while(!valid && tries++ < 100)
+                {
+                    P = referenceP;
+                    P.chunkOffset += Hadamart(maxClusterOffset, RandomBilV3(seq));
+                    P = NormalizePosition(P);
+                    if(Valid(clusters, P, spawn->minClusterDistance))
+                    {
+                        valid = true;
+                        AddToPoission(&clusters, &tempPool, P);
+                    }
+                }
+                
+                if(valid)
+                {
+                    UniversePos clusterP = P;
+                    i32 count = spawn->count + RoundReal32ToI32(spawn->countV * RandomBil(seq));
+                    for(i32 index = 0; index < count; ++index)
+                    {
+                        Vec3 maxOffset = V3(VOXEL_SIZE * spawn->maxOffset, 0);
+                        
+                        valid = false;
+                        tries = 0;
+                        while(!valid && tries++ < 100)
+                        {
+                            P = clusterP;
+                            P.chunkOffset += Hadamart(maxOffset, RandomBilV3(seq));
+                            P = NormalizePosition(P);
+                            
+                            if(Valid(entities, P, spawn->minEntityDistance))
+                            {
+                                AddToPoission(&entities, &tempPool, P);
+                                valid = true;
+                            }
+                        }
+                        
+                        
+                        if(valid)
+                        {
+                            AddEntity(server, P, seq, spawn->type, 0);
+                        }
+                    }
+                }
+            }
         }
+        
+        Clear(&tempPool);
     }
 }
 
