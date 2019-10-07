@@ -50,7 +50,7 @@ internal void AddToMetaDefinitions_(char* name, u32 size, u32 fieldCount, FieldD
 
 global_variable u16 meta_propertyTypeCount;
 global_variable MetaPropertyList meta_properties[Property_Count];
-global_variable char* meta_propertiesString[Property_Count - 1];
+global_variable char* meta_propertiesString[Property_Count];
 internal u16 GetMetaPropertyType(Token propertyName)
 {
     u16 result = 0;
@@ -150,8 +150,8 @@ internal u32 MetaGetCurrentVersion(char* assetType)
 internal StringArray GetAssetTypeList()
 {
     StringArray result;
-    result.strings = &metaAsset_assetType[1];
-    result.count = AssetType_Count - 1; // NOTE(Leonardo): avoid the "invalid" asset type
+    result.strings = metaAsset_assetType;
+    result.count = AssetType_Count; 
     return result;
 }
 
@@ -160,10 +160,14 @@ internal StringArray GetAssetSubtypeList(u16 type)
     StringArray result = {};
     
     Assert(type < AssetType_Count);
+    
+    
+#if 0    
     MetaAssetType* typeArray = metaAsset_subTypes + type;
     
     result.strings = typeArray->names;
     result.count = typeArray->subtypeCount;
+#endif
     
     return result;
 }
@@ -173,7 +177,7 @@ internal StringArray GetPropertyTypeList()
     StringArray result = {};
     
     result.strings = meta_propertiesString;
-    result.count = meta_propertyTypeCount - 1; // NOTE(Leonardo): avoid the "invalid" property
+    result.count = meta_propertyTypeCount;
     
     return result;
 }
@@ -204,7 +208,7 @@ internal void AddToMetaProperties_(char* name, u16 propertyCount, char** propert
     list->properties = properties;
 }
 
-char* MetaProperties_Invalid[] =
+char* MetaTable_Invalid[] =
 {
     "invalid",
 };
@@ -349,7 +353,6 @@ internal void Dump_Enumerator(Stream* output, FieldDefinition* field, Enumerator
     }
 }
 
-
 internal r32 Parse_r32(Tokenizer* tokenizer, r32 defaultVal)
 {
     r32 result = defaultVal;
@@ -399,6 +402,58 @@ internal void Dump_Hash64(Stream* output, FieldDefinition* field, Hash64 value, 
         if(value != field->def.def_Hash64)
         {
             OutputToStream(output, "%s=%ul;", field->name, value);
+        }
+    }
+}
+
+internal u16 GetAssetIndex(Assets* assets, u16 type, u16 subtype, Token indexName);
+internal char* GetAssetIndexName(Assets* assets, AssetID ID);
+internal EntityRef Parse_EntityRef(Assets* assets, Tokenizer* tokenizer, EntityRef defaultVal)
+{
+    EntityRef result = defaultVal;
+    
+    Token t = GetToken(tokenizer);
+    if(t.type == Token_String)
+    {
+        t = Stringize(t);
+    }
+    
+    Token kind = {};
+    kind.text = t.text;
+    kind.textLength = FindFirstInString(t.text, '|');
+    
+    if(kind.textLength != 0xffffffff)
+    {
+        Token index = {};
+        index.text = kind.text + kind.textLength + 1;
+        index.textLength = t.textLength - kind.textLength - 1;
+        
+        result.subtype = GetMetaAssetSubtype(AssetType_EntityDefinition, kind);
+        result.index = GetAssetIndex(assets, AssetType_EntityDefinition, result.subtype, index);
+    }
+    
+    return result;
+}
+
+internal void Dump_EntityRef(Assets* assets, Stream* output, FieldDefinition* field, EntityRef value, b32 isInArray)
+{
+    if(value.subtype)
+    {
+        char* subtypeName = GetAssetSubtypeName(AssetType_EntityDefinition, value.subtype);
+        
+        AssetID ID;
+        ID.type = AssetType_EntityDefinition;
+        ID.subtype = value.subtype;
+        ID.index = value.index;
+        char* indexName = GetAssetIndexName(assets, ID);
+        
+        if(isInArray)
+        {
+            OutputToStream(output, "\"%s|%s\"", subtypeName, indexName);
+        }
+        else
+        {
+            OutputToStream(output, "%s=\"%s|%s\";", field->name, subtypeName, indexName);
         }
     }
 }
@@ -559,7 +614,7 @@ internal void Dump_Vec2(Stream* output, FieldDefinition* field, Vec2 value, b32 
     {
         if(value != field->def.def_Vec2)
         {
-            OutputToStream(output, "{", field->name);
+            OutputToStream(output, "%s={", field->name);
             OUTPUT_VECTOR_ELEMENT(Vec2, x);
             OUTPUT_VECTOR_ELEMENT(Vec2, y);
             OutputToStream(output, "};");
@@ -686,6 +741,7 @@ internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray,
 internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray, AssetID assetID);
 internal b32 Edit_Hash64(EditorLayout* layout, char* name, Hash64* h, char* optionsName, b32 isInArray, AssetID assetID);
 internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enumerator, StringArray options, b32 isInArray, AssetID assetID);
+internal b32 Edit_EntityRef(EditorLayout* layout, char* name, EntityRef* ref, b32 isInArray, AssetID assetID);
 internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* property, b32 isInArray, AssetID assetID);
 internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray, AssetID assetID);
 internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray, AssetID assetID);
@@ -716,6 +772,12 @@ result.size = sizeof(type);\
 type value = field->def.def_##type;\
 if(source){value = Parse_##type(source, value);}
 
+
+#define ASSET_INIT_BOILERPLATE(type)\
+result.size = sizeof(type);\
+type value = field->def.def_##type;\
+if(source){value = Parse_##type(layout->context->assets, source, value);}
+
 #define STANDARD_OPERATION_FUNCTION(type)\
 internal StructOperationResult type##Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray, AssetID assetID)\
 {\
@@ -734,6 +796,25 @@ internal StructOperationResult type##Operation(EditorLayout* layout, FieldDefini
     return result;\
 }
 
+
+#define ASSET_OPERATION_FUNCTION(type)\
+internal StructOperationResult type##Operation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray, AssetID assetID)\
+{\
+    StructOperationResult result = {};\
+    ASSET_INIT_BOILERPLATE(type);\
+    switch(operation)\
+    {\
+        DUMB_OPERATION_BOILERPLATE(type);\
+        case FieldOperation_Dump:\
+        {\
+            value = *(type*) ptr;\
+            Dump_##type(layout->context->assets, output, field, value, isInArray);\
+        } break;\
+        InvalidDefaultCase;\
+    }\
+    return result;\
+}
+
 STANDARD_OPERATION_FUNCTION(u16);
 STANDARD_OPERATION_FUNCTION(u32);
 STANDARD_OPERATION_FUNCTION(i32);
@@ -744,6 +825,7 @@ STANDARD_OPERATION_FUNCTION(Vec2);
 STANDARD_OPERATION_FUNCTION(Vec3);
 STANDARD_OPERATION_FUNCTION(Vec4);
 STANDARD_OPERATION_FUNCTION(AssetLabel);
+ASSET_OPERATION_FUNCTION(EntityRef);
 
 internal StructOperationResult EnumeratorOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray, AssetID assetID)
 {
@@ -910,6 +992,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
             DUMB_OPERATION(GameProperty);
             DUMB_OPERATION(GameAssetType);
             DUMB_OPERATION(AssetLabel);
+            DUMB_OPERATION(EntityRef);
             
             default:
             {
@@ -1075,6 +1158,7 @@ internal void CopyDefaultValue(FieldDefinition* field, void* ptr)
             DUMB_COPY_DEF(GameProperty);
             DUMB_COPY_DEF(GameAssetType);
             DUMB_COPY_DEF(AssetLabel);
+            DUMB_COPY_DEF(EntityRef);
             
             default:
             {

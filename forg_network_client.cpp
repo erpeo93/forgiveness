@@ -288,6 +288,13 @@ internal void SendSpawnRequest(UniversePos P, AssetID definitionID)
     CloseAndSendGuaranteedPacket();
 }
 
+internal void SendRecreateWorldRequrest(b32 createEntities, UniversePos P)
+{
+    StartPacket(RecreateWorld);
+    Pack("lllV", createEntities, P.chunkX, P.chunkY, P.chunkOffset);
+    CloseAndSendGuaranteedPacket();
+}
+
 #if FORGIVENESS_INTERNAL
 inline SavedNameSlot* GetNameSlot( DebugTable* debugTable, u64 pointer )
 {
@@ -346,6 +353,11 @@ internal void AddClientIDMapping(GameModeWorld* worldMode, EntityID serverID, En
     
     u32 hashIndex = ServerClientIDMappingHashIndex(worldMode, serverID);
     FREELIST_INSERT(mapping, worldMode->mappings[hashIndex]);
+}
+
+STANDARD_ECS_JOB_CLIENT(DeleteEntities)
+{
+    FreeArchetype(worldMode, &ID);
 }
 
 internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
@@ -428,8 +440,18 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             
             case Type_gameAccess:
             {
-                Unpack("QHL", &worldMode->worldSeed, 
-                       &player->serverID.archetype, &player->serverID.archetypeIndex);
+                b32 deleteEntities = false;
+                Unpack("QHLl", &worldMode->worldSeed, 
+                       &player->serverID.archetype, &player->serverID.archetypeIndex, &deleteEntities);
+                
+                if(deleteEntities)
+                {
+                    for(u32 mappingIndex = 0; mappingIndex < ArrayCount(worldMode->mappings); ++mappingIndex)
+                    {
+                        FREELIST_FREE(worldMode->mappings[mappingIndex], ServerClientIDMapping, worldMode->firstFreeMapping);
+                    }
+                    EXECUTE_JOB(worldMode, DeleteEntities, true, 0);
+                }
             } break;
             
             case Type_worldInfo:
@@ -455,7 +477,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     if(definition)
                     {
                         clientID = {};
-                        Acquire(worldMode, serverID.archetype, (&clientID));
+                        AcquireArchetype(worldMode, serverID.archetype, (&clientID));
                         
                         ClientEntityInitParams params = definition->client;
                         params.ID = serverID;
@@ -579,7 +601,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 }
                 packetPtr += sizeToCopy;
             } break;
-            
 #if 0                
             case Type_plantUpdate:
             {

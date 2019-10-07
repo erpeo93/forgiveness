@@ -53,12 +53,5 @@ inline Vec3 GetRockDim(RockDefinition* rock, RandomSequence* sequence)
 #ifndef FORG_SERVER
 struct RockComponent
 {
-    Vec3 dim;
-    
-    u32 vertexCount;
-    ColoredVertex vertexes[1024];
-    
-    u32 faceCount;
-    ModelFace faces[1024];
 };
 #endif

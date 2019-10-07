@@ -416,6 +416,22 @@ internal u16 GetValueFromNames_(char** names, u16 nameCount, char* value)
     return result;
 }
 
+internal u16 GetValueFromNames_(char** names, u16 nameCount, Token value)
+{
+    u16 result = 0xffff;
+    for(u16 nameIndex = 0; nameIndex < nameCount; ++nameIndex)
+    {
+        char* name = names[nameIndex];
+        if(StrEqual(value.text, value.textLength, name, StrLen(name)))
+        {
+            result = nameIndex;
+            break;
+        }
+    }
+    
+    return result;
+}
+
 #define GetNameFromNames(names, value) GetNameFromNames_(names, ArrayCount(names), value)
 internal char* GetNameFromNames_(char** names, u32 nameCount, u32 value)
 {
@@ -450,6 +466,19 @@ internal char* GetAssetTypeName(u16 type)
 }
 
 internal u16 GetMetaAssetSubtype(u16 type, char* subtype)
+{
+    u16 result = 0xffff;
+    
+    if(type < AssetType_Count)
+    {
+        MetaAssetType sub = metaAsset_subTypes[type];
+        result = GetValueFromNames_(sub.names, sub.subtypeCount, subtype);
+    }
+    
+    return result;
+}
+
+internal u16 GetMetaAssetSubtype(u16 type, Token subtype)
 {
     u16 result = 0xffff;
     

@@ -20,6 +20,7 @@
 #include "asset_builder.cpp"
 #include "miniz.c"
 
+#include "forg_world_generation.cpp"
 #include "forg_world_server.cpp"
 #if FORGIVENESS_INTERNAL
 DebugTable* globalDebugTable;
@@ -56,6 +57,17 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
     {
         work->ReceiveData(work->network);
     }
+}
+
+#define SpawnPlayer(server, player, P) SpawnPlayer_(server, player, P, false)
+#define RespawnPlayer(server, player, P) SpawnPlayer_(server, player, P, true)
+internal void SpawnPlayer_(ServerState* server, PlayerComponent* player, UniversePos P, b32 deleteEntities)
+{
+    EntityRef type = {};
+    EntityID ID = AddEntity(server, P, &server->entropy, type, player);
+    
+    ResetQueue(player->queues + GuaranteedDelivery_None);
+    SendGameAccessConfirm(player, server->worldSeed, ID, deleteEntities);
 }
 
 internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* player,  unsigned char* packetPtr, u16 dataSize)
@@ -124,9 +136,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                 UniversePos P = {};
                 P.chunkX = 1;
                 P.chunkY = 1;
-                
-                EntityID ID = AddEntity(server, P, Spawn_Animal, player);
-                SendGameAccessConfirm(player, server->worldSeed, ID);
+                SpawnPlayer(server, player, P);
             }
             else
             {
@@ -165,23 +175,23 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             AssetID ID;
             ID.type = AssetType_EntityDefinition;
             unpack(packetPtr, "HHllV", &ID.subtype, &ID.index, &P.chunkX, &P.chunkY, &P.chunkOffset);
-            AddEntity(server, P, ID, 0);
+            
+            u32 seed = GetNextUInt32(&server->entropy);
+            AddEntity_(server, P, ID, seed, 0);
+        } break;
+        
+        
+        case Type_RecreateWorld:
+        {
+            UniversePos P = {};
+            b32 createEntities;
+            unpack(packetPtr, "lllV", &createEntities, &P.chunkX, &P.chunkY, &P.chunkOffset);
+            EXECUTE_JOB(server, DeleteAllEntities, (1 == 1), 0);
+            BuildWorld(server, createEntities);
+            RespawnPlayer(server, player, P);
         } break;
         
 #if 0        
-        case Type_RegenerateWorldChunks:
-        {
-            if(server->editor)
-            {
-                u32 worldSeed;
-                u32 generateMode;
-                packetPtr = unpack(packetPtr, "LL", &worldSeed, &generateMode);
-                server->worldSeed = worldSeed;
-                
-                CompletePastWritesBeforeFutureWrites;
-                server->generateMode = (GenerateWorldMode) generateMode;
-            }
-        } break;
         
         case Type_ReloadAssets:
         {
@@ -353,64 +363,6 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
                         DispatchApplicationPacket(server, player, packetPtr, received.dataSize - sizeof(ForgNetworkApplicationData));
                     }
                 }
-            }
-        }
-    }
-}
-
-internal UniversePos BuildPFromSpawnerGrid(r32 cellDim, u32 cellX, u32 cellY)
-{
-    UniversePos result = {};
-    result.chunkOffset.x = cellDim * cellX;
-    result.chunkOffset.y = cellDim * cellY;
-    
-    result = NormalizePosition(result);
-    return result;
-}
-
-internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos referenceP)
-{
-    u32 optionIndex = RandomChoice(&server->entropy, spawner->optionCount);
-    SpawnerOption* option = spawner->options + optionIndex;
-    
-    UniversePos P = referenceP;
-    //P.chunkOffset += ?;
-    //NormalizePosition();
-    
-    AddEntity(server, P, option->type, 0);
-}
-
-internal void SpawnEntities(ServerState* server, r32 elapsedTime)
-{
-    for(u32 spawnerIndex = 0; spawnerIndex < server->spawnerCount; ++spawnerIndex)
-    {
-        Spawner* spawner = server->spawners + spawnerIndex;
-        spawner->time += elapsedTime;
-        if(spawner->time >= spawner->targetTime)
-        {
-            u32 cellCount = TruncateReal32ToU32(WORLD_SIDE / spawner->cellDim);
-            
-            u32 cellX = RandomChoice(&server->entropy, cellCount);
-            u32 cellY = RandomChoice(&server->entropy, cellCount);
-            
-            UniversePos P = BuildPFromSpawnerGrid(spawner->cellDim, cellX, cellY);
-            TriggerSpawner(server, spawner, P);
-        }
-    }
-}
-
-internal void BuildWorld(ServerState* server)
-{
-    for(u32 spawnerIndex = 0; spawnerIndex < server->spawnerCount; ++spawnerIndex)
-    {
-        Spawner* spawner = server->spawners + spawnerIndex;
-        u32 cellCount = TruncateReal32ToU32(WORLD_SIDE / spawner->cellDim);
-        for(u32 Y = 0; Y < cellCount; ++Y)
-        {
-            for(u32 X = 0; X < cellCount; ++X)
-            {
-                UniversePos P = BuildPFromSpawnerGrid(spawner->cellDim, X, Y);
-                TriggerSpawner(server, spawner, P);
             }
         }
     }
@@ -639,13 +591,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         platformAPI.PushWork(server->slowQueue, WatchForFileChanges, hash);
         server->assets = InitAssets(server->slowQueue, server->tasks, ArrayCount(server->tasks), &server->gamePool, 0, MegaBytes(16));
-        
-        Spawner* spawner = server->spawners + server->spawnerCount++;
-        spawner->time = 0;
-        spawner->targetTime = 111.0f;
-        spawner->cellDim = VOXEL_SIZE;
-        spawner->options[spawner->optionCount++] = {Spawn_Rock};
-        BuildWorld(server);
+        BuildWorld(server, true);
     }
     
 	PlatformFileGroup reloadedFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, RELOAD_PATH);

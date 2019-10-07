@@ -385,7 +385,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                     forceVoronoiRegeneration = true;
                     Assert(chunk->texture.textureHandle.width == 0);
                     Assert(chunk->texture.textureHandle.height == 0);
-                    BuildChunk(worldMode, group->assets, chunk, X, Y, worldSeed);
+                    BuildChunk(group->assets, chunk, X, Y, worldSeed, worldMode->totalRunningTime);
                 }
             }
         }

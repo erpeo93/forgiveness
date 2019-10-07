@@ -187,6 +187,5 @@ int main(int argc, char** argv)
     sprintf(metaSubtypesPtr, "};\n\n");
     printf(metaSubtypesTable);
     printf("\n");
-    
 }
 

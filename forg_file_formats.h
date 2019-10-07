@@ -4,7 +4,7 @@
 #define PAK_CODE( a, b, c, d ) ((u32) ( ( a ) << 0 ) | ( u32 ) ( ( b ) << 8 ) | ( u32 ) ( ( c ) << 16 ) | ( u32 ) ( ( d ) << 24 ) ) 
 
 #define PAK_MAGIC_NUMBER PAK_CODE('h', 'h', 'a', 'f')
-#define PAK_VERSION 1
+#define PAK_VERSION 2
 
 struct PAKFileHeader
 {
@@ -141,7 +141,10 @@ struct PAKAsset
 {
     char sourceName[32];
     u64 dataOffset;
-    PAKProperty properties[MAX_PROPERTIES_PER_ASSET];
+    
+    u64 propertyHash[MAX_PROPERTIES_PER_ASSET];
+    u64 valueHash[MAX_PROPERTIES_PER_ASSET];
+    PAKProperty runtime[MAX_PROPERTIES_PER_ASSET];
     
     union
     {

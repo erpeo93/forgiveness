@@ -29,6 +29,7 @@ inline void CreateRockVertex(RockDefinition* rockDefinition, ColoredVertex* vert
 
 
 
+#if 0
 // NOTE(Leonardo): API
 internal void GenerateRock(RockComponent* dest, VertexModel* model, MemoryPool* tempPool, RandomSequence* seq, RockDefinition* rockDefinition)
 {
@@ -201,5 +202,5 @@ internal void GenerateRock(RockComponent* dest, VertexModel* model, MemoryPool* 
         v1->N = Lerp(v1->N, normalLerp, N);
         v2->N = Lerp(v2->N, normalLerp, N);
     }
-    
 }
+#endif

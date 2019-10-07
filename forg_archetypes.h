@@ -17,6 +17,7 @@ Archetype() struct RockArchetype
 #else
     BaseComponent base;
     RockComponent rock;
+    ImageComponent image;
 #endif
 };
 
@@ -28,6 +29,7 @@ Archetype() struct PlantArchetype
 #else
     BaseComponent base;
     PlantComponent rock;
+    ImageComponent image;
 #endif
 };
 
@@ -39,6 +41,7 @@ Archetype() struct GrassArchetype
 #else
     BaseComponent base;
     GrassComponent rock;
+    ImageComponent image;
 #endif
 };
 
@@ -55,12 +58,23 @@ introspection() struct ServerEntityInitParams
     AssetID definitionID MetaUneditable();
 };
 
+introspection() struct ImageProperty
+{
+    b32 optional;
+    GameProperty property;
+};
+
 introspection() struct ClientEntityInitParams
 {
     EntityID ID MetaUneditable();
     u32 seed MetaUneditable();
-    Enumerator skeleton MetaEnumerator(AssetSkeletonType);
-    Enumerator skin MetaEnumerator(AssetImageType);
+    
+    
+    Enumerator skeleton;
+    Enumerator skin;
+    
+    ArrayCounter propertyCount MetaCounter(properties);
+    ImageProperty* properties;
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

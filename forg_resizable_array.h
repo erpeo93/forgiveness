@@ -7,8 +7,11 @@ struct ResizableArray
     MemoryPool* currentPool;
     
     
+    u32 internalElementSize;
     u32 elementSize;
     u32 count;
     u32 maxCount;
     u8* memory;
+    
+    u32 firstFree;
 };

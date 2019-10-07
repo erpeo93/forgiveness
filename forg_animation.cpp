@@ -468,6 +468,7 @@ internal Rect2 RenderAnimation_(RenderGroup* group, AssetID animationID, Animati
                         result = Union(result, RectMinDim(dim.P.xy, dim.size));
                         
                         
+#if 0                        
                         for(u32 attachmentPointIndex = 0; attachmentPointIndex < bitmapInfo->attachmentPointCount; ++attachmentPointIndex)
                         {
                             PAKAttachmentPoint* point = GetAttachmentPoint(group->assets, bitmap, attachmentPointIndex);
@@ -481,6 +482,7 @@ internal Rect2 RenderAnimation_(RenderGroup* group, AssetID animationID, Animati
                                 }
                             }
                         }
+#endif
                         
                     }
                 }

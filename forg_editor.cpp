@@ -994,7 +994,6 @@ internal char* GetStringFromOptions(StringArray options, u32 value)
 internal Enumerator GetValueFromOptions(StringArray options, char* value)
 {
     Enumerator result = {};
-    
     for(u32 stringIndex = 0; stringIndex < options.count; ++stringIndex)
     {
         if(StrEqual(options.strings[stringIndex], value))
@@ -1135,6 +1134,61 @@ internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* p
     if(isInArray)
     {
         if(StandardEditorButton(layout, "canc", auID(property, "cancButton"), V4(0, 0.5f, 1.0f, 1.0f)))
+        {
+            result = true;
+        }
+    }
+    
+    return result;
+}
+
+internal b32 Edit_EntityRef(EditorLayout* layout, char* name, EntityRef* ref, b32 isInArray, AssetID assetID)
+{
+    b32 result = false;
+    
+    ShowNameNoColon(layout, name);
+    char output[64];
+    
+    char* typeString = ?;
+    if(!typeString)
+    {
+        ref->kind = 0;
+        typeString = ?;
+    }
+    
+    StringArray kindOptions = BuildEntityKindOptions();
+    if(EditString(layout, "type", typeString, auID(&ref->kind), kindOptions, output, sizeof(output), assetID))
+    {
+        u16 newKind = GetSubtype(Tokenize(output));
+        if(newKind != ref->kind)
+        {
+            EntityRef oldStruct = *ref;
+            ref->kind = newKind;
+            ref->index = 0;
+            AddUndoRedoCopyStruct(ÈntityRef, layout->context, &oldStruct, ref, ref, assetID);
+        }
+    }
+    
+    char* indexString = GetAssetName(ref->subtype, ref->index);
+    if(!indexString)
+    {
+        ref->index = 0;
+        indexString = GetAssetName(ref->subtype, ref->index);
+    }
+    
+    StringArray indexOptions = BuildAssetIndexNames();
+    if(EditString(layout, "value", indexString, auID(&ref->index), indexOptions, output, sizeof(output), assetID))
+    {
+        u16 newIndex = GetAssetIndex(output);
+        u16 oldValue = property->value;
+        ref->index = newValue;
+        
+        AddUndoRedoCopyStruct(u16, layout->context, &oldValue, &ref->index, &newIndex, assetID);
+    }
+    
+    if(isInArray)
+    {
+        if(StandardEditorButton(layout, "canc", auID(ref, "cancButton"), V4(0, 0.5f, 1.0f, 1.0f)))
         {
             result = true;
         }
@@ -1379,9 +1433,9 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
         if(EditorCollapsible(layout, "properties", auID(info, "properties")))
         {
             Push(layout);
-            for(u32 propertyIndex = 0; propertyIndex < ArrayCount(info->properties); ++propertyIndex)
+            for(u32 propertyIndex = 0; propertyIndex < ArrayCount(info->runtime); ++propertyIndex)
             {
-                PAKProperty* property = info->properties + propertyIndex;
+                PAKProperty* property = info->runtime + propertyIndex;
                 NextRaw(layout);
                 Edit_GameProperty(layout, 0, property, false, ID);
             }
@@ -1454,8 +1508,9 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                     Edit_r32_(layout, "time", &data->time, auID(info, "time"), false, {});
                     
                     StringArray options;
-                    options.strings = MetaTable_AssetImageType;
-                    options.count = ArrayCount(MetaTable_AssetImageType);
+                    options.strings = 0;
+                    options.count = 0;
+                    
                     Edit_Enumerator(layout, "skin", &data->skin, options, false, {});
                     
                     if(increaseTime)
@@ -1474,7 +1529,7 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                         
                         AnimationComponent component = {};
                         component.time = data->time;
-                        component.skin = ConvertEnumerator(AssetImageType, data->skin);
+                        component.skin = (u16) ConvertEnumerator(AssetImageType, data->skin);
                         
                         AnimationParams params = {};
                         params.P = P;
@@ -1607,7 +1662,7 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
     {
         RandomSequence seq = {};
         GameProperties properties = {};
-        FontId fontID = QueryFonts(group->assets, AssetFont_debug, &seq, &properties);
+        FontId fontID = QueryFonts(group->assets, 0, &seq, &properties);
         if(IsValid(fontID))
         {
             MemoryPool editorPool = {};
@@ -1723,6 +1778,18 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                                 FreeSpecialTexture(group->assets, &chunk->texture);
                             }
                         }
+                    }
+                    
+                    AUID recreateEmptyID = auID(context, "recreateEmptyWorld");
+                    if(StandardEditorButton(&layout, "Recreate Empty World", recreateEmptyID))
+                    {
+                        SendRecreateWorldRequrest(false, worldMode->player.universeP);
+                    }
+                    
+                    AUID recreateID = auID(context, "recreateWorld");
+                    if(StandardEditorButton(&layout, "Recreate standard World", recreateID))
+                    {
+                        SendRecreateWorldRequrest(true, worldMode->player.universeP);
                     }
                     
                     NextRaw(&layout);

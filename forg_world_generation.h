@@ -146,3 +146,29 @@ inline NoiseParams NoisePar(r32 frequency, u32 octaves, r32 min, r32 max,r32 per
     result.max = max;
     return result;
 }
+
+introspection() struct EntityRef
+{
+    u16 subtype;
+    u16 index;
+};
+
+introspection() struct SpawnerOption
+{
+    EntityRef type;
+    Vec2 maxOffset;
+    r32 weight MetaDefault("1.0f");
+    i32 count MetaDefault("1");
+    i32 countV;
+};
+
+introspection() struct Spawner
+{
+    r32 time MetaUneditable();
+    r32 targetTime;
+    r32 cellDim MetaDefault("1.0f");
+    r32 percentageOfStartingCells MetaDefault("1.0f");
+    
+    ArrayCounter optionCount MetaCounter(options);
+    SpawnerOption* options;
+};

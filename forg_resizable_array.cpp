@@ -1,61 +1,101 @@
-internal void* Acquire_(ResizableArray* array, u32* index)
+internal void* GetInternal_(ResizableArray* array, u32 index)
 {
-    Assert(array->count);
-    Assert(array->count <= array->maxCount);
-    
-    if(array->count == array->maxCount)
+    void* result = 0;
+    if(index && index < array->count)
     {
-        MemoryPool* newPool = &array->p2;
-        MemoryPool* toFree = &array->p1;
-        if(array->currentPool == &array->p2)
-        {
-            newPool = &array->p1;
-            toFree = &array->p2;
-        }
-        
-        u8* temp = array->memory;
-        u32 toCopySize = array->elementSize * array->count;
-        
-        array->maxCount = array->count * 2;
-        array->currentPool = newPool;
-        
-        array->memory = PushSize(newPool, array->maxCount * array->elementSize);
-        Copy(toCopySize, array->memory, temp);
-        
-        Clear(toFree);
+        result = AdvanceVoidPtrBytes(array->memory, index * array->internalElementSize);
     }
     
-    Assert(array->count < array->maxCount);
-    u32 newIndex = array->count++;
-    if(index)
-    {
-        *index = newIndex;
-    }
-    
-    void* result = AdvanceVoidPtrBytes(array->memory, newIndex * array->elementSize);
     return result;
 }
 
 internal void* Get_(ResizableArray* array, u32 index)
 {
-    void* result = 0;
-    if(index && index < array->count)
+    void* result = GetInternal_(array, index);
+    if(result)
     {
-        result = AdvanceVoidPtrBytes(array->memory, index * array->elementSize);
+        result = AdvanceVoidPtrBytes(result, array->internalElementSize - array->elementSize);
+    }
+    return result;
+}
+
+internal void Free_(ResizableArray* array, u32 index)
+{
+    void* toFree = GetInternal_(array, index);
+    *(u32*) toFree = array->firstFree;
+    array->firstFree = index;
+}
+
+internal b32 Deleted_(ResizableArray* array, u32 index)
+{
+    void* element = GetInternal_(array, index);
+    b32 result = (*(u32*) element != 0);
+    return result;
+}
+
+internal void* Acquire_(ResizableArray* array, u32* index)
+{
+    Assert(array->count);
+    Assert(array->count <= array->maxCount);
+    
+    u32 acquired = 0;
+    if(array->firstFree > 0 && array->firstFree != 0xffffffff)
+    {
+        acquired = array->firstFree;
+        void* element = GetInternal_(array, acquired);
+        array->firstFree = *(u32*) element;
+        *(u32*)element = 0;
+    }
+    else
+    {
+        if(array->count == array->maxCount)
+        {
+            MemoryPool* newPool = &array->p2;
+            MemoryPool* toFree = &array->p1;
+            if(array->currentPool == &array->p2)
+            {
+                newPool = &array->p1;
+                toFree = &array->p2;
+            }
+            
+            u8* temp = array->memory;
+            u32 toCopySize = array->internalElementSize * array->count;
+            
+            array->maxCount = array->count * 2;
+            array->currentPool = newPool;
+            
+            array->memory = PushSize(newPool, array->maxCount * array->internalElementSize);
+            Copy(toCopySize, array->memory, temp);
+            
+            Clear(toFree);
+        }
+        
+        Assert(array->count < array->maxCount);
+        acquired = array->count++;
     }
     
+    Assert(acquired);
+    if(index)
+    {
+        *index = acquired;
+    }
+    
+    void* result = Get_(array, acquired);
     return result;
 }
 
 internal ResizableArray InitResizableArray_(u32 elementSize, u32 maxElementCount)
 {
     ResizableArray result = {};
+    result.internalElementSize = elementSize + sizeof(u32);
     result.elementSize = elementSize;
     result.count = 1;
     result.maxCount = maxElementCount;
     
+    result.firstFree = 0xffffffff;
+    
     result.currentPool = &result.p1;
-    result.memory = PushSize(result.currentPool, elementSize * maxElementCount, NoClear());
+    result.memory = PushSize(result.currentPool, result.internalElementSize * maxElementCount, NoClear());
     
     return result;
 }

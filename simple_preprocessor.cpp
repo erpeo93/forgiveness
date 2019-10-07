@@ -329,7 +329,7 @@ void ParseProperties(Tokenizer* tokenizer)
     {
         Token nameToken = GetToken(tokenizer);
         Assert( nameToken.type == Token_Identifier );
-        printf( "char* MetaProperties_%.*s[] = \n {\n", nameToken.textLength, nameToken.text );
+        printf( "char* MetaTable_%.*s[] = \n {\n", nameToken.textLength, nameToken.text );
         
         if(RequireToken(tokenizer, Token_CloseParen))
         {
@@ -661,6 +661,7 @@ int main(int argc, char** argv)
     char* fileNames[] =
     {
         "forg_platform.h",
+        "../properties/test.properties",
         "forg_math.h",
         "forg_action_effect.h",
         "forg_plant.h",
@@ -678,7 +679,6 @@ int main(int argc, char** argv)
         "forg_ecs.h",
         "forg_archetypes.h",
         "forg_rock.h",
-        "../properties/test.properties",
     };
     
     
@@ -817,7 +817,7 @@ int main(int argc, char** argv)
     printf( "#define META_PROPERTIES_ADD()\\\n" );
     for(MetaProperty* meta = firstPropertyList; meta; meta = meta->next)
     {
-        printf("AddToMetaProperties(%s, MetaProperties_%s);", meta->name, meta->name); 
+        printf("AddToMetaProperties(%s, MetaTable_%s);", meta->name, meta->name); 
         
         printf( meta->next ? "\\" : "" );
         printf( "\n" );
@@ -838,7 +838,7 @@ int main(int argc, char** argv)
     printf("#define META_ASSET_PROPERTIES_STRINGS()\\\n");
     for(MetaProperty* meta = firstPropertyList; meta; meta = meta->next)
     {
-        printf("meta_propertiesString[Property_%s - 1] = \"%s\";\\\n", meta->name, meta->name);
+        printf("meta_propertiesString[Property_%s] = \"%s\";\\\n", meta->name, meta->name);
     }
     printf("\n");
     

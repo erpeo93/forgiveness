@@ -22,6 +22,9 @@ enum MetaType
     MetaType_GameProperty,
     MetaType_GameAssetType,
     MetaType_AssetLabel,
+    MetaType_EntityRef,
+    MetaType_EntityKind,
+    MetaType_EntityType,
     
     
     MetaType_FirstCustomMetaType = MetaType_GameAssetType,
@@ -48,6 +51,9 @@ enum MetaType
     MetaType_RockDefinition,
     MetaType_RockMineral,
     MetaType_AssetID,
+    MetaType_SpawnerOption,
+    MetaType_Spawner,
+    MetaType_ImageProperty,
 };
 
 enum FieldMetaFlags
@@ -79,6 +85,7 @@ union DefaultFieldValue
     GameProperty def_GameProperty;
     GameAssetType def_GameAssetType;
     AssetLabel def_AssetLabel;
+    EntityRef def_EntityRef;
 };
 
 struct FieldDefinition

@@ -208,46 +208,18 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
     RenderAnimationWithHeight(group, animation, &params, height);
 }
 
-RENDERING_ECS_JOB_CLIENT(RenderRock)
+RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     
     r32 height = GetHeight(base);
-    RockComponent* rock = GetComponent(worldMode, ID, RockComponent);
+    ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
     
     RandomSequence seq = Seed(base->seed);
-    BitmapId rockID = QueryBitmaps(group->assets, AssetImage_rock, &seq, 0);
-    if(IsValid(rockID))
+    BitmapId BID = QueryBitmaps(group->assets, image->type, &seq, &image->properties);
+    if(IsValid(BID))
     {
-        PushBitmap(group, UprightTransform(), rockID, GetRelativeP(worldMode, base), height);
-    }
-}
-
-RENDERING_ECS_JOB_CLIENT(RenderPlant)
-{
-    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    r32 height = GetHeight(base);
-    PlantComponent* plant = GetComponent(worldMode, ID, PlantComponent);
-    
-    RandomSequence seq = Seed(base->seed);
-    BitmapId plantID = QueryBitmaps(group->assets, AssetImage_tree, &seq, 0);
-    if(IsValid(plantID))
-    {
-        PushBitmap(group, UprightTransform(), plantID, GetRelativeP(worldMode, base), height);
-    }
-}
-
-RENDERING_ECS_JOB_CLIENT(RenderGrass)
-{
-    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    r32 height = GetHeight(base);
-    GrassComponent* grass = GetComponent(worldMode, ID, GrassComponent);
-    
-    RandomSequence seq = Seed(base->seed);
-    BitmapId grassID = QueryBitmaps(group->assets, AssetImage_grass, &seq, 0);
-    if(IsValid(grassID))
-    {
-        PushBitmap(group, UprightTransform(), grassID, GetRelativeP(worldMode, base), height);
+        PushBitmap(group, UprightTransform(), BID, GetRelativeP(worldMode, base), height);
     }
 }
 
@@ -500,10 +472,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             PushAmbientLighting(group, ambientLightColor, directionalLightColor, directionalLightDirection, directionalLightIntensity);
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderCharacterAnimation, ArchetypeHas(BaseComponent) && ArchetypeHas(AnimationComponent), input->timeToAdvance);
-            EXECUTE_RENDERING_JOB(worldMode, group, RenderRock, ArchetypeHas(BaseComponent) && ArchetypeHas(RockComponent), input->timeToAdvance);
-            EXECUTE_RENDERING_JOB(worldMode, group, RenderPlant, ArchetypeHas(BaseComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
-            EXECUTE_RENDERING_JOB(worldMode, group, RenderGrass, ArchetypeHas(BaseComponent) && ArchetypeHas(GrassComponent), input->timeToAdvance);
-            EXECUTE_RENDERING_JOB(worldMode, group, RenderPlant, ArchetypeHas(BaseComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(ImageComponent), input->timeToAdvance);
             
             
             if(worldMode->editorUI.renderEntityBounds)

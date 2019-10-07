@@ -6,7 +6,8 @@ internal void LoadMetaData()
     AddToMetaDefinitions(Vec3, fieldDefinitionOfVec3);
     AddToMetaDefinitions(Vec4, fieldDefinitionOfVec4);
     
-    AddToMetaProperties(Invalid, MetaProperties_Invalid);
+    AddToMetaProperties(Invalid, MetaTable_Invalid);
+    meta_propertiesString[Property_Invalid] = "Invalid";
     META_PROPERTIES_ADD();
     META_ASSET_PROPERTIES_STRINGS();
     

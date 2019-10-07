@@ -10,10 +10,8 @@ internal void UpdateSeasonTimer(ServerState* server, r32 elapsedTime)
     server->seasonLerp = Clamp01MapToRange(0.5f * SEASON_DURATION, server->seasonTime, SEASON_DURATION);
 }
 
-internal EntityID AddEntity(ServerState* server, UniversePos P, AssetID definitionID,PlayerComponent* player = 0)
+internal EntityID AddEntity_(ServerState* server, UniversePos P, AssetID definitionID,u32 seed, PlayerComponent* player = 0)
 {
-    u32 seed = GetNextUInt32(&server->entropy);
-    
     Assert(IsValid(definitionID));
     EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
     EntityID result = {};
@@ -23,7 +21,7 @@ internal EntityID AddEntity(ServerState* server, UniversePos P, AssetID definiti
     params.seed = seed;
     
     u16 archetype = SafeTruncateToU16(ConvertEnumerator(EntityArchetype, definition->archetype));
-    Acquire(server, archetype, (&result));
+    AcquireArchetype(server, archetype, (&result));
     InitFunc[result.archetype](server, result, &definition->common, &params); 
     if(HasComponent(result.archetype, PlayerComponent))
     {
@@ -33,14 +31,24 @@ internal EntityID AddEntity(ServerState* server, UniversePos P, AssetID definiti
     return result;
 }
 
-internal EntityID AddEntity(ServerState* server, UniversePos P, u32 type,PlayerComponent* player = 0)
+internal EntityID AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, GameProperties* definitionProperties, PlayerComponent* player = 0)
 {
-    GameProperties properties = {};
-    AddOptionalGameProperty(&properties, spawnEntityType, type);
+    AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, 0, seq, definitionProperties);
     
-    AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, 0, &server->entropy, &properties);
+    u32 seed = GetNextUInt32(seq);
+    EntityID result = AddEntity_(server, P, definitionID, seed, player);
+    return result;
+}
+
+internal EntityID AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, EntityRef type, PlayerComponent* player = 0)
+{
+    AssetID definitionID;
+    definitionID.type = AssetType_EntityDefinition;
+    definitionID.subtype = type.subtype;
+    definitionID.index = type.index;
     
-    EntityID result = AddEntity(server, P, definitionID, player);
+    u32 seed = GetNextUInt32(seq);
+    EntityID result = AddEntity_(server, P, definitionID, seed, player);
     return result;
 }
 
@@ -168,4 +176,130 @@ internal void MoveAndSendUpdate(ServerState* server, EntityID ID, r32 elapsedTim
     
     
     SendBasicUpdate(server, ID, physic);
+}
+
+
+internal UniversePos BuildPFromSpawnerGrid(r32 cellDim, u32 cellX, u32 cellY)
+{
+    UniversePos result = {};
+    result.chunkOffset.x = cellDim * cellX;
+    result.chunkOffset.y = cellDim * cellY;
+    
+    result = NormalizePosition(result);
+    return result;
+}
+
+internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos referenceP, RandomSequence* seq)
+{
+    if(spawner->optionCount)
+    {
+        r32 totalWeight = 0;
+        for(u32 optionIndex = 0; optionIndex < spawner->optionCount; ++optionIndex)
+        {
+            totalWeight += spawner->options[optionIndex].weight;
+        }
+        r32 weight = totalWeight * RandomUni(seq);
+        
+        
+        SpawnerOption* option = 0;
+        
+        r32 runningWeight = 0;
+        for(u32 optionIndex = 0; optionIndex < spawner->optionCount; ++optionIndex)
+        {
+            SpawnerOption* test = spawner->options + optionIndex;
+            runningWeight += test->weight;
+            if(weight <= runningWeight)
+            {
+                option = test;
+                break;
+            }
+        }
+        
+        i32 count = option->count + RoundReal32ToI32(option->countV * RandomBil(seq));
+        
+        for(i32 index = 0; index < count; ++index)
+        {
+            Vec3 maxOffset = V3(VOXEL_SIZE * option->maxOffset, 0);
+            UniversePos P = referenceP;
+            P.chunkOffset += Hadamart(maxOffset, RandomBilV3(seq));
+            P = NormalizePosition(P);
+            AddEntity(server, P, seq, option->type, 0);
+        }
+    }
+}
+
+internal void SpawnEntities(ServerState* server, r32 elapsedTime)
+{
+    MemoryPool tempPool = {};
+    u16 spawnerCount;
+    AssetID* spawners = GetAllDataAsset(&tempPool, server->assets, Spawner, 0, 0, &spawnerCount);
+    for(u32 spawnerIndex = 0; spawnerIndex < spawnerCount; ++spawnerIndex)
+    {
+        AssetID sID = spawners[spawnerIndex];
+        Spawner* spawner = GetData(server->assets, Spawner, sID);
+        if(spawner->targetTime > 0)
+        {
+            spawner->time += elapsedTime;
+            if(spawner->time >= spawner->targetTime)
+            {
+                spawner->time = 0;
+                r32 cellDim = VOXEL_SIZE * spawner->cellDim;
+                u32 cellCount = TruncateReal32ToU32(WORLD_SIDE / cellDim);
+                
+                u32 cellX = RandomChoice(&server->entropy, cellCount);
+                u32 cellY = RandomChoice(&server->entropy, cellCount);
+                
+                UniversePos P = BuildPFromSpawnerGrid(cellDim, cellX, cellY);
+                TriggerSpawner(server, spawner, P, &server->entropy);
+            }
+        }
+    }
+    
+    Clear(&tempPool);
+}
+
+internal void BuildWorld(ServerState* server, b32 spawnEntities)
+{
+    for(u32 chunkY = 0; chunkY < WORLD_CHUNK_SPAN; ++chunkY)
+    {
+        for(u32 chunkX = 0; chunkX < WORLD_CHUNK_SPAN; ++chunkX)
+        {
+            WorldChunk* chunk = &server->chunks[chunkY][chunkX];
+            BuildChunk(server->assets, chunk, chunkX, chunkY, server->worldSeed, 0);
+        }
+    }
+    
+    RandomSequence seq = Seed(server->worldSeed);
+    if(spawnEntities)
+    {
+        MemoryPool tempPool = {};
+        u16 spawnerCount;
+        AssetID* spawners = GetAllDataAsset(&tempPool, server->assets, Spawner, 0, 0, &spawnerCount);
+        
+        for(u32 spawnerIndex = 0; spawnerIndex < spawnerCount; ++spawnerIndex)
+        {
+            AssetID sID = spawners[spawnerIndex];
+            Spawner* spawner = GetData(server->assets, Spawner, sID);
+            r32 cellDim = VOXEL_SIZE * spawner->cellDim;
+            u32 cellCount = TruncateReal32ToU32(WORLD_SIDE / cellDim);
+            for(u32 Y = 0; Y < cellCount; ++Y)
+            {
+                for(u32 X = 0; X < cellCount; ++X)
+                {
+                    if(RandomUni(&seq) <= spawner->percentageOfStartingCells)
+                    {
+                        UniversePos P = BuildPFromSpawnerGrid(cellDim, X, Y);
+                        TriggerSpawner(server, spawner, P, &seq);
+                    }
+                }
+            }
+        }
+        
+        Clear(&tempPool);
+    }
+}
+
+STANDARD_ECS_JOB_SERVER(DeleteAllEntities)
+{
+    FreeArchetype(server, &ID);
 }

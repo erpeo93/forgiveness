@@ -149,6 +149,7 @@ typedef Vec4 Color;
 #endif
 
 #define InvalidCodePath Assert(!"noooo");
+#define RestructuringCode InvalidCodePath
 #define InvalidDefaultCase default: { InvalidCodePath; }
 
 #if FORGIVENESS_INTERNAL

@@ -1,12 +1,17 @@
+internal void ResetQueue(ForgNetworkPacketQueue* queue)
+{
+    Clear(&queue->tempPool);
+    queue->firstPacket = 0;
+    queue->lastPacket = 0;
+}
+
 inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery deliveryType, u8 flags, u16 size, AssetID definitionID, EntityID ID, u32 entitySeed)
 {
     ForgNetworkPacketQueue* queue = player->queues + deliveryType; 
-    
     u8 applicationFlags = flags;
     u8* result = 0;
     Assert(size <= MTU);
     ForgNetworkPacket* packet = 0;
-    
     
     if(queue->lastPacket)
     {
@@ -21,7 +26,6 @@ inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery delivery
     if(!packet)
     {
         packet = PushStruct(&queue->tempPool, ForgNetworkPacket);
-        
         if(queue->lastPacket)
         {
             queue->lastPacket->next = packet;
@@ -120,10 +124,10 @@ internal void SendLoginResponse(PlayerComponent* player, u16 port, u32 challenge
     CloseAndStoreOrderedPacket(player);
 }
 
-internal void SendGameAccessConfirm(PlayerComponent* player, u64 worldSeed, EntityID ID)
+internal void SendGameAccessConfirm(PlayerComponent* player, u64 worldSeed, EntityID ID, b32 deleteEntities)
 {
     StartPacket(player, gameAccess);
-    Pack("QHL", worldSeed, ID.archetype, ID.archetypeIndex);
+    Pack("QHLl", worldSeed, ID.archetype, ID.archetypeIndex, deleteEntities);
     CloseAndStoreOrderedPacket(player);
 }
 

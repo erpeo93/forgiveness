@@ -14,10 +14,12 @@
 #include "forg_file_formats.h"
 #include "asset_builder.h"
 
-#define Property(name) enum Property_##name
+
+#define Property(name) enum name
 #include "../properties/test.properties"
 
 #include "forg_asset.h"
+#include "forg_world_generation.h"
 #include "forg_meta.h"
 #include "forg_render_tier.h"
 #include "forg_render.h"
@@ -32,7 +34,6 @@
 #include "forg_physics.h"
 #include "forg_network.h"
 #include "forg_network_client.h"
-#include "forg_world_generation.h"
 #include "forg_particles.h"
 #include "forg_bolt.h"
 #include "forg_book.h"
@@ -61,6 +62,13 @@ struct GrassComponent
 {
     
 };
+
+struct ImageComponent
+{
+    AssetImageType type;
+    GameProperties properties;
+};
+
 
 #include "forg_ecs.h"
 #include "forg_archetypes.h"

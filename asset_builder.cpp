@@ -1483,20 +1483,20 @@ internal u8* ReadEntireFile(MemoryPool* pool, PlatformFileGroup* group, Platform
     PlatformFileHandle handle = platformAPI.OpenFile(group, info);
     u8* result = PushSize(pool, info->size, NoClear());
     platformAPI.ReadFromFile(&handle, 0, info->size, result);
+    result[info->size] = 0;
     platformAPI.CloseFile(&handle);
     return result;
 }
 
-internal void AddProperty(PAKAsset* asset, u16 property, u16 value)
+internal void AddProperty(PAKAsset* asset, u64 propertyHash, u64 valueHash)
 {
     b32 found = false;
-    for(u32 propertyIndex = 0; propertyIndex < ArrayCount(asset->properties); ++propertyIndex)
+    for(u32 propertyIndex = 0; propertyIndex < ArrayCount(asset->runtime); ++propertyIndex)
     {
-        PAKProperty* dest = asset->properties + propertyIndex;
-        if(!dest->property)
+        if(!asset->propertyHash[propertyIndex])
         {
-            dest->property = property;
-            dest->value = value;
+            asset->propertyHash[propertyIndex] = propertyHash;
+            asset->valueHash[propertyIndex] = valueHash;
             found = true;
             break;
         }
@@ -1525,15 +1525,11 @@ internal void FillPAKProperty(PAKAsset* asset, Token property, Token value)
     }
     else
     {
-        u16 propertyType = SafeTruncateToU16(GetMetaPropertyType(property));
-        if(propertyType)
-        {
-            u16 propertyValue = ExistMetaPropertyValue(propertyType, value);
-            if(propertyValue != INVALID_PROPERTY_VALUE)
-            {
-                AddProperty(asset, propertyType, propertyValue);
-            }
-        }
+        u64 propertyHash = StringHash(property.text, property.textLength);
+        u64 valueHash = StringHash(value.text, value.textLength);
+        
+        Assert(propertyHash && valueHash);
+        AddProperty(asset, propertyHash, valueHash);
     }
 }
 
@@ -1721,8 +1717,11 @@ internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* as
     asset->dataOffset = ftell(out);
     for(u32 propertyIndex = 0; propertyIndex < MAX_PROPERTIES_PER_ASSET; ++propertyIndex)
     {
-        asset->properties[propertyIndex] = {};
+        asset->propertyHash[propertyIndex] = 0;
+        asset->valueHash[propertyIndex] = 0;
+        asset->runtime[propertyIndex] = {};
     }
+    
     
     for(PlatformFileInfo* info = markupFiles->firstFileInfo; info; info = info->next)
     {
@@ -1868,7 +1867,7 @@ internal void SavePakVersion(char* basePath)
     platformAPI.ReplaceFile(PlatformFile_AssetVersion, basePath, "version", (u8*) &version, sizeof(u32), PlatformFileReplace_Hidden);
 }
 
-internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, char* sourceSubdir, char* outputPath, b32 propertiesChanged, b32 checkVersion)
+internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, char* sourceSubdir, char* outputPath, b32 checkVersion)
 {
     MemoryPool tempPool = {};
     
@@ -1911,7 +1910,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
     u16 standardAssetCount = 0;
     u16 derivedAssetCount = 0;
     
-    b32 updatedFiles = propertiesChanged;
+    b32 updatedFiles = false;
     
     u32 validFileCount = 0;
     u32 validMarkupCount = 0;
@@ -2042,7 +2041,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
             
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
-				if(RelevantFile(info, &fileGroup, false))
+				if(RelevantFile(info, &fileGroup, true))
 				{
 					TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
                     u8* fileContent = ReadEntireFile(&tempPool, &fileGroup, info);
@@ -2336,19 +2335,6 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
 
 internal void BuildAssets(TimestampHash* hash, char* sourcePath, char* destPath)
 {
-    b32 propertiesChanged = false;
-    PlatformFileGroup propertiesFiles = platformAPI.GetAllFilesBegin(PlatformFile_properties, PROPERTIES_PATH);
-    for(PlatformFileInfo* info = propertiesFiles.firstFileInfo; info; info = info->next)
-    {
-        SavedFileInfoHash* saved = GetCorrenspodingFileDateHash(hash, PROPERTIES_PATH, info->name);
-        if(!AreEqual(saved->timestamp, info->timestamp))
-        {
-            SaveFileDateHash(saved, info->timestamp);
-            propertiesChanged = true;
-        }
-    }
-    platformAPI.GetAllFilesEnd(&propertiesFiles);
-    
     PlatformSubdirNames subdir;
     platformAPI.GetAllSubdirectories(&subdir, sourcePath);
     for(u32 subdirIndex = 0; subdirIndex < subdir.count; ++subdirIndex)
@@ -2363,7 +2349,7 @@ internal void BuildAssets(TimestampHash* hash, char* sourcePath, char* destPath)
         for(u32 subsubDirIndex = 0; subsubDirIndex < subsubdir.count; ++subsubDirIndex)
         {
             char* subsubDirName = subsubdir.names[subsubDirIndex];
-            WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, propertiesChanged, true);
+            WritePak(hash, sourcePath, subdirName, subsubDirName, destPath, true);
         }
         
         SaveVersion(sourcePath, subdirName);
@@ -2462,7 +2448,7 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             if(updatedStandardFiles || updatedTestFiles || numberOfFilesChanged)
             {
                 char* path = (updatedStandardFiles || numberOfFilesChanged) ? destSendPath : destPath;
-                WritePak(hash, sourcePath, subdirName, subsubDirName, path, false, false);
+                WritePak(hash, sourcePath, subdirName, subsubDirName, path, false);
             }
         }
     }

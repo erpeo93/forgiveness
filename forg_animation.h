@@ -23,10 +23,10 @@ struct AnimationComponent
 {
     r32 time;
     
-    AssetImageType skin;
+    u16 skin;
     GameProperties skinProperties;
     
-    AssetSkeletonType skeleton;
+    u16 skeleton;
     GameProperties skeletonProperties;
     
     b32 flipOnYAxis;

@@ -12,8 +12,9 @@
 #include "forg_math.h"
 #include "forg_file_formats.h"
 
-#define Property(name) enum Property_##name
+#define Property(name) enum name
 #include "../properties/test.properties"
+
 #include "forg_asset.h"
 #include "forg_world.h"
 #include "forg_editor.h"
@@ -142,32 +143,12 @@ struct TimestampHash
     SavedTypeSubtypeCountHash* countHashSlots[128];
 };
 
-
-struct SpawnerOption
-{
-    u32 type;
-};
-
-struct Spawner
-{
-    r32 time;
-    r32 targetTime;
-    
-    r32 cellDim;
-    
-    u32 optionCount;
-    SpawnerOption options[4];
-};
-
 struct ServerState
 {
     WorldSeason season;
     r32 seasonLerp;
     r32 seasonTime;
     u32 worldSeed;
-    
-    u32 spawnerCount;
-    Spawner spawners[4];
     
     TaskWithMemory tasks[6];
     PlatformWorkQueue* fastQueue;
@@ -177,6 +158,8 @@ struct ServerState
     ResizableArray PlayerComponent_;
     //SpacePartition collisionPartition;
     //SpacePartition playerPartition;
+    
+    WorldChunk chunks[WORLD_CHUNK_SPAN][WORLD_CHUNK_SPAN];
     
     MemoryPool gamePool;
     MemoryPool networkPool;

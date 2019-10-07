@@ -65,6 +65,23 @@ internal void InitBaseComponent(BaseComponent* base, Vec3 boundOffset, Vec3 boun
     base->bounds = StandardBounds(boundDim, boundOffset);
 }
 
+internal void InitImageComponent(ImageComponent* image, AssetImageType type, ImageProperty* properties, u16 propertyCount)
+{
+    image->type = type;
+    image->properties = {};
+    for(u16 propertyIndex = 0; propertyIndex < propertyCount; ++propertyIndex)
+    {
+        u32 flags = 0;
+        ImageProperty* property = properties + propertyIndex;
+        
+        if(property->optional)
+        {
+            flags |= GameProperty_Optional;
+        }
+        AddGameProperty_(&image->properties, property->property, flags);
+    }
+}
+
 INIT_ENTITY(AnimalArchetype)
 {
     GameModeWorld* worldMode = (GameModeWorld*) state;
@@ -75,8 +92,8 @@ INIT_ENTITY(AnimalArchetype)
     InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed);
     
     AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
-    animation->skeleton = ConvertEnumerator(AssetSkeletonType, params->skeleton);
-    animation->skin = ConvertEnumerator(AssetImageType, params->skin);
+    animation->skeleton = (u16) ConvertEnumerator(AssetSkeletonType, params->skeleton);
+    animation->skin = (u16) ConvertEnumerator(AssetImageType, params->skin);
     animation->flipOnYAxis = 0;
 }
 
@@ -94,18 +111,8 @@ INIT_ENTITY(RockArchetype)
     
     RockComponent* dest = GetComponent(worldMode, ID, RockComponent);
     
-    MemoryPool tempPool = {};
-    RandomSequence seq = Seed(1234);
-    AssetID model = QueryModels(assets, AssetModel_default, &seq, 0);
-    AssetID rock = QueryDataFiles(assets, RockDefinition, 0, &seq, 0);
-    if(IsValid(model) && IsValid(rock))
-    {
-        LoadModel(assets, model, true);
-        VertexModel* m = GetModel(assets, model);
-        RockDefinition* r = GetData(assets, RockDefinition, rock);
-        GenerateRock(dest, m, &tempPool, &seq, r);
-    }
-    Clear(&tempPool);
+    ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
+    InitImageComponent(image, AssetImage_rock, params->properties, params->propertyCount);
 }
 
 
@@ -120,6 +127,9 @@ INIT_ENTITY(PlantArchetype)
     InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed);
     
     PlantComponent* dest = GetComponent(worldMode, ID, PlantComponent);
+    
+    ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
+    InitImageComponent(image, AssetImage_tree, params->properties, params->propertyCount);
 }
 
 INIT_ENTITY(GrassArchetype)
@@ -133,5 +143,8 @@ INIT_ENTITY(GrassArchetype)
     InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed);
     
     GrassComponent* dest = GetComponent(worldMode, ID, GrassComponent);
+    
+    ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
+    InitImageComponent(image, AssetImage_grass, params->properties, params->propertyCount);
 }
 #endif

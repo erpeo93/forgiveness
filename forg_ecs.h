@@ -17,6 +17,7 @@ struct ArchetypeLayout
     ArchetypeComponent hasGrassComponent;
     ArchetypeComponent hasPhysicComponent;
     ArchetypeComponent hasPlayerComponent;
+    ArchetypeComponent hasImageComponent;
 };
 
 #define HasComponent(arch, component) archetypeLayouts[arch].has##component.exists
@@ -33,8 +34,11 @@ struct ArchetypeLayout
 #define FirstComponent(state, component) FirstComponent_(&state->component##_)
 #define GetComponentRaw(state, iter, component) (component*) Get_(&state->component##_, iter.index)
 #define AcquireComponent(state, component, idAddress) (component*) Acquire_(&state->component##_, idAddress)
+#define FreeComponent(state, component, id) Free_(&state->component##_, id)
 
-#define Acquire(state, arch, idAddress) idAddress->archetype = arch; Acquire_(&state->archetypes[arch], &(idAddress)->archetypeIndex)
+#define AcquireArchetype(state, arch, idAddress) idAddress->archetype = arch; Acquire_(&state->archetypes[arch], &(idAddress)->archetypeIndex)
+#define FreeArchetype(state, idAddress) Free_(&state->archetypes[(idAddress)->archetype], (idAddress)->archetypeIndex)
+#define DeletedArchetype(state, id) Deleted_(&state->archetypes[id.archetype], id.archetypeIndex)
 
 
 introspection() struct EntityID
@@ -128,7 +132,7 @@ for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)\
         IsValid(iter); \
         iter = Next(iter))\
         {\
-            job(state, iter.ID, elapsedTime);\
+            if(!DeletedArchetype(state, iter.ID)) job(state, iter.ID, elapsedTime);\
         }\
     }\
 }
@@ -142,7 +146,7 @@ for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)\
         IsValid(iter); \
         iter = Next(iter))\
         {\
-            job(state, group, iter.ID, elapsedTime);\
+            if(!DeletedArchetype(state, iter.ID)) job(state, group, iter.ID, elapsedTime);\
         }\
     }\
 }

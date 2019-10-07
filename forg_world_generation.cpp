@@ -143,7 +143,7 @@ inline GameProperty SelectFromBiomePyramid(BiomePyramid* pyramid, r32 precipitat
 global_variable r32 minHeight = -100.0f;
 global_variable r32 maxHeight = 1000.0f;
 
-inline WorldTile GenerateTile(GameModeWorld* worldMode, Assets* assets, world_generator* generator, r32 tileNormX, r32 tileNormY, RandomSequence* seq, u32 seed)
+inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 tileNormX, r32 tileNormY, RandomSequence* seq, u32 seed, r32 totalRunningTime)
 {
     WorldTile result = {};
     
@@ -190,16 +190,16 @@ inline WorldTile GenerateTile(GameModeWorld* worldMode, Assets* assets, world_ge
         result.color = definition->color;
     }
     
-    result.entropy = Seed((i32) (tileNormX * 1000.24f) + (i32)(tileNormY * 1223424.0f));
     
+#ifndef FORG_SERVER
+    result.entropy = Seed((i32) (tileNormX * 1000.24f) + (i32)(tileNormY * 1223424.0f));
     result.waterRandomization = RandomUni(seq);
     result.movingNegative = false;
-    
-    result.waterTime = worldMode->totalRunningTime + Length(V2(tileNormX, tileNormY) - V2(0.5f, 0.5f));
+    result.waterTime = totalRunningTime + Length(V2(tileNormX, tileNormY) - V2(0.5f, 0.5f));
     result.waterSeed = GetNextUInt32(&result.entropy);
-    
     result.blueNoise = 0;
     result.alphaNoise = 0;
+#endif
     
     return result;
 }
@@ -210,7 +210,7 @@ internal RandomSequence GetChunkSeed(u32 chunkX, u32 chunkY, u32 worldSeed)
     return result;
 }
 
-internal void BuildChunk(GameModeWorld* worldMode, Assets* assets, WorldChunk* chunk, i32 chunkX, i32 chunkY, u32 seed)
+internal void BuildChunk(Assets* assets, WorldChunk* chunk, i32 chunkX, i32 chunkY, u32 seed, r32 totalRunningTime)
 {
     RandomSequence generatorSeq = Seed(seed);
     GameProperties properties = {};
@@ -246,7 +246,7 @@ internal void BuildChunk(GameModeWorld* worldMode, Assets* assets, WorldChunk* c
                 Assert(Normalized(tileNormX));
                 Assert(Normalized(tileNormY));
                 
-                chunk->tiles[tileY][tileX] = GenerateTile(worldMode, assets, generator, tileNormX, tileNormY, &seq, seed);
+                chunk->tiles[tileY][tileX] = GenerateTile(assets, generator, tileNormX, tileNormY, &seq, seed, totalRunningTime);
             }
         }
     }

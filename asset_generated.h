@@ -8,6 +8,7 @@ AssetType_Model,
 AssetType_RockDefinition,
 AssetType_Skeleton,
 AssetType_Sound,
+AssetType_Spawner,
 AssetType_tile_definition,
 AssetType_WaterParams,
 AssetType_world_generator,
@@ -24,6 +25,7 @@ char* metaAsset_assetType[] =
 "RockDefinition",
 "Skeleton",
 "Sound",
+"Spawner",
 "tile_definition",
 "WaterParams",
 "world_generator",
@@ -133,6 +135,15 @@ char* MetaTable_AssetSoundType[] = {
 "puhp",
 "thunder",
 };
+enum AssetSpawnerType
+{
+AssetSpawner_default,
+AssetSpawner_Count
+};
+
+char* MetaTable_AssetSpawnerType[] = {
+"default",
+};
 enum Assettile_definitionType
 {
 Assettile_definition_default,
@@ -170,6 +181,7 @@ MetaAssetType metaAsset_subTypes[AssetType_Count] =
 {1, MetaTable_AssetRockDefinitionType},
 {4, MetaTable_AssetSkeletonType},
 {10, MetaTable_AssetSoundType},
+{1, MetaTable_AssetSpawnerType},
 {1, MetaTable_Assettile_definitionType},
 {1, MetaTable_AssetWaterParamsType},
 {1, MetaTable_Assetworld_generatorType},
