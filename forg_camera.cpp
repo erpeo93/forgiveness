@@ -15,7 +15,7 @@ inline b32 ActionRequiresZooming(u32 action, r32* zoomLevel)
 
 inline Vec3 GetRelativeP(GameModeWorld* worldMode, BaseComponent* base)
 {
-    Vec3 result = Subtract(base->universeP, worldMode->player.universeP);
+    Vec3 result = SubtractOnSameZChunk(base->universeP, worldMode->player.universeP);
     return result;
 }
 

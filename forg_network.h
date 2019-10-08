@@ -188,6 +188,7 @@ enum Packet_Type
     Type_FileHash,
     
     Type_SpawnEntity,
+    Type_MoveChunkZ,
     Type_RecreateWorld,
     Type_MovePlayerInOtherRegion,
     Type_PauseToggle,

@@ -131,10 +131,10 @@ internal void SendLoginFileTransferBegin(PlayerComponent* player, u32 fileCount)
     CloseAndStoreOrderedPacket(player);
 }
 
-internal void SendGameAccessConfirm(PlayerComponent* player, u64 worldSeed, EntityID ID, b32 deleteEntities)
+internal void SendGameAccessConfirm(PlayerComponent* player, u32 worldSeed, EntityID ID, b32 deleteEntities)
 {
     StartPacket(player, gameAccess);
-    Pack("QHLl", worldSeed, ID.archetype, ID.archetypeIndex, deleteEntities);
+    Pack("LHLl", worldSeed, ID.archetype, ID.archetypeIndex, deleteEntities);
     CloseAndStoreOrderedPacket(player);
 }
 
@@ -149,7 +149,7 @@ internal u16 PrepareEntityUpdate(ServerState* server, PhysicComponent* physic, u
 {
     UniversePos P = physic->P;
     unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
-    Pack("llVVHH", P.chunkX, P.chunkY, P.chunkOffset, physic->speed, physic->action.property, physic->action.value);
+    Pack("lllVVHH", P.chunkX, P.chunkY, P.chunkZ, P.chunkOffset, physic->speed, physic->action.property, physic->action.value);
     u16 totalSize = ForgEndPacket_( buff_, buff );
     return totalSize;
 }

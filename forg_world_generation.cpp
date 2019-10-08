@@ -127,14 +127,20 @@ inline GameProperty Select(PropertySelector* selector, r32 selectionValue, u32 s
     return result;
 }
 
-inline GameProperty SelectFromBiomePyramid(BiomePyramid* pyramid, r32 precipitationLevel, r32 temperature, u32 seed)
+inline GameProperty SelectFromBiomePyramid(BiomePyramid* pyramid, r32 precipitationLevel, r32 darkness, r32 temperature, u32 seed)
 {
     GameProperty result = {};
-    r32 row = Select(&pyramid->drySelector, 0, 0, precipitationLevel, seed);
-    if((u32) row < pyramid->rowCount)
+    r32 row = Select(&pyramid->darknessSelector, 0, 0, darkness, seed);
+    if((u32) row < pyramid->drynessCount)
     {
-        PropertySelector* temperatureSelector = pyramid->temperatureSelectors + (u32) row;
-        result = Select(temperatureSelector, temperature, seed);
+        DrynessSelector* selector = pyramid->drynessSelectors + (u32) row;
+        r32 row2 = Select(&selector->drynessSelector, 0, 0, precipitationLevel, seed);
+        
+        if((u32) row2 < selector->rowCount)
+        {
+            PropertySelector* temperatureSelector = selector->temperatureSelectors + (u32) row2;
+            result = Select(temperatureSelector, temperature, seed);
+        }
     }
     
     return result;
@@ -143,41 +149,87 @@ inline GameProperty SelectFromBiomePyramid(BiomePyramid* pyramid, r32 precipitat
 global_variable r32 minHeight = -100.0f;
 global_variable r32 maxHeight = 1000.0f;
 
-inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 tileNormX, r32 tileNormY, RandomSequence* seq, u32 seed, r32 totalRunningTime)
+internal WorldTile NullTile(world_generator* generator)
 {
     WorldTile result = {};
+    result.elevation = minHeight;
     
-    // NOTE(Leonardo): elevation
+#if 0    
+    result.asset = definition->asset;
+    result.property = definition->property;
+#endif
+    result.color = V4(1, 0, 0, 1);
+    
+    return result;
+}
+
+internal r32 GetTileElevation(world_generator* generator, r32 tileNormX, r32 tileNormY, r32 tileNormZ, RandomSequence* seq, u32 seed)
+{
     r32 landscape = Evaluate(tileNormX, tileNormY, generator->landscapeNoise, seed);
-    
     r32 waterMargin = Clamp01(generator->waterSafetyMargin);
-    
-    r32 standardElevation = minHeight;
+    r32 result = minHeight;
     if(tileNormX < waterMargin || tileNormY < waterMargin || 
        tileNormX >= (1.0f - waterMargin) || tileNormY >= (1.0f - waterMargin))
     {
     }
     else
     {
-        standardElevation = Select(&generator->landscapeSelect, tileNormX, tileNormY, landscape, seed);
+        result = Select(&generator->landscapeSelect, tileNormX, tileNormY, landscape, seed);
         // NOTE(Leonardo): modify elevation to match out island shapes
-        r32 normalizedElevation = Clamp01MapToRange(minHeight, standardElevation, maxHeight);
+        r32 normalizedElevation = Clamp01MapToRange(minHeight, result, maxHeight);
         r32 distanceFromCenter = Length(V2(tileNormX, tileNormY) - V2(0.5f, 0.5f));
         r32 elevationCoeff = Evaluate(tileNormX, tileNormY, generator->elevationNoise, seed);
         normalizedElevation = (generator->elevationNormOffset + normalizedElevation) - distanceFromCenter * elevationCoeff;
         normalizedElevation = Clamp01(normalizedElevation);
         normalizedElevation = Pow(normalizedElevation, generator->elevationPower);
-        standardElevation = Lerp(minHeight, normalizedElevation, maxHeight);
+        result = Lerp(minHeight, normalizedElevation, maxHeight);
     }
     
-    result.elevation = standardElevation;
+    return result;
+}
+
+internal ZSlice* GetZSlice(world_generator* generator, r32 tileNormZ)
+{
+    ZSlice* result = 0;
+    
+    r32 maxDelta = R32_MAX;
+    for(u32 zSliceIndex = 0; zSliceIndex < generator->zSlicesCount; ++zSliceIndex)
+    {
+        ZSlice* slice = generator->zSlices + zSliceIndex;
+        r32 delta = Abs(slice->referenceZ - tileNormZ);
+        if(delta < maxDelta)
+        {
+            maxDelta = delta;
+            result = slice;
+        }
+    }
+    return result;
+}
+
+inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 tileNormX, r32 tileNormY, r32 tileNormZ, RandomSequence* seq, u32 seed, r32 totalRunningTime)
+{
+    WorldTile result = {};
+    
+    // NOTE(Leonardo): elevation
+    result.elevation = GetTileElevation(generator, tileNormX, tileNormY, tileNormZ, seq, seed);
     r32 temperatureNoise = Evaluate(tileNormX, tileNormY, generator->temperatureNoise, seed);
-    r32 temperatureDegrees = Select(&generator->temperatureSelect, temperatureNoise, temperatureNoise, standardElevation, seed, false);
+    r32 temperatureDegrees = Select(&generator->temperatureSelect, temperatureNoise, temperatureNoise, result.elevation, seed, false);
     
-    // NOTE(Leonardo): precipitations
-    r32 annualMMPrecipitation = Evaluate(tileNormX, tileNormY, generator->precipitationNoise, seed);
+    ZSlice* slice = GetZSlice(generator, tileNormZ);
     
-    GameProperty property = SelectFromBiomePyramid(&generator->biomePyramid, annualMMPrecipitation, temperatureDegrees, seed);
+    r32 annualMMPrecipitation = 0;
+    r32 darkness = 0;
+    
+    if(slice)
+    {
+        // NOTE(Leonardo): precipitations
+        annualMMPrecipitation = Evaluate(tileNormX, tileNormY, slice->precipitationNoise, seed);
+        
+        // NOTE(Leonardo): darkness
+        darkness = Evaluate(tileNormX, tileNormY, slice->darknessNoise, seed);
+    }
+    
+    GameProperty property = SelectFromBiomePyramid(&generator->biomePyramid, annualMMPrecipitation, darkness, temperatureDegrees, seed);
     
     GameProperties properties = {};
     properties.properties[0] = property;
@@ -210,28 +262,61 @@ internal RandomSequence GetChunkSeed(u32 chunkX, u32 chunkY, u32 worldSeed)
     return result;
 }
 
-internal void BuildChunk(Assets* assets, WorldChunk* chunk, i32 chunkX, i32 chunkY, u32 seed, r32 totalRunningTime)
+internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY, i32 chunkZ, u32 seed, r32 totalRunningTime)
 {
-    RandomSequence generatorSeq = Seed(seed);
-    GameProperties properties = {};
-    AssetID ID = QueryDataFiles(assets, world_generator, "default", &generatorSeq, &properties);
-    if(IsValid(ID))
+    RandomSequence seq = GetChunkSeed(chunkX, chunkY, seed);
+    RandomSequence seqTest = seq;
+    
+#ifndef FORG_SERVER
+    chunk->initialized = true;
+    chunk->worldX = chunkX;
+    chunk->worldY = chunkY;
+    chunk->worldZ = chunkZ;
+#endif
+    
+    u32 maxTile = (WORLD_CHUNK_SPAN  + 2 * WORLD_CHUNK_APRON)* CHUNK_DIM;
+    
+    i32 normalizedChunkX = chunkX + WORLD_CHUNK_APRON;
+    i32 normalizedChunkY = chunkY + WORLD_CHUNK_APRON;
+    
+    chunk->tiles = 0;
+    b32 buildTiles = false;
+    
+    r32 chunkNormZ = 0;
+    
+    if(generator->maxDeepness > 1)
     {
-        RandomSequence seq = GetChunkSeed(chunk->worldX, chunk->worldY, seed);
-        world_generator* generator = GetData(assets, world_generator, ID);
-        Assert(generator);
-        
-        
-        chunk->initialized = true;
-        chunk->worldX = chunkX;
-        chunk->worldY = chunkY;
-        
-        u32 maxTile = (WORLD_CHUNK_SPAN  + 2 * WORLD_CHUNK_APRON)* CHUNK_DIM;
-        
-        
-        i32 normalizedChunkX = chunkX + WORLD_CHUNK_APRON;
-        i32 normalizedChunkY = chunkY + WORLD_CHUNK_APRON;
-        
+        chunkNormZ = (r32) chunkZ / (r32) (generator->maxDeepness - 1);
+    }
+    
+    WorldTile nullTile = NullTile(generator);
+    for(u8 tileY = 0; tileY < CHUNK_DIM && !buildTiles; ++tileY)
+    {
+        for(u8 tileX = 0; tileX < CHUNK_DIM && !buildTiles; ++tileX)
+        {
+            u32 realTileX = normalizedChunkX * CHUNK_DIM + tileX;
+            u32 realTileY = normalizedChunkY * CHUNK_DIM + tileY;
+            
+            // NOTE(Leonardo): normalized values
+            r32 tileNormX = (r32) realTileX / maxTile;
+            r32 tileNormY = (r32) realTileY / maxTile;
+            r32 tileNormZ = chunkNormZ;
+            
+            Assert(Normalized(tileNormX));
+            Assert(Normalized(tileNormY));
+            Assert(Normalized(tileNormZ));
+            
+            r32 elevation = GetTileElevation(generator, tileNormX, tileNormY, tileNormZ, &seqTest, seed);
+            if(elevation != nullTile.elevation)
+            {
+                buildTiles = true;
+            }
+        }
+    }
+    
+    if(buildTiles)
+    {
+        chunk->tiles = PushArray(pool, WorldTile, CHUNK_DIM * CHUNK_DIM, NoClear());
         for(u8 tileY = 0; tileY < CHUNK_DIM; ++tileY)
         {
             for(u8 tileX = 0; tileX < CHUNK_DIM; ++tileX)
@@ -242,11 +327,15 @@ internal void BuildChunk(Assets* assets, WorldChunk* chunk, i32 chunkX, i32 chun
                 // NOTE(Leonardo): normalized values
                 r32 tileNormX = (r32) realTileX / maxTile;
                 r32 tileNormY = (r32) realTileY / maxTile;
+                r32 tileNormZ = chunkNormZ;
                 
                 Assert(Normalized(tileNormX));
                 Assert(Normalized(tileNormY));
+                Assert(Normalized(tileNormZ));
                 
-                chunk->tiles[tileY][tileX] = GenerateTile(assets, generator, tileNormX, tileNormY, &seq, seed, totalRunningTime);
+                WorldTile* tile = chunk->tiles + (tileY * CHUNK_DIM) + tileX;
+                
+                *tile = GenerateTile(assets, generator, tileNormX, tileNormY, tileNormZ, &seq, seed, totalRunningTime);
             }
         }
     }

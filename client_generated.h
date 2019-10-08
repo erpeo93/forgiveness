@@ -121,6 +121,7 @@ FieldDefinition fieldDefinitionOfUniversePos[] =
  {
 {0, MetaType_i32, "i32", "chunkX", (u32) (&((UniversePos*)0)->chunkX), {}, sizeof(i32),"invalid",0, 0, 0}, 
 {0, MetaType_i32, "i32", "chunkY", (u32) (&((UniversePos*)0)->chunkY), {}, sizeof(i32),"invalid",0, 0, 0}, 
+{0, MetaType_i32, "i32", "chunkZ", (u32) (&((UniversePos*)0)->chunkZ), {}, sizeof(i32),"invalid",0, 0, 0}, 
 {0, MetaType_Vec3, "Vec3", "chunkOffset", (u32) (&((UniversePos*)0)->chunkOffset), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
 };
 
@@ -159,11 +160,25 @@ FieldDefinition fieldDefinitionOfPropertySelector[] =
 {MetaFlag_Pointer, MetaType_PropertyBucket, "PropertyBucket", "buckets", (u32) (&((PropertySelector*)0)->buckets), {}, sizeof(PropertyBucket),"invalid",0, 0, 0}, 
 };
 
+FieldDefinition fieldDefinitionOfDrynessSelector[] = 
+ {
+{0, MetaType_NoiseSelector, "NoiseSelector", "drynessSelector", (u32) (&((DrynessSelector*)0)->drynessSelector), {}, sizeof(NoiseSelector),"invalid",0, 0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "rowCount", (u32) (&((DrynessSelector*)0)->rowCount), {}, sizeof(ArrayCounter),"invalid","temperatureSelectors", (u32)(&((DrynessSelector*)0)->temperatureSelectors), 0}, 
+{MetaFlag_Pointer, MetaType_PropertySelector, "PropertySelector", "temperatureSelectors", (u32) (&((DrynessSelector*)0)->temperatureSelectors), {}, sizeof(PropertySelector),"invalid",0, 0, 0}, 
+};
+
 FieldDefinition fieldDefinitionOfBiomePyramid[] = 
  {
-{0, MetaType_NoiseSelector, "NoiseSelector", "drySelector", (u32) (&((BiomePyramid*)0)->drySelector), {}, sizeof(NoiseSelector),"invalid",0, 0, 0}, 
-{0, MetaType_ArrayCounter, "ArrayCounter", "rowCount", (u32) (&((BiomePyramid*)0)->rowCount), {}, sizeof(ArrayCounter),"invalid","temperatureSelectors", (u32)(&((BiomePyramid*)0)->temperatureSelectors), 0}, 
-{MetaFlag_Pointer, MetaType_PropertySelector, "PropertySelector", "temperatureSelectors", (u32) (&((BiomePyramid*)0)->temperatureSelectors), {}, sizeof(PropertySelector),"invalid",0, 0, 0}, 
+{0, MetaType_NoiseSelector, "NoiseSelector", "darknessSelector", (u32) (&((BiomePyramid*)0)->darknessSelector), {}, sizeof(NoiseSelector),"invalid",0, 0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "drynessCount", (u32) (&((BiomePyramid*)0)->drynessCount), {}, sizeof(ArrayCounter),"invalid","drynessSelectors", (u32)(&((BiomePyramid*)0)->drynessSelectors), 0}, 
+{MetaFlag_Pointer, MetaType_DrynessSelector, "DrynessSelector", "drynessSelectors", (u32) (&((BiomePyramid*)0)->drynessSelectors), {}, sizeof(DrynessSelector),"invalid",0, 0, 0}, 
+};
+
+FieldDefinition fieldDefinitionOfZSlice[] = 
+ {
+{0, MetaType_r32, "r32", "referenceZ", (u32) (&((ZSlice*)0)->referenceZ), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_NoiseParams, "NoiseParams", "precipitationNoise", (u32) (&((ZSlice*)0)->precipitationNoise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
+{0, MetaType_NoiseParams, "NoiseParams", "darknessNoise", (u32) (&((ZSlice*)0)->darknessNoise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfworld_generator[] = 
@@ -172,12 +187,14 @@ FieldDefinition fieldDefinitionOfworld_generator[] =
 {0, MetaType_NoiseSelector, "NoiseSelector", "landscapeSelect", (u32) (&((world_generator*)0)->landscapeSelect), {}, sizeof(NoiseSelector),"invalid",0, 0, 0}, 
 {0, MetaType_NoiseParams, "NoiseParams", "temperatureNoise", (u32) (&((world_generator*)0)->temperatureNoise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
 {0, MetaType_NoiseSelector, "NoiseSelector", "temperatureSelect", (u32) (&((world_generator*)0)->temperatureSelect), {}, sizeof(NoiseSelector),"invalid",0, 0, 0}, 
-{0, MetaType_NoiseParams, "NoiseParams", "precipitationNoise", (u32) (&((world_generator*)0)->precipitationNoise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
 {0, MetaType_NoiseParams, "NoiseParams", "elevationNoise", (u32) (&((world_generator*)0)->elevationNoise), {}, sizeof(NoiseParams),"invalid",0, 0, 0}, 
 {0, MetaType_r32, "r32", "elevationPower", (u32) (&((world_generator*)0)->elevationPower), {}, sizeof(r32),"invalid",0, 0, 0}, 
 {0, MetaType_r32, "r32", "elevationNormOffset", (u32) (&((world_generator*)0)->elevationNormOffset), {}, sizeof(r32),"invalid",0, 0, 0}, 
 {0, MetaType_r32, "r32", "waterSafetyMargin", (u32) (&((world_generator*)0)->waterSafetyMargin), {}, sizeof(r32),"invalid",0, 0, 0}, 
 {0, MetaType_BiomePyramid, "BiomePyramid", "biomePyramid", (u32) (&((world_generator*)0)->biomePyramid), {}, sizeof(BiomePyramid),"invalid",0, 0, 0}, 
+{0, MetaType_u32, "u32", "maxDeepness", (u32) (&((world_generator*)0)->maxDeepness), {}, sizeof(u32),"invalid",0, 0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "zSlicesCount", (u32) (&((world_generator*)0)->zSlicesCount), {}, sizeof(ArrayCounter),"invalid","zSlices", (u32)(&((world_generator*)0)->zSlices), 0}, 
+{MetaFlag_Pointer, MetaType_ZSlice, "ZSlice", "zSlices", (u32) (&((world_generator*)0)->zSlices), {}, sizeof(ZSlice),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfEntityRef[] = 
@@ -386,7 +403,9 @@ AddToMetaDefinitions(SpawnerOption, fieldDefinitionOfSpawnerOption);\
 AddToMetaDefinitions(SpawnerEntity, fieldDefinitionOfSpawnerEntity);\
 AddToMetaDefinitions(EntityRef, fieldDefinitionOfEntityRef);\
 AddToMetaDefinitions(world_generator, fieldDefinitionOfworld_generator);\
+AddToMetaDefinitions(ZSlice, fieldDefinitionOfZSlice);\
 AddToMetaDefinitions(BiomePyramid, fieldDefinitionOfBiomePyramid);\
+AddToMetaDefinitions(DrynessSelector, fieldDefinitionOfDrynessSelector);\
 AddToMetaDefinitions(PropertySelector, fieldDefinitionOfPropertySelector);\
 AddToMetaDefinitions(NoiseSelector, fieldDefinitionOfNoiseSelector);\
 AddToMetaDefinitions(PropertyBucket, fieldDefinitionOfPropertyBucket);\
@@ -412,7 +431,7 @@ meta_propertiesString[Property_action] = "action";\
 meta_propertiesString[Property_tileType] = "tileType";\
 
 #define META_DEFAULT_VALUES_CPP_SUCKS()\
-fieldDefinitionOfWaterPhase[0].def.def_r32 =0;fieldDefinitionOfWaterPhase[6].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[7].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[8].def.def_r32 =1.0f;fieldDefinitionOfWaterPhase[9].def.def_r32 =0.5f;fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfworld_generator[7].def.def_r32 =1;fieldDefinitionOfworld_generator[8].def.def_r32 =0.05f;fieldDefinitionOfSpawnerEntity[3].def.def_r32 =1;fieldDefinitionOfSpawnerEntity[4].def.def_r32 =1;fieldDefinitionOfSpawnerEntity[5].def.def_i32 =1;fieldDefinitionOfSpawnerEntity[6].def.def_i32 =0;fieldDefinitionOfSpawnerEntity[7].def.def_i32 =1;fieldDefinitionOfSpawnerOption[0].def.def_r32 =1.0f;fieldDefinitionOfSpawner[2].def.def_r32 =1.0f;fieldDefinitionOfSpawner[3].def.def_r32 =1.0f;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, 0};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, 0};fieldDefinitionOftile_definition[2].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfCommonEntityInitParams[1].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[1].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfRockDefinition[4].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[6].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[9].def.def_u32 =1;fieldDefinitionOfRockDefinition[10].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[11].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[12].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[13].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[17].def.def_u32 =1;
+fieldDefinitionOfWaterPhase[0].def.def_r32 =0;fieldDefinitionOfWaterPhase[6].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[7].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[8].def.def_r32 =1.0f;fieldDefinitionOfWaterPhase[9].def.def_r32 =0.5f;fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[5].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfworld_generator[7].def.def_r32 =0.05f;fieldDefinitionOfworld_generator[9].def.def_u32 =1;fieldDefinitionOfSpawnerEntity[3].def.def_r32 =1;fieldDefinitionOfSpawnerEntity[4].def.def_r32 =1;fieldDefinitionOfSpawnerEntity[5].def.def_i32 =1;fieldDefinitionOfSpawnerEntity[6].def.def_i32 =0;fieldDefinitionOfSpawnerEntity[7].def.def_i32 =1;fieldDefinitionOfSpawnerOption[0].def.def_r32 =1.0f;fieldDefinitionOfSpawner[2].def.def_r32 =1.0f;fieldDefinitionOfSpawner[3].def.def_r32 =1.0f;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, 0};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, 0};fieldDefinitionOftile_definition[2].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfCommonEntityInitParams[1].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[1].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfRockDefinition[4].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[6].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[9].def.def_u32 =1;fieldDefinitionOfRockDefinition[10].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[11].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[12].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[13].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[17].def.def_u32 =1;
 ;
 #define META_ARCHETYPES_BOTH()\
 archetypeLayouts[Archetype_AnimalArchetype].totalSize = sizeof(AnimalArchetype); archetypeLayouts[Archetype_RockArchetype].totalSize = sizeof(RockArchetype); archetypeLayouts[Archetype_PlantArchetype].totalSize = sizeof(PlantArchetype); archetypeLayouts[Archetype_GrassArchetype].totalSize = sizeof(GrassArchetype); 

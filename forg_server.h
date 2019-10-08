@@ -175,8 +175,11 @@ struct ServerState
     //SpacePartition collisionPartition;
     //SpacePartition playerPartition;
     
-    WorldChunk chunks[WORLD_CHUNK_SPAN][WORLD_CHUNK_SPAN];
+    WorldTile nullTile;
+    u32 maxDeepness;
+    WorldChunk* chunks;
     
+    MemoryPool chunkPool;
     MemoryPool gamePool;
     MemoryPool networkPool;
     

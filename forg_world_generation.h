@@ -108,14 +108,28 @@ introspection() struct PropertySelector
     PropertyBucket* buckets;
 };
 
+introspection() struct DrynessSelector
+{
+    NoiseSelector drynessSelector;
+    ArrayCounter rowCount MetaCounter(temperatureSelectors);
+    PropertySelector* temperatureSelectors;
+};
+
 introspection() struct BiomePyramid
 {
     // NOTE(Leonardo): vertical!
-    NoiseSelector drySelector;
+    NoiseSelector darknessSelector;
     
-    // NOTE(Leonardo): horizontal, one for every "slice"
-    ArrayCounter rowCount MetaCounter(temperatureSelectors);
-    PropertySelector* temperatureSelectors;
+    ArrayCounter drynessCount MetaCounter(drynessSelectors);
+    DrynessSelector* drynessSelectors;
+};
+
+introspection() struct ZSlice
+{
+    r32 referenceZ;
+    
+    NoiseParams precipitationNoise;
+    NoiseParams darknessNoise;
 };
 
 introspection() struct world_generator
@@ -126,14 +140,17 @@ introspection() struct world_generator
     NoiseParams temperatureNoise;
     NoiseSelector temperatureSelect;
     
-    NoiseParams precipitationNoise;
-    
     NoiseParams elevationNoise;
     r32 elevationPower MetaDefault("1");
     r32 elevationNormOffset MetaDefault("1");
     
     r32 waterSafetyMargin MetaDefault("0.05f");
     BiomePyramid biomePyramid;
+    
+    u32 maxDeepness MetaDefault("1");
+    
+    ArrayCounter zSlicesCount MetaCounter(zSlices);
+    ZSlice* zSlices;
 };
 
 inline NoiseParams NoisePar(r32 frequency, u32 octaves, r32 min, r32 max,r32 persistance = 0.5f)

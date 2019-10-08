@@ -162,23 +162,26 @@ internal AssetBlock* AcquireAssetBlocks(Assets* assets, u16 assetCount)
 
 internal AssetSubtypeArray* GetSubtype(AssetArray* array, u32 subtype)
 {
-    u16 hashIndex = SafeTruncateToU16(subtype >> 16);
-    u16 count = SafeTruncateToU16(subtype & 0xffff);
-    Assert(hashIndex < ArrayCount(array->subtypes));
     AssetSubtypeArray* result = 0;
-    AssetSubtypeArray* first = array->subtypes[hashIndex];
-    u16 runningCount = 0;
-    while(true)
+    if(subtype != 0xffffffff)
     {
-        if(runningCount++ == count)
+        u16 hashIndex = SafeTruncateToU16(subtype >> 16);
+        u16 count = SafeTruncateToU16(subtype & 0xffff);
+        Assert(hashIndex < ArrayCount(array->subtypes));
+        AssetSubtypeArray* first = array->subtypes[hashIndex];
+        u16 runningCount = 0;
+        while(true)
         {
-            result = first;
-            break;
+            if(runningCount++ == count)
+            {
+                result = first;
+                break;
+            }
+            
+            first = first->next;
         }
         
-        first = first->next;
     }
-    
     return result;
 }
 
@@ -1571,9 +1574,8 @@ internal AssetID QueryAssets_(Assets* assets, AssetType type, u32 subtype, Rando
     if(type)
     {
         AssetArray* array = assets->assets + type;
-        
         AssetSubtypeArray* subtypeArray = GetSubtype(array, subtype);
-        if(subtypeArray->standardAssetCount > 0)
+        if(subtypeArray && subtypeArray->standardAssetCount > 0)
         {
             u16 matchingOptional = 0;
             u16 matchingAssetsOptional[32];

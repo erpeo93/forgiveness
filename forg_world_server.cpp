@@ -77,6 +77,17 @@ STANDARD_ECS_JOB_SERVER(HandlePlayerRequests)
                     }
                 } break;
                 
+                case Type_MoveChunkZ:
+                {
+                    if(HasComponent(ID.archetype, PhysicComponent))
+                    {
+                        PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+                        if(++physic->P.chunkZ == (i32) server->maxDeepness)
+                        {
+                            physic->P.chunkZ = 0;
+                        }
+                    }
+                } break;
                 InvalidDefaultCase;
             }
         }
@@ -130,15 +141,18 @@ internal void SendBasicUpdate(ServerState* server, EntityID ID, PhysicComponent*
                 {
                     PhysicComponent* playerPhysic = GetComponent(server, iter.ID, PhysicComponent);
                     
-                    Vec3 distance = Subtract(physic->P, playerPhysic->P);
-                    if(LengthSq(distance) < maxDistanceSq)
+                    if(physic->P.chunkZ == playerPhysic->P.chunkZ)
                     {
-                        SendEntityHeader(player, physic->definitionID, ID, physic->seed);
-                        u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, physic->definitionID, ID, physic->seed);
-                        Assert(writeHere);
-                        if(writeHere)
+                        Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
+                        if(LengthSq(distance) < maxDistanceSq)
                         {
-                            Copy(totalSize, writeHere, buff_);
+                            SendEntityHeader(player, physic->definitionID, ID, physic->seed);
+                            u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, physic->definitionID, ID, physic->seed);
+                            Assert(writeHere);
+                            if(writeHere)
+                            {
+                                Copy(totalSize, writeHere, buff_);
+                            }
                         }
                     }
                 }
@@ -179,9 +193,10 @@ internal void MoveAndSendUpdate(ServerState* server, EntityID ID, r32 elapsedTim
 }
 
 
-internal UniversePos BuildPFromSpawnerGrid(r32 cellDim, u32 cellX, u32 cellY)
+internal UniversePos BuildPFromSpawnerGrid(r32 cellDim, u32 cellX, u32 cellY, i32 chunkZ)
 {
     UniversePos result = {};
+    result.chunkZ = chunkZ;
     result.chunkOffset.x = cellDim * cellX;
     result.chunkOffset.y = cellDim * cellY;
     
@@ -202,7 +217,7 @@ internal b32 Valid(PoissonP* positions, UniversePos P, r32 maxDelta)
     r32 maxDistanceSq = Square(maxDelta);
     for(PoissonP* poisson = positions; poisson; poisson = poisson->next)
     {
-        Vec3 delta = Subtract(P, poisson->P);
+        Vec3 delta = SubtractOnSameZChunk(P, poisson->P);
         if(LengthSq(delta) < maxDistanceSq)
         {
             result = false;
@@ -332,8 +347,8 @@ internal void SpawnEntities(ServerState* server, r32 elapsedTime)
                 
                 u32 cellX = RandomChoice(&server->entropy, cellCount);
                 u32 cellY = RandomChoice(&server->entropy, cellCount);
-                
-                UniversePos P = BuildPFromSpawnerGrid(cellDim, cellX, cellY);
+                i32 Z = 0;
+                UniversePos P = BuildPFromSpawnerGrid(cellDim, cellX, cellY, Z);
                 TriggerSpawner(server, spawner, P, &server->entropy);
             }
         }
@@ -344,13 +359,36 @@ internal void SpawnEntities(ServerState* server, r32 elapsedTime)
 
 internal void BuildWorld(ServerState* server, b32 spawnEntities)
 {
-    for(u32 chunkY = 0; chunkY < WORLD_CHUNK_SPAN; ++chunkY)
+    
+    RandomSequence generatorSeq = Seed(server->worldSeed);
+    GameProperties properties = {};
+    AssetID ID = QueryDataFiles(server->assets, world_generator, "default", &generatorSeq, &properties);
+    if(IsValid(ID))
     {
-        for(u32 chunkX = 0; chunkX < WORLD_CHUNK_SPAN; ++chunkX)
+        world_generator* generator = GetData(server->assets, world_generator, ID);
+        server->nullTile = NullTile(generator);
+        
+        server->maxDeepness = generator->maxDeepness;
+        
+        Clear(&server->chunkPool);
+        server->chunks = PushArray(&server->chunkPool, WorldChunk, generator->maxDeepness * WORLD_CHUNK_SPAN * WORLD_CHUNK_SPAN);
+        WorldChunk* chunk = server->chunks;
+        for(u32 chunkZ = 0; chunkZ < generator->maxDeepness; ++chunkZ)
         {
-            WorldChunk* chunk = &server->chunks[chunkY][chunkX];
-            BuildChunk(server->assets, chunk, chunkX, chunkY, server->worldSeed, 0);
+            for(u32 chunkY = 0; chunkY < WORLD_CHUNK_SPAN; ++chunkY)
+            {
+                for(u32 chunkX = 0; chunkX < WORLD_CHUNK_SPAN; ++chunkX)
+                {
+                    BuildChunk(server->assets, &server->chunkPool, generator,
+                               chunk, chunkX, chunkY, chunkZ, server->worldSeed, 0);
+                    ++chunk;
+                }
+            }
         }
+    }
+    else
+    {
+        InvalidCodePath;
     }
     
     RandomSequence seq = Seed(server->worldSeed);
@@ -366,14 +404,17 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
             Spawner* spawner = GetData(server->assets, Spawner, sID);
             r32 cellDim = VOXEL_SIZE * spawner->cellDim;
             u32 cellCount = TruncateReal32ToU32(WORLD_SIDE / cellDim);
-            for(u32 Y = 0; Y < cellCount; ++Y)
+            for(i32 chunkZ = 0; chunkZ < (i32) server->maxDeepness; ++chunkZ)
             {
-                for(u32 X = 0; X < cellCount; ++X)
+                for(u32 Y = 0; Y < cellCount; ++Y)
                 {
-                    if(RandomUni(&seq) <= spawner->percentageOfStartingCells)
+                    for(u32 X = 0; X < cellCount; ++X)
                     {
-                        UniversePos P = BuildPFromSpawnerGrid(cellDim, X, Y);
-                        TriggerSpawner(server, spawner, P, &seq);
+                        if(RandomUni(&seq) <= spawner->percentageOfStartingCells)
+                        {
+                            UniversePos P = BuildPFromSpawnerGrid(cellDim, X, Y, chunkZ);
+                            TriggerSpawner(server, spawner, P, &seq);
+                        }
                     }
                 }
             }

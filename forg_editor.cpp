@@ -198,7 +198,13 @@ internal Vec2 RectPadding(r32 fontScale)
 
 internal Vec2 ButtonPadding(r32 fontScale)
 {
-    Vec2 result = fontScale * V2(2, 2);
+    Vec2 result = fontScale * V2(8, 8);
+    return result;
+}
+
+internal r32 ButtonSpacing(r32 fontScale)
+{
+    r32 result = 32.0f * fontScale;
     return result;
 }
 
@@ -281,12 +287,6 @@ internal void Pop(EditorLayout* layout)
 #define HotNumberColor() V4(0, 1, 1.0f, 1)
 #define StandardFloatColor() V4(0.2f, 0.2f, 1.0f, 1)
 #define HotFloatColor() V4(1.0f, 0.5f, 1.0f, 1)
-
-internal Vec2 ButtonDim(EditorLayout* layout)
-{
-    Vec2 result = layout->fontScale * V2(2.0f * layout->standardButtonDim, layout->standardButtonDim);
-    return result;
-}
 
 internal Vec2 ColorDim(EditorLayout* layout)
 {
@@ -1214,10 +1214,25 @@ internal b32 Edit_EntityRef(EditorLayout* layout, char* name, EntityRef* ref, b3
 
 
 
-internal b32 EditorButton(EditorLayout* layout, Vec2 rawOffset, Vec2 buttonDim, char* name, AUID ID, b32 disabled = false, Vec4 color = V4(1, 0, 0, 1))
+internal b32 EditorButton(EditorLayout* layout, Vec2 rawOffset, char* name, AUID ID, b32 disabled = false, Vec4 color = V4(1, 0, 0, 1))
 {
     b32 result = false;
+    
+    Vec2 padding = ButtonPadding(layout->fontScale);
+    layout->currentP.x += ButtonSpacing(layout->fontScale);
     Vec2 buttonMin = layout->currentP + Hadamart(rawOffset, V2(RawHeight(layout), RawHeight(layout)));
+    
+    Vec2 buttonDim;
+    if(name)
+    {
+        buttonDim = GetDim(GetTextDim(layout->group, layout->fontID, name, V3(0, 0, 0), layout->fontScale));
+        buttonDim.y = Max(50 * layout->fontScale, buttonDim.y);
+    }
+    else
+    {
+        buttonDim = CollapsibleDim(layout);
+    }
+    
     Rect2 button = RectMinDim(buttonMin, buttonDim);
     
     if(disabled)
@@ -1241,8 +1256,8 @@ internal b32 EditorButton(EditorLayout* layout, Vec2 rawOffset, Vec2 buttonDim, 
         }
     }
     
-    layout->currentP.x += 1.2f* buttonDim.x;
-    PushRect(layout->group, FlatTransform(), AddRadius(button, ButtonPadding(layout->fontScale)), color);
+    layout->currentP.x += (buttonDim.x + ButtonSpacing(layout->fontScale) + padding.x);
+    PushRect(layout->group, FlatTransform(), AddRadius(button, padding), color);
     if(name)
     {
         Vec4 textColor = StandardTextColor();
@@ -1258,8 +1273,7 @@ internal b32 EditorButton(EditorLayout* layout, Vec2 rawOffset, Vec2 buttonDim, 
 
 internal b32 StandardEditorButton(EditorLayout* layout, char* name, AUID ID, Vec4 color = V4(1, 0, 0, 1))
 {
-    Vec2 buttonDim = ButtonDim(layout);
-    b32 result = EditorButton(layout, V2(0.25f, -0.1f), buttonDim, name, ID);
+    b32 result = EditorButton(layout, V2(0.25f, -0.1f), name, ID);
     return result;
 }
 
@@ -1268,8 +1282,7 @@ internal b32 EditorCollapsible(EditorLayout* layout, char* name, AUID ID)
     AUIDData* data = GetAUIDData(layout->context, ID);
     
     Vec4 collapsibleColor = data->show ? V4(0, 1, 0, 1) : V4(0, 0, 1, 1);
-    Vec2 collapseDim = CollapsibleDim(layout);
-    if(EditorButton(layout, V2(0, 0), collapseDim, 0, ID, false, collapsibleColor))
+    if(EditorButton(layout, V2(0, 0), 0, ID, false, collapsibleColor))
     {
         data->show = !data->show;
     }
@@ -1342,7 +1355,7 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
     AUID saveID = auID(info, "saveButton");
     
     b32 disabled = (!get.asset);
-    if(EditorButton(layout, V2(0.25f, -0.1f), ButtonDim(layout), "save", saveID, disabled))
+    if(EditorButton(layout, V2(0.25f, -0.1f), "save", saveID, disabled))
     {
         WritebackAssetToFileSystem(assets, ID, WRITEBACK_PATH, false);
     }
@@ -1805,6 +1818,13 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                     if(StandardEditorButton(&layout, "Recreate standard World", recreateID))
                     {
                         SendRecreateWorldRequrest(true, worldMode->player.universeP);
+                    }
+                    
+                    
+                    AUID chunkID = auID(context, "chunkZ");
+                    if(StandardEditorButton(&layout, "Move Z", chunkID))
+                    {
+                        SendMoveChunkZRequest();
                     }
                     
                     NextRaw(&layout);

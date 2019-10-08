@@ -199,6 +199,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             if(challenge == clientReq.challenge)
             {
                 UniversePos P = {};
+                P.chunkZ = 0;
                 P.chunkX = 1;
                 P.chunkY = 1;
                 SpawnPlayer(server, player, P);
@@ -244,58 +245,17 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             AddEntity_(server, P, ID, seed, 0);
         } break;
         
-        
         case Type_RecreateWorld:
         {
             UniversePos P = {};
             b32 createEntities;
-            unpack(packetPtr, "lllV", &createEntities, &P.chunkX, &P.chunkY, &P.chunkOffset);
+            unpack(packetPtr, "llllV", &createEntities, &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset);
             EXECUTE_JOB(server, DeleteAllEntities, (1 == 1), 0);
             BuildWorld(server, createEntities);
             RespawnPlayer(server, player, P);
         } break;
         
 #if 0        
-        
-        case Type_ReloadAssets:
-        {
-            if(server->editor)
-            {
-                BuildAssetsAsync(server);
-            }
-        } break;
-        
-        case Type_PatchCheck:
-        {
-            if(server->editor)
-            {
-                ReloadServer(server);
-                if(!server->activeTable->errorCount)
-                {
-                    printf("Yay! you can patch the local server!\n");
-                }
-                else
-                {
-                    InvalidCodePath;
-                }
-                
-                SendPatchDoneMessageToAllPlayers(server);
-            } break;
-        } break;
-        
-        case Type_PatchLocalServer:
-        {
-            if(server->editor)
-            {
-                char* destinationFolder = "../server/assets";
-                char* destinationPath = "../server";
-                platformAPI.DeleteFolderRecursive(destinationFolder);
-                platformAPI.CopyAllFiles("assets", destinationPath);
-                
-                SendPatchDoneMessageToAllPlayers(server);
-            }
-        } break;
-        
         case Type_PauseToggle:
         {
             if(server->editor)
@@ -648,7 +608,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         server->worldSeed = (u32) time(0);
         
         u32 maxEntityCount = 0xffff;
-        
         MemoryPool* compPool = &server->gamePool;
         for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
         {

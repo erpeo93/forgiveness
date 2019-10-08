@@ -30,7 +30,7 @@ PLATFORM_WORK_CALLBACK(GenerateVoronoiPoints)
     EndTaskWithMemory(work->task);
 }
 
-internal void GenerateVoronoi(GameModeWorld* worldMode, UniversePos originP, i32 originChunkX, i32 originChunkY, i32 chunkApron)
+internal void GenerateVoronoi(GameModeWorld* worldMode, UniversePos originP, i32 originChunkX, i32 originChunkY, i32 originChunkZ, i32 chunkApron)
 {
     GameState* gameState = worldMode->gameState;
     TaskWithMemory* task = BeginTaskWithMemory(gameState->tasks, ArrayCount(gameState->tasks), false);
@@ -70,7 +70,7 @@ internal void GenerateVoronoi(GameModeWorld* worldMode, UniversePos originP, i32
                 Rect2 chunkRect = RectMinDim(chunkLowLeftCornerOffset.xy, V2(chunkSide, chunkSide));
                 
                 RandomSequence seq = Seed((X + 10) * (Y + 10));
-                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
+                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, originChunkZ, worldMode->persistentPool);
                 
                 Assert(chunk->initialized);
                 
@@ -85,7 +85,7 @@ internal void GenerateVoronoi(GameModeWorld* worldMode, UniversePos originP, i32
                         Vec2 destP2D = chunkLowLeftCornerOffset.xy + tileCenter;
                         
                         
-                        WorldTile* tile = GetTile(chunk, tileX, tileY);
+                        WorldTile* tile = GetTile(worldMode, chunk, tileX, tileY);
                         
                         r32 groundPointMaxOffset = 0.5f;
                         u32 groundPointPerTile = 4;
@@ -353,10 +353,11 @@ internal Vec4 GetWaterColor(r32 elevation, RandomSequence* seq)
 
 inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, UniversePos origin, UniversePos oldOrigin, r32 timeToAdvance)
 {
-    u32 worldSeed = 1111;
+    u32 worldSeed = worldMode->worldSeed;
     
     i32 originChunkX = origin.chunkX;
     i32 originChunkY = origin.chunkY;
+    i32 Z = origin.chunkZ;
     i32 chunkApron = worldMode->chunkApron;
     
     if(chunkApron > 4)
@@ -377,21 +378,34 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
     {
         for(i32 X = originChunkX - chunkApron - 1; X <= originChunkX + chunkApron + 1; X++)
         {
-            if(ChunkValid(X, Y))
+            if(ChunkValid(X, Y, Z))
             {
-                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
+                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, Z, worldMode->persistentPool);
                 if(!chunk->initialized)
                 {
                     forceVoronoiRegeneration = true;
                     Assert(chunk->texture.textureHandle.width == 0);
                     Assert(chunk->texture.textureHandle.height == 0);
-                    BuildChunk(group->assets, chunk, X, Y, worldSeed, worldMode->totalRunningTime);
+                    
+                    
+                    RandomSequence generatorSeq = Seed(worldSeed);
+                    GameProperties properties = {};
+                    AssetID ID = QueryDataFiles(group->assets, world_generator, "default", &generatorSeq, &properties);
+                    if(IsValid(ID))
+                    {
+                        world_generator* generator = GetData(group->assets, world_generator, ID);
+                        worldMode->nullTile = NullTile(generator);
+                        
+                        BuildChunk(group->assets, worldMode->persistentPool, generator, 
+                                   chunk, X, Y, Z, worldSeed, worldMode->totalRunningTime);
+                    }
+                    
                 }
             }
         }
     }
     
-    b32 changedChunk = (origin.chunkX != oldOrigin.chunkX || origin.chunkY != oldOrigin.chunkY);
+    b32 changedChunk = (origin.chunkX != oldOrigin.chunkX || origin.chunkY != oldOrigin.chunkY || origin.chunkZ != oldOrigin.chunkZ);
     
     RandomSequence assetSeq = Seed(worldSeed);
     AssetID waterID = QueryDataFiles(group->assets, WaterParams, "default", &assetSeq, 0);
@@ -412,13 +426,13 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
         {
             for(i32 X = originChunkX - chunkApron - 1; X <= originChunkX + chunkApron + 1; X++)
             {
-                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, worldMode->persistentPool);
+                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), X, Y, Z, worldMode->persistentPool);
                 
                 for(u32 tileY = 0; tileY < CHUNK_DIM; ++tileY)
                 {
                     for(u32 tileX = 0; tileX < CHUNK_DIM; ++tileX)
                     {
-                        WorldTile* tile = GetTile(chunk, tileX, tileY);
+                        WorldTile* tile = GetTile(worldMode, chunk, tileX, tileY);
                         WaterPhase* phase = GetWaterPhaseLeft(water, tile->elevation);
                         if(phase)
                         {
@@ -459,7 +473,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
         {
             if(!worldMode->generatingVoronoi)
             {
-                GenerateVoronoi(worldMode, origin, originChunkX, originChunkY, chunkApron);
+                GenerateVoronoi(worldMode, origin, originChunkX, originChunkY, Z, chunkApron);
             }
         }
         
@@ -583,10 +597,9 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
         for(i32 chunkX = originChunkX - chunkApron; 
             (chunkX <= originChunkX + chunkApron) && !generatedTextureThisFrame; chunkX++)
         {
-            if(ChunkValid(chunkX, chunkY))
+            if(ChunkValid(chunkX, chunkY, Z))
             {	
-                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, worldMode->persistentPool);
-                
+                WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, Z, worldMode->persistentPool);
                 if(chunk->initialized)
                 {
                     Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - origin.chunkOffset;
@@ -602,7 +615,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                         {
                             for(u8 X = 0; X < CHUNK_DIM; ++X)
                             {
-                                WorldTile* tile = GetTile(chunk, X, Y);
+                                WorldTile* tile = GetTile(worldMode, chunk, X, Y);
                                 averageColor += tile->color;
                                 
                                 if(tile->elevation < 0)
@@ -718,12 +731,11 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                     i32 splatX = chunk->worldX + deltaX;
                                     i32 splatY = chunk->worldY + deltaY;
                                     
-                                    if(ChunkValid(splatX, splatY))
+                                    if(ChunkValid(splatX, splatY, Z))
                                     {
-                                        WorldChunk* splatChunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), splatX, splatY, 0);
+                                        WorldChunk* splatChunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), splatX, splatY, Z, 0);
                                         Assert(splatChunk->initialized);
                                         Vec3 chunkCenterOffset = chunkSide * V3((r32) deltaX, (r32) deltaY, 0);
-                                        
                                         
                                         RandomSequence seq = GetChunkSeed(splatChunk->worldX, splatChunk->worldY, worldSeed);
                                         for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
@@ -736,7 +748,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                                 Rect2 tileSurface = RectMinDim(tileMin.xy, tileDim);
                                                 Vec2 tileCenter = GetCenter(tileSurface);
                                                 
-                                                WorldTile* tile = GetTile(splatChunk, X, Y);
+                                                WorldTile* tile = GetTile(worldMode, splatChunk, X, Y);
                                                 
                                                 GameProperties properties = {};
                                                 properties.properties[0] = tile->property;

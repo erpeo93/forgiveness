@@ -183,45 +183,47 @@ internal r32 GetHeight(BaseComponent* base)
 RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    r32 height = GetHeight(base);
-    AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
-    
-    if(base->velocity.x != 0.0f)
+    if(base->universeP.chunkZ == worldMode->player.universeP.chunkZ)
     {
-        animation->flipOnYAxis = (base->velocity.x < 0);
+        r32 height = GetHeight(base);
+        AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
+        if(base->velocity.x != 0.0f)
+        {
+            animation->flipOnYAxis = (base->velocity.x < 0.1f);
+        }
+        Clear(&animation->skeletonProperties);
+        AddOptionalGamePropertyRaw(&animation->skeletonProperties, base->action);
+        
+        
+        AnimationParams params = {};
+        params.elapsedTime = elapsedTime;
+        params.angle = 0;
+        params.P = GetRelativeP(worldMode, base);
+        params.scale = 1;
+        params.transform = UprightTransform();
+        params.flipOnYAxis = animation->flipOnYAxis;
+        
+        
+        RenderAnimationWithHeight(group, animation, &params, height);
     }
-    Clear(&animation->skeletonProperties);
-    AddOptionalGamePropertyRaw(&animation->skeletonProperties, base->action);
-    
-    
-    
-    
-    AnimationParams params = {};
-    params.elapsedTime = elapsedTime;
-    params.angle = 0;
-    params.P = GetRelativeP(worldMode, base);
-    params.scale = 1;
-    params.transform = UprightTransform();
-    params.flipOnYAxis = animation->flipOnYAxis;
-    
-    
-    RenderAnimationWithHeight(group, animation, &params, height);
 }
 
 RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    
-    r32 height = GetHeight(base);
-    ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
-    
-    RandomSequence seq = Seed(base->seed);
-    
-    u32 imageType = GetAssetSubtype(group->assets, AssetType_Image, image->typeHash);
-    BitmapId BID = QueryBitmaps(group->assets, imageType, &seq, &image->properties);
-    if(IsValid(BID))
+    if(base->universeP.chunkZ == worldMode->player.universeP.chunkZ)
     {
-        PushBitmap(group, UprightTransform(), BID, GetRelativeP(worldMode, base), height);
+        r32 height = GetHeight(base);
+        ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
+        
+        RandomSequence seq = Seed(base->seed);
+        
+        u32 imageType = GetAssetSubtype(group->assets, AssetType_Image, image->typeHash);
+        BitmapId BID = QueryBitmaps(group->assets, imageType, &seq, &image->properties);
+        if(IsValid(BID))
+        {
+            PushBitmap(group, UprightTransform(), BID, GetRelativeP(worldMode, base), height);
+        }
     }
 }
 
@@ -483,7 +485,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             }
             
             myPlayer->universeP = player->universeP;
-            Vec3 deltaP = -Subtract(myPlayer->universeP, myPlayer->oldUniverseP);
+            Vec3 deltaP = -SubtractOnSameZChunk(myPlayer->universeP, myPlayer->oldUniverseP);
             
             
             for(u32 voronoiIndex = 0; voronoiIndex < ArrayCount(worldMode->voronoiPingPong); ++voronoiIndex)

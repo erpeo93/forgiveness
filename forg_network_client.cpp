@@ -288,10 +288,16 @@ internal void SendSpawnRequest(UniversePos P, AssetID definitionID)
     CloseAndSendGuaranteedPacket();
 }
 
+internal void SendMoveChunkZRequest()
+{
+    StartPacket(MoveChunkZ);
+    CloseAndSendGuaranteedPacket();
+}
+
 internal void SendRecreateWorldRequrest(b32 createEntities, UniversePos P)
 {
     StartPacket(RecreateWorld);
-    Pack("lllV", createEntities, P.chunkX, P.chunkY, P.chunkOffset);
+    Pack("llllV", createEntities, P.chunkX, P.chunkY, P.chunkZ, P.chunkOffset);
     CloseAndSendGuaranteedPacket();
 }
 
@@ -443,7 +449,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             case Type_gameAccess:
             {
                 b32 deleteEntities = false;
-                Unpack("QHLl", &worldMode->worldSeed, 
+                Unpack("LHLl", &worldMode->worldSeed, 
                        &player->serverID.archetype, &player->serverID.archetypeIndex, &deleteEntities);
                 
                 if(deleteEntities)
@@ -501,14 +507,14 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 UniversePos P;
                 Vec3 speed;
                 GameProperty action;
-                Unpack("llVVHH", &P.chunkX, &P.chunkY, &P.chunkOffset, &speed, &action.property, &action.value);
+                Unpack("lllVVHH", &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset, &speed, &action.property, &action.value);
                 
                 BaseComponent* base = GetComponent(worldMode, currentID, BaseComponent);
                 if(base)
                 {
                     r32 maxDistancePrediction = 2.5f;
-                    Vec3 deltaP = Subtract(P, base->universeP);
-                    r32 deltaLength = Length(deltaP);
+                    //Vec3 deltaP = Subtract(P, base->universeP);
+                    //r32 deltaLength = Length(deltaP);
                     base->universeP = P;
                     base->velocity = speed;
                     base->action = action;

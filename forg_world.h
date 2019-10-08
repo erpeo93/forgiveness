@@ -10,6 +10,7 @@ introspection() struct UniversePos
 {
     i32 chunkX;
     i32 chunkY;
+    i32 chunkZ;
     Vec3 chunkOffset;
 };
 
@@ -17,18 +18,13 @@ struct WorldTile
 {
 #ifndef FORG_SERVER
     Lights lights;
-    
     RandomSequence entropy;
-    
     r32 waterRandomization;
     b32 movingNegative;
-    
     r32 waterTime;
     u32 waterSeed;
-    
     r32 blueNoise;
     r32 alphaNoise;
-    
 #endif
     
     Vec4 color;
@@ -55,20 +51,17 @@ struct WorldChunk
 #ifndef FORG_SERVER
     SpecialTexture texture;
     Lights lights;
-#endif
+    TempLight* firstTempLight;
+    TempLight* firstTempLightNextFrame;
+    WorldChunk* next;
     
-    b32 initialized;
     
     i32 worldX;
     i32 worldY;
     i32 worldZ;
-    
-    WorldTile tiles[CHUNK_DIM][CHUNK_DIM];
-    
-    TempLight* firstTempLight;
-    TempLight* firstTempLightNextFrame;
-    
-    WorldChunk* next;
+    b32 initialized;
+#endif
+    WorldTile* tiles;
 };
 
 #define SEASON_DURATION 5.0f

@@ -157,8 +157,7 @@ struct GameModeWorld
     r32 seasonLerp;
     
     
-    u64 worldSeed;
-    
+    u32 worldSeed;
     b32 editingEnabled;
     u32 editorRoles;
     
@@ -169,6 +168,7 @@ struct GameModeWorld
     MemoryPool* persistentPool;
     MemoryPool* temporaryPool;
     
+    WorldTile nullTile;
     WorldChunk* chunks[1024];
     ServerClientIDMapping* mappings[1024];
     ServerClientIDMapping* firstFreeMapping;
