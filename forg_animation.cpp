@@ -434,7 +434,7 @@ internal Rect2 RenderAnimation_(RenderGroup* group, AssetID animationID, Animati
     {
         PAKAnimation* animationInfo = GetAnimationInfo(group->assets, animationID);
         u16 bitmapCount = 0;
-        AssetID* bitmaps = GetAllSkinBitmaps(&tempPool, group->assets, SafeTruncateToU16(component->skin), &component->skinProperties, &bitmapCount);
+        AssetID* bitmaps = GetAllSkinBitmaps(&tempPool, group->assets, GetAssetSubtype(group->assets, AssetType_Image, component->skinHash), &component->skinProperties, &bitmapCount);
         
         u32 pieceCount;
         AnimationPiece* pieces = GetAnimationPiecesAndAdvanceState(&tempPool, animationInfo, animation, component, params, &pieceCount, render);
@@ -503,7 +503,7 @@ internal Rect2 RenderAnimation(RenderGroup* group, AnimationComponent* component
 {
     Rect2 result = InvertedInfinityRect2();
     RandomSequence seq = {};
-    AssetID animationID = QueryAnimations(group->assets, component->skeleton, &seq, &component->skeletonProperties);
+    AssetID animationID = QueryAnimations(group->assets, component->skeletonHash, &seq, &component->skeletonProperties);
     
     if(IsValid(animationID))
     {

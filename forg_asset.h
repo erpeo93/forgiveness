@@ -42,7 +42,7 @@ struct MetaPropertyList
 introspection() struct AssetID
 {
     u16 type;
-    u16 subtype;
+    u32 subtypeHashIndex;
     u16 index;
 };
 
@@ -196,7 +196,7 @@ struct DataFile
 introspection() struct GameAssetType
 {
     u16 type;
-    u16 subtype;
+    u64 subtypeHash;
 };
 
 
@@ -339,11 +339,14 @@ struct AssetSubtypeArray
     
     AssetBlock* firstAssetBlock;
     u32 fileIndex;
+    u64 hash;
+    
+    AssetSubtypeArray* next;
 };
 
 struct AssetArray
 {
-    AssetSubtypeArray subtypes[32];
+    AssetSubtypeArray* subtypes[32];
 };
 
 struct AssetFile
@@ -387,7 +390,7 @@ struct Assets
     
     AssetArray assets[AssetType_Count];
     AssetBlock* firstFreeAssetBlock;
-    MemoryPool* blockPool;
+    MemoryPool* pool;
     
     TicketMutex fileMutex;
 };

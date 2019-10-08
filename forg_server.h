@@ -52,7 +52,7 @@ struct GameFile
     u64 dataHash;
     
     u16 type;
-    u16 subtype;
+    u64 subtypeHash;
     
     u32 counter;
 };

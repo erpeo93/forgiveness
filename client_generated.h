@@ -182,7 +182,7 @@ FieldDefinition fieldDefinitionOfworld_generator[] =
 
 FieldDefinition fieldDefinitionOfEntityRef[] = 
  {
-{0, MetaType_u16, "u16", "subtype", (u32) (&((EntityRef*)0)->subtype), {}, sizeof(u16),"invalid",0, 0, 0}, 
+{0, MetaType_u32, "u32", "subtypeHashIndex", (u32) (&((EntityRef*)0)->subtypeHashIndex), {}, sizeof(u32),"invalid",0, 0, 0}, 
 {0, MetaType_u16, "u16", "index", (u32) (&((EntityRef*)0)->index), {}, sizeof(u16),"invalid",0, 0, 0}, 
 };
 
@@ -244,14 +244,14 @@ char* MetaTable_ParticleUpdaterEndPosition[] =
 FieldDefinition fieldDefinitionOfAssetID[] = 
  {
 {0, MetaType_u16, "u16", "type", (u32) (&((AssetID*)0)->type), {}, sizeof(u16),"invalid",0, 0, 0}, 
-{0, MetaType_u16, "u16", "subtype", (u32) (&((AssetID*)0)->subtype), {}, sizeof(u16),"invalid",0, 0, 0}, 
+{0, MetaType_u32, "u32", "subtypeHashIndex", (u32) (&((AssetID*)0)->subtypeHashIndex), {}, sizeof(u32),"invalid",0, 0, 0}, 
 {0, MetaType_u16, "u16", "index", (u32) (&((AssetID*)0)->index), {}, sizeof(u16),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfGameAssetType[] = 
  {
 {0, MetaType_u16, "u16", "type", (u32) (&((GameAssetType*)0)->type), {}, sizeof(u16),"invalid",0, 0, 0}, 
-{0, MetaType_u16, "u16", "subtype", (u32) (&((GameAssetType*)0)->subtype), {}, sizeof(u16),"invalid",0, 0, 0}, 
+{0, MetaType_u64, "u64", "subtypeHash", (u32) (&((GameAssetType*)0)->subtypeHash), {}, sizeof(u64),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfGroundColorationArrayTest[] = 

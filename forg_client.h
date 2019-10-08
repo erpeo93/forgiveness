@@ -65,7 +65,7 @@ struct GrassComponent
 
 struct ImageComponent
 {
-    u16 imageType;
+    u64 typeHash;
     GameProperties properties;
 };
 

@@ -741,7 +741,8 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                                 GameProperties properties = {};
                                                 properties.properties[0] = tile->property;
                                                 
-                                                BitmapId groundID = QueryBitmaps(group->assets, tile->asset.subtype, &seq, &properties);
+                                                u32 subtype = GetAssetSubtype(group->assets, AssetType_Image, tile->asset.subtypeHash);
+                                                BitmapId groundID = QueryBitmaps(group->assets, subtype, &seq, &properties);
                                                 
                                                 if(IsValid(groundID))
                                                 {

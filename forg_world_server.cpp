@@ -44,7 +44,7 @@ internal EntityID AddEntity(ServerState* server, UniversePos P, RandomSequence* 
 {
     AssetID definitionID;
     definitionID.type = AssetType_EntityDefinition;
-    definitionID.subtype = type.subtype;
+    definitionID.subtypeHashIndex = type.subtypeHashIndex;
     definitionID.index = type.index;
     
     u32 seed = GetNextUInt32(seq);

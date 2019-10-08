@@ -389,11 +389,12 @@ internal void Dump_Hash64(Stream* output, FieldDefinition* field, Hash64 value, 
     }
 }
 
-internal u16 GetAssetIndex(Assets* assets, u16 type, u16 subtype, Token indexName);
+internal u16 GetAssetIndex(Assets* assets, u16 type, u32 subtype, Token indexName);
 internal char* GetAssetIndexName(Assets* assets, AssetID ID);
-internal u16 GetAssetSubtype(Assets* assets, u16 type, Token subtype);
-internal u16 GetAssetSubtype(Assets* assets, u16 type, char* subtype);
-internal char* GetAssetSubtypeName(Assets* assets, u16 type, u16 subtype);
+internal u32 GetAssetSubtype(Assets* assets, u16 type, Token subtype);
+internal u32 GetAssetSubtype(Assets* assets, u16 type, char* subtype);
+internal char* GetAssetSubtypeName(Assets* assets, u16 type, u32 subtype);
+internal char* GetAssetSubtypeName(Assets* assets, u16 type, u64 subtypeHash);
 
 internal EntityRef Parse_EntityRef(Tokenizer* tokenizer, EntityRef defaultVal)
 {
@@ -415,8 +416,8 @@ internal EntityRef Parse_EntityRef(Tokenizer* tokenizer, EntityRef defaultVal)
         index.text = kind.text + kind.textLength + 1;
         index.textLength = t.textLength - kind.textLength - 1;
         
-        result.subtype = GetAssetSubtype(meta_assets, AssetType_EntityDefinition, kind);
-        result.index = GetAssetIndex(meta_assets, AssetType_EntityDefinition, result.subtype, index);
+        result.subtypeHashIndex = GetAssetSubtype(meta_assets, AssetType_EntityDefinition, kind);
+        result.index = GetAssetIndex(meta_assets, AssetType_EntityDefinition, result.subtypeHashIndex, index);
     }
     
     return result;
@@ -424,13 +425,13 @@ internal EntityRef Parse_EntityRef(Tokenizer* tokenizer, EntityRef defaultVal)
 
 internal void Dump_EntityRef(Stream* output, FieldDefinition* field, EntityRef value, b32 isInArray)
 {
-    if(value.subtype || value.index)
+    if(value.subtypeHashIndex || value.index)
     {
-        char* subtypeName = GetAssetSubtypeName(meta_assets, AssetType_EntityDefinition, value.subtype);
+        char* subtypeName = GetAssetSubtypeName(meta_assets, AssetType_EntityDefinition, value.subtypeHashIndex);
         
         AssetID ID;
         ID.type = AssetType_EntityDefinition;
-        ID.subtype = value.subtype;
+        ID.subtypeHashIndex = value.subtypeHashIndex;
         ID.index = value.index;
         char* indexName = GetAssetIndexName(meta_assets, ID);
         
@@ -518,7 +519,7 @@ internal GameAssetType Parse_GameAssetType(Tokenizer* tokenizer, GameAssetType d
         FormatString(subtype_, sizeof(subtype_), "%.*s", subtype.textLength, subtype.text);
         
         result.type = GetMetaAssetType(type_);
-        result.subtype = GetAssetSubtype(meta_assets, result.type, subtype_);
+        result.subtypeHash = StringHash(subtype_);
     }
     
     return result;
@@ -529,7 +530,7 @@ internal void Dump_GameAssetType(Stream* output, FieldDefinition* field, GameAss
     if(value.type)
     {
         char* type = GetAssetTypeName(value.type);
-        char* subtype = GetAssetSubtypeName(meta_assets, value.type, value.subtype);
+        char* subtype = GetAssetSubtypeName(meta_assets, value.type, value.subtypeHash);
         
         if(isInArray)
         {

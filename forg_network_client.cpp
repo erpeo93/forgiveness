@@ -267,10 +267,10 @@ inline void SendPauseToggleMessage()
     CloseAndSendOrderedPacket();
 }
 
-inline void SendFileHash(u16 type, u16 subtype, u64 hash)
+inline void SendFileHash(u16 type, u64 subtypeHash, u64 hash)
 {
     StartPacket(FileHash);
-    Pack("HHQ", type, subtype, hash);
+    Pack("HQQ", type, subtypeHash, hash);
     CloseAndSendOrderedPacket();
 }
 
@@ -284,7 +284,7 @@ internal void SendFileHeaderAck(u32 index)
 internal void SendSpawnRequest(UniversePos P, AssetID definitionID)
 {
     StartPacket(SpawnEntity);
-    Pack("HHllV", definitionID.subtype, definitionID.index, P.chunkX, P.chunkY, P.chunkOffset);
+    Pack("LHllV", definitionID.subtypeHashIndex, definitionID.index, P.chunkX, P.chunkY, P.chunkOffset);
     CloseAndSendGuaranteedPacket();
 }
 
@@ -400,37 +400,26 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 MemoryPool tempPool = {};
                 
-                
-                for(u16 type = 0; type < AssetType_Count; ++type)
+                for(u32 fileIndex = 0; fileIndex < assets->fileCount; ++fileIndex)
                 {
-                    AssetArray* assetTypeArray = assets->assets + type;
-                    for(u16 subtype = 0; subtype < ArrayCount(assetTypeArray->subtypes); ++subtype)
+                    AssetFile* file = GetAssetFile(assets, fileIndex);
+                    if(file->valid)
                     {
-                        u64 dataHash = 0;
-                        for(u32 fileIndex = 0; fileIndex < assets->fileCount; ++fileIndex)
-                        {
-                            AssetFile* file = GetAssetFile(assets, fileIndex);
-                            if(file->valid)
-                            {
-                                PAKFileHeader* fileHeader = GetFileInfo(assets, fileIndex);
-                                PlatformFileHandle* fileHandle = GetHandleFor(assets, fileIndex);
-                                
-                                u16 fileType = GetMetaAssetType(fileHeader->type);
-                                u16 fileSubtype = GetAssetSubtype(assets, type, fileHeader->subtype);
-                                
-                                if(fileType == type && fileSubtype == subtype)
-                                {
-                                    TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
-                                    
-                                    u8* content = (u8*) PushSize(&tempPool, file->size);
-                                    platformAPI.ReadFromFile(fileHandle, 0, file->size, content);
-                                    
-                                    dataHash = DataHash((char*) content, file->size);
-                                    EndTemporaryMemory(fileMemory);
-                                }
-                            }
-                        }
-                        SendFileHash(type, subtype, dataHash);
+                        PAKFileHeader* fileHeader = GetFileInfo(assets, fileIndex);
+                        PlatformFileHandle* fileHandle = GetHandleFor(assets, fileIndex);
+                        
+                        u16 fileType = GetMetaAssetType(fileHeader->type);
+                        u64 fileSubtypeHash = StringHash(fileHeader->subtype);
+                        
+                        TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
+                        
+                        u8* content = (u8*) PushSize(&tempPool, file->size);
+                        platformAPI.ReadFromFile(fileHandle, 0, file->size, content);
+                        
+                        u64 dataHash = DataHash((char*) content, file->size);
+                        EndTemporaryMemory(fileMemory);
+                        
+                        SendFileHash(fileType, fileSubtypeHash, dataHash);
                     }
                 }
                 
@@ -465,7 +454,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 EntityID serverID;
                 u32 seed;
                 
-                Unpack("HHLHLL", &definitionID.type, &definitionID.subtype, &definitionID.index, &serverID.archetype, &serverID.archetypeIndex, &seed);
+                Unpack("HLLHLL", &definitionID.type, &definitionID.subtypeHashIndex, &definitionID.index, &serverID.archetype, &serverID.archetypeIndex, &seed);
                 Assert(serverID.archetype < Archetype_Count);
                 
                 EntityID clientID = GetClientIDMapping(worldMode, serverID);

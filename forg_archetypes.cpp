@@ -67,7 +67,7 @@ internal void InitBaseComponent(BaseComponent* base, Vec3 boundOffset, Vec3 boun
 
 internal void InitImageComponent(Assets* assets, ImageComponent* image, u64 type, ImageProperty* properties, u16 propertyCount)
 {
-    image->imageType = GetAssetSubtype(assets, AssetType_Image, type);
+    image->typeHash = type;
     image->properties = {};
     for(u16 propertyIndex = 0; propertyIndex < propertyCount; ++propertyIndex)
     {
@@ -92,8 +92,8 @@ INIT_ENTITY(AnimalArchetype)
     InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed);
     
     AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
-    animation->skeleton =GetAssetSubtype(worldMode->gameState->assets, AssetType_Skeleton, params->skeleton);
-    animation->skin = GetAssetSubtype(worldMode->gameState->assets, AssetType_Image, params->skin);
+    animation->skeletonHash =StringHash(params->skeleton.value);
+    animation->skinHash =StringHash(params->skin.value);
     animation->flipOnYAxis = 0;
 }
 

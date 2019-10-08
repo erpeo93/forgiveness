@@ -57,7 +57,7 @@ inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery delivery
         {
             unsigned char* oldResult = result;
             result = ForgPackHeader(result, Type_entityHeader);
-            result += pack(result, "HHLHLL", definitionID.type, definitionID.subtype, definitionID.index, ID.archetype, ID.archetypeIndex);
+            result += pack(result, "HLLHLL", definitionID.type, definitionID.subtypeHashIndex, definitionID.index, ID.archetype, ID.archetypeIndex);
             packet->size += (u16) (result - oldResult);
         }
         packet->size += size;
@@ -208,14 +208,14 @@ internal void SendDeleteMessage(SimRegion* region, SimEntity* entity)
 inline void SendEntityHeader(PlayerComponent* player, AssetID definitionID, EntityID ID, u32 seed)
 {
     StartPacket(player, entityHeader);
-    Pack("HHLHLL", definitionID.type, definitionID.subtype, definitionID.index, ID.archetype, ID.archetypeIndex, seed);
+    Pack("HLLHLL", definitionID.type, definitionID.subtypeHashIndex, definitionID.index, ID.archetype, ID.archetypeIndex, seed);
     CloseAndStoreStandardPacket(player);
 }
 
 inline void SendEntityHeaderReliably(PlayerComponent* player, AssetID definitionID, EntityID ID, u32 seed)
 {
     StartPacket(player, entityHeader);
-    Pack("HHLHLL", definitionID.type, definitionID.subtype, definitionID.index, ID.archetype, ID.archetypeIndex, seed);
+    Pack("HLLHLL", definitionID.type, definitionID.subtypeHashIndex, definitionID.index, ID.archetype, ID.archetypeIndex, seed);
     CloseAndStoreOrderedPacket(player);
 }
 
@@ -252,10 +252,10 @@ inline void SendCompletedAction(PlayerComponent* player, u64 entityID, u8 action
 }
 #endif
 
-inline void SendFileHeader(PlayerComponent* player, u32 index, u16 type, u16 subtype, u32 uncompressedSize, u32 compressedSize)
+inline void SendFileHeader(PlayerComponent* player, u32 index, u16 type, u64 subtypeHash, u32 uncompressedSize, u32 compressedSize)
 {
     StartPacket(player, FileHeader);
-    Pack("LHHLL", index, type, subtype, uncompressedSize, compressedSize);
+    Pack("LHQLL", index, type, subtypeHash, uncompressedSize, compressedSize);
     CloseAndStoreOrderedPacket(player);
 }
 

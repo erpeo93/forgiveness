@@ -64,7 +64,7 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 internal void SpawnPlayer_(ServerState* server, PlayerComponent* player, UniversePos P, b32 deleteEntities)
 {
     EntityRef type = {};
-    type.subtype = GetAssetSubtype(server->assets, AssetType_EntityDefinition, "default");
+    type.subtypeHashIndex = GetAssetSubtype(server->assets, AssetType_EntityDefinition, "default");
     
     EntityID ID = AddEntity(server, P, &server->entropy, type, player);
     
@@ -102,14 +102,14 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
         case Type_FileHash:
         {
             u16 type;
-            u16 subtype;
+            u64 subtypeHash;
             u64 hash;
-            packetPtr = unpack(packetPtr, "HHQ", &type, &subtype, &hash);
+            packetPtr = unpack(packetPtr, "HQQ", &type, &subtypeHash, &hash);
             
             for(u32 fileIndex = 0; fileIndex < server->fileCount; ++fileIndex)
             {
                 GameFile* file = server->files + fileIndex;
-                if(file->type == type && file->subtype == subtype)
+                if(file->type == type && file->subtypeHash == subtypeHash)
                 {
                     Assert(file->dataHash);
                     if(file->dataHash != hash)
@@ -122,7 +122,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                         toSend->sendingOffset = 0;
                         
                         ++file->counter;
-                        SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
+                        SendFileHeader(player, toSend->playerIndex, file->type, file->subtypeHash, file->uncompressedSize, file->compressedSize);
                         FREELIST_INSERT(toSend, player->firstLoginFileToSend);
                     }
                     break;
@@ -176,7 +176,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             UniversePos P = {};
             AssetID ID;
             ID.type = AssetType_EntityDefinition;
-            unpack(packetPtr, "HHllV", &ID.subtype, &ID.index, &P.chunkX, &P.chunkY, &P.chunkOffset);
+            unpack(packetPtr, "LHllV", &ID.subtypeHashIndex, &ID.index, &P.chunkX, &P.chunkY, &P.chunkOffset);
             
             u32 seed = GetNextUInt32(&server->entropy);
             AddEntity_(server, P, ID, seed, 0);
@@ -389,7 +389,7 @@ inline void ReadCompressFile(ServerState* server, GameFile* file, u32 uncompress
     Assert(cmp_status == Z_OK);
     PAKFileHeader* header = (PAKFileHeader*) uncompressedContent;
     file->type = GetMetaAssetType(header->type);
-    file->subtype = GetAssetSubtype(server->assets, file->type, header->subtype);
+    file->subtypeHash = StringHash(header->subtype);
     file->dataHash = DataHash((char*) uncompressedContent, uncompressedSize);
 }
 
@@ -403,7 +403,8 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
     platformAPI.ReadFromFile(&handle, 0, sizeof(PAKFileHeader), &header);
     
     u16 type = GetMetaAssetType(header.type);
-    u16 subtype = GetAssetSubtype(server->assets, type, header.subtype);
+    u32 subtype = GetAssetSubtype(server->assets, type, header.subtype);
+    u64 subtypeHash = StringHash(header.subtype);
     
     u32 fileIndex = 0;
     GameFile* file = 0;
@@ -411,7 +412,7 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
     for(u32 testIndex = 0; testIndex < server->fileCount; ++testIndex)
     {
         GameFile* test = server->files + testIndex;
-        if(test->type == type && test->subtype == subtype)
+        if(test->type == type && test->subtypeHash == subtypeHash)
         {
             file = test;
             fileIndex = testIndex;
@@ -473,7 +474,7 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
                                 }
                             }
                             
-                            SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
+                            SendFileHeader(player, toSend->playerIndex, file->type, file->subtypeHash, file->uncompressedSize, file->compressedSize);
                         }
                     }
                 }

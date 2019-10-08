@@ -217,7 +217,8 @@ RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
     
     RandomSequence seq = Seed(base->seed);
     
-    BitmapId BID = QueryBitmaps(group->assets, image->imageType, &seq, &image->properties);
+    u32 imageType = GetAssetSubtype(group->assets, AssetType_Image, image->typeHash);
+    BitmapId BID = QueryBitmaps(group->assets, imageType, &seq, &image->properties);
     if(IsValid(BID))
     {
         PushBitmap(group, UprightTransform(), BID, GetRelativeP(worldMode, base), height);

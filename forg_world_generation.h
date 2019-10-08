@@ -149,7 +149,7 @@ inline NoiseParams NoisePar(r32 frequency, u32 octaves, r32 min, r32 max,r32 per
 
 introspection() struct EntityRef
 {
-    u16 subtype;
+    u32 subtypeHashIndex;
     u16 index;
 };
 
