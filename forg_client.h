@@ -102,7 +102,7 @@ struct ReceivingAssetFile
     
     u32 index;
     u16 type;
-    u16 subtype;
+    char subtype[32];
     
     u32 uncompressedSize;
     u32 compressedSize;
@@ -189,6 +189,8 @@ struct GameModeWorld
     r32 boltTime;
     BoltCache* boltCache;
     
+    u32 loginFileToReceiveCount;
+    u32 loginReceivedFileCount;
     ClientPlayer player;
     
 #if FORGIVENESS_INTERNAL

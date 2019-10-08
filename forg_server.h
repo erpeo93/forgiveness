@@ -52,7 +52,7 @@ struct GameFile
     u64 dataHash;
     
     u16 type;
-    u64 subtypeHash;
+    char subtype[32];
     
     u32 counter;
 };
@@ -87,6 +87,19 @@ struct PhysicComponent
     GameProperty action;
 };
 
+struct FileHash
+{
+    u16 type;
+    u64 subtypeHash;
+    u64 dataHash;
+    
+    union
+    {
+        FileHash* next;
+        FileHash* nextFree;
+    };
+};
+
 struct PlayerComponent
 {
     b32 connectionClosed;
@@ -97,6 +110,9 @@ struct PlayerComponent
     
     u32 requestCount;
     PlayerRequest requests[8];
+    
+    
+    FileHash* firstFileHash;
     
     u32 runningFileIndex;
     FileToSend* firstLoginFileToSend;
@@ -175,6 +191,7 @@ struct ServerState
     TimestampHash fileHash;
     
     FileToSend* firstFreeToSendFile;
+    FileHash* firstFreeFileHash;
     
     Assets* assets;
 };

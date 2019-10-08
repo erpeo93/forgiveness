@@ -1035,16 +1035,16 @@ internal void InitFileAssetHeader(AssetFile* file)
     file->valid = valid;
 }
 
-internal AssetFile* CloseAssetFileFor(Assets* assets, u16 closeType, u32 closeSubtype, u32* fileIndex)
+internal AssetFile* CloseAssetFileFor(Assets* assets, u16 closeType, u64 closeSubtypeHash, u32* fileIndex)
 {
     AssetFile* result = 0;
     for(u32 assetFileIndex = 0; assetFileIndex < assets->fileCount; ++assetFileIndex)
     {
         AssetFile* file = GetAssetFile(assets, assetFileIndex);
         u16 type = GetMetaAssetType(file->header.type);
-        u32 subtype = GetAssetSubtype(assets, type, file->header.subtype);
+        u64 subtypeHash = StringHash(file->header.subtype);
         
-        if(closeType == type && closeSubtype == subtype)
+        if(closeType == type && closeSubtypeHash == subtypeHash)
         {
             platformAPI.CloseFile(&file->handle);
             result = file;
@@ -1057,10 +1057,11 @@ internal AssetFile* CloseAssetFileFor(Assets* assets, u16 closeType, u32 closeSu
     return result;
 }
 
-internal void ReopenReloadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, u16 typeIn, u32 subtypeIn, u8* content, u32 size, MemoryPool* pool)
+internal void ReopenReloadAssetFile(Assets* assets, AssetFile* file, u32 fileIndex, u16 typeIn, char* subtypeIn, u8* content, u32 size, MemoryPool* pool)
 {
     char* type = GetAssetTypeName(typeIn);
-    char* subtype = GetAssetSubtypeName(assets, typeIn, subtypeIn);
+    char* subtype = subtypeIn;
+    u64 subtypeHashIn = StringHash(subtype);
     char newName[128];
     FormatString(newName, sizeof(newName), "%s_%s", type, subtype);
     platformAPI.ReplaceFile(PlatformFile_AssetPack, ASSETS_PATH, newName, content, size, 0);

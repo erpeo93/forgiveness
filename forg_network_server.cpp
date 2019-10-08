@@ -124,6 +124,13 @@ internal void SendLoginResponse(PlayerComponent* player, u16 port, u32 challenge
     CloseAndStoreOrderedPacket(player);
 }
 
+internal void SendLoginFileTransferBegin(PlayerComponent* player, u32 fileCount)
+{
+    StartPacket(player, loginFileTransferBegin);
+    Pack("L", fileCount);
+    CloseAndStoreOrderedPacket(player);
+}
+
 internal void SendGameAccessConfirm(PlayerComponent* player, u64 worldSeed, EntityID ID, b32 deleteEntities)
 {
     StartPacket(player, gameAccess);
@@ -252,10 +259,10 @@ inline void SendCompletedAction(PlayerComponent* player, u64 entityID, u8 action
 }
 #endif
 
-inline void SendFileHeader(PlayerComponent* player, u32 index, u16 type, u64 subtypeHash, u32 uncompressedSize, u32 compressedSize)
+inline void SendFileHeader(PlayerComponent* player, u32 index, u16 type, char* subtype, u32 uncompressedSize, u32 compressedSize)
 {
     StartPacket(player, FileHeader);
-    Pack("LHQLL", index, type, subtypeHash, uncompressedSize, compressedSize);
+    Pack("LHsLL", index, type, subtype, uncompressedSize, compressedSize);
     CloseAndStoreOrderedPacket(player);
 }
 

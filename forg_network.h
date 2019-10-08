@@ -153,6 +153,7 @@ enum Packet_Type
 {
     Type_invalid,
     Type_login,
+    Type_loginFileTransferBegin,
     Type_gameAccess,
     Type_worldInfo,
     

@@ -395,9 +395,9 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 ResetReceiver(&clientNetwork->receiver);
                 clientNetwork->nextSendStandardApplicationData = {};
                 clientNetwork->nextSendOrderedApplicationData = {};
+                clientNetwork->serverChallenge = login.challenge;
                 
                 Assets* assets = gameState->assets;
-                
                 MemoryPool tempPool = {};
                 
                 for(u32 fileIndex = 0; fileIndex < assets->fileCount; ++fileIndex)
@@ -423,8 +423,21 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     }
                 }
                 
-                clientNetwork->serverChallenge = login.challenge;
-                GameAccessRequest(clientNetwork->serverChallenge);
+                SendFileHash(0, 0, 0);
+            } break;
+            
+            case Type_loginFileTransferBegin:
+            {
+                u32 fileToReceive;
+                Unpack("L", &fileToReceive);
+                
+                worldMode->loginFileToReceiveCount = fileToReceive;
+                worldMode->loginReceivedFileCount = 0;
+                
+                if(!fileToReceive)
+                {
+                    GameAccessRequest(clientNetwork->serverChallenge);
+                }
             } break;
             
             case Type_gameAccess:
@@ -510,7 +523,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             case Type_FileHeader:
             {
                 ReceivingAssetFile* newFile = BootstrapPushStruct(ReceivingAssetFile, memory);
-                Unpack("LHHLL", &newFile->index, &newFile->type, &newFile->subtype, &newFile->uncompressedSize, &newFile->compressedSize);
+                Unpack("LHsLL", &newFile->index, &newFile->type, newFile->subtype, &newFile->uncompressedSize, &newFile->compressedSize);
                 newFile->receivedSize = 0;
                 newFile->content = PushSize(&newFile->memory, newFile->compressedSize);
                 
@@ -562,8 +575,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                             Assert(receiving->receivedSize == receiving->compressedSize);
                             Assets* assets = gameState->assets;
                             u32 destFileIndex = 0;
-                            AssetFile* destFile = CloseAssetFileFor(assets, receiving->type, receiving->subtype, &destFileIndex);
-                            
+                            AssetFile* destFile = CloseAssetFileFor(assets, receiving->type, StringHash(receiving->subtype), &destFileIndex);
                             if(!destFile)
                             {
                                 Assert(assets->fileCount < assets->maxFileCount);
@@ -585,6 +597,12 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                             
                             DLLIST_REMOVE(receiving);
                             Clear(&receiving->memory);
+                            
+                            Assert(worldMode->loginFileToReceiveCount);
+                            if(++worldMode->loginReceivedFileCount == worldMode->loginFileToReceiveCount)
+                            {
+                                GameAccessRequest(clientNetwork->serverChallenge);
+                            }
                         }
                     }
                 }

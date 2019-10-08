@@ -72,6 +72,17 @@ internal void SpawnPlayer_(ServerState* server, PlayerComponent* player, Univers
     SendGameAccessConfirm(player, server->worldSeed, ID, deleteEntities);
 }
 
+internal void StoreFileHash(ServerState* server, PlayerComponent* player, u16 type, u64 subtypeHash, u64 dataHash)
+{
+    FileHash* hash;
+    FREELIST_ALLOC(hash, server->firstFreeFileHash, PushStruct(&server->gamePool, FileHash));
+    hash->type = type;
+    hash->subtypeHash = subtypeHash;
+    hash->dataHash = dataHash;
+    
+    FREELIST_INSERT(hash, player->firstFileHash);
+}
+
 internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* player,  unsigned char* packetPtr, u16 dataSize)
 {
     u32 challenge = 1111;
@@ -103,30 +114,82 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
         {
             u16 type;
             u64 subtypeHash;
-            u64 hash;
-            packetPtr = unpack(packetPtr, "HQQ", &type, &subtypeHash, &hash);
+            u64 dataHash;
+            packetPtr = unpack(packetPtr, "HQQ", &type, &subtypeHash, &dataHash);
             
-            for(u32 fileIndex = 0; fileIndex < server->fileCount; ++fileIndex)
+            if(!type && !subtypeHash && !dataHash)
             {
-                GameFile* file = server->files + fileIndex;
-                if(file->type == type && file->subtypeHash == subtypeHash)
+                u32 fileCount = 0;
+                for(u32 fileIndex = 0; fileIndex < server->fileCount; ++fileIndex)
                 {
-                    Assert(file->dataHash);
-                    if(file->dataHash != hash)
+                    GameFile* file = server->files + fileIndex;
+                    if(file->type != 0xffff)
                     {
-                        FileToSend* toSend;
-                        FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
-                        toSend->acked = false;
-                        toSend->playerIndex = player->runningFileIndex++;
-                        toSend->serverFileIndex = fileIndex;
-                        toSend->sendingOffset = 0;
+                        Assert(file->dataHash);
                         
-                        ++file->counter;
-                        SendFileHeader(player, toSend->playerIndex, file->type, file->subtypeHash, file->uncompressedSize, file->compressedSize);
-                        FREELIST_INSERT(toSend, player->firstLoginFileToSend);
+                        b32 toSend = true;
+                        for(FileHash* hash = player->firstFileHash; hash; hash = hash->next)
+                        {
+                            if(file->type == hash->type && StringHash(file->subtype) == hash->subtypeHash)
+                            {
+                                Assert(hash->dataHash);
+                                if(file->dataHash == hash->dataHash)
+                                {
+                                    toSend = false;
+                                }
+                                break;
+                            }
+                        }
+                        
+                        if(toSend)
+                        {
+                            ++fileCount;
+                        }
                     }
-                    break;
                 }
+                SendLoginFileTransferBegin(player, fileCount);
+                
+                
+                for(u32 fileIndex = 0; fileIndex < server->fileCount; ++fileIndex)
+                {
+                    GameFile* file = server->files + fileIndex;
+                    if(file->type != 0xffff)
+                    {
+                        Assert(file->dataHash);
+                        
+                        b32 send = true;
+                        for(FileHash* hash = player->firstFileHash; hash; hash = hash->next)
+                        {
+                            if(file->type == hash->type && StringHash(file->subtype) == hash->subtypeHash)
+                            {
+                                Assert(hash->dataHash);
+                                if(file->dataHash == hash->dataHash)
+                                {
+                                    send = false;
+                                }
+                                break;
+                            }
+                        }
+                        
+                        if(send)
+                        {
+                            FileToSend* toSend;
+                            FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
+                            toSend->acked = false;
+                            toSend->playerIndex = player->runningFileIndex++;
+                            toSend->serverFileIndex = fileIndex;
+                            toSend->sendingOffset = 0;
+                            
+                            ++file->counter;
+                            SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
+                            FREELIST_INSERT(toSend, player->firstLoginFileToSend);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                StoreFileHash(server, player, type, subtypeHash, dataHash);
             }
         } break;
         case Type_gameAccess:
@@ -167,7 +230,6 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                     break;
                 }
             }
-            
             
 		} break;
         
@@ -287,6 +349,8 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
                 }
                 player->firstReloadedFileToSend = 0;
                 
+                FREELIST_FREE(player->firstFileHash, FileHash, server->firstFreeFileHash);
+                
             }
             else
             {
@@ -389,7 +453,9 @@ inline void ReadCompressFile(ServerState* server, GameFile* file, u32 uncompress
     Assert(cmp_status == Z_OK);
     PAKFileHeader* header = (PAKFileHeader*) uncompressedContent;
     file->type = GetMetaAssetType(header->type);
-    file->subtypeHash = StringHash(header->subtype);
+    
+    Assert(StrLen(header->subtype) <= ArrayCount(file->subtype));
+    FormatString(file->subtype, sizeof(file->subtype), "%s", header->subtype);
     file->dataHash = DataHash((char*) uncompressedContent, uncompressedSize);
 }
 
@@ -403,7 +469,6 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
     platformAPI.ReadFromFile(&handle, 0, sizeof(PAKFileHeader), &header);
     
     u16 type = GetMetaAssetType(header.type);
-    u32 subtype = GetAssetSubtype(server->assets, type, header.subtype);
     u64 subtypeHash = StringHash(header.subtype);
     
     u32 fileIndex = 0;
@@ -412,7 +477,7 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
     for(u32 testIndex = 0; testIndex < server->fileCount; ++testIndex)
     {
         GameFile* test = server->files + testIndex;
-        if(test->type == type && test->subtypeHash == subtypeHash)
+        if(test->type == type && StringHash(test->subtype) == subtypeHash)
         {
             file = test;
             fileIndex = testIndex;
@@ -430,9 +495,9 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
         
         
         u32 destFileIndex = 0;
-        AssetFile* destFile = CloseAssetFileFor(server->assets, type, subtype, &destFileIndex);
+        AssetFile* destFile = CloseAssetFileFor(server->assets, type, subtypeHash, &destFileIndex);
         Assert(destFile);
-        ReopenReloadAssetFile(server->assets, destFile, destFileIndex, type, subtype, uncompressedContent, SafeTruncateUInt64ToU32(info->size), pool);
+        ReopenReloadAssetFile(server->assets, destFile, destFileIndex, type, header.subtype, uncompressedContent, SafeTruncateUInt64ToU32(info->size), pool);
         
         ReadCompressFile(server, file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
         
@@ -474,7 +539,7 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
                                 }
                             }
                             
-                            SendFileHeader(player, toSend->playerIndex, file->type, file->subtypeHash, file->uncompressedSize, file->compressedSize);
+                            SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
                         }
                     }
                 }
