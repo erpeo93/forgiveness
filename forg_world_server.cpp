@@ -105,15 +105,36 @@ internal void MoveEntity(ServerState* server, PhysicComponent* physic, r32 elaps
     Vec3 acceleration = Normalize(physic->acc) *accelerationCoeff;
     Vec3 velocity = physic->speed;
     r32 dt = elapsedTime;
-    
     acceleration.xy += drag * velocity.xy;
     
-    physic->P.chunkOffset += 0.5f * Square(dt) * acceleration + velocity * dt;
-    physic->speed += dt * acceleration;
     
+    Vec3 deltaP = 0.5f * acceleration * Square(dt) + velocity * dt;
+    
+    physic->speed += acceleration * dt;
+    
+    
+    r32 tRemaining = 1.0f;
+    for( u32 iteration = 0; (iteration < 2) && tRemaining > 0; iteration++)
+    {
+        Vec3 wallNormalMin = {};
+        r32 tStop = tRemaining;
+        
+#if 0        
+        for(every entity)
+        {
+            HandleVolumeCollision(entity->P, entity->bounds, deltaP, entityToCheck->P, entityToCheck->bounds, &tStop, &wallNormalMin);
+        }
+#endif
+        
+        Vec3 wallNormal = wallNormalMin;
+        
+        physic->P.chunkOffset += tStop * deltaP;
+        physic->speed = physic->speed - Dot(physic->speed, wallNormal) * wallNormal;
+        deltaP = deltaP - Dot(deltaP, wallNormal) * wallNormal;
+        tRemaining -= tStop;
+    }
     
     physic->P = NormalizePosition(physic->P);
-    
     if(!PositionInsideWorld(&physic->P))
     {
         physic->P = oldP;
