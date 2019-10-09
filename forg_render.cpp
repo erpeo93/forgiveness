@@ -510,15 +510,13 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTra
 }
 
 
-inline b32 PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
+inline BitmapDim PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
 {
-    b32 result = false;
-    
+    BitmapDim result = {};
     ColoredBitmap bitmap = GetBitmap(renderGroup->assets, ID);
     if(bitmap.bitmap)
     {
-        result = true;
-        PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, bitmap.pivot);
+        result = PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, bitmap.pivot);
     }
     else
     {

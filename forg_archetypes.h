@@ -64,6 +64,13 @@ introspection() struct ImageProperty
     GameProperty property;
 };
 
+introspection() struct ImageProperties
+{
+    GameAssetType imageType MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
+    ArrayCounter propertyCount MetaCounter(properties);
+    ImageProperty* properties;
+};
+
 introspection() struct ClientEntityInitParams
 {
     EntityID ID MetaUneditable();
@@ -73,8 +80,8 @@ introspection() struct ClientEntityInitParams
     Enumerator skeleton;
     Enumerator skin;
     
-    ArrayCounter propertyCount MetaCounter(properties);
-    ImageProperty* properties;
+    ImageProperties entityProperties;
+    ImageProperties leafProperties;
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

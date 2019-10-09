@@ -475,12 +475,16 @@ internal void ParseAttachmentPoint(PAKAttachmentPoint* point, Tokenizer* tokeniz
         Token alignX = GetToken(tokenizer);
         Token alignY = GetToken(tokenizer);
         Token angle = GetToken(tokenizer);
+        Token scaleX = GetToken(tokenizer);
+        Token scaleY = GetToken(tokenizer);
         
         point->alignment.x = StringToR32(alignX.text);
         point->alignment.y = StringToR32(alignY.text);
         point->angle = StringToR32(angle.text);
+        point->scale.x = StringToR32(scaleX.text);
+        point->scale.y = StringToR32(scaleY.text);
         
-        while(t.type != Token_CloseBraces)
+        while(t.type != Token_CloseBraces && t.type != Token_EndOfFile && t.type != Token_SemiColon)
         {
             t = GetToken(tokenizer);
         }

@@ -53,9 +53,15 @@ struct BaseComponent
     GameProperty action;
 };
 
+struct ImageReference
+{
+    u64 typeHash;
+    GameProperties properties;
+};
+
 struct PlantComponent
 {
-    
+    ImageReference leaf;
 };
 
 struct GrassComponent
@@ -65,8 +71,7 @@ struct GrassComponent
 
 struct ImageComponent
 {
-    u64 typeHash;
-    GameProperties properties;
+    ImageReference entity;
 };
 
 

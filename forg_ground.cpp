@@ -771,10 +771,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                                     
                                                     ObjectTransform transform = FlatTransform();
                                                     transform.angle = RandomUni(&seq) * TAU32;
-                                                    if(!PushBitmap(group, transform, groundID, splatP, height * voxelSide, scale, color))
-                                                    {
-                                                        //InvalidCodePath;
-                                                    }
+                                                    PushBitmap(group, transform, groundID, splatP, height * voxelSide, scale, color);
                                                 }
                                             }
                                         }

@@ -203,8 +203,57 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.transform = UprightTransform();
         params.flipOnYAxis = animation->flipOnYAxis;
         
-        
         RenderAnimationWithHeight(group, animation, &params, height);
+    }
+}
+
+internal BitmapId GetImageFromReference(Assets* assets, ImageReference* reference, RandomSequence* seq)
+{
+    u32 imageType = GetAssetSubtype(assets, AssetType_Image, reference->typeHash);
+    BitmapId BID = QueryBitmaps(assets, imageType, seq, &reference->properties);
+    
+    return BID;
+}
+
+RENDERING_ECS_JOB_CLIENT(RenderPlants)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    if(base->universeP.chunkZ == worldMode->player.universeP.chunkZ)
+    {
+        r32 height = GetHeight(base);
+        ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
+        PlantComponent* plant = GetComponent(worldMode, ID, PlantComponent);
+        
+        RandomSequence seq = Seed(base->seed);
+        BitmapId BID = GetImageFromReference(group->assets, &image->entity, &seq);
+        if(IsValid(BID))
+        {
+            BitmapDim bitmapData = PushBitmap(group, UprightTransform(), BID, GetRelativeP(worldMode, base), height);
+            
+            Bitmap* bitmap = GetBitmap(group->assets, BID).bitmap;
+            PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, BID);
+            if(bitmap)
+            {
+                ObjectTransform leafTransform = UprightTransform();
+                leafTransform.additionalZBias = 0.05f;
+                u64 leafHash = StringHash("leaf");
+                
+                for(u32 attachmentPointIndex = 0;
+                    attachmentPointIndex < bitmapInfo->attachmentPointCount; ++attachmentPointIndex)
+                {
+                    PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
+                    if(StringHash(point->name) == leafHash)
+                    {
+                        BitmapId leafID = GetImageFromReference(group->assets, &plant->leaf, &seq);
+                        leafTransform.angle = point->angle;
+                        Vec2 scale = point->scale;
+                        
+                        Vec3 pointP = bitmapData.P + point->alignment.x * bitmapData.XAxis * bitmapData.size.x + point->alignment.y * bitmapData.YAxis * bitmapData.size.y;
+                        PushBitmap(group, leafTransform, leafID, pointP, 0, scale);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -217,9 +266,7 @@ RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
         ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
         
         RandomSequence seq = Seed(base->seed);
-        
-        u32 imageType = GetAssetSubtype(group->assets, AssetType_Image, image->typeHash);
-        BitmapId BID = QueryBitmaps(group->assets, imageType, &seq, &image->properties);
+        BitmapId BID = GetImageFromReference(group->assets, &image->entity, &seq);
         if(IsValid(BID))
         {
             PushBitmap(group, UprightTransform(), BID, GetRelativeP(worldMode, base), height);
@@ -476,7 +523,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             PushAmbientLighting(group, ambientLightColor, directionalLightColor, directionalLightDirection, directionalLightIntensity);
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderCharacterAnimation, ArchetypeHas(BaseComponent) && ArchetypeHas(AnimationComponent), input->timeToAdvance);
-            EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(ImageComponent), input->timeToAdvance);
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(ImageComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderPlants, ArchetypeHas(BaseComponent) && ArchetypeHas(ImageComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
             
             
             if(worldMode->editorUI.renderEntityBounds)

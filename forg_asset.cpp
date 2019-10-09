@@ -552,6 +552,7 @@ internal u32 GetAssetSubtype(Assets* assets, u16 type, u64 hash)
                 break;
             }
             ++index;
+            first = first->next;
         }
     }
     return result;
@@ -1206,7 +1207,7 @@ internal void DumpAttachmentPointToStream(Stream* stream, PAKAttachmentPoint* po
 {
     if(!StrEqual(point->name, "null"))
     {
-        OutputToStream(stream, "%s={\"%s\", %f %f %f};", ATTACHMENT_POINT, point->name, point->alignment.x, point->alignment.y, point->angle);
+        OutputToStream(stream, "%s={\"%s\" %f %f %f %f %f};", ATTACHMENT_POINT, point->name, point->alignment.x, point->alignment.y, point->angle, point->scale.x, point->scale.y);
     }
 }
 

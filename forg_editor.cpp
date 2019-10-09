@@ -1038,6 +1038,7 @@ internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enume
     return result;
 }
 
+global_variable char* nullAssetType = "null";
 internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
@@ -1077,8 +1078,7 @@ internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType*
     char* subtypeString = GetAssetSubtypeName(assets, type->type, type->subtypeHash);
     if(!subtypeString)
     {
-        type->subtypeHash = 0;
-        subtypeString = GetAssetSubtypeName(assets, type->type, type->subtypeHash);
+        subtypeString = nullAssetType;
     }
     
     MemoryPool tempPool = {};
@@ -1420,6 +1420,8 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                                 if(!point->name[0] || StrEqual(point->name, "null"))
                                 {
                                     FormatString(point->name, sizeof(point->name), "default");
+                                    point->alignment = V2(0.5f, 0.5f);
+                                    point->scale = V2(1, 1);
                                     break;
                                 }
                             }
@@ -1434,6 +1436,7 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                                 NextRaw(layout);
                                 Edit_StringFreely(layout, "name", point->name, sizeof(point->name), auID(point->name, "name"), false, ID);
                                 Edit_Vec2(layout, "alignment", &point->alignment, false, ID, true);
+                                Edit_Vec2(layout, "scale", &point->scale, false, ID, false);
                                 Edit_r32(layout, "angle", &point->angle, false, ID, false);
                                 
                                 AUID pointID = auID(point);

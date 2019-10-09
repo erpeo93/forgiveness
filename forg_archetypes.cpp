@@ -65,20 +65,21 @@ internal void InitBaseComponent(BaseComponent* base, Vec3 boundOffset, Vec3 boun
     base->bounds = StandardBounds(boundDim, boundOffset);
 }
 
-internal void InitImageComponent(Assets* assets, ImageComponent* image, u64 type, ImageProperty* properties, u16 propertyCount)
+#define InitImageReference(assets, dest, source, reference) InitImageReference_(assets, dest->reference, source->reference##Properties)
+internal void InitImageReference_(Assets* assets, ImageReference* dest,ImageProperties* sourceProperties)
 {
-    image->typeHash = type;
-    image->properties = {};
-    for(u16 propertyIndex = 0; propertyIndex < propertyCount; ++propertyIndex)
+    dest->typeHash = sourceProperties->imageType.subtypeHash;
+    
+    dest->properties = {};
+    for(u16 propertyIndex = 0; propertyIndex < sourceProperties->propertyCount; ++propertyIndex)
     {
         u32 flags = 0;
-        ImageProperty* property = properties + propertyIndex;
-        
-        if(property->optional)
+        ImageProperty* source = sourceProperties->properties + propertyIndex;
+        if(source->optional)
         {
             flags |= GameProperty_Optional;
         }
-        AddGameProperty_(&image->properties, property->property, flags);
+        AddGameProperty_(&dest->properties, source->property, flags);
     }
 }
 
@@ -112,7 +113,7 @@ INIT_ENTITY(RockArchetype)
     RockComponent* dest = GetComponent(worldMode, ID, RockComponent);
     
     ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
-    InitImageComponent(assets, image, StringHash("rock"), params->properties, params->propertyCount);
+    InitImageReference(assets, &image, &params, entity);
 }
 
 
@@ -128,9 +129,10 @@ INIT_ENTITY(PlantArchetype)
     InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed);
     
     PlantComponent* dest = GetComponent(worldMode, ID, PlantComponent);
+    InitImageReference(assets, &dest, &params, leaf);
     
     ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
-    InitImageComponent(assets, image, StringHash("tree"), params->properties, params->propertyCount);
+    InitImageReference(assets, &image, &params, entity);
 }
 
 INIT_ENTITY(GrassArchetype)
@@ -147,6 +149,6 @@ INIT_ENTITY(GrassArchetype)
     GrassComponent* dest = GetComponent(worldMode, ID, GrassComponent);
     
     ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
-    InitImageComponent(assets, image, StringHash("grass"), params->properties, params->propertyCount);
+    InitImageReference(assets, &image, &params, entity);
 }
 #endif
