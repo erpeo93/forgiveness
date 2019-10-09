@@ -500,20 +500,20 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, StringAr
 }
 
 
-internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray, AssetID assetID)
+internal b32 Edit_StringFreely(EditorLayout* layout, char* name, char* value, u32 valueSize, b32 isInArray, AssetID assetID)
 {
     EditorUIContext* context = layout->context;
     
     b32 result = false;
     Assert(!isInArray);
     
-    AUID ID = auID(label);
+    AUID ID = auID(value);
     AUIDData* data = GetAUIDData(context, ID);
     Vec4 color = DefaultEditorStringColor();
     
-    if(!label->name[0])
+    if(!value[0])
     {
-        FormatString(label->name, sizeof(label->name), "null");
+        FormatString(value, valueSize, "null");
     }
     
     if(PointInRect(data->dim, layout->mouseP))
@@ -527,12 +527,12 @@ internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label
         ZeroSize(sizeof(context->keyboardBuffer), context->keyboardBuffer);
         SetInteractiveAUID(context, ID);
         
-        u32 size = StrLen(label->name) + 1;
+        u32 size = StrLen(value) + 1;
         Assert(size < sizeof(data->before));
-        Copy(size, data->before, label->name);
+        Copy(size, data->before, value);
     }
     
-    char* toShow = label->name;
+    char* toShow = value;
     
     if(IsInteractiveAUID(context, ID))
     {
@@ -562,15 +562,21 @@ internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label
         if(UIPressed(layout->context, confirmButton))
         {
             EndInteraction(layout->context);
-            FormatString(label->name, sizeof(label->name), "%s", layout->context->keyboardBuffer);
+            FormatString(value, valueSize, "%s", layout->context->keyboardBuffer);
             result = true;
             
-            AddUndoRedoCopy(layout->context, StrLen(data->before) + 1, data->before, label->name, StrLen(label->name) + 1, label->name, assetID);
+            AddUndoRedoCopy(layout->context, StrLen(data->before) + 1, data->before, value, StrLen(value) + 1, value, assetID);
         }
     }
     
     data->dim = ShowString(layout, name, toShow, EditorText_StartingSpace, color);
     
+    return result;
+}
+
+internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray, AssetID assetID)
+{
+    b32 result = Edit_StringFreely(layout, name, label->name, sizeof(label->name), isInArray, assetID);
     return result;
 }
 
@@ -1378,6 +1384,23 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                     Nest(layout);
                     Edit_r32(layout, "alignX", info->bitmap.align + 0, false, ID, true);
                     Edit_r32(layout, "alignY", info->bitmap.align + 1, false, ID, true);
+                    
+                    NextRaw(layout);
+                    LoadBitmap(assets, ID, true);
+                    Bitmap* bitmap = GetBitmap(assets, ID).bitmap;
+                    Assert(bitmap);
+                    
+                    AUID auid = auID(info, "attachmentPoints");
+                    if(EditorCollapsible(layout, "attachment points", auid))
+                    {
+                        for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
+                        {
+                            PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
+                            NextRaw(layout);
+                            Edit_StringFreely(layout, "name", point->name, sizeof(point->name), false, ID);
+                            
+                        }
+                    }
                     Pop(layout);
                 }
             } break;

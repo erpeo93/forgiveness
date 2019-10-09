@@ -391,12 +391,160 @@ internal LoadedBitmap LoadGlyph(LoadedFont* font, u32 codePoint)
     return result;
 }
 
-internal LoadedBitmap LoadImage(char* path, char* filename)
+internal b32 EditorFile(PlatformFileInfo* file)
+{
+    b32 result = StrEqual(StrLen(TEST_FILE_PREFIX), file->name, TEST_FILE_PREFIX);
+    return result;
+}
+
+internal b32 RelevantFile(PlatformFileInfo* file, PlatformFileGroup* group, b32 invalidWhenNotFound)
+{
+	b32 result = true;
+    if(!EditorFile(file))
+    {
+        for(PlatformFileInfo* test = group->firstFileInfo; test; test = test->next)
+        {
+            if(EditorFile(test))
+            {
+                Assert(StrLen(test->name) > StrLen(TEST_FILE_PREFIX));
+                char* name = file->name;
+                char* testName = test->name + StrLen(TEST_FILE_PREFIX);
+                
+                if(StrEqual(testName, name))
+                {
+                    if(TimestampIsMoreRecent(test->timestamp, file->timestamp))
+                    {
+                        result = false;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    else
+    {
+        b32 foundStandardFile = false;
+        for(PlatformFileInfo* test = group->firstFileInfo; test; test = test->next)
+        {
+            if(!EditorFile(test))
+            {
+                Assert(StrLen(file->name) > StrLen(TEST_FILE_PREFIX));
+                char* name = file->name + StrLen(TEST_FILE_PREFIX);
+                char* testName = test->name;
+                
+                if(StrEqual(testName, name))
+                {
+                    foundStandardFile = true;
+                    if(TimestampIsMoreRecent(test->timestamp, file->timestamp))
+                    {
+                        result = false;
+                    }
+                    break;
+                }
+            }
+        }
+        
+        if(invalidWhenNotFound && !foundStandardFile)
+        {
+            result = false;
+        }
+    }
+	
+    return result;
+}
+
+internal u8* ReadEntireFile(MemoryPool* pool, PlatformFileGroup* group, PlatformFileInfo* info)
+{
+    PlatformFileHandle handle = platformAPI.OpenFile(group, info);
+    u8* result = PushSize(pool, info->size, NoClear());
+    platformAPI.ReadFromFile(&handle, 0, info->size, result);
+    result[info->size] = 0;
+    platformAPI.CloseFile(&handle);
+    return result;
+}
+
+internal void ParseAttachmentPoint(PAKAttachmentPoint* point, Tokenizer* tokenizer)
+{
+    if(RequireToken(tokenizer, Token_OpenBraces))
+    {
+        Token t = GetToken(tokenizer);
+        Assert(t.type == Token_String);
+        t = Stringize(t);
+        FormatString(point->name, sizeof(point->name), "%.*s", t.textLength, t.text);
+        
+        while(t.type != Token_CloseBraces)
+        {
+            t = GetToken(tokenizer);
+        }
+    }
+}
+
+#define MAX_ATTACHMENT_POINT 64
+internal void FillAttachmentPoints(LoadedBitmap* bitmap, char* name, MemoryPool* tempPool, PlatformFileGroup* markupFiles)
+{
+    u32 runningPointIndex = 0;
+    bitmap->attachmentPointCount = MAX_ATTACHMENT_POINT;
+    u32 attachmentTotalSize = sizeof(PAKAttachmentPoint) * MAX_ATTACHMENT_POINT;
+    bitmap->attachmentPoints = (PAKAttachmentPoint*) malloc(attachmentTotalSize);
+    memset(bitmap->attachmentPoints, 0, attachmentTotalSize);
+    
+    for(PlatformFileInfo* info = markupFiles->firstFileInfo; info; info = info->next)
+    {
+        if(RelevantFile(info, markupFiles, false))
+        {
+            u8* fileContent = ReadEntireFile(tempPool, markupFiles, info);
+            Tokenizer tokenizer = {};
+            tokenizer.at = (char*) fileContent;
+            Token t = AdvanceToToken(&tokenizer, name);
+            
+            if(t.type != Token_EndOfFile)
+            {
+                if(RequireToken(&tokenizer, Token_Colon))
+                {
+                    while(true)
+                    {
+                        Token p = GetToken(&tokenizer);
+                        
+                        if(p.type == Token_Comma)
+                        {
+                        }
+                        else if(p.type == Token_EndOfFile)
+                        {
+                            break;
+                        }
+                        else if(p.type == Token_SemiColon)
+                        {
+                        }
+                        else
+                        {
+                            Token propertyName = p;
+                            
+                            if(TokenEquals(propertyName, ATTACHMENT_POINT))
+                            {
+                                if(RequireToken(&tokenizer, Token_EqualSign))
+                                {
+                                    if(runningPointIndex < MAX_ATTACHMENT_POINT)
+                                    {
+                                        PAKAttachmentPoint* point = bitmap->attachmentPoints + runningPointIndex++;
+                                        ParseAttachmentPoint(point, &tokenizer);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal LoadedBitmap LoadImage(MemoryPool* tempPool, char* path, char* filename, PlatformFileGroup* markupFiles)
 {
     LoadedBitmap result = {};
     char completeName[256];
     sprintf(completeName, "%s/%s", path, filename);
     
+    FillAttachmentPoints(&result, filename, tempPool, markupFiles);
 #if STB_IMAGE_IMPLEMENTATION
     int x;
     int y;
@@ -441,13 +589,6 @@ internal LoadedBitmap LoadImage(char* path, char* filename)
         
         result.pixels = (u8*) malloc(xFinal * yFinal * n);
         stbir_resize_uint8(data, x, y, 0, (unsigned char* )result.pixels, xFinal, yFinal, 0, 4);
-        
-        u32 attachmentPointCount = 1;
-        result.attachmentPointCount = attachmentPointCount;
-        result.attachmentPoints = (PAKAttachmentPoint*) malloc(sizeof(PAKAttachmentPoint) * attachmentPointCount);
-        
-        PAKAttachmentPoint* point = result.attachmentPoints + 0;
-        point->nameHash = StringHash("test");
         
         stbi_image_free( data );
         result.width = SafeTruncateToU16(xFinal);
@@ -1478,16 +1619,6 @@ internal LoadedModel LoadModel(char* fileContent)
 }
 
 
-internal u8* ReadEntireFile(MemoryPool* pool, PlatformFileGroup* group, PlatformFileInfo* info)
-{
-    PlatformFileHandle handle = platformAPI.OpenFile(group, info);
-    u8* result = PushSize(pool, info->size, NoClear());
-    platformAPI.ReadFromFile(&handle, 0, info->size, result);
-    result[info->size] = 0;
-    platformAPI.CloseFile(&handle);
-    return result;
-}
-
 internal void AddProperty(PAKAsset* asset, u64 propertyHash, u64 valueHash)
 {
     b32 found = false;
@@ -1645,68 +1776,6 @@ internal void SaveFileDateHash(SavedFileInfoHash* info, PlatformFileTimestamp ti
 }
 
 
-internal b32 EditorFile(PlatformFileInfo* file)
-{
-    b32 result = StrEqual(StrLen(TEST_FILE_PREFIX), file->name, TEST_FILE_PREFIX);
-    return result;
-}
-
-internal b32 RelevantFile(PlatformFileInfo* file, PlatformFileGroup* group, b32 invalidWhenNotFound)
-{
-	b32 result = true;
-    if(!EditorFile(file))
-    {
-        for(PlatformFileInfo* test = group->firstFileInfo; test; test = test->next)
-        {
-            if(EditorFile(test))
-            {
-                Assert(StrLen(test->name) > StrLen(TEST_FILE_PREFIX));
-                char* name = file->name;
-                char* testName = test->name + StrLen(TEST_FILE_PREFIX);
-                
-                if(StrEqual(testName, name))
-                {
-                    if(TimestampIsMoreRecent(test->timestamp, file->timestamp))
-                    {
-                        result = false;
-                    }
-                    break;
-                }
-            }
-        }
-    }
-    else
-    {
-        b32 foundStandardFile = false;
-        for(PlatformFileInfo* test = group->firstFileInfo; test; test = test->next)
-        {
-            if(!EditorFile(test))
-            {
-                Assert(StrLen(file->name) > StrLen(TEST_FILE_PREFIX));
-                char* name = file->name + StrLen(TEST_FILE_PREFIX);
-                char* testName = test->name;
-                
-                if(StrEqual(testName, name))
-                {
-                    foundStandardFile = true;
-                    if(TimestampIsMoreRecent(test->timestamp, file->timestamp))
-                    {
-                        result = false;
-                    }
-                    break;
-                }
-            }
-        }
-        
-        if(invalidWhenNotFound && !foundStandardFile)
-        {
-            result = false;
-        }
-    }
-	
-    return result;
-}
-
 internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* asset, char* name, PlatformFileGroup* markupFiles)
 {
     if(StrEqual(StrLen(TEST_FILE_PREFIX), TEST_FILE_PREFIX, name))
@@ -1721,7 +1790,6 @@ internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* as
         asset->valueHash[propertyIndex] = 0;
         asset->runtime[propertyIndex] = {};
     }
-    
     
     for(PlatformFileInfo* info = markupFiles->firstFileInfo; info; info = info->next)
     {
@@ -2090,7 +2158,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                 dest->bitmap.align[1] = 0.5f;
                                 
                                 FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
-                                LoadedBitmap bitmap = LoadImage(source, info->name);
+                                LoadedBitmap bitmap = LoadImage(&tempPool, source, info->name, &markupFiles);
                                 
                                 char nameNoPoint[64];
                                 TrimToFirstCharacter(nameNoPoint, sizeof(nameNoPoint), info->name, '.');

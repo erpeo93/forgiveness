@@ -15,6 +15,7 @@
 #define ANIMATION_PROPERTY_PREPARATION_THREESOLD "preparationThreesold"
 #define IMAGE_PROPERTY_ALIGN_X "alignX"
 #define IMAGE_PROPERTY_ALIGN_Y "alignY"
+#define ATTACHMENT_POINT "attachmentPoint"
 
 
 
@@ -159,6 +160,13 @@ struct Animation
 
 struct Skeleton
 {
+};
+
+struct ColoredBitmap
+{
+    Vec2 pivot;
+    Bitmap* bitmap;
+    Vec4 coloration;
 };
 
 

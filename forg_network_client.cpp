@@ -604,10 +604,12 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                             DLLIST_REMOVE(receiving);
                             Clear(&receiving->memory);
                             
-                            Assert(worldMode->loginFileToReceiveCount);
-                            if(++worldMode->loginReceivedFileCount == worldMode->loginFileToReceiveCount)
+                            if(worldMode->loginFileToReceiveCount)
                             {
-                                GameAccessRequest(clientNetwork->serverChallenge);
+                                if(++worldMode->loginReceivedFileCount == worldMode->loginFileToReceiveCount)
+                                {
+                                    GameAccessRequest(clientNetwork->serverChallenge);
+                                }
                             }
                         }
                     }

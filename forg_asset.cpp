@@ -1117,10 +1117,10 @@ internal void ReopenReloadAssetFile(Assets* assets, AssetFile* file, u32 fileInd
     }
 }
 
-internal void WriteAssetMarkupDataToStream(Stream* stream, AssetType type, PAKAsset* asset, b32 derivedAsset)
+internal b32 WriteAssetMarkupDataToStream(Stream* stream, AssetType type, PAKAsset* asset, b32 derivedAsset)
 {
-    unm rollbackSize = OutputToStream(stream, "\"%s\":", asset->sourceName);
-    
+    StreamState beforeName = SaveStreamState(stream);
+    OutputToStream(stream, "\"%s\":", asset->sourceName);
     b32 nothingWrote = true;
     for(u32 propertyIndex = 0; propertyIndex < ArrayCount(asset->runtime); ++propertyIndex)
     {
@@ -1176,12 +1176,14 @@ internal void WriteAssetMarkupDataToStream(Stream* stream, AssetType type, PAKAs
         } break;
     }
     
+    b32 writtenName = !nothingWrote;
     
     if(nothingWrote)
     {
-        stream->current -= rollbackSize;
-        stream->left += (u32) rollbackSize;
+        RestoreStreamState(stream, beforeName);
     }
+    
+    return writtenName;
 }
 
 #ifndef ONLY_DATA_FILES
@@ -1200,6 +1202,15 @@ internal void DumpPivotToStream(PAKBitmap* bitmap, Stream* stream)
     OutputToStream(stream, "%s=%f;%s=%f;", IMAGE_PROPERTY_ALIGN_X, IMAGE_PROPERTY_ALIGN_Y, bitmap->align[0], bitmap->align[1]);
 }
 
+internal void DumpAttachmentPointToStream(Stream* stream, PAKAttachmentPoint* point)
+{
+    if(!StrEqual(point->name, "null"))
+    {
+        OutputToStream(stream, "%s={\"%s\"};", ATTACHMENT_POINT, point->name);
+    }
+}
+
+inline ColoredBitmap GetBitmap(Assets* assets, AssetID ID);
 internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* basePath, b32 editorMode)
 {
     u16 type = ID.type;
@@ -1221,7 +1232,7 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
     Asset* asset = GetAsset(assetSubtypeArray, index);
     b32 derivedAsset = (index >= assetSubtypeArray->standardAssetCount);
     
-    WriteAssetMarkupDataToStream(&metaDataStream, (AssetType) type, &asset->paka, derivedAsset);
+    b32 writtenName = WriteAssetMarkupDataToStream(&metaDataStream, (AssetType) type, &asset->paka, derivedAsset);
     TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
     
     u32 replaceFlags = editorMode ? PlatformFileReplace_Hidden : 0; 
@@ -1265,6 +1276,35 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
                     {
                         break;
                     }
+                }
+            }
+            else
+            {
+                
+                Bitmap* bitmap = GetBitmap(assets, ID).bitmap;
+                Assert(bitmap);
+                
+                
+                StreamState beforeAttachmentPoints = SaveStreamState(&metaDataStream);
+                if(!writtenName)
+                {
+                    OutputToStream(&metaDataStream, "\"%s\":", asset->paka.sourceName);
+                }
+                
+                b32 somethingWritten = false;
+                for(u32 attachmentPointIndex = 0; attachmentPointIndex < asset->paka.bitmap.attachmentPointCount; ++attachmentPointIndex)
+                {
+                    PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
+                    if(point->name[0])
+                    {
+                        somethingWritten = true;
+                        DumpAttachmentPointToStream(&metaDataStream, point);
+                    }
+                }
+                
+                if(!somethingWritten)
+                {
+                    RestoreStreamState(&metaDataStream, beforeAttachmentPoints);
                 }
             }
         } break;
@@ -1804,13 +1844,6 @@ inline GetGameAssetResult GetGameAsset(Assets* assets, AssetID ID)
 }
 
 #ifndef ONLY_DATA_FILES
-struct ColoredBitmap
-{
-    Vec2 pivot;
-    Bitmap* bitmap;
-    Vec4 coloration;
-};
-
 inline ColoredBitmap GetBitmap(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));

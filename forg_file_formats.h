@@ -29,10 +29,10 @@ struct PAKProperty
 
 struct PAKAttachmentPoint
 {
-    u64 nameHash;
+    char name[32];
 };
 
-#define PAK_BITMAP_VERSION 0
+#define PAK_BITMAP_VERSION 2
 struct PAKBitmap
 {
     u64 nameHash;
