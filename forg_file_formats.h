@@ -30,9 +30,11 @@ struct PAKProperty
 struct PAKAttachmentPoint
 {
     char name[32];
+    Vec2 alignment;
+    r32 angle;
 };
 
-#define PAK_BITMAP_VERSION 2
+#define PAK_BITMAP_VERSION 3
 struct PAKBitmap
 {
     u64 nameHash;

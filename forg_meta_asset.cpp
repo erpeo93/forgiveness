@@ -724,9 +724,9 @@ internal b32 Edit_i32(EditorLayout* layout, char* name, i32* number, b32 isInArr
 internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArray, AssetID assetID);
 internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID, b32 clamp01 = false);
 internal b32 Edit_Color(EditorLayout* layout, char* name, Color* color, b32 isInArray, AssetID assetID);
-internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray, AssetID assetID);
-internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray, AssetID assetID);
-internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray, AssetID assetID);
+internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray, AssetID assetID, b32 clamp01 = false);
+internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray, AssetID assetID, b32 clamp01 = false);
+internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray, AssetID assetID, b32 clamp01 = false);
 internal b32 Edit_Hash64(EditorLayout* layout, char* name, Hash64* h, char* optionsName, b32 isInArray, AssetID assetID);
 internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enumerator, StringArray options, b32 isInArray, AssetID assetID);
 internal b32 Edit_EntityRef(EditorLayout* layout, char* name, EntityRef* ref, b32 isInArray, AssetID assetID);

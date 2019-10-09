@@ -1206,7 +1206,7 @@ internal void DumpAttachmentPointToStream(Stream* stream, PAKAttachmentPoint* po
 {
     if(!StrEqual(point->name, "null"))
     {
-        OutputToStream(stream, "%s={\"%s\"};", ATTACHMENT_POINT, point->name);
+        OutputToStream(stream, "%s={\"%s\", %f %f %f};", ATTACHMENT_POINT, point->name, point->alignment.x, point->alignment.y, point->angle);
     }
 }
 

@@ -500,14 +500,14 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, StringAr
 }
 
 
-internal b32 Edit_StringFreely(EditorLayout* layout, char* name, char* value, u32 valueSize, b32 isInArray, AssetID assetID)
+internal b32 Edit_StringFreely(EditorLayout* layout, char* name, char* value, u32 valueSize, AUID ID, b32 isInArray, AssetID assetID)
 {
+    
     EditorUIContext* context = layout->context;
     
     b32 result = false;
     Assert(!isInArray);
     
-    AUID ID = auID(value);
     AUIDData* data = GetAUIDData(context, ID);
     Vec4 color = DefaultEditorStringColor();
     
@@ -570,10 +570,15 @@ internal b32 Edit_StringFreely(EditorLayout* layout, char* name, char* value, u3
     }
     
     data->dim = ShowString(layout, name, toShow, EditorText_StartingSpace, color);
-    
     return result;
 }
 
+internal b32 Edit_StringFreely(EditorLayout* layout, char* name, char* value, u32 valueSize, b32 isInArray, AssetID assetID)
+{
+    AUID ID = auID(value);
+    b32 result = Edit_StringFreely(layout, name, value, valueSize, ID, isInArray, assetID); 
+    return result;
+}
 internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray, AssetID assetID)
 {
     b32 result = Edit_StringFreely(layout, name, label->name, sizeof(label->name), isInArray, assetID);
@@ -912,44 +917,44 @@ internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArr
     return result;
 }
 
-internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray, AssetID assetID)
+internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray, AssetID assetID, b32 clamp01)
 {
     b32 result = false;
     
     AUID ID = auID(v);
     
     ShowName(layout, name);
-    Edit_r32(layout, "x", &v->x, false, assetID);
-    Edit_r32(layout, "y", &v->y, false, assetID);
+    Edit_r32(layout, "x", &v->x, false, assetID, clamp01);
+    Edit_r32(layout, "y", &v->y, false, assetID, clamp01);
     
     return result;
 }
 
-internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray, AssetID assetID)
+internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray, AssetID assetID, b32 clamp01)
 {
     b32 result = false;
     
     AUID ID = auID(v);
     
     ShowName(layout, name);
-    Edit_r32(layout, "x", &v->x, false, assetID);
-    Edit_r32(layout, "y", &v->y, false, assetID);
-    Edit_r32(layout, "z", &v->z, false, assetID);
+    Edit_r32(layout, "x", &v->x, false, assetID, clamp01);
+    Edit_r32(layout, "y", &v->y, false, assetID, clamp01);
+    Edit_r32(layout, "z", &v->z, false, assetID, clamp01);
     
     return result;
 }
 
-internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray, AssetID assetID)
+internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray, AssetID assetID, b32 clamp01)
 {
     b32 result = false;
     
     AUID ID = auID(v);
     
     ShowName(layout, name);
-    Edit_r32(layout, "x", &v->x, false, assetID);
-    Edit_r32(layout, "y", &v->y, false, assetID);
-    Edit_r32(layout, "z", &v->z, false, assetID);
-    Edit_r32(layout, "w", &v->w, false, assetID);
+    Edit_r32(layout, "x", &v->x, false, assetID, clamp01);
+    Edit_r32(layout, "y", &v->y, false, assetID, clamp01);
+    Edit_r32(layout, "z", &v->z, false, assetID, clamp01);
+    Edit_r32(layout, "w", &v->w, false, assetID, clamp01);
     
     return result;
 }
@@ -1366,7 +1371,6 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
         WritebackAssetToFileSystem(assets, ID, WRITEBACK_PATH, false);
     }
     
-    
     if(showAssetInfo)
     {
         switch(ID.type)
@@ -1393,14 +1397,51 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                     AUID auid = auID(info, "attachmentPoints");
                     if(EditorCollapsible(layout, "attachment points", auid))
                     {
+                        b32 addDisabled = true;
                         for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
                         {
                             PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
-                            NextRaw(layout);
-                            Edit_StringFreely(layout, "name", point->name, sizeof(point->name), false, ID);
+                            if(point->name[0] && !StrEqual(point->name, "null"))
+                            {
+                            }
+                            else
+                            {
+                                addDisabled = false;
+                            }
+                        }
+                        
+                        
+                        AUID addID = auID(info, "add");
+                        if(EditorButton(layout, V2(0.25f, -0.1f), "add", addID, addDisabled))
+                        {
+                            for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
+                            {
+                                PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
+                                if(!point->name[0] || StrEqual(point->name, "null"))
+                                {
+                                    FormatString(point->name, sizeof(point->name), "default");
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
+                        {
+                            PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
                             
+                            if(point->name[0] && !StrEqual(point->name, "null"))
+                            {
+                                NextRaw(layout);
+                                Edit_StringFreely(layout, "name", point->name, sizeof(point->name), auID(point->name, "name"), false, ID);
+                                Edit_Vec2(layout, "alignment", &point->alignment, false, ID, true);
+                                Edit_r32(layout, "angle", &point->angle, false, ID, false);
+                                
+                                AUID pointID = auID(point);
+                                EditorCheckbox(layout, "show", pointID);
+                            }
                         }
                     }
+                    
                     Pop(layout);
                 }
             } break;
@@ -1513,8 +1554,29 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                 Vec2 pivot = V2(info->bitmap.align[0], info->bitmap.align[1]);
                 Vec2 pivotP = P.xy + Hadamart(pivot, dim.size);
                 Rect2 pivotRect = RectCenterDim(pivotP, layout->fontScale * V2(8, 8));
-                
                 PushRect(layout->group, FlatTransform(0.2f), pivotRect, V4(1, 0, 0, 1));
+                
+                
+                LoadBitmap(assets, ID, true);
+                Bitmap* bitmap = GetBitmap(assets, ID).bitmap;
+                Assert(bitmap);
+                
+                for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
+                {
+                    PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
+                    AUID pointID = auID(point);
+                    AUIDData* pointData = GetAUIDData(layout->context, pointID);
+                    
+                    if(pointData->active)
+                    {
+                        Vec2 attachmentP = point->alignment;
+                        Vec2 pointP = P.xy + Hadamart(attachmentP, dim.size);
+                        Rect2 pointRect = RectCenterDim(pointP, layout->fontScale * V2(8, 8));
+                        RandomSequence seq = Seed(attachmentPointIndex);
+                        Vec4 color = V4(RandomUniV3(&seq), 1.0f);
+                        PushRect(layout->group, FlatTransform(0.3f), pointRect, color);
+                    }
+                }
                 
                 Rect2 rect = Scale(RectMinDim(P.xy, dim.size), backgroundScale);
                 PushRect(layout->group, FlatTransform(), rect, V4(0, 0, 0, 1));

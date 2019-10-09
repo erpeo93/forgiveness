@@ -472,6 +472,14 @@ internal void ParseAttachmentPoint(PAKAttachmentPoint* point, Tokenizer* tokeniz
         t = Stringize(t);
         FormatString(point->name, sizeof(point->name), "%.*s", t.textLength, t.text);
         
+        Token alignX = GetToken(tokenizer);
+        Token alignY = GetToken(tokenizer);
+        Token angle = GetToken(tokenizer);
+        
+        point->alignment.x = StringToR32(alignX.text);
+        point->alignment.y = StringToR32(alignY.text);
+        point->angle = StringToR32(angle.text);
+        
         while(t.type != Token_CloseBraces)
         {
             t = GetToken(tokenizer);
