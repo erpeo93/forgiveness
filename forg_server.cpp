@@ -7,11 +7,11 @@
 #include "forg_server.h"
 #include "forg_token.cpp"
 #include "forg_pool.cpp"
+#include "forg_world.cpp"
 #include "forg_physics.cpp"
 #include "forg_resizable_array.cpp"
 //#include "forg_bound.cpp"
 #include "forg_network_server.cpp"
-#include "forg_world.cpp"
 #include "forg_archetypes.cpp"
 
 #define ONLY_DATA_FILES
@@ -47,7 +47,6 @@ internal void HandleDebugMessage(PlatformServerMemory* memory, ServerPlayer* pla
     }
 }
 #endif
-
 
 PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 {
@@ -618,7 +617,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         platformAPI.PushWork(server->slowQueue, WatchForFileChanges, hash);
         server->assets = InitAssets(server->slowQueue, server->tasks, ArrayCount(server->tasks), &server->gamePool, 0, MegaBytes(16));
-        BuildWorld(server, true);
+        BuildWorld(server, false);
     }
     
 	PlatformFileGroup reloadedFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, RELOAD_PATH);
@@ -657,10 +656,21 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     }
     
     
+    server->frameByFramePool = &tempPool;
     SpawnEntities(server, elapsedTime);
     HandlePlayersNetwork(server, elapsedTime);
+    
+    
+    InitSpatialPartition(server->frameByFramePool, &server->playerPartition);
+    EXECUTE_JOB(server, FillPlayerSpacePartition, ArchetypeHas(PlayerComponent) && ArchetypeHas(PhysicComponent), elapsedTime);
+    
+    InitSpatialPartition(server->frameByFramePool, &server->collisionPartition);
+    EXECUTE_JOB(server, FillCollisionSpatialPartition, ArchetypeHas(PhysicComponent), elapsedTime);
+    
     EXECUTE_JOB(server, HandlePlayerRequests, ArchetypeHas(PlayerComponent), elapsedTime);
     EXECUTE_JOB(server, MoveAndSendUpdate, ArchetypeHas(PhysicComponent), elapsedTime);
+    
+    Clear(&tempPool);
 }
 
 

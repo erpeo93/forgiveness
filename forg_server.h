@@ -5,6 +5,7 @@
 #include "forg_platform.h"
 
 #include "forg_pool.h"
+#include "forg_resizable_array.h"
 #include "forg_debug_interface.h"
 #include "forg_shared.h"
 #include "forg_token.h"
@@ -15,6 +16,7 @@
 #define Property(name) enum name
 #include "../properties/test.properties"
 
+#include "forg_ecs.h"
 #include "forg_asset.h"
 #include "forg_world.h"
 #include "forg_editor.h"
@@ -37,7 +39,6 @@
 #include "forg_network.h"
 #include "forg_meta.h"
 #include "forg_ground.h"
-#include "forg_resizable_array.h"
 
 PlatformAPI platformAPI;
 
@@ -119,7 +120,6 @@ struct PlayerComponent
     FileToSend* firstReloadedFileToSend;
 };
 
-#include "forg_ecs.h"
 #include "forg_archetypes.h"
 #include "client_generated.h"
 global_variable Initentity* InitFunc[Archetype_Count];
@@ -179,12 +179,16 @@ struct ServerState
     u32 maxDeepness;
     WorldChunk* chunks;
     
+    MemoryPool* frameByFramePool;
     MemoryPool chunkPool;
     MemoryPool gamePool;
     MemoryPool networkPool;
     
     ReceiveNetworkPacketWork receivePacketWork;
     NetworkInterface clientInterface;
+    
+    SpatialPartition collisionPartition;
+    SpatialPartition playerPartition;
     
     RandomSequence entropy;
     

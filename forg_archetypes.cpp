@@ -1,5 +1,6 @@
 internal Rect3 StandardBounds(Vec3 dim, Vec3 offset)
 {
+    offset = {};
     Rect3 result = Offset(RectCenterDim(V3(0, 0, 0), dim), offset + V3(0, 0, 0.5f * dim.z));
     return result;
 }

@@ -5,8 +5,8 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_token.cpp"
 #include "forg_pool.cpp"
 #include "forg_resizable_array.cpp"
-#include "forg_physics.cpp"
 #include "forg_world.cpp"
+#include "forg_physics.cpp"
 //#include "forg_world_client.cpp"
 #include "forg_asset.cpp"
 #include "forg_world_generation.cpp"
@@ -187,9 +187,9 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
     {
         r32 height = GetHeight(base);
         AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
-        if(base->velocity.x != 0.0f)
+        if(Abs(base->velocity.x) > 0.1f)
         {
-            animation->flipOnYAxis = (base->velocity.x < 0.1f);
+            animation->flipOnYAxis = (base->velocity.x < 0.0f);
         }
         Clear(&animation->skeletonProperties);
         AddOptionalGamePropertyRaw(&animation->skeletonProperties, base->action);

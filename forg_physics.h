@@ -32,17 +32,46 @@ struct Wall
     r32 pz;
     r32 miny;
     r32 maxy;
+    
     r32 minz;
     r32 maxz;
+    
     Vec3 normal;
 };
 
-struct CheckCollisionCurrent
+struct SpatialPartitionEntityBlock
 {
-    b32 isEntity;
-    union
-    {
-        struct SimEntity* entity;
-        struct RegionTile* tile;
-    };
+    u32 count;
+	EntityID IDs[64];
+	SpatialPartitionEntityBlock* next;
+};
+
+struct SpatialPartitionChunk
+{
+	u32 totalCount;
+	SpatialPartitionEntityBlock* entities;
+};
+
+struct SpatialPartition
+{
+    i32 width;
+    i32 height;
+    r32 cellDim;
+	SpatialPartitionChunk* chunks;
+};
+
+struct SpatialPartitionQuery
+{
+	SpatialPartition* partition;
+    
+	i32 minX;
+	i32 minY;
+	
+	i32 maxX;
+	i32 maxY;
+    
+	i32 currentX;
+	i32 currentY;
+    
+	u32 currentIndex;
 };

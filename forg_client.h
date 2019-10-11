@@ -18,6 +18,7 @@
 #define Property(name) enum name
 #include "../properties/test.properties"
 
+#include "forg_ecs.h"
 #include "forg_asset.h"
 #include "forg_world_generation.h"
 #include "forg_meta.h"
@@ -75,7 +76,6 @@ struct ImageComponent
 };
 
 
-#include "forg_ecs.h"
 #include "forg_archetypes.h"
 #include "client_generated.h"
 global_variable Initentity* InitFunc[Archetype_Count];

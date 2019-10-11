@@ -95,6 +95,26 @@ STANDARD_ECS_JOB_SERVER(HandlePlayerRequests)
     }
 }
 
+STANDARD_ECS_JOB_SERVER(FillPlayerSpacePartition)
+{
+    PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
+    if(player)
+    {
+        PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+        r32 maxDistance = 3.0f * CHUNK_DIM;
+        Rect3 bounds = AddRadius(physic->bounds, V3(maxDistance, maxDistance, maxDistance));
+        AddToSpatialPartition(server->frameByFramePool, &server->playerPartition, physic->P, bounds, ID);
+    }
+}
+
+global_variable r32 g_maxDelta = 1.0f;
+STANDARD_ECS_JOB_SERVER(FillCollisionSpatialPartition)
+{
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    Rect3 bounds = AddRadius(physic->bounds, V3(g_maxDelta, g_maxDelta, g_maxDelta));
+    AddToSpatialPartition(server->frameByFramePool, &server->collisionPartition, physic->P, bounds, ID);
+}
+
 internal void MoveEntity(ServerState* server, PhysicComponent* physic, r32 elapsedTime)
 {
     UniversePos oldP = physic->P;
@@ -107,8 +127,11 @@ internal void MoveEntity(ServerState* server, PhysicComponent* physic, r32 elaps
     r32 dt = elapsedTime;
     acceleration.xy += drag * velocity.xy;
     
-    
     Vec3 deltaP = 0.5f * acceleration * Square(dt) + velocity * dt;
+    
+    Assert(Abs(deltaP.x) <= g_maxDelta);
+    Assert(Abs(deltaP.y) <= g_maxDelta);
+    Assert(Abs(deltaP.z) <= g_maxDelta);
     
     physic->speed += acceleration * dt;
     
@@ -119,18 +142,25 @@ internal void MoveEntity(ServerState* server, PhysicComponent* physic, r32 elaps
         Vec3 wallNormalMin = {};
         r32 tStop = tRemaining;
         
-#if 0        
-        for(every entity)
+        Rect3 bounds = AddRadius(physic->bounds, deltaP);
+        SpatialPartitionQuery collisionQuery = QuerySpatialPartition(&server->collisionPartition, physic->P, bounds);
+        
+        for(EntityID testID = GetCurrent(&collisionQuery); IsValid(&collisionQuery); testID = Advance(&collisionQuery))
         {
-            HandleVolumeCollision(entity->P, entity->bounds, deltaP, entityToCheck->P, entityToCheck->bounds, &tStop, &wallNormalMin);
+            PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
+            if(testPhysic->P.chunkZ == physic->P.chunkZ)
+            {
+                Vec3 testP = SubtractOnSameZChunk(testPhysic->P, physic->P);
+                HandleVolumeCollision(physic->bounds, deltaP, testP, testPhysic->bounds, &tStop, &wallNormalMin);
+            }
         }
-#endif
         
         Vec3 wallNormal = wallNormalMin;
         
         physic->P.chunkOffset += tStop * deltaP;
-        physic->speed = physic->speed - Dot(physic->speed, wallNormal) * wallNormal;
-        deltaP = deltaP - Dot(deltaP, wallNormal) * wallNormal;
+        
+        physic->speed -= Dot(physic->speed, wallNormal) * wallNormal;
+        deltaP -= Dot(deltaP, wallNormal) * wallNormal;
         tRemaining -= tStop;
     }
     
@@ -147,35 +177,29 @@ internal void SendBasicUpdate(ServerState* server, EntityID ID, PhysicComponent*
     Assert(sizeof(EntityUpdate) < ArrayCount(buff_));
     u16 totalSize = PrepareEntityUpdate(server, physic, buff_);
     
+    r32 maxDistance = 3.0f * CHUNK_DIM;
+    r32 maxDistanceSq = Square(maxDistance);
     
-    r32 maxDistanceSq = Square(10.0f);
-    for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
+    Rect3 bounds = {};
+    
+    SpatialPartitionQuery playerQuery = QuerySpatialPartition(&server->playerPartition, physic->P, bounds);
+    
+    for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
     {
-        if(HasComponent(archetypeIndex, PlayerComponent))
+        PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
+        PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
+        
+        if(physic->P.chunkZ == playerPhysic->P.chunkZ)
         {
-            for(ArchIterator iter = First(server, archetypeIndex); 
-                IsValid(iter); 
-                iter = Next(iter))
+            Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
+            if(LengthSq(distance) < maxDistanceSq)
             {
-                PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
-                if(player)
+                SendEntityHeader(player, physic->definitionID, ID, physic->seed);
+                u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, physic->definitionID, ID, physic->seed);
+                Assert(writeHere);
+                if(writeHere)
                 {
-                    PhysicComponent* playerPhysic = GetComponent(server, iter.ID, PhysicComponent);
-                    
-                    if(physic->P.chunkZ == playerPhysic->P.chunkZ)
-                    {
-                        Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
-                        if(LengthSq(distance) < maxDistanceSq)
-                        {
-                            SendEntityHeader(player, physic->definitionID, ID, physic->seed);
-                            u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, physic->definitionID, ID, physic->seed);
-                            Assert(writeHere);
-                            if(writeHere)
-                            {
-                                Copy(totalSize, writeHere, buff_);
-                            }
-                        }
-                    }
+                    Copy(totalSize, writeHere, buff_);
                 }
             }
         }
@@ -196,7 +220,6 @@ internal GameProperty GameProp_(u16 property, u16 value)
 internal void MoveAndSendUpdate(ServerState* server, EntityID ID, r32 elapsedTime)
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    
     MoveEntity(server, physic, elapsedTime);
     
     physic->action = {};
