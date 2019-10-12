@@ -19,7 +19,7 @@ echo Version %buildname% already present!
 exit /B 1
 )
 
-call buildrelease.bat
+call build.bat
 
 pushd .
 cd ..\release

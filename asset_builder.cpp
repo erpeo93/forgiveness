@@ -1331,7 +1331,7 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
                     Assert(parentID >= -1 && parentID < temp->countBones );
                     
                     Bone* bone = temp->bones + boneID;
-                    bone->parentOffset = V2(x, y ) * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / DEFAULT_WIDTH );
+                    bone->parentOffset = V2(x, y ) * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / DEFAULT_WIDTH);
                     bone->parentAngle = angle;
                     bone->spin = currentSpin;
                     bone->id = boneID;

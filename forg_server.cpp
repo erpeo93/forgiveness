@@ -534,7 +534,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         LoadMetaData();
         
         server = memory->server = BootstrapPushStruct(ServerState, gamePool);
-        
         TimestampHash* hash = &server->fileHash;
         
         PlatformFileGroup timestampFiles = platformAPI.GetAllFilesBegin(PlatformFile_timestamp, TIMESTAMP_PATH);

@@ -322,39 +322,40 @@ int main( int argc, char* argv[] )
     
     DEBUGSetEventRecording(true);
     
-    PlatformServerMemory memory = {};
-    memory.api.AllocateMemory = Win32AllocateMemory;
-    memory.api.DeallocateMemory = Win32DeallocateMemory;
+    PlatformServerMemory* memory = (PlatformServerMemory*) malloc(sizeof(PlatformServerMemory));
+    memset(memory, 0, sizeof(PlatformServerMemory));
+    memory->api.AllocateMemory = Win32AllocateMemory;
+    memory->api.DeallocateMemory = Win32DeallocateMemory;
     
 #if FORGIVENESS_INTERNAL
-    memory.api.PlatformInputRecordingCommand = Win32DispatchInputRecordingCommand;
-    memory.api.PlatformInputRecordingHandlePlayer = Win32InputRecordingHandlePlayer;
-    memory.api.DEBUGMemoryStats = Win32GetMemoryStats;
-    memory.debugTable = globalDebugTable;
+    memory->api.PlatformInputRecordingCommand = Win32DispatchInputRecordingCommand;
+    memory->api.PlatformInputRecordingHandlePlayer = Win32InputRecordingHandlePlayer;
+    memory->api.DEBUGMemoryStats = Win32GetMemoryStats;
+    memory->debugTable = globalDebugTable;
 #endif
-    memory.api.GetAllSubdirectories = Win32GetAllSubdirectories;
-    memory.api.CloseFile = Win32CloseFile;
-    memory.api.GetAllFilesBegin = Win32GetAllFilesBegin;
-    memory.api.OpenFile = Win32OpenFile;
-    memory.api.GetAllFilesEnd = Win32GetAllFilesEnd;
-    memory.api.ReadFromFile = Win32ReadFromFile;
-    memory.api.FileError = Win32FileError;
-    memory.api.ReplaceFile = Win32ReplaceFile;
+    memory->api.GetAllSubdirectories = Win32GetAllSubdirectories;
+    memory->api.CloseFile = Win32CloseFile;
+    memory->api.GetAllFilesBegin = Win32GetAllFilesBegin;
+    memory->api.OpenFile = Win32OpenFile;
+    memory->api.GetAllFilesEnd = Win32GetAllFilesEnd;
+    memory->api.ReadFromFile = Win32ReadFromFile;
+    memory->api.FileError = Win32FileError;
+    memory->api.ReplaceFile = Win32ReplaceFile;
     
-    memory.api.DEBUGExecuteSystemCommand = DEBUGWin32ExecuteCommand;
-    memory.api.DEBUGGetProcessState = DEBUGWin32GetProcessState;
+    memory->api.DEBUGExecuteSystemCommand = DEBUGWin32ExecuteCommand;
+    memory->api.DEBUGGetProcessState = DEBUGWin32GetProcessState;
     
-    memory.api.DeleteFiles = Win32DeleteFiles;
+    memory->api.DeleteFiles = Win32DeleteFiles;
     
-    memory.api.net = Win32NetworkAPI;
+    memory->api.net = Win32NetworkAPI;
     
-    memory.api.CompleteQueueWork = Win32CompleteQueueWork;
-    memory.api.PushWork = Win32PushWork;
+    memory->api.CompleteQueueWork = Win32CompleteQueueWork;
+    memory->api.PushWork = Win32PushWork;
     
-    memory.fastQueue = &fastQueue;
-    memory.slowQueue = &slowQueue;
+    memory->fastQueue = &fastQueue;
+    memory->slowQueue = &slowQueue;
     
-    platformAPI = memory.api;
+    platformAPI = memory->api;
     
     char* DLLName = "forg_server.dll";
     char* tempDLLName = "forg_server_temp.dll";
@@ -408,7 +409,7 @@ int main( int argc, char* argv[] )
             
             if(functions.SimulateWorlds)
             {
-                functions.SimulateWorlds(&memory, secondElapsed);
+                functions.SimulateWorlds(memory, secondElapsed);
             }
             
             
@@ -423,7 +424,7 @@ int main( int argc, char* argv[] )
             }
             start = end;
             secondElapsed = MSecondElapsed / 1000.0f;
-            memory.elapsedTime = secondElapsed;
+            memory->elapsedTime = secondElapsed;
             
             FRAME_MARKER(secondElapsed);
 #if FORGIVENESS_INTERNAL
