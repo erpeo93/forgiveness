@@ -37,9 +37,6 @@ struct RenderSetup
     m4x4 proj;
     u32 renderTargetIndex;
     Vec3 ambientLightColor;
-    Vec3 directionalLightColor;
-    Vec3 directionalLightDir;
-    r32 directionalLightIntensity;
 };
 
 struct TexturedQuadsCommand

@@ -526,17 +526,6 @@ inline BitmapDim PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTran
     return result;
 }
 
-
-inline void PushUIBitmap(RenderGroup* group, BitmapId ID, Vec2 screenCenterOffset, r32 height, r32 angle, r32 additionalZBias, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f))
-{
-    ObjectTransform transform = UprightTransform();
-    transform.cameraOffset = ToV3(screenCenterOffset + group->gameCamera.screenCameraOffset);
-    transform.additionalZBias = additionalZBias;
-    transform.angle = angle;
-    
-    PushBitmap(group, transform, ID, V3(0, 0, 0), height, scale, color);
-}
-
 inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, Vec2 pivot, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
 {
     BitmapDim result = {};
@@ -822,13 +811,10 @@ inline void PushClipRect(RenderGroup* renderGroup, Rect2 rect, r32 z = 0)
     PushClipRect(renderGroup, clipRect);
 }
 
-inline void PushAmbientLighting(RenderGroup* renderGroup, Vec3 ambientLightColor, Vec3 directionalLightColor, Vec3 directionalLightDirection, r32 directionalLightIntensity)
+inline void PushAmbientLighting(RenderGroup* renderGroup, Vec3 ambientLightColor)
 {
     RenderSetup setup = renderGroup->lastSetup;
     setup.ambientLightColor = ambientLightColor;
-    setup.directionalLightColor = directionalLightColor;
-    setup.directionalLightDir = Normalize(directionalLightDirection);
-    setup.directionalLightIntensity = Clamp01(directionalLightIntensity);
     PushSetup(renderGroup, &setup);
 }
 
@@ -891,7 +877,7 @@ internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont*
                     {
                         if(drawShadow)
                         {
-                            PushBitmap(group, FlatTransform(), ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight, V2( 1.0f, 1.0f ), V4( 0.0f, 0.0f, 0.0f, 1.0f ) );
+                            PushBitmap(group, FlatTransform(), ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight, V2( 1.0f, 1.0f ), V4( 0.0f, 0.0f, 0.0f, 1.0f ));
                         }
                         
                         PushBitmap(group, FlatTransform(), ID, P, glyphHeight, V2(1.0f, 1.0f), color);
@@ -1002,8 +988,6 @@ inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLen
     
     setup.rect = { 0, 0, (i32) width, (i32) height };
     setup.ambientLightColor = V3(1, 1, 1);
-    setup.directionalLightColor = {};
-    setup.directionalLightDir = {};
     PushSetup(renderGroup, &setup);
 }
 

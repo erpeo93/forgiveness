@@ -9,7 +9,6 @@ inline void AddLightToGrid_(GameModeWorld* worldMode, Vec3 P, Vec3 lightColor, r
         for(r32 offsetX = -chunkSide * chunkApron; offsetX <= chunkSide * chunkApron; offsetX += chunkSide)
         {
             GetUniversePosQuery query = TranslateRelativePos(worldMode, worldMode->player.universeP, P.xy + V2(offsetX, offsetY));
-            
             if(query.chunk)
             {
                 TempLight* light;
@@ -95,7 +94,7 @@ inline void FinalizeLightGrid(GameModeWorld* worldMode, RenderGroup* group)
             {
                 for(u32 X = 0; X < CHUNK_DIM; ++X)
                 {
-                    WorldTile* tile = GetTile(chunk, X, Y);
+                    WorldTile* tile = GetTile(worldMode, chunk, X, Y);
                     tile->lights = chunk->lights;
                 }
             }

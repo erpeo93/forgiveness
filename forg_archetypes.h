@@ -76,12 +76,15 @@ introspection() struct ClientEntityInitParams
     EntityID ID MetaUneditable();
     u32 seed MetaUneditable();
     
-    
     Enumerator skeleton;
     Enumerator skin;
     
     ImageProperties entityProperties;
     ImageProperties leafProperties;
+    
+    Vec3 shadowOffset;
+    Vec2 shadowScale MetaDefault("V2(1, 1)");
+    Vec4 shadowColor MetaDefault("V4(1, 1, 1, 0.5f)");
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

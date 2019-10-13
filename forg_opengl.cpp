@@ -457,10 +457,6 @@ internal void OpenGLUseProgramBegin(ZBiasProgram* prog, RenderSetup* setup, r32 
     glUniform1f(prog->alphaThreesoldID, alphaThreesold);
     
     glUniform3fv(prog->ambientLightColorID, 1, setup->ambientLightColor.E);
-    
-    glUniform3fv(prog->directionalLightColorID, 1, setup->directionalLightColor.E);
-    glUniform3fv(prog->directionalLightDirectionID, 1, setup->directionalLightDir.E);
-    glUniform1f(prog->directionalLightIntensityID, setup->directionalLightIntensity);
 }
 
 internal void OpenGLUseProgramBegin(PeelCompositeProgram* prog)
@@ -619,7 +615,7 @@ return(Result);
 
 )FOO";
 
-internal void OpenGLCompileZBiasProgram(ZBiasProgram* result, b32 depthPeel, b32 light)
+internal void OpenGLCompileZBiasProgram(ZBiasProgram* result, b32 depthPeel)
 {
     
     char defines[4096];
@@ -680,87 +676,75 @@ in r32 modulationPercentage;
    )FOO";
     
     char* fragmentCode;
-    if(light)
-    {
-        fragmentCode = R"FOO(
-        //fragment code
-        uniform sampler2DArray textureSampler;
-        #if depthPeeling
-        uniform sampler2D depthSampler;
-        #endif
-        uniform r32 alphaThreesold;
-    out Vec4 resultColor;
-        smooth in Vec2 fragUV;
-        smooth in Vec4 fragColor;
-        smooth in Vec3 worldPos;
-        smooth in Vec3 worldNorm;
-        
-        flat in int fragLightStartingIndex;
-        flat in int fragLightEndingIndex;
-         flat in int fragTextureIndex;
-         
-         smooth in r32 modulationWithFocusColor;
-        uniform Vec3 ambientLightColor;
-        uniform Vec3 directionalLightDir;
- uniform Vec3 directionalLightColor;
- uniform r32 directionalLightIntensity;
- 
- 
-        uniform sampler1D lightSource0;
-        uniform sampler1D lightSource1;
-        
-        void main(void)
-         {
+    fragmentCode = R"FOO(
+    //fragment code
+    uniform sampler2DArray textureSampler;
     #if depthPeeling
-         r32 clipDepth = texelFetch(depthSampler, ivec2(gl_FragCoord.xy), 0).r;
-         r32 fragZ = gl_FragCoord.z;
-         if(fragZ <= clipDepth)
-         {
-         discard;
-    }
-         #endif
-         
-         Vec3 arrayUV = V3(fragUV.x, fragUV.y, fragTextureIndex);
-         Vec4 texSample = texture(textureSampler, arrayUV);
-         #if shaderSimTexLoadSRGB
-    texSample.rgb *= texSample.rgb;
-         #endif
-         
-    resultColor = fragColor * texSample;
-         if(resultColor.a > alphaThreesold)
-         {
-         
-         
-         Vec3 modulationLightColor = ambientLightColor;
-         // NOTE(Leonardo): directional light!
-         {
-         Vec3 toLight = -directionalLightDir;
-         r32 cosAngle = Dot(toLight, worldNorm);
-         cosAngle = clamp(cosAngle, 0, 1);
-         
-         r32 lightInfluence = directionalLightIntensity * cosAngle;
-          modulationLightColor += Lerp(V3(0, 0, 0), lightInfluence, directionalLightColor);
+    uniform sampler2D depthSampler;
+    #endif
+    uniform r32 alphaThreesold;
+out Vec4 resultColor;
+    smooth in Vec2 fragUV;
+    smooth in Vec4 fragColor;
+    smooth in Vec3 worldPos;
+    smooth in Vec3 worldNorm;
+    
+    flat in int fragLightStartingIndex;
+    flat in int fragLightEndingIndex;
+     flat in int fragTextureIndex;
+     
+     smooth in r32 modulationWithFocusColor;
+    uniform Vec3 ambientLightColor;
+    
+    uniform sampler1D lightSource0;
+    uniform sampler1D lightSource1;
+    
+    void main(void)
+     {
+#if depthPeeling
+     r32 clipDepth = texelFetch(depthSampler, ivec2(gl_FragCoord.xy), 0).r;
+     r32 fragZ = gl_FragCoord.z;
+     if(fragZ <= clipDepth)
+     {
+     discard;
 }
-
-         for(int index = fragLightStartingIndex; index < fragLightEndingIndex; ++index)
+     #endif
+     
+     Vec3 arrayUV = V3(fragUV.x, fragUV.y, fragTextureIndex);
+     Vec4 texSample = texture(textureSampler, arrayUV);
+     #if shaderSimTexLoadSRGB
+texSample.rgb *= texSample.rgb;
+     #endif
+     
+resultColor = fragColor * texSample;
+     if(resultColor.a > alphaThreesold)
+     {
+     
+     
+     Vec3 modulationLightColor = ambientLightColor;
+     for(int index = fragLightStartingIndex; index < fragLightEndingIndex; ++index)
 {
- Vec4 lightData0 = texelFetch(lightSource0, index, 0);
-     Vec4 lightData1 = texelFetch(lightSource1, index, 0);
-     
-     Vec3 lightP = lightData0.xyz;
-     Vec3 lightColor = lightData1.rgb;
-     r32 lightStrength = lightData0.a;
-     
-     
+Vec4 lightData0 = texelFetch(lightSource0, index, 0);
+ Vec4 lightData1 = texelFetch(lightSource1, index, 0);
+ 
+ Vec3 lightP = lightData0.xyz;
+ Vec3 lightColor = lightData1.rgb;
+ r32 lightStrength = lightData0.a;
+ 
 Vec3 toLight = lightP - worldPos;
-         r32 lightDistance = length(toLight);
-         
-         toLight *= (1.0f / lightDistance);
-         r32 cosAngle = dot(toLight, worldNorm);
-         
-         r32 lightInfluence = cosAngle *(lightStrength / (lightDistance * lightDistance));
-         lightInfluence = clamp(lightInfluence, 0, 1);
-         modulationLightColor += lightInfluence * lightColor;
+     r32 lightDistance = length(toLight);
+     
+     toLight *= (1.0f / lightDistance);
+     
+#if 0
+r32 cosAngle = dot(toLight, worldNorm);
+     r32 lightInfluence = cosAngle *(lightStrength / (lightDistance * lightDistance));
+     #else
+     r32 lightInfluence = lightStrength / (lightDistance * lightDistance);
+     #endif
+     
+     lightInfluence = clamp(lightInfluence, 0, 1);
+     modulationLightColor += lightInfluence * lightColor;
 }
 
 modulationLightColor = clamp(modulationLightColor, 0, 1);
@@ -771,85 +755,21 @@ resultColor.rgb *= modulationLightColor;
 resultColor.rgb = Clamp01(resultColor.rgb);
 resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.7f, 0.7f, 0.7f));
 #if shaderSimTexWriteSRGB
-         resultColor.rgb = sqrt(resultColor.rgb);
-         #endif
-    }
-    else
-    {
-    discard;
-    }
-         }
-       )FOO";
-    }
-    else
-    {
-        fragmentCode = R"FOO(
-        //fragment code
-        uniform sampler2DArray textureSampler;
-        #if depthPeeling
-        uniform sampler2D depthSampler;
-        #endif
-        uniform r32 alphaThreesold;
-    out Vec4 resultColor;
-        smooth in Vec2 fragUV;
-        smooth in Vec4 fragColor;
-        smooth in Vec3 worldPos;
-        smooth in Vec3 worldNorm;
-         flat in Vec4 fragLightIndex;
-         flat in int fragTextureIndex;
-         smooth in r32 modulationWithFocusColor;
-        uniform Vec3 ambientLightColor;
-        
-uniform Vec3 pointLightPos[256];
-uniform Vec3 pointLightColors[256];
-uniform r32 pointLightStrength[256];
-        void main(void)
-         {
-         
-    #if depthPeeling
-         r32 clipDepth = texelFetch(depthSampler, ivec2(gl_FragCoord.xy), 0).r;
-         r32 fragZ = gl_FragCoord.z;
-         if(fragZ <= clipDepth)
-         {
-         discard;
-    }
-         #endif
-         
-         Vec3 arrayUV = V3(fragUV.x, fragUV.y, fragTextureIndex);
-         Vec4 texSample = texture(textureSampler, arrayUV);
-         #if shaderSimTexLoadSRGB
-    texSample.rgb *= texSample.rgb;
-         #endif
-         
-    resultColor = fragColor * texSample;
-         if(resultColor.a > alphaThreesold)
-         {
-         
-         resultColor.rgb *= ambientLightColor;
-         
-resultColor.rgb = Clamp01(resultColor.rgb);
-resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.7f, 0.7f, 0.7f));
-#if shaderSimTexWriteSRGB
-         resultColor.rgb = sqrt(resultColor.rgb);
-         #endif
-    }
-    else
-    {
-    discard;
-    }
-         }
-       )FOO";
-    }
-    
+     resultColor.rgb = sqrt(resultColor.rgb);
+     #endif
+}
+else
+{
+discard;
+}
+     }
+   )FOO";
     GLuint prog = OpenGLCreateProgram(defines, globalHeaderCode, vertexCode, fragmentCode, &result->common);
     result->GLSLTransformID = glGetUniformLocation(prog, "transform");
     result->textureSamplerID = glGetUniformLocation(prog, "textureSampler");
     result->depthSamplerID = glGetUniformLocation(prog, "depthSampler");
     result->alphaThreesoldID = glGetUniformLocation(prog, "alphaThreesold");
     result->ambientLightColorID = glGetUniformLocation(prog, "ambientLightColor");
-    result->directionalLightColorID = glGetUniformLocation(prog, "directionalLightColor");
-    result->directionalLightDirectionID = glGetUniformLocation(prog, "directionalLightDir");
-    result->directionalLightIntensityID = glGetUniformLocation(prog, "directionalLightIntensity");
     result->lightSource0ID = glGetUniformLocation(prog, "lightSource0");
     result->lightSource1ID = glGetUniformLocation(prog, "lightSource1");
     
@@ -973,44 +893,6 @@ void main(void)
     result->textureSamplerID = glGetUniformLocation(prog, "textureSampler");
 }
 
-
-internal void OpenGLCompileTextureGenProgram(TextureGenProgram* result)
-{
-    char defines[4096];
-    FormatString(defines, sizeof(defines),  
-                 "#version 130\n"
-                 "#define shaderSimTexLoadSRGB %d\n"
-                 "#define shaderSimTexWriteSRGB %d\n",
-                 opengl.shaderSimTexLoadSRGB,
-                 opengl.shaderSimTexWriteSRGB);
-    
-    char* vertexCode = R"FOO(
-        in Vec4 vertP;
-        in Vec2 vertUV;
-         smooth out Vec2 fragUV;
-         
-void main(void)
-          {
-          gl_Position = vertP;
-          fragUV = vertUV;
-    }
-    
-   )FOO";
-    
-    char* fragmentCode = R"FOO(
-        //fragment code
-        smooth in Vec2 fragUV;
-        out Vec4 resultColor;
-        
-        void main(void)
-         {
-          resultColor = V4(0, 0, 1, 1);
-         }
-       )FOO";
-    
-    GLuint prog = OpenGLCreateProgram(defines, globalHeaderCode, vertexCode, fragmentCode, &result->common);
-}
-
 internal void OpenGLInit(OpenGLInfo info, b32 frameBufferSupportSRGB)
 {
     opengl.shaderSimTexLoadSRGB = true;
@@ -1021,6 +903,8 @@ internal void OpenGLInit(OpenGLInfo info, b32 frameBufferSupportSRGB)
     {
         opengl.maxMultisampleCount = 16;
     }
+    opengl.maxMultisampleCount = 1;
+    
     
     opengl.defaultSpriteTextureFormat = GL_RGBA8;
     opengl.defaultFramebufferTextureFormat = GL_RGBA8;
@@ -1139,12 +1023,9 @@ internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
         FreeFrameBuffer(&opengl.depthPeelBuffer[depthPeelIndex]);
     }
     FreeProgram(&opengl.zBiasDepthPeelLight.common);
-    FreeProgram(&opengl.zBiasDepthPeelNoLight.common);
     FreeProgram(&opengl.zBiasNoDepthPeel.common);
     FreeProgram(&opengl.peelComposite.common);
     FreeProgram(&opengl.finalStretch.common);
-    FreeProgram(&opengl.testTextureGen.common);
-    
     
     glDeleteTextures(1, &opengl.lightSource0);
     glDeleteTextures(1, &opengl.lightSource1);
@@ -1155,12 +1036,10 @@ internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
     u32 renderWidth = settings->width;
     u32 renderHeight = settings->height;
     
-    OpenGLCompileZBiasProgram(&opengl.zBiasDepthPeelLight, true, true);
-    OpenGLCompileZBiasProgram(&opengl.zBiasDepthPeelNoLight, true, false);
-    OpenGLCompileZBiasProgram(&opengl.zBiasNoDepthPeel, false, true);
+    OpenGLCompileZBiasProgram(&opengl.zBiasDepthPeelLight, true);
+    OpenGLCompileZBiasProgram(&opengl.zBiasNoDepthPeel, false);
     OpenGLCompilePeelComposite(&opengl.peelComposite);
     OpenGLCompileFinalStretch(&opengl.finalStretch);
-    OpenGLCompileTextureGenProgram(&opengl.testTextureGen);
     
     u32 resolveFlags = (OpenGLFramebuffer_linearFilter | OpenGLFramebuffer_hasColor);
     opengl.resolveFramebuffer = OpenGLCreateFramebuffer(resolveFlags, renderWidth, renderHeight);

@@ -12,9 +12,9 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_world_generation.cpp"
 #include "forg_render.cpp"
 #include "forg_sound.cpp"
+#include "forg_light.cpp"
 #include "forg_animation.cpp"
 #include "forg_camera.cpp"
-//#include "forg_light.cpp"
 #include "miniz.c"
 #include "forg_network_client.cpp"
 #include "forg_editor.cpp"
@@ -115,6 +115,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
 internal Vec3 HandleDaynightCycle(GameModeWorld* worldMode, PlatformInput* input)
 {
     Vec3 ambientLightColor = {};
+    ambientLightColor = V3(0.1f, 0.1f, 0.1f);
 #if 0                
     worldMode->currentPhaseTimer += input->timeToAdvance;
     DayPhase* currentPhase = worldMode->dayPhases + worldMode->currentPhase;
@@ -180,13 +181,57 @@ internal r32 GetHeight(BaseComponent* base)
     return height;
 }
 
+internal r32 GetWidth(BaseComponent* base)
+{
+    r32 height = GetDim(base->bounds).x;
+    return height;
+}
+
+internal r32 GetDeepness(BaseComponent* base)
+{
+    r32 height = GetDim(base->bounds).y;
+    return height;
+}
+
+internal void RenderShadow(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ShadowComponent* shadowComponent, r32 deepness, r32 width)
+{
+    Lights lights = GetLights(worldMode, P);
+    RandomSequence ignored = Seed(1);
+    BitmapId shadowID = QueryBitmaps(group->assets, GetAssetSubtype(group->assets, AssetType_Image, "shadow"), &ignored, 0);
+    if(IsValid(shadowID))
+    {
+        Bitmap* shadow = GetBitmap(group->assets, shadowID).bitmap;
+        if(shadow)
+        {
+            r32 nativeDeepness = shadow->nativeHeight;
+            r32 nativeWidth = shadow->nativeHeight * shadow->widthOverHeight;
+            
+            r32 yScale = deepness / nativeDeepness;
+            r32 xScale = width / nativeWidth;
+            
+            Vec2 finalScale = Hadamart(shadowComponent->scale, V2(xScale, yScale));
+            PushBitmap(group, FlatTransform(0.01f), shadowID, P + shadowComponent->offset, 0, finalScale, shadowComponent->color, lights);
+        }
+        else
+        {
+            LoadBitmap(group->assets, shadowID);
+        }
+    }
+}
+
 RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     if(base->universeP.chunkZ == worldMode->player.universeP.chunkZ)
     {
         r32 height = GetHeight(base);
+        r32 deepness = GetWidth(base);
+        r32 width = GetWidth(base);
+        
+        Vec3 P = GetRelativeP(worldMode, base);
         AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
+        RenderShadow(worldMode, group, P, &animation->shadow, deepness, width);
+        
         if(Abs(base->velocity.x) > 0.1f)
         {
             animation->flipOnYAxis = (base->velocity.x < 0.0f);
@@ -194,11 +239,11 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         Clear(&animation->skeletonProperties);
         AddOptionalGamePropertyRaw(&animation->skeletonProperties, base->action);
         
-        
         AnimationParams params = {};
         params.elapsedTime = elapsedTime;
         params.angle = 0;
-        params.P = GetRelativeP(worldMode, base);
+        params.P = P;
+        params.lights = GetLights(worldMode, P);
         params.scale = 1;
         params.transform = UprightTransform();
         params.flipOnYAxis = animation->flipOnYAxis;
@@ -221,14 +266,21 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
     if(base->universeP.chunkZ == worldMode->player.universeP.chunkZ)
     {
         r32 height = GetHeight(base);
+        r32 deepness = GetWidth(base);
+        r32 width = GetWidth(base);
+        
+        Vec3 P = GetRelativeP(worldMode, base);
+        Lights lights = GetLights(worldMode, P);
         ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
+        RenderShadow(worldMode, group, P, &image->shadow, deepness, width);
+        
         PlantComponent* plant = GetComponent(worldMode, ID, PlantComponent);
         
         RandomSequence seq = Seed(base->seed);
         BitmapId BID = GetImageFromReference(group->assets, &image->entity, &seq);
         if(IsValid(BID))
         {
-            BitmapDim bitmapData = PushBitmap(group, UprightTransform(), BID, GetRelativeP(worldMode, base), height);
+            BitmapDim bitmapData = PushBitmap(group, UprightTransform(), BID, P, height, V2(1, 1), V4(1, 1, 1, 1), lights);
             
             Bitmap* bitmap = GetBitmap(group->assets, BID).bitmap;
             PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, BID);
@@ -249,7 +301,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
                         Vec2 scale = point->scale;
                         
                         Vec3 pointP = bitmapData.P + point->alignment.x * bitmapData.XAxis * bitmapData.size.x + point->alignment.y * bitmapData.YAxis * bitmapData.size.y;
-                        PushBitmap(group, leafTransform, leafID, pointP, 0, scale);
+                        PushBitmap(group, leafTransform, leafID, pointP, 0, scale, V4(1, 1, 1, 1), lights);
                     }
                 }
             }
@@ -263,13 +315,19 @@ RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
     if(base->universeP.chunkZ == worldMode->player.universeP.chunkZ)
     {
         r32 height = GetHeight(base);
+        r32 deepness = GetWidth(base);
+        r32 width = GetWidth(base);
+        
+        Vec3 P = GetRelativeP(worldMode, base);
+        Lights lights = GetLights(worldMode, P);
         ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
+        RenderShadow(worldMode, group, P, &image->shadow, deepness, width);
         
         RandomSequence seq = Seed(base->seed);
         BitmapId BID = GetImageFromReference(group->assets, &image->entity, &seq);
         if(IsValid(BID))
         {
-            PushBitmap(group, UprightTransform(), BID, GetRelativeP(worldMode, base), height);
+            PushBitmap(group, UprightTransform(), BID, P, height, V2(1, 1), V4(1, 1, 1, 1), lights);
         }
     }
 }
@@ -278,36 +336,6 @@ RENDERING_ECS_JOB_CLIENT(RenderBound)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     PushCubeOutline(group, Offset(base->bounds, GetRelativeP(worldMode, base)), V4(1, 0, 0, 1), 0.05f);
-}
-
-internal void AddEntityLights(GameModeWorld* worldMode)
-{
-    
-#if 0    
-    for(u32 entityIndex = 0; 
-        entityIndex < ArrayCount(worldMode->entities); 
-        entityIndex++)
-    {
-        ClientEntity* entity = worldMode->entities[entityIndex];
-        while(entity)
-        {
-            if(entity->identifier)
-            {  
-                if(!IsSet(entity, Flag_deleted | Flag_Attached))
-                {
-                    TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, entity->taxonomy);
-                    if(slot->hasLight)
-                    {
-                        AddLightToGridCurrentFrame(worldMode, entity->P, slot->lightColor, entity->lightIntensity);
-                    }
-                }
-            }
-            
-            entity = entity->next;
-        }
-    }
-#endif
-    
 }
 
 internal u64 DetectNearestEntities(GameModeWorld* worldMode, RenderGroup* group, Vec2 screenMouseP)
@@ -503,7 +531,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
 #endif
             
             Clear(group, V4(0.1f, 0.1f, 0.1f, 1.0f));
-            //ResetLightGrid(worldMode);
+            ResetLightGrid(worldMode);
             
             MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), 1.0f);
             UpdateAndSetupGameCamera(worldMode, group, input);
@@ -511,16 +539,11 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             BeginDepthPeel(group);
             
-            AddEntityLights(worldMode);
-            //FinalizeLightGrid(worldMode, group);
-            
-            Vec3 directionalLightColor = V3(1, 1, 1);
-            Vec3 directionalLightDirection = V3(0, 0, -1);
-            r32 directionalLightIntensity = 1.0f;
             Vec3 ambientLightColor = HandleDaynightCycle(worldMode, input);
-            ambientLightColor = V3(0, 0, 0);
-            
-            PushAmbientLighting(group, ambientLightColor, directionalLightColor, directionalLightDirection, directionalLightIntensity);
+            PushAmbientLighting(group, ambientLightColor);
+            //AddLightToGridCurrentFrame(worldMode, V3(0, 0, 0), V3(0, 0, 1), 4);
+            AddLightToGridCurrentFrame(worldMode, V3(1, 0, 0), V3(1, 0, 0), 8);
+            FinalizeLightGrid(worldMode, group);
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderCharacterAnimation, ArchetypeHas(BaseComponent) && ArchetypeHas(AnimationComponent), input->timeToAdvance);
             EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(ImageComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);

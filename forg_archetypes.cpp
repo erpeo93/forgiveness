@@ -66,6 +66,12 @@ internal void InitBaseComponent(BaseComponent* base, Vec3 boundOffset, Vec3 boun
     base->bounds = StandardBounds(boundDim, boundOffset);
 }
 
+internal void InitShadow(ShadowComponent* shadow, ClientEntityInitParams* params)
+{
+    shadow->offset = params->shadowOffset;
+    shadow->scale = params->shadowScale;
+    shadow->color = params->shadowColor;
+}
 #define InitImageReference(assets, dest, source, reference) InitImageReference_(assets, dest->reference, source->reference##Properties)
 internal void InitImageReference_(Assets* assets, ImageReference* dest,ImageProperties* sourceProperties)
 {
@@ -97,6 +103,8 @@ INIT_ENTITY(AnimalArchetype)
     animation->skeletonHash =StringHash(params->skeleton.value);
     animation->skinHash =StringHash(params->skin.value);
     animation->flipOnYAxis = 0;
+    
+    InitShadow(&animation->shadow, params);
 }
 
 INIT_ENTITY(RockArchetype)
@@ -115,6 +123,8 @@ INIT_ENTITY(RockArchetype)
     
     ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
     InitImageReference(assets, &image, &params, entity);
+    
+    InitShadow(&image->shadow, params);
 }
 
 
@@ -134,6 +144,8 @@ INIT_ENTITY(PlantArchetype)
     
     ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
     InitImageReference(assets, &image, &params, entity);
+    
+    InitShadow(&image->shadow, params);
 }
 
 INIT_ENTITY(GrassArchetype)
@@ -151,5 +163,7 @@ INIT_ENTITY(GrassArchetype)
     
     ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
     InitImageReference(assets, &image, &params, entity);
+    
+    InitShadow(&image->shadow, params);
 }
 #endif

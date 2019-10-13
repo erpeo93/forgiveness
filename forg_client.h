@@ -72,6 +72,7 @@ struct GrassComponent
 
 struct ImageComponent
 {
+    ShadowComponent shadow;
     ImageReference entity;
 };
 
@@ -180,13 +181,14 @@ struct GameModeWorld
     
     ResizableArray archetypes[Archetype_Count];
     
+    TempLight* firstFreeTempLight;
+    
     TicketMutex plantMutex;
     PlantSegment* firstFreePlantSegment;
     PlantStem* firstFreePlantStem;
     Plant* firstFreePlant;
     
     RandomSequence entropy;
-    
     RandomSequence leafFlowerFruitSequence;
     ParticleCache* particleCache;
     

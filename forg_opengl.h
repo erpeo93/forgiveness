@@ -94,7 +94,6 @@ struct Opengl
     OpenGLFramebuffer resolveFramebuffer;
     OpenGLFramebuffer textureGenFrameBuffer;
     
-    
     b32 shaderSimTexLoadSRGB;
     b32 shaderSimTexWriteSRGB;
     
@@ -111,10 +110,8 @@ struct Opengl
     
     ZBiasProgram zBiasNoDepthPeel;
     ZBiasProgram zBiasDepthPeelLight;
-    ZBiasProgram zBiasDepthPeelNoLight;
     PeelCompositeProgram peelComposite;
     FinalStretchProgram finalStretch;
-    TextureGenProgram testTextureGen;
     
     GLuint vertexBuffer;
     GLuint indexBuffer;

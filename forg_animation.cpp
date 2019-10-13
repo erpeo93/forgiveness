@@ -442,6 +442,7 @@ internal Rect2 RenderAnimation_(RenderGroup* group, AssetID animationID, Animati
         ObjectTransform transform = params->transform;
         transform.flipOnYAxis = params->flipOnYAxis;
         
+        Lights lights = params->lights;
         for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
         {
             AnimationPiece* piece = pieces + pieceIndex;
@@ -464,7 +465,7 @@ internal Rect2 RenderAnimation_(RenderGroup* group, AssetID animationID, Animati
                         }
                         
                         r32 height = bitmapInfo->nativeHeight * params->scale;
-                        BitmapDim dim = PushBitmapWithPivot(group, transform, bitmap, P, piece->pivot, height, V2(1, 1), piece->color);
+                        BitmapDim dim = PushBitmapWithPivot(group, transform, bitmap, P, piece->pivot, height, V2(1, 1), piece->color, lights);
                         result = Union(result, RectMinDim(dim.P.xy, dim.size));
                         
                         

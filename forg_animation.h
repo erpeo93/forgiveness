@@ -19,6 +19,13 @@ struct AssAlteration
     Vec4 color;
 };
 
+struct ShadowComponent
+{
+    Vec3 offset;
+    Vec2 scale;
+    Vec4 color;
+};
+
 struct AnimationComponent
 {
     r32 time;
@@ -30,6 +37,8 @@ struct AnimationComponent
     GameProperties skeletonProperties;
     
     b32 flipOnYAxis;
+    
+    ShadowComponent shadow;
 };
 
 struct AnimationPiece
@@ -47,6 +56,7 @@ struct AnimationParams
     r32 elapsedTime;
     r32 angle;
     Vec3 P;
+    Lights lights;
     r32 scale;
     b32 flipOnYAxis;
     ObjectTransform transform;
