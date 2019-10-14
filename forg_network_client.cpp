@@ -302,7 +302,7 @@ internal void SendRecreateWorldRequrest(b32 createEntities, UniversePos P)
 }
 
 #if FORGIVENESS_INTERNAL
-inline SavedNameSlot* GetNameSlot( DebugTable* debugTable, u64 pointer )
+inline SavedNameSlot* GetNameSlot(u64 pointer )
 {
     u32 index = ( u32 ) ( pointer & ( u64 ) ( ArrayCount( debugTable->nameSlots - 1) ) );
     
@@ -1037,12 +1037,13 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 }
             } break;
             
+            
             case Type_debugEvent:
             {
                 DebugEvent event = {};
                 
                 Unpack("QQ", &event.clock, &event.pointer );
-                SavedNameSlot* slot = GetNameSlot( globalDebugTable, ( u64 ) event.pointer );
+                SavedNameSlot* slot = GetNameSlot(( u64 ) event.pointer );
                 event.GUID = slot->GUID;
                 event.name = slot->name;
                 Unpack("ssLHCQQ", event.GUID, event.name, &event.threadID, &event.coreIndex, &event.type, event.overNetwork, event.overNetwork + 1 );

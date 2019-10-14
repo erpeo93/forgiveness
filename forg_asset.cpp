@@ -1,15 +1,4 @@
 #include "forg_meta_asset.cpp"
-
-#ifndef ONLY_DATA_FILES
-// NOTE(Leonardo): all the functions here can be called just by the main thread!
-inline Assets* DEBUGGetGameAssets(PlatformClientMemory* memory)
-{
-    GameState* gameState = (GameState*) memory->gameState;
-    Assets* result = gameState->assets;
-    return result;
-}
-#endif
-
 internal AssetFile* GetAssetFile(Assets* assets, u32 fileIndex)
 {
     Assert(fileIndex < assets->fileCount);
@@ -1668,12 +1657,12 @@ internal AssetID QueryAssets_(Assets* assets, AssetType type, u32 subtype, Rando
                 
                 if(matchingExact > 0)
                 {
-                    u32 choice = RandomChoice(seq, matchingExact);
+                    u32 choice = seq ? RandomChoice(seq, matchingExact) : 0;
                     result.index = matchingAssetsExact[choice];
                 }
                 else
                 {
-                    u32 choice = RandomChoice(seq, matchingOptional);
+                    u32 choice = seq ? RandomChoice(seq, matchingOptional) : 0;
                     result.index = matchingAssetsOptional[choice];
                 }
             }

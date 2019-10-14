@@ -181,7 +181,9 @@ struct EditorLayout
     Vec2 rawP;
     
     FontId fontID;
-    PAKFont* font;
+    Font* font;
+    PAKFont* fontInfo;
+    
     r32 fontScale;
     r32 horizontalAdvance;
     r32 standardButtonDim;
@@ -190,6 +192,17 @@ struct EditorLayout
     
     Vec2 mouseP;
     Vec2 deltaMouseP;
+    
+    Vec2 baseCorner;
+    Vec2 At;
+    r32 spacingY;
+    r32 spacingX;
+    r32 nextYDelta;
+    u32 depth;
+    r32 lineAdvance;
+    
+    u32 noLineFeed;
+    b32 lineInitialized;
 };
 
 

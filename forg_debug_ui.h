@@ -2,7 +2,6 @@
 
 struct DebugState;
 struct DebugCollationState;
-
 enum DebugInteractionType
 {
     DebugInteraction_none,
@@ -42,19 +41,6 @@ struct DebugInteraction
 
 struct Layout
 {
-    Vec2 baseCorner;
-    Vec2 At;
-    Vec2 mouseP;
-    r32 spacingY;
-    r32 spacingX;
-    r32 nextYDelta;
-    u32 depth;
-    r32 lineAdvance;
-    DebugState* debugState;
-    DebugCollationState* collation;
-    
-    u32 noLineFeed;
-    b32 lineInitialized;
 };
 
 struct LayoutElement

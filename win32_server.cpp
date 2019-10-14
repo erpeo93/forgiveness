@@ -129,16 +129,24 @@ internal void EndInputPlayback(ServerState* server)
     SendLoopMessage(server, false);
 }
 
+
 internal void Win32WritePlayerState(ServerState* server, ActionRequest* source)
 {
+    InvalidCodePath;
+#if 0    
     Assert(globalRecording && recordingHandle);
     DWORD bytesWritten;
-    WriteFile( recordingHandle, source, sizeof(ActionRequest), &bytesWritten, 0);
+    WriteFile(recordingHandle, source, sizeof(ActionRequest), &bytesWritten, 0);
     Assert( bytesWritten == sizeof(ActionRequest));
+#endif
+    
 }
 
 internal void Win32ReadPlayerState(ServerState* server, ActionRequest* dest)
 {
+    InvalidCodePath;
+    
+#if 0    
     Assert(globalPlayingBack && playingBackHandle);
     DWORD bytesRead;
     ReadFile(playingBackHandle, dest, sizeof(ActionRequest), &bytesRead, 0);
@@ -151,10 +159,15 @@ internal void Win32ReadPlayerState(ServerState* server, ActionRequest* dest)
     {
         Assert(bytesRead == sizeof(ActionRequest));
     }
+#endif
+    
 }
 
 internal void Win32InputRecordingHandlePlayer(ServerState* server, ActionRequest* sourceDest)
 {
+    InvalidCodePath;
+    
+#if 0    
     if(globalRecording)
     {
         Assert(!globalPlayingBack);
@@ -165,6 +178,8 @@ internal void Win32InputRecordingHandlePlayer(ServerState* server, ActionRequest
     {
         Win32ReadPlayerState(server, sourceDest);
     }
+#endif
+    
 }
 
 internal void StartInputRecording()
@@ -390,7 +405,6 @@ int main( int argc, char* argv[] )
         while(true)
         {
 #if FORGIVENESS_INTERNAL
-            server->recompiled = false;
             WIN32_FILE_ATTRIBUTE_DATA DLLFileAttributes;
             if(GetFileAttributesEx(DLLFullName, GetFileExInfoStandard, &DLLFileAttributes))
             {
@@ -402,7 +416,6 @@ int main( int argc, char* argv[] )
                     {
                         functions = LoadServerCode(DLLFullName, tempDLLFullName, lockFullName);
                     }
-                    server->recompiled = true;
                 }
             }
 #endif
@@ -430,7 +443,7 @@ int main( int argc, char* argv[] )
 #if FORGIVENESS_INTERNAL
             if(functions.ServerFrameEnd)
             {
-                functions.ServerFrameEnd(&memory);
+                functions.ServerFrameEnd(memory);
             }
 #endif
         }

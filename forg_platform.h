@@ -543,7 +543,6 @@ struct PlatformClientMemory
 };
 
 extern struct PlatformClientMemory* debugGlobalMemory;
-
 #define GAME_UPDATE_AND_RENDER(name) void name(PlatformClientMemory* memory, PlatformInput* input, GameRenderCommands* commands)
 typedef GAME_UPDATE_AND_RENDER(game_update_and_render);
 

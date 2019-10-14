@@ -2,7 +2,6 @@
 #define DEBUG_FRAME_COUNT 256
 
 extern DebugTable* debugTable;
-
 struct DebugVariable;
 struct DebugTree;
 
@@ -37,7 +36,6 @@ struct DebugView
     
     DebugID ID;
     DebugView* nextInHash;
-    
     union
     {
         DebugEntryBlock block;
@@ -99,7 +97,7 @@ struct DebugElement
     DebugElement* nextInHash;
 };
 
-inline char* GetName( DebugElement* element ) 
+inline char* GetName(DebugElement* element) 
 {
     char* result = element->name;
     return result;
@@ -117,13 +115,13 @@ struct DebugEventLink
     DebugElement* element;
 };
 
-inline DebugEventLink* GetSentinel( DebugEventLink* from )
+inline DebugEventLink* GetSentinel(DebugEventLink* from)
 {
     DebugEventLink* result = ( DebugEventLink* ) ( &from->firstChild );
     return result;
 }
 
-inline b32 HasChildren( DebugEventLink* link )
+inline b32 HasChildren(DebugEventLink* link)
 {
     b32 result = ( link->firstChild != GetSentinel( link ) );
     return result;
@@ -192,27 +190,11 @@ struct DebugThread
     };
 };
 
-struct PositionedText
-{
-    char text[64];
-    Vec2 screenP;
-    Vec4 color;
-};
-
-#define MAX_DEBUG_TEMPLATES 32
-struct DebugTemplateRecipesNames
-{
-    u32 entityType;
-    i32 templateRecipeCount;
-    char* names[MAX_DEBUG_TEMPLATES];
-};
-
 #include "forg_debug_ui.h"
 
 struct DebugCollationState
 {
     b32 paused;
-    
     u32 totalFrameCount;
     u32 viewingFrameOrdinal;
     u32 mostRecentFrameOrdinal;
@@ -253,30 +235,16 @@ struct DebugState
     MemoryPool debugPool;
     MemoryPool perFramePool;
     
-    RenderGroup renderGroup;
-    
     Vec2 layoutOffset;
-    
-    r32 fontScale;
-    FontId fontId;
-    Font* debugFont;
-    PakFont* debugFontInfo;
-    
     
     Vec2 lastMouseP;
     Layout mouseTextLayout;
-    
-    u32 countPositionedText;
-    PositionedText positionedText[1024];
     
     DebugThread* firstFreeThread;
     OpenDebugBlock* firstFreeBlock;
     DebugStoredEvent* firstFreeStoredEvent;
     
-    
-    
     DebugCollationState clientState;
-    DebugCollationState serverState;
 };
 
 struct DebugStatistic

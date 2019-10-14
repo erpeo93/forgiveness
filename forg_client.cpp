@@ -31,6 +31,12 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_UIcommon.cpp"
 #include "forg_archetypes.cpp"
 #include "forg_meta.cpp"
+#include "forg_sort.cpp"
+
+#if FORGIVENESS_INTERNAL
+#include "forg_debug_ui.cpp"
+#endif
+
 internal void PlayGame(GameState* gameState, PlatformInput* input)
 {
     SetGameMode(gameState, GameMode_Playing);
@@ -789,9 +795,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         
         gameState = BootstrapPushStruct(GameState, totalPool);
         memory->gameState = gameState;
-#if FORGIVENESS_INTERNAL
-        gameState->timeCoeff = 100.0f;
-#endif
         
         for(u32 taskIndex = 0; 
             taskIndex < ArrayCount(gameState->tasks); 

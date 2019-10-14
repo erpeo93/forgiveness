@@ -45,6 +45,10 @@
 #include "forg_skill.h"
 #include "forg_ground.h"
 
+#if FORGIVENESS_INTERNAL
+#include "forg_debug.h"
+#endif
+
 struct BaseComponent
 {
     u32 seed;

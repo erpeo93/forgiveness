@@ -336,10 +336,12 @@ internal u32 SendAllPossibleData(ServerState* server, PlayerComponent* player, F
 }
 
 #if FORGIVENESS_INTERNAL
+
+#if 0
 internal void SendDebugEvent(PlayerComponent* player, DebugEvent* event)
 {
-    b32 result = false;
     
+    b32 result = false;
     StartPacket(debugEvent);
     Pack("QQssLHCQQ", event->clock, event->GUID, event->GUID, event->name, event->threadID, event->coreIndex, event->type, event->overNetwork[0], event->overNetwork[1] );
     
@@ -356,5 +358,7 @@ internal void SendMemStats(PlayerComponent* player )
     
     CloseAndStoreOrderedPacket(player);
 }
+#endif
+
 #endif
 

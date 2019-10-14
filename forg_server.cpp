@@ -24,8 +24,10 @@
 #include "forg_world_server.cpp"
 #if FORGIVENESS_INTERNAL
 DebugTable* globalDebugTable;
-internal void HandleDebugMessage(PlatformServerMemory* memory, ServerPlayer* player, u32 packetType, unsigned char* packetPtr)
+internal void HandleDebugMessage(PlatformServerMemory* memory, PlayerComponent* player, u32 packetType, unsigned char* packetPtr)
 {
+    InvalidCodePath;
+#if 0    
     ServerState* server = (ServerState*) memory->server;
     switch( packetType )
     {
@@ -43,8 +45,9 @@ internal void HandleDebugMessage(PlatformServerMemory* memory, ServerPlayer* pla
             // NOTE(Leonardo): leonardo: we avoid receiving the "string" version of the guid, and we override it with the original one.
             unpack( packetPtr, "QQLHCQQ", &editEvent->clock, &editEvent->GUID, &editEvent->threadID, &editEvent->coreIndex, &editEvent->type, &editEvent->overNetwork[0], &editEvent->overNetwork[1]);
         } break;
-        
     }
+#endif
+    
 }
 #endif
 
@@ -689,6 +692,8 @@ extern "C" SERVER_FRAME_END(ServerFrameEnd)
     Assert(eventArrayIndex <= 1);
     u32 eventCount = arrayIndex_eventIndex & 0xffffffff;
     
+    
+#if 0    
     if(!server->recompiled && server->debugPlayer)
     {
         for(u32 eventIndex = 0; eventIndex < eventCount; ++eventIndex)
@@ -699,6 +704,8 @@ extern "C" SERVER_FRAME_END(ServerFrameEnd)
         
         SendMemStats(server->debugPlayer);
     }
+#endif
+    
     return globalDebugTable;
 }
 #else

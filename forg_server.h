@@ -206,8 +206,4 @@ struct ServerState
 #define SERVER_SIMULATE_WORLDS(name) void name(PlatformServerMemory* memory, r32 secondElapsed)
 typedef SERVER_SIMULATE_WORLDS(server_simulate_worlds);
 
-#define SERVER_FRAME_END(name) DebugTable* name(PlatformServerMemory* memory)
-typedef SERVER_FRAME_END(server_frame_end);
-
-
 

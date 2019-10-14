@@ -1,24 +1,24 @@
-inline b32 InteractionsAreEqual( DebugInteraction A, DebugInteraction B )
+inline b32 InteractionsAreEqual(DebugInteraction A, DebugInteraction B)
 {
-    b32 result = ( DebugIDAreEqual( A.ID, B.ID ) && 
-                  ( A.type == B.type ) && 
-                  ( A.target == B.target ) && 
-                  ( A.generic == B.generic ) );
+    b32 result = (DebugIDAreEqual(A.ID, B.ID) && 
+                  (A.type == B.type) && 
+                  (A.target == B.target) && 
+                  (A.generic == B.generic));
     return result;
 }
 
-inline b32 InteractionIsHot( DebugCollationState* collation, DebugInteraction B )
+inline b32 InteractionIsHot(DebugCollationState* collation, DebugInteraction B)
 {
-    b32 result = InteractionsAreEqual( collation->hotInteraction, B );
+    b32 result = InteractionsAreEqual(collation->hotInteraction, B);
     
-    if( B.type == DebugInteraction_none )
+    if(B.type == DebugInteraction_none)
     {
         result = false;
     }
     return result;
 }
 
-inline DebugInteraction  SetUInt32Interaction( DebugID ID, u32* target, u32 value )
+inline DebugInteraction SetUInt32Interaction(DebugID ID, u32* target, u32 value)
 {
     DebugInteraction result = {};
     result.ID = ID;
@@ -29,7 +29,7 @@ inline DebugInteraction  SetUInt32Interaction( DebugID ID, u32* target, u32 valu
     return result;
 }
 
-inline DebugInteraction  SetPointerInteraction( DebugID ID, void** target, void* value )
+inline DebugInteraction  SetPointerInteraction(DebugID ID, void** target, void* value)
 {
     DebugInteraction result = {};
     result.ID = ID;
@@ -40,67 +40,55 @@ inline DebugInteraction  SetPointerInteraction( DebugID ID, void** target, void*
     return result;
 }
 
-inline Rect2 TextOp(DebugState* debugState, char* string, Vec2 p, TextOperation op, Vec4 color = V4( 1.0f, 1.0f, 1.0f, 1.0f ), r32 scale = 1.0f )
+inline Rect2 TextOp(RenderGroup* group, EditorLayout* layout, char* string, Vec2 p, TextOperation op, Vec4 color = V4(1.0f, 1.0f, 1.0f, 1.0f), r32 scale = 1.0f)
 {
     
     Rect2 result = InvertedInfinityRect2();
-    Font* font = debugState->debugFont;
-    
-    if(debugState && font)
+    if(layout->font)
     {
-        RenderGroup* renderGroup = &debugState->renderGroup;
-        PakFont* info = debugState->debugFontInfo;
-        result =UIOrthoTextOp(renderGroup, font, info, string, debugState->fontScale, V3(p.x, p.y, 0), op, color, true);
+        result = PushText_(group, layout->fontID, layout->font, layout->fontInfo, 
+                           string, V3(p.x, p.y, 0), layout->fontScale, 
+                           op, color, false, true);
     }
     
     return result;
 }
 
-inline void TextLineAt(DebugState* debugState, char* string, Vec2 p, Vec4 color = V4( 1.0f, 1.0f, 1.0f, 1.0f), r32 scale = 1.0f)
+inline void TextLineAt(RenderGroup* group, EditorLayout* layout, char* string, Vec2 p, Vec4 color = V4(1.0f, 1.0f, 1.0f, 1.0f), r32 scale = 1.0f)
 {
-    TextOp( debugState, string, p, TextOp_draw, color, scale);
+    TextOp(group, layout, string, p, TextOp_draw, color, scale);
 }
 
-inline Rect2 TextSize( DebugState* debugState, char* string )
+inline Rect2 TextSize(RenderGroup* group, EditorLayout* layout, char* string)
 {
-    Rect2 result = TextOp( debugState, string, V2( 0, 0 ), TextOp_getSize );
+    Rect2 result = TextOp(group, layout, string, V2(0, 0), TextOp_getSize);
     return result;
 }
 
-inline r32 GetLineAdvance( DebugState* debugState )
+inline r32 GetLineAdvance(EditorLayout* layout)
 {
-    r32 result = debugState->fontScale * GetLineAdvance( debugState->debugFontInfo );
+    r32 result = layout->fontScale * GetLineAdvance(layout->fontInfo);
     return result;
 }
 
-inline r32 GetBaseline( DebugState* debugState )
+inline r32 GetBaseline(EditorLayout* layout)
 {
-    r32 result = debugState->fontScale * GetStartingLineY( debugState->debugFontInfo );
+    r32 result = layout->fontScale * GetStartingLineY(layout->fontInfo);
     return result;
 }
 
-inline Layout BeginLayout( DebugState* debugState, DebugCollationState* collation, Vec2 mouseP, Vec2 upperLeftCorner )
+inline Layout BeginLayout(DebugState* debugState, EditorLayout* l, DebugCollationState* collation, Vec2 mouseP, Vec2 upperLeftCorner)
 {
     Layout layout = {};
-    layout.lineAdvance = GetLineAdvance( debugState->debugFontInfo );
-    layout.At = upperLeftCorner;;
-    layout.baseCorner = upperLeftCorner;
-    layout.spacingY = 4.0f;
-    layout.spacingX = 4.0f;
-    layout.depth = 0;
-    layout.debugState = debugState;
-    layout.collation = collation;
-    layout.mouseP = mouseP;
-    
     return layout;
 }
 
-inline void EndLayout( Layout* layout )
+inline void EndLayout(Layout* layout)
 {
     
 }
 
-inline LayoutElement BeginRectElement( Layout* layout, Vec2* dim )
+inline LayoutElement BeginRectElement(Layout* layout, Vec2* dim)
 {
     LayoutElement result = {};
     result.layout = layout;
@@ -109,20 +97,20 @@ inline LayoutElement BeginRectElement( Layout* layout, Vec2* dim )
     return result;
 }
 
-inline void MakeElementSizable( Layout* layout, LayoutElement* element )
+inline void MakeElementSizable(Layout* layout, LayoutElement* element)
 {
     element->size = element->dim;
 }
 
-inline void DefaultInteraction( LayoutElement* element, DebugInteraction interaction )
+inline void DefaultInteraction(LayoutElement* element, DebugInteraction interaction)
 {
     element->interaction = interaction;
 }
 
-inline void AdvanceElement( Layout* layout, Rect2 elRect )
+inline void AdvanceElement(EditorLayout* layout, Rect2 elRect)
 {
-    layout->nextYDelta = Min( layout->nextYDelta, elRect.min.y - layout->At.y );
-    if( layout->noLineFeed )
+    layout->nextYDelta = Min(layout->nextYDelta, elRect.min.y - layout->At.y);
+    if(layout->noLineFeed)
     {
         layout->At.x = elRect.max.x + layout->spacingX;
     }
@@ -133,14 +121,13 @@ inline void AdvanceElement( Layout* layout, Rect2 elRect )
     }
 }
 
-inline void EndElement( LayoutElement* element )
+inline void EndElement(DebugRenderGroup* group, LayoutElement* element)
 {
     Layout* layout = element->layout;
     DebugState* debugState = layout->debugState;
     DebugCollationState* collation = layout->collation;
-    RenderGroup* renderGroup = &debugState->renderGroup;
     
-    if( !layout->lineInitialized )
+    if(!layout->lineInitialized)
     {
         layout->At.x = layout->baseCorner.x + layout->depth * layout->lineAdvance;
         layout->nextYDelta = 0;
@@ -150,7 +137,7 @@ inline void EndElement( LayoutElement* element )
     r32 sizeHandlePixels = 4.0f;
     Vec2 frame = {};
     
-    if( element->size )
+    if(element->size)
     {
         frame.x = sizeHandlePixels;
         frame.y = sizeHandlePixels;
@@ -158,98 +145,98 @@ inline void EndElement( LayoutElement* element )
     
     Vec2 totalDim = *element->dim + 2.0f * frame;
     
-    Vec2 totalMinCorner = V2( layout->At.x, layout->At.y - totalDim.y );
+    Vec2 totalMinCorner = V2(layout->At.x, layout->At.y - totalDim.y);
     Vec2 totalMaxCorner = totalMinCorner + totalDim;
     
     Vec2 interiorMinCorner = totalMinCorner + frame;
     Vec2 interiorMaxCorner = interiorMinCorner + *element->dim;
     
-    Rect2 totalBounds = RectMinMax( totalMinCorner, totalMaxCorner );
-    element->bounds = RectMinMax( interiorMinCorner, interiorMaxCorner );
+    Rect2 totalBounds = RectMinMax(totalMinCorner, totalMaxCorner);
+    element->bounds = RectMinMax(interiorMinCorner, interiorMaxCorner);
     
-    if( element->interaction.type && PointInRect( element->bounds, layout->mouseP ) )
+    if(element->interaction.type && PointInRect(element->bounds, layout->mouseP))
     {
         collation->nextHotInteraction = element->interaction;
     }
     
-    if( element->size )
+    if(element->size)
     {
-        Rect2 sizeBounds = AddRadius( RectMinMax( V2( interiorMaxCorner.x, totalMinCorner.y ),
-                                                 V2( totalMaxCorner.x, interiorMinCorner.y ) ), V2( 4.0f, 4.0f ) );
+        Rect2 sizeBounds = AddRadius(RectMinMax(V2(interiorMaxCorner.x, totalMinCorner.y),
+                                                V2(totalMaxCorner.x, interiorMinCorner.y)), V2(4.0f, 4.0f));
         DebugInteraction sizeInteraction = {};
         sizeInteraction.type = DebugInteraction_resize;
         sizeInteraction.P = element->size;
         
-        PushRect(renderGroup, FlatTransform(), sizeBounds, InteractionIsHot( collation, sizeInteraction ) ? V4( 1.0f, 1.0f, 0.0f, 1.0f ) : V4( 1.0f, 1.0f, 1.0f, 1.0f ) );
+        PushRect(group, FlatTransform(), sizeBounds, InteractionIsHot(collation, sizeInteraction) ? V4(1.0f, 1.0f, 0.0f, 1.0f) : V4(1.0f, 1.0f, 1.0f, 1.0f));
         
-        if( PointInRect( sizeBounds, layout->mouseP ) )
+        if(PointInRect(sizeBounds, layout->mouseP))
         {
             collation->nextHotInteraction = sizeInteraction;
         }
     }
     
-    AdvanceElement( layout, totalBounds );
+    AdvanceElement(layout, totalBounds);
 }
 
-internal Vec2 BasicTextElement( Layout* layout, char* text, DebugInteraction itemInteraction, Vec4 color = V4( 0.8f, 0.8f, 0.8f, 1.0f ), Vec4 hotColot = V4( 1.0f, 1.0f, 1.0f, 1.0f ), r32 border = 0.0f, Vec4 backdropColor = V4( 0, 0, 0, 0 ) )
+internal Vec2 BasicTextElement(RenderGroup* group, EditorLayout* layout, char* text, DebugInteraction itemInteraction, Vec4 color = V4(0.8f, 0.8f, 0.8f, 1.0f), Vec4 hotColot = V4(1.0f, 1.0f, 1.0f, 1.0f), r32 border = 0.0f, Vec4 backdropColor = V4(0, 0, 0, 0))
 {
     
     DebugState* debugState = layout->debugState;
-    Rect2 textBounds = TextSize( layout->debugState, text );
-    Vec2 dim = V2( GetDim( textBounds ).x, layout->lineAdvance );
-    dim += 2.0f * V2( border, border );
+    Rect2 textBounds = TextSize(group, layout->debugState, text);
+    Vec2 dim = V2(GetDim(textBounds).x, layout->lineAdvance);
+    dim += 2.0f * V2(border, border);
     
-    LayoutElement element = BeginRectElement( layout, &dim );
-    DefaultInteraction( &element, itemInteraction );
-    EndElement( &element );
+    LayoutElement element = BeginRectElement(layout, &dim);
+    DefaultInteraction(&element, itemInteraction);
+    EndElement(&element);
     
-    if( backdropColor.w > 0 )
+    if(backdropColor.w > 0)
     {
-        PushRect( &debugState->renderGroup, FlatTransform(), element.bounds, backdropColor );
+        PushRect(&debugState->renderGroup, FlatTransform(), element.bounds, backdropColor);
     }
     
-    b32 hot = InteractionIsHot( layout->collation, itemInteraction );
-    TextLineAt( debugState, text, V2( element.bounds.min.x + border, element.bounds.max.y - border - GetStartingLineY( debugState->debugFontInfo ) ), hot ? hotColot : color );
+    b32 hot = InteractionIsHot(layout->collation, itemInteraction);
+    TextLineAt(debugState, text, V2(element.bounds.min.x + border, element.bounds.max.y - border - GetStartingLineY(debugState->debugFontInfo)), hot ? hotColot : color);
     
     return dim;
 }
 
-internal void BeginRow( Layout* layout )
+internal void BeginRow(Layout* layout)
 {
     ++layout->noLineFeed;
     LayoutElement result = {};
 }
 
-internal void ActionButton( Layout* layout, char* name, DebugInteraction interaction )
+internal void ActionButton(Layout* layout, char* name, DebugInteraction interaction)
 {
-    Vec2 dim = BasicTextElement( layout, name, interaction, V4( 0.5f, 0.5f, 0.5f, 1.0f ), V4( 1.0f, 1.0f, 1.0f, 1.0f ), 4.0f, V4( 0.0f, 0.5f, 1.0f, 1.0f ) );
+    Vec2 dim = BasicTextElement(layout, name, interaction, V4(0.5f, 0.5f, 0.5f, 1.0f), V4(1.0f, 1.0f, 1.0f, 1.0f), 4.0f, V4(0.0f, 0.5f, 1.0f, 1.0f));
     
 }
 
-internal void BooleanButton( Layout* layout, char* name, b32 highlight, DebugInteraction interaction )
+internal void BooleanButton(Layout* layout, char* name, b32 highlight, DebugInteraction interaction)
 {
-    Vec2 dim = BasicTextElement( layout, name, interaction, highlight ? V4( 1.0f, 1.0f, 1.0f, 1.0f ) : V4( 0.5f, 0.5f, 0.5f, 1.0f ), V4( 1.0f, 1.0f, 1.0f, 1.0f ), 4.0f, V4( 0.0f, 0.5f, 1.0f, 1.0f ) );
+    Vec2 dim = BasicTextElement(layout, name, interaction, highlight ? V4(1.0f, 1.0f, 1.0f, 1.0f) : V4(0.5f, 0.5f, 0.5f, 1.0f), V4(1.0f, 1.0f, 1.0f, 1.0f), 4.0f, V4(0.0f, 0.5f, 1.0f, 1.0f));
 }
 
-internal void EndRow( Layout* layout )
+internal void EndRow(Layout* layout)
 {
-    Assert( layout->noLineFeed > 0 );
+    Assert(layout->noLineFeed > 0);
     --layout->noLineFeed;
     
-    AdvanceElement( layout, RectMinMax( layout->At, layout->At ) );
+    AdvanceElement(layout, RectMinMax(layout->At, layout->At));
 }
 
-internal void AddTooltip( DebugState* debugState, char* string )
+internal void AddTooltip(DebugState* debugState, char* string)
 {
     Layout* layout = &debugState->mouseTextLayout;
     RenderGroup* renderGroup = &debugState->renderGroup;
     
-    Rect2 textBounds = TextSize( layout->debugState, string );
-    Vec2 dim = V2( GetDim( textBounds ).x, layout->lineAdvance );
+    Rect2 textBounds = TextSize(layout->debugState, string);
+    Vec2 dim = V2(GetDim(textBounds).x, layout->lineAdvance);
     
-    LayoutElement element = BeginRectElement( layout, &dim );
-    EndElement( &element );
+    LayoutElement element = BeginRectElement(layout, &dim);
+    EndElement(&element);
     
-    TransientClipRect( &debugState->renderGroup, GetScreenRect( &debugState->renderGroup ) );
-    TextLineAt( debugState, string, V2( element.bounds.min.x, element.bounds.max.y - GetStartingLineY( debugState->debugFontInfo ) ) );
+    TransientClipRect(&debugState->renderGroup, GetScreenRect(&debugState->renderGroup));
+    TextLineAt(debugState, string, V2(element.bounds.min.x, element.bounds.max.y - GetStartingLineY(debugState->debugFontInfo)));
 }

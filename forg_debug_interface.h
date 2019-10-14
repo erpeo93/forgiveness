@@ -34,10 +34,6 @@ enum DebugType
     DebugType_Vec4,
     DebugType_Rect2,
     DebugType_Rect3,
-    DebugType_BitmapId,
-    DebugType_SoundId,
-    DebugType_FontId,
-    DebugType_ContextSlot,
     
     DebugType_ThreadIntervalGraph,
     DebugType_FrameBarGraph,
@@ -73,10 +69,6 @@ struct DebugEvent
         Vec4 Value_Vec4;
         Rect2 Value_Rect2;
         Rect3 Value_Rect3;
-        BitmapId Value_BitmapId;
-        SoundId Value_SoundId;
-        FontId Value_FontId;
-        ContextSlot* Value_ContextSlot;
         
         DebugID debugID;
         u64 overNetwork[2];
@@ -135,9 +127,6 @@ DEBUGValueSetEventData_( Vec3 );
 DEBUGValueSetEventData_( Vec4 );
 DEBUGValueSetEventData_( Rect2 );
 DEBUGValueSetEventData_( Rect3 );
-DEBUGValueSetEventData_( BitmapId );
-DEBUGValueSetEventData_( SoundId );
-DEBUGValueSetEventData_( FontId );
 
 
 #define UniqueFileLineCounterString__(file, line, counter, name) file "|" #line "|" #counter //"|" name

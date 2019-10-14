@@ -240,7 +240,7 @@ internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char*
 
 r32 RawHeight(EditorLayout* layout)
 {
-    r32 result = layout->fontScale * GetLineAdvance(layout->font);
+    r32 result = layout->fontScale * GetLineAdvance(layout->fontInfo);
     return result;
 }
 
@@ -1740,7 +1740,9 @@ internal EditorLayout StandardLayout(MemoryPool* pool, FontId ID, RenderGroup* g
     EditorLayout result = {};
     
     
-    PAKFont* font = GetFontInfo(group->assets, ID);
+    PAKFont* fontInfo = GetFontInfo(group->assets, ID);
+    Font* font = GetFont(group->assets, ID);
+    
     result.context = context;
     
     result.defaultColoration = defaultColoration;
@@ -1754,6 +1756,7 @@ internal EditorLayout StandardLayout(MemoryPool* pool, FontId ID, RenderGroup* g
     
     result.fontID = ID;
     result.font = font;
+    result.fontInfo = fontInfo;
     result.fontScale = context->fontScale;
     result.horizontalAdvance = horizontalAdvance;
     result.standardButtonDim = 0.5f * horizontalAdvance;
@@ -1762,10 +1765,21 @@ internal EditorLayout StandardLayout(MemoryPool* pool, FontId ID, RenderGroup* g
     result.deltaMouseP = deltaMouseP;
     result.group = group;
     
+    result.lineAdvance = GetLineAdvance(fontInfo);
+    result.At = result.currentP;
+    result.baseCorner = result.currentP;
+    result.spacingY = 4.0f;
+    result.spacingX = 4.0f;
+    result.depth = 0;
+    //layout.debugState = debugState;
+    //layout.collation = collation;
+    
+    
     return result;
 }
 
-internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 deltaMouseP)
+internal void DEBUGOverlay(DebugState* debugState, DebugCollationState* collation, PlatformInput* input, Vec2 mouseP);
+internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 deltaMouseP, PlatformInput* input)
 {
     EditorUIContext* context = &worldMode->editorUI;
     Vec2 mouseP = worldMode->relativeScreenMouseP;
@@ -1783,6 +1797,27 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
         {
             MemoryPool editorPool = {};
             SetOrthographicTransformScreenDim(group);
+            
+            
+#if FORGIVENESS_INTERNAL
+            
+#if 0            
+            if(IsValid(debugState->fontId))
+            {
+                debugState->debugFont = PushFont(&debugState->renderGroup, debugState->fontId);
+                debugState->debugFontInfo = GetFontInfo(debugState->renderGroup.assets, debugState->fontId);
+            }
+#endif
+            
+            DebugState* debugState = debugGlobalMemory->debugState;
+            
+            DEBUGOverlay(debugState, &debugState->clientState, input, mouseP); 
+            debugState->lastMouseP = mouseP;
+#endif
+            
+            
+            
+            
             
             if(Pressed(&context->input->undo))
             {
