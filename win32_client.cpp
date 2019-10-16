@@ -1317,16 +1317,16 @@ PLATFORM_SET_CLIPBOARD(Win32SetClipboardText)
 #endif
 
 #if FORGIVENESS_INTERNAL
-global_variable DebugTable globalDebugTable_;
-DebugTable* globalDebugTable = &globalDebugTable_;
+global_variable DebugTable globalClientDebugTable_;
+global_variable DebugTable globalServerDebugTable_;
+DebugTable* globalDebugTable = &globalClientDebugTable_;
+DebugTable* globalServerDebugTable = &globalServerDebugTable_;
 #endif
 
 
 int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR commandLine, int showCode)
 {
     SetUnhandledExceptionFilter((LPTOP_LEVEL_EXCEPTION_FILTER) CreateMiniDump);
-    
-    DEBUGSetEventRecording(true);
     
     globalMemorySentinel.next = &globalMemorySentinel;
     globalMemorySentinel.prev = &globalMemorySentinel;
@@ -1352,7 +1352,6 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                              tempDLLFullName, 
                              lockFullName );
     
-    DEBUGSetEventRecording(game.isValid);
     Win32LoadXInput();
     
     WNDCLASS windowClass  = {};
@@ -1437,7 +1436,8 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             gameMemory.gameState = 0;
             gameMemory.tranState = 0;
 #if FORGIVENESS_INTERNAL
-            gameMemory.debugTable = globalDebugTable;
+            gameMemory.debugClientTable = globalDebugTable;
+            gameMemory.debugServerTable = globalServerDebugTable;
             gameMemory.debugState = 0;
 #endif
             
@@ -1526,18 +1526,15 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                     
                     while(running)
                     {
-                        {
-                            DEBUG_DATA_BLOCK(Platform_Controls);
-                        }
-                        
+                        BEGIN_BLOCK("setup renderer");
                         gameInput.timeToAdvance = targetSecPerFrame;
                         
                         GameRenderCommands renderCommands =DefaultRenderCommands( pushBuffer, pushBufferSize, globalScreenBuffer.width, globalScreenBuffer.height, maxVertexCount, maxIndexCount,  vertexArray, indexArray, V4( 0, 0, 0, 1 ));
                         Win32Dimension dimension = Win32GetWindowDimension( window );
                         Rect2i drawRegion = AspectRatioFit( renderCommands.settings.width, renderCommands.settings.height, dimension.width, dimension.height );
+                        END_BLOCK();
                         
                         BEGIN_BLOCK( "input processing" );
-                        
                         POINT mousePos;
                         GetCursorPos( &mousePos );
                         ScreenToClient( window, &mousePos);
@@ -1747,17 +1744,14 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                                 xboxControllerPresent = false;
                             }
                         }
-                        
                         END_BLOCK();
                         
                         BEGIN_BLOCK( "game updated" );
-                        Win32RunGame( &renderCommands );
-                        
+                        Win32RunGame(&renderCommands);
                         END_BLOCK();
                         
 #if FORGIVENESS_INTERNAL
-                        BEGIN_BLOCK( "debug system" );
-                        
+                        BEGIN_BLOCK("dll reload");
                         gameMemory.DLLReloaded = false;
                         executableNeedsToBeRealoaded = false;
                         
@@ -1770,39 +1764,28 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                                 executableNeedsToBeRealoaded = true;
                                 Win32CompleteQueueWork( &highQueue );
                                 Win32CompleteQueueWork( &lowQueue );
-                                DEBUGSetEventRecording( false );
                             }
                         }
-                        
-                        if( game.DEBUGFrameEnd )
-                        {
-                            game.DEBUGFrameEnd( &gameMemory, &gameInput, &renderCommands );
-                        }
-                        
-                        if( executableNeedsToBeRealoaded )
+                        if(executableNeedsToBeRealoaded)
                         {
                             Win32UnloadGameCode( &game );
                             while( !game.isValid )
                             {
                                 game = Win32LoadGameCode( DLLFullName, tempDLLFullName, lockFullName );
-                                Sleep( 100 );
                             }
                             gameMemory.DLLReloaded = true;
-                            DEBUGSetEventRecording( true );
                         }
-                        
                         END_BLOCK();
 #endif
                         
-                        
-#if 0
-                        r32 secElapsed = Win32GetSecondsElapsed( lastCounter, Win32GetWallClock() );
+#if 0                        
+                        r32 secElapsed = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
                         BEGIN_BLOCK( "sleep" );
                         if(secElapsed < targetSecPerFrame)
                         {
                             while(secElapsed < targetSecPerFrame)
                             {
-                                if( sleepIsGranular )
+                                if(sleepIsGranular)
                                 {
                                     r32 secToSleep = targetSecPerFrame - secElapsed;
                                     Sleep( ( i32 ) ( secToSleep * 1000.0f ) );
@@ -1810,12 +1793,6 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                                 
                                 secElapsed = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
                             }
-                        }
-                        else
-                        {
-                            // NOTE( Leonardo ): this is not meant to be here, is just my temporary solution
-                            //to windows not sending messages when application is in pause.
-                            OutputDebugString("missed frame rate");
                         }
                         END_BLOCK();
 #endif
@@ -1827,7 +1804,6 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         TextureOp* lastOp = textureQueue->last;
                         textureQueue->last = textureQueue->first = 0;
                         EndTicketMutex( &textureQueue->mutex );
-                        
                         
                         if(firstOp)
                         {
@@ -1841,25 +1817,25 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         
                         Win32UpdateWindow( &highQueue, &renderCommands, deviceContext, drawRegion, dimension.width, dimension.height );
                         winSoundBuffer.buffer->GetCurrentPosition( &lastPlayCursor, &writeCursor );
-                        
                         END_BLOCK();
                         
+                        BEGIN_BLOCK("debug system");
+                        if(game.DEBUGFrameEnd)
+                        {
+                            game.DEBUGFrameEnd();
+                        }
+                        END_BLOCK();
                         
                         LARGE_INTEGER endCounter = Win32GetWallClock();
                         r32 measuredSecondsPerFrame = Win32GetSecondsElapsed(lastCounter, endCounter);
                         r32 exactTargetFramesPerUpdate = measuredSecondsPerFrame * monitorRefreshRate;
                         u32 newExpectedFramesPerUpdate = RoundReal32ToI32(exactTargetFramesPerUpdate);
-                        
                         expectedFramesPerUpdate = newExpectedFramesPerUpdate;
                         
                         targetSecPerFrame = measuredSecondsPerFrame;
-                        
-                        char expected[16];
-                        sprintf(expected, "expected frames per update: %d, targetSecPerFrame: %f\n", newExpectedFramesPerUpdate, targetSecPerFrame);
-                        //OutputDebugString(expected);
-                        
-                        FRAME_MARKER( measuredSecondsPerFrame );
                         lastCounter = endCounter;
+                        
+                        FRAME_MARKER(measuredSecondsPerFrame);
                     }	
                     
                     Win32CloseConnection(gameInput.network, 0);

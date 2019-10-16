@@ -531,7 +531,8 @@ struct PlatformClientMemory
     
 #if FORGIVENESS_INTERNAL
     b32 DLLReloaded;
-    struct DebugTable* debugTable;
+    struct DebugTable* debugClientTable;
+    struct DebugTable* debugServerTable;
     struct DebugState* debugState;
 #endif
     

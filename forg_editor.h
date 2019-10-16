@@ -135,6 +135,7 @@ enum EditorTabs
 {
     EditorTab_Assets,
     EditorTab_Misc,
+    EditorTab_Debug,
     
     EditorTab_Count,
 };
@@ -171,7 +172,6 @@ struct EditorUIContext
 struct EditorLayout
 {
     EditorUIContext* context;
-    Vec4 defaultColoration;
     
     char* buffer;
     u32 bufferSize;
@@ -193,16 +193,7 @@ struct EditorLayout
     Vec2 mouseP;
     Vec2 deltaMouseP;
     
-    Vec2 baseCorner;
-    Vec2 At;
-    r32 spacingY;
-    r32 spacingX;
-    r32 nextYDelta;
-    u32 depth;
-    r32 lineAdvance;
-    
-    u32 noLineFeed;
-    b32 lineInitialized;
+    char tooltip[128];
 };
 
 

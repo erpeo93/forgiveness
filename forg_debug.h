@@ -1,146 +1,45 @@
 #pragma once
 #define DEBUG_FRAME_COUNT 256
 
-extern DebugTable* debugTable;
-struct DebugVariable;
-struct DebugTree;
-
-struct DebugEntryBlock
+struct DebugElement
 {
-    Vec2 dim;
-};
-
-struct DebugViewProfileGraph
-{
-    DebugEntryBlock block;
     char* GUID;
-};
-
-struct DebugEntryCollapsible
-{
-    b32 expandedAltView;
-    b32 expandedAlways;
-};
-
-enum DebugViewType
-{
-    DebugView_unknown,
-    DebugView_basic,
-    DebugView_inlineBlock,
-    DebugView_collapsible,
-};
-
-struct DebugView
-{
-    DebugViewType type;
+    char* name;
+    struct DebugProfileNode* nodes[DEBUG_FRAME_COUNT];
     
-    DebugID ID;
-    DebugView* nextInHash;
-    union
-    {
-        DebugEntryBlock block;
-        DebugViewProfileGraph profileGraph;
-        DebugEntryCollapsible collapsible;
-    };
+    DebugElement* nextInHash;
 };
 
 struct DebugProfileNode
 {
-    struct DebugElement* element;
-    struct DebugStoredEvent* firstChild;
-    struct DebugStoredEvent* nextSameParent;
+    DebugProfileNode* firstChild;
+    DebugProfileNode* nextSameParent;
+    
+    DebugElement* element;
+    
     u64 duration;
     u64 durationOfChildren;
     u64 parentRelativeClock;
-    u32 reserved;
     u16 threadOrdinal;
     u16 coreIndex;
-};
-
-struct DebugStoredEvent
-{
-    u32 frameIndex;
     
     union
     {
-        DebugEvent event;
-        DebugProfileNode profileNode;
-    };
-    
-    union
-    {
-        DebugStoredEvent* next;
-        DebugStoredEvent* nextFree;
+        DebugProfileNode* next;
+        DebugProfileNode* nextFree;
     };
 };
 
-struct DebugElementFrame
-{
-    DebugStoredEvent* oldestEvent;
-    DebugStoredEvent* mostRecentEvent;
-};
 
-struct DebugElement
+struct DebugEntry
 {
-    char* originalGUID; // NOTE(Leonardo): can't be printed! might point into unloaded DLL!
-    char* GUID;
-    char* name;
-    
-    u32 fileNameCount;
-    u32 lineNumber;
-    
-    DebugType type;
-    
-    b32 valueWasEdited;
-    
-    DebugElementFrame frames[DEBUG_FRAME_COUNT];
-    DebugElement* nextInHash;
-};
-
-inline char* GetName(DebugElement* element) 
-{
-    char* result = element->name;
-    return result;
-}
-
-struct DebugEventLink
-{
-    DebugEventLink* next;
-    DebugEventLink* prev;
-    
-    DebugEventLink* firstChild;
-    DebugEventLink* lastChild;
-    
-    char* name;
     DebugElement* element;
-};
-
-inline DebugEventLink* GetSentinel(DebugEventLink* from)
-{
-    DebugEventLink* result = ( DebugEventLink* ) ( &from->firstChild );
-    return result;
-}
-
-inline b32 HasChildren(DebugEventLink* link)
-{
-    b32 result = ( link->firstChild != GetSentinel( link ) );
-    return result;
-}
-
-struct DebugTree
-{
-    DebugEventLink* root;
-    Vec2 P;
     
-    DebugTree* next;
-    DebugTree* prev;
-};
-
-struct DebugCounterState
-{
-    char* filename;
-    char* blockName;
-    u32 lineNumber;
+    union
+    {
+        DebugEntry* next;
+        DebugEntry* nextFree;
+    };
 };
 
 struct DebugFrame
@@ -151,23 +50,17 @@ struct DebugFrame
     u64 endClock;
     
     r32 secondsElapsed;
-    r32 frameBarScale;
     
-    u32 storedEventCount;
-    u32 profileBlockCount;
-    u32 dataBlockCount;
+    DebugProfileNode* rootProfileNode;
     
-    DebugStoredEvent* rootProfileNode;
+    u32 entryCount;
+    DebugEntry* firstEntry;
 };
 
 struct OpenDebugBlock
 {
-    u32 startingFrameIndex;
-    DebugElement* element;
-    
     u64 beginClock;
-    DebugStoredEvent* node;
-    DebugEventLink* group;
+    DebugProfileNode* currentNode;
     
     union
     {
@@ -180,8 +73,7 @@ struct DebugThread
 {
     u32 laneIndex;
     u32 ID;
-    OpenDebugBlock* firstOpenCodeBlock;
-    OpenDebugBlock* firstOpenDataBlock;
+    OpenDebugBlock* currentOpenCodeBlock;
     
     union
     {
@@ -190,61 +82,53 @@ struct DebugThread
     };
 };
 
-#include "forg_debug_ui.h"
-
 struct DebugCollationState
 {
-    b32 paused;
     u32 totalFrameCount;
+    
+    b32 paused;
+    
     u32 viewingFrameOrdinal;
     u32 mostRecentFrameOrdinal;
     u32 collatingFrameOrdinal;
     u32 oldestFrameOrdinal;
+    
     DebugFrame frames[DEBUG_FRAME_COUNT];
     
-    DebugElement* rootProfileElement;
-    u32 frameBarLaneCount;
-    DebugThread* firstThread;
-    
-    DebugEventLink* rootGroup;
-    DebugEventLink* profileGroup;
-    DebugTree sentinelTree;
-    
-    DebugView* viewHash[4096];
+    DebugElement* currentRootElement;
     DebugElement* elements[1024];
     
-    DebugInteraction interaction;
-    DebugInteraction hotInteraction;
-    DebugInteraction nextHotInteraction;
-    
-    u32 countSelectedIDs;
-    DebugID selectedID[32];
-    DebugID editingID;
-    
-    char* rootInfo;
-    
-    DebugPlatformMemoryStats memStats;
+    u32 threadCount;
+    DebugThread* firstThread;
+};
+
+
+enum ProfilerViewType
+{
+    Profiler_Threads,
+    Profiler_Frames,
+    Profiler_TopList,
 };
 
 struct DebugState
 {
-    b32 ALTUI;
-    
-    Vec2 mousePOffsetFromCenter;
-    
+    b32 profiling;
     MemoryPool debugPool;
-    MemoryPool perFramePool;
-    
-    Vec2 layoutOffset;
-    
-    Vec2 lastMouseP;
-    Layout mouseTextLayout;
     
     DebugThread* firstFreeThread;
     OpenDebugBlock* firstFreeBlock;
-    DebugStoredEvent* firstFreeStoredEvent;
+    DebugProfileNode* firstFreeProfileNode;
+    DebugEntry* firstFreeEntry;
     
+    ProfilerViewType profilerType;
     DebugCollationState clientState;
+    DebugCollationState serverState;
+    
+    Vec2 frameSliderDim;
+    Vec2 profilerDim;
+    
+    b32 showServerProfiling;
+    
 };
 
 struct DebugStatistic
@@ -254,22 +138,4 @@ struct DebugStatistic
     r64 sum;
     r64 avg;
     u32 count;
-};
-
-inline b32 DebugIDAreEqual( DebugID A, DebugID B )
-{
-    b32 result = ( A.value[0] == B.value[0] ) && ( A.value[1] == B.value[1] );
-    return result;
-}
-
-inline b32 IsNull( DebugID ID )
-{
-    b32 result = ( ID.value[0] == 0 ) && ( ID.value[1] == 0 );
-    return result;
-}
-
-enum DebugElementOp
-{
-    DebugElementOp_AddToGroup = ( 1 << 1 ),
-    DebugElementOp_CreateHierarchy = ( 1 << 2 ),
 };

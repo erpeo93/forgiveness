@@ -33,10 +33,6 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_meta.cpp"
 #include "forg_sort.cpp"
 
-#if FORGIVENESS_INTERNAL
-#include "forg_debug_ui.cpp"
-#endif
-
 internal void PlayGame(GameState* gameState, PlatformInput* input)
 {
     SetGameMode(gameState, GameMode_Playing);
@@ -582,7 +578,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             myPlayer->oldUniverseP = myPlayer->universeP;
             
-            RenderEditor(group, worldMode, deltaMouseScreenP);
+            RenderEditor(group, worldMode, deltaMouseScreenP, input);
 #if 0
             Rect3 worldCameraBounds = GetScreenBoundsAtTargetDistance(group);
             Rect2 screenBounds = RectCenterDim(V2(0, 0), V2(worldCameraBounds.max.x - worldCameraBounds.min.x, worldCameraBounds.max.y - worldCameraBounds.min.y));
@@ -752,7 +748,7 @@ internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* gr
 
 #if FORGIVENESS_INTERNAL
 PlatformClientMemory* debugGlobalMemory;
-DebugTable *globalDebugTable;
+DebugTable* globalDebugTable;
 #endif 
 
 //void GameUpdateAndRender(PlatformMemory* memory, PlatformInput* input, GameRenderCommands* commands)
@@ -763,27 +759,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     r32 timeToAdvance = input->timeToAdvance;
 #if FORGIVENESS_INTERNAL
     debugGlobalMemory = memory;
-    globalDebugTable = memory->debugTable;
-    
-    {
-        DEBUG_DATA_BLOCK(Renderer);
-        {
-            DEBUG_DATA_BLOCK(Entity);
-        }
-        {
-            DEBUG_DATA_BLOCK(Camera);
-        }
-    }
-    
-    {
-        DEBUG_DATA_BLOCK(GameProfile);
-        DEBUG_UI_ELEMENT(DebugType_FrameSlider, FrameSlider);
-        DEBUG_UI_ELEMENT(DebugType_TopClockList, GameUpdateAndRender1);
-        DEBUG_UI_ELEMENT(DebugType_FrameBarGraph, GameUpdateAndRender2);
-        DEBUG_UI_ELEMENT(DebugType_ThreadIntervalGraph, GameUpdateAndRender3);
-        DEBUG_UI_ELEMENT(DebugType_LastFrameInfo, LastFrame);
-        DEBUG_UI_ELEMENT(DebugType_MemoryRemaining, MemoryRemaining);
-    }
+    globalDebugTable = memory->debugClientTable;
 #endif 
     
     TIMED_FUNCTION();

@@ -335,8 +335,6 @@ int main( int argc, char* argv[] )
     globalMemorySentinel.next = &globalMemorySentinel;
     globalMemorySentinel.prev = &globalMemorySentinel;
     
-    DEBUGSetEventRecording(true);
-    
     PlatformServerMemory* memory = (PlatformServerMemory*) malloc(sizeof(PlatformServerMemory));
     memset(memory, 0, sizeof(PlatformServerMemory));
     memory->api.AllocateMemory = Win32AllocateMemory;

@@ -189,6 +189,15 @@ internal void EditStruct(EditorLayout* layout, String structName, void* structPt
     StructOperation(layout, structName, structName, 0, structPtr, FieldOperation_Edit, 0, &ignored, false, ID);
 }
 
+internal Rect2 EditorElementBounds(EditorLayout* layout, Vec2 dim)
+{
+    r32 minX = layout->currentP.x;
+    r32 minY = layout->currentP.y - dim.y;
+    Vec2 min = V2(minX, minY);
+    Rect2 bounds = RectMinDim(min, dim);
+    
+    return bounds;
+}
 
 internal Vec2 RectPadding(r32 fontScale)
 {
@@ -236,6 +245,37 @@ internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char*
     layout->currentP.x = textDim.max.x;
     
     return textDim;
+}
+
+inline Rect2 TextOp(EditorLayout* layout, char* string, Vec2 p, TextOperation op, Vec4 color = V4(1.0f, 1.0f, 1.0f, 1.0f), r32 scale = 1.0f)
+{
+    
+    Rect2 result = InvertedInfinityRect2();
+    if(layout->font)
+    {
+        result = PushText_(layout->group, layout->fontID, layout->font, layout->fontInfo, 
+                           string, V3(p.x, p.y, 0), layout->fontScale, 
+                           op, color, false, true);
+    }
+    
+    return result;
+}
+
+inline void TextLineAt(EditorLayout* layout, char* string, Vec2 p, Vec4 color = V4(1.0f, 1.0f, 1.0f, 1.0f), r32 scale = 1.0f)
+{
+    TextOp(layout, string, p, TextOp_draw, color, scale);
+}
+
+inline Rect2 TextSize(EditorLayout* layout, char* string)
+{
+    Rect2 result = TextOp(layout, string, V2(0, 0), TextOp_getSize);
+    return result;
+}
+
+inline r32 GetBaseline(EditorLayout* layout)
+{
+    r32 result = layout->fontScale * GetStartingLineY(layout->fontInfo);
+    return result;
 }
 
 r32 RawHeight(EditorLayout* layout)
@@ -324,6 +364,7 @@ inline b32 IsHotAUID(EditorUIContext* context, AUID ID)
 #define GetUIButton(context, button) &(context->input->button)
 #define UIPressed(context, button) Pressed(GetUIButton(context, button))
 #define UIReleased(context, button) Released(GetUIButton(context, button))
+#define UIDown(context, button) IsDown(GetUIButton(context, button))
 
 #define HotAUIDAndPressed(context, ID, button) HotAUIDAndPressed_(context, ID, GetUIButton(context, button))
 internal b32 HotAUIDAndPressed_(EditorUIContext* context, AUID ID, PlatformButton* button)
@@ -1351,6 +1392,38 @@ internal void EditorResize(EditorLayout* layout, Vec2 P, AUID ID, r32* dim)
     PushRect(layout->group, FlatTransform(0.2f), resizableRect, resizeColor);
 }
 
+internal void EditorResize(EditorLayout* layout, Vec2 P, AUID ID, Vec2* dim)
+{
+    AUIDData* data = GetAUIDData(layout->context, ID);
+    
+    Vec4 resizeColor = V4(1, 0, 0, 1);
+    Vec2 resizeDim = ResizableDim(layout);
+    Rect2 resizableRect = RectCenterDim(P, resizeDim);
+    
+    if(PointInRect(resizableRect, layout->mouseP))
+    {
+        SetNextHotAUID(layout->context, ID);
+        resizeColor = V4(1, 1, 0, 1);
+    }
+    
+    if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
+    {
+        SetInteractiveAUID(layout->context, ID);
+    }
+    
+    if(IsInteractiveAUID(layout->context, ID))
+    {
+        (*dim) += V2(layout->deltaMouseP.x, -layout->deltaMouseP.y);
+        
+        if(UIReleased(layout->context, mouseLeft))
+        {
+            EndInteraction(layout->context);
+        }
+    }
+    
+    PushRect(layout->group, FlatTransform(0.2f), resizableRect, resizeColor);
+}
+
 internal b32 EditorCollapsible(EditorLayout* layout, char* string)
 {
     b32 result = EditorCollapsible(layout, string, auID(string));
@@ -1735,7 +1808,7 @@ internal void RenderEditAssetFile(EditorLayout* layout, Assets* assets, PAKFileH
     }
 }
 
-internal EditorLayout StandardLayout(MemoryPool* pool, FontId ID, RenderGroup* group, EditorUIContext* context, Vec2 mouseP, Vec2 deltaMouseP, Vec4 defaultColoration = V4(1, 1, 1, 1), r32 fontScale = 1.0f, r32 horizontalAdvance = 100.0f)
+internal EditorLayout StandardLayout(MemoryPool* pool, FontId ID, RenderGroup* group, EditorUIContext* context, Vec2 mouseP, Vec2 deltaMouseP, r32 fontScale = 1.0f, r32 horizontalAdvance = 100.0f)
 {
     EditorLayout result = {};
     
@@ -1744,8 +1817,6 @@ internal EditorLayout StandardLayout(MemoryPool* pool, FontId ID, RenderGroup* g
     Font* font = GetFont(group->assets, ID);
     
     result.context = context;
-    
-    result.defaultColoration = defaultColoration;
     
     result.bufferSize = KiloBytes(64);
     result.buffer = (char*) PushSize(pool, result.bufferSize);
@@ -1765,20 +1836,15 @@ internal EditorLayout StandardLayout(MemoryPool* pool, FontId ID, RenderGroup* g
     result.deltaMouseP = deltaMouseP;
     result.group = group;
     
-    result.lineAdvance = GetLineAdvance(fontInfo);
-    result.At = result.currentP;
-    result.baseCorner = result.currentP;
-    result.spacingY = 4.0f;
-    result.spacingX = 4.0f;
-    result.depth = 0;
-    //layout.debugState = debugState;
-    //layout.collation = collation;
-    
-    
     return result;
 }
 
-internal void DEBUGOverlay(DebugState* debugState, DebugCollationState* collation, PlatformInput* input, Vec2 mouseP);
+internal void AddTooltip(EditorLayout* layout, char* text)
+{
+    FormatString(layout->tooltip, sizeof(layout->tooltip), "%s", text);
+}
+
+internal void DEBUGOverlay(EditorLayout* layout);
 internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 deltaMouseP, PlatformInput* input)
 {
     EditorUIContext* context = &worldMode->editorUI;
@@ -1797,27 +1863,6 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
         {
             MemoryPool editorPool = {};
             SetOrthographicTransformScreenDim(group);
-            
-            
-#if FORGIVENESS_INTERNAL
-            
-#if 0            
-            if(IsValid(debugState->fontId))
-            {
-                debugState->debugFont = PushFont(&debugState->renderGroup, debugState->fontId);
-                debugState->debugFontInfo = GetFontInfo(debugState->renderGroup.assets, debugState->fontId);
-            }
-#endif
-            
-            DebugState* debugState = debugGlobalMemory->debugState;
-            
-            DEBUGOverlay(debugState, &debugState->clientState, input, mouseP); 
-            debugState->lastMouseP = mouseP;
-#endif
-            
-            
-            
-            
             
             if(Pressed(&context->input->undo))
             {
@@ -1848,10 +1893,8 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                 context->offset.y -= 10.0f * context->input->mouseWheelOffset;
             }
             context->fontScale = Max(context->fontScale, 0.4f);
-            
             context->nextHot = {};
-            EditorLayout layout = StandardLayout(&editorPool, fontID, group, context, mouseP, deltaMouseP, V4(1, 1, 1, 1));
-            
+            EditorLayout layout = StandardLayout(&editorPool, fontID, group, context, mouseP, deltaMouseP);
             EditorTabs active = context->activeTab;
             
             AUID auid = auID(context, "left");
@@ -1878,6 +1921,11 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                 case EditorTab_Misc:
                 {
                     ShowLabel(&layout, "Misc");
+                } break;
+                
+                case EditorTab_Debug:
+                {
+                    ShowLabel(&layout, "Debug");
                 } break;
             }
             
@@ -1914,6 +1962,13 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                             NextRaw(&layout);
                         }
                     }
+                } break;
+                
+                case EditorTab_Debug:
+                {
+#if FORGIVENESS_INTERNAL
+                    DEBUGOverlay(&layout); 
+#endif
                 } break;
                 
                 case EditorTab_Misc:
@@ -1962,6 +2017,18 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                     Edit_u32(&layout, "chunk apron", &worldMode->chunkApron, 0, {});
                 } break;
             }
+            
+            r32 tooltipScale = 0.5f;
+            Rect2 tooltipDim = GetTextDim(group, fontID, layout.tooltip, V3(0, 0, 0), tooltipScale);
+            
+            Vec3 tooltipP = V3(layout.mouseP + V2(-0.5f * GetDim(tooltipDim).x, 20), 0);
+            tooltipP.x = Max(tooltipP.x, -0.5f * group->screenDim.x);
+            
+            tooltipDim = Offset(tooltipDim, tooltipP.xy);
+            PushRect(group, FlatTransform(), tooltipDim, V4(0, 0, 0, 1));
+            PushText(group, fontID, layout.tooltip, tooltipP, tooltipScale);
+            
+            
             
             context->hot = context->nextHot;
             if(Pressed(&context->input->escButton))

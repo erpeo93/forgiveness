@@ -75,19 +75,6 @@ internal void GameAccessRequest(u32 challenge)
 }
 
 #if FORGIVENESS_INTERNAL
-internal void SendEditingEvent( DebugEvent* event )
-{
-    Assert( event->pointer );
-    if( clientNetwork )
-    {
-        StartPacket(debugEvent);
-        
-        Pack("QQLHCQQ", event->clock, event->pointer, event->threadID, event->coreIndex, event->type, event->overNetwork[0], event->overNetwork[1]);
-        
-        CloseAndSendOrderedPacket();
-    }
-}
-
 internal void SendInputRecordingMessage( b32 recording, b32 startAutomatically )
 {
     if( clientNetwork )
@@ -300,33 +287,6 @@ internal void SendRecreateWorldRequrest(b32 createEntities, UniversePos P)
     Pack("llllV", createEntities, P.chunkX, P.chunkY, P.chunkZ, P.chunkOffset);
     CloseAndSendGuaranteedPacket();
 }
-
-#if FORGIVENESS_INTERNAL
-inline SavedNameSlot* GetNameSlot(u64 pointer )
-{
-    u32 index = ( u32 ) ( pointer & ( u64 ) ( ArrayCount( debugTable->nameSlots - 1) ) );
-    
-    SavedNameSlot* result = 0;
-    for( SavedNameSlot* test =  debugTable->nameSlots[index]; test; test = test->next )
-    {
-        if( test->pointer == pointer )
-        {
-            result = test;
-            break;
-        }
-    }
-    
-    if( !result )
-    {
-        result = PushStruct( &debugTable->tempPool, SavedNameSlot );
-        result->next = debugTable->nameSlots[index];
-        debugTable->nameSlots[index] = result;
-        result->pointer = pointer;
-    }
-    
-    return result;
-}
-#endif
 
 internal u32 ServerClientIDMappingHashIndex(GameModeWorld* worldMode, EntityID ID)
 {
@@ -1040,36 +1000,26 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             
             case Type_debugEvent:
             {
+                InvalidCodePath;
+                
+#if 0                
                 DebugEvent event = {};
+                Unpack("QssLHCQQ", &event->clock, event.GUID, event.name, &event.threadID, &event.coreIndex, &event.type, event.overNetwork, event.overNetwork + 1 );
                 
-                Unpack("QQ", &event.clock, &event.pointer );
-                SavedNameSlot* slot = GetNameSlot(( u64 ) event.pointer );
-                event.GUID = slot->GUID;
-                event.name = slot->name;
-                Unpack("ssLHCQQ", event.GUID, event.name, &event.threadID, &event.coreIndex, &event.type, event.overNetwork, event.overNetwork + 1 );
-                Assert( event.pointer );
+                u32 arrayIndex = globalServerDebugTable->currentServerEventArrayIndex;
+                u32 eventIndex = globalServerDebugTable->serverEventCount[arrayIndex]++;
+                globalServerDebugTable->serverEvents[arrayIndex][eventIndex] = event;
+#endif
                 
-                if( event.pointer == globalDebugTable->pointerToIgnore )
-                {
-                    // NOTE(Leonardo): we ignore the event cause the data it contains will be wrong... we have just finished editing that
-                    //event, so the server can't have the updated information.
-                    globalDebugTable->pointerToIgnore = 0;
-                    event.overNetwork[0] = globalDebugTable->overNetworkEdit[0];
-                    event.overNetwork[1] = globalDebugTable->overNetworkEdit[1];
-                }
-                
-                u32 arrayIndex = globalDebugTable->currentServerEventArrayIndex;
-                u32 eventIndex = globalDebugTable->serverEventCount[arrayIndex]++;
-                globalDebugTable->serverEvents[arrayIndex][eventIndex] = event;
             } break;
             
-            
-            case Type_memoryStats:
+#if 0            
+            case Type_debugAllEventsSent:
             {
-                DebugPlatformMemoryStats* serverStats = &globalDebugTable->serverStats;
-                Unpack("LQQ", &serverStats->blockCount, &serverStats->totalUsed, &serverStats->totalSize );
-                globalDebugTable->serverFinished = true;
+                debugState->serverState.paused = false;
+                CollateDebugEvents(debugState, &debugState->serverState, debugGlobalMemory->debugServerTable);
             } break;
+#endif
             
 #endif
             InvalidDefaultCase;

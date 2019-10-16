@@ -681,20 +681,11 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 #if FORGIVENESS_INTERNAL
 extern "C" SERVER_FRAME_END(ServerFrameEnd)
 {
-    TIMED_FUNCTION();
     ServerState* server = memory->server;
-    globalDebugTable->currentEventArrayIndex = !globalDebugTable->currentEventArrayIndex;
-    
-    u64 arrayIndex_eventIndex = AtomicExchangeU64(&globalDebugTable->eventArrayIndex_EventIndex, 
-                                                  ((u64) globalDebugTable->currentEventArrayIndex << 32));
-    
-    u32 eventArrayIndex = arrayIndex_eventIndex >> 32;
-    Assert(eventArrayIndex <= 1);
-    u32 eventCount = arrayIndex_eventIndex & 0xffffffff;
-    
+    FlipTableResult flip = FlipDebugTable(globalDebugTable);
     
 #if 0    
-    if(!server->recompiled && server->debugPlayer)
+    if(server->debugPlayer)
     {
         for(u32 eventIndex = 0; eventIndex < eventCount; ++eventIndex)
         {
@@ -702,11 +693,9 @@ extern "C" SERVER_FRAME_END(ServerFrameEnd)
             SendDebugEvent(server->debugPlayer, event);
         }
         
-        SendMemStats(server->debugPlayer);
+        SendAllEventsSentMessage(debugPlayer);
     }
 #endif
-    
-    return globalDebugTable;
 }
 #else
 extern "C" SERVER_FRAME_END( ServerFrameEnd )
