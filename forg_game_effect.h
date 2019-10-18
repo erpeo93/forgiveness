@@ -1,18 +1,22 @@
 #pragma once
 
-struct GameEffect
+introspection() struct GameEffect
 {
-    u16 type;
+    r32 timer MetaDefault("1");
+    GameProperty effectType MetaDefault("{Property_gameEffect}") MetaFixed(property);
+    EntityRef spawnType;
 };
 
-struct EffectBinding
+introspection() struct EffectBinding
 {
-    u16 essenceType;
+    GameProperty property;
     GameEffect effect;
 };
 
 struct EffectComponent
 {
     u32 effectCount;
+    
     GameEffect effects[8];
+    r32 timers[8];
 };

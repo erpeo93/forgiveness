@@ -10,7 +10,7 @@ internal void UpdateSeasonTimer(ServerState* server, r32 elapsedTime)
     server->seasonLerp = Clamp01MapToRange(0.5f * SEASON_DURATION, server->seasonTime, SEASON_DURATION);
 }
 
-internal EntityID AddEntity_(ServerState* server, UniversePos P, AssetID definitionID,u32 seed, PlayerComponent* player = 0)
+internal EntityID AddEntity_(ServerState* server, UniversePos P, AssetID definitionID, u32 seed, PlayerComponent* player = 0)
 {
     Assert(IsValid(definitionID));
     EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
@@ -370,31 +370,31 @@ internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos 
     }
 }
 
-internal void Craft()
+internal void DispatchGameEffect(ServerState* server, UniversePos P, GameEffect* effect)
 {
-    PickRandomEffects();
-    Pick Essences based on seed();
-    
+    switch(effect->effectType.value)
+    {
+        case spawnEntity:
+        {
+            AddEntity(server, P, &server->entropy, effect->spawnType);
+        } break;
+    }
 }
 
-internal void DispatchGameEffect(ServerState* server, Vec3 P, GameEffect* effect)
+STANDARD_ECS_JOB_SERVER(DispatchGameEffects)
 {
-    switch(effect->type)
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    EffectComponent* effects = GetComponent(server, ID, EffectComponent);
+    
+    for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
     {
-        case spawnAnimal:
+        GameEffect* effect = effects->effects + effectIndex;
+        effects->timers[effectIndex] += elapsedTime;
+        if(effects->timers[effectIndex] >= effect->timer)
         {
-            
-        } break;
-        
-        case spawnGrass:
-        {
-            
-        } break;
-        
-        case spawnRock:
-        {
-            
-        } break;
+            effects->timers[effectIndex] = 0;
+            DispatchGameEffect(server, physic->P, effect);
+        }
     }
 }
 

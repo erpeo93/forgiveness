@@ -4,9 +4,11 @@ Archetype() struct AnimalArchetype
 #ifdef FORG_SERVER
     PhysicComponent physic;
     PlayerComponent* player;
+    EquipmentComponent equipment;
 #else
     BaseComponent base;
     AnimationComponent animation;
+    EquipmentComponent equipment;
 #endif
 };
 
@@ -50,6 +52,7 @@ Archetype() struct ObjectArchetype
 #ifdef FORG_SERVER
     PhysicComponent physic;
     PlayerComponent* player;
+    EffectComponent effect;
 #else
     BaseComponent base;
     LayoutComponent layout;
@@ -70,6 +73,9 @@ introspection() struct ServerEntityInitParams
     UniversePos P MetaUneditable();
     u32 seed MetaUneditable();
     AssetID definitionID MetaUneditable();
+    
+    ArrayCounter bindingCount MetaCounter(bindings);
+    EffectBinding* bindings;
 };
 
 introspection() struct ImageProperty

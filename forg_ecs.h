@@ -19,6 +19,8 @@ struct ArchetypeLayout
     ArchetypeComponent hasPlayerComponent;
     ArchetypeComponent hasImageComponent;
     ArchetypeComponent hasLayoutComponent;
+    ArchetypeComponent hasEffectComponent;
+    ArchetypeComponent hasEquipmentComponent;
 };
 
 #define HasComponent(arch, component) archetypeLayouts[arch].has##component.exists

@@ -65,6 +65,11 @@ struct GameProperties
     u32 flags[MAX_PROPERTIES_PER_ASSET];
 };
 
+inline b32 AreEqual(GameProperty p1, GameProperty p2)
+{
+    b32 result = ((p1.property == p2.property) && (p1.value == p2.value));
+    return result;
+}
 
 struct RenderTexture
 {

@@ -475,7 +475,7 @@ internal GameProperty Parse_GameProperty(Tokenizer* tokenizer, GameProperty defa
 
 internal void Dump_GameProperty(Stream* output, FieldDefinition* field, GameProperty value, b32 isInArray)
 {
-    if(value.property && value.value)
+    if(value.property)
     {
         char* propertyType = GetMetaPropertyTypeName(value.property);
         char* propertyValue = GetMetaPropertyValueName(value.property, value.value);

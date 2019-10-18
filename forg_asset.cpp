@@ -184,7 +184,7 @@ inline GetAssetResult GetAssetRaw(Assets* assets, AssetID ID)
     
     AssetSubtypeArray* subtype = GetSubtype(array, ID.subtypeHashIndex);
     
-    if(ID.index < (subtype->standardAssetCount + subtype->derivedAssetCount))
+    if(subtype && ID.index < (subtype->standardAssetCount + subtype->derivedAssetCount))
     {
         Asset* asset = GetAsset(subtype, ID.index);
         result.asset = asset;
@@ -1396,8 +1396,12 @@ internal u16 GetAssetIndex(Assets* assets, u16 type, u32 subtype, Token indexNam
 
 internal char* GetAssetIndexName(Assets* assets, AssetID ID)
 {
+    char* result = 0;
     Asset* asset = GetAssetRaw(assets, ID).asset;
-    char* result = asset->paka.sourceName;
+    if(asset)
+    {
+        result = asset->paka.sourceName;
+    }
     return result;
 }
 

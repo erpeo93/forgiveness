@@ -1079,7 +1079,7 @@ internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enume
     return result;
 }
 
-global_variable char* nullAssetType = "null";
+global_variable char* nullAssetString = "null";
 internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
@@ -1119,7 +1119,7 @@ internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType*
     char* subtypeString = GetAssetSubtypeName(assets, type->type, type->subtypeHash);
     if(!subtypeString)
     {
-        subtypeString = nullAssetType;
+        subtypeString = nullAssetString;
     }
     
     MemoryPool tempPool = {};
@@ -1214,6 +1214,11 @@ internal b32 Edit_EntityRef(EditorLayout* layout, char* name, EntityRef* ref, b3
         typeString = GetAssetSubtypeName(assets, AssetType_EntityDefinition, ref->subtypeHashIndex);
     }
     
+    if(!typeString)
+    {
+        typeString = nullAssetString;
+    }
+    
     MemoryPool tempPool = {};
     
     StringArray kindOptions = GetAssetSubtypeList(assets, &tempPool, AssetType_EntityDefinition);
@@ -1233,12 +1238,18 @@ internal b32 Edit_EntityRef(EditorLayout* layout, char* name, EntityRef* ref, b3
     ID.type = AssetType_EntityDefinition;
     ID.subtypeHashIndex = ref->subtypeHashIndex;
     ID.index = ref->index;
+    
     char* indexString = GetAssetIndexName(layout->context->assets, ID);
     if(!indexString)
     {
         ref->index = 0;
         ID.index = 0;
         indexString = GetAssetIndexName(layout->context->assets, ID);
+    }
+    
+    if(!indexString)
+    {
+        indexString = nullAssetString;
     }
     
     StringArray indexOptions = BuildAssetIndexNames(layout->context->assets, &tempPool, AssetType_EntityDefinition, ref->subtypeHashIndex);
@@ -1569,12 +1580,11 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
             
             case AssetType_EntityDefinition:
             {
-                AUID auid = auID(info, "entityDef");
+                AUID auid = auID(info, "entityDefSpawn");
                 if(StandardEditorButton(layout, "spawn", auid))
                 {
                     SendSpawnRequest(layout->context->playerP, ID);
                 }
-                
             }
             default:
             {

@@ -5,6 +5,18 @@ internal Rect3 StandardBounds(Vec3 dim, Vec3 offset)
     return result;
 }
 
+internal GameProperty GetProperty(u32 seed)
+{
+    GameProperty result;
+    result.property = Property_essence;
+    
+    RandomSequence seq = Seed(seed);
+    u32 choice = RandomChoice(&seq, earth + 1);
+    result.value = SafeTruncateToU16(choice);
+    
+    return result;
+}
+
 #ifdef FORG_SERVER
 internal void InitPhysicComponent(PhysicComponent* physic, UniversePos P, Vec3 boundOffset, Vec3 boundDim, AssetID definitionID, u32 seed)
 {
@@ -58,6 +70,23 @@ INIT_ENTITY(GrassArchetype)
     InitPhysicComponent(physic, params->P, common->boundOffset, common->boundDim, params->definitionID, params->seed);
 }
 
+internal void AddRandomEffects(EffectComponent* effects, EffectBinding* bindings, ArrayCounter bindingCount, GameProperty property)
+{
+    for(ArrayCounter bindingIndex = 0; bindingIndex < bindingCount; ++bindingIndex)
+    {
+        EffectBinding* binding = bindings + bindingIndex;
+        if(AreEqual(binding->property, property))
+        {
+            if(effects->effectCount < ArrayCount(effects->effects))
+            {
+                GameEffect* dest = effects->effects + effects->effectCount++;
+                *dest = binding->effect;
+            }
+            break;
+        }
+    }
+}
+
 INIT_ENTITY(ObjectArchetype)
 {
     ServerState* server = (ServerState*) state;
@@ -68,7 +97,8 @@ INIT_ENTITY(ObjectArchetype)
     InitPhysicComponent(physic, params->P, common->boundOffset, common->boundDim, params->definitionID, params->seed);
     
     EffectComponent* effect = GetComponent(server, ID, EffectComponent);
-    AddEffectBasedOnEssences();
+    GameProperty property = GetProperty(params->seed);
+    AddRandomEffects(effect, params->bindings, params->bindingCount, property);
 }
 
 #else
@@ -206,7 +236,11 @@ INIT_ENTITY(ObjectArchetype)
         }
     }
     
-    
-    AddPiecePropertiesBasedOnEssences();
+    GameProperty property = GetProperty(params->seed);
+    for(u32 pieceIndex = 0; pieceIndex < dest->pieceCount; ++pieceIndex)
+    {
+        LayoutPiece* destPiece = dest->pieces + pieceIndex;
+        AddGameProperty_(&destPiece->image.properties, property, GameProperty_Optional);
+    }
 }
 #endif

@@ -21,8 +21,6 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_plant.cpp"
 #include "forg_mesh.cpp"
 #include "forg_rock.cpp"
-#include "forg_object.cpp"
-//#include "forg_crafting.cpp"
 #include "forg_particles.cpp"
 //#include "forg_bolt.cpp"
 //#include "forg_bound.cpp"

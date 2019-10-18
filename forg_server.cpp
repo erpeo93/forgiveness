@@ -679,6 +679,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     EXECUTE_JOB(server, FillCollisionSpatialPartition, ArchetypeHas(PhysicComponent), elapsedTime);
     
     EXECUTE_JOB(server, HandlePlayerRequests, ArchetypeHas(PlayerComponent), elapsedTime);
+    EXECUTE_JOB(server, DispatchGameEffects, ArchetypeHas(PhysicComponent) && ArchetypeHas(EffectComponent), elapsedTime);
     EXECUTE_JOB(server, MoveAndSendUpdate, ArchetypeHas(PhysicComponent), elapsedTime);
     
     Clear(&tempPool);

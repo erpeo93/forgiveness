@@ -13,14 +13,15 @@
 #include "forg_random.h"
 #include "forg_file_formats.h"
 #include "asset_builder.h"
+#include "forg_asset.h"
 
 
 #define Property(name) enum name
 #include "../properties/test.properties"
-
-#include "forg_ecs.h"
-#include "forg_asset.h"
 #include "forg_world_generation.h"
+#include "forg_game_effect.h"
+#include "forg_ecs.h"
+#include "forg_entity_layout.h"
 #include "forg_meta.h"
 #include "forg_render_tier.h"
 #include "forg_render.h"
@@ -28,7 +29,6 @@
 #include "forg_animation.h"
 #include "forg_bound.h"
 #include "forg_sound.h"
-#include "forg_action_effect.h"
 #include "forg_AI.h"
 #include "forg_world.h"
 #include "forg_editor.h"
@@ -41,8 +41,6 @@
 #include "forg_cutscene.h"
 #include "forg_plant.h"
 #include "forg_rock.h"
-#include "forg_essence.h"
-#include "forg_skill.h"
 #include "forg_ground.h"
 
 #if FORGIVENESS_INTERNAL

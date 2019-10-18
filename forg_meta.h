@@ -59,6 +59,8 @@ enum MetaType
     MetaType_SpawnerEntity,
     MetaType_ImageProperties,
     MetaType_LayoutPieceProperties,
+    MetaType_EffectBinding,
+    MetaType_GameEffect,
 };
 
 enum FieldMetaFlags

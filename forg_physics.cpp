@@ -145,8 +145,8 @@ internal EntityID GetCurrent(SpatialPartitionQuery* query)
                         result = block->IDs[index];
                         break;
                     }
-                    block = block->next;
                     runningIndex += block->count;
+                    block = block->next;
                 }
             }
             
