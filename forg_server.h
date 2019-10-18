@@ -201,6 +201,10 @@ struct ServerState
     FileHash* firstFreeFileHash;
     
     Assets* assets;
+    
+#if FORGIVENESS_INTERNAL
+    b32 captureFrame;
+#endif
 };
 
 #define SERVER_SIMULATE_WORLDS(name) void name(PlatformServerMemory* memory, r32 secondElapsed)

@@ -182,46 +182,49 @@ internal u64 GetTotalDuration(DebugProfileNode* n)
 internal void DrawProfileBars(EditorLayout* layout, DebugCollationState* collation, Rect2 bounds, DebugElement* rootElement, r32 laneStride, r32 laneHeight, u32 depthRemaining)
 {
     DebugProfileNode* rootNode = GetViewingNode(collation, rootElement);
-    r32 frameSpan = (r32) (rootNode->duration);
-    r32 pixelSpan = GetDim(bounds).x;
-    
-    r32 zOffset = -20.0f * (r32) depthRemaining;
-    
-    r32 scale = 0.0f;
-    if(frameSpan > 0)
+    if(rootNode)
     {
-        scale = pixelSpan / frameSpan;
-    }
-    
-    for(DebugProfileNode* node = rootNode->firstChild; node; node = node->nextSameParent)
-    {
-        DebugElement* element = node->element;
+        r32 frameSpan = (r32) (rootNode->duration);
+        r32 pixelSpan = GetDim(bounds).x;
         
-        Vec3 color = debugColors[U32FromPointer(element->GUID) % ArrayCount(debugColors)];
-        u32 laneIndex = node->threadOrdinal;
-        r32 laneY = bounds.max.y - laneStride * laneIndex;
-        r32 thisMinX = bounds.min.x + scale * (node->parentRelativeClock);
-        r32 thisMaxX = thisMinX + scale * (r32) (node->duration);
+        r32 zOffset = -20.0f * (r32) depthRemaining;
         
-        Rect2 regionRect = RectMinMax(V2(thisMinX, laneY - laneHeight), V2(thisMaxX, laneY));
-        PushRectOutline(layout->group, FlatTransform(), regionRect, V4(0.0f, 0.0f, 0.0f, 1.0f), 2.0f);
-        PushRect(layout->group, FlatTransform(), regionRect, V4(color, 1.0f));
-        
-        if(PointInRect(regionRect, layout->mouseP))
+        r32 scale = 0.0f;
+        if(frameSpan > 0)
         {
-            char buff[256];
-            FormatString(buff, sizeof(buff), "%s: %ucy ", element->name, (u32) node->duration);
-            AddTooltip(layout, buff);
-            
-            if(UIPressed(layout->context, mouseLeft))
-            {
-                collation->currentRootElement = element;
-            }
+            scale = pixelSpan / frameSpan;
         }
         
-        if(depthRemaining > 0)
+        for(DebugProfileNode* node = rootNode->firstChild; node; node = node->nextSameParent)
         {
-            DrawProfileBars(layout, collation, regionRect, node->element, 0, laneHeight * 0.5f, depthRemaining - 1);
+            DebugElement* element = node->element;
+            
+            Vec3 color = debugColors[U32FromPointer(element->GUID) % ArrayCount(debugColors)];
+            u32 laneIndex = node->threadOrdinal;
+            r32 laneY = bounds.max.y - laneStride * laneIndex;
+            r32 thisMinX = bounds.min.x + scale * (node->parentRelativeClock);
+            r32 thisMaxX = thisMinX + scale * (r32) (node->duration);
+            
+            Rect2 regionRect = RectMinMax(V2(thisMinX, laneY - laneHeight), V2(thisMaxX, laneY));
+            PushRectOutline(layout->group, FlatTransform(), regionRect, V4(0.0f, 0.0f, 0.0f, 1.0f), 2.0f);
+            PushRect(layout->group, FlatTransform(), regionRect, V4(color, 1.0f));
+            
+            if(PointInRect(regionRect, layout->mouseP))
+            {
+                char buff[256];
+                FormatString(buff, sizeof(buff), "%s: %ucy ", element->name, (u32) node->duration);
+                AddTooltip(layout, buff);
+                
+                if(UIPressed(layout->context, mouseLeft))
+                {
+                    collation->currentRootElement = element;
+                }
+            }
+            
+            if(depthRemaining > 0)
+            {
+                DrawProfileBars(layout, collation, regionRect, node->element, 0, laneHeight * 0.5f, depthRemaining - 1);
+            }
         }
     }
 }
@@ -309,66 +312,68 @@ internal void DrawTopClockList(EditorLayout* layout, DebugCollationState* collat
 {
     
     DebugFrame* frame = GetViewingFrame(collation);
-    
-    TempMemory temp = BeginTemporaryMemory(pool);
-    DebugClockEntry* entries = PushArray(temp.pool, DebugClockEntry, frame->entryCount, NoClear());
-    SortEntry* sortA = PushArray(temp.pool, SortEntry, frame->entryCount, NoClear());
-    SortEntry* sortB = PushArray(temp.pool, SortEntry, frame->entryCount, NoClear());
-    
-    u32 index = 0;
-    r64 totalTime = (r64) frame->rootProfileNode->duration;
-    
-    for(DebugEntry* debugEntry = frame->firstEntry; debugEntry; debugEntry = debugEntry->next, index++)
+    if(frame->rootProfileNode)
     {
-        SortEntry* sort = sortA + index;
-        DebugClockEntry* entry = entries + index;
+        TempMemory temp = BeginTemporaryMemory(pool);
+        DebugClockEntry* entries = PushArray(temp.pool, DebugClockEntry, frame->entryCount, NoClear());
+        SortEntry* sortA = PushArray(temp.pool, SortEntry, frame->entryCount, NoClear());
+        SortEntry* sortB = PushArray(temp.pool, SortEntry, frame->entryCount, NoClear());
         
-        DebugElement* element = debugEntry->element;
-        entry->element = element;
+        u32 index = 0;
         
-        BeginDebugStatistics(&entry->stats);
-        
-        for(DebugProfileNode* node = GetViewingNode(collation, element); node; node = node->next)
+        r64 totalTime = (r64) frame->rootProfileNode->duration;
+        for(DebugEntry* debugEntry = frame->firstEntry; debugEntry; debugEntry = debugEntry->next, index++)
         {
-            AccumDebugStatistics(&entry->stats, (r64) (node->duration - node->durationOfChildren));
-        }
-        
-        EndDebugStatistics(&entry->stats);
-        //totalTime += (r32) entry->stats.sum;
-        
-        sort->sortKey = (r32) -entry->stats.sum;
-        sort->index = index;
-    }
-    
-    RadixSort(sortA, frame->entryCount, sortB);
-    
-    r64 PC = 0;
-    if(totalTime > 0)
-    {
-        PC = 100.0f / totalTime;
-    }
-    
-    Vec2 at = V2(bounds.min.x, bounds.max.y) - V2(0, GetBaseline(layout));
-    for(index = 0; index < frame->entryCount; ++ index)
-    {
-        DebugClockEntry* entry = entries + sortA[index].index;
-        DebugStatistic* stats = &entry->stats;
-        DebugElement* element = entry->element;
-        
-        if(at.y < bounds.min.y)
-        {
-            break;
-        }
-        else
-        {
-            char buff[1024];
-            FormatString(buff, sizeof(buff), "%012ucy %3.2f%% %4d %s", (u32) stats->sum, PC * stats->sum, stats->count, element->name);
-            TextLineAt(layout, buff, at);
+            SortEntry* sort = sortA + index;
+            DebugClockEntry* entry = entries + index;
             
-            at.y -= RawHeight(layout);
+            DebugElement* element = debugEntry->element;
+            entry->element = element;
+            
+            BeginDebugStatistics(&entry->stats);
+            
+            for(DebugProfileNode* node = GetViewingNode(collation, element); node; node = node->next)
+            {
+                AccumDebugStatistics(&entry->stats, (r64) (node->duration - node->durationOfChildren));
+            }
+            
+            EndDebugStatistics(&entry->stats);
+            //totalTime += (r32) entry->stats.sum;
+            
+            sort->sortKey = (r32) -entry->stats.sum;
+            sort->index = index;
         }
+        
+        RadixSort(sortA, frame->entryCount, sortB);
+        
+        r64 PC = 0;
+        if(totalTime > 0)
+        {
+            PC = 100.0f / totalTime;
+        }
+        
+        Vec2 at = V2(bounds.min.x, bounds.max.y) - V2(0, GetBaseline(layout));
+        for(index = 0; index < frame->entryCount; ++ index)
+        {
+            DebugClockEntry* entry = entries + sortA[index].index;
+            DebugStatistic* stats = &entry->stats;
+            DebugElement* element = entry->element;
+            
+            if(at.y < bounds.min.y)
+            {
+                break;
+            }
+            else
+            {
+                char buff[1024];
+                FormatString(buff, sizeof(buff), "%012ucy %3.2f%% %4d %s", (u32) stats->sum, PC * stats->sum, stats->count, element->name);
+                TextLineAt(layout, buff, at);
+                
+                at.y -= RawHeight(layout);
+            }
+        }
+        EndTemporaryMemory(temp);
     }
-    EndTemporaryMemory(temp);
 }
 
 
@@ -459,109 +464,96 @@ internal DebugProfileNode* StoreEvent(DebugState* debugState, DebugCollationStat
     return result;
 }
 
-internal void CollateDebugEvents(DebugState* debugState, DebugCollationState* collation, DebugTable* debugTable)
+internal void CollateDebugEvent(DebugState* debugState, DebugCollationState* collation, DebugEvent* event)
 {
-    FlipTableResult flip = FlipDebugTable(debugTable);
-    u32 eventCount = flip.eventCount;
-    DebugEvent* eventArray = flip.eventArray;
-    
-    if(!collation->paused)
+    DebugFrame* collationFrame = GetCollationFrame(collation);
+    if(event->type == DebugType_frameMarker)
     {
-        collation->viewingFrameOrdinal = collation->mostRecentFrameOrdinal;
-    }
-    
-    for(u32 eventIndex = 0; eventIndex < eventCount; eventIndex++)
-    {
-        DebugFrame* collationFrame = GetCollationFrame(collation);
-        DebugEvent* event = eventArray + eventIndex;
-        
-        if(event->type == DebugType_frameMarker)
+        collationFrame->endClock = event->clock;
+        if(collationFrame->rootProfileNode)
         {
-            collationFrame->endClock = event->clock;
-            if(collationFrame->rootProfileNode)
-            {
-                collationFrame->rootProfileNode->duration = collationFrame->endClock - collationFrame->beginClock;
-            }
-            
-            collationFrame->secondsElapsed = event->Value_r32;
-            r32 clockRange = (r32) (collationFrame->endClock - collationFrame->beginClock);
-            
-            ++collation->totalFrameCount;
-            
-            if(collation->paused)
-            {
-                FreeFrame(debugState, collation, collation->collatingFrameOrdinal);
-            }
-            else
-            {
-                collation->mostRecentFrameOrdinal = collation->collatingFrameOrdinal;
-                IncrementFrameOrdinal(&collation->collatingFrameOrdinal);
-                if(collation->collatingFrameOrdinal == collation->oldestFrameOrdinal)
-                {
-                    FreeOldestFrame(debugState, collation);
-                }
-                collationFrame = GetCollationFrame(collation);
-            }
-            InitFrame(collation, event->clock, collationFrame);
+            collationFrame->rootProfileNode->duration = collationFrame->endClock - collationFrame->beginClock;
+        }
+        
+        collationFrame->secondsElapsed = event->Value_r32;
+        r32 clockRange = (r32) (collationFrame->endClock - collationFrame->beginClock);
+        
+        ++collation->totalFrameCount;
+        
+        if(collation->paused)
+        {
+            FreeFrame(debugState, collation, collation->collatingFrameOrdinal);
         }
         else
         {
-            if(true || debugState->profiling)
+            collation->mostRecentFrameOrdinal = collation->collatingFrameOrdinal;
+            IncrementFrameOrdinal(&collation->collatingFrameOrdinal);
+            if(collation->collatingFrameOrdinal == collation->oldestFrameOrdinal)
             {
-                Assert(collationFrame);
-                u32 frameIndex = collation->totalFrameCount - 1;
-                DebugThread* thread = GetDebugThread(debugState, collation, event->threadID);
-                u64 relativeClock = event->clock - collationFrame->beginClock;
-                
-                switch(event->type)
+                FreeOldestFrame(debugState, collation);
+            }
+            collationFrame = GetCollationFrame(collation);
+        }
+        InitFrame(collation, event->clock, collationFrame);
+    }
+    else
+    {
+        if(debugState->profiling)
+        {
+            Assert(collationFrame);
+            u32 frameIndex = collation->totalFrameCount - 1;
+            DebugThread* thread = GetDebugThread(debugState, collation, event->threadID);
+            u64 relativeClock = event->clock - collationFrame->beginClock;
+            
+            switch(event->type)
+            {
+                case DebugType_beginCodeBlock:
                 {
-                    case DebugType_beginCodeBlock:
+                    DebugProfileNode* parentNode = collationFrame->rootProfileNode;
+                    u64 clockBasis = collationFrame->beginClock;
+                    if(thread->currentOpenCodeBlock)
                     {
-                        DebugProfileNode* parentNode = collationFrame->rootProfileNode;
-                        u64 clockBasis = collationFrame->beginClock;
-                        if(thread->currentOpenCodeBlock)
+                        parentNode = thread->currentOpenCodeBlock->currentNode;
+                        clockBasis = thread->currentOpenCodeBlock->beginClock;
+                    }
+                    else if(!parentNode)
+                    {
+                        DebugEvent nullEvent = {};
+                        nullEvent.GUID = "unprofiled";
+                        nullEvent.name = "unprofiled";
+                        parentNode =  StoreEvent(debugState, collation, &nullEvent, false);
+                        clockBasis = collationFrame->beginClock;
+                        collationFrame->rootProfileNode = parentNode;
+                        
+                        if(!collation->currentRootElement)
                         {
-                            parentNode = thread->currentOpenCodeBlock->currentNode;
-                            clockBasis = thread->currentOpenCodeBlock->beginClock;
+                            collation->currentRootElement = parentNode->element;
                         }
-                        else if(!parentNode)
-                        {
-                            DebugEvent nullEvent = {};
-                            nullEvent.GUID = "unprofiled";
-                            nullEvent.name = "unprofiled";
-                            parentNode =  StoreEvent(debugState, collation, &nullEvent, false);
-                            clockBasis = collationFrame->beginClock;
-                            collationFrame->rootProfileNode = parentNode;
-                            
-                            if(!collation->currentRootElement)
-                            {
-                                collation->currentRootElement = parentNode->element;
-                            }
-                        }
-                        
-                        DebugProfileNode* node = StoreEvent(debugState, collation, event, true);
-                        node->parentRelativeClock = event->clock - clockBasis;
-                        node->threadOrdinal = (u16) thread->laneIndex;
-                        node->coreIndex = event->coreIndex;
-                        
-                        node->nextSameParent = parentNode->firstChild;
-                        parentNode->firstChild = node;
-                        
-                        OpenDebugBlock* debugBlock = 0;
-                        FREELIST_ALLOC(debugBlock, debugState->firstFreeBlock, PushStruct(&debugState->debugPool, OpenDebugBlock));
-                        debugBlock->beginClock = event->clock;
-                        debugBlock->parent = thread->currentOpenCodeBlock;
-                        debugBlock->currentNode = node;
-                        thread->currentOpenCodeBlock = debugBlock;
-                        
-                    } break;
+                    }
                     
-                    case DebugType_endCodeBlock:
+                    DebugProfileNode* node = StoreEvent(debugState, collation, event, true);
+                    node->parentRelativeClock = event->clock - clockBasis;
+                    node->threadOrdinal = (u16) thread->laneIndex;
+                    node->coreIndex = event->coreIndex;
+                    
+                    node->nextSameParent = parentNode->firstChild;
+                    parentNode->firstChild = node;
+                    
+                    OpenDebugBlock* debugBlock = 0;
+                    FREELIST_ALLOC(debugBlock, debugState->firstFreeBlock, PushStruct(&debugState->debugPool, OpenDebugBlock));
+                    debugBlock->beginClock = event->clock;
+                    debugBlock->parent = thread->currentOpenCodeBlock;
+                    debugBlock->currentNode = node;
+                    thread->currentOpenCodeBlock = debugBlock;
+                    
+                } break;
+                
+                case DebugType_endCodeBlock:
+                {
+                    Assert(thread->ID == event->threadID);
+                    OpenDebugBlock* matchingBlock = thread->currentOpenCodeBlock;
+                    if(matchingBlock)
                     {
-                        Assert(thread->currentOpenCodeBlock);
-                        Assert(thread->ID == event->threadID);
-                        
-                        OpenDebugBlock* matchingBlock = thread->currentOpenCodeBlock;
                         DebugProfileNode* node = matchingBlock->currentNode;
                         node->duration = event->clock - matchingBlock->beginClock;
                         
@@ -574,44 +566,54 @@ internal void CollateDebugEvents(DebugState* debugState, DebugCollationState* co
                             DebugProfileNode* parentNode = thread->currentOpenCodeBlock->currentNode;
                             parentNode->durationOfChildren += node->duration;
                         }
-                    } break;
-                    
-                    InvalidDefaultCase;
-                }
+                    }
+                } break;
+                
+                InvalidDefaultCase;
             }
         }
     }
 }
+
 
 internal void DEBUGOverlay(EditorLayout* layout)
 {
     DebugState* debugState = debugGlobalMemory->debugState;
     DebugCollationState* collation = debugState->showServerProfiling ? &debugState->serverState : &debugState->clientState;
     
+    if(!collation->paused)
+    {
+        collation->viewingFrameOrdinal = collation->mostRecentFrameOrdinal;
+    }
+    
     Edit_b32(layout, "profiling", &debugState->profiling, 0, {});
     
     DebugFrame* mostRecentFrame = collation->frames + collation->viewingFrameOrdinal;
     NextRaw(layout);
     EditorTextDraw(layout, V4(1, 1, 1, 1), 0, "%2.2fms", mostRecentFrame->secondsElapsed * 1000.0f);
+    Vec4 debugButtonColor = V4(0.2f, 0.5f, 1.0f, 1.0f);
+    NextRaw(layout);
+    if(StandardEditorButton(layout, "Client Profiling", auID(debugState, "client"), debugButtonColor))
+    {
+        debugState->showServerProfiling = false;
+    }
+    
+    if(StandardEditorButton(layout, "Server Profiling", auID(debugState, "server"), debugButtonColor))
+    {
+        debugState->showServerProfiling = true;
+    }
     
     if(debugState->profiling)
     {
-        Vec4 debugButtonColor = V4(0.2f, 0.5f, 1.0f, 1.0f);
-        NextRaw(layout);
-        if(StandardEditorButton(layout, "Client Profiling", auID(debugState, "client"), debugButtonColor))
-        {
-            debugState->showServerProfiling = false;
-        }
-        
-        if(StandardEditorButton(layout, "Server Profiling", auID(debugState, "server"), debugButtonColor))
-        {
-            debugState->showServerProfiling = true;
-        }
-        
         NextRaw(layout);
         if(StandardEditorButton(layout, "Pause", auID(debugState, "pause"), debugButtonColor))
         {
             collation->paused = !collation->paused;
+        }
+        
+        if(StandardEditorButton(layout, "Capture Server Frame", auID(debugState, "capture server frame"), debugButtonColor))
+        {
+            SendOrderedMessage(CaptureFrame);
         }
         
         if(StandardEditorButton(layout, "Root", auID(debugState, "root"), debugButtonColor))
@@ -698,8 +700,18 @@ extern "C" GAME_FRAME_END(GameDEBUGFrameEnd)
         
         debugState->frameSliderDim = V2(1700, 30);
         debugState->profilerDim = V2(1700, 900);
+        
+        debugState->clientState.collatingFrameOrdinal = 1;
+        debugState->serverState.collatingFrameOrdinal = 1;
     }
+    
+    FlipTableResult flip = FlipDebugTable(globalDebugTable);
+    
     DebugState* debugState = debugGlobalMemory->debugState;
-    debugState->serverState.paused = true;
-    CollateDebugEvents(debugState, &debugState->clientState, debugGlobalMemory->debugClientTable);
+    DebugCollationState* collation = &debugState->clientState;
+    for(u32 eventIndex = 0; eventIndex < flip.eventCount; eventIndex++)
+    {
+        DebugEvent* event = flip.eventArray + eventIndex;
+        CollateDebugEvent(debugState, collation, event);
+    }
 }

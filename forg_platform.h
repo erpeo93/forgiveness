@@ -527,12 +527,10 @@ struct PlatformServerMemory
 struct PlatformClientMemory
 {
     struct GameState* gameState;
-    struct TranState* tranState;
     
 #if FORGIVENESS_INTERNAL
     b32 DLLReloaded;
-    struct DebugTable* debugClientTable;
-    struct DebugTable* debugServerTable;
+    struct DebugTable* debugTable;
     struct DebugState* debugState;
 #endif
     

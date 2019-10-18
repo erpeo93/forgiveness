@@ -334,6 +334,60 @@ RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
     }
 }
 
+internal void RenderAttachedPieces(RenderGroup* group, Vec3 P, Vec2 scale, r32 angle, LayoutPiece* pieces, u32 pieceCount, u64 nameHash, u32 seed, Lights lights)
+{
+    RandomSequence seq = Seed(seed);
+    ObjectTransform transform = UprightTransform();
+    transform.angle = angle;
+    
+    for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
+    {
+        LayoutPiece* piece = pieces + pieceIndex;
+        BitmapId BID = GetImageFromReference(group->assets, &piece->image, &seq);
+        if(piece->nameHash == nameHash)
+        {
+            if(IsValid(BID))
+            {
+                transform.additionalZBias = 0.01f * pieceIndex;
+                BitmapDim dim = PushBitmap(group, transform, BID, P, 0, scale, V4(1, 1, 1, 1), lights);
+                
+                PAKBitmap* bitmap = GetBitmapInfo(group->assets, BID);
+                for(u32 attachmentIndex = 0; attachmentIndex < bitmap->attachmentPointCount; ++attachmentIndex)
+                {
+                    PAKAttachmentPoint* attachmentPoint = GetAttachmentPoint(group->assets, BID, attachmentIndex);
+                    
+                    if(attachmentPoint)
+                    {
+                        Vec3 newP = dim.P + attachmentPoint->alignment.x * dim.size.x * dim.XAxis + attachmentPoint->alignment.y * dim.size.y * dim.YAxis;
+                        Vec2 newScale = attachmentPoint->scale;
+                        r32 newAngle = angle + attachmentPoint->angle;
+                        
+                        RenderAttachedPieces(group, newP, newScale, newAngle, pieces, pieceCount, StringHash(attachmentPoint->name), seed, lights);
+                    }
+                }
+            }
+        }
+    }
+}
+
+RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    if(base->universeP.chunkZ == worldMode->player.universeP.chunkZ)
+    {
+        r32 height = GetHeight(base);
+        r32 deepness = GetWidth(base);
+        r32 width = GetWidth(base);
+        
+        Vec3 P = GetRelativeP(worldMode, base);
+        Lights lights = GetLights(worldMode, P);
+        LayoutComponent* layout = GetComponent(worldMode, ID, LayoutComponent);
+        RenderShadow(worldMode, group, P, &layout->shadow, deepness, width);
+        
+        RenderAttachedPieces(group, P, layout->rootScale, layout->rootAngle, layout->pieces, layout->pieceCount, layout->rootHash, base->seed, lights);
+    }
+}
+
 RENDERING_ECS_JOB_CLIENT(RenderBound)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
@@ -461,7 +515,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     if(Pressed(&input->pauseButton))
     {
         worldMode->gamePaused = !worldMode->gamePaused;
-        SendPauseToggleMessage();
+        SendOrderedMessage(PauseToggle);
     }
     if(worldMode->gamePaused)
     {
@@ -548,8 +602,12 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             FinalizeLightGrid(worldMode, group);
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderCharacterAnimation, ArchetypeHas(BaseComponent) && ArchetypeHas(AnimationComponent), input->timeToAdvance);
+            
             EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(ImageComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
+            
             EXECUTE_RENDERING_JOB(worldMode, group, RenderPlants, ArchetypeHas(BaseComponent) && ArchetypeHas(ImageComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
+            
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderLayoutEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(LayoutComponent), input->timeToAdvance);
             
             
             if(worldMode->editorUI.renderEntityBounds)
@@ -755,11 +813,10 @@ DebugTable* globalDebugTable;
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     platformAPI = memory->api;
-    
     r32 timeToAdvance = input->timeToAdvance;
 #if FORGIVENESS_INTERNAL
     debugGlobalMemory = memory;
-    globalDebugTable = memory->debugClientTable;
+    globalDebugTable = memory->debugTable;
 #endif 
     
     TIMED_FUNCTION();
@@ -885,7 +942,6 @@ internal void SetGameMode(GameState* gameState, GameMode mode)
 extern "C" GAME_GET_SOUND_OUTPUT(GameGetSoundOutput)
 {
     GameState* gameState = (GameState*) memory->gameState;
-    TranState* tranState = (TranState*) memory->tranState;
     //OutputSineWave(soundBuffer, gameState);
     
     PlayMixedAudio(&gameState->soundState, input->timeToAdvance, soundBuffer, gameState->assets, &gameState->framePool);

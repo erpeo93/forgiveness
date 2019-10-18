@@ -26,7 +26,6 @@ struct PAKProperty
     u16 value;
 };
 
-
 struct PAKAttachmentPoint
 {
     char name[32];

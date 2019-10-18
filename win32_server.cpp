@@ -39,8 +39,8 @@ global_variable b32 globalPlayingBack;
 global_variable HANDLE recordingHandle;
 global_variable HANDLE playingBackHandle;
 
-#define SERVER_MAX_FPS 60
-#define SERVER_MIN_MSEC_PER_FRAME 1000.0f / (r32) (SERVER_MAX_FPS)
+#define SERVER_FPS 60.0f
+#define SERVER_MSEC_PER_FRAME 1000.0f / SERVER_FPS
 
 inline b32 IsInLoop()
 {
@@ -403,6 +403,7 @@ int main( int argc, char* argv[] )
         while(true)
         {
 #if FORGIVENESS_INTERNAL
+            BEGIN_BLOCK("check dll");
             WIN32_FILE_ATTRIBUTE_DATA DLLFileAttributes;
             if(GetFileAttributesEx(DLLFullName, GetFileExInfoStandard, &DLLFileAttributes))
             {
@@ -416,6 +417,7 @@ int main( int argc, char* argv[] )
                     }
                 }
             }
+            END_BLOCK();
 #endif
             
             if(functions.SimulateWorlds)
@@ -424,11 +426,11 @@ int main( int argc, char* argv[] )
             }
             
             
-            
+            BEGIN_BLOCK("sleep");
             clock_t end = clock();
-            r32 MSecondElapsed = (r32) (((end - start) * 1000.0f )  / CLOCKS_PER_SEC);
+            r32 MSecondElapsed = (r32) (((end - start) * 1000.0f)  / CLOCKS_PER_SEC);
             
-            while(MSecondElapsed <  SERVER_MIN_MSEC_PER_FRAME)
+            while(MSecondElapsed <  SERVER_MSEC_PER_FRAME)
             {
                 end = clock();
                 MSecondElapsed = (r32) (((end - start) * 1000.0f)  / CLOCKS_PER_SEC);
@@ -436,6 +438,7 @@ int main( int argc, char* argv[] )
             start = end;
             secondElapsed = MSecondElapsed / 1000.0f;
             memory->elapsedTime = secondElapsed;
+            END_BLOCK();
             
             FRAME_MARKER(secondElapsed);
 #if FORGIVENESS_INTERNAL

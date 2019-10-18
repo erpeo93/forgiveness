@@ -45,10 +45,24 @@ Archetype() struct GrassArchetype
 #endif
 };
 
+Archetype() struct ObjectArchetype
+{
+#ifdef FORG_SERVER
+    PhysicComponent physic;
+    PlayerComponent* player;
+#else
+    BaseComponent base;
+    LayoutComponent layout;
+#endif
+};
+
 introspection() struct CommonEntityInitParams
 {
     Vec3 boundOffset;
     Vec3 boundDim MetaDefault("V3(1, 1, 1)");
+    
+    ArrayCounter possibleCraftingEffects MetaCounter(craftingEffects);
+    EffectBinding* craftingEffects;
 };
 
 introspection() struct ServerEntityInitParams
@@ -71,6 +85,12 @@ introspection() struct ImageProperties
     ImageProperty* properties;
 };
 
+introspection() struct LayoutPieceProperties
+{
+    AssetLabel name;
+    ImageProperties properties;
+};
+
 introspection() struct ClientEntityInitParams
 {
     EntityID ID MetaUneditable();
@@ -81,6 +101,10 @@ introspection() struct ClientEntityInitParams
     
     ImageProperties entityProperties;
     ImageProperties leafProperties;
+    
+    AssetLabel layoutRootName;
+    ArrayCounter pieceCount MetaCounter(layoutPieces);
+    LayoutPieceProperties* layoutPieces;
     
     Vec3 shadowOffset;
     Vec2 shadowScale MetaDefault("V2(1, 1)");

@@ -1317,10 +1317,8 @@ PLATFORM_SET_CLIPBOARD(Win32SetClipboardText)
 #endif
 
 #if FORGIVENESS_INTERNAL
-global_variable DebugTable globalClientDebugTable_;
-global_variable DebugTable globalServerDebugTable_;
-DebugTable* globalDebugTable = &globalClientDebugTable_;
-DebugTable* globalServerDebugTable = &globalServerDebugTable_;
+global_variable DebugTable globalDebugTable_;
+DebugTable* globalDebugTable = &globalDebugTable_;
 #endif
 
 
@@ -1434,10 +1432,8 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             
             
             gameMemory.gameState = 0;
-            gameMemory.tranState = 0;
 #if FORGIVENESS_INTERNAL
-            gameMemory.debugClientTable = globalDebugTable;
-            gameMemory.debugServerTable = globalServerDebugTable;
+            gameMemory.debugTable = globalDebugTable;
             gameMemory.debugState = 0;
 #endif
             

@@ -80,6 +80,22 @@ struct ImageComponent
     ImageReference entity;
 };
 
+struct LayoutPiece
+{
+    u64 nameHash;
+    ImageReference image;
+};
+
+struct LayoutComponent
+{
+    ShadowComponent shadow;
+    Vec2 rootScale;
+    r32 rootAngle;
+    u64 rootHash;
+    u32 pieceCount;
+    LayoutPiece pieces[8];
+};
+
 
 #include "forg_archetypes.h"
 #include "client_generated.h"

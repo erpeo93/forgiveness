@@ -27,7 +27,6 @@ internal EntityID AddEntity_(ServerState* server, UniversePos P, AssetID definit
     {
         SetComponent(server, result, PlayerComponent, player);
     }
-    
     return result;
 }
 
@@ -368,6 +367,34 @@ internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos 
         }
         
         Clear(&tempPool);
+    }
+}
+
+internal void Craft()
+{
+    PickRandomEffects();
+    Pick Essences based on seed();
+    
+}
+
+internal void DispatchGameEffect(ServerState* server, Vec3 P, GameEffect* effect)
+{
+    switch(effect->type)
+    {
+        case spawnAnimal:
+        {
+            
+        } break;
+        
+        case spawnGrass:
+        {
+            
+        } break;
+        
+        case spawnRock:
+        {
+            
+        } break;
     }
 }
 

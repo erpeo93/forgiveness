@@ -58,6 +58,7 @@ enum MetaType
     MetaType_ImageProperty,
     MetaType_SpawnerEntity,
     MetaType_ImageProperties,
+    MetaType_LayoutPieceProperties,
 };
 
 enum FieldMetaFlags

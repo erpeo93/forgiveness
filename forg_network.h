@@ -173,7 +173,6 @@ enum Packet_Type
     Type_LearnRequest,
     Type_ConsumeRequest,
     Type_CraftFromInventoryRequest,
-    Type_CustomTargetPRequest,
     
     Type_containerHeader,
     Type_containerInfo,
@@ -195,6 +194,7 @@ enum Packet_Type
     Type_RegenerateWorldChunks,
     
 #if FORGIVENESS_INTERNAL
+    Type_CaptureFrame,
     Type_debugEvent,
     Type_memoryStats,
     Type_InputRecording,

@@ -267,6 +267,13 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
         } break;
 #endif
         
+#if FORGIVENESS_INTERNAL
+        case Type_CaptureFrame:
+        {
+            server->captureFrame = true;
+        } break;
+#endif
+        
         default:
         {
             if(player->requestCount < ArrayCount(player->requests))
@@ -524,12 +531,14 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
 
 extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 {
+    
     r32 elapsedTime = memory->elapsedTime;
     platformAPI = memory->api;
     ServerState* server = memory->server;
 #if FORGIVENESS_INTERNAL
     globalDebugTable = memory->debugTable;
 #endif
+    TIMED_FUNCTION();
     
     MemoryPool tempPool = {};
     if(!memory->server)
@@ -684,18 +693,29 @@ extern "C" SERVER_FRAME_END(ServerFrameEnd)
     ServerState* server = memory->server;
     FlipTableResult flip = FlipDebugTable(globalDebugTable);
     
-#if 0    
-    if(server->debugPlayer)
+    for(CompIterator iter = FirstComponent(server, PlayerComponent); 
+        IsValid(iter); iter = Next(iter))
     {
-        for(u32 eventIndex = 0; eventIndex < eventCount; ++eventIndex)
+        PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
+        if(player->connectionSlot)
         {
-            DebugEvent* event = globalDebugTable->eventArray[eventArrayIndex] + eventIndex;
-            SendDebugEvent(server->debugPlayer, event);
+            if(server->captureFrame)
+            {
+                for(u32 eventIndex = 0; eventIndex < flip.eventCount; ++eventIndex)
+                {
+                    DebugEvent* event = flip.eventArray + eventIndex;
+                    SendDebugEvent(player, event);
+                }
+            }
+            else
+            {
+                DebugEvent* frameMarkerEvent = flip.eventArray + flip.eventCount - 1;
+                Assert(frameMarkerEvent->type == DebugType_frameMarker);
+                SendDebugEvent(player, frameMarkerEvent);
+            }
         }
-        
-        SendAllEventsSentMessage(debugPlayer);
     }
-#endif
+    server->captureFrame = false;
 }
 #else
 extern "C" SERVER_FRAME_END( ServerFrameEnd )

@@ -58,6 +58,19 @@ INIT_ENTITY(GrassArchetype)
     InitPhysicComponent(physic, params->P, common->boundOffset, common->boundDim, params->definitionID, params->seed);
 }
 
+INIT_ENTITY(ObjectArchetype)
+{
+    ServerState* server = (ServerState*) state;
+    ServerEntityInitParams* params = (ServerEntityInitParams*) par;
+    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
+    
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    InitPhysicComponent(physic, params->P, common->boundOffset, common->boundDim, params->definitionID, params->seed);
+    
+    EffectComponent* effect = GetComponent(server, ID, EffectComponent);
+    AddEffectBasedOnEssences();
+}
+
 #else
 
 internal void InitBaseComponent(BaseComponent* base, Vec3 boundOffset, Vec3 boundDim, u32 seed)
@@ -165,5 +178,35 @@ INIT_ENTITY(GrassArchetype)
     InitImageReference(assets, &image, &params, entity);
     
     InitShadow(&image->shadow, params);
+}
+
+INIT_ENTITY(ObjectArchetype)
+{
+    GameModeWorld* worldMode = (GameModeWorld*) state;
+    Assets* assets = worldMode->gameState->assets;
+    ClientEntityInitParams* params = (ClientEntityInitParams*) par;
+    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
+    
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed);
+    
+    LayoutComponent* dest = GetComponent(worldMode, ID, LayoutComponent);
+    InitShadow(&dest->shadow, params);
+    dest->rootHash = StringHash(params->layoutRootName.name);
+    dest->rootScale = V2(1, 1);
+    dest->rootAngle = 0;
+    for(u32 pieceIndex = 0; pieceIndex < params->pieceCount; ++pieceIndex)
+    {
+        LayoutPieceProperties* piece = params->layoutPieces + pieceIndex;
+        if(dest->pieceCount < ArrayCount(dest->pieces))
+        {
+            LayoutPiece* destPiece = dest->pieces + dest->pieceCount++;
+            InitImageReference_(assets, &destPiece->image, &piece->properties);
+            destPiece->nameHash = StringHash(piece->name.name);
+        }
+    }
+    
+    
+    AddPiecePropertiesBasedOnEssences();
 }
 #endif

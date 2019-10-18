@@ -336,29 +336,14 @@ internal u32 SendAllPossibleData(ServerState* server, PlayerComponent* player, F
 }
 
 #if FORGIVENESS_INTERNAL
-
-#if 0
 internal void SendDebugEvent(PlayerComponent* player, DebugEvent* event)
 {
     
     b32 result = false;
-    StartPacket(debugEvent);
-    Pack("QQssLHCQQ", event->clock, event->GUID, event->GUID, event->name, event->threadID, event->coreIndex, event->type, event->overNetwork[0], event->overNetwork[1] );
-    
-    CloseAndStoreStandardPacket(player, ReliableOrdered);
-}
-
-internal void SendMemStats(PlayerComponent* player )
-{
-    DebugPlatformMemoryStats stats = platformAPI.DEBUGMemoryStats();
-    b32 result = false;
-    
-    StartPacket(player, memoryStats);
-    Pack("LQQ", stats.blockCount, stats.totalUsed, stats.totalSize );
+    StartPacket(player, debugEvent);
+    Pack("QssLHCd", event->clock, event->GUID, event->name, event->threadID, event->coreIndex, event->type, event->Value_r32);
     
     CloseAndStoreOrderedPacket(player);
 }
-#endif
-
 #endif
 

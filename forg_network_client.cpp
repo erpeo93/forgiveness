@@ -178,13 +178,6 @@ internal void SendCraftFromInventoryRequest(u64 containerID, u32 objectIndex)
     CloseAndSendOrderedPacket();
 }
 
-inline void SendCustomTargetPRequest(Vec3 P)
-{
-    StartPacket(CustomTargetPRequest);
-    Pack("V", P);
-    CloseAndSendOrderedPacket();
-}
-
 internal void SendActiveSkillRequest(u32 taxonomy)
 {
     StartPacket(ActiveSkillRequest);
@@ -226,18 +219,14 @@ internal void SendSkillLevelUpRequest(u32 taxonomy)
 internal void SendLearnRequest(u64 containerID, u32 objectIndex)
 {
     StartPacket(LearnRequest);
-    
     Pack("QL", containerID, objectIndex);
-    
     CloseAndSendOrderedPacket();
 }
 
 internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
 {
     StartPacket(ConsumeRequest);
-    
     Pack("QL", containerID, objectIndex);
-    
     CloseAndSendOrderedPacket();
 }
 
@@ -248,11 +237,7 @@ inline void SendMovePlayerRequest(Vec3 offset)
     CloseAndSendOrderedPacket();
 }
 
-inline void SendPauseToggleMessage()
-{
-    StartPacket(PauseToggle);
-    CloseAndSendOrderedPacket();
-}
+#define SendOrderedMessage(message) {StartPacket(message); CloseAndSendOrderedPacket();}
 
 inline void SendFileHash(u16 type, u64 subtypeHash, u64 hash)
 {
@@ -326,6 +311,7 @@ STANDARD_ECS_JOB_CLIENT(DeleteEntities)
     FreeArchetype(worldMode, &ID);
 }
 
+internal void CollateDebugEvent(DebugState* debugState, DebugCollationState* collation, DebugEvent* event);
 internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
     ClientPlayer* player = &worldMode->player;
@@ -1000,27 +986,21 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             
             case Type_debugEvent:
             {
-                InvalidCodePath;
-                
-#if 0                
+                char GUID[256];
+                char name[256];
                 DebugEvent event = {};
-                Unpack("QssLHCQQ", &event->clock, event.GUID, event.name, &event.threadID, &event.coreIndex, &event.type, event.overNetwork, event.overNetwork + 1 );
+                event.GUID = GUID;
+                event.name = name;
                 
-                u32 arrayIndex = globalServerDebugTable->currentServerEventArrayIndex;
-                u32 eventIndex = globalServerDebugTable->serverEventCount[arrayIndex]++;
-                globalServerDebugTable->serverEvents[arrayIndex][eventIndex] = event;
-#endif
+                Unpack("QssLHCd", &event.clock, event.GUID, event.name, &event.threadID, &event.coreIndex, &event.type, &event.Value_r32);
                 
+                DebugState* debugState = debugGlobalMemory->debugState;
+                if(debugState)
+                {
+                    DebugCollationState* collation = &debugState->serverState;
+                    CollateDebugEvent(debugState, collation, &event);
+                }
             } break;
-            
-#if 0            
-            case Type_debugAllEventsSent:
-            {
-                debugState->serverState.paused = false;
-                CollateDebugEvents(debugState, &debugState->serverState, debugGlobalMemory->debugServerTable);
-            } break;
-#endif
-            
 #endif
             InvalidDefaultCase;
         }
