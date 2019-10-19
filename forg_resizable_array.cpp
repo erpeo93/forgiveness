@@ -33,7 +33,7 @@ internal b32 Deleted_(ResizableArray* array, u32 index)
     return result;
 }
 
-internal void* Acquire_(ResizableArray* array, u32* index)
+internal void* Acquire_(ResizableArray* array, u32* index, u32 max)
 {
     Assert(array->count);
     Assert(array->count <= array->maxCount);
@@ -77,7 +77,8 @@ internal void* Acquire_(ResizableArray* array, u32* index)
     Assert(acquired);
     if(index)
     {
-        *index = acquired;
+        Assert(acquired <= max);
+        *index = (*index | acquired);
     }
     
     void* result = Get_(array, acquired);

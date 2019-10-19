@@ -330,7 +330,6 @@ void ParseProperties(Tokenizer* tokenizer)
         Token nameToken = GetToken(tokenizer);
         Assert( nameToken.type == Token_Identifier );
         printf( "char* MetaTable_%.*s[] = \n {\n", nameToken.textLength, nameToken.text );
-        
         if(RequireToken(tokenizer, Token_CloseParen))
         {
             if(RequireToken(tokenizer, Token_OpenBraces))
@@ -346,8 +345,10 @@ void ParseProperties(Tokenizer* tokenizer)
                     {
                         if(element.type == Token_Identifier)
                         {
-                            element = FirstUnderScore(element);
-                            printf( "\"%.*s\",\n", element.textLength, element.text );
+                            if(!StrEqual(StrLen("Count"), element.text, "Count"))
+                            {
+                                printf( "\"%.*s\",\n", element.textLength, element.text );
+                            }
                         }
                     }
                 }

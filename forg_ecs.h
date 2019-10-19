@@ -21,34 +21,61 @@ struct ArchetypeLayout
     ArchetypeComponent hasLayoutComponent;
     ArchetypeComponent hasEffectComponent;
     ArchetypeComponent hasEquipmentComponent;
+    ArchetypeComponent hasEquipmentMappingComponent;
 };
 
-#define HasComponent(arch, component) archetypeLayouts[arch].has##component.exists
-#define GetPtr(state, ID) Get_(state->archetypes + ID.archetype, ID.archetypeIndex)
-#define GetComponent(state, ID, component) HasComponent(ID.archetype, component) ?((archetypeLayouts[ID.archetype].has##component.pointer) ? (component*) (*(u64*) AdvanceVoidPtrBytes(GetPtr(state, ID), archetypeLayouts[ID.archetype].has##component.offset)) : (component*) AdvanceVoidPtrBytes(GetPtr(state, ID), archetypeLayouts[ID.archetype].has##component.offset)) : 0
+#define HasComponent_(arch, component) archetypeLayouts[arch].has##component.exists
+#define HasComponent(ID, component) HasComponent_(GetArchetype(ID), component)
+#define GetPtr(state, ID) Get_(state->archetypes + GetArchetype(ID), GetArchetypeIndex(ID))
+#define GetComponent(state, ID, component) HasComponent(ID, component) ?((archetypeLayouts[GetArchetype(ID)].has##component.pointer) ? (component*) (*(u64*) AdvanceVoidPtrBytes(GetPtr(state, ID), archetypeLayouts[GetArchetype(ID)].has##component.offset)) : (component*) AdvanceVoidPtrBytes(GetPtr(state, ID), archetypeLayouts[GetArchetype(ID)].has##component.offset)) : 0
 
-#define GetComponentPtr(state, ID, component) AdvanceVoidPtrBytes(GetPtr(state, ID), archetypeLayouts[ID.archetype].has##component.offset)
+#define GetComponentPtr(state, ID, component) AdvanceVoidPtrBytes(GetPtr(state, ID), archetypeLayouts[GetArchetype(ID)].has##component.offset)
 
-#define SetComponent(state, ID, component, value) if(HasComponent(ID.archetype, component)){*(u64*) GetComponentPtr(state, ID, component) = (u64) value;}else{InvalidCodePath;}
+#define SetComponent(state, ID, component, value) if(HasComponent(ID, component)){*(u64*) GetComponentPtr(state, ID, component) = (u64) value;}else{InvalidCodePath;}
 
 #define InitArchetype(state, arch, maxCount) state->archetypes[arch] = InitResizableArray_(archetypeLayouts[arch].totalSize, maxCount)
 #define InitComponentArray(state, component, maxCount) state->component##_ = InitResizableArray_(sizeof(component), maxCount)
 #define First(state, arch) First_(&state->archetypes[arch], arch)
 #define FirstComponent(state, component) FirstComponent_(&state->component##_)
 #define GetComponentRaw(state, iter, component) (component*) Get_(&state->component##_, iter.index)
-#define AcquireComponent(state, component, idAddress) (component*) Acquire_(&state->component##_, idAddress)
+#define AcquireComponent(state, component, idAddress) (component*) Acquire_(&state->component##_, idAddress, 0xffffff)
 #define FreeComponent(state, component, id) Free_(&state->component##_, id)
 
-#define AcquireArchetype(state, arch, idAddress) idAddress->archetype = arch; Acquire_(&state->archetypes[arch], &(idAddress)->archetypeIndex)
-#define FreeArchetype(state, idAddress) Free_(&state->archetypes[(idAddress)->archetype], (idAddress)->archetypeIndex)
-#define DeletedArchetype(state, id) Deleted_(&state->archetypes[id.archetype], id.archetypeIndex)
+#define AcquireArchetype(state, arch, idAddress) SetArchetype(idAddress, arch); Acquire_(&state->archetypes[arch], &(idAddress)->archetype_archetypeIndex, 0xffffff)
+#define FreeArchetype(state, idAddress) Free_(&state->archetypes[GetArchetype(*idAddress)], GetArchetypeIndex(*idAddress))
+#define DeletedArchetype(state, id) Deleted_(&state->archetypes[GetArchetype(id)], GetArchetypeIndex(id))
 
 
 introspection() struct EntityID
 {
-    u16 archetype;
-    u32 archetypeIndex;
+    u32 archetype_archetypeIndex; // NOTE(Leonardo): 8 bit archetype, 24 bits index
 };
+
+inline EntityID BuildEntityID(u16 archetype, u32 archetypeIndex)
+{
+    EntityID result;
+    Assert(archetypeIndex <= 0xffffff);
+    result.archetype_archetypeIndex = ((u32) SafeTruncateToU8(archetype) << 24) | archetypeIndex;
+    return result;
+}
+
+inline u8 GetArchetype(EntityID ID)
+{
+    u8 result = SafeTruncateToU8(ID.archetype_archetypeIndex >> 24);
+    return result;
+}
+
+inline void SetArchetype(EntityID* ID, u8 archetype)
+{
+    ID->archetype_archetypeIndex |= (((u32) archetype) << 24);
+}
+
+inline u32 GetArchetypeIndex(EntityID ID)
+{
+    u32 result = (ID.archetype_archetypeIndex & 0xffffff);
+    return result;
+}
+
 
 struct CompIterator
 {
@@ -88,8 +115,7 @@ inline ArchIterator First_(ResizableArray* array, u16 archetype)
 {
     ArchIterator result = {};
     result.count = array->count;
-    result.ID.archetype = archetype;
-    result.ID.archetypeIndex = 1;
+    result.ID = BuildEntityID(archetype, 1);
     
     return result;
 }
@@ -97,25 +123,25 @@ inline ArchIterator First_(ResizableArray* array, u16 archetype)
 inline ArchIterator Next(ArchIterator iter)
 {
     ArchIterator result = iter;
-    ++result.ID.archetypeIndex;
+    ++result.ID.archetype_archetypeIndex;
     return result;
 }
 
 inline b32 IsValid(ArchIterator iter)
 {
-    b32 result = (iter.ID.archetypeIndex < iter.count);
+    b32 result = (GetArchetypeIndex(iter.ID) < iter.count);
     return result;
 }
 
 inline b32 IsValid(EntityID ID)
 {
-    b32 result = (ID.archetypeIndex > 0);
+    b32 result = (GetArchetypeIndex(ID) > 0);
     return result;
 }
 
 inline b32 AreEqual(EntityID i1, EntityID i2)
 {
-    b32 result = (i1.archetype == i2.archetype && i1.archetypeIndex == i2.archetypeIndex);
+    b32 result = (i1.archetype_archetypeIndex == i2.archetype_archetypeIndex);
     return result;
 }
 
@@ -125,7 +151,7 @@ inline b32 AreEqual(EntityID i1, EntityID i2)
 #define RENDERING_ECS_JOB_CLIENT(name) internal void name(GameModeWorld* worldMode, RenderGroup* group, EntityID ID, r32 elapsedTime)
 
 
-#define ArchetypeHas(component) HasComponent(archetypeIndex, component)
+#define ArchetypeHas(component) HasComponent_(archetypeIndex, component)
 #define EXECUTE_JOB(state, job, query, elapsedTime)\
 for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)\
 {\

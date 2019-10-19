@@ -17,13 +17,13 @@ internal EntityID AddEntity_(ServerState* server, UniversePos P, AssetID definit
     EntityID result = {};
     ServerEntityInitParams params = definition->server;
     params.P = P;
-    params.definitionID = definitionID;
+    params.definitionID = EntityReference(definitionID);
     params.seed = seed;
     
-    u16 archetype = SafeTruncateToU16(ConvertEnumerator(EntityArchetype, definition->archetype));
+    u8 archetype = SafeTruncateToU8(ConvertEnumerator(EntityArchetype, definition->archetype));
     AcquireArchetype(server, archetype, (&result));
-    InitFunc[result.archetype](server, result, &definition->common, &params); 
-    if(HasComponent(result.archetype, PlayerComponent))
+    InitFunc[GetArchetype(result)](server, result, &definition->common, &params); 
+    if(HasComponent(result, PlayerComponent))
     {
         SetComponent(server, result, PlayerComponent, player);
     }
@@ -69,7 +69,7 @@ STANDARD_ECS_JOB_SERVER(HandlePlayerRequests)
                     Vec3 acc;
                     unpack(data, "V", &acc);
                     
-                    if(HasComponent(ID.archetype, PhysicComponent))
+                    if(HasComponent(ID, PhysicComponent))
                     {
                         PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
                         physic->acc = acc;
@@ -78,7 +78,7 @@ STANDARD_ECS_JOB_SERVER(HandlePlayerRequests)
                 
                 case Type_MoveChunkZ:
                 {
-                    if(HasComponent(ID.archetype, PhysicComponent))
+                    if(HasComponent(ID, PhysicComponent))
                     {
                         PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
                         if(++physic->P.chunkZ == (i32) server->maxDeepness)
@@ -110,8 +110,12 @@ global_variable r32 g_maxDelta = 1.0f;
 STANDARD_ECS_JOB_SERVER(FillCollisionSpatialPartition)
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    Rect3 bounds = AddRadius(physic->bounds, V3(g_maxDelta, g_maxDelta, g_maxDelta));
-    AddToSpatialPartition(server->frameByFramePool, &server->collisionPartition, physic->P, bounds, ID);
+    
+    if(!(physic->flags & EntityFlag_equipment))
+    {
+        Rect3 bounds = AddRadius(physic->bounds, V3(g_maxDelta, g_maxDelta, g_maxDelta));
+        AddToSpatialPartition(server->frameByFramePool, &server->collisionPartition, physic->P, bounds, ID);
+    }
 }
 
 internal void MoveEntity(ServerState* server, PhysicComponent* physic, r32 elapsedTime)
@@ -170,42 +174,6 @@ internal void MoveEntity(ServerState* server, PhysicComponent* physic, r32 elaps
     }
 }
 
-internal void SendBasicUpdate(ServerState* server, EntityID ID, PhysicComponent* physic)
-{
-    unsigned char buff_[KiloBytes(2)];
-    Assert(sizeof(EntityUpdate) < ArrayCount(buff_));
-    u16 totalSize = PrepareEntityUpdate(server, physic, buff_);
-    
-    r32 maxDistance = 3.0f * CHUNK_DIM;
-    r32 maxDistanceSq = Square(maxDistance);
-    
-    Rect3 bounds = {};
-    
-    SpatialPartitionQuery playerQuery = QuerySpatialPartition(&server->playerPartition, physic->P, bounds);
-    
-    for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
-    {
-        PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
-        PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
-        
-        if(physic->P.chunkZ == playerPhysic->P.chunkZ)
-        {
-            Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
-            if(LengthSq(distance) < maxDistanceSq)
-            {
-                SendEntityHeader(player, physic->definitionID, ID, physic->seed);
-                u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, physic->definitionID, ID, physic->seed);
-                Assert(writeHere);
-                if(writeHere)
-                {
-                    Copy(totalSize, writeHere, buff_);
-                }
-            }
-        }
-    }
-}
-
-
 #define GameProp(property, value) GameProp_(Property_##property, value)
 internal GameProperty GameProp_(u16 property, u16 value)
 {
@@ -216,7 +184,17 @@ internal GameProperty GameProp_(u16 property, u16 value)
     return result;
 }
 
-internal void MoveAndSendUpdate(ServerState* server, EntityID ID, r32 elapsedTime)
+internal EntityRef EntityReference(ServerState* server, char* kind, char* type)
+{
+    char type_[128];
+    FormatString(type_, sizeof(type_), "%s.dat", type);
+    EntityRef result;
+    result.subtypeHashIndex = GetAssetSubtype(server->assets, AssetType_EntityDefinition, kind);
+    result.index = GetAssetIndex(server->assets, AssetType_EntityDefinition, result.subtypeHashIndex, Tokenize(type_));
+    return result;
+}
+
+internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     MoveEntity(server, physic, elapsedTime);
@@ -231,10 +209,83 @@ internal void MoveAndSendUpdate(ServerState* server, EntityID ID, r32 elapsedTim
         physic->action = GameProp(action, idle);
     }
     
-    
-    SendBasicUpdate(server, ID, physic);
+    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    if(equipment)
+    {
+        EntityRef ref = EntityReference(server, "default", "sword");
+        
+        Rect3 bounds = physic->bounds;
+        SpatialPartitionQuery collisionQuery = QuerySpatialPartition(&server->collisionPartition, physic->P, bounds);
+        
+        for(EntityID testID = GetCurrent(&collisionQuery); IsValid(&collisionQuery); testID = Advance(&collisionQuery))
+        {
+            PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
+            if(testPhysic->P.chunkZ == physic->P.chunkZ && AreEqual(testPhysic->definitionID, ref))
+            {
+                EquipEntity();
+            }
+        }
+        
+        for(u16 pieceIndex = 0; pieceIndex < Count_equipmentSlot; ++pieceIndex)
+        {
+            EntityID equipmentID = equipment->IDs[pieceIndex];
+            if(IsValid(equipmentID))
+            {
+                PhysicComponent* equipmentPhysic = GetComponent(server, equipmentID, PhysicComponent);
+                equipmentPhysic->P = physic->P;
+                equipmentPhysic->flags |= EntityFlag_equipment;
+            }
+        }
+        
+    }
 }
 
+internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime)
+{
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    unsigned char buff_[KiloBytes(2)];
+    Assert(sizeof(EntityUpdate) < ArrayCount(buff_));
+    u16 totalSize = PrepareEntityUpdate(server, physic, buff_);
+    
+    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    
+    r32 maxDistance = 3.0f * CHUNK_DIM;
+    r32 maxDistanceSq = Square(maxDistance);
+    
+    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, physic->P);
+    for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
+    {
+        PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
+        PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
+        
+        if(physic->P.chunkZ == playerPhysic->P.chunkZ)
+        {
+            Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
+            if(LengthSq(distance) < maxDistanceSq)
+            {
+                QueueEntityHeader(player, ID);
+                u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, ID);
+                Assert(writeHere);
+                if(writeHere)
+                {
+                    Copy(totalSize, writeHere, buff_);
+                }
+                
+                if(equipment)
+                {
+                    for(u16 slotIndex = 0; slotIndex < Count_equipmentSlot; ++slotIndex)
+                    {
+                        EntityID equipmentID = equipment->IDs[slotIndex];
+                        if(IsValid(equipmentID))
+                        {
+                            QueueEquipmentID(player, ID, slotIndex, equipmentID);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 internal UniversePos BuildPFromSpawnerGrid(r32 cellDim, u32 cellX, u32 cellY, i32 chunkZ)
 {

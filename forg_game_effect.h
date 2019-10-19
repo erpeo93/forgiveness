@@ -1,5 +1,4 @@
 #pragma once
-
 introspection() struct GameEffect
 {
     r32 timer MetaDefault("1");

@@ -315,8 +315,8 @@ internal void CollateDebugEvent(DebugState* debugState, DebugCollationState* col
 internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
     ClientPlayer* player = &worldMode->player;
-    EntityID currentID = {};
-    
+    EntityID currentServerID = {};
+    EntityID currentClientID = {};
     
     u16 readSize = 0;
     u16 toReadSize = dataSize;
@@ -395,8 +395,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             case Type_gameAccess:
             {
                 b32 deleteEntities = false;
-                Unpack("LHLl", &worldMode->worldSeed, 
-                       &player->serverID.archetype, &player->serverID.archetypeIndex, &deleteEntities);
+                Unpack("LLl", &worldMode->worldSeed, 
+                       &player->serverID.archetype_archetypeIndex, &deleteEntities);
                 
                 if(deleteEntities)
                 {
@@ -415,47 +415,48 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             
             case Type_entityHeader:
             {
-                AssetID definitionID;
-                EntityID serverID;
-                u32 seed;
-                
-                Unpack("HLLHLL", &definitionID.type, &definitionID.subtypeHashIndex, &definitionID.index, &serverID.archetype, &serverID.archetypeIndex, &seed);
-                Assert(serverID.archetype < Archetype_Count);
-                
-                EntityID clientID = GetClientIDMapping(worldMode, serverID);
-                if(!IsValid(clientID))
-                {
-                    Assets* assets = gameState->assets;
-                    EntityDefinition* definition = GetData(assets, EntityDefinition, definitionID);
-                    
-                    if(definition)
-                    {
-                        clientID = {};
-                        AcquireArchetype(worldMode, serverID.archetype, (&clientID));
-                        
-                        ClientEntityInitParams params = definition->client;
-                        params.ID = serverID;
-                        params.seed = seed;
-                        
-                        InitFunc[serverID.archetype](worldMode, clientID, &definition->common, &params);
-                        AddClientIDMapping(worldMode, serverID, clientID);
-                    }
-                }
-                currentID = clientID;
-                if(AreEqual(serverID, player->serverID))
-                {
-                    player->clientID = clientID;
-                }
+                Unpack("L", &currentServerID.archetype_archetypeIndex);
+                Assert(GetArchetype(currentServerID) < Archetype_Count);
+                currentClientID = GetClientIDMapping(worldMode, currentServerID);
             } break;
             
             case Type_entityBasics:
             {
+                AssetID definitionID;
+                definitionID.type = AssetType_EntityDefinition;
+                u32 seed;
                 UniversePos P;
                 Vec3 speed;
                 GameProperty action;
-                Unpack("lllVVHH", &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset, &speed, &action.property, &action.value);
+                u32 flags;
                 
-                BaseComponent* base = GetComponent(worldMode, currentID, BaseComponent);
+                Unpack("LLLlllVVHHL", &definitionID.subtypeHashIndex, &definitionID.index, &seed, &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset, &speed, &action.property, &action.value, &flags);
+                
+                if(!IsValid(currentClientID))
+                {
+                    Assets* assets = gameState->assets;
+                    EntityDefinition* definition = GetData(assets, EntityDefinition, definitionID);
+                    if(definition)
+                    {
+                        currentClientID = {};
+                        AcquireArchetype(worldMode, GetArchetype(currentServerID), (&currentClientID));
+                        
+                        ClientEntityInitParams params = definition->client;
+                        params.ID = currentServerID;
+                        params.seed = seed;
+                        
+                        InitFunc[GetArchetype(currentServerID)](worldMode, currentClientID, &definition->common, &params);
+                        AddClientIDMapping(worldMode, currentServerID, currentClientID);
+                    }
+                }
+                
+                if(AreEqual(currentServerID, player->serverID))
+                {
+                    player->clientID = currentClientID;
+                }
+                
+                
+                BaseComponent* base = GetComponent(worldMode, currentClientID, BaseComponent);
                 if(base)
                 {
                     r32 maxDistancePrediction = 2.5f;
@@ -464,13 +465,33 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     base->universeP = P;
                     base->velocity = speed;
                     base->action = action;
+                    base->flags = flags;
                     
-                    if(AreEqual(currentID, player->clientID))
+                    if(AreEqual(currentClientID, player->clientID))
                     {
                         player->universeP = P;
                     }
                 }
             } break;
+            
+            case Type_EquipmentMapping:
+            {
+                u16 index;
+                EntityID ID;
+                Unpack("HL", &index, &ID.archetype_archetypeIndex);
+                
+                EquipmentMappingComponent* equipment = GetComponent(worldMode, currentClientID, EquipmentMappingComponent);
+                
+                if(equipment)
+                {
+                    BaseComponent* equipmentBase = GetComponent(worldMode, ID, BaseComponent);
+                    Assert(index < ArrayCount(equipment->mappings));
+                    equipment->mappings[index].nameHash = equipmentBase->nameHash;
+                    equipment->mappings[index].ID = ID;
+                }
+            } break;
+            
+            
             
             case Type_FileHeader:
             {

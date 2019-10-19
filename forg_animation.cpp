@@ -470,16 +470,27 @@ internal Rect2 RenderAnimation_(RenderGroup* group, AssetID animationID, Animati
                         
                         
 #if 0                        
-                        for(u32 attachmentPointIndex = 0; attachmentPointIndex < bitmapInfo->attachmentPointCount; ++attachmentPointIndex)
+                        if(params->equipment)
                         {
-                            PAKAttachmentPoint* point = GetAttachmentPoint(group->assets, bitmap, attachmentPointIndex);
-                            if(point)
+                            for(u32 attachmentPointIndex = 0; attachmentPointIndex < bitmapInfo->attachmentPointCount; ++attachmentPointIndex)
                             {
-                                if(point->nameHash == StringHash("test"))
+                                PAKAttachmentPoint* point = GetAttachmentPoint(group->assets, bitmap, attachmentPointIndex);
+                                if(point)
                                 {
-                                    ObjectTransform testT = transform;
-                                    testT.additionalZBias = 0.1f;
-                                    PushBitmapWithPivot(group, testT, bitmap, P, piece->pivot, height, V2(1, 1), V4(1, 0, 0, 1));
+                                    for(each equipmentPiece)
+                                    {
+                                        if(point->nameHash == equipment->nameHash)
+                                        {
+                                            BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);
+                                            LayoutComponent* equipmentLayout = GetComponent(worldMode, equipmentID, LayoutComponent);
+                                            
+                                            if(equipmentBase && equipmentLayout)
+                                            {
+                                                RenderAttachedPieces(group, P, equipmentLayout->rootScale, equipmentLayout->rootAngle, equipmentLayout->pieces, equipmentLayout->pieceCount, equipmentLayout->rootHash, base->seed, lights);
+                                            }
+                                            break;
+                                        }
+                                    }
                                 }
                             }
                         }

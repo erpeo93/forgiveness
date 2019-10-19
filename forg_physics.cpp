@@ -90,6 +90,11 @@ internal SpatialPartitionQuery QuerySpatialPartition(SpatialPartition* partition
     return result;
 }
 
+internal SpatialPartitionQuery QuerySpatialPartitionAtPoint(SpatialPartition* partition, UniversePos P)
+{
+    SpatialPartitionQuery result = QuerySpatialPartition(partition, P, {});
+    return result;
+}
 
 internal b32 IsValid(SpatialPartitionQuery* query)
 {

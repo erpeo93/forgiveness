@@ -18,17 +18,6 @@
 #define ATTACHMENT_POINT "attachmentPoint"
 
 
-
-
-
-#if ASSET_SUBTYPE_RESTRUCTURING
-struct MetaAssetType
-{
-    u16 subtypeCount;
-    char** names;
-};
-#endif
-
 #define INVALID_PROPERTY_VALUE 0xffff
 #define INVALID_ASSET_SUBTYPE 0xffff
 struct MetaPropertyList

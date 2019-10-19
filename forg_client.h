@@ -50,10 +50,12 @@
 struct BaseComponent
 {
     u32 seed;
+    u64 nameHash;
     UniversePos universeP;
     Vec3 velocity;
     Rect3 bounds;
     GameProperty action;
+    u32 flags;
 };
 
 struct ImageReference
@@ -81,6 +83,7 @@ struct ImageComponent
 struct LayoutPiece
 {
     u64 nameHash;
+    r32 height;
     ImageReference image;
 };
 

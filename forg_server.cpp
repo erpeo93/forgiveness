@@ -65,13 +65,11 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 #define RespawnPlayer(server, player, P) SpawnPlayer_(server, player, P, true)
 internal void SpawnPlayer_(ServerState* server, PlayerComponent* player, UniversePos P, b32 deleteEntities)
 {
-    EntityRef type = {};
-    type.subtypeHashIndex = GetAssetSubtype(server->assets, AssetType_EntityDefinition, "default");
-    
+    EntityRef type = EntityReference(server, "default", "crocodile");
     EntityID ID = AddEntity(server, P, &server->entropy, type, player);
     
     ResetQueue(player->queues + GuaranteedDelivery_None);
-    SendGameAccessConfirm(player, server->worldSeed, ID, deleteEntities);
+    QueueGameAccessConfirm(player, server->worldSeed, ID, deleteEntities);
 }
 
 internal void StoreFileHash(ServerState* server, PlayerComponent* player, u16 type, u64 subtypeHash, u64 dataHash)
@@ -102,7 +100,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             if(true)
             {
                 b32 editingEnabled = false;
-                SendLoginResponse(player, LOGIN_PORT, challenge, editingEnabled);
+                QueueLoginResponse(player, LOGIN_PORT, challenge, editingEnabled);
             }
             else
             {
@@ -149,7 +147,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                         }
                     }
                 }
-                SendLoginFileTransferBegin(player, fileCount);
+                QueueLoginFileTransferBegin(player, fileCount);
                 
                 
                 for(u32 fileIndex = 0; fileIndex < server->fileCount; ++fileIndex)
@@ -183,7 +181,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                             toSend->sendingOffset = 0;
                             
                             ++file->counter;
-                            SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
+                            QueueFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
                             FREELIST_INSERT(toSend, player->firstLoginFileToSend);
                         }
                     }
@@ -295,7 +293,7 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
         PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
         if(player->connectionSlot)
         {
-            QueueAndFlushAllPackets(server, player, elapsedTime);
+            FlushAllPackets(server, player, elapsedTime);
             if(player->connectionClosed)
             {
                 platformAPI.net.CloseConnection(&server->clientInterface, player->connectionSlot);
@@ -326,12 +324,12 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
                 u32 toSendSize = KiloBytes(250);
                 
                 FileToSend** toSendPtr = &player->firstLoginFileToSend;
-                toSendSize = SendAllPossibleData(server, player, toSendPtr, toSendSize);
+                toSendSize = QueueAllPossibleFileData(server, player, toSendPtr, toSendSize);
                 
                 if(!player->firstLoginFileToSend)
                 {
                     FileToSend** reloadPtr = &player->firstReloadedFileToSend;
-                    SendAllPossibleData(server, player, reloadPtr, toSendSize);
+                    QueueAllPossibleFileData(server, player, reloadPtr, toSendSize);
                 }
             }
         }
@@ -474,7 +472,7 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
         {
             for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
             {
-                if(HasComponent(archetypeIndex, PlayerComponent))
+                if(HasComponent_(archetypeIndex, PlayerComponent))
                 {
                     for(ArchIterator iter = First(server, archetypeIndex); 
                         IsValid(iter); 
@@ -508,7 +506,7 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
                                 }
                             }
                             
-                            SendFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
+                            QueueFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
                         }
                     }
                 }
@@ -680,7 +678,8 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     
     EXECUTE_JOB(server, HandlePlayerRequests, ArchetypeHas(PlayerComponent), elapsedTime);
     EXECUTE_JOB(server, DispatchGameEffects, ArchetypeHas(PhysicComponent) && ArchetypeHas(EffectComponent), elapsedTime);
-    EXECUTE_JOB(server, MoveAndSendUpdate, ArchetypeHas(PhysicComponent), elapsedTime);
+    EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime);
+    EXECUTE_JOB(server, SendEntityUpdate, ArchetypeHas(PhysicComponent), elapsedTime);
     
     Clear(&tempPool);
 }
@@ -705,14 +704,14 @@ extern "C" SERVER_FRAME_END(ServerFrameEnd)
                 for(u32 eventIndex = 0; eventIndex < flip.eventCount; ++eventIndex)
                 {
                     DebugEvent* event = flip.eventArray + eventIndex;
-                    SendDebugEvent(player, event);
+                    QueueDebugEvent(player, event);
                 }
             }
             else
             {
                 DebugEvent* frameMarkerEvent = flip.eventArray + flip.eventCount - 1;
                 Assert(frameMarkerEvent->type == DebugType_frameMarker);
-                SendDebugEvent(player, frameMarkerEvent);
+                QueueDebugEvent(player, frameMarkerEvent);
             }
         }
     }

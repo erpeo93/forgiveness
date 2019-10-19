@@ -8,7 +8,7 @@ Archetype() struct AnimalArchetype
 #else
     BaseComponent base;
     AnimationComponent animation;
-    EquipmentComponent equipment;
+    EquipmentMappingComponent equipment;
 #endif
 };
 
@@ -72,7 +72,7 @@ introspection() struct ServerEntityInitParams
 {
     UniversePos P MetaUneditable();
     u32 seed MetaUneditable();
-    AssetID definitionID MetaUneditable();
+    EntityRef definitionID MetaUneditable();
     
     ArrayCounter bindingCount MetaCounter(bindings);
     EffectBinding* bindings;
@@ -94,6 +94,7 @@ introspection() struct ImageProperties
 introspection() struct LayoutPieceProperties
 {
     AssetLabel name;
+    r32 height;
     ImageProperties properties;
 };
 
@@ -107,6 +108,8 @@ introspection() struct ClientEntityInitParams
     
     ImageProperties entityProperties;
     ImageProperties leafProperties;
+    
+    AssetLabel name;
     
     AssetLabel layoutRootName;
     ArrayCounter pieceCount MetaCounter(layoutPieces);

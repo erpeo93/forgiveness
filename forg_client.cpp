@@ -79,22 +79,6 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     
     result->firstFreePlantSegment = 0;
     
-    
-#if 0    
-    result->dayPhases[DayPhase_Day].duration = 6000.0f;
-    result->dayPhases[DayPhase_Day].ambientLightColor = V3(0.9f, 0.88f, 1.0f);
-    result->dayPhases[DayPhase_Day].next = DayPhase_Sunset;
-    
-    result->dayPhases[DayPhase_Sunset].duration = 30.0f;
-    result->dayPhases[DayPhase_Sunset].ambientLightColor = V3(1.0f, 0.8f, 0.8f);
-    result->dayPhases[DayPhase_Sunset].next = DayPhase_Night;
-    
-    result->dayPhases[DayPhase_Night].duration = 40.0f;
-    result->dayPhases[DayPhase_Night].ambientLightColor = V3(0.0f, 0.01f, 0.15f);
-    result->dayPhases[DayPhase_Night].next = DayPhase_Day;
-#endif
-    
-    //result->currentPhase = DayPhase_Day;
     result->soundState = &gameState->soundState;
     
     result->editorUI.input = input;
@@ -114,64 +98,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
 
 internal Vec3 HandleDaynightCycle(GameModeWorld* worldMode, PlatformInput* input)
 {
-    Vec3 ambientLightColor = {};
-    ambientLightColor = V3(0.1f, 0.1f, 0.1f);
-#if 0                
-    worldMode->currentPhaseTimer += input->timeToAdvance;
-    DayPhase* currentPhase = worldMode->dayPhases + worldMode->currentPhase;
-    DayPhase* nextPhase = worldMode->dayPhases + currentPhase->next;
-    
-    r32 maxLerpDuration = 1.0f;
-    if(worldMode->currentPhaseTimer >= currentPhase->duration)
-    {
-        worldMode->currentPhaseTimer = 0;
-        worldMode->currentPhase = currentPhase->next;
-        ambientLightColor = nextPhase->ambientLightColor;
-    }
-    else if(worldMode->currentPhaseTimer >= (currentPhase->duration - maxLerpDuration))
-    {
-        r32 lowTimer = currentPhase->duration - maxLerpDuration;
-        
-        r32 lerp = Clamp01MapToRange(lowTimer, worldMode->currentPhaseTimer, currentPhase->duration);
-        ambientLightColor = Lerp(currentPhase->ambientLightColor, lerp, nextPhase->ambientLightColor);
-    }
-    else
-    {
-        ambientLightColor = currentPhase->ambientLightColor;
-    }
-    switch(worldMode->currentPhase)
-    {
-        case DayPhase_Sunrise:
-        {
-            ambientLightColor = V3(0.0f, 0.01f, 0.5f);
-        } break;
-        
-        case DayPhase_Morning:
-        {
-            ambientLightColor = V3(0.5f, 0.7f, 0.9f);
-        } break;
-        
-        case DayPhase_Day:
-        {
-            ambientLightColor = V3(0.0f, 0.3f, 0.7f);
-        } break;
-        
-        case DayPhase_Sunset:
-        {
-            ambientLightColor = V3(0.9f, 0.8f, 0.3f);
-        } break;
-        
-        case DayPhase_Dusk:
-        {
-            ambientLightColor = V3(0.43f, 0.2f, 0.28f);
-        } break;
-        
-        case DayPhase_Night:
-        {
-            ambientLightColor = V3(0.02f, 0.02f, 0.1f);
-        } break;
-    }
-#endif
+    Vec3 ambientLightColor = V3(0.1f, 0.1f, 0.1f);
     return ambientLightColor;
 }
 
@@ -191,6 +118,13 @@ internal r32 GetDeepness(BaseComponent* base)
 {
     r32 height = GetDim(base->bounds).y;
     return height;
+}
+
+internal b32 ShouldBeRendered(GameModeWorld* worldMode, BaseComponent* base)
+{
+    b32 result = ((base->universeP.chunkZ == worldMode->player.universeP.chunkZ) &&
+                  !(base->flags & EntityFlag_equipment));
+    return result;
 }
 
 internal void RenderShadow(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ShadowComponent* shadowComponent, r32 deepness, r32 width)
@@ -222,7 +156,7 @@ internal void RenderShadow(GameModeWorld* worldMode, RenderGroup* group, Vec3 P,
 RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    if(base->universeP.chunkZ == worldMode->player.universeP.chunkZ)
+    if(ShouldBeRendered(worldMode, base))
     {
         r32 height = GetHeight(base);
         r32 deepness = GetWidth(base);
@@ -237,6 +171,7 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
             animation->flipOnYAxis = (base->velocity.x < 0.0f);
         }
         Clear(&animation->skeletonProperties);
+        
         AddOptionalGamePropertyRaw(&animation->skeletonProperties, base->action);
         
         AnimationParams params = {};
@@ -247,6 +182,7 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.scale = 1;
         params.transform = UprightTransform();
         params.flipOnYAxis = animation->flipOnYAxis;
+        params.equipment = GetComponent(worldMode, ID, EquipmentComponent);
         
         RenderAnimationWithHeight(group, animation, &params, height);
     }
@@ -263,7 +199,7 @@ internal BitmapId GetImageFromReference(Assets* assets, ImageReference* referenc
 RENDERING_ECS_JOB_CLIENT(RenderPlants)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    if(base->universeP.chunkZ == worldMode->player.universeP.chunkZ)
+    if(ShouldBeRendered(worldMode, base))
     {
         r32 height = GetHeight(base);
         r32 deepness = GetWidth(base);
@@ -312,7 +248,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
 RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    if(base->universeP.chunkZ == worldMode->player.universeP.chunkZ)
+    if(ShouldBeRendered(worldMode, base))
     {
         r32 height = GetHeight(base);
         r32 deepness = GetWidth(base);
@@ -371,7 +307,7 @@ internal void RenderAttachedPieces(RenderGroup* group, Vec3 P, Vec2 scale, r32 a
 RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    if(base->universeP.chunkZ == worldMode->player.universeP.chunkZ)
+    if(ShouldBeRendered(worldMode, base))
     {
         r32 height = GetHeight(base);
         r32 deepness = GetWidth(base);
@@ -389,105 +325,10 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
 RENDERING_ECS_JOB_CLIENT(RenderBound)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    PushCubeOutline(group, Offset(base->bounds, GetRelativeP(worldMode, base)), V4(1, 0, 0, 1), 0.05f);
-}
-
-internal u64 DetectNearestEntities(GameModeWorld* worldMode, RenderGroup* group, Vec2 screenMouseP)
-{
-    
-    u64 result = 0;
-    
-#if 0    
-    for(u32 index = 0; index < ArrayCount(worldMode->nearestCameraZ); ++index)
+    if(ShouldBeRendered(worldMode, base))
     {
-        worldMode->nearestCameraZ[index] = R32_MAX;
-        worldMode->nearestEntities[index] = 0;
+        PushCubeOutline(group, Offset(base->bounds, GetRelativeP(worldMode, base)), V4(1, 0, 0, 1), 0.05f);
     }
-    r32 maxOverallDistanceSq = R32_MAX;
-    r32 overallMinCameraZ = R32_MAX;
-    
-    
-    for(u32 entityIndex = 0; 
-        entityIndex < ArrayCount(worldMode->entities); 
-        entityIndex++)
-    {
-        ClientEntity* entity = worldMode->entities[entityIndex];
-        while(entity)
-        {
-            ClientEntity* next = entity->next;
-            if(entity->identifier)
-            {  
-                if(entity->identifier && !IsSet(entity, Flag_deleted | Flag_Attached))
-                {
-                    r32 cameraZ = 0.0f;
-                    
-                    Rect2 screenBounds = InvertedInfinityRect2();
-                    if(IsRock(worldMode->table, entity->taxonomy) || IsPlant(worldMode->table, entity->taxonomy) ||
-                       AnimatedIn3d(worldMode->table, entity->taxonomy))
-                    {
-                        screenBounds = ProjectOnScreen(group, entity->bounds, &cameraZ);
-                    }
-                    else
-                    {
-                        Rect2 entityBounds = entity->animation.bounds;
-                        Vec2 entityRectDim = GetDim(entityBounds);
-                        r32 minBoundDim = 0.6f;
-                        if(entityRectDim.x < minBoundDim || entityRectDim.x < minBoundDim)
-                        {
-                            entityRectDim.x = Max(entityRectDim.x, minBoundDim);
-                            entityRectDim.y = Max(entityRectDim.y, minBoundDim);
-                            
-                            Vec2 entityRectCenter = GetCenter(entityBounds);
-                            entityBounds = RectCenterDim(entityRectCenter, entityRectDim);
-                        }
-                        
-                        
-                        screenBounds = ProjectOnScreenCameraAligned(group, entity->P, entityBounds, &cameraZ);
-                    }
-                    
-                    r32 distanceSq = LengthSq(screenMouseP - GetCenter(screenBounds));
-                    if(distanceSq < maxOverallDistanceSq) // && cameraZ < overallMinCameraZ
-                    {
-                        maxOverallDistanceSq = distanceSq;
-                        overallMinCameraZ = cameraZ;
-                        result = entity->identifier;
-                    }
-                    
-                    entity->showHUD = false;
-                    if(PointInRect(screenBounds, screenMouseP))
-                    {
-                        entity->showHUD = true;
-                        
-                        u32 maxEntityCount = ArrayCount(worldMode->nearestEntities);
-                        u32 destIndex = maxEntityCount - 1;
-                        Assert(maxEntityCount > 1);
-                        for(i32 slideIndex = destIndex - 1; slideIndex >= 0; --slideIndex)
-                        {
-                            if(cameraZ < worldMode->nearestCameraZ[slideIndex])
-                            {
-                                worldMode->nearestEntities[slideIndex + 1] = worldMode->nearestEntities[slideIndex];
-                                worldMode->nearestCameraZ[slideIndex + 1] = worldMode->nearestCameraZ[slideIndex];
-                                
-                                destIndex = slideIndex;
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
-                        
-                        worldMode->nearestEntities[destIndex] = entity;
-                        worldMode->nearestCameraZ[destIndex] = cameraZ;
-                    }
-                }
-            }
-            
-            entity = entity->next;
-        }
-    }
-#endif
-    
-    return result;
 }
 
 internal void UpdateEntities(GameModeWorld* worldMode, r32 timeToAdvance, ClientPlayer* myPlayer)

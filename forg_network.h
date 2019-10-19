@@ -181,6 +181,7 @@ enum Packet_Type
     
     Type_entityHeader,
     Type_entityBasics,
+    Type_EquipmentMapping,
     
     Type_FileHeader,
     Type_FileChunk,
@@ -196,7 +197,6 @@ enum Packet_Type
 #if FORGIVENESS_INTERNAL
     Type_CaptureFrame,
     Type_debugEvent,
-    Type_memoryStats,
     Type_InputRecording,
 #endif
 };

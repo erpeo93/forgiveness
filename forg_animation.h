@@ -60,4 +60,5 @@ struct AnimationParams
     r32 scale;
     b32 flipOnYAxis;
     ObjectTransform transform;
+    EquipmentComponent* equipment;
 };

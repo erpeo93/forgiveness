@@ -74,11 +74,12 @@ struct PhysicComponent
 {
     UniversePos P;
     Rect3 bounds;
-    AssetID definitionID;
+    EntityRef definitionID;
     u32 seed;
     Vec3 speed;
     Vec3 acc;
     GameProperty action;
+    u32 flags;
 };
 
 struct FileHash

@@ -5,7 +5,7 @@ internal void ResetQueue(ForgNetworkPacketQueue* queue)
     queue->lastPacket = 0;
 }
 
-inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery deliveryType, u8 flags, u16 size, AssetID definitionID, EntityID ID, u32 entitySeed)
+inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery deliveryType, u8 flags, u16 size, EntityID ID)
 {
     ForgNetworkPacketQueue* queue = player->queues + deliveryType; 
     u8 applicationFlags = flags;
@@ -57,7 +57,7 @@ inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery delivery
         {
             unsigned char* oldResult = result;
             result = ForgPackHeader(result, Type_entityHeader);
-            result += pack(result, "HLLHLL", definitionID.type, definitionID.subtypeHashIndex, definitionID.index, ID.archetype, ID.archetypeIndex);
+            result += pack(result, "L", ID.archetype_archetypeIndex);
             packet->size += (u16) (result - oldResult);
         }
         packet->size += size;
@@ -70,17 +70,17 @@ inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery delivery
     return result;
 }
 
-#define CloseAndStoreStandardPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_None, 0, __VA_ARGS__)
-#define CloseAndStoreGuaranteedPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_Guaranteed,0, __VA_ARGS__)
+#define QueueStandardPacket(player, ...) Queue(player, buff_, buff, GuaranteedDelivery_None, 0, __VA_ARGS__)
+#define QueueGuaranteedPacket(player, ...) Queue(player, buff_, buff, GuaranteedDelivery_Guaranteed,0, __VA_ARGS__)
 
-#define CloseAndStoreFilePacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_Guaranteed, ForgNetworkFlag_FileChunk, __VA_ARGS__)
+#define QueueFilePacket(player, ...) Queue(player, buff_, buff, GuaranteedDelivery_Guaranteed, ForgNetworkFlag_FileChunk, __VA_ARGS__)
 
-#define CloseAndStoreOrderedPacket(player, ...) CloseAndStore(player, buff_, buff, GuaranteedDelivery_Ordered, ForgNetworkFlag_Ordered, __VA_ARGS__)
+#define QueueOrderedPacket(player, ...) Queue(player, buff_, buff, GuaranteedDelivery_Ordered, ForgNetworkFlag_Ordered, __VA_ARGS__)
 
-inline void CloseAndStore(PlayerComponent* player, unsigned char* buff_, unsigned char* buff, GuaranteedDelivery deliveryType, u8 flags, AssetID definitionID = {},EntityID ID = {}, u32 seed = 0)
+inline void Queue(PlayerComponent* player, unsigned char* buff_, unsigned char* buff, GuaranteedDelivery deliveryType, u8 flags, EntityID ID = {})
 {
     u16 totalSize = ForgEndPacket_(buff_, buff);
-    u8* writeHere = ForgReserveSpace(player, deliveryType, flags, totalSize, definitionID, ID, seed);
+    u8* writeHere = ForgReserveSpace(player, deliveryType, flags, totalSize, ID);
     Assert(writeHere);
     if(writeHere)
     {
@@ -88,7 +88,7 @@ inline void CloseAndStore(PlayerComponent* player, unsigned char* buff_, unsigne
     }
 }
 
-inline void QueueAndFlushAllPackets(ServerState* server, PlayerComponent* player, ForgNetworkPacketQueue* queue, GuaranteedDelivery deliveryType)
+inline void FlushAllPackets(ServerState* server, PlayerComponent* player, ForgNetworkPacketQueue* queue, GuaranteedDelivery deliveryType)
 {
     NetworkSendParams params = {};
     params.guaranteedDelivery = deliveryType;
@@ -103,12 +103,12 @@ inline void QueueAndFlushAllPackets(ServerState* server, PlayerComponent* player
     Clear(&queue->tempPool);
 }
 
-inline void QueueAndFlushAllPackets(ServerState* server, PlayerComponent* player, r32 timeToAdvance)
+inline void FlushAllPackets(ServerState* server, PlayerComponent* player, r32 timeToAdvance)
 {
     for(u32 deliveryType = GuaranteedDelivery_None; deliveryType < GuaranteedDelivery_Count; ++deliveryType)
     {
         ForgNetworkPacketQueue* queue = player->queues + deliveryType;
-        QueueAndFlushAllPackets(server, player, queue, (GuaranteedDelivery) deliveryType);
+        FlushAllPackets(server, player, queue, (GuaranteedDelivery) deliveryType);
     }
     platformAPI.net.FlushSendQueue(&server->clientInterface, player->connectionSlot, timeToAdvance);
 }
@@ -117,113 +117,62 @@ inline void QueueAndFlushAllPackets(ServerState* server, PlayerComponent* player
 
 #define Pack(formatString, ...) buff += pack(buff, formatString, ##__VA_ARGS__)
 
-internal void SendLoginResponse(PlayerComponent* player, u16 port, u32 challenge, b32 editingEnabled)
+internal void QueueLoginResponse(PlayerComponent* player, u16 port, u32 challenge, b32 editingEnabled)
 {
     StartPacket(player, login);
     Pack("HLl", port, challenge, editingEnabled);
-    CloseAndStoreOrderedPacket(player);
+    QueueOrderedPacket(player);
 }
 
-internal void SendLoginFileTransferBegin(PlayerComponent* player, u32 fileCount)
+internal void QueueLoginFileTransferBegin(PlayerComponent* player, u32 fileCount)
 {
     StartPacket(player, loginFileTransferBegin);
     Pack("L", fileCount);
-    CloseAndStoreOrderedPacket(player);
+    QueueOrderedPacket(player);
 }
 
-internal void SendGameAccessConfirm(PlayerComponent* player, u32 worldSeed, EntityID ID, b32 deleteEntities)
+internal void QueueGameAccessConfirm(PlayerComponent* player, u32 worldSeed, EntityID ID, b32 deleteEntities)
 {
     StartPacket(player, gameAccess);
-    Pack("LHLl", worldSeed, ID.archetype, ID.archetypeIndex, deleteEntities);
-    CloseAndStoreOrderedPacket(player);
+    Pack("LLl", worldSeed, ID.archetype_archetypeIndex, deleteEntities);
+    QueueOrderedPacket(player);
 }
 
-internal void SendWorldInfo(PlayerComponent* player, WorldSeason season, r32 seasonLerp)
+internal void QueueWorldInfo(PlayerComponent* player, WorldSeason season, r32 seasonLerp)
 {
     StartPacket(player, worldInfo);
     Pack("Cd", SafeTruncateToU8(season), seasonLerp);
-    CloseAndStoreStandardPacket(player);
+    QueueStandardPacket(player);
 }
 
 internal u16 PrepareEntityUpdate(ServerState* server, PhysicComponent* physic, unsigned char* buff_)
 {
     UniversePos P = physic->P;
     unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
-    Pack("lllVVHH", P.chunkX, P.chunkY, P.chunkZ, P.chunkOffset, physic->speed, physic->action.property, physic->action.value);
+    Pack("LLLlllVVHHL", physic->definitionID.subtypeHashIndex, physic->definitionID.index, physic->seed, P.chunkX, P.chunkY, P.chunkZ, P.chunkOffset, physic->speed, physic->action.property, physic->action.value, physic->flags);
     u16 totalSize = ForgEndPacket_( buff_, buff );
     return totalSize;
 }
 
-
-#if 0
-inline b32 EntityCanDoAction(SimRegion* region, SimEntity* actor, SimEntity* target, EntityAction action, b32 distanceConstrain, b32* unableBecauseOfDistance);
-internal void SendPossibleActions(SimRegion* region, SimEntity* actor, SimEntity* target, b32 overlapping)
-{
-    ServerState* server = region->server;
-    ServerPlayerComponent* player = server->players + actor->playerID;
-    
-    StartPacket(player, possibleActions);
-    unsigned char* actionCountDest = buff;
-    buff += sizeof(u32);
-    
-    Pack("Ql", target->identifier, overlapping);
-    
-    
-    u32 actionCount = 0;
-    for(u32 actionIndex = 0; actionIndex < Action_Count; ++actionIndex)
-    {
-        b32 unableBecauseOfDistance = false;
-        if(EntityCanDoAction(region, actor, target, (EntityAction)actionIndex, false, &unableBecauseOfDistance))
-        {
-            ++actionCount;
-            
-            PossibleActionType possible = unableBecauseOfDistance ? PossibleAction_TooFar : PossibleAction_CanBeDone;
-            Pack("LC", actionIndex, SafeTruncateToU8(possible));
-        }
-    }
-    
-    pack(actionCountDest, "L", actionCount);
-    
-    CloseAndStoreStandardPacket(player);
-}
-
-
-internal void SendDeleteMessage(SimRegion* region, SimEntity* entity)
-{
-    ServerState* server = region->server;
-    PartitionSurfaceEntityBlock* playerSurfaceBlock = QuerySpacePartitionPoint(region, &region->playerPartition, entity->P);
-    while(playerSurfaceBlock)
-    {
-        for( u32 playerIndex = 0; playerIndex < playerSurfaceBlock->entityCount; ++playerIndex )
-        {
-            CollisionData* collider = playerSurfaceBlock->colliders + playerIndex;
-            SimEntity* entityToSend = GetRegionEntity(region, collider->entityIndex);
-            if(entityToSend->playerID)
-            {
-                ServerPlayerComponent* player = server->players + entityToSend->playerID;
-                StartPacket(player, deletedEntity);
-                
-                Pack("Q", entity->identifier);
-                CloseAndStoreOrderedPacket(player);
-            }
-        }
-        playerSurfaceBlock = playerSurfaceBlock->next;
-    }
-}
-#endif
-
-inline void SendEntityHeader(PlayerComponent* player, AssetID definitionID, EntityID ID, u32 seed)
+inline void QueueEntityHeader(PlayerComponent* player, EntityID ID)
 {
     StartPacket(player, entityHeader);
-    Pack("HLLHLL", definitionID.type, definitionID.subtypeHashIndex, definitionID.index, ID.archetype, ID.archetypeIndex, seed);
-    CloseAndStoreStandardPacket(player);
+    Pack("L", ID.archetype_archetypeIndex);
+    QueueStandardPacket(player);
 }
 
-inline void SendEntityHeaderReliably(PlayerComponent* player, AssetID definitionID, EntityID ID, u32 seed)
+inline void QueueEntityHeaderReliably(PlayerComponent* player, EntityID ID)
 {
     StartPacket(player, entityHeader);
-    Pack("HLLHLL", definitionID.type, definitionID.subtypeHashIndex, definitionID.index, ID.archetype, ID.archetypeIndex, seed);
-    CloseAndStoreOrderedPacket(player);
+    Pack("L", ID.archetype_archetypeIndex);
+    QueueOrderedPacket(player);
+}
+
+internal void QueueEquipmentID(PlayerComponent* player, EntityID ID, u16 slotIndex, EntityID equipmentID)
+{
+    StartPacket(player, EquipmentMapping);
+    Pack("HL", slotIndex, equipmentID.archetype_archetypeIndex);
+    QueueStandardPacket(player, ID);
 }
 
 #if 0
@@ -232,41 +181,18 @@ inline void SendPlantUpdate(PlayerComponent* player, u64 entityID, PlantComponen
     StartPacket(player, plantUpdate);
     Pack("ddddd", plant->age, plant->life, plant->leafDensity,
          plant->flowerDensity, plant->fruitDensity);
-    CloseAndStoreStandardPacket(player, entityID);
+    QueueStandardPacket(player, entityID);
 }
 #endif
 
-#if 0
-inline void SendEquipmentID(PlayerComponent* player, u64 entityID, u8 slotIndex, u64 ID)
-{
-    StartPacket(player, equipmentSlot);
-    Pack("CQ", slotIndex, ID);
-    CloseAndStoreStandardPacket(player, entityID);
-}
-
-inline void SendStartedAction(PlayerComponent* player, u64 entityID, u8 actionIndex, u64 targetID)
-{
-    StartPacket(player, StartedAction);
-    Pack("CQ", actionIndex, targetID);
-    CloseAndStoreStandardPacket(player, entityID);
-}
-
-inline void SendCompletedAction(PlayerComponent* player, u64 entityID, u8 actionIndex, u64 targetID)
-{
-    StartPacket(player, CompletedAction);
-    Pack("CQ", actionIndex, targetID);
-    CloseAndStoreStandardPacket(player, entityID);
-}
-#endif
-
-inline void SendFileHeader(PlayerComponent* player, u32 index, u16 type, char* subtype, u32 uncompressedSize, u32 compressedSize)
+inline void QueueFileHeader(PlayerComponent* player, u32 index, u16 type, char* subtype, u32 uncompressedSize, u32 compressedSize)
 {
     StartPacket(player, FileHeader);
     Pack("LHsLL", index, type, subtype, uncompressedSize, compressedSize);
-    CloseAndStoreOrderedPacket(player);
+    QueueOrderedPacket(player);
 }
 
-inline void SendFileChunks(PlayerComponent* player, u32 index, char* source, u32 offset, u32 sizeToSend, u32 chunkSize)
+inline void QueueFileChunks(PlayerComponent* player, u32 index, char* source, u32 offset, u32 sizeToSend, u32 chunkSize)
 {
     u32 sentSize = 0;
     u8* runningSource = (u8*) source + offset;
@@ -283,13 +209,13 @@ inline void SendFileChunks(PlayerComponent* player, u32 index, char* source, u32
         offset += toSend;
         sentSize += toSend;
         
-        CloseAndStoreFilePacket(player);
+        QueueFilePacket(player);
     }
     
     Assert(sentSize == sizeToSend);
 }
 
-internal u32 SendAllPossibleData(ServerState* server, PlayerComponent* player, FileToSend** toSendPtr, u32 toSendSize)
+internal u32 QueueAllPossibleFileData(ServerState* server, PlayerComponent* player, FileToSend** toSendPtr, u32 toSendSize)
 {
     while(*toSendPtr && (toSendSize > 0))
     {
@@ -302,7 +228,7 @@ internal u32 SendAllPossibleData(ServerState* server, PlayerComponent* player, F
             u32 sending = Min(toSendSize, remainingSizeInFile);
             if(sending > 0)
             {
-                SendFileChunks(player, toSend->playerIndex, (char*) file->content, toSend->sendingOffset, sending, CHUNK_SIZE);
+                QueueFileChunks(player, toSend->playerIndex, (char*) file->content, toSend->sendingOffset, sending, CHUNK_SIZE);
                 toSend->sendingOffset += sending;
             }
             
@@ -336,14 +262,14 @@ internal u32 SendAllPossibleData(ServerState* server, PlayerComponent* player, F
 }
 
 #if FORGIVENESS_INTERNAL
-internal void SendDebugEvent(PlayerComponent* player, DebugEvent* event)
+internal void QueueDebugEvent(PlayerComponent* player, DebugEvent* event)
 {
     
     b32 result = false;
     StartPacket(player, debugEvent);
     Pack("QssLHCd", event->clock, event->GUID, event->name, event->threadID, event->coreIndex, event->type, event->Value_r32);
     
-    CloseAndStoreOrderedPacket(player);
+    QueueOrderedPacket(player);
 }
 #endif
 

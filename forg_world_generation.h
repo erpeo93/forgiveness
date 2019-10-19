@@ -170,6 +170,22 @@ introspection() struct EntityRef
     u16 index;
 };
 
+
+inline b32 AreEqual(EntityRef r1, EntityRef r2)
+{
+    b32 result = (r1.subtypeHashIndex == r2.subtypeHashIndex &&
+                  r1.index == r2.index);
+    return result;
+}
+
+inline EntityRef EntityReference(AssetID definitionID)
+{
+    EntityRef result;
+    result.subtypeHashIndex = definitionID.subtypeHashIndex;
+    result.index = definitionID.index;
+    return result;
+}
+
 introspection() struct SpawnerEntity
 {
     EntityRef type;
