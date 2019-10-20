@@ -636,8 +636,9 @@ inline void RenderLFF(RenderGroup* group, Plant* plant, Vec3 P, PlantLFFParams* 
     
     lffTransform.angle = lffAngle;
     lffTransform.modulationPercentage = renderingParams.modulationWithFocusColor;
+    lffTransform.scale = scale;
     
-    PushBitmap(group, lffTransform, BID, P, 0, scale, color, renderingParams.lights);
+    PushBitmap(group, lffTransform, BID, P, 0, color, renderingParams.lights);
 }
 
 internal void RenderStem(RenderGroup* group, PlantRenderingParams renderingParams, r32 windTime, Plant* plant, PlantDefinition* definition, PlantStem* stem, Vec3 stemP, u8 recursiveLevel, m4x4 originOrientation, r32 startingZ)

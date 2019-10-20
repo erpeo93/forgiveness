@@ -5,10 +5,12 @@ Archetype() struct AnimalArchetype
     PhysicComponent physic;
     PlayerComponent* player;
     EquipmentComponent equipment;
+    UsingComponent equipped;
 #else
     BaseComponent base;
     AnimationComponent animation;
     EquipmentMappingComponent equipment;
+    UsingMappingComponent equipped;
 #endif
 };
 

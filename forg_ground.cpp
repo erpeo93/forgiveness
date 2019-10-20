@@ -771,7 +771,8 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                                     
                                                     ObjectTransform transform = FlatTransform();
                                                     transform.angle = RandomUni(&seq) * TAU32;
-                                                    PushBitmap(group, transform, groundID, splatP, height * voxelSide, scale, color);
+                                                    transform.scale = scale;
+                                                    PushBitmap(group, transform, groundID, splatP, height * voxelSide, color);
                                                 }
                                             }
                                         }

@@ -143,8 +143,9 @@ internal void RenderShadow(GameModeWorld* worldMode, RenderGroup* group, Vec3 P,
             r32 yScale = deepness / nativeDeepness;
             r32 xScale = width / nativeWidth;
             
-            Vec2 finalScale = Hadamart(shadowComponent->scale, V2(xScale, yScale));
-            PushBitmap(group, FlatTransform(0.01f), shadowID, P + shadowComponent->offset, 0, finalScale, shadowComponent->color, lights);
+            ObjectTransform transform = FlatTransform(0.01f);
+            transform.scale = Hadamart(shadowComponent->scale, V2(xScale, yScale));
+            PushBitmap(group, transform, shadowID, P + shadowComponent->offset, 0, shadowComponent->color, lights);
         }
         else
         {
@@ -182,9 +183,10 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.scale = 1;
         params.transform = UprightTransform();
         params.flipOnYAxis = animation->flipOnYAxis;
-        params.equipment = GetComponent(worldMode, ID, EquipmentComponent);
+        params.equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
+        params.equipped = GetComponent(worldMode, ID, UsingMappingComponent);
         
-        RenderAnimationWithHeight(group, animation, &params, height);
+        RenderAnimationWithHeight(worldMode, group, animation, &params, height);
     }
 }
 
@@ -216,7 +218,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
         BitmapId BID = GetImageFromReference(group->assets, &image->entity, &seq);
         if(IsValid(BID))
         {
-            BitmapDim bitmapData = PushBitmap(group, UprightTransform(), BID, P, height, V2(1, 1), V4(1, 1, 1, 1), lights);
+            BitmapDim bitmapData = PushBitmap(group, UprightTransform(), BID, P, height, V4(1, 1, 1, 1), lights);
             
             Bitmap* bitmap = GetBitmap(group->assets, BID).bitmap;
             PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, BID);
@@ -234,10 +236,10 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
                     {
                         BitmapId leafID = GetImageFromReference(group->assets, &plant->leaf, &seq);
                         leafTransform.angle = point->angle;
-                        Vec2 scale = point->scale;
+                        leafTransform.scale = point->scale;
                         
-                        Vec3 pointP = bitmapData.P + point->alignment.x * bitmapData.XAxis * bitmapData.size.x + point->alignment.y * bitmapData.YAxis * bitmapData.size.y;
-                        PushBitmap(group, leafTransform, leafID, pointP, 0, scale, V4(1, 1, 1, 1), lights);
+                        Vec3 pointP = GetAlignP(bitmapData, point->alignment);
+                        PushBitmap(group, leafTransform, leafID, pointP, 0, V4(1, 1, 1, 1), lights);
                     }
                 }
             }
@@ -263,17 +265,14 @@ RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
         BitmapId BID = GetImageFromReference(group->assets, &image->entity, &seq);
         if(IsValid(BID))
         {
-            PushBitmap(group, UprightTransform(), BID, P, height, V2(1, 1), V4(1, 1, 1, 1), lights);
+            PushBitmap(group, UprightTransform(), BID, P, height, V4(1, 1, 1, 1), lights);
         }
     }
 }
 
-internal void RenderAttachedPieces(RenderGroup* group, Vec3 P, Vec2 scale, r32 angle, LayoutPiece* pieces, u32 pieceCount, u64 nameHash, u32 seed, Lights lights)
+internal void RenderAttachedPieces(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutPiece* pieces, u32 pieceCount, u64 nameHash, u32 seed, Lights lights)
 {
     RandomSequence seq = Seed(seed);
-    ObjectTransform transform = UprightTransform();
-    transform.angle = angle;
-    
     for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
     {
         LayoutPiece* piece = pieces + pieceIndex;
@@ -283,7 +282,7 @@ internal void RenderAttachedPieces(RenderGroup* group, Vec3 P, Vec2 scale, r32 a
             if(IsValid(BID))
             {
                 transform.additionalZBias = 0.01f * pieceIndex;
-                BitmapDim dim = PushBitmap(group, transform, BID, P, 0, scale, V4(1, 1, 1, 1), lights);
+                BitmapDim dim = PushBitmap(group, transform, BID, P, 0, V4(1, 1, 1, 1), lights);
                 
                 PAKBitmap* bitmap = GetBitmapInfo(group->assets, BID);
                 for(u32 attachmentIndex = 0; attachmentIndex < bitmap->attachmentPointCount; ++attachmentIndex)
@@ -292,11 +291,12 @@ internal void RenderAttachedPieces(RenderGroup* group, Vec3 P, Vec2 scale, r32 a
                     
                     if(attachmentPoint)
                     {
-                        Vec3 newP = dim.P + attachmentPoint->alignment.x * dim.size.x * dim.XAxis + attachmentPoint->alignment.y * dim.size.y * dim.YAxis;
-                        Vec2 newScale = attachmentPoint->scale;
-                        r32 newAngle = angle + attachmentPoint->angle;
+                        Vec3 newP = GetAlignP(dim, attachmentPoint->alignment);
+                        ObjectTransform finalTransform = transform;
+                        finalTransform.angle += attachmentPoint->angle;
+                        finalTransform.scale = Hadamart(finalTransform.scale, attachmentPoint->scale);
                         
-                        RenderAttachedPieces(group, newP, newScale, newAngle, pieces, pieceCount, StringHash(attachmentPoint->name), seed, lights);
+                        RenderAttachedPieces(group, newP, finalTransform, pieces, pieceCount, StringHash(attachmentPoint->name), seed, lights);
                     }
                 }
             }
@@ -318,7 +318,11 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
         LayoutComponent* layout = GetComponent(worldMode, ID, LayoutComponent);
         RenderShadow(worldMode, group, P, &layout->shadow, deepness, width);
         
-        RenderAttachedPieces(group, P, layout->rootScale, layout->rootAngle, layout->pieces, layout->pieceCount, layout->rootHash, base->seed, lights);
+        ObjectTransform transform = UprightTransform();
+        transform.angle = layout->rootAngle;
+        transform.scale = layout->rootScale;
+        
+        RenderAttachedPieces(group, P, transform, layout->pieces, layout->pieceCount, layout->rootHash, base->seed, lights);
     }
 }
 

@@ -16,6 +16,7 @@
 #define IMAGE_PROPERTY_ALIGN_X "alignX"
 #define IMAGE_PROPERTY_ALIGN_Y "alignY"
 #define ATTACHMENT_POINT "attachmentPoint"
+#define SKELETON_FLIPPED "flipped"
 
 
 #define INVALID_PROPERTY_VALUE 0xffff

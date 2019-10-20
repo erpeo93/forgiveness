@@ -397,6 +397,12 @@ struct BitmapDim
     Vec3 YAxis;
 };
 
+inline Vec3 GetAlignP(BitmapDim dim, Vec2 alignment)
+{
+    Vec3 result = dim.P + alignment.x * dim.size.x * dim.XAxis + alignment.y * dim.size.y * dim.YAxis;
+    return result;
+}
+
 inline BitmapDim GetBitmapDim(Bitmap* bitmap, Vec2 pivot, Vec3 P, Vec3 XAxis, Vec3 YAxis, r32 height, Vec2 scale = V2(1.0f, 1.0f))
 {
     BitmapDim result;
@@ -446,7 +452,7 @@ inline void PushTexture(RenderGroup* group, RenderTexture texture, Vec3 P, Vec3 
     }
 }
 
-inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTransform, ColoredBitmap coloredBitmap,  Vec3 P, r32 height, Vec2 scale, Vec4 color, Lights lights, Vec2 pivot)
+inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform transform, ColoredBitmap coloredBitmap,  Vec3 P, r32 height, Vec4 color, Lights lights, Vec2 pivot)
 {
     BitmapDim result = {};
     GameRenderCommands* commands = renderGroup->commands;
@@ -456,20 +462,20 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTra
     
     if(bitmap->width && bitmap->height)
     {
-        r32 angleRad = DegToRad(objectTransform.angle);
+        r32 angleRad = DegToRad(transform.angle);
         Vec3 XAxis = V3(Cos(angleRad), Sin(angleRad), 0.0f);
         Vec3 YAxis  = V3(Perp(XAxis.xy), 0.0f);
         
-        if(objectTransform.flipOnYAxis)
+        if(transform.flipOnYAxis)
         {
             XAxis.x = -XAxis.x;
             YAxis.xy = -Perp(XAxis.xy);
-            objectTransform.cameraOffset.x = -objectTransform.cameraOffset.x;
+            transform.cameraOffset.x = -transform.cameraOffset.x;
         }
         
-        if(objectTransform.upright)
+        if(transform.upright)
         {
-            P += objectTransform.cameraOffset.x * renderGroup->gameCamera.X + objectTransform.cameraOffset.y * renderGroup->gameCamera.Y + objectTransform.cameraOffset.z * renderGroup->gameCamera.Z;  
+            P += transform.cameraOffset.x * renderGroup->gameCamera.X + transform.cameraOffset.y * renderGroup->gameCamera.Y + transform.cameraOffset.z * renderGroup->gameCamera.Z;  
             
             Vec3 XAxis0 = V3(XAxis.x, 0.0f, XAxis.y);
             Vec3 YAxis0 = V3(YAxis.x, 0.0f, YAxis.y);
@@ -484,7 +490,7 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTra
         }
         else
         {
-            P += objectTransform.cameraOffset;
+            P += transform.cameraOffset;
         }
         
         
@@ -493,16 +499,16 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTra
             height = bitmap->nativeHeight;
         }
         
-        BitmapDim dim = GetBitmapDim(bitmap, pivot, P, XAxis, YAxis, height, scale);
+        BitmapDim dim = GetBitmapDim(bitmap, pivot, P, XAxis, YAxis, height, transform.scale);
         result = dim;
         
         P = dim.P;
         XAxis= XAxis * dim.size.x;
         YAxis = YAxis * dim.size.y;
         
-        if(!objectTransform.dontRender)
+        if(!transform.dontRender)
         {
-            PushTexture(renderGroup, bitmap->textureHandle, P, XAxis, YAxis, color, lights, objectTransform.modulationPercentage, objectTransform.additionalZBias);
+            PushTexture(renderGroup, bitmap->textureHandle, P, XAxis, YAxis, color, lights, transform.modulationPercentage, transform.additionalZBias);
         }
     }
     
@@ -510,13 +516,13 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform objectTra
 }
 
 
-inline BitmapDim PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
+inline BitmapDim PushBitmap(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, r32 height = 0, Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
 {
     BitmapDim result = {};
     ColoredBitmap bitmap = GetBitmap(renderGroup->assets, ID);
     if(bitmap.bitmap)
     {
-        result = PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, bitmap.pivot);
+        result = PushBitmap_(renderGroup, transform, bitmap, P, height, color, lights, bitmap.pivot);
     }
     else
     {
@@ -526,13 +532,13 @@ inline BitmapDim PushBitmap(RenderGroup* renderGroup, ObjectTransform objectTran
     return result;
 }
 
-inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform objectTransform, BitmapId ID, Vec3 P, Vec2 pivot, r32 height = 0, Vec2 scale = V2(1.0f, 1.0f),  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
+inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, Vec2 pivot, r32 height = 0,  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
 {
     BitmapDim result = {};
     ColoredBitmap bitmap = GetBitmap(renderGroup->assets, ID);
     if(bitmap.bitmap)
     {
-        result = PushBitmap_(renderGroup, objectTransform, bitmap, P, height, scale, color, lights, pivot);
+        result = PushBitmap_(renderGroup, transform, bitmap, P, height, color, lights, pivot);
     }
     else
     {
@@ -877,10 +883,10 @@ internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont*
                     {
                         if(drawShadow)
                         {
-                            PushBitmap(group, FlatTransform(), ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight, V2( 1.0f, 1.0f ), V4( 0.0f, 0.0f, 0.0f, 1.0f ));
+                            PushBitmap(group, FlatTransform(), ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight, V4( 0.0f, 0.0f, 0.0f, 1.0f ));
                         }
                         
-                        PushBitmap(group, FlatTransform(), ID, P, glyphHeight, V2(1.0f, 1.0f), color);
+                        PushBitmap(group, FlatTransform(), ID, P, glyphHeight, color);
                     }
                 }
             }

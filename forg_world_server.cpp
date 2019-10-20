@@ -209,23 +209,47 @@ internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
         physic->action = GameProp(action, idle);
     }
     
-    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-    if(equipment)
+    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+    if(equipped)
     {
         EntityRef ref = EntityReference(server, "default", "sword");
         
-        Rect3 bounds = physic->bounds;
-        SpatialPartitionQuery collisionQuery = QuerySpatialPartition(&server->collisionPartition, physic->P, bounds);
+        SpatialPartitionQuery collisionQuery = QuerySpatialPartitionAtPoint(&server->collisionPartition, physic->P);
         
         for(EntityID testID = GetCurrent(&collisionQuery); IsValid(&collisionQuery); testID = Advance(&collisionQuery))
         {
             PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
-            if(testPhysic->P.chunkZ == physic->P.chunkZ && AreEqual(testPhysic->definitionID, ref))
+            if(!IsSet(testPhysic->flags, EntityFlag_equipment) && 
+               testPhysic->P.chunkZ == physic->P.chunkZ && 
+               AreEqual(testPhysic->definitionID, ref))
             {
-                EquipEntity();
+                for(u32 equippedIndex = 0; equippedIndex < ArrayCount(equipped->IDs); ++equippedIndex)
+                {
+                    if(!IsValid(equipped->IDs[equippedIndex]))
+                    {
+                        equipped->IDs[equippedIndex] = testID;
+                        break;
+                    }
+                }
             }
         }
         
+        for(u16 pieceIndex = 0; pieceIndex < Count_usingSlot; ++pieceIndex)
+        {
+            EntityID usingID = equipped->IDs[pieceIndex];
+            if(IsValid(usingID))
+            {
+                PhysicComponent* usingPhysic = GetComponent(server, usingID, PhysicComponent);
+                usingPhysic->P = physic->P;
+                usingPhysic->flags |= EntityFlag_equipment;
+            }
+        }
+    }
+    
+    
+    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    if(equipment)
+    {
         for(u16 pieceIndex = 0; pieceIndex < Count_equipmentSlot; ++pieceIndex)
         {
             EntityID equipmentID = equipment->IDs[pieceIndex];
@@ -236,7 +260,6 @@ internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
                 equipmentPhysic->flags |= EntityFlag_equipment;
             }
         }
-        
     }
 }
 
@@ -248,6 +271,7 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime
     u16 totalSize = PrepareEntityUpdate(server, physic, buff_);
     
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
     
     r32 maxDistance = 3.0f * CHUNK_DIM;
     r32 maxDistanceSq = Square(maxDistance);
@@ -279,6 +303,18 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime
                         if(IsValid(equipmentID))
                         {
                             QueueEquipmentID(player, ID, slotIndex, equipmentID);
+                        }
+                    }
+                }
+                
+                if(equipped)
+                {
+                    for(u16 slotIndex = 0; slotIndex < Count_usingSlot; ++slotIndex)
+                    {
+                        EntityID usingID = equipped->IDs[slotIndex];
+                        if(IsValid(usingID))
+                        {
+                            QueueUsingID(player, ID, slotIndex, usingID);
                         }
                     }
                 }
@@ -427,7 +463,7 @@ internal void DispatchGameEffect(ServerState* server, UniversePos P, GameEffect*
     {
         case spawnEntity:
         {
-            AddEntity(server, P, &server->entropy, effect->spawnType);
+            //AddEntity(server, P, &server->entropy, effect->spawnType);
         } break;
     }
 }

@@ -484,14 +484,45 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 if(equipment)
                 {
-                    BaseComponent* equipmentBase = GetComponent(worldMode, ID, BaseComponent);
                     Assert(index < ArrayCount(equipment->mappings));
-                    equipment->mappings[index].nameHash = equipmentBase->nameHash;
                     equipment->mappings[index].ID = ID;
+                    if(IsValid(ID))
+                    {
+                        BaseComponent* equipmentBase = GetComponent(worldMode, ID, BaseComponent);
+                        equipment->mappings[index].nameHash = StringHash(MetaTable_equipmentSlot[index]);
+                    }
+                    else
+                    {
+                        equipment->mappings[index].nameHash = 0;
+                    }
+                    
                 }
             } break;
             
-            
+            case Type_UsingMapping:
+            {
+                u16 index;
+                EntityID ID;
+                Unpack("HL", &index, &ID.archetype_archetypeIndex);
+                
+                UsingMappingComponent* equipped = GetComponent(worldMode, currentClientID, UsingMappingComponent);
+                
+                if(equipped)
+                {
+                    Assert(index < ArrayCount(equipped->mappings));
+                    equipped->mappings[index].ID = ID;
+                    if(IsValid(ID))
+                    {
+                        BaseComponent* equipmentBase = GetComponent(worldMode, ID, BaseComponent);
+                        equipped->mappings[index].nameHash = StringHash(MetaTable_usingSlot[index]);
+                    }
+                    else
+                    {
+                        equipped->mappings[index].nameHash = 0;
+                    }
+                    
+                }
+            } break;
             
             case Type_FileHeader:
             {

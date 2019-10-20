@@ -182,6 +182,7 @@ enum Packet_Type
     Type_entityHeader,
     Type_entityBasics,
     Type_EquipmentMapping,
+    Type_UsingMapping,
     
     Type_FileHeader,
     Type_FileChunk,

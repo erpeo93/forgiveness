@@ -50,6 +50,8 @@ struct TexturedQuadsCommand
 struct ObjectTransform
 {
     Vec3 cameraOffset;
+    Vec2 scale;
+    
     r32 additionalZBias;
     r32 modulationPercentage;
     
@@ -93,6 +95,7 @@ struct RenderGroup
 inline ObjectTransform UprightTransform()
 {
     ObjectTransform result = {};
+    result.scale = V2(1, 1);
     result.upright = true;
     return result;
 }
@@ -100,6 +103,7 @@ inline ObjectTransform UprightTransform()
 inline ObjectTransform FlatTransform(r32 additionalZBias = 0)
 {
     ObjectTransform result = {};
+    result.scale = V2(1, 1);
     result.additionalZBias = additionalZBias;
     return result;
 }

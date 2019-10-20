@@ -175,6 +175,13 @@ internal void QueueEquipmentID(PlayerComponent* player, EntityID ID, u16 slotInd
     QueueStandardPacket(player, ID);
 }
 
+internal void QueueUsingID(PlayerComponent* player, EntityID ID, u16 slotIndex, EntityID usingID)
+{
+    StartPacket(player, UsingMapping);
+    Pack("HL", slotIndex, usingID.archetype_archetypeIndex);
+    QueueStandardPacket(player, ID);
+}
+
 #if 0
 inline void SendPlantUpdate(PlayerComponent* player, u64 entityID, PlantComponent* plant)
 {

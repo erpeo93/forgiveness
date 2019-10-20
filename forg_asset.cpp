@@ -1231,6 +1231,11 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
         case AssetType_Font:
         case AssetType_Model:
         case AssetType_Skeleton:
+        {
+            char* print = asset->paka.skeleton.flippedByDefault ? "true" : "false";
+            OutputToStream(&metaDataStream, "%s:%s", SKELETON_FLIPPED, print);
+        } break;
+        
         case AssetType_Sound:
         {
             // NOTE(Leonardo): we can't possibly have edited these!
@@ -1745,18 +1750,20 @@ internal AssetID* GetAllSkinBitmaps(MemoryPool* tempPool, Assets* assets, u32 sk
     AssetArray* array = assets->assets + AssetType_Image;
     AssetSubtypeArray* skinBitmaps = GetSubtype(array, skin);
     
-    u16 totalAssetCount = skinBitmaps->standardAssetCount + skinBitmaps->derivedAssetCount;
-    *bitmapCount = totalAssetCount;
-    
-    result = PushArray(tempPool, AssetID, totalAssetCount);
-    for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
+    if(skinBitmaps)
     {
-        AssetID* dest = result + assetIndex;
-        dest->type = AssetType_Image;
-        dest->subtypeHashIndex = skin;
-        dest->index = assetIndex;
+        u16 totalAssetCount = skinBitmaps->standardAssetCount + skinBitmaps->derivedAssetCount;
+        *bitmapCount = totalAssetCount;
+        
+        result = PushArray(tempPool, AssetID, totalAssetCount);
+        for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
+        {
+            AssetID* dest = result + assetIndex;
+            dest->type = AssetType_Image;
+            dest->subtypeHashIndex = skin;
+            dest->index = assetIndex;
+        }
     }
-    
     return result;
 }
 
@@ -2062,7 +2069,7 @@ inline AssetID GetBitmapForGlyph(Assets* assets, AssetID fontID, u32 desiredCode
     
 }
 
-inline AssetID GetMatchingAnimationForSkeleton(Assets* assets, AssetID skeletonID, RandomSequence* seq, GameProperties* properties)
+inline AssetID GetMatchingAnimationForSkeleton(Assets* assets, AssetID skeletonID, RandomSequence* seq, GameProperties* properties, b32* flipOnYAxis)
 {
     AssetID result = {};
     Asset* asset = GetAssetRaw(assets, skeletonID).asset;
@@ -2074,6 +2081,7 @@ inline AssetID GetMatchingAnimationForSkeleton(Assets* assets, AssetID skeletonI
             u16 startingIndex = info->animationAssetsFirstIndex;
             u16 endingIndex = startingIndex + info->animationCount;
             
+            *flipOnYAxis = info->flippedByDefault;
             result = QueryAssets_(assets, (AssetType) skeletonID.type, skeletonID.subtypeHashIndex, seq, properties, true, startingIndex, endingIndex);
             
         }
@@ -2082,14 +2090,15 @@ inline AssetID GetMatchingAnimationForSkeleton(Assets* assets, AssetID skeletonI
     return result;
 }
 
-internal AssetID QueryAnimations(Assets* assets, u64 skeletonHash, RandomSequence* seq, GameProperties* properties)
+internal AssetID QueryAnimations(Assets* assets, u64 skeletonHash, RandomSequence* seq, GameProperties* properties, b32* flipOnYAxis)
 {
     u32 skeleton = GetAssetSubtype(assets, AssetType_Skeleton, skeletonHash);
     AssetID result = {};
     AssetID skeletonID = QuerySkeletons(assets, skeleton, seq, properties);
+    
     if(IsValid(skeletonID))
     {
-        result = GetMatchingAnimationForSkeleton(assets, skeletonID, seq, properties);
+        result = GetMatchingAnimationForSkeleton(assets, skeletonID, seq, properties, flipOnYAxis);
     }
     
     return result;

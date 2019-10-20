@@ -234,6 +234,7 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffect* 
         {
             ObjectTransform transform = UprightTransform();
             transform.angle = angle;
+            transform.scale = V2(scaleX, scaleY);
             
             if(updater->startDrawingFollowingBitmapAt && followingPhase)
             {
@@ -243,9 +244,10 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffect* 
                 newColor.a = newAlpha;
                 
                 ParticleUpdater* followingUpdater = &followingPhase->updater;
-                PushBitmap(group, transform, followingUpdater->bitmapID, P, 0, V2(scaleX, scaleY),  newColor, lights);
+                
+                PushBitmap(group, transform, followingUpdater->bitmapID, P, 0, newColor, lights);
             }
-            PushBitmap(group, transform, updater->bitmapID, P, 9, V2(scaleX, scaleY),  color, lights);
+            PushBitmap(group, transform, updater->bitmapID, P, 0, color, lights);
         }
     }
 }

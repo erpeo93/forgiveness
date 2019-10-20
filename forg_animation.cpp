@@ -423,8 +423,55 @@ inline void ApplyAssAlterations(PieceAss* ass, AssAlteration* assAlt, Bone* pare
 }
 #endif
 
+internal void RenderAttachedPieces(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutPiece* pieces, u32 pieceCount, u64 nameHash, u32 seed, Lights lights);
+internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
+                                   PAKBitmap* bitmapInfo, BitmapId BID, BitmapDim dim, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, Lights lights)
+{
+    TempMemory temp = BeginTemporaryMemory(worldMode->persistentPool);
+    b32* alreadyRendered = PushArray(temp.pool, b32, mappingCount);
+    
+    for(u32 attachmentPointIndex = 0; attachmentPointIndex < bitmapInfo->attachmentPointCount; ++attachmentPointIndex)
+    {
+        PAKAttachmentPoint* point = GetAttachmentPoint(group->assets, BID, attachmentPointIndex);
+        if(point)
+        {
+            u64 pointHash = StringHash(point->name);
+            if(pointHash)
+            {
+                Vec3 P = GetAlignP(dim, point->alignment);
+                for(u32 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
+                {
+                    if(!alreadyRendered[mappingIndex])
+                    {
+                        ObjectMapping* mapping = mappings + mappingIndex;
+                        if(IsValid(mapping->ID) && pointHash == mapping->nameHash)
+                        {
+                            alreadyRendered[mappingIndex] = true;
+                            
+                            EntityID equipmentID = mapping->ID;
+                            BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);
+                            LayoutComponent* equipmentLayout = GetComponent(worldMode, equipmentID, LayoutComponent);
+                            
+                            if(equipmentBase && equipmentLayout)
+                            {
+                                ObjectTransform finalTransform = transform;
+                                finalTransform.angle += point->angle + equipmentLayout->rootAngle;;
+                                finalTransform.scale = Hadamart(point->scale, equipmentLayout->rootScale);
+                                
+                                RenderAttachedPieces(group, P, finalTransform, equipmentLayout->pieces, equipmentLayout->pieceCount, equipmentLayout->rootHash, equipmentBase->seed, lights);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    EndTemporaryMemory(temp);
+}
 
-internal Rect2 RenderAnimation_(RenderGroup* group, AssetID animationID, AnimationComponent* component, AnimationParams* params, b32 render = true)
+internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, AssetID animationID, AnimationComponent* component, AnimationParams* params, b32 render = true)
 {
     MemoryPool tempPool = {};
     
@@ -446,7 +493,6 @@ internal Rect2 RenderAnimation_(RenderGroup* group, AssetID animationID, Animati
         for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
         {
             AnimationPiece* piece = pieces + pieceIndex;
-            
             for(u32 bitmapIndex = 0; bitmapIndex < bitmapCount; ++bitmapIndex)
             {
                 AssetID bitmap = bitmaps[bitmapIndex];
@@ -465,37 +511,26 @@ internal Rect2 RenderAnimation_(RenderGroup* group, AssetID animationID, Animati
                         }
                         
                         r32 height = bitmapInfo->nativeHeight * params->scale;
-                        BitmapDim dim = PushBitmapWithPivot(group, transform, bitmap, P, piece->pivot, height, V2(1, 1), piece->color, lights);
+                        BitmapDim dim = PushBitmapWithPivot(group, transform, bitmap, P, piece->pivot, height, piece->color, lights);
                         result = Union(result, RectMinDim(dim.P.xy, dim.size));
                         
                         
-#if 0                        
-                        if(params->equipment)
+                        ObjectTransform equipmentTransform = transform;
+                        equipmentTransform.cameraOffset = {};
+                        if(worldMode)
                         {
-                            for(u32 attachmentPointIndex = 0; attachmentPointIndex < bitmapInfo->attachmentPointCount; ++attachmentPointIndex)
+                            if(params->equipment)
                             {
-                                PAKAttachmentPoint* point = GetAttachmentPoint(group->assets, bitmap, attachmentPointIndex);
-                                if(point)
-                                {
-                                    for(each equipmentPiece)
-                                    {
-                                        if(point->nameHash == equipment->nameHash)
-                                        {
-                                            BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);
-                                            LayoutComponent* equipmentLayout = GetComponent(worldMode, equipmentID, LayoutComponent);
-                                            
-                                            if(equipmentBase && equipmentLayout)
-                                            {
-                                                RenderAttachedPieces(group, P, equipmentLayout->rootScale, equipmentLayout->rootAngle, equipmentLayout->pieces, equipmentLayout->pieceCount, equipmentLayout->rootHash, base->seed, lights);
-                                            }
-                                            break;
-                                        }
-                                    }
-                                }
+                                RenderObjectMappings(worldMode, group,
+                                                     bitmapInfo, bitmap, dim, equipmentTransform, params->equipment->mappings, ArrayCount(params->equipment->mappings), lights);
+                            }
+                            
+                            if(params->equipped)
+                            {
+                                RenderObjectMappings(worldMode, group,
+                                                     bitmapInfo, bitmap, dim, equipmentTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), lights);
                             }
                         }
-#endif
-                        
                     }
                 }
             }
@@ -511,15 +546,22 @@ internal Rect2 RenderAnimation_(RenderGroup* group, AssetID animationID, Animati
     return result;
 }
 
-internal Rect2 RenderAnimation(RenderGroup* group, AnimationComponent* component, AnimationParams* params, b32 render = true)
+internal Rect2 RenderAnimation(GameModeWorld* worldMode, RenderGroup* group, AnimationComponent* component, AnimationParams* params, b32 render = true)
 {
     Rect2 result = InvertedInfinityRect2();
     RandomSequence seq = {};
-    AssetID animationID = QueryAnimations(group->assets, component->skeletonHash, &seq, &component->skeletonProperties);
+    
+    b32 flippedByDefault = false;
+    AssetID animationID = QueryAnimations(group->assets, component->skeletonHash, &seq, &component->skeletonProperties, &flippedByDefault);
+    
+    if(render && flippedByDefault)
+    {
+        params->flipOnYAxis = !params->flipOnYAxis;
+    }
     
     if(IsValid(animationID))
     {
-        result = RenderAnimation_(group, animationID, component, params, render);
+        result = RenderAnimation_(worldMode, group, animationID, component, params, render);
     }
     
     return result;
@@ -528,23 +570,23 @@ internal Rect2 RenderAnimation(RenderGroup* group, AnimationComponent* component
 
 internal Rect2 GetAnimationDim(RenderGroup* group, AnimationComponent* component, AnimationParams* params)
 {
-    Rect2 result = RenderAnimation(group, component, params, false);
+    Rect2 result = RenderAnimation(0, group, component, params, false);
     return result;
 }
 
 internal Rect2 GetAnimationDim(RenderGroup* group, AssetID ID, AnimationComponent* component, AnimationParams* params)
 {
-    Rect2 result = RenderAnimation_(group, ID, component, params, false);
+    Rect2 result = RenderAnimation_(0, group, ID, component, params, false);
     return result;
 }
 
-internal void RenderAnimationWithHeight(RenderGroup* group, AnimationComponent* component, AnimationParams* params, r32 height)
+internal void RenderAnimationWithHeight(GameModeWorld* worldMode, RenderGroup* group, AnimationComponent* component, AnimationParams* params, r32 height)
 {
     Rect2 animationDefaultDim = GetAnimationDim(group, component, params);
     r32 defaultHeight = GetDim(animationDefaultDim).y;
     r32 scale = height / defaultHeight;
     params->scale = scale;
-    RenderAnimation(group, component, params);
+    RenderAnimation(worldMode, group, component, params);
 }
 
 

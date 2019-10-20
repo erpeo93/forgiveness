@@ -1568,7 +1568,9 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
             
             case AssetType_Skeleton:
             {
-                
+                Nest(layout);
+                Edit_b32(layout, "flipped", &info->skeleton.flippedByDefault, false, ID);
+                Pop(layout);
             } break;
             
             case AssetType_Invalid:
@@ -1706,6 +1708,7 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                     Edit_r32_(layout, "speed", &data->speed, auID(info, "speed"), false, {});
                     Edit_r32_(layout, "time", &data->time, auID(info, "time"), false, {});
                     
+                    // TODO(Leonardo): make this a free string!
                     StringArray options;
                     options.strings = 0;
                     options.count = 0;
@@ -1730,27 +1733,30 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                         component.time = data->time;
                         component.skinHash = StringHash(data->skin.value);
                         
-                        AnimationParams params = {};
-                        params.P = P;
-                        params.scale = minPixelHeight;
-                        params.transform = FlatTransform();
-                        
-                        Rect2 animationDim = GetAnimationDim(layout->group, ID, &component, &params);
-                        
-                        r32 coeff = height / GetDim(animationDim).y;
-                        params.scale *= coeff;
-                        
-                        Rect2 animationDimCorrect = GetAnimationDim(layout->group, ID, &component, &params);
-                        
-                        
-                        Vec2 offset = P.xy - animationDimCorrect.min;
-                        params.P.xy += offset;
-                        Rect2 dim = RenderAnimation_(layout->group, ID, &component, &params);
-                        
-                        PushRect(layout->group, FlatTransform(), dim, V4(0, 0, 0, 1));
-                        
-                        Vec2 resizableP = dim.min;
-                        EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
+                        if(component.skinHash)
+                        {
+                            AnimationParams params = {};
+                            params.P = P;
+                            params.scale = minPixelHeight;
+                            params.transform = FlatTransform();
+                            
+                            Rect2 animationDim = GetAnimationDim(layout->group, ID, &component, &params);
+                            
+                            r32 coeff = height / GetDim(animationDim).y;
+                            params.scale *= coeff;
+                            
+                            Rect2 animationDimCorrect = GetAnimationDim(layout->group, ID, &component, &params);
+                            
+                            
+                            Vec2 offset = P.xy - animationDimCorrect.min;
+                            params.P.xy += offset;
+                            Rect2 dim = RenderAnimation_(0, layout->group, ID, &component, &params);
+                            
+                            PushRect(layout->group, FlatTransform(), dim, V4(0, 0, 0, 1));
+                            
+                            Vec2 resizableP = dim.min;
+                            EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
+                        }
                     }
                     
                     VerticalAdvance(layout, height * backgroundScale);

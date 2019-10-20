@@ -36,6 +36,7 @@ struct AnimationComponent
     u64 skeletonHash;
     GameProperties skeletonProperties;
     
+    b32 flippedByDefault;
     b32 flipOnYAxis;
     
     ShadowComponent shadow;
@@ -60,5 +61,6 @@ struct AnimationParams
     r32 scale;
     b32 flipOnYAxis;
     ObjectTransform transform;
-    EquipmentComponent* equipment;
+    EquipmentMappingComponent* equipment;
+    UsingMappingComponent* equipped;
 };

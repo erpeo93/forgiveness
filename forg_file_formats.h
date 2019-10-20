@@ -86,7 +86,7 @@ struct PAKSound
     */
 };
 
-#define PAK_ANIMATION_VERSION 0
+#define PAK_ANIMATION_VERSION 1
 struct PAKAnimation
 {
     u32 spriteCount;
@@ -111,6 +111,7 @@ struct PAKAnimation
 
 struct PAKSkeleton
 {
+    b32 flippedByDefault;
     u16 animationCount;
     u16 animationAssetsFirstIndex;
 };
