@@ -11,12 +11,15 @@
 #define TEST_FILE_PREFIX "__test__"
 
 #define MARKUP_FILE_NAME "markup"
+
+#define SKELETON_FLIPPED "flipped"
 #define ANIMATION_PROPERTY_SYNC_THREESOLD "syncThreesold"
 #define ANIMATION_PROPERTY_PREPARATION_THREESOLD "preparationThreesold"
+
 #define IMAGE_PROPERTY_ALIGN_X "alignX"
 #define IMAGE_PROPERTY_ALIGN_Y "alignY"
-#define ATTACHMENT_POINT "attachmentPoint"
-#define SKELETON_FLIPPED "flipped"
+#define IMAGE_ATTACHMENT_POINT "attachmentPoint"
+#define IMAGE_GROUP_NAME "groupName"
 
 
 #define INVALID_PROPERTY_VALUE 0xffff
@@ -78,6 +81,7 @@ struct Bitmap
     r32 widthOverHeight;
     
     PAKAttachmentPoint* attachmentPoints;
+    PAKGroupName* groupNames;
     
     RenderTexture textureHandle;
 };
@@ -131,6 +135,7 @@ struct SpriteInfo
     Vec2 pivot;
     u64 nameHash;
     char name[32];
+    b32 placeHolder;
 };
 
 struct FrameData

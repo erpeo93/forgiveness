@@ -325,6 +325,7 @@ internal AnimationPiece* GetAnimationPiecesAndAdvanceState(MemoryPool* tempPool,
         
         dest->pivot = sprite->pivot;
         dest->nameHash = sprite->nameHash;
+        dest->placeHolder = sprite->placeHolder;
         
         Assert(ass->boneIndex >= 0);
         Bone* parentBone = blended.bones + ass->boneIndex;
@@ -424,56 +425,72 @@ inline void ApplyAssAlterations(PieceAss* ass, AssAlteration* assAlt, Bone* pare
 #endif
 
 internal void RenderAttachedPieces(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutPiece* pieces, u32 pieceCount, u64 nameHash, u32 seed, Lights lights);
-internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
-                                   PAKBitmap* bitmapInfo, BitmapId BID, BitmapDim dim, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, Lights lights)
+internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, u64 hash, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights)
 {
-    TempMemory temp = BeginTemporaryMemory(worldMode->persistentPool);
-    b32* alreadyRendered = PushArray(temp.pool, b32, mappingCount);
-    
+    Assert(hash);
+    for(u32 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
+    {
+        if(!alreadyRendered[mappingIndex])
+        {
+            ObjectMapping* mapping = mappings + mappingIndex;
+            if(IsValid(mapping->ID) && (hash == mapping->slotHash || hash == mapping->pieceHash))
+            {
+                alreadyRendered[mappingIndex] = true;
+                
+                EntityID equipmentID = mapping->ID;
+                BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);
+                LayoutComponent* equipmentLayout = GetComponent(worldMode, equipmentID, LayoutComponent);
+                
+                if(equipmentBase && equipmentLayout)
+                {
+                    ObjectTransform finalTransform = transform;
+                    finalTransform.angle += equipmentLayout->rootAngle;;
+                    finalTransform.scale = Hadamart(finalTransform.scale, equipmentLayout->rootScale);
+                    
+                    RenderAttachedPieces(group, P, finalTransform, equipmentLayout->pieces, equipmentLayout->pieceCount, equipmentLayout->rootHash, equipmentBase->seed, lights);
+                }
+                break;
+            }
+        }
+    }
+}
+
+internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
+                                   PAKBitmap* bitmapInfo, BitmapId BID, BitmapDim dim, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights)
+{
     for(u32 attachmentPointIndex = 0; attachmentPointIndex < bitmapInfo->attachmentPointCount; ++attachmentPointIndex)
     {
         PAKAttachmentPoint* point = GetAttachmentPoint(group->assets, BID, attachmentPointIndex);
         if(point)
         {
-            u64 pointHash = StringHash(point->name);
+			u64 pointHash = StringHash(point->name);
             if(pointHash)
             {
                 Vec3 P = GetAlignP(dim, point->alignment);
-                for(u32 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
-                {
-                    if(!alreadyRendered[mappingIndex])
-                    {
-                        ObjectMapping* mapping = mappings + mappingIndex;
-                        if(IsValid(mapping->ID) && pointHash == mapping->nameHash)
-                        {
-                            alreadyRendered[mappingIndex] = true;
-                            
-                            EntityID equipmentID = mapping->ID;
-                            BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);
-                            LayoutComponent* equipmentLayout = GetComponent(worldMode, equipmentID, LayoutComponent);
-                            
-                            if(equipmentBase && equipmentLayout)
-                            {
-                                ObjectTransform finalTransform = transform;
-                                finalTransform.angle += point->angle + equipmentLayout->rootAngle;;
-                                finalTransform.scale = Hadamart(point->scale, equipmentLayout->rootScale);
-                                
-                                RenderAttachedPieces(group, P, finalTransform, equipmentLayout->pieces, equipmentLayout->pieceCount, equipmentLayout->rootHash, equipmentBase->seed, lights);
-                            }
-                            break;
-                        }
-                    }
-                }
+                
+                ObjectTransform attachmentTransform = transform;
+                attachmentTransform.angle += point->angle;
+                attachmentTransform.scale = Hadamart(attachmentTransform.scale, point->scale);
+                RenderAttachmentPoint(worldMode, group, P, pointHash, attachmentTransform, mappings, mappingCount, alreadyRendered, lights);
             }
         }
     }
-    
-    EndTemporaryMemory(temp);
 }
 
 internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, AssetID animationID, AnimationComponent* component, AnimationParams* params, b32 render = true)
 {
-    MemoryPool tempPool = {};
+    TempMemory temp = BeginTemporaryMemory(worldMode->persistentPool);
+    
+    b32* usingRendered = 0;
+    if(params->equipped)
+    {
+        usingRendered = PushArray(temp.pool, b32, ArrayCount(params->equipped->mappings));
+    }
+    b32* equipmentRendered = 0;
+    if(params->equipment)
+    {
+        equipmentRendered = PushArray(temp.pool, b32, ArrayCount(params->equipment->mappings));
+    }
     
     Rect2 result = InvertedInfinityRect2();
     Animation* animation = GetAnimation(group->assets, animationID);
@@ -481,54 +498,78 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
     {
         PAKAnimation* animationInfo = GetAnimationInfo(group->assets, animationID);
         u16 bitmapCount = 0;
-        AssetID* bitmaps = GetAllSkinBitmaps(&tempPool, group->assets, GetAssetSubtype(group->assets, AssetType_Image, component->skinHash), &component->skinProperties, &bitmapCount);
+        AssetID* bitmaps = GetAllSkinBitmaps(temp.pool, group->assets, GetAssetSubtype(group->assets, AssetType_Image, component->skinHash), &component->skinProperties, &bitmapCount);
         
         u32 pieceCount;
-        AnimationPiece* pieces = GetAnimationPiecesAndAdvanceState(&tempPool, animationInfo, animation, component, params, &pieceCount, render);
+        AnimationPiece* pieces = GetAnimationPiecesAndAdvanceState(temp.pool, animationInfo, animation, component, params, &pieceCount, render);
         
         ObjectTransform transform = params->transform;
         transform.flipOnYAxis = params->flipOnYAxis;
+        transform.dontRender = !render;
         
         Lights lights = params->lights;
+        
+        if(render && params->equipped)
+        {
+            for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
+            {
+                AnimationPiece* piece = pieces + pieceIndex;
+                if(piece->placeHolder)
+                {
+                    ObjectTransform equippedTransform = transform;
+                    equippedTransform.angle = piece->angle;
+                    equippedTransform.scale = piece->scale;
+                    
+                    Vec3 offset = GetCameraOffset(group, piece->originOffset);
+                    if(transform.flipOnYAxis)
+                    {
+                        offset.x = -offset.x;
+                    }
+                    Vec3 P = params->P + offset;
+                    
+                    RenderAttachmentPoint(worldMode, group, P, piece->nameHash, equippedTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights);
+                }
+            }
+        }
+        
         for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
         {
             AnimationPiece* piece = pieces + pieceIndex;
-            for(u32 bitmapIndex = 0; bitmapIndex < bitmapCount; ++bitmapIndex)
+            if(!piece->placeHolder)
             {
-                AssetID bitmap = bitmaps[bitmapIndex];
-                if(IsValid(bitmap))
+                for(u32 bitmapIndex = 0; bitmapIndex < bitmapCount; ++bitmapIndex)
                 {
-                    PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, bitmap);
-                    if(bitmapInfo->nameHash == piece->nameHash)
+                    AssetID bitmap = bitmaps[bitmapIndex];
+                    if(IsValid(bitmap))
                     {
-                        transform.angle = piece->angle;
-                        Vec3 P = params->P;
-                        
-                        transform.cameraOffset = piece->originOffset;
-                        if(!render)
+                        PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, bitmap);
+                        if(bitmapInfo->nameHash == piece->nameHash)
                         {
-                            transform.dontRender = true;
-                        }
-                        
-                        r32 height = bitmapInfo->nativeHeight * params->scale;
-                        BitmapDim dim = PushBitmapWithPivot(group, transform, bitmap, P, piece->pivot, height, piece->color, lights);
-                        result = Union(result, RectMinDim(dim.P.xy, dim.size));
-                        
-                        
-                        ObjectTransform equipmentTransform = transform;
-                        equipmentTransform.cameraOffset = {};
-                        if(worldMode)
-                        {
-                            if(params->equipment)
-                            {
-                                RenderObjectMappings(worldMode, group,
-                                                     bitmapInfo, bitmap, dim, equipmentTransform, params->equipment->mappings, ArrayCount(params->equipment->mappings), lights);
-                            }
+                            transform.angle = piece->angle;
+                            Vec3 P = params->P;
                             
-                            if(params->equipped)
+                            transform.cameraOffset = piece->originOffset;
+                            r32 height = bitmapInfo->nativeHeight * params->scale;
+                            BitmapDim dim = PushBitmapWithPivot(group, transform, bitmap, P, piece->pivot, height, piece->color, lights);
+                            result = Union(result, RectMinDim(dim.P.xy, dim.size));
+                            
+                            
+                            ObjectTransform equipmentTransform = transform;
+                            equipmentTransform.cameraOffset = {};
+                            
+                            if(render)
                             {
-                                RenderObjectMappings(worldMode, group,
-                                                     bitmapInfo, bitmap, dim, equipmentTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), lights);
+                                if(params->equipment)
+                                {
+                                    RenderObjectMappings(worldMode, group,
+                                                         bitmapInfo, bitmap, dim, equipmentTransform, params->equipment->mappings, ArrayCount(params->equipment->mappings), equipmentRendered, lights);
+                                }
+                                
+                                if(params->equipped)
+                                {
+                                    RenderObjectMappings(worldMode, group,
+                                                         bitmapInfo, bitmap, dim, equipmentTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights);
+                                }
                             }
                         }
                     }
@@ -541,8 +582,7 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
         LoadAnimation(group->assets, animationID);
     }
     
-    Clear(&tempPool);
-    
+    EndTemporaryMemory(temp);
     return result;
 }
 
@@ -568,21 +608,21 @@ internal Rect2 RenderAnimation(GameModeWorld* worldMode, RenderGroup* group, Ani
 }
 
 
-internal Rect2 GetAnimationDim(RenderGroup* group, AnimationComponent* component, AnimationParams* params)
+internal Rect2 GetAnimationDim(GameModeWorld* worldMode, RenderGroup* group, AnimationComponent* component, AnimationParams* params)
 {
-    Rect2 result = RenderAnimation(0, group, component, params, false);
+    Rect2 result = RenderAnimation(worldMode, group, component, params, false);
     return result;
 }
 
-internal Rect2 GetAnimationDim(RenderGroup* group, AssetID ID, AnimationComponent* component, AnimationParams* params)
+internal Rect2 GetAnimationDim(GameModeWorld* worldMode, RenderGroup* group, AssetID ID, AnimationComponent* component, AnimationParams* params)
 {
-    Rect2 result = RenderAnimation_(0, group, ID, component, params, false);
+    Rect2 result = RenderAnimation_(worldMode, group, ID, component, params, false);
     return result;
 }
 
 internal void RenderAnimationWithHeight(GameModeWorld* worldMode, RenderGroup* group, AnimationComponent* component, AnimationParams* params, r32 height)
 {
-    Rect2 animationDefaultDim = GetAnimationDim(group, component, params);
+    Rect2 animationDefaultDim = GetAnimationDim(worldMode, group, component, params);
     r32 defaultHeight = GetDim(animationDefaultDim).y;
     r32 scale = height / defaultHeight;
     params->scale = scale;

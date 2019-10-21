@@ -773,7 +773,8 @@ void LoadBitmap(Assets* assets, AssetID ID, b32 immediate = false)
         PAKBitmap* info = &asset->paka.bitmap;
         u32 pixelSize = info->dimension[0] * info->dimension[1] * 4;
         u32 attachmentSize = info->attachmentPointCount * sizeof(PAKAttachmentPoint);
-        u32 size = pixelSize + attachmentSize;
+        u32 groupSize = info->groupNameCount * sizeof(PAKGroupName);
+        u32 size = pixelSize + attachmentSize + groupSize;
         
         asset->data = AcquireAssetMemory(assets, size, asset);
         Bitmap* bitmap = &asset->bitmap;
@@ -784,6 +785,7 @@ void LoadBitmap(Assets* assets, AssetID ID, b32 immediate = false)
         bitmap->widthOverHeight = (r32) bitmap->width / (r32) bitmap->height;
         bitmap->pixels = asset->data;
         bitmap->attachmentPoints = (PAKAttachmentPoint*) AdvanceVoidPtrBytes(asset->data, pixelSize);
+        bitmap->groupNames = (PAKGroupName*) AdvanceVoidPtrBytes(asset->data, pixelSize + attachmentSize);
         
         u32 textureHandle = AcquireTextureHandle(assets);
         asset->textureHandle = TextureHandle(textureHandle, bitmap->width, bitmap->height);
@@ -1196,7 +1198,15 @@ internal void DumpAttachmentPointToStream(Stream* stream, PAKAttachmentPoint* po
 {
     if(!StrEqual(point->name, "null"))
     {
-        OutputToStream(stream, "%s={\"%s\" %f %f %f %f %f};", ATTACHMENT_POINT, point->name, point->alignment.x, point->alignment.y, point->angle, point->scale.x, point->scale.y);
+        OutputToStream(stream, "%s={\"%s\" %f %f %f %f %f};", IMAGE_ATTACHMENT_POINT, point->name, point->alignment.x, point->alignment.y, point->angle, point->scale.x, point->scale.y);
+    }
+}
+
+internal void DumpGroupNameToStream(Stream* stream, PAKGroupName* group)
+{
+    if(!StrEqual(group->name, "null"))
+    {
+        OutputToStream(stream, "%s={\"%s\"};", IMAGE_GROUP_NAME, group->name);
     }
 }
 
@@ -1293,6 +1303,16 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
                     {
                         somethingWritten = true;
                         DumpAttachmentPointToStream(&metaDataStream, point);
+                    }
+                }
+                
+                for(u32 groupNameIndex = 0; groupNameIndex < asset->paka.bitmap.groupNameCount; ++groupNameIndex)
+                {
+                    PAKGroupName* group = bitmap->groupNames + groupNameIndex;
+                    if(group->name[0])
+                    {
+                        somethingWritten = true;
+                        DumpGroupNameToStream(&metaDataStream, group);
                     }
                 }
                 

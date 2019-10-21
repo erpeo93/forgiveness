@@ -15,6 +15,9 @@ struct LoadedBitmap
     u32 attachmentPointCount;
     PAKAttachmentPoint* attachmentPoints;
     
+    u32 groupNameCount;
+    PAKGroupName* groupNames;
+    
     void* free;
 };
 

@@ -26,6 +26,12 @@ inline void* PushRenderElement_(RenderGroup* renderGroup, u32 size, u32 type)
     return result;
 }
 
+inline Vec3 GetCameraOffset(RenderGroup* group, Vec3 P)
+{
+    Vec3 result = P.x * group->gameCamera.X + P.y * group->gameCamera.Y + P.z * group->gameCamera.Z;
+    return result;
+}
+
 inline void Clear(RenderGroup* renderGroup, Vec4 color)
 {
     renderGroup->commands->clearColor = color;

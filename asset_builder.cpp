@@ -531,7 +531,7 @@ internal void FillAttachmentPoints(LoadedBitmap* bitmap, char* name, MemoryPool*
                         {
                             Token propertyName = p;
                             
-                            if(TokenEquals(propertyName, ATTACHMENT_POINT))
+                            if(TokenEquals(propertyName, IMAGE_ATTACHMENT_POINT))
                             {
                                 if(RequireToken(&tokenizer, Token_EqualSign))
                                 {
@@ -550,6 +550,80 @@ internal void FillAttachmentPoints(LoadedBitmap* bitmap, char* name, MemoryPool*
     }
 }
 
+internal void ParseGroupName(PAKGroupName* group, Tokenizer* tokenizer)
+{
+    if(RequireToken(tokenizer, Token_OpenBraces))
+    {
+        Token t = GetToken(tokenizer);
+        Assert(t.type == Token_String);
+        t = Stringize(t);
+        FormatString(group->name, sizeof(group->name), "%.*s", t.textLength, t.text);
+        
+        while(t.type != Token_CloseBraces && t.type != Token_EndOfFile && t.type != Token_SemiColon)
+        {
+            t = GetToken(tokenizer);
+        }
+    }
+}
+
+#define MAX_GROUP_NAMES 16
+internal void FillGroupNames(LoadedBitmap* bitmap, char* name, MemoryPool* tempPool, PlatformFileGroup* markupFiles)
+{
+    u32 runningGroupIndex = 0;
+    bitmap->groupNameCount = MAX_GROUP_NAMES;
+    u32 groupNameTotalSize = sizeof(PAKGroupName) * MAX_GROUP_NAMES;
+    bitmap->groupNames = (PAKGroupName*) malloc(groupNameTotalSize);
+    memset(bitmap->groupNames, 0, groupNameTotalSize);
+    
+    for(PlatformFileInfo* info = markupFiles->firstFileInfo; info; info = info->next)
+    {
+        if(RelevantFile(info, markupFiles, false))
+        {
+            u8* fileContent = ReadEntireFile(tempPool, markupFiles, info);
+            Tokenizer tokenizer = {};
+            tokenizer.at = (char*) fileContent;
+            Token t = AdvanceToToken(&tokenizer, name);
+            
+            if(t.type != Token_EndOfFile)
+            {
+                if(RequireToken(&tokenizer, Token_Colon))
+                {
+                    while(true)
+                    {
+                        Token p = GetToken(&tokenizer);
+                        
+                        if(p.type == Token_Comma)
+                        {
+                        }
+                        else if(p.type == Token_EndOfFile)
+                        {
+                            break;
+                        }
+                        else if(p.type == Token_SemiColon)
+                        {
+                        }
+                        else
+                        {
+                            Token propertyName = p;
+                            if(TokenEquals(propertyName, IMAGE_GROUP_NAME))
+                            {
+                                if(RequireToken(&tokenizer, Token_EqualSign))
+                                {
+                                    if(runningGroupIndex < MAX_GROUP_NAMES)
+                                    {
+                                        PAKGroupName* group = bitmap->groupNames + runningGroupIndex++;
+                                        ParseGroupName(group, &tokenizer);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 internal LoadedBitmap LoadImage(MemoryPool* tempPool, char* path, char* filename, PlatformFileGroup* markupFiles)
 {
     LoadedBitmap result = {};
@@ -557,6 +631,7 @@ internal LoadedBitmap LoadImage(MemoryPool* tempPool, char* path, char* filename
     sprintf(completeName, "%s/%s", path, filename);
     
     FillAttachmentPoints(&result, filename, tempPool, markupFiles);
+    FillGroupNames(&result, filename, tempPool, markupFiles);
 #if STB_IMAGE_IMPLEMENTATION
     int x;
     int y;
@@ -1129,14 +1204,16 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
                     
                     char* pieceName = GetXMLValues(&currentTag, "name");
                     Assert(pieceName);
-                    pieceName = AdvanceToLastSlash(pieceName);
-                    TrimToFirstCharacter(tempSprite->name, sizeof(tempSprite->name), pieceName, '.');
+                    
+                    char* pieceNameReal = AdvanceToLastSlash(pieceName);
+                    TrimToFirstCharacter(tempSprite->name, sizeof(tempSprite->name), pieceNameReal, '.');
                     tempSprite->nameHash = StringHash(tempSprite->name);
                     
                     Vec2 pivot;
                     GetXMLValuef(&currentTag, "pivot_x", &pivot.x );
                     GetXMLValuef(&currentTag, "pivot_y", &pivot.y );
                     tempSprite->pivot = pivot;
+                    tempSprite->placeHolder = (pieceName != pieceNameReal);
                 }
                 else if(StrEqual(currentTag.title, "animation"))
                 {
@@ -2181,6 +2258,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                 
                                 dest->bitmap.nameHash = StringHash(nameNoPoint);
                                 dest->bitmap.attachmentPointCount = bitmap.attachmentPointCount;
+                                dest->bitmap.groupNameCount = bitmap.groupNameCount;
                                 
                                 dest->bitmap.dimension[0] = bitmap.width;
                                 dest->bitmap.dimension[1] = bitmap.height;
@@ -2189,9 +2267,11 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                 
                                 fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out);
                                 fwrite(bitmap.attachmentPoints, bitmap.attachmentPointCount * sizeof(PAKAttachmentPoint), 1, out);
+                                fwrite(bitmap.groupNames, bitmap.groupNameCount * sizeof(PAKGroupName), 1, out);
                                 
                                 free(bitmap.free);
                                 free(bitmap.attachmentPoints);
+                                free(bitmap.groupNames);
                             }
                         } break;
                         

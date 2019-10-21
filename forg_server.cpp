@@ -65,7 +65,7 @@ PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
 #define RespawnPlayer(server, player, P) SpawnPlayer_(server, player, P, true)
 internal void SpawnPlayer_(ServerState* server, PlayerComponent* player, UniversePos P, b32 deleteEntities)
 {
-    EntityRef type = EntityReference(server, "default", "crocodile");
+    EntityRef type = EntityReference(server, "default", "human");
     EntityID ID = AddEntity(server, P, &server->entropy, type, player);
     
     ResetQueue(player->queues + GuaranteedDelivery_None);
@@ -622,7 +622,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             InitArchetype(server, archetypeIndex, 16);
         }
         InitComponentArray(server, PlayerComponent, 16);
-        
         
         platformAPI.PushWork(server->slowQueue, WatchForFileChanges, hash);
         server->assets = InitAssets(server->slowQueue, server->tasks, ArrayCount(server->tasks), &server->gamePool, 0, MegaBytes(16));

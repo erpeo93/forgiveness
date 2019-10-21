@@ -1441,7 +1441,7 @@ internal b32 EditorCollapsible(EditorLayout* layout, char* string)
     return result;
 }
 
-internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID ID)
+internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout, Assets* assets, AssetID ID)
 {
     GetGameAssetResult get = GetGameAsset(assets, ID);
     PAKAsset* info = get.info;
@@ -1478,8 +1478,8 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                     Bitmap* bitmap = GetBitmap(assets, ID).bitmap;
                     Assert(bitmap);
                     
-                    AUID auid = auID(info, "attachmentPoints");
-                    if(EditorCollapsible(layout, "attachment points", auid))
+                    AUID attachAUID = auID(info, "attachmentPoints");
+                    if(EditorCollapsible(layout, "attachment points", attachAUID))
                     {
                         b32 addDisabled = true;
                         for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
@@ -1529,6 +1529,50 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                         }
                     }
                     
+                    NextRaw(layout);
+                    AUID groupAUID = auID(info, "groupNames");
+                    if(EditorCollapsible(layout, "group names", groupAUID))
+                    {
+                        b32 addDisabled = true;
+                        for(u32 groupNameIndex = 0; groupNameIndex < info->bitmap.groupNameCount; ++groupNameIndex)
+                        {
+                            PAKGroupName* group = bitmap->groupNames + groupNameIndex;
+                            if(group->name[0] && !StrEqual(group->name, "null"))
+                            {
+                            }
+                            else
+                            {
+                                addDisabled = false;
+                            }
+                        }
+                        
+                        
+                        AUID addID = auID(info, "add group");
+                        if(EditorButton(layout, V2(0.25f, -0.1f), "add", addID, addDisabled))
+                        {
+                            for(u32 groupNameIndex = 0; groupNameIndex < info->bitmap.groupNameCount; ++groupNameIndex)
+                            {
+                                PAKGroupName* group = bitmap->groupNames + groupNameIndex;
+                                if(!group->name[0] || StrEqual(group->name, "null"))
+                                {
+                                    FormatString(group->name, sizeof(group->name), "default");
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        for(u32 groupNameIndex = 0; groupNameIndex < info->bitmap.groupNameCount; ++groupNameIndex)
+                        {
+                            PAKGroupName* group = bitmap->groupNames + groupNameIndex;
+                            
+                            if(group->name[0] && !StrEqual(group->name, "null"))
+                            {
+                                NextRaw(layout);
+                                Edit_StringFreely(layout, "name", group->name, sizeof(group->name), auID(group->name, "name"), false, ID);
+                            }
+                        }
+                    }
+                    
                     Pop(layout);
                 }
             } break;
@@ -1568,9 +1612,12 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
             
             case AssetType_Skeleton:
             {
-                Nest(layout);
-                Edit_b32(layout, "flipped", &info->skeleton.flippedByDefault, false, ID);
-                Pop(layout);
+                if(!get.derived)
+                {
+                    Nest(layout);
+                    Edit_b32(layout, "flipped", &info->skeleton.flippedByDefault, false, ID);
+                    Pop(layout);
+                }
             } break;
             
             case AssetType_Invalid:
@@ -1736,17 +1783,17 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                             params.scale = minPixelHeight;
                             params.transform = FlatTransform();
                             
-                            Rect2 animationDim = GetAnimationDim(layout->group, ID, &component, &params);
+                            Rect2 animationDim = GetAnimationDim(worldMode, layout->group, ID, &component, &params);
                             
                             r32 coeff = height / GetDim(animationDim).y;
                             params.scale *= coeff;
                             
-                            Rect2 animationDimCorrect = GetAnimationDim(layout->group, ID, &component, &params);
+                            Rect2 animationDimCorrect = GetAnimationDim(worldMode, layout->group, ID, &component, &params);
                             
                             
                             Vec2 offset = P.xy - animationDimCorrect.min;
                             params.P.xy += offset;
-                            Rect2 dim = RenderAnimation_(0, layout->group, ID, &component, &params);
+                            Rect2 dim = RenderAnimation_(worldMode, layout->group, ID, &component, &params);
                             
                             PushRect(layout->group, FlatTransform(), dim, V4(0, 0, 0, 1));
                             
@@ -1776,7 +1823,7 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
     
 }
 
-internal void RenderEditAssetFile(EditorLayout* layout, Assets* assets, PAKFileHeader* header)
+internal void RenderEditAssetFile(GameModeWorld* worldMode, EditorLayout* layout, Assets* assets, PAKFileHeader* header)
 {
     b32 showAssetData = EditorCollapsible(layout, header->name);
     u16 type = GetMetaAssetType(header->type);
@@ -1811,7 +1858,7 @@ internal void RenderEditAssetFile(EditorLayout* layout, Assets* assets, PAKFileH
                 ID.subtypeHashIndex = subtype;
                 ID.index = assetIndex;
                 
-                RenderAndEditAsset(layout, assets, ID);
+                RenderAndEditAsset(worldMode, layout, assets, ID);
             }
             Pop(layout);
         }
@@ -1970,7 +2017,7 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                         AssetSubtypeArray* assets = GetAssetSubtypeForFile(group->assets, header);
                         if(assets)
                         {
-                            RenderEditAssetFile(&layout, group->assets, header);
+                            RenderEditAssetFile(worldMode, &layout, group->assets, header);
                             NextRaw(&layout);
                         }
                     }

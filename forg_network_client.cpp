@@ -489,11 +489,13 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     if(IsValid(ID))
                     {
                         BaseComponent* equipmentBase = GetComponent(worldMode, ID, BaseComponent);
-                        equipment->mappings[index].nameHash = StringHash(MetaTable_equipmentSlot[index]);
+                        equipment->mappings[index].slotHash = StringHash(MetaTable_equipmentSlot[index]);
+                        equipment->mappings[index].pieceHash = equipmentBase->nameHash;
                     }
                     else
                     {
-                        equipment->mappings[index].nameHash = 0;
+                        equipment->mappings[index].slotHash = 0;
+                        equipment->mappings[index].pieceHash = 0;
                     }
                     
                 }
@@ -514,11 +516,13 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     if(IsValid(ID))
                     {
                         BaseComponent* equipmentBase = GetComponent(worldMode, ID, BaseComponent);
-                        equipped->mappings[index].nameHash = StringHash(MetaTable_usingSlot[index]);
+                        equipped->mappings[index].slotHash = StringHash(MetaTable_usingSlot[index]);
+                        equipped->mappings[index].pieceHash = equipmentBase->nameHash;
                     }
                     else
                     {
-                        equipped->mappings[index].nameHash = 0;
+                        equipped->mappings[index].slotHash = 0;
+                        equipped->mappings[index].pieceHash = 0;
                     }
                     
                 }

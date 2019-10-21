@@ -518,8 +518,12 @@ internal GameAssetType Parse_GameAssetType(Tokenizer* tokenizer, GameAssetType d
         FormatString(type_, sizeof(type_), "%.*s", type.textLength, type.text);
         FormatString(subtype_, sizeof(subtype_), "%.*s", subtype.textLength, subtype.text);
         
-        result.type = GetMetaAssetType(type_);
-        result.subtypeHash = StringHash(subtype_);
+        u16 typeTest = GetMetaAssetType(type_);
+        if(typeTest != 0xffff)
+        {
+            result.type = typeTest;
+            result.subtypeHash = StringHash(subtype_);
+        }
     }
     
     return result;

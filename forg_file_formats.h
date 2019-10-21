@@ -34,7 +34,12 @@ struct PAKAttachmentPoint
     r32 angle;
 };
 
-#define PAK_BITMAP_VERSION 4
+struct PAKGroupName
+{
+    char name[32];
+};
+
+#define PAK_BITMAP_VERSION 6
 struct PAKBitmap
 {
     u64 nameHash;
@@ -42,10 +47,12 @@ struct PAKBitmap
     r32 align[2];
     r32 nativeHeight;
     u32 attachmentPointCount;
+    u32 groupNameCount;
     // NOTE( Leonardo ): data is:
     /*
-    AttachmentPoint* points;
     u32* pixels;
+    AttachmentPoint* points[64];
+    PAKGroupName* groups[16];
     */
 };
 
@@ -86,7 +93,7 @@ struct PAKSound
     */
 };
 
-#define PAK_ANIMATION_VERSION 1
+#define PAK_ANIMATION_VERSION 2
 struct PAKAnimation
 {
     u32 spriteCount;

@@ -11,7 +11,8 @@ struct UsingComponent
 
 struct ObjectMapping
 {
-    u64 nameHash;
+    u64 slotHash;
+    u64 pieceHash;
     EntityID ID;
 };
 
