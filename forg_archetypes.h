@@ -11,6 +11,7 @@ Archetype() struct AnimalArchetype
     AnimationComponent animation;
     EquipmentMappingComponent equipment;
     UsingMappingComponent equipped;
+    AnimationEffectsComponent animationEffects;
 #endif
 };
 

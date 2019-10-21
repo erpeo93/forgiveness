@@ -119,13 +119,30 @@ internal r32 GetDeepness(BaseComponent* base)
     r32 height = GetDim(base->bounds).y;
     return height;
 }
-
 internal b32 ShouldBeRendered(GameModeWorld* worldMode, BaseComponent* base)
+
 {
     b32 result = ((base->universeP.chunkZ == worldMode->player.universeP.chunkZ) &&
                   !(base->flags & EntityFlag_equipment));
     return result;
 }
+
+internal void DispatchGameEffect(GameModeWorld* worldMode, EntityID ID)
+{
+    // TODO(Leonardo): for now let's hardcode this, but in the future we would like to customize these on a entity basis
+#if 0    
+    EntityDefinitionDef* = GetDefinition();
+    AddAllAnimationEffectsFor(def, effect->effectType.value);
+#else
+    AnimationEffectsComponent* effects = GetComponent(worldMode, ID, AnimationEffectsComponent);
+    if(effects)
+    {
+        effects->timer = 0.3f;
+        effects->tint = V4(0, 0, 0, 1);
+    }
+#endif
+}
+
 
 internal void RenderShadow(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ShadowComponent* shadowComponent, r32 deepness, r32 width)
 {
@@ -175,6 +192,7 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         
         AddOptionalGamePropertyRaw(&animation->skeletonProperties, base->action);
         
+        
         AnimationParams params = {};
         params.elapsedTime = elapsedTime;
         params.angle = 0;
@@ -185,8 +203,27 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.flipOnYAxis = animation->flipOnYAxis;
         params.equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
         params.equipped = GetComponent(worldMode, ID, UsingMappingComponent);
+        params.tint = V4(1, 1, 1, 1);
         
-        RenderAnimationWithHeight(worldMode, group, animation, &params, height);
+        AnimationEffectsComponent* effects = GetComponent(worldMode, ID, AnimationEffectsComponent);
+        if(effects)
+        {
+            if(effects->timer > 0)
+            {
+                effects->timer -= elapsedTime;
+                params.tint = effects->tint;
+            }
+        }
+        
+        if(base->action.value == idle)
+        {
+            Rect2 animationDefaultDim = GetAnimationDim(worldMode, group, animation, &params);
+            r32 defaultHeight = GetDim(animationDefaultDim).y;
+            animation->scale = height / defaultHeight;
+        }
+        
+        params.scale = animation->scale;
+        RenderAnimation(worldMode, group, animation, &params);
     }
 }
 

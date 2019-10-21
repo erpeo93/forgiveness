@@ -539,10 +539,10 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
             {
                 for(u32 bitmapIndex = 0; bitmapIndex < bitmapCount; ++bitmapIndex)
                 {
-                    AssetID bitmap = bitmaps[bitmapIndex];
-                    if(IsValid(bitmap))
+                    AssetID BID = bitmaps[bitmapIndex];
+                    if(IsValid(BID))
                     {
-                        PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, bitmap);
+                        PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, BID);
                         if(bitmapInfo->nameHash == piece->nameHash)
                         {
                             transform.angle = piece->angle;
@@ -550,25 +550,25 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
                             
                             transform.cameraOffset = piece->originOffset;
                             r32 height = bitmapInfo->nativeHeight * params->scale;
-                            BitmapDim dim = PushBitmapWithPivot(group, transform, bitmap, P, piece->pivot, height, piece->color, lights);
-                            result = Union(result, RectMinDim(dim.P.xy, dim.size));
                             
+                            Vec4 color = Hadamart(piece->color, params->tint);
+                            BitmapDim dim = PushBitmapWithPivot(group, transform, BID, P, piece->pivot, height, color, lights);
+                            result = Union(result, RectMinDim(dim.P.xy, dim.size));
                             
                             ObjectTransform equipmentTransform = transform;
                             equipmentTransform.cameraOffset = {};
-                            
                             if(render)
                             {
                                 if(params->equipment)
                                 {
                                     RenderObjectMappings(worldMode, group,
-                                                         bitmapInfo, bitmap, dim, equipmentTransform, params->equipment->mappings, ArrayCount(params->equipment->mappings), equipmentRendered, lights);
+                                                         bitmapInfo, BID, dim, equipmentTransform, params->equipment->mappings, ArrayCount(params->equipment->mappings), equipmentRendered, lights);
                                 }
                                 
                                 if(params->equipped)
                                 {
                                     RenderObjectMappings(worldMode, group,
-                                                         bitmapInfo, bitmap, dim, equipmentTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights);
+                                                         bitmapInfo, BID, dim, equipmentTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights);
                                 }
                             }
                         }
@@ -619,16 +619,6 @@ internal Rect2 GetAnimationDim(GameModeWorld* worldMode, RenderGroup* group, Ass
     Rect2 result = RenderAnimation_(worldMode, group, ID, component, params, false);
     return result;
 }
-
-internal void RenderAnimationWithHeight(GameModeWorld* worldMode, RenderGroup* group, AnimationComponent* component, AnimationParams* params, r32 height)
-{
-    Rect2 animationDefaultDim = GetAnimationDim(worldMode, group, component, params);
-    r32 defaultHeight = GetDim(animationDefaultDim).y;
-    r32 scale = height / defaultHeight;
-    params->scale = scale;
-    RenderAnimation(worldMode, group, component, params);
-}
-
 
 #if 0
 inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, TaxonomySlot* slot, u64 nameHash, r32 oldSoundTime, r32 soundTime)

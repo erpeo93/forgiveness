@@ -93,143 +93,6 @@ internal void SendUpdate(Vec3 acceleration)
     CloseAndSendStandardPacket();
 }
 
-internal void SendEquipRequest(u64 sourceContainerID, u8 objectIndex)
-{
-    StartPacket(EquipRequest);
-    
-    Pack("QC", sourceContainerID, objectIndex);
-    
-    CloseAndSendOrderedPacket();
-}
-
-internal void SendDisequipRequest(u32 slotIndex, u64 destContainerID, u8 destObjectIndex)
-{
-    StartPacket(DisequipRequest);
-    
-    Pack("LQC", slotIndex, destContainerID, destObjectIndex);
-    
-    CloseAndSendOrderedPacket();
-}
-
-internal void SendDropRequest(u64 sourceContainerID, u8 objectIndex)
-{
-    StartPacket(DropRequest);
-    
-    Pack("QC", sourceContainerID, objectIndex);
-    
-    CloseAndSendOrderedPacket();
-}
-
-internal void SendMoveRequest(u64 sourceContainerID, u8 objectIndex, u64 destContainerID, u8 destObjectIndex)
-{
-    
-    StartPacket(MoveRequest);
-    
-    Pack("QCQC", sourceContainerID, objectIndex, destContainerID, destObjectIndex);
-    
-    CloseAndSendOrderedPacket();
-}
-
-internal void SendSwapRequest(u64 sourceContainerID, u8 sourceObjectIndex)
-{
-    StartPacket(SwapRequest);
-    
-    Pack("QC", sourceContainerID, sourceObjectIndex);
-    
-    CloseAndSendOrderedPacket();
-}
-
-internal void SendDragEquipmentRequest(u32 slotIndex)
-{
-    StartPacket(DragEquipmentRequest);
-    
-    Pack("L", slotIndex);
-    
-    CloseAndSendOrderedPacket();
-}
-
-internal void SendEquipDraggingRequest(u32 slotIndex)
-{
-    StartPacket(EquipDraggingRequest);
-    
-    Pack("L", slotIndex);
-    
-    CloseAndSendOrderedPacket();
-}
-
-
-#if 0
-internal void SendCraftRequest(u32 taxonomy, GenerationData gen)
-{
-    StartPacket(CraftRequest);
-    
-    Pack("LQ", taxonomy, gen.generic);
-    
-    CloseAndSendOrderedPacket();
-}
-#endif
-
-internal void SendCraftFromInventoryRequest(u64 containerID, u32 objectIndex)
-{
-    StartPacket(CraftFromInventoryRequest);
-    
-    Pack("QL", containerID, objectIndex);
-    
-    CloseAndSendOrderedPacket();
-}
-
-internal void SendActiveSkillRequest(u32 taxonomy)
-{
-    StartPacket(ActiveSkillRequest);
-    Pack("L", taxonomy);
-    CloseAndSendOrderedPacket();
-}
-
-internal void SendPassiveSkillRequest(u32 taxonomy)
-{
-    StartPacket(PassiveSkillRequest);
-    Pack("L", taxonomy);
-    CloseAndSendOrderedPacket();
-}
-
-#if 0
-internal void SendReleaseDraggingRequest()
-{
-    StartPacket(ReleaseDraggingRequest);
-    CloseAndSendOrderedPacket();
-}
-#endif
-
-internal void SendUnlockSkillCategoryRequest(u32 taxonomy)
-{
-    StartPacket(UnlockSkillCategoryRequest);
-    
-    Pack("L", taxonomy);
-    
-    CloseAndSendOrderedPacket();
-}
-
-internal void SendSkillLevelUpRequest(u32 taxonomy)
-{
-    StartPacket(SkillLevelUpRequest);
-    Pack("L", taxonomy);
-    CloseAndSendOrderedPacket();
-}
-
-internal void SendLearnRequest(u64 containerID, u32 objectIndex)
-{
-    StartPacket(LearnRequest);
-    Pack("QL", containerID, objectIndex);
-    CloseAndSendOrderedPacket();
-}
-
-internal void SendConsumeRequest(u64 containerID, u32 objectIndex)
-{
-    StartPacket(ConsumeRequest);
-    Pack("QL", containerID, objectIndex);
-    CloseAndSendOrderedPacket();
-}
-
 inline void SendMovePlayerRequest(Vec3 offset)
 {
     StartPacket(MovePlayerInOtherRegion);
@@ -311,6 +174,7 @@ STANDARD_ECS_JOB_CLIENT(DeleteEntities)
     FreeArchetype(worldMode, &ID);
 }
 
+internal void DispatchGameEffect(GameModeWorld* worldMode, EntityID ID);
 internal void CollateDebugEvent(DebugState* debugState, DebugCollationState* collation, DebugEvent* event);
 internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
@@ -526,6 +390,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     }
                     
                 }
+            } break;
+            
+            case Type_EffectDispatch:
+            {
+                DispatchGameEffect(worldMode, currentClientID);
             } break;
             
             case Type_FileHeader:
@@ -1136,47 +1005,3 @@ internal void ReceiveNetworkPackets(GameState* gameState, GameModeWorld* worldMo
         }
     }
 }
-
-
-#if 0
-internal void HandleClientPrediction(ClientEntity* entity, r32 timeToUpdate)
-{
-    ClientPrediction* prediction = &entity->prediction;
-    prediction->timeLeft -= timeToUpdate;
-    if(prediction->timeLeft <= 0)
-    {
-        prediction->type = Prediction_None;
-    }
-    switch(prediction->type)
-    {
-        case Prediction_None:
-        {
-            
-        } break;
-        
-        case Prediction_EquipmentRemoved:
-        {
-            entity->equipment[prediction->slot].ID = 0;
-        } break;
-        
-        case Prediction_EquipmentAdded:
-        {
-            u64 ID = prediction->identifier;
-            entity->equipment[prediction->slot].ID = ID;
-        } break;
-        
-        case Prediction_ActionBegan:
-        {
-            EntityAction currentAction = entity->action;
-            if((currentAction == prediction->action) || (currentAction <= Action_Idle))
-            {
-                entity->action = prediction->action;
-            }
-            else
-            {
-                prediction->type = Prediction_None;
-            }
-        } break;
-    }
-}
-#endif

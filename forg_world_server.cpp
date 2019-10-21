@@ -267,7 +267,6 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     unsigned char buff_[KiloBytes(2)];
-    Assert(sizeof(EntityUpdate) < ArrayCount(buff_));
     u16 totalSize = PrepareEntityUpdate(server, physic, buff_);
     
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
@@ -318,6 +317,31 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+
+internal void SendEffectDispatch(ServerState* server, EntityID ID)
+{
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    
+    r32 maxDistance = 3.0f * CHUNK_DIM;
+    r32 maxDistanceSq = Square(maxDistance);
+    
+    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, physic->P);
+    for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
+    {
+        PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
+        PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
+        
+        if(physic->P.chunkZ == playerPhysic->P.chunkZ)
+        {
+            Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
+            if(LengthSq(distance) < maxDistanceSq)
+            {
+                QueueEffectDispatch(player, ID);
             }
         }
     }
@@ -457,30 +481,69 @@ internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos 
     }
 }
 
-internal void DispatchGameEffect(ServerState* server, UniversePos P, GameEffect* effect)
+internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect)
 {
     switch(effect->effectType.value)
     {
         case spawnEntity:
         {
+            SendEffectDispatch(server, ID);
             //AddEntity(server, P, &server->entropy, effect->spawnType);
         } break;
     }
 }
 
-STANDARD_ECS_JOB_SERVER(DispatchGameEffects)
+STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    EffectComponent* effects = GetComponent(server, ID, EffectComponent);
     
-    for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
+    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    if(equipment)
     {
-        GameEffect* effect = effects->effects + effectIndex;
-        effects->timers[effectIndex] += elapsedTime;
-        if(effects->timers[effectIndex] >= effect->timer)
+        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->IDs); ++equipmentIndex)
         {
-            effects->timers[effectIndex] = 0;
-            DispatchGameEffect(server, physic->P, effect);
+            EntityID equipID = equipment->IDs[equipmentIndex];
+            if(IsValid(equipID))
+            {
+                EffectComponent* effects = GetComponent(server, equipID, EffectComponent);
+                Assert(effects);
+                for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
+                {
+                    GameEffect* effect = effects->effects + effectIndex;
+                    effects->timers[effectIndex] += elapsedTime;
+                    if(effects->timers[effectIndex] >= effect->timer)
+                    {
+                        effects->timers[effectIndex] = 0;
+                        DispatchGameEffect(server, ID, physic->P, effect);
+                    }
+                }
+            }
+        }
+    }
+    
+    
+    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+    if(equipped)
+    {
+        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->IDs); ++equipmentIndex)
+        {
+            EntityID usingID = equipped->IDs[equipmentIndex];
+            if(IsValid(usingID))
+            {
+                EffectComponent* effects = GetComponent(server, usingID, EffectComponent);
+                
+                Assert(effects);
+                for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
+                {
+                    GameEffect* effect = effects->effects + effectIndex;
+                    effects->timers[effectIndex] += elapsedTime;
+                    if(effects->timers[effectIndex] >= effect->timer)
+                    {
+                        effects->timers[effectIndex] = 0;
+                        DispatchGameEffect(server, ID, physic->P, effect);
+                    }
+                }
+            }
         }
     }
 }

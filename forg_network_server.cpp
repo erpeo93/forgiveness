@@ -182,15 +182,11 @@ internal void QueueUsingID(PlayerComponent* player, EntityID ID, u16 slotIndex, 
     QueueStandardPacket(player, ID);
 }
 
-#if 0
-inline void SendPlantUpdate(PlayerComponent* player, u64 entityID, PlantComponent* plant)
+internal void QueueEffectDispatch(PlayerComponent* player, EntityID ID)
 {
-    StartPacket(player, plantUpdate);
-    Pack("ddddd", plant->age, plant->life, plant->leafDensity,
-         plant->flowerDensity, plant->fruitDensity);
-    QueueStandardPacket(player, entityID);
+    StartPacket(player, EffectDispatch);
+    QueueStandardPacket(player, ID);
 }
-#endif
 
 inline void QueueFileHeader(PlayerComponent* player, u32 index, u16 type, char* subtype, u32 uncompressedSize, u32 compressedSize)
 {

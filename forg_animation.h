@@ -26,6 +26,12 @@ struct ShadowComponent
     Vec4 color;
 };
 
+struct AnimationEffectsComponent
+{
+    r32 timer;
+    Vec4 tint;
+};
+
 struct AnimationComponent
 {
     r32 time;
@@ -38,6 +44,8 @@ struct AnimationComponent
     
     b32 flippedByDefault;
     b32 flipOnYAxis;
+    
+    r32 scale;
     
     ShadowComponent shadow;
 };
@@ -58,6 +66,7 @@ struct AnimationParams
     r32 elapsedTime;
     r32 angle;
     Vec3 P;
+    Vec4 tint;
     Lights lights;
     r32 scale;
     b32 flipOnYAxis;

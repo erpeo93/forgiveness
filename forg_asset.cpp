@@ -1901,6 +1901,18 @@ internal PAKAttachmentPoint* GetAttachmentPoint(Assets* assets, AssetID ID, u32 
     return result;
 }
 
+internal PAKGroupName* GetBitmapGroupName(Assets* assets, AssetID ID, u32 groupNameIndex)
+{
+    PAKGroupName* result = 0;
+    ColoredBitmap bitmap = GetBitmap(assets, ID);
+    if(bitmap.bitmap)
+    {
+        result = bitmap.bitmap->groupNames + groupNameIndex;
+    }
+    
+    return result;
+}
+
 inline Font* GetFont(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));

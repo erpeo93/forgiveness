@@ -158,41 +158,24 @@ enum Packet_Type
     Type_worldInfo,
     
     Type_ActionRequest,
-    Type_EquipRequest,
-    Type_DisequipRequest,
-    Type_MoveRequest,
-    Type_DropRequest,
-    Type_SwapRequest,
-    Type_DragEquipmentRequest,
-    Type_EquipDraggingRequest,
-    Type_CraftRequest,
-    Type_ActiveSkillRequest,
-    Type_UnlockSkillCategoryRequest,
-    Type_SkillLevelUpRequest,
-    Type_PassiveSkillRequest,
-    Type_LearnRequest,
-    Type_ConsumeRequest,
-    Type_CraftFromInventoryRequest,
-    
-    Type_containerHeader,
-    Type_containerInfo,
-    Type_objectRemoved,
-    Type_objectAdded,
     
     Type_entityHeader,
     Type_entityBasics,
     Type_EquipmentMapping,
     Type_UsingMapping,
     
+    Type_EffectDispatch,
+    
     Type_FileHeader,
     Type_FileChunk,
     Type_FileHash,
     
-    Type_SpawnEntity,
     Type_MoveChunkZ,
-    Type_RecreateWorld,
     Type_MovePlayerInOtherRegion,
+    
     Type_PauseToggle,
+    Type_SpawnEntity,
+    Type_RecreateWorld,
     Type_RegenerateWorldChunks,
     
 #if FORGIVENESS_INTERNAL
@@ -200,105 +183,6 @@ enum Packet_Type
     Type_debugEvent,
     Type_InputRecording,
 #endif
-};
-
-struct SkillCategory
-{
-    b32 unlocked;
-    u32 taxonomy;
-};
-
-struct EquipRequest
-{
-    u64 sourceContainerID;
-    u8 sourceObjectIndex;
-};
-
-struct DisequipRequest
-{
-    u32 slotIndex;
-    
-    u64 destContainerID;
-    u8 destObjectIndex;
-};
-
-struct DropRequest
-{
-    u64 sourceContainerID;
-    u8 sourceObjectIndex;
-};
-
-struct SwapRequest
-{
-    u64 sourceContainerID;
-    u8 sourceObjectIndex;
-};
-
-struct DragEquipmentRequest
-{
-    u32 slotIndex;
-};
-
-struct EquipDraggingRequest
-{
-    u32 slotIndex;
-};
-
-
-struct CraftFromInventoryRequest
-{
-    u64 containerID;
-    u32 objectIndex;
-};
-
-struct LearnRequest
-{
-    u64 containerID;
-    u32 objectIndex;
-};
-
-struct ConsumeRequest
-{
-    u64 containerID;
-    u32 objectIndex;
-};
-
-struct EntityUpdate
-{
-    Vec3 relativePos;
-    u64 identifier;
-    
-    u32 equipmentPieceCount;
-    u32 effectCount;
-    u32 objectCount;
-    
-    
-    
-    u32 flags;
-    u32 taxonomy;
-    u64 recipeIndex;
-    u8 action;
-    
-    r32 plantTotalAge;
-    r32 plantStatusPercentage;
-    u8 plantStatus;
-    
-    u32 recipeTaxonomy;
-    u64 recipeRecipeIndex;
-};
-
-struct PlantUpdate
-{
-    r32 age;
-    r32 life;
-    r32 leafDensity;
-};
-
-struct EntityPossibleActions
-{
-    u64 identifier;
-    u32 actionCount;
-    b32 overlapping;
 };
 
 struct LoginResponse
@@ -316,10 +200,4 @@ struct LoginRequest
 struct GameAccessRequest
 {
     u32 challenge;
-};
-
-struct UpdateAck
-{
-    UniversePos p;
-    u32 sequenceNumber;
 };

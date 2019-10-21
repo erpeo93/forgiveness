@@ -24,6 +24,7 @@ struct ArchetypeLayout
     ArchetypeComponent hasUsingComponent;
     ArchetypeComponent hasEquipmentMappingComponent;
     ArchetypeComponent hasUsingMappingComponent;
+    ArchetypeComponent hasAnimationEffectsComponent;
 };
 
 #define HasComponent_(arch, component) archetypeLayouts[arch].has##component.exists

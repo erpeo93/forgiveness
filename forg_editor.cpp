@@ -1525,6 +1525,12 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                                 
                                 AUID pointID = auID(point);
                                 EditorCheckbox(layout, "show", pointID);
+                                
+                                AUID deleteID = auID(point, "delete");
+                                if(EditorButton(layout, V2(0.25f, -0.1f), "delete", deleteID, false))
+                                {
+                                    FormatString(point->name, sizeof(point->name), "null");
+                                }
                             }
                         }
                     }
@@ -1569,6 +1575,12 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                             {
                                 NextRaw(layout);
                                 Edit_StringFreely(layout, "name", group->name, sizeof(group->name), auID(group->name, "name"), false, ID);
+                                
+                                AUID deleteID = auID(group, "delete");
+                                if(EditorButton(layout, V2(0.25f, -0.1f), "delete", deleteID, false))
+                                {
+                                    FormatString(group->name, sizeof(group->name), "null");
+                                }
                             }
                         }
                     }
