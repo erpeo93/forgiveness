@@ -1666,6 +1666,10 @@ internal void FillPAKProperty(PAKAsset* asset, Token property, Token value)
     {
         asset->bitmap.align[1] = (r32) StringToR32(value.text);
     }
+    else if(TokenEquals(property, SKELETON_FLIPPED))
+    {
+        asset->skeleton.flippedByDefault = (b32) StringToB32(value.text);
+    }
     else
     {
         u64 propertyHash = StringHash(property.text, property.textLength);

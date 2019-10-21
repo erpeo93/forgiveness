@@ -144,8 +144,8 @@ INIT_ENTITY(AnimalArchetype)
     InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name));
     
     AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
-    animation->skeletonHash =StringHash(params->skeleton.value);
-    animation->skinHash =StringHash(params->skin.value);
+    animation->skeletonHash =params->skeleton.subtypeHash;
+    animation->skinHash =params->skin.subtypeHash;
     animation->flipOnYAxis = 0;
     
     InitShadow(&animation->shadow, params);

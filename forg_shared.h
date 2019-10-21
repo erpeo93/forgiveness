@@ -28,34 +28,6 @@ inline bool IsNumeric(char c)
     return result;
 }
 
-internal i32 StringToInt32(char* string)
-{
-    i32 result = atoi(string);
-    return result;
-}
-
-internal u32 StringToUInt32(char* string)
-{
-    u32 result = atoi(string);
-    return result;
-}
-
-internal u64 StringToUInt64(char* string, u32 length)
-{
-    char end__ = string[length];
-    char* end_ = &end__;
-    char** end = &end_;
-    
-    u64 result = _strtoui64(string, end, 10);
-    return result;
-}
-
-internal r32 StringToR32(char* string)
-{
-    r32 result = (r32) atof(string);
-    return result;
-}
-
 inline u64 StringHash( char* string, u32 length = U32_MAX )
 {
     u64 result = 0;
@@ -834,5 +806,40 @@ internal u32 DeltaStreamState(StreamState s1, StreamState s2)
     Assert(s1.left <= s2.left);
     u32 result = s2.left - s1.left;
     
+    return result;
+}
+
+
+internal i32 StringToInt32(char* string)
+{
+    i32 result = atoi(string);
+    return result;
+}
+
+internal u32 StringToUInt32(char* string)
+{
+    u32 result = atoi(string);
+    return result;
+}
+
+internal u64 StringToUInt64(char* string, u32 length)
+{
+    char end__ = string[length];
+    char* end_ = &end__;
+    char** end = &end_;
+    
+    u64 result = _strtoui64(string, end, 10);
+    return result;
+}
+
+internal r32 StringToR32(char* string)
+{
+    r32 result = (r32) atof(string);
+    return result;
+}
+
+internal b32 StringToB32(char* string)
+{
+    b32 result = (StrEqual(StrLen("true"), string, "true"));
     return result;
 }

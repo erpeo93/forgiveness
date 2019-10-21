@@ -1230,15 +1230,15 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
     {
         case AssetType_Font:
         case AssetType_Model:
-        case AssetType_Skeleton:
-        {
-            char* print = asset->paka.skeleton.flippedByDefault ? "true" : "false";
-            OutputToStream(&metaDataStream, "%s:%s", SKELETON_FLIPPED, print);
-        } break;
-        
         case AssetType_Sound:
         {
             // NOTE(Leonardo): we can't possibly have edited these!
+        } break;
+        
+        case AssetType_Skeleton:
+        {
+            char* print = asset->paka.skeleton.flippedByDefault ? "true" : "false";
+            OutputToStream(&metaDataStream, "\"%s\":%s=%s;", asset->paka.sourceName, SKELETON_FLIPPED, print);
         } break;
         
         case AssetType_Image:
@@ -1261,7 +1261,6 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
                 }
                 
                 TrimToFirstCharacter(filenameNoExtension, bufferSize, filename, '.');
-                
                 
                 while(true)
                 {

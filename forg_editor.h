@@ -52,7 +52,7 @@ struct AUIDData
             r32 height;
             r32 speed;
             r32 time;
-            Enumerator skin;
+            GameAssetType skin;
         };
         struct
         {

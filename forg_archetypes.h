@@ -105,8 +105,8 @@ introspection() struct ClientEntityInitParams
     EntityID ID MetaUneditable();
     u32 seed MetaUneditable();
     
-    Enumerator skeleton;
-    Enumerator skin;
+    GameAssetType skeleton MetaDefault("{AssetType_Skeleton, 0}") MetaFixed(type);
+    GameAssetType skin MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
     
     ImageProperties entityProperties;
     ImageProperties leafProperties;

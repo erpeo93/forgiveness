@@ -504,13 +504,13 @@ internal GameAssetType Parse_GameAssetType(Tokenizer* tokenizer, GameAssetType d
     
     Token type = {};
     type.text = t.text;
-    type.textLength = FindFirstInString(t.text, '|');
+    type.textLength = Min(t.textLength, (i32) FindFirstInString(t.text, '|'));
     
     if(type.textLength != 0xffffffff)
     {
         Token subtype = {};
         subtype.text = type.text + type.textLength + 1;
-        subtype.textLength = t.textLength - type.textLength - 1;
+        subtype.textLength = Max(t.textLength - type.textLength - 1, 0);
         
         char type_[32];
         char subtype_[32];

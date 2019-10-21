@@ -1708,12 +1708,8 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                     Edit_r32_(layout, "speed", &data->speed, auID(info, "speed"), false, {});
                     Edit_r32_(layout, "time", &data->time, auID(info, "time"), false, {});
                     
-                    // TODO(Leonardo): make this a free string!
-                    StringArray options;
-                    options.strings = 0;
-                    options.count = 0;
-                    
-                    Edit_Enumerator(layout, "skin", &data->skin, options, false, {});
+                    data->skin.type = AssetType_Image;
+                    Edit_GameAssetType(layout, "skin", &data->skin, false, false, {});
                     
                     if(increaseTime)
                     {
@@ -1731,7 +1727,7 @@ internal void RenderAndEditAsset(EditorLayout* layout, Assets* assets, AssetID I
                         
                         AnimationComponent component = {};
                         component.time = data->time;
-                        component.skinHash = StringHash(data->skin.value);
+                        component.skinHash = data->skin.subtypeHash;
                         
                         if(component.skinHash)
                         {
