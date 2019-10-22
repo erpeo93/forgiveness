@@ -157,7 +157,7 @@ enum Packet_Type
     Type_gameAccess,
     Type_worldInfo,
     
-    Type_ActionRequest,
+    Type_Command,
     
     Type_entityHeader,
     Type_entityBasics,
@@ -201,3 +201,14 @@ struct GameAccessRequest
 {
     u32 challenge;
 };
+
+struct GameCommand
+{
+    Vec3 acceleration;
+};
+
+inline b32 AreEqual(GameCommand c1, GameCommand c2)
+{
+    b32 result = (c1.acceleration == c2.acceleration);
+    return result;
+}

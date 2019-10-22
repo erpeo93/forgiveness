@@ -51,11 +51,20 @@ internal EntityID AddEntity(ServerState* server, UniversePos P, RandomSequence* 
     return result;
 }
 
-STANDARD_ECS_JOB_SERVER(HandlePlayerRequests)
+STANDARD_ECS_JOB_SERVER(HandlePlayerCommands)
 {
     PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
     if(player)
     {
+        GameCommand* command = &player->requestCommand;
+        if(HasComponent(ID, PhysicComponent))
+        {
+            PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+            physic->acc = command->acceleration;
+        }
+        
+        
+#if 0        
         for(u32 requestIndex = 0; requestIndex < player->requestCount; ++requestIndex)
         {
             PlayerRequest* request = player->requests + requestIndex;
@@ -69,11 +78,6 @@ STANDARD_ECS_JOB_SERVER(HandlePlayerRequests)
                     Vec3 acc;
                     unpack(data, "V", &acc);
                     
-                    if(HasComponent(ID, PhysicComponent))
-                    {
-                        PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-                        physic->acc = acc;
-                    }
                 } break;
                 
                 case Type_MoveChunkZ:
@@ -91,6 +95,8 @@ STANDARD_ECS_JOB_SERVER(HandlePlayerRequests)
             }
         }
         player->requestCount = 0;
+#endif
+        
     }
 }
 

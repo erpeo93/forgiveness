@@ -210,8 +210,17 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             }
         } break;
         
-		case Type_FileHeader:
-		{
+        case Type_Command:
+        {
+            Vec3 acc;
+            unpack(packetPtr, "V", &acc);
+            
+            GameCommand* command = &player->requestCommand;
+            command->acceleration = acc;
+        } break;
+        
+        case Type_FileHeader:
+        {
             u32 index;
             unpack(packetPtr, "L", &index); 
             for(FileToSend* test = player->firstLoginFileToSend; test; test = test->next)
@@ -232,7 +241,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                 }
             }
             
-		} break;
+        } break;
         
         case Type_SpawnEntity:
         {
@@ -272,15 +281,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
         } break;
 #endif
         
-        default:
-        {
-            if(player->requestCount < ArrayCount(player->requests))
-            {
-                PlayerRequest* request = player->requests + player->requestCount++;
-                Assert(dataSize < ArrayCount(request->data));
-                Copy(dataSize, request->data, original);
-            }
-        } break;
+        InvalidDefaultCase;
     }
 }
 
@@ -413,7 +414,7 @@ PLATFORM_WORK_CALLBACK(WatchForFileChanges)
 inline void ReadCompressFile(ServerState* server, GameFile* file, u32 uncompressedSize, u8* uncompressedContent)
 {
     Clear(&file->pool);
-	file->uncompressedSize = uncompressedSize;          
+    file->uncompressedSize = uncompressedSize;          
     file->compressedSize = compressBound(file->uncompressedSize);
     file->content = PushSize(&file->pool, file->compressedSize);
     u32 cmp_status = compress(file->content, (mz_ulong*) &file->compressedSize, (const unsigned char*) uncompressedContent, file->uncompressedSize);
@@ -582,7 +583,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
             u8* uncompressedContent = (u8*) PushSize(&tempPool, info->size);
             platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
-			ReadCompressFile(server, file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
+            ReadCompressFile(server, file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
             platformAPI.CloseFile(&handle);        
             
             EndTemporaryMemory(fileMemory);
@@ -628,8 +629,8 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         BuildWorld(server, false);
     }
     
-	PlatformFileGroup reloadedFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, RELOAD_PATH);
-	for(PlatformFileInfo* info = reloadedFiles.firstFileInfo; info; info = info->next)
+    PlatformFileGroup reloadedFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, RELOAD_PATH);
+    for(PlatformFileInfo* info = reloadedFiles.firstFileInfo; info; info = info->next)
     {
         if(info->size)
         {
@@ -639,8 +640,8 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     platformAPI.GetAllFilesEnd(&reloadedFiles);
     
     
-	PlatformFileGroup reloadedSendFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, RELOAD_SEND_PATH);
-	for(PlatformFileInfo* info = reloadedSendFiles.firstFileInfo; info; info = info->next)
+    PlatformFileGroup reloadedSendFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, RELOAD_SEND_PATH);
+    for(PlatformFileInfo* info = reloadedSendFiles.firstFileInfo; info; info = info->next)
     {
         if(info->size)
         {
@@ -675,7 +676,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     InitSpatialPartition(server->frameByFramePool, &server->collisionPartition);
     EXECUTE_JOB(server, FillCollisionSpatialPartition, ArchetypeHas(PhysicComponent), elapsedTime);
     
-    EXECUTE_JOB(server, HandlePlayerRequests, ArchetypeHas(PlayerComponent), elapsedTime);
+    EXECUTE_JOB(server, HandlePlayerCommands, ArchetypeHas(PlayerComponent), elapsedTime);
     EXECUTE_JOB(server, DispatchEquipmentEffects, ArchetypeHas(PhysicComponent) && (ArchetypeHas(EquipmentComponent) || ArchetypeHas(UsingComponent)), elapsedTime);
     EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime);
     EXECUTE_JOB(server, SendEntityUpdate, ArchetypeHas(PhysicComponent), elapsedTime);

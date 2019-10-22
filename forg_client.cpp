@@ -524,7 +524,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
 #endif
         }
     }
-    SendUpdate(inputAcc);
+    
+    GameCommand command;
+    command.acceleration = inputAcc;
+    SendCommand(command);
     
     
     return result;

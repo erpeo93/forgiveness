@@ -103,9 +103,7 @@ struct PlayerComponent
     ForgNetworkPacketQueue queues[GuaranteedDelivery_Count];
     ForgNetworkReceiver receiver;
     
-    u32 requestCount;
-    PlayerRequest requests[8];
-    
+    GameCommand requestCommand;
     
     FileHash* firstFileHash;
     

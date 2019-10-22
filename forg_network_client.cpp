@@ -86,10 +86,10 @@ internal void SendInputRecordingMessage( b32 recording, b32 startAutomatically )
 }
 #endif
 
-internal void SendUpdate(Vec3 acceleration)
+internal void SendCommand(GameCommand command)
 {
-    StartPacket(ActionRequest);
-    Pack("V", acceleration);
+    StartPacket(Command);
+    Pack("V", command.acceleration);
     CloseAndSendStandardPacket();
 }
 
