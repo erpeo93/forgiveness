@@ -204,11 +204,21 @@ struct GameAccessRequest
 
 struct GameCommand
 {
+    u16 action;
     Vec3 acceleration;
+    EntityID targetID;
 };
 
 inline b32 AreEqual(GameCommand c1, GameCommand c2)
 {
-    b32 result = (c1.acceleration == c2.acceleration);
+    b32 result = (c1.acceleration == c2.acceleration && 
+                  AreEqual(c1.targetID, c2.targetID));
+    return result;
+}
+
+inline b32 CommandIndexValid(u16 s1, u16 s2)
+{
+    b32 result = (s1 == s2 || (( s1 > s2) && (s1 - s2 <= 32768)) || 
+                  ((s1 < s2) && (s2 - s1  > 32768)));
     return result;
 }

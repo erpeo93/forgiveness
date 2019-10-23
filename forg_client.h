@@ -27,7 +27,6 @@
 #include "forg_render.h"
 #include "forg_mesh.h"
 #include "forg_animation.h"
-#include "forg_bound.h"
 #include "forg_sound.h"
 #include "forg_AI.h"
 #include "forg_world.h"
@@ -162,6 +161,10 @@ struct ClientPlayer
     u64 openedContainerID;
     
     ReceivingAssetFile receiveFileSentinel;
+    
+    u16 currentCommandIndex;
+    GameCommand currentCommand;
+    GameCommand lastCommand;
 };
 
 struct ServerClientIDMapping

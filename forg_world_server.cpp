@@ -51,18 +51,80 @@ internal EntityID AddEntity(ServerState* server, UniversePos P, RandomSequence* 
     return result;
 }
 
+#define GameProp(property, value) GameProp_(Property_##property, value)
+internal GameProperty GameProp_(u16 property, u16 value)
+{
+    GameProperty result;
+    result.property = property;
+    result.value = value;
+    
+    return result;
+}
+
+internal EntityRef EntityReference(ServerState* server, char* kind, char* type)
+{
+    char type_[128];
+    FormatString(type_, sizeof(type_), "%s.dat", type);
+    EntityRef result;
+    result.subtypeHashIndex = GetAssetSubtype(server->assets, AssetType_EntityDefinition, kind);
+    result.index = GetAssetIndex(server->assets, AssetType_EntityDefinition, result.subtypeHashIndex, Tokenize(type_));
+    return result;
+}
+
 STANDARD_ECS_JOB_SERVER(HandlePlayerCommands)
 {
     PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
     if(player)
     {
         GameCommand* command = &player->requestCommand;
-        if(HasComponent(ID, PhysicComponent))
-        {
-            PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-            physic->acc = command->acceleration;
-        }
         
+        switch(command->action)
+        {
+            case idle:
+            case move:
+            {
+                if(HasComponent(ID, PhysicComponent))
+                {
+                    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+                    physic->acc = command->acceleration;
+                }
+            } break;
+            
+            case equip:
+            {
+                if(HasComponent(ID, PhysicComponent))
+                {
+                    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+                    physic->acc = {};
+                    
+                    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+                    if(equipped)
+                    {
+                        EntityRef ref = EntityReference(server, "default", "sword");
+                        EntityID targetID = command->targetID;
+                        
+                        if(IsValid(targetID) && HasComponent(targetID, PhysicComponent))
+                        {
+                            PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
+                            if(!IsSet(targetPhysic->flags, EntityFlag_equipment) && 
+                               targetPhysic->P.chunkZ == physic->P.chunkZ && 
+                               AreEqual(targetPhysic->definitionID, ref))
+                            {
+                                for(u32 equippedIndex = 0; equippedIndex < ArrayCount(equipped->IDs); ++equippedIndex)
+                                {
+                                    if(!IsValid(equipped->IDs[equippedIndex]))
+                                    {
+                                        equipped->IDs[equippedIndex] = targetID;
+                                        targetPhysic->flags |= EntityFlag_equipment;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } break;
+        }
         
 #if 0        
         for(u32 requestIndex = 0; requestIndex < player->requestCount; ++requestIndex)
@@ -180,26 +242,6 @@ internal void MoveEntity(ServerState* server, PhysicComponent* physic, r32 elaps
     }
 }
 
-#define GameProp(property, value) GameProp_(Property_##property, value)
-internal GameProperty GameProp_(u16 property, u16 value)
-{
-    GameProperty result;
-    result.property = property;
-    result.value = value;
-    
-    return result;
-}
-
-internal EntityRef EntityReference(ServerState* server, char* kind, char* type)
-{
-    char type_[128];
-    FormatString(type_, sizeof(type_), "%s.dat", type);
-    EntityRef result;
-    result.subtypeHashIndex = GetAssetSubtype(server->assets, AssetType_EntityDefinition, kind);
-    result.index = GetAssetIndex(server->assets, AssetType_EntityDefinition, result.subtypeHashIndex, Tokenize(type_));
-    return result;
-}
-
 internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
@@ -218,28 +260,6 @@ internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
     if(equipped)
     {
-        EntityRef ref = EntityReference(server, "default", "sword");
-        
-        SpatialPartitionQuery collisionQuery = QuerySpatialPartitionAtPoint(&server->collisionPartition, physic->P);
-        
-        for(EntityID testID = GetCurrent(&collisionQuery); IsValid(&collisionQuery); testID = Advance(&collisionQuery))
-        {
-            PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
-            if(!IsSet(testPhysic->flags, EntityFlag_equipment) && 
-               testPhysic->P.chunkZ == physic->P.chunkZ && 
-               AreEqual(testPhysic->definitionID, ref))
-            {
-                for(u32 equippedIndex = 0; equippedIndex < ArrayCount(equipped->IDs); ++equippedIndex)
-                {
-                    if(!IsValid(equipped->IDs[equippedIndex]))
-                    {
-                        equipped->IDs[equippedIndex] = testID;
-                        break;
-                    }
-                }
-            }
-        }
-        
         for(u16 pieceIndex = 0; pieceIndex < Count_usingSlot; ++pieceIndex)
         {
             EntityID usingID = equipped->IDs[pieceIndex];

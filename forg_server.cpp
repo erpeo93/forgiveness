@@ -10,7 +10,6 @@
 #include "forg_world.cpp"
 #include "forg_physics.cpp"
 #include "forg_resizable_array.cpp"
-//#include "forg_bound.cpp"
 #include "forg_network_server.cpp"
 #include "forg_archetypes.cpp"
 
@@ -19,7 +18,6 @@
 #include "forg_meta.cpp"
 #include "asset_builder.cpp"
 #include "miniz.c"
-
 #include "forg_world_generation.cpp"
 #include "forg_world_server.cpp"
 #if FORGIVENESS_INTERNAL
@@ -37,13 +35,6 @@ internal void HandleDebugMessage(PlatformServerMemory* memory, PlayerComponent* 
             b32 startAutomatically;
             unpack( packetPtr, "ll", &recording, &startAutomatically );
             platformAPI.PlatformInputRecordingCommand( server, recording, startAutomatically );
-        } break;
-        
-        case Type_debugEvent:
-        {
-            DebugEvent* editEvent = &globalDebugTable->editEvent;
-            // NOTE(Leonardo): leonardo: we avoid receiving the "string" version of the guid, and we override it with the original one.
-            unpack( packetPtr, "QQLHCQQ", &editEvent->clock, &editEvent->GUID, &editEvent->threadID, &editEvent->coreIndex, &editEvent->type, &editEvent->overNetwork[0], &editEvent->overNetwork[1]);
         } break;
     }
 #endif
@@ -108,7 +99,6 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                 //SendLoginResponse(player, 0, 0);
             }
         } break;
-        
         
         case Type_FileHash:
         {
@@ -192,6 +182,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                 StoreFileHash(server, player, type, subtypeHash, dataHash);
             }
         } break;
+        
         case Type_gameAccess:
         {
             GameAccessRequest clientReq;
@@ -212,11 +203,20 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
         
         case Type_Command:
         {
+            u16 index;
+            u16 action;
             Vec3 acc;
-            unpack(packetPtr, "V", &acc);
+            EntityID targetID;
+            unpack(packetPtr, "HHVL", &index, &action, &acc, &targetID);
             
-            GameCommand* command = &player->requestCommand;
-            command->acceleration = acc;
+            if(CommandIndexValid(index, player->expectingCommandIndex))
+            {
+                player->expectingCommandIndex = index + 1;
+                GameCommand* command = &player->requestCommand;
+                command->action = action;
+                command->acceleration = acc;
+                command->targetID = targetID;
+            }
         } break;
         
         case Type_FileHeader:
@@ -665,11 +665,17 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     }
     
     
+    
+    
+    
+    
+    
+    
+    
     server->frameByFramePool = &tempPool;
+    
     SpawnEntities(server, elapsedTime);
     HandlePlayersNetwork(server, elapsedTime);
-    
-    
     InitSpatialPartition(server->frameByFramePool, &server->playerPartition);
     EXECUTE_JOB(server, FillPlayerSpacePartition, ArchetypeHas(PlayerComponent) && ArchetypeHas(PhysicComponent), elapsedTime);
     

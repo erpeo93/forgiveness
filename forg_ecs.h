@@ -152,6 +152,7 @@ inline b32 AreEqual(EntityID i1, EntityID i2)
 #define STANDARD_ECS_JOB_SERVER(name) internal void name(ServerState* server, EntityID ID, r32 elapsedTime)
 #define STANDARD_ECS_JOB_CLIENT(name) internal void name(GameModeWorld* worldMode, EntityID ID, r32 elapsedTime)
 #define RENDERING_ECS_JOB_CLIENT(name) internal void name(GameModeWorld* worldMode, RenderGroup* group, EntityID ID, r32 elapsedTime)
+#define INTERACTION_ECS_JOB_CLIENT(name) internal void name(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input, EntityID ID, r32 elapsedTime)
 
 
 #define ArchetypeHas(component) HasComponent_(archetypeIndex, component)
@@ -179,6 +180,20 @@ for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)\
         iter = Next(iter))\
         {\
             if(!DeletedArchetype(state, iter.ID)) job(state, group, iter.ID, elapsedTime);\
+        }\
+    }\
+}
+
+#define EXECUTE_INTERACTION_JOB(state, group, input, job, query, elapsedTime)\
+for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)\
+{\
+    if(query)\
+    {\
+        for(ArchIterator iter = First(state, archetypeIndex); \
+        IsValid(iter); \
+        iter = Next(iter))\
+        {\
+            if(!DeletedArchetype(state, iter.ID)) job(state, group, input, iter.ID, elapsedTime);\
         }\
     }\
 }

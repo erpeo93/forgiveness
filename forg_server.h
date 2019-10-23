@@ -24,7 +24,6 @@
 #include "asset_builder.h"
 #include "forg_random.h"
 #include "forg_physics.h"
-#include "forg_bound.h"
 #include "forg_game_effect.h"
 #include "forg_AI.h"
 #include "forg_plant.h"
@@ -103,6 +102,7 @@ struct PlayerComponent
     ForgNetworkPacketQueue queues[GuaranteedDelivery_Count];
     ForgNetworkReceiver receiver;
     
+    u16 expectingCommandIndex;
     GameCommand requestCommand;
     
     FileHash* firstFileHash;

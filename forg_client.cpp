@@ -7,7 +7,6 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_resizable_array.cpp"
 #include "forg_world.cpp"
 #include "forg_physics.cpp"
-//#include "forg_world_client.cpp"
 #include "forg_asset.cpp"
 #include "forg_world_generation.cpp"
 #include "forg_render.cpp"
@@ -23,7 +22,6 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_rock.cpp"
 #include "forg_particles.cpp"
 //#include "forg_bolt.cpp"
-//#include "forg_bound.cpp"
 #include "forg_cutscene.cpp"
 #include "forg_ground.cpp"
 #include "forg_UIcommon.cpp"
@@ -363,12 +361,73 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
     }
 }
 
+internal Rect3 GetEntityBound(GameModeWorld* worldMode, BaseComponent* base)
+{
+    Rect3 result = Offset(base->bounds, GetRelativeP(worldMode, base));
+    return result;
+}
+
 RENDERING_ECS_JOB_CLIENT(RenderBound)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     if(ShouldBeRendered(worldMode, base))
     {
-        PushCubeOutline(group, Offset(base->bounds, GetRelativeP(worldMode, base)), V4(1, 0, 0, 1), 0.05f);
+        Rect3 entityBound = GetEntityBound(worldMode, base);
+        PushCubeOutline(group, entityBound, V4(1, 0, 0, 1), 0.05f);
+    }
+}
+
+internal void HandleKeyboardInteraction(ClientPlayer* player, PlatformInput* input)
+{
+    GameCommand* command = &player->currentCommand;
+    
+    command->action = idle;
+    command->acceleration = {};
+    command->targetID = {};
+    
+    if(IsDown(&input->moveLeft))
+    {
+        command->acceleration.x = -1.0f;
+    }
+    if(IsDown(&input->moveRight))
+    {
+        command->acceleration.x = 1.0f;
+    }
+    if(IsDown(&input->moveDown))
+    {
+        command->acceleration.y = -1.0f;
+    }
+    if(IsDown(&input->moveUp))
+    {
+        command->acceleration.y = 1.0f;
+    }
+    
+    if(LengthSq(command->acceleration) > 0)
+    {
+        command->action = move;
+    }
+}
+
+INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
+{
+    GameCommand* command = &worldMode->player.currentCommand;
+    
+    BaseComponent* component = GetComponent(worldMode, ID, BaseComponent);
+    
+    r32 cameraZ;
+    
+    Vec2 mouseP = worldMode->relativeScreenMouseP + 0.5f * group->screenDim;
+    
+    Rect3 bound = GetEntityBound(worldMode, component);
+    Rect2 screenBounds = ProjectOnScreen(group, bound, &cameraZ);
+    if(PointInRect(screenBounds, mouseP))
+    {
+        PushCubeOutline(group, bound, V4(1, 0, 0, 1), 0.02f);
+        if(Pressed(&input->mouseLeft))
+        {
+            command->action = equip;
+            command->targetID = ID;
+        }
     }
 }
 
@@ -380,12 +439,6 @@ internal void UpdateEntities(GameModeWorld* worldMode, r32 timeToAdvance, Client
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
     b32 result = false;
-    
-    Vec3 inputAcc = {};
-    u64 targetEntityID = 0;
-    u32 desiredAction = 0;
-    u64 overlappingEntityID = 0;
-    
     
     ClientPlayer* myPlayer = &worldMode->player;
     ReceiveNetworkPackets(gameState, worldMode);
@@ -416,7 +469,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     }
 #endif
     
-    
     Vec2 screenMouseP = V2(input->mouseX, input->mouseY);
     Vec3 unprojectedWorldMouseP = UnprojectAtZ(group, &group->gameCamera, screenMouseP, 0);
     
@@ -427,31 +479,11 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     Vec2 deltaMouseScreenP = newMouseP - worldMode->relativeScreenMouseP;
     worldMode->relativeScreenMouseP = newMouseP;
     
-    
     if(IsValid(myPlayer->clientID))
     {
         BaseComponent* player = GetComponent(worldMode, myPlayer->clientID, BaseComponent);
         if(player)
         {
-            if(IsDown(&input->moveLeft))
-            {
-                inputAcc.x = -1.0f;
-            }
-            
-            if(IsDown(&input->moveRight))
-            {
-                inputAcc.x = 1.0f;
-            }
-            
-            if(IsDown(&input->moveDown))
-            {
-                inputAcc.y = -1.0f;
-            }
-            if(IsDown(&input->moveUp))
-            {
-                inputAcc.y = 1.0f;
-            }
-            
             worldMode->editorUI.playerP = player->universeP;
             group->assets = gameState->assets;
 #if 0            
@@ -471,7 +503,12 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), 1.0f);
             UpdateAndSetupGameCamera(worldMode, group, input);
+            
             UpdateEntities(worldMode, input->timeToAdvance, myPlayer);
+            
+            HandleKeyboardInteraction(myPlayer, input);
+            EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent), input->timeToAdvance);
+            
             
             BeginDepthPeel(group);
             
@@ -480,6 +517,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             //AddLightToGridCurrentFrame(worldMode, V3(0, 0, 0), V3(0, 0, 1), 4);
             AddLightToGridCurrentFrame(worldMode, V3(1, 0, 0), V3(1, 0, 0), 8);
             FinalizeLightGrid(worldMode, group);
+            
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderCharacterAnimation, ArchetypeHas(BaseComponent) && ArchetypeHas(AnimationComponent), input->timeToAdvance);
             
@@ -525,9 +563,12 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         }
     }
     
-    GameCommand command;
-    command.acceleration = inputAcc;
-    SendCommand(command);
+    if(!AreEqual(myPlayer->lastCommand, myPlayer->currentCommand))
+    {
+        myPlayer->lastCommand = myPlayer->currentCommand;
+        ++myPlayer->currentCommandIndex;
+    }
+    SendCommand(myPlayer->currentCommandIndex, myPlayer->currentCommand);
     
     
     return result;

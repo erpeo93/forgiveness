@@ -1,9 +1,3 @@
-internal b32 ShouldCollide(u64 id1, ForgBoundType b1, u64 id2, ForgBoundType b2)
-{
-    b32 result = true;
-    return result;
-}
-
 internal void InitSpatialPartition(MemoryPool* pool, SpatialPartition* partition)
 {
 	partition->width = WORLD_CHUNK_SPAN;

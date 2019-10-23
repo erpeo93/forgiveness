@@ -86,10 +86,10 @@ internal void SendInputRecordingMessage( b32 recording, b32 startAutomatically )
 }
 #endif
 
-internal void SendCommand(GameCommand command)
+internal void SendCommand(u16 index, GameCommand command)
 {
     StartPacket(Command);
-    Pack("V", command.acceleration);
+    Pack("HHVL", index, command.action, command.acceleration, command.targetID);
     CloseAndSendStandardPacket();
 }
 
