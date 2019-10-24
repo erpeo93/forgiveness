@@ -248,7 +248,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             UniversePos P = {};
             AssetID ID;
             ID.type = AssetType_EntityDefinition;
-            unpack(packetPtr, "LHllV", &ID.subtypeHashIndex, &ID.index, &P.chunkX, &P.chunkY, &P.chunkOffset);
+            unpack(packetPtr, "LHlllV", &ID.subtypeHashIndex, &ID.index, &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset);
             
             u32 seed = GetNextUInt32(&server->entropy);
             AddEntity_(server, P, ID, seed, 0);

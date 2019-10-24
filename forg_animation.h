@@ -73,4 +73,5 @@ struct AnimationParams
     ObjectTransform transform;
     EquipmentMappingComponent* equipment;
     UsingMappingComponent* equipped;
+    r32 modulationPercentage;
 };

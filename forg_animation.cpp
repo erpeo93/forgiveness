@@ -506,6 +506,7 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
         ObjectTransform transform = params->transform;
         transform.flipOnYAxis = params->flipOnYAxis;
         transform.dontRender = !render;
+        transform.modulationPercentage = params->modulationPercentage;
         
         Lights lights = params->lights;
         

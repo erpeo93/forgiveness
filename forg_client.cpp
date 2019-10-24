@@ -117,6 +117,17 @@ internal r32 GetDeepness(BaseComponent* base)
     r32 height = GetDim(base->bounds).y;
     return height;
 }
+
+internal r32 GetModulationPercentageAndResetFocus(BaseComponent* base)
+{
+    r32 result = 0;
+    if(base->isOnFocus)
+    {
+        result = 0.7f;
+        base->isOnFocus = false;
+    }
+    return result;
+}
 internal b32 ShouldBeRendered(GameModeWorld* worldMode, BaseComponent* base)
 
 {
@@ -202,6 +213,7 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
         params.equipped = GetComponent(worldMode, ID, UsingMappingComponent);
         params.tint = V4(1, 1, 1, 1);
+        params.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
         
         AnimationEffectsComponent* effects = GetComponent(worldMode, ID, AnimationEffectsComponent);
         if(effects)
@@ -247,12 +259,17 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
         ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
         RenderShadow(worldMode, group, P, &image->shadow, deepness, width);
         
+        r32 modulationPercentage = GetModulationPercentageAndResetFocus(base); 
+        
         PlantComponent* plant = GetComponent(worldMode, ID, PlantComponent);
         
         RandomSequence seq = Seed(base->seed);
         BitmapId BID = GetImageFromReference(group->assets, &image->entity, &seq);
         if(IsValid(BID))
         {
+            ObjectTransform stillTransform = UprightTransform();
+            stillTransform.modulationPercentage = modulationPercentage;
+            
             BitmapDim bitmapData = PushBitmap(group, UprightTransform(), BID, P, height, V4(1, 1, 1, 1), lights);
             
             Bitmap* bitmap = GetBitmap(group->assets, BID).bitmap;
@@ -272,6 +289,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
                         BitmapId leafID = GetImageFromReference(group->assets, &plant->leaf, &seq);
                         leafTransform.angle = point->angle;
                         leafTransform.scale = point->scale;
+                        leafTransform.modulationPercentage = modulationPercentage;
                         
                         Vec3 pointP = GetAlignP(bitmapData, point->alignment);
                         PushBitmap(group, leafTransform, leafID, pointP, 0, V4(1, 1, 1, 1), lights);
@@ -300,6 +318,8 @@ RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
         BitmapId BID = GetImageFromReference(group->assets, &image->entity, &seq);
         if(IsValid(BID))
         {
+            ObjectTransform transform = UprightTransform();
+            transform.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
             PushBitmap(group, UprightTransform(), BID, P, height, V4(1, 1, 1, 1), lights);
         }
     }
@@ -356,6 +376,7 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
         ObjectTransform transform = UprightTransform();
         transform.angle = layout->rootAngle;
         transform.scale = layout->rootScale;
+        transform.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
         
         RenderAttachedPieces(group, P, transform, layout->pieces, layout->pieceCount, layout->rootHash, base->seed, lights);
     }
@@ -410,23 +431,18 @@ internal void HandleKeyboardInteraction(ClientPlayer* player, PlatformInput* inp
 
 INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
 {
-    GameCommand* command = &worldMode->player.currentCommand;
-    
     BaseComponent* component = GetComponent(worldMode, ID, BaseComponent);
     
     r32 cameraZ;
-    
     Vec2 mouseP = worldMode->relativeScreenMouseP + 0.5f * group->screenDim;
     
     Rect3 bound = GetEntityBound(worldMode, component);
     Rect2 screenBounds = ProjectOnScreen(group, bound, &cameraZ);
-    if(PointInRect(screenBounds, mouseP))
+    if(ShouldBeRendered(worldMode, component) && PointInRect(screenBounds, mouseP))
     {
-        PushCubeOutline(group, bound, V4(1, 0, 0, 1), 0.02f);
-        if(Pressed(&input->mouseLeft))
+        if(worldMode->hotCount < ArrayCount(worldMode->hotIDs))
         {
-            command->action = equip;
-            command->targetID = ID;
+            worldMode->hotIDs[worldMode->hotCount++] = ID;
         }
     }
 }
@@ -506,8 +522,40 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             UpdateEntities(worldMode, input->timeToAdvance, myPlayer);
             
+            worldMode->hotCount = 0;
             HandleKeyboardInteraction(myPlayer, input);
             EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent), input->timeToAdvance);
+            
+            if(worldMode->hotCount > 0)
+            {
+                for(u32 hotIndex = 0; hotIndex < worldMode->hotCount; ++hotIndex)
+                {
+                    if(AreEqual(worldMode->hotIDs[hotIndex], worldMode->lastFrameHotID))
+                    {
+                        worldMode->currentHotIndex = (i32) hotIndex;
+                        break;
+                    }
+                }
+                
+                worldMode->currentHotIndex += input->mouseWheelOffset;
+                worldMode->currentHotIndex = Wrap(0, worldMode->currentHotIndex, (i32) worldMode->hotCount);
+                
+                EntityID hotID = worldMode->hotIDs[worldMode->currentHotIndex];
+                worldMode->lastFrameHotID = hotID;
+                
+                BaseComponent* base = GetComponent(worldMode, hotID, BaseComponent);
+                if(base)
+                {
+                    base->isOnFocus = true;
+                }
+                
+                if(Pressed(&input->mouseLeft))
+                {
+                    GameCommand* command = &myPlayer->currentCommand;
+                    command->action = equip;
+                    command->targetID = hotID;
+                }
+            }
             
             
             BeginDepthPeel(group);
@@ -515,7 +563,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             Vec3 ambientLightColor = HandleDaynightCycle(worldMode, input);
             PushAmbientLighting(group, ambientLightColor);
             //AddLightToGridCurrentFrame(worldMode, V3(0, 0, 0), V3(0, 0, 1), 4);
-            AddLightToGridCurrentFrame(worldMode, V3(1, 0, 0), V3(1, 0, 0), 8);
+            //AddLightToGridCurrentFrame(worldMode, V3(1, 0, 0), V3(1, 0, 0), 8);
             FinalizeLightGrid(worldMode, group);
             
             

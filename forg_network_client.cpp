@@ -119,7 +119,7 @@ internal void SendFileHeaderAck(u32 index)
 internal void SendSpawnRequest(UniversePos P, AssetID definitionID)
 {
     StartPacket(SpawnEntity);
-    Pack("LHllV", definitionID.subtypeHashIndex, definitionID.index, P.chunkX, P.chunkY, P.chunkOffset);
+    Pack("LHlllV", definitionID.subtypeHashIndex, definitionID.index, P.chunkX, P.chunkY, P.chunkZ, P.chunkOffset);
     CloseAndSendGuaranteedPacket();
 }
 

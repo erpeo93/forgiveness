@@ -101,6 +101,26 @@ INIT_ENTITY(ObjectArchetype)
     AddRandomEffects(effect, params->bindings, params->bindingCount, property);
 }
 
+INIT_ENTITY(PortalArchetype)
+{
+    ServerState* server = (ServerState*) state;
+    ServerEntityInitParams* params = (ServerEntityInitParams*) par;
+    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
+    
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    InitPhysicComponent(physic, params->P, common->boundOffset, common->boundDim, params->definitionID, params->seed);
+    
+    CollisionEffectsComponent* collision = GetComponent(server, ID, CollisionEffectsComponent);
+    for(u32 effectIndex = 0; effectIndex < params->collisionEffectsCount; ++effectIndex)
+    {
+        if(collision->effectCount < ArrayCount(collision->effects))
+        {
+            GameEffect* dest = collision->effects + collision->effectCount++;
+            *dest = params->collisionEffects[effectIndex];
+        }
+    }
+}
+
 #else
 
 internal void InitBaseComponent(BaseComponent* base, Vec3 boundOffset, Vec3 boundDim, u32 seed, u64 nameHash)
@@ -245,4 +265,22 @@ INIT_ENTITY(ObjectArchetype)
         AddGameProperty_(&destPiece->image.properties, property, GameProperty_Optional);
     }
 }
+
+INIT_ENTITY(PortalArchetype)
+{
+    GameModeWorld* worldMode = (GameModeWorld*) state;
+    ClientEntityInitParams* params = (ClientEntityInitParams*) par;
+    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
+    
+    Assets* assets = worldMode->gameState->assets;
+    
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name));
+    
+    ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
+    InitImageReference(assets, &image, &params, entity);
+    
+    InitShadow(&image->shadow, params);
+}
+
 #endif

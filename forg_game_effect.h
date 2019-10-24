@@ -19,3 +19,16 @@ struct EffectComponent
     GameEffect effects[8];
     r32 timers[8];
 };
+
+struct CollisionEffectsComponent
+{
+    u32 effectCount;
+    GameEffect effects[8];
+};
+
+struct OverlappingEffectsComponent
+{
+    u32 effectCount;
+    GameEffect effects[8];
+};
+

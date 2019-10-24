@@ -238,8 +238,10 @@ internal void PointCubeCollision(Vec3 P, Vec3 deltaP, Rect3 minkowski, r32* tMin
     }
 }
 
-internal void HandleVolumeCollision(Rect3 bounds, Vec3 deltaP, Vec3 testP, Rect3 testBounds, r32* tMin, Vec3* wallNormalMin)
+internal b32 HandleVolumeCollision(Rect3 bounds, Vec3 deltaP, Vec3 testP, Rect3 testBounds, r32* tMin, Vec3* wallNormalMin, b32 shouldCollide)
 {
+    b32 result = false;
+    
     Vec3 fakeDelta = GetCenter(bounds);
     Vec3 myP = fakeDelta;
     deltaP -= fakeDelta;
@@ -249,8 +251,17 @@ internal void HandleVolumeCollision(Rect3 bounds, Vec3 deltaP, Vec3 testP, Rect3
     Vec3 minkowskiDimension =  GetDim(bounds) + GetDim(testBounds);
     Rect3 minkowski = RectCenterDim(minkowskiCenter, minkowskiDimension);
     
-    if(!PointInRect(minkowski, myP))
+    if(PointInRect(minkowski, myP))
     {
-        PointCubeCollision(myP, deltaP, minkowski, tMin, wallNormalMin);
+        result = true;
     }
+    else
+    {
+        if(shouldCollide)
+        {
+            PointCubeCollision(myP, deltaP, minkowski, tMin, wallNormalMin);
+        }
+    }
+    
+    return result;
 }

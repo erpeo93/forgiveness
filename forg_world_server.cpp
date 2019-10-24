@@ -186,7 +186,136 @@ STANDARD_ECS_JOB_SERVER(FillCollisionSpatialPartition)
     }
 }
 
-internal void MoveEntity(ServerState* server, PhysicComponent* physic, r32 elapsedTime)
+internal void SendEffectDispatch(ServerState* server, EntityID ID)
+{
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    
+    r32 maxDistance = 3.0f * CHUNK_DIM;
+    r32 maxDistanceSq = Square(maxDistance);
+    
+    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, physic->P);
+    for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
+    {
+        PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
+        PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
+        
+        if(physic->P.chunkZ == playerPhysic->P.chunkZ)
+        {
+            Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
+            if(LengthSq(distance) < maxDistanceSq)
+            {
+                QueueEffectDispatch(player, ID);
+            }
+        }
+    }
+}
+
+internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect)
+{
+    switch(effect->effectType.value)
+    {
+        case spawnEntity:
+        {
+            SendEffectDispatch(server, ID);
+            //AddEntity(server, P, &server->entropy, effect->spawnType);
+        } break;
+        
+        case moveOnZSlice:
+        {
+            if(HasComponent(ID, PhysicComponent))
+            {
+                PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+                if(++physic->P.chunkZ == (i32) server->maxDeepness)
+                {
+                    physic->P.chunkZ = 0;
+                }
+            }
+        } break;
+    }
+}
+
+STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
+{
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    
+    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    if(equipment)
+    {
+        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->IDs); ++equipmentIndex)
+        {
+            EntityID equipID = equipment->IDs[equipmentIndex];
+            if(IsValid(equipID))
+            {
+                EffectComponent* effects = GetComponent(server, equipID, EffectComponent);
+                Assert(effects);
+                for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
+                {
+                    GameEffect* effect = effects->effects + effectIndex;
+                    effects->timers[effectIndex] += elapsedTime;
+                    if(effects->timers[effectIndex] >= effect->timer)
+                    {
+                        effects->timers[effectIndex] = 0;
+                        DispatchGameEffect(server, ID, physic->P, effect);
+                    }
+                }
+            }
+        }
+    }
+    
+    
+    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+    if(equipped)
+    {
+        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->IDs); ++equipmentIndex)
+        {
+            EntityID usingID = equipped->IDs[equipmentIndex];
+            if(IsValid(usingID))
+            {
+                EffectComponent* effects = GetComponent(server, usingID, EffectComponent);
+                
+                Assert(effects);
+                for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
+                {
+                    GameEffect* effect = effects->effects + effectIndex;
+                    effects->timers[effectIndex] += elapsedTime;
+                    if(effects->timers[effectIndex] >= effect->timer)
+                    {
+                        effects->timers[effectIndex] = 0;
+                        DispatchGameEffect(server, ID, physic->P, effect);
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal void DispatchCollisitonEffects(ServerState* server, UniversePos P, EntityID actor, EntityID trigger)
+{
+    CollisionEffectsComponent* effects = GetComponent(server, trigger, CollisionEffectsComponent);
+    if(effects)
+    {
+        for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
+        {
+            GameEffect* effect = effects->effects + effectIndex;
+            DispatchGameEffect(server, actor, P, effect);
+        }
+    }
+}
+
+internal void DispatchOverlappingEffects(ServerState* server, UniversePos P, EntityID actor, EntityID overlap)
+{
+    OverlappingEffectsComponent* effects = GetComponent(server, overlap, OverlappingEffectsComponent);
+    if(effects)
+    {
+        for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
+        {
+            GameEffect* effect = effects->effects + effectIndex;
+            DispatchGameEffect(server, actor, P, effect);
+        }
+    }
+}
+
+internal void HandleEntityMovement(ServerState* server, PhysicComponent* physic, EntityID ID, r32 elapsedTime)
 {
     UniversePos oldP = physic->P;
     
@@ -216,18 +345,45 @@ internal void MoveEntity(ServerState* server, PhysicComponent* physic, r32 elaps
         Rect3 bounds = AddRadius(physic->bounds, deltaP);
         SpatialPartitionQuery collisionQuery = QuerySpatialPartition(&server->collisionPartition, physic->P, bounds);
         
+        EntityID collisionTriggerID = {};
+        UniversePos collisionP = {};
+        
         for(EntityID testID = GetCurrent(&collisionQuery); IsValid(&collisionQuery); testID = Advance(&collisionQuery))
         {
             PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
             if(testPhysic->P.chunkZ == physic->P.chunkZ)
             {
                 Vec3 testP = SubtractOnSameZChunk(testPhysic->P, physic->P);
-                HandleVolumeCollision(physic->bounds, deltaP, testP, testPhysic->bounds, &tStop, &wallNormalMin);
+                
+                b32 overlappingEntity = HasComponent(testID, OverlappingEffectsComponent);
+                
+                b32 shouldCollide = overlappingEntity ? false : true;
+                b32 shouldOverlap = overlappingEntity ? true : false;
+                
+                r32 oldT = tStop;
+                if(HandleVolumeCollision(physic->bounds, deltaP, testP, testPhysic->bounds, &tStop, &wallNormalMin, shouldCollide))
+                {
+                    if(shouldOverlap)
+                    {
+                        DispatchOverlappingEffects(server, testPhysic->P, ID, testID);
+                    }
+                }
+                
+                
+                if(tStop < oldT)
+                {
+                    collisionP = testPhysic->P;
+                    collisionTriggerID = testID;
+                }
             }
         }
         
-        Vec3 wallNormal = wallNormalMin;
+        if(IsValid(collisionTriggerID))
+        {
+            DispatchCollisitonEffects(server, collisionP, ID, collisionTriggerID);
+        }
         
+        Vec3 wallNormal = wallNormalMin;
         physic->P.chunkOffset += tStop * deltaP;
         
         physic->speed -= Dot(physic->speed, wallNormal) * wallNormal;
@@ -245,7 +401,7 @@ internal void MoveEntity(ServerState* server, PhysicComponent* physic, r32 elaps
 internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    MoveEntity(server, physic, elapsedTime);
+    HandleEntityMovement(server, physic, ID, elapsedTime);
     
     physic->action = {};
     if(LengthSq(physic->speed) > 0.1f)
@@ -343,31 +499,6 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-
-internal void SendEffectDispatch(ServerState* server, EntityID ID)
-{
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    
-    r32 maxDistance = 3.0f * CHUNK_DIM;
-    r32 maxDistanceSq = Square(maxDistance);
-    
-    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, physic->P);
-    for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
-    {
-        PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
-        PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
-        
-        if(physic->P.chunkZ == playerPhysic->P.chunkZ)
-        {
-            Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
-            if(LengthSq(distance) < maxDistanceSq)
-            {
-                QueueEffectDispatch(player, ID);
             }
         }
     }
@@ -507,72 +638,6 @@ internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos 
     }
 }
 
-internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect)
-{
-    switch(effect->effectType.value)
-    {
-        case spawnEntity:
-        {
-            SendEffectDispatch(server, ID);
-            //AddEntity(server, P, &server->entropy, effect->spawnType);
-        } break;
-    }
-}
-
-STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
-{
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    
-    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-    if(equipment)
-    {
-        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->IDs); ++equipmentIndex)
-        {
-            EntityID equipID = equipment->IDs[equipmentIndex];
-            if(IsValid(equipID))
-            {
-                EffectComponent* effects = GetComponent(server, equipID, EffectComponent);
-                Assert(effects);
-                for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
-                {
-                    GameEffect* effect = effects->effects + effectIndex;
-                    effects->timers[effectIndex] += elapsedTime;
-                    if(effects->timers[effectIndex] >= effect->timer)
-                    {
-                        effects->timers[effectIndex] = 0;
-                        DispatchGameEffect(server, ID, physic->P, effect);
-                    }
-                }
-            }
-        }
-    }
-    
-    
-    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-    if(equipped)
-    {
-        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->IDs); ++equipmentIndex)
-        {
-            EntityID usingID = equipped->IDs[equipmentIndex];
-            if(IsValid(usingID))
-            {
-                EffectComponent* effects = GetComponent(server, usingID, EffectComponent);
-                
-                Assert(effects);
-                for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
-                {
-                    GameEffect* effect = effects->effects + effectIndex;
-                    effects->timers[effectIndex] += elapsedTime;
-                    if(effects->timers[effectIndex] >= effect->timer)
-                    {
-                        effects->timers[effectIndex] = 0;
-                        DispatchGameEffect(server, ID, physic->P, effect);
-                    }
-                }
-            }
-        }
-    }
-}
 
 internal void SpawnEntities(ServerState* server, r32 elapsedTime)
 {

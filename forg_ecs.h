@@ -25,6 +25,8 @@ struct ArchetypeLayout
     ArchetypeComponent hasEquipmentMappingComponent;
     ArchetypeComponent hasUsingMappingComponent;
     ArchetypeComponent hasAnimationEffectsComponent;
+    ArchetypeComponent hasCollisionEffectsComponent;
+    ArchetypeComponent hasOverlappingEffectsComponent;
 };
 
 #define HasComponent_(arch, component) archetypeLayouts[arch].has##component.exists

@@ -55,6 +55,7 @@ struct BaseComponent
     Rect3 bounds;
     GameProperty action;
     u32 flags;
+    b32 isOnFocus;
 };
 
 struct ImageReference
@@ -234,8 +235,6 @@ struct GameModeWorld
     Vec2 relativeScreenMouseP;
     
     
-    
-    
     b32 voronoiValid;
     b32 generatingVoronoi;
     VoronoiDiagram voronoiPingPong[2];
@@ -266,6 +265,12 @@ struct GameModeWorld
     SoundState* soundState;
     
     EditorUIContext editorUI;
+    
+    i32 currentHotIndex;
+    u32 hotCount;
+    EntityID hotIDs[8];
+    
+    EntityID lastFrameHotID;
 };
 
 enum GameMode

@@ -62,13 +62,21 @@ Archetype() struct ObjectArchetype
 #endif
 };
 
+Archetype() struct PortalArchetype
+{
+#ifdef FORG_SERVER
+    PhysicComponent physic;
+    CollisionEffectsComponent collision;
+#else
+    BaseComponent base;
+    ImageComponent image;
+#endif
+};
+
 introspection() struct CommonEntityInitParams
 {
     Vec3 boundOffset;
     Vec3 boundDim MetaDefault("V3(1, 1, 1)");
-    
-    ArrayCounter possibleCraftingEffects MetaCounter(craftingEffects);
-    EffectBinding* craftingEffects;
 };
 
 introspection() struct ServerEntityInitParams
@@ -79,6 +87,9 @@ introspection() struct ServerEntityInitParams
     
     ArrayCounter bindingCount MetaCounter(bindings);
     EffectBinding* bindings;
+    
+    ArrayCounter collisionEffectsCount MetaCounter(collisionEffects);
+    GameEffect* collisionEffects;
 };
 
 introspection() struct ImageProperty
