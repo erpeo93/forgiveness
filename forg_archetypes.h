@@ -108,7 +108,7 @@ introspection() struct ImageProperties
 introspection() struct LayoutPieceProperties
 {
     AssetLabel name;
-    r32 height;
+    r32 height MetaDefault("1.0f");
     ImageProperties properties;
 };
 

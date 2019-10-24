@@ -1522,6 +1522,7 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                                 Edit_Vec2(layout, "alignment", &point->alignment, false, ID, true);
                                 Edit_Vec2(layout, "scale", &point->scale, false, ID, false);
                                 Edit_r32(layout, "angle", &point->angle, false, ID, false);
+                                Edit_r32(layout, "zOffset", &point->zOffset, false, ID, false);
                                 
                                 AUID pointID = auID(point);
                                 EditorCheckbox(layout, "show", pointID);
@@ -1919,7 +1920,7 @@ internal void DEBUGOverlay(EditorLayout* layout);
 internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 deltaMouseP, PlatformInput* input)
 {
     EditorUIContext* context = &worldMode->editorUI;
-    Vec2 mouseP = worldMode->relativeScreenMouseP;
+    Vec2 mouseP = worldMode->screenMouseP - 0.5f * group->screenDim;
     if(Pressed(&context->input->editorButton))
     {
         context->showEditor = !context->showEditor;

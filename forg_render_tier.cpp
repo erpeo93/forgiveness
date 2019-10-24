@@ -912,7 +912,7 @@ inline void SoftwareRenderCommands( PlatformWorkQueue* renderQueue, GameRenderCo
     platformAPI.CompleteQueueWork( renderQueue );
 }
 
-internal Rect2i AspectRatioFit( i32 renderWidth, i32 renderHeight, i32 windowWidth, i32 windowHeight )
+internal Rect2i AspectRatioFit(i32 renderWidth, i32 renderHeight, i32 windowWidth, i32 windowHeight)
 {
     Rect2i result = {};
     if( ( renderWidth > 0 && renderHeight > 0 && windowWidth > 0 && windowHeight > 0 ) )

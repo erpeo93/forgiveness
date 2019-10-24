@@ -1085,6 +1085,35 @@ inline Vec2 ProjectOnScreen(RenderGroup* group, Vec3 worldP, r32* clipZ)
     return result;
 }
 
+inline Rect2 ProjectOnScreenCameraAligned(RenderGroup* group, Vec3 P, Rect2 worldSpaceBounds, r32* cameraZ = 0)
+{
+    Vec2 center = GetCenter(worldSpaceBounds);
+    Vec2 halfDim = 0.5f * GetDim(worldSpaceBounds);
+    
+    Vec3 X = group->gameCamera.X;
+    Vec3 Y = group->gameCamera.Y;
+    Vec3 Z = group->gameCamera.Z;
+    
+    Vec3 origin = P + center.x * X + center.y * Y;
+    
+    Vec3 minXminY = origin - halfDim.x * X - halfDim.y * Y;
+    Vec3 maxXmaxY = origin + halfDim.x * X + halfDim.y * Y;
+    
+    r32 minZ, maxZ;
+    
+    Vec2 minScreen = ProjectOnScreen(group, minXminY, &minZ);
+    Vec2 maxScreen = ProjectOnScreen(group, maxXmaxY, &maxZ);
+    
+    if(cameraZ)
+    {
+        *cameraZ = Min(minZ, maxZ);
+    }
+    
+    Rect2 result = RectMinMax(minScreen, maxScreen);
+    
+    return result;
+}
+
 inline Rect2 ProjectOnScreen(RenderGroup* group, BitmapDim dim)
 {
     r32 cameraZ;
@@ -1114,35 +1143,6 @@ inline Rect2 ProjectOnScreen(RenderGroup* group, BitmapDim dim)
     }
     
     Rect2 result = RectMinMax(V2(minX, minY), V2(maxX, maxY));
-    return result;
-}
-
-inline Rect2 ProjectOnScreenCameraAligned(RenderGroup* group, Vec3 P, Rect2 worldSpaceBounds, r32* cameraZ = 0)
-{
-    Vec2 center = GetCenter(worldSpaceBounds);
-    Vec2 halfDim = 0.5f * GetDim(worldSpaceBounds);
-    
-    Vec3 X = group->gameCamera.X;
-    Vec3 Y = group->gameCamera.Y;
-    Vec3 Z = group->gameCamera.Z;
-    
-    Vec3 origin = P + center.x * X + center.y * Y;
-    
-    Vec3 minXminY = origin - halfDim.x * X - halfDim.y * Y;
-    Vec3 maxXmaxY = origin + halfDim.x * X + halfDim.y * Y;
-    
-    r32 minZ, maxZ;
-    
-    Vec2 minScreen = ProjectOnScreen(group, minXminY, &minZ);
-    Vec2 maxScreen = ProjectOnScreen(group, maxXmaxY, &maxZ);
-    
-    if(cameraZ)
-    {
-        *cameraZ = Min(minZ, maxZ);
-    }
-    
-    Rect2 result = RectMinMax(minScreen, maxScreen);
-    
     return result;
 }
 

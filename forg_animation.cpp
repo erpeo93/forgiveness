@@ -435,7 +435,7 @@ internal r32 GetModulationPercentageAndResetFocus(BaseComponent* base)
     return result;
 }
 
-internal Rect2 RenderAttachedPieces(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutPiece* pieces, u32 pieceCount, u64 nameHash, u32 seed, Lights lights);
+internal Rect2 RenderLayout(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights);
 internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, u64 hash, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights)
 {
     Assert(hash);
@@ -464,7 +464,7 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                         finalTransform.modulationPercentage = GetModulationPercentageAndResetFocus(equipmentBase);
                     }
                     
-                    mapping->projectedOnScreen = RenderAttachedPieces(group, P, finalTransform, equipmentLayout->pieces, equipmentLayout->pieceCount, equipmentLayout->rootHash, equipmentBase->seed, lights);
+                    mapping->projectedOnScreen = RenderLayout(group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights);
                 }
                 break;
             }
@@ -488,6 +488,7 @@ internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
                 ObjectTransform attachmentTransform = transform;
                 attachmentTransform.angle += point->angle;
                 attachmentTransform.scale = Hadamart(attachmentTransform.scale, point->scale);
+                attachmentTransform.additionalZBias = point->zOffset;
                 RenderAttachmentPoint(worldMode, group, P, pointHash, attachmentTransform, mappings, mappingCount, alreadyRendered, lights);
             }
         }

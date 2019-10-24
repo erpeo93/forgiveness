@@ -32,6 +32,7 @@ struct PAKAttachmentPoint
     Vec2 alignment;
     Vec2 scale;
     r32 angle;
+    r32 zOffset;
 };
 
 struct PAKGroupName
@@ -39,7 +40,7 @@ struct PAKGroupName
     char name[32];
 };
 
-#define PAK_BITMAP_VERSION 6
+#define PAK_BITMAP_VERSION 7
 struct PAKBitmap
 {
     u64 nameHash;

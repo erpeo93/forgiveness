@@ -20,6 +20,7 @@ inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, Vec
 internal void UpdateAndSetupGameCamera(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input, Vec2 dMouseP)
 {
     
+#if 0    
     if(input->altDown && IsDown(&input->mouseLeft))
     {
         r32 rotationSpeed = 0.001f * PI32;
@@ -31,6 +32,7 @@ internal void UpdateAndSetupGameCamera(GameModeWorld* worldMode, RenderGroup* gr
         r32 zoomSpeed = (worldMode->debugCameraDolly) * 0.01f;
         worldMode->debugCameraDolly -= zoomSpeed * dMouseP.y;
     }
+#endif
     
     worldMode->cameraPitch = 0.32f * PI32;
     worldMode->cameraDolly = 0.0f;

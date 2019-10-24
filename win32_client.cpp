@@ -1554,9 +1554,6 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         gameInput.mouseX = renderCommands.settings.width * gameInput.normalizedMouseX;
                         gameInput.mouseY = renderCommands.settings.height * gameInput.normalizedMouseY;
                         
-                        gameInput.relativeMouseX = renderCommands.settings.width * (gameInput.normalizedMouseX - 0.5f);
-                        gameInput.relativeMouseY = renderCommands.settings.height * (gameInput.normalizedMouseY - 0.5f);
-                        
                         gameInput.shiftDown = ( GetKeyState( VK_SHIFT ) & ( 1 << 15 ) );
                         gameInput.altDown = ( GetKeyState( VK_MENU ) & ( 1 << 15 ) );
                         gameInput.ctrlDown = ( GetKeyState( VK_CONTROL ) & ( 1 << 15 ) );

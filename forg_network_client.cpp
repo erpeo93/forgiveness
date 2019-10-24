@@ -312,6 +312,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         params.seed = seed;
                         
                         InitFunc[GetArchetype(currentServerID)](worldMode, currentClientID, &definition->common, &params);
+                        
                         AddClientIDMapping(worldMode, currentServerID, currentClientID);
                     }
                 }

@@ -184,7 +184,8 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                     {
                         targetPhysic->flags = ClearFlags(targetPhysic->flags, EntityFlag_equipment);
                         equipment->IDs[equipIndex] = {};
-                    } break;
+                        break;
+                    }
                 }
             }
         } break;
@@ -524,7 +525,7 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime
                     for(u16 slotIndex = 0; slotIndex < Count_equipmentSlot; ++slotIndex)
                     {
                         EntityID equipmentID = equipment->IDs[slotIndex];
-                        if(IsValid(equipmentID))
+                        //if(IsValid(equipmentID))
                         {
                             QueueEquipmentID(player, ID, slotIndex, equipmentID);
                         }
@@ -536,7 +537,7 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime
                     for(u16 slotIndex = 0; slotIndex < Count_usingSlot; ++slotIndex)
                     {
                         EntityID usingID = equipped->IDs[slotIndex];
-                        if(IsValid(usingID))
+                        //if(IsValid(usingID))
                         {
                             QueueUsingID(player, ID, slotIndex, usingID);
                         }

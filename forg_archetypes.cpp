@@ -123,11 +123,12 @@ INIT_ENTITY(PortalArchetype)
 
 #else
 
-internal void InitBaseComponent(BaseComponent* base, Vec3 boundOffset, Vec3 boundDim, u32 seed, u64 nameHash)
+internal void InitBaseComponent(BaseComponent* base, Vec3 boundOffset, Vec3 boundDim, u32 seed, u64 nameHash, EntityID serverID)
 {
     base->seed = seed;
     base->bounds = StandardBounds(boundDim, boundOffset);
     base->nameHash = nameHash;
+    base->serverID = serverID;
 }
 
 internal void InitShadow(ShadowComponent* shadow, ClientEntityInitParams* params)
@@ -161,7 +162,7 @@ INIT_ENTITY(AnimalArchetype)
     CommonEntityInitParams* common = (CommonEntityInitParams*) com;
     
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name));
+    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name), params->ID);
     
     AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
     animation->skeletonHash =params->skeleton.subtypeHash;
@@ -181,7 +182,7 @@ INIT_ENTITY(RockArchetype)
     
     
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name));
+    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name), params->ID);
     
     RockComponent* dest = GetComponent(worldMode, ID, RockComponent);
     
@@ -201,7 +202,7 @@ INIT_ENTITY(PlantArchetype)
     Assets* assets = worldMode->gameState->assets;
     
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name));
+    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name), params->ID);
     
     PlantComponent* dest = GetComponent(worldMode, ID, PlantComponent);
     InitImageReference(assets, &dest, &params, leaf);
@@ -221,7 +222,7 @@ INIT_ENTITY(GrassArchetype)
     CommonEntityInitParams* common = (CommonEntityInitParams*) com;
     
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name));
+    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name), params->ID);
     
     GrassComponent* dest = GetComponent(worldMode, ID, GrassComponent);
     
@@ -239,7 +240,7 @@ INIT_ENTITY(ObjectArchetype)
     CommonEntityInitParams* common = (CommonEntityInitParams*) com;
     
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name));
+    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name), params->ID);
     
     LayoutComponent* dest = GetComponent(worldMode, ID, LayoutComponent);
     InitShadow(&dest->shadow, params);
@@ -275,7 +276,7 @@ INIT_ENTITY(PortalArchetype)
     Assets* assets = worldMode->gameState->assets;
     
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name));
+    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name), params->ID);
     
     ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
     InitImageReference(assets, &image, &params, entity);

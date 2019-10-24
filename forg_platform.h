@@ -111,9 +111,6 @@ struct PlatformInput
     r32 normalizedMouseX;
     r32 normalizedMouseY;
     
-    r32 relativeMouseX;
-    r32 relativeMouseY;
-    
     i32 mouseWheelOffset;
     
     b32 isDown[0xff];

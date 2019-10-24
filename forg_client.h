@@ -56,6 +56,7 @@ struct BaseComponent
     GameProperty action;
     u32 flags;
     b32 isOnFocus;
+    EntityID serverID;
 };
 
 struct ImageReference
@@ -154,6 +155,24 @@ struct ServerClientIDMapping
     };
 };
 
+enum EntityInteractionType
+{
+    EntityInteraction_Inventory,
+    EntityInteraction_Standard,
+};
+
+struct EntityHotInteraction
+{
+    u32 type;
+    EntityID ID;
+};
+
+inline b32 AreEqual(EntityHotInteraction i1, EntityHotInteraction i2)
+{
+    b32 result = (i1.type == i2.type && AreEqual(i1.ID, i2.ID));
+    return result;
+}
+
 struct GameModeWorld
 {
     struct GameState* gameState;
@@ -205,8 +224,7 @@ struct GameModeWorld
     b32 canAdvance;
 #endif
     
-    Vec3 worldMouseP;
-    Vec2 relativeScreenMouseP;
+    Vec2 screenMouseP;
     
     
     b32 voronoiValid;
@@ -242,9 +260,8 @@ struct GameModeWorld
     
     i32 currentHotIndex;
     u32 hotCount;
-    EntityID hotIDs[8];
-    
-    EntityID lastFrameHotID;
+    EntityHotInteraction hotInteractions[8];
+    EntityHotInteraction lastFrameHotInteraction;
 };
 
 enum GameMode
