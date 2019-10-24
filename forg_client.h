@@ -105,24 +105,6 @@ global_variable ArchetypeLayout archetypeLayouts[Archetype_Count];
 global_variable PlatformAPI platformAPI;
 
 
-printTable(noPrefix) enum ForgDayPhase
-{
-    DayPhase_Day,
-    DayPhase_Sunrise,
-    DayPhase_Morning,
-    DayPhase_Sunset,
-    DayPhase_Dusk,
-    DayPhase_Night,
-};
-
-struct DayPhase
-{
-    r32 duration;
-    Vec3 ambientLightColor;
-    ForgDayPhase next;
-};
-
-
 struct ReceivingAssetFile
 {
     MemoryPool memory;
@@ -149,17 +131,9 @@ struct ClientPlayer
 {
     EntityID serverID;
     EntityID clientID;
+    
     UniversePos universeP;
     UniversePos oldUniverseP;
-    
-    Vec3 acceleration;
-    Vec3 velocity;
-    r32 distanceCoeffFromServerP;
-    
-    u64 targetIdentifier;
-    u64 overlappingIdentifier;
-    
-    u64 openedContainerID;
     
     ReceivingAssetFile receiveFileSentinel;
     
@@ -184,9 +158,9 @@ struct GameModeWorld
 {
     struct GameState* gameState;
     
-    WorldSeason season;
-    r32 seasonLerp;
-    
+    b32 inventoryMode;
+    EntityID openIDLeft;
+    EntityID openIDRight;
     
     u32 worldSeed;
     b32 editingEnabled;

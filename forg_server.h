@@ -64,11 +64,6 @@ struct FileToSend
     };
 };
 
-struct PlayerRequest
-{
-    u8 data[512];
-};
-
 struct PhysicComponent
 {
     UniversePos P;
@@ -104,6 +99,9 @@ struct PlayerComponent
     
     u16 expectingCommandIndex;
     GameCommand requestCommand;
+    
+    b32 inventoryCommandValid;
+    GameCommand inventoryCommand;
     
     FileHash* firstFileHash;
     

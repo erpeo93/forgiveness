@@ -138,13 +138,6 @@ internal void QueueGameAccessConfirm(PlayerComponent* player, u32 worldSeed, Ent
     QueueOrderedPacket(player);
 }
 
-internal void QueueWorldInfo(PlayerComponent* player, WorldSeason season, r32 seasonLerp)
-{
-    StartPacket(player, worldInfo);
-    Pack("Cd", SafeTruncateToU8(season), seasonLerp);
-    QueueStandardPacket(player);
-}
-
 internal u16 PrepareEntityUpdate(ServerState* server, PhysicComponent* physic, unsigned char* buff_)
 {
     UniversePos P = physic->P;

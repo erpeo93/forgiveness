@@ -11,6 +11,7 @@ struct UsingComponent
 
 struct ObjectMapping
 {
+    Rect2 projectedOnScreen;
     u64 slotHash;
     u64 pieceHash;
     EntityID ID;
@@ -34,5 +35,17 @@ enum EntityFlags
 inline b32 IsSet(u32 flags, u32 flag)
 {
     b32 result = ((flags & flag) == flag);
+    return result;
+}
+
+inline u32 AddFlags(u32 flags, u32 flag)
+{
+    u32 result = (flags | flag);
+    return result;
+}
+
+inline u32 ClearFlags(u32 flags, u32 flag)
+{
+    u32 result = (flags & ~flag);
     return result;
 }

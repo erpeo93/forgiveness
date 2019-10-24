@@ -118,16 +118,6 @@ internal r32 GetDeepness(BaseComponent* base)
     return height;
 }
 
-internal r32 GetModulationPercentageAndResetFocus(BaseComponent* base)
-{
-    r32 result = 0;
-    if(base->isOnFocus)
-    {
-        result = 0.7f;
-        base->isOnFocus = false;
-    }
-    return result;
-}
 internal b32 ShouldBeRendered(GameModeWorld* worldMode, BaseComponent* base)
 
 {
@@ -325,8 +315,10 @@ RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
     }
 }
 
-internal void RenderAttachedPieces(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutPiece* pieces, u32 pieceCount, u64 nameHash, u32 seed, Lights lights)
+internal Rect2 RenderAttachedPieces(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutPiece* pieces, u32 pieceCount, u64 nameHash, u32 seed, Lights lights)
 {
+    Rect2 result = InvertedInfinityRect2();
+    
     RandomSequence seq = Seed(seed);
     for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
     {
@@ -339,6 +331,7 @@ internal void RenderAttachedPieces(RenderGroup* group, Vec3 P, ObjectTransform t
                 transform.additionalZBias = 0.01f * pieceIndex;
                 BitmapDim dim = PushBitmap(group, transform, BID, P, 0, V4(1, 1, 1, 1), lights);
                 
+                result = ProjectOnScreen(group, dim);
                 PAKBitmap* bitmap = GetBitmapInfo(group->assets, BID);
                 for(u32 attachmentIndex = 0; attachmentIndex < bitmap->attachmentPointCount; ++attachmentIndex)
                 {
@@ -351,12 +344,15 @@ internal void RenderAttachedPieces(RenderGroup* group, Vec3 P, ObjectTransform t
                         finalTransform.angle += attachmentPoint->angle;
                         finalTransform.scale = Hadamart(finalTransform.scale, attachmentPoint->scale);
                         
-                        RenderAttachedPieces(group, newP, finalTransform, pieces, pieceCount, StringHash(attachmentPoint->name), seed, lights);
+                        Rect2 subRect = RenderAttachedPieces(group, newP, finalTransform, pieces, pieceCount, StringHash(attachmentPoint->name), seed, lights);
+                        result = Union(result, subRect);
                     }
                 }
             }
         }
     }
+    
+    return result;
 }
 
 RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
@@ -398,7 +394,7 @@ RENDERING_ECS_JOB_CLIENT(RenderBound)
     }
 }
 
-internal void HandleKeyboardInteraction(ClientPlayer* player, PlatformInput* input)
+internal void HandleKeyboardInteraction(GameModeWorld* worldMode, ClientPlayer* player, PlatformInput* input)
 {
     GameCommand* command = &player->currentCommand;
     
@@ -427,6 +423,103 @@ internal void HandleKeyboardInteraction(ClientPlayer* player, PlatformInput* inp
     {
         command->action = move;
     }
+    
+    if(Pressed(&input->mouseRight))
+    {
+        worldMode->inventoryMode = !worldMode->inventoryMode;
+    }
+}
+
+internal void HandleEquipmentInteraction(GameModeWorld* worldMode, PlatformInput* input, EntityID ID)
+{
+    EquipmentMappingComponent* equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
+    if(equipment)
+    {
+        for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->mappings); ++equipIndex)
+        {
+            ObjectMapping* mapping = equipment->mappings + equipIndex;
+            if(PointInRect(mapping->projectedOnScreen, worldMode->relativeScreenMouseP))
+            {
+                BaseComponent* base = GetComponent(worldMode, mapping->ID, BaseComponent);
+                base->isOnFocus = true;
+                
+                if(Pressed(&input->mouseLeft))
+                {
+                    if(AreEqual(mapping->ID, worldMode->openIDLeft))
+                    {
+                        worldMode->openIDLeft = {};
+                    }
+                    else if(AreEqual(mapping->ID, worldMode->openIDRight))
+                    {
+                        worldMode->openIDRight = {};
+                    }
+                    else
+                    {
+                        if(!IsValid(worldMode->openIDLeft))
+                        {
+                            worldMode->openIDLeft = mapping->ID;
+                        }
+                        else if(!IsValid(worldMode->openIDRight))
+                        {
+                            worldMode->openIDRight = mapping->ID;
+                        }
+                    }
+                }
+                
+                if(Pressed(&input->mouseRight))
+                {
+                    GameCommand command = {};
+                    command.action = disequip;
+                    command.targetID = mapping->ID;
+                    SendInventoryCommand(command);
+                }
+            }
+        }
+    }
+}
+
+internal void DrawOpenedContainers(GameModeWorld* worldMode, RenderGroup* group)
+{
+    if(IsValid(worldMode->openIDLeft))
+    {
+        SetOrthographicTransformScreenDim(group);
+        
+        BaseComponent* base = GetComponent(worldMode, worldMode->openIDLeft, BaseComponent);
+        LayoutComponent* layout = GetComponent(worldMode, worldMode->openIDLeft, LayoutComponent);
+        
+        ObjectTransform transform = FlatTransform(10.0f);
+        transform.angle = layout->rootAngle;
+        transform.scale = layout->rootScale * 10;
+        transform.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
+        
+        RenderAttachedPieces(group, V3(0, 0, 0), transform, layout->pieces, layout->pieceCount, layout->rootHash, base->seed, {});
+        
+#if 0        
+        for(each object of container)
+        {
+            Draw();
+            if(PointInRect())
+            {
+                if(Pressed)
+                {
+                    SendAsyncCommand(use, ID);
+                }
+            }
+        }
+#endif
+        
+    }
+}
+
+internal void DrawUsingSlots()
+{
+    
+#if 0    
+    SetOrthographicTransformScreenDim(group);
+    Draw(leftHand, V2(0, -400));
+    Draw(rightHand, V2(0, 400));
+#endif
+    
 }
 
 INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
@@ -518,13 +611,20 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             ResetLightGrid(worldMode);
             
             MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), 1.0f);
-            UpdateAndSetupGameCamera(worldMode, group, input);
-            
             UpdateEntities(worldMode, input->timeToAdvance, myPlayer);
             
             worldMode->hotCount = 0;
-            HandleKeyboardInteraction(myPlayer, input);
+            HandleKeyboardInteraction(worldMode, myPlayer, input);
             EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent), input->timeToAdvance);
+            if(worldMode->inventoryMode)
+            {
+                MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), 2.0f);
+                
+                HandleEquipmentInteraction(worldMode, input, myPlayer->clientID);
+                DrawOpenedContainers(worldMode, group);
+            }
+            DrawUsingSlots();
+            
             
             if(worldMode->hotCount > 0)
             {
@@ -552,12 +652,12 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 if(Pressed(&input->mouseLeft))
                 {
                     GameCommand* command = &myPlayer->currentCommand;
-                    command->action = equip;
+                    command->action = pick;
                     command->targetID = hotID;
                 }
             }
             
-            
+            UpdateAndSetupGameCamera(worldMode, group, input, deltaMouseScreenP);
             BeginDepthPeel(group);
             
             Vec3 ambientLightColor = HandleDaynightCycle(worldMode, input);

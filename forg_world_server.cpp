@@ -71,94 +71,137 @@ internal EntityRef EntityReference(ServerState* server, char* kind, char* type)
     return result;
 }
 
-STANDARD_ECS_JOB_SERVER(HandlePlayerCommands)
+internal b32 FindPlace(EntityID* IDs, u32 idCount, EntityID ID)
 {
-    PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
-    if(player)
+    b32 result = false;
+    for(u32 idIndex = 0; idIndex < idCount; ++idIndex)
     {
-        GameCommand* command = &player->requestCommand;
-        
-        switch(command->action)
+        if(!IsValid(IDs[idIndex]))
         {
-            case idle:
-            case move:
+            IDs[idIndex] = ID;
+            result = true;
+            break;
+        }
+    }
+    
+    return result;
+}
+
+internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* command)
+{
+    
+    switch(command->action)
+    {
+        case idle:
+        case move:
+        {
+            if(HasComponent(ID, PhysicComponent))
             {
-                if(HasComponent(ID, PhysicComponent))
-                {
-                    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-                    physic->acc = command->acceleration;
-                }
-            } break;
-            
-            case equip:
+                PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+                physic->acc = command->acceleration;
+            }
+        } break;
+        
+        case pick:
+        {
+            if(HasComponent(ID, PhysicComponent))
             {
-                if(HasComponent(ID, PhysicComponent))
+                PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+                physic->acc = {};
+                
+                EntityID targetID = command->targetID;
+                if(IsValid(targetID) && HasComponent(targetID, PhysicComponent))
                 {
-                    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-                    physic->acc = {};
+                    PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
                     
-                    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-                    if(equipped)
+                    EntityRef ref = EntityReference(server, "default", "sword");
+                    EntityRef ref2 = EntityReference(server, "default", "bag");
+                    
+                    if(!IsSet(targetPhysic->flags, EntityFlag_equipment) && 
+                       targetPhysic->P.chunkZ == physic->P.chunkZ)
                     {
-                        EntityRef ref = EntityReference(server, "default", "sword");
-                        EntityID targetID = command->targetID;
-                        
-                        if(IsValid(targetID) && HasComponent(targetID, PhysicComponent))
+                        if(AreEqual(targetPhysic->definitionID, ref))
                         {
-                            PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
-                            if(!IsSet(targetPhysic->flags, EntityFlag_equipment) && 
-                               targetPhysic->P.chunkZ == physic->P.chunkZ && 
-                               AreEqual(targetPhysic->definitionID, ref))
+                            UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+                            if(equipped)
                             {
-                                for(u32 equippedIndex = 0; equippedIndex < ArrayCount(equipped->IDs); ++equippedIndex)
+                                if(FindPlace(equipped->IDs, ArrayCount(equipped->IDs), targetID))
                                 {
-                                    if(!IsValid(equipped->IDs[equippedIndex]))
-                                    {
-                                        equipped->IDs[equippedIndex] = targetID;
-                                        targetPhysic->flags |= EntityFlag_equipment;
-                                        break;
-                                    }
+                                    targetPhysic->flags = AddFlags(targetPhysic->flags, EntityFlag_equipment);
+                                }
+                            }
+                        }
+                        
+                        if(AreEqual(targetPhysic->definitionID, ref2))
+                        {
+                            EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+                            if(equipment)
+                            {
+                                if(FindPlace(equipment->IDs, ArrayCount(equipment->IDs), targetID))
+                                {
+                                    targetPhysic->flags = AddFlags(targetPhysic->flags, EntityFlag_equipment);
                                 }
                             }
                         }
                     }
                 }
-            } break;
-        }
+            }
+        } break;
         
-#if 0        
-        for(u32 requestIndex = 0; requestIndex < player->requestCount; ++requestIndex)
+        case use:
         {
-            PlayerRequest* request = player->requests + requestIndex;
-            unsigned char* data = request->data;
-            ForgNetworkHeader header;
-            data = ForgUnpackHeader(data, &header);
-            switch(header.packetType)
+            EntityID targetID = command->targetID;
+            EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+            UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+            if(equipment && equipped)
             {
-                case Type_ActionRequest:
+                for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->IDs); ++equipIndex)
                 {
-                    Vec3 acc;
-                    unpack(data, "V", &acc);
-                    
-                } break;
-                
-                case Type_MoveChunkZ:
-                {
-                    if(HasComponent(ID, PhysicComponent))
+                    if(AreEqual(equipment->IDs[equipIndex], targetID))
                     {
-                        PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-                        if(++physic->P.chunkZ == (i32) server->maxDeepness)
+                        if(FindPlace(equipped->IDs, ArrayCount(equipped->IDs), targetID))
                         {
-                            physic->P.chunkZ = 0;
+                            equipment->IDs[equipIndex] = {};
                         }
                     }
-                } break;
-                InvalidDefaultCase;
+                }
             }
-        }
-        player->requestCount = 0;
-#endif
+        } break;
         
+        case disequip:
+        {
+            EntityID targetID = command->targetID;
+            
+            PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
+            EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+            UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+            
+            if(equipment && equipped && targetPhysic)
+            {
+                for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->IDs); ++equipIndex)
+                {
+                    if(AreEqual(equipment->IDs[equipIndex], targetID))
+                    {
+                        targetPhysic->flags = ClearFlags(targetPhysic->flags, EntityFlag_equipment);
+                        equipment->IDs[equipIndex] = {};
+                    } break;
+                }
+            }
+        } break;
+    }
+}
+
+STANDARD_ECS_JOB_SERVER(HandlePlayerCommands)
+{
+    PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
+    if(player)
+    {
+        DispatchCommand(server, ID, &player->requestCommand);
+        if(player->inventoryCommandValid)
+        {
+            DispatchCommand(server, ID, &player->inventoryCommand);
+            player->inventoryCommandValid = false;
+        }
     }
 }
 

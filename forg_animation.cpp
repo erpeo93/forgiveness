@@ -424,7 +424,18 @@ inline void ApplyAssAlterations(PieceAss* ass, AssAlteration* assAlt, Bone* pare
 }
 #endif
 
-internal void RenderAttachedPieces(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutPiece* pieces, u32 pieceCount, u64 nameHash, u32 seed, Lights lights);
+internal r32 GetModulationPercentageAndResetFocus(BaseComponent* base)
+{
+    r32 result = 0;
+    if(base->isOnFocus)
+    {
+        result = 0.7f;
+        base->isOnFocus = false;
+    }
+    return result;
+}
+
+internal Rect2 RenderAttachedPieces(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutPiece* pieces, u32 pieceCount, u64 nameHash, u32 seed, Lights lights);
 internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, u64 hash, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights)
 {
     Assert(hash);
@@ -438,16 +449,22 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                 alreadyRendered[mappingIndex] = true;
                 
                 EntityID equipmentID = mapping->ID;
+                
                 BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);
                 LayoutComponent* equipmentLayout = GetComponent(worldMode, equipmentID, LayoutComponent);
                 
                 if(equipmentBase && equipmentLayout)
                 {
                     ObjectTransform finalTransform = transform;
-                    finalTransform.angle += equipmentLayout->rootAngle;;
+                    finalTransform.angle += equipmentLayout->rootAngle;
                     finalTransform.scale = Hadamart(finalTransform.scale, equipmentLayout->rootScale);
                     
-                    RenderAttachedPieces(group, P, finalTransform, equipmentLayout->pieces, equipmentLayout->pieceCount, equipmentLayout->rootHash, equipmentBase->seed, lights);
+                    if(equipmentBase->isOnFocus)
+                    {
+                        finalTransform.modulationPercentage = GetModulationPercentageAndResetFocus(equipmentBase);
+                    }
+                    
+                    mapping->projectedOnScreen = RenderAttachedPieces(group, P, finalTransform, equipmentLayout->pieces, equipmentLayout->pieceCount, equipmentLayout->rootHash, equipmentBase->seed, lights);
                 }
                 break;
             }

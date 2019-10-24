@@ -93,6 +93,13 @@ internal void SendCommand(u16 index, GameCommand command)
     CloseAndSendStandardPacket();
 }
 
+internal void SendInventoryCommand(GameCommand command)
+{
+    StartPacket(InventoryCommand);
+    Pack("HL", command.action, command.targetID);
+    CloseAndSendOrderedPacket();
+}
+
 inline void SendMovePlayerRequest(Vec3 offset)
 {
     StartPacket(MovePlayerInOtherRegion);
@@ -270,11 +277,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     }
                     EXECUTE_JOB(worldMode, DeleteEntities, true, 0);
                 }
-            } break;
-            
-            case Type_worldInfo:
-            {
-                Unpack("Cd", &worldMode->season, &worldMode->seasonLerp);
             } break;
             
             case Type_entityHeader:

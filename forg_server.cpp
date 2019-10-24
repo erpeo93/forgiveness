@@ -219,6 +219,20 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             }
         } break;
         
+        case Type_InventoryCommand:
+        {
+            u16 action;
+            EntityID targetID;
+            
+            unpack(packetPtr, "HL", &action, &targetID);
+            GameCommand* command = &player->inventoryCommand;
+            command->action = action;
+            command->targetID = targetID;
+            
+            Assert(!player->inventoryCommandValid);
+            player->inventoryCommandValid = true;
+        } break;
+        
         case Type_FileHeader:
         {
             u32 index;

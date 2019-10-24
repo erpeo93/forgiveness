@@ -409,6 +409,7 @@ inline Vec3 GetAlignP(BitmapDim dim, Vec2 alignment)
     return result;
 }
 
+
 inline BitmapDim GetBitmapDim(Bitmap* bitmap, Vec2 pivot, Vec3 P, Vec3 XAxis, Vec3 YAxis, r32 height, Vec2 scale = V2(1.0f, 1.0f))
 {
     BitmapDim result;
@@ -1081,6 +1082,38 @@ inline Vec2 ProjectOnScreen(RenderGroup* group, Vec3 worldP, r32* clipZ)
         
     }
     
+    return result;
+}
+
+inline Rect2 ProjectOnScreen(RenderGroup* group, BitmapDim dim)
+{
+    r32 cameraZ;
+    
+    Vec3 XAxis = dim.XAxis * dim.size.x;
+    Vec3 YAxis = dim.YAxis * dim.size.y;
+    
+    Vec2 Ps[4];
+    
+    Ps[0] = ProjectOnScreen(group, dim.P, &cameraZ);
+    Ps[1] = ProjectOnScreen(group, dim.P + XAxis, &cameraZ);
+    Ps[2] = ProjectOnScreen(group, dim.P + XAxis + YAxis, &cameraZ);
+    Ps[3] = ProjectOnScreen(group, dim.P + YAxis, &cameraZ);
+    
+    r32 minX = R32_MAX;
+    r32 minY = R32_MAX;
+    r32 maxX = R32_MIN;
+    r32 maxY = R32_MIN;
+    
+    for(u32 pIndex = 0; pIndex < ArrayCount(Ps); ++pIndex)
+    {
+        Vec2 P = Ps[pIndex];
+        minX = Min(minX, P.x);
+        minY = Min(minY, P.y);
+        maxX = Max(maxX, P.x);
+        maxY = Max(maxY, P.y);
+    }
+    
+    Rect2 result = RectMinMax(V2(minX, minY), V2(maxX, maxY));
     return result;
 }
 

@@ -31,7 +31,9 @@ char* MetaTable_action[] =
 "idle",
 "move",
 "attack",
-"equip",
+"pick",
+"use",
+"disequip",
 };
 
 char* MetaTable_essence[] = 

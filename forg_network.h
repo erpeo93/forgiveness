@@ -155,9 +155,9 @@ enum Packet_Type
     Type_login,
     Type_loginFileTransferBegin,
     Type_gameAccess,
-    Type_worldInfo,
     
     Type_Command,
+    Type_InventoryCommand,
     
     Type_entityHeader,
     Type_entityBasics,

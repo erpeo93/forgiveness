@@ -1,18 +1,3 @@
-inline b32 ActionRequiresZooming(u32 action, r32* zoomLevel)
-{
-    b32 result = false;
-    
-#if 0    
-    if(action == Action_Open)
-    {
-        result = true;
-        *zoomLevel = Max(*zoomLevel, 3.8f);
-    }
-#endif
-    
-    return result;
-}
-
 inline Vec3 GetRelativeP(GameModeWorld* worldMode, BaseComponent* base)
 {
     Vec3 result = SubtractOnSameZChunk(base->universeP, worldMode->player.universeP);
@@ -29,15 +14,12 @@ inline void MoveTowards_(GameModeWorld* worldMode, Vec2 cameraWorldOffset, Vec2 
 inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, Vec2 cameraWorldOffset = V2(0, 0), Vec2 cameraEntityOffset = V2(0, 0), r32 zoomCoeff = 1.0f)
 {
     cameraWorldOffset += GetRelativeP(worldMode, base).xy;
-    //cameraEntityOffset += entityC->animation.cameraEntityOffset;
-    
     MoveTowards_(worldMode, cameraWorldOffset, cameraEntityOffset, zoomCoeff);
 }
 
-internal void UpdateAndSetupGameCamera(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
+internal void UpdateAndSetupGameCamera(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input, Vec2 dMouseP)
 {
     
-#if 0    
     if(input->altDown && IsDown(&input->mouseLeft))
     {
         r32 rotationSpeed = 0.001f * PI32;
@@ -49,7 +31,6 @@ internal void UpdateAndSetupGameCamera(GameModeWorld* worldMode, RenderGroup* gr
         r32 zoomSpeed = (worldMode->debugCameraDolly) * 0.01f;
         worldMode->debugCameraDolly -= zoomSpeed * dMouseP.y;
     }
-#endif
     
     worldMode->cameraPitch = 0.32f * PI32;
     worldMode->cameraDolly = 0.0f;
