@@ -75,7 +75,7 @@ struct GrassComponent
     
 };
 
-struct ImageComponent
+struct StandardImageComponent
 {
     ShadowComponent shadow;
     ImageReference entity;
@@ -98,10 +98,14 @@ struct LayoutComponent
     LayoutPiece pieces[8];
 };
 
+struct LayoutContainer
+{
+    u32 currentObjectIndex;
+    ContainerMappingComponent* container;
+};
 
 #include "forg_archetypes.h"
 #include "client_generated.h"
-global_variable Initentity* InitFunc[Archetype_Count];
 global_variable ArchetypeLayout archetypeLayouts[Archetype_Count];
 global_variable PlatformAPI platformAPI;
 
@@ -157,8 +161,9 @@ struct ServerClientIDMapping
 
 enum EntityInteractionType
 {
-    EntityInteraction_Inventory,
     EntityInteraction_Standard,
+    EntityInteraction_Inventory,
+    EntityInteraction_Container,
 };
 
 struct EntityHotInteraction

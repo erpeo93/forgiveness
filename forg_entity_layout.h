@@ -9,6 +9,14 @@ struct UsingComponent
     EntityID IDs[Count_usingSlot];
 };
 
+#define MAX_CONTAINER_OBJECT 64
+struct ContainerComponent
+{
+    u32 maxObjectCount;
+    u32 objectCount;
+    EntityID IDs[MAX_CONTAINER_OBJECT];
+};
+
 struct ObjectMapping
 {
     Rect2 projectedOnScreen;
@@ -27,9 +35,14 @@ struct UsingMappingComponent
     ObjectMapping mappings[Count_usingSlot];
 };
 
+struct ContainerMappingComponent
+{
+    ObjectMapping mappings[MAX_CONTAINER_OBJECT];
+};
+
 enum EntityFlags
 {
-    EntityFlag_equipment = (1 << 0),
+    EntityFlag_notInWorld = (1 << 0),
 };
 
 inline b32 IsSet(u32 flags, u32 flag)

@@ -22,7 +22,7 @@ Archetype() struct RockArchetype
 #else
     BaseComponent base;
     RockComponent rock;
-    ImageComponent image;
+    StandardImageComponent image;
 #endif
 };
 
@@ -33,8 +33,8 @@ Archetype() struct PlantArchetype
     PlayerComponent* player;
 #else
     BaseComponent base;
-    PlantComponent rock;
-    ImageComponent image;
+    PlantComponent plant;
+    StandardImageComponent image;
 #endif
 };
 
@@ -45,8 +45,8 @@ Archetype() struct GrassArchetype
     PlayerComponent* player;
 #else
     BaseComponent base;
-    GrassComponent rock;
-    ImageComponent image;
+    GrassComponent grass;
+    StandardImageComponent image;
 #endif
 };
 
@@ -62,6 +62,19 @@ Archetype() struct ObjectArchetype
 #endif
 };
 
+Archetype() struct ContainerArchetype
+{
+#ifdef FORG_SERVER
+    PhysicComponent physic;
+    EffectComponent effect;
+    ContainerComponent container;
+#else
+    BaseComponent base;
+    LayoutComponent layout;
+    ContainerMappingComponent container;
+#endif
+};
+
 Archetype() struct PortalArchetype
 {
 #ifdef FORG_SERVER
@@ -69,7 +82,7 @@ Archetype() struct PortalArchetype
     CollisionEffectsComponent collision;
 #else
     BaseComponent base;
-    ImageComponent image;
+    StandardImageComponent image;
 #endif
 };
 

@@ -435,7 +435,7 @@ internal r32 GetModulationPercentageAndResetFocus(BaseComponent* base)
     return result;
 }
 
-internal Rect2 RenderLayout(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights);
+internal Rect2 RenderLayout(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, struct LayoutContainer* container);
 internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, u64 hash, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights)
 {
     Assert(hash);
@@ -464,7 +464,10 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                         finalTransform.modulationPercentage = GetModulationPercentageAndResetFocus(equipmentBase);
                     }
                     
-                    mapping->projectedOnScreen = RenderLayout(group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights);
+                    LayoutContainer container = {};
+                    //container.container = GetComponent(worldMode, equipmentID, ContainerMappingComponent);
+                    
+                    mapping->projectedOnScreen = RenderLayout(worldMode, group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights, &container);
                 }
                 break;
             }

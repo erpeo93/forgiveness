@@ -17,6 +17,5 @@ internal void LoadMetaData()
 #else
     META_ARCHETYPES_CLIENT();
 #endif
-    META_ARCHETYPES_INIT_FUNC();
 }
 

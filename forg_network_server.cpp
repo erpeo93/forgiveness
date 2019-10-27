@@ -175,6 +175,14 @@ internal void QueueUsingID(PlayerComponent* player, EntityID ID, u16 slotIndex, 
     QueueStandardPacket(player, ID);
 }
 
+internal void QueueContainerID(PlayerComponent* player, EntityID ID, u16 slotIndex, EntityID objectID)
+{
+    StartPacket(player, ContainerMapping);
+    Pack("HL", slotIndex, objectID.archetype_archetypeIndex);
+    QueueStandardPacket(player, ID);
+}
+
+
 internal void QueueEffectDispatch(PlayerComponent* player, EntityID ID)
 {
     StartPacket(player, EffectDispatch);

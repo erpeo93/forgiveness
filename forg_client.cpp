@@ -122,7 +122,7 @@ internal b32 ShouldBeRendered(GameModeWorld* worldMode, BaseComponent* base)
 
 {
     b32 result = ((base->universeP.chunkZ == worldMode->player.universeP.chunkZ) &&
-                  !(base->flags & EntityFlag_equipment));
+                  !(base->flags & EntityFlag_notInWorld));
     return result;
 }
 
@@ -246,7 +246,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
         
         Vec3 P = GetRelativeP(worldMode, base);
         Lights lights = GetLights(worldMode, P);
-        ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
+        StandardImageComponent* image = GetComponent(worldMode, ID, StandardImageComponent);
         RenderShadow(worldMode, group, P, &image->shadow, deepness, width);
         
         r32 modulationPercentage = GetModulationPercentageAndResetFocus(base); 
@@ -301,7 +301,7 @@ RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
         
         Vec3 P = GetRelativeP(worldMode, base);
         Lights lights = GetLights(worldMode, P);
-        ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
+        StandardImageComponent* image = GetComponent(worldMode, ID, StandardImageComponent);
         RenderShadow(worldMode, group, P, &image->shadow, deepness, width);
         
         RandomSequence seq = Seed(base->seed);
@@ -315,13 +315,16 @@ RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
     }
 }
 
-internal Rect2 RenderLayoutRecursive_(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u64 nameHash, u32 seed, Lights lights)
+
+internal void RenderLayoutInRectCameraAligned(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, Vec3 rectP, Rect2 cameraRect, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container);
+internal void RenderLayoutInRect(GameModeWorld* worldMode, RenderGroup* group, Rect2 rect, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container);
+internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u64 nameHash, u32 seed, Lights lights, LayoutContainer* container)
 {
+    u64 emptySpaceHash = StringHash("emptySpace");
+    
     LayoutPiece* pieces = layout->pieces;
     u32 pieceCount = layout->pieceCount;
-    
     Rect2 result = InvertedInfinityRect2();
-    
     RandomSequence seq = Seed(seed);
     for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
     {
@@ -329,33 +332,68 @@ internal Rect2 RenderLayoutRecursive_(RenderGroup* group, Vec3 P, ObjectTransfor
         BitmapId BID = GetImageFromReference(group->assets, &piece->image, &seq);
         if(piece->nameHash == nameHash)
         {
-            if(IsValid(BID))
+            if((piece->nameHash != emptySpaceHash) || container->container)
             {
-                transform.additionalZBias += 0.01f * pieceIndex;
-                BitmapDim dim = PushBitmap(group, transform, BID, P, piece->height, V4(1, 1, 1, 1), lights);
-                if(transform.upright)
+                if(IsValid(BID))
                 {
-                    result = ProjectOnScreen(group, dim);
-                }
-                else
-                {
-                    result = RectMinDim(dim.P.xy, dim.size);
-                }
-                
-                PAKBitmap* bitmap = GetBitmapInfo(group->assets, BID);
-                for(u32 attachmentIndex = 0; attachmentIndex < bitmap->attachmentPointCount; ++attachmentIndex)
-                {
-                    PAKAttachmentPoint* attachmentPoint = GetAttachmentPoint(group->assets, BID, attachmentIndex);
-                    
-                    if(attachmentPoint)
+                    transform.additionalZBias += 0.01f * pieceIndex;
+                    BitmapDim dim = PushBitmap(group, transform, BID, P, piece->height, V4(1, 1, 1, 1), lights);
+                    if(transform.upright)
                     {
-                        Vec3 newP = GetAlignP(dim, attachmentPoint->alignment);
-                        ObjectTransform finalTransform = transform;
-                        finalTransform.angle += attachmentPoint->angle;
-                        finalTransform.scale = Hadamart(finalTransform.scale, attachmentPoint->scale);
+                        result = ProjectOnScreen(group, dim);
+                    }
+                    else
+                    {
+                        result = RectMinDim(dim.P.xy, dim.size);
+                    }
+                    
+                    if(piece->nameHash == emptySpaceHash && container->container)
+                    {
+                        ContainerMappingComponent* objects = container->container;
+                        if(container->currentObjectIndex < ArrayCount(objects->mappings))
+                        {
+                            ObjectMapping* mapping = objects->mappings + container->currentObjectIndex++;
+                            EntityID objectID = mapping->ID;
+                            
+                            if(IsValid(objectID))
+                            {
+                                BaseComponent* objectBase = GetComponent(worldMode, objectID, BaseComponent);
+                                transform.modulationPercentage = GetModulationPercentageAndResetFocus(objectBase);
+                                LayoutComponent* objectLayout = GetComponent(worldMode, objectID, LayoutComponent);
+                                if(objectBase && objectLayout)
+                                {
+                                    Rect2 objectRect = result;
+                                    LayoutContainer objectContainer = {};
+                                    
+                                    mapping->projectedOnScreen = Offset(result, 0.5f * group->screenDim);
+                                    if(transform.upright)
+                                    {
+                                        RenderLayoutInRectCameraAligned(worldMode, group, P, dim.P, objectRect, transform, objectLayout, objectBase->seed, lights, &objectContainer);
+                                    }
+                                    else
+                                    {
+                                        RenderLayoutInRect(worldMode, group, objectRect, transform, objectLayout, objectBase->seed, lights, &objectContainer);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    PAKBitmap* bitmap = GetBitmapInfo(group->assets, BID);
+                    for(u32 attachmentIndex = 0; attachmentIndex < bitmap->attachmentPointCount; ++attachmentIndex)
+                    {
+                        PAKAttachmentPoint* attachmentPoint = GetAttachmentPoint(group->assets, BID, attachmentIndex);
                         
-                        Rect2 subRect = RenderLayoutRecursive_(group, newP, finalTransform, layout, StringHash(attachmentPoint->name), seed, lights);
-                        result = Union(result, subRect);
+                        if(attachmentPoint)
+                        {
+                            Vec3 newP = GetAlignP(dim, attachmentPoint->alignment);
+                            ObjectTransform finalTransform = transform;
+                            finalTransform.angle += attachmentPoint->angle;
+                            finalTransform.scale = Hadamart(finalTransform.scale, attachmentPoint->scale);
+                            
+                            Rect2 subRect = RenderLayoutRecursive_(worldMode, group, newP, finalTransform, layout, StringHash(attachmentPoint->name), seed, lights, container);
+                            result = Union(result, subRect);
+                        }
                     }
                 }
             }
@@ -365,35 +403,57 @@ internal Rect2 RenderLayoutRecursive_(RenderGroup* group, Vec3 P, ObjectTransfor
     return result;
 }
 
-internal Rect2 RenderLayout(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights)
+internal Rect2 RenderLayout(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container)
 {
-    Rect2 result = RenderLayoutRecursive_(group, P, transform, layout, layout->rootHash, seed, lights);
+    Rect2 result = RenderLayoutRecursive_(worldMode, group, P, transform, layout, layout->rootHash, seed, lights, container);
     return result;
 }
 
 internal Rect2 GetLayoutDim(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed)
 {
     transform.dontRender = true;
-    Rect2 result = RenderLayoutRecursive_(group, P, transform, layout, layout->rootHash, seed, {});
+    LayoutContainer fakeContainer = {};
+    Rect2 result = RenderLayoutRecursive_(0, group, P, transform, layout, layout->rootHash, seed, {}, &fakeContainer);
     return result;
 }
 
-internal void RenderLayoutInRect(RenderGroup* group, Rect2 rect, ObjectTransform transform, LayoutComponent* layout, u32 seed)
+internal void RenderLayoutInRect(GameModeWorld* worldMode, RenderGroup* group, Rect2 rect, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container)
 {
     Vec3 fakeP = V3(GetCenter(rect), 0);
     Vec2 desiredDim = GetDim(rect);
     
     Rect2 layoutDim = GetLayoutDim(group, fakeP, transform, layout, seed);
-    Vec2 drawnP = GetCenter(layoutDim);
-    
     Vec2 dim = GetDim(layoutDim);
     r32 scale = Min(desiredDim.x / dim.x, desiredDim.y / dim.y);
     transform.scale *= scale;
     
-    Vec3 offset = V3(GetCenter(rect) - drawnP, 0);
-    Vec3 finalP = fakeP + offset;
+    Rect2 finalLayoutDim = GetLayoutDim(group, fakeP, transform, layout, seed);
+    Vec2 drawnP = GetCenter(finalLayoutDim);
     
-    RenderLayout(group, finalP, transform, layout, seed, {});
+    Vec3 offset = V3(drawnP - GetCenter(rect), 0);
+    Vec3 finalP = fakeP - offset;
+    
+    RenderLayout(worldMode, group, finalP, transform, layout, seed, lights, container);
+}
+
+internal void RenderLayoutInRectCameraAligned(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, Vec3 rectP, Rect2 cameraRect, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container)
+{
+    Vec2 desiredDim = GetDim(cameraRect);
+    Rect2 layoutDim = GetLayoutDim(group, P, transform, layout, seed);
+    Vec2 dim = GetDim(layoutDim);
+    r32 scale = Min(desiredDim.x / dim.x, desiredDim.y / dim.y);
+    transform.scale *= scale;
+    
+    Rect2 finalLayoutDim = GetLayoutDim(group, P, transform, layout, seed);
+    
+    Vec3 drawnCenter = UnprojectAtZ(group, &group->gameCamera, GetCenter(finalLayoutDim), rectP.z);
+    Vec3 desiredCenter = UnprojectAtZ(group, &group->gameCamera, GetCenter(cameraRect), rectP.z);
+    
+    Vec3 offset = drawnCenter - desiredCenter;
+    transform.cameraOffset.x -= Dot(offset, group->gameCamera.X);
+    transform.cameraOffset.y -= Dot(offset, group->gameCamera.Y);
+    
+    RenderLayout(worldMode, group, P, transform, layout, seed, lights, container);
 }
 
 RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
@@ -415,7 +475,10 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
         transform.scale = layout->rootScale;
         transform.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
         
-        RenderLayout(group, P, transform, layout, base->seed, lights);
+        LayoutContainer container = {};
+        container.container = GetComponent(worldMode, ID, ContainerMappingComponent);
+        
+        RenderLayout(worldMode, group, P, transform, layout, base->seed, lights, &container);
     }
 }
 
@@ -481,7 +544,7 @@ internal void AddPossibleInteraction(GameModeWorld* worldMode, u32 type, EntityI
     }
 }
 
-internal void HandleEquipmentInteraction(GameModeWorld* worldMode, PlatformInput* input, EntityID ID)
+internal void HandleEquipmentInteraction(GameModeWorld* worldMode, EntityID ID)
 {
     EquipmentMappingComponent* equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
     if(equipment)
@@ -500,6 +563,42 @@ internal void HandleEquipmentInteraction(GameModeWorld* worldMode, PlatformInput
     }
 }
 
+internal void HandleContainerInteraction(GameModeWorld* worldMode)
+{
+    if(IsValid(worldMode->openIDRight))
+    {
+        ContainerMappingComponent* container = GetComponent(worldMode, worldMode->openIDRight, ContainerMappingComponent);
+        if(container)
+        {
+            for(u32 mappingIndex = 0; mappingIndex < ArrayCount(container->mappings); ++mappingIndex)
+            {
+                ObjectMapping* mapping = container->mappings + mappingIndex;
+                if(PointInRect(mapping->projectedOnScreen, worldMode->screenMouseP))
+                {
+                    AddPossibleInteraction(worldMode, EntityInteraction_Container, mapping->ID);
+                }
+            }
+        }
+    }
+    
+    if(IsValid(worldMode->openIDLeft))
+    {
+        ContainerMappingComponent* container = GetComponent(worldMode, worldMode->openIDLeft, ContainerMappingComponent);
+        if(container)
+        {
+            for(u32 mappingIndex = 0; mappingIndex < ArrayCount(container->mappings); ++mappingIndex)
+            {
+                ObjectMapping* mapping = container->mappings + mappingIndex;
+                if(PointInRect(mapping->projectedOnScreen, worldMode->screenMouseP))
+                {
+                    AddPossibleInteraction(worldMode, EntityInteraction_Container, mapping->ID);
+                }
+            }
+        }
+    }
+}
+
+
 internal void DrawOpenedContainers(GameModeWorld* worldMode, RenderGroup* group)
 {
     Vec2 rightP = V2(300, -200);
@@ -512,28 +611,16 @@ internal void DrawOpenedContainers(GameModeWorld* worldMode, RenderGroup* group)
         
         BaseComponent* base = GetComponent(worldMode, worldMode->openIDRight, BaseComponent);
         LayoutComponent* layout = GetComponent(worldMode, worldMode->openIDRight, LayoutComponent);
+        LayoutContainer container = {};
+        
+        container.container = GetComponent(worldMode, worldMode->openIDRight, ContainerMappingComponent);
         
         ObjectTransform transform = FlatTransform(10.0f);
         transform.angle = layout->rootAngle;
         transform.scale = layout->rootScale;
         transform.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
         
-        RenderLayoutInRect(group, RectMinDim(rightP, desiredDim), transform, layout, base->seed);
-        
-#if 0        
-        for(each object of container)
-        {
-            Draw();
-            if(PointInRect())
-            {
-                if(Pressed)
-                {
-                    SendAsyncCommand(use, ID);
-                }
-            }
-        }
-#endif
-        
+        RenderLayoutInRect(worldMode, group, RectMinDim(rightP, desiredDim), transform, layout, base->seed, {}, &container);
     }
     
     if(IsValid(worldMode->openIDLeft))
@@ -543,27 +630,15 @@ internal void DrawOpenedContainers(GameModeWorld* worldMode, RenderGroup* group)
         BaseComponent* base = GetComponent(worldMode, worldMode->openIDLeft, BaseComponent);
         LayoutComponent* layout = GetComponent(worldMode, worldMode->openIDLeft, LayoutComponent);
         
+        LayoutContainer container = {};
+        container.container = GetComponent(worldMode, worldMode->openIDLeft, ContainerMappingComponent);
+        
         ObjectTransform transform = FlatTransform(10.0f);
         transform.angle = layout->rootAngle;
         transform.scale = layout->rootScale * 300.0f;
         transform.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
         
-        RenderLayoutInRect(group, RectMinDim(leftP, desiredDim), transform, layout, base->seed);
-        
-#if 0        
-        for(each object of container)
-        {
-            Draw();
-            if(PointInRect())
-            {
-                if(Pressed)
-                {
-                    SendAsyncCommand(use, ID);
-                }
-            }
-        }
-#endif
-        
+        RenderLayoutInRect(worldMode, group, RectMinDim(leftP, desiredDim), transform, layout, base->seed, {}, &container);
     }
     
 }
@@ -585,11 +660,9 @@ INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
     {
         BaseComponent* component = GetComponent(worldMode, ID, BaseComponent);
         r32 cameraZ;
-        Vec2 mouseP = worldMode->screenMouseP;
-        
         Rect3 bound = GetEntityBound(worldMode, component);
         Rect2 screenBounds = ProjectOnScreen(group, bound, &cameraZ);
-        if(ShouldBeRendered(worldMode, component) && PointInRect(screenBounds, mouseP))
+        if(ShouldBeRendered(worldMode, component) && PointInRect(screenBounds, worldMode->screenMouseP))
         {
             AddPossibleInteraction(worldMode, EntityInteraction_Standard, ID);
         }
@@ -663,7 +736,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             Clear(group, V4(0.1f, 0.1f, 0.1f, 1.0f));
             ResetLightGrid(worldMode);
             
-            r32 zoom = worldMode->inventoryMode ? 2.0f : 1.0f;
+            r32 zoom = worldMode->inventoryMode ? 3.5f : 1.0f;
             MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), zoom);
             UpdateAndSetupGameCamera(worldMode, group, input, deltaMouseScreenP);
             
@@ -674,7 +747,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent), input->timeToAdvance);
             if(worldMode->inventoryMode)
             {
-                HandleEquipmentInteraction(worldMode, input, myPlayer->clientID);
+                HandleEquipmentInteraction(worldMode, myPlayer->clientID);
+                HandleContainerInteraction(worldMode);
             }
             
             if(worldMode->hotCount > 0)
@@ -757,12 +831,32 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             }
                         }
                     } break;
+                    
+                    case EntityInteraction_Container:
+                    {
+                        if(Pressed(&input->mouseLeft))
+                        {
+                            GameCommand* command = &myPlayer->currentCommand;
+                            command->targetID = hotInteraction.ID;
+                            command->action = useFromContainer;
+                        }
+                        
+                        if(Pressed(&input->mouseRight))
+                        {
+                            GameCommand* command = &myPlayer->currentCommand;
+                            command->targetID = hotInteraction.ID;
+                            command->action = dropFromContainer;
+                        }
+                        
+                        
+                    } break;
                 }
             }
             
             BeginDepthPeel(group);
             
             Vec3 ambientLightColor = HandleDaynightCycle(worldMode, input);
+            ambientLightColor = V3(1, 1, 1);
             PushAmbientLighting(group, ambientLightColor);
             //AddLightToGridCurrentFrame(worldMode, V3(0, 0, 0), V3(0, 0, 1), 4);
             //AddLightToGridCurrentFrame(worldMode, V3(1, 0, 0), V3(1, 0, 0), 8);
@@ -771,9 +865,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderCharacterAnimation, ArchetypeHas(BaseComponent) && ArchetypeHas(AnimationComponent), input->timeToAdvance);
             
-            EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(ImageComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
             
-            EXECUTE_RENDERING_JOB(worldMode, group, RenderPlants, ArchetypeHas(BaseComponent) && ArchetypeHas(ImageComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderPlants, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderLayoutEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(LayoutComponent), input->timeToAdvance);
             
@@ -805,6 +899,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 DrawOpenedContainers(worldMode, group);
                 DrawUsingSlots();
             }
+            
             RenderEditor(group, worldMode, deltaMouseScreenP, input);
             EndDepthPeel(group);
             

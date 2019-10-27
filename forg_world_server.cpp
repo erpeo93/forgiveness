@@ -22,7 +22,7 @@ internal EntityID AddEntity_(ServerState* server, UniversePos P, AssetID definit
     
     u8 archetype = SafeTruncateToU8(ConvertEnumerator(EntityArchetype, definition->archetype));
     AcquireArchetype(server, archetype, (&result));
-    InitFunc[GetArchetype(result)](server, result, &definition->common, &params); 
+    InitEntity(server, result, &definition->common, &params, 0); 
     if(HasComponent(result, PlayerComponent))
     {
         SetComponent(server, result, PlayerComponent, player);
@@ -87,6 +87,61 @@ internal b32 FindPlace(EntityID* IDs, u32 idCount, EntityID ID)
     return result;
 }
 
+internal b32 Use(ServerState* server, EntityID ID, PhysicComponent* targetPhysic, EntityID targetID)
+{
+    b32 result = false;
+    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+    if(equipped)
+    {
+        if(FindPlace(equipped->IDs, ArrayCount(equipped->IDs), targetID))
+        {
+            targetPhysic->flags = AddFlags(targetPhysic->flags, EntityFlag_notInWorld);
+            result = true;
+        }
+    }
+    
+    return result;
+}
+
+internal b32 Store(ServerState* server, ContainerComponent* container, EntityID ID)
+{
+    b32 result = false;
+    if(container)
+    {
+        if(FindPlace(container->IDs, container->maxObjectCount, ID))
+        {
+            ++container->objectCount;
+            result = true;
+        }
+    }
+    
+    return result;
+}
+
+internal b32 Remove(ServerState* server, ContainerComponent* container, EntityID ID)
+{
+    b32 result = false;
+    if(container)
+    {
+        for(u32 objectIndex = 0; objectIndex < container->objectCount; ++objectIndex)
+        {
+            if(AreEqual(container->IDs[objectIndex], ID))
+            {
+                container->IDs[objectIndex] = container->IDs[--container->objectCount];
+                if(!container->objectCount)
+                {
+                    container->IDs[0] = {};
+                }
+                
+                result = true;
+                break;
+            }
+        }
+        
+    }
+    return result;
+}
+
 internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* command)
 {
     
@@ -117,29 +172,38 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                     EntityRef ref = EntityReference(server, "default", "sword");
                     EntityRef ref2 = EntityReference(server, "default", "bag");
                     
-                    if(!IsSet(targetPhysic->flags, EntityFlag_equipment) && 
+                    if(!IsSet(targetPhysic->flags, EntityFlag_notInWorld) && 
                        targetPhysic->P.chunkZ == physic->P.chunkZ)
                     {
                         if(AreEqual(targetPhysic->definitionID, ref))
                         {
-                            UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-                            if(equipped)
+                            if(!Use(server, ID, targetPhysic, targetID))
                             {
-                                if(FindPlace(equipped->IDs, ArrayCount(equipped->IDs), targetID))
+                                EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+                                if(equipment)
                                 {
-                                    targetPhysic->flags = AddFlags(targetPhysic->flags, EntityFlag_equipment);
+                                    for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->IDs); equipmentIndex++)
+                                    {
+                                        EntityID equipmentID = equipment->IDs[equipmentIndex];
+                                        
+                                        ContainerComponent* container = GetComponent(server, equipmentID, ContainerComponent);
+                                        if(Store(server, container, targetID))
+                                        {
+                                            targetPhysic->flags = AddFlags(targetPhysic->flags, EntityFlag_notInWorld);
+                                            break;
+                                        }
+                                    }
                                 }
                             }
                         }
-                        
-                        if(AreEqual(targetPhysic->definitionID, ref2))
+                        else if(AreEqual(targetPhysic->definitionID, ref2))
                         {
                             EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
                             if(equipment)
                             {
                                 if(FindPlace(equipment->IDs, ArrayCount(equipment->IDs), targetID))
                                 {
-                                    targetPhysic->flags = AddFlags(targetPhysic->flags, EntityFlag_equipment);
+                                    targetPhysic->flags = AddFlags(targetPhysic->flags, EntityFlag_notInWorld);
                                 }
                             }
                         }
@@ -171,7 +235,6 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         case disequip:
         {
             EntityID targetID = command->targetID;
-            
             PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
             EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
             UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
@@ -182,12 +245,38 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                 {
                     if(AreEqual(equipment->IDs[equipIndex], targetID))
                     {
-                        targetPhysic->flags = ClearFlags(targetPhysic->flags, EntityFlag_equipment);
+                        targetPhysic->flags = ClearFlags(targetPhysic->flags, EntityFlag_notInWorld);
                         equipment->IDs[equipIndex] = {};
                         break;
                     }
                 }
             }
+        } break;
+        
+        case dropFromContainer:
+        {
+            EntityID targetID = command->targetID;
+            PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
+            EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+            
+            if(equipment && targetPhysic)
+            {
+                for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->IDs); ++equipIndex)
+                {
+                    EntityID equipmentID = equipment->IDs[equipIndex];
+                    ContainerComponent* container = GetComponent(server, equipmentID, ContainerComponent);
+                    if(Remove(server, container, targetID))
+                    {
+                        targetPhysic->flags = ClearFlags(targetPhysic->flags, EntityFlag_notInWorld);
+                        break;
+                    }
+                }
+            }
+        } break;
+        
+        case useFromContainer:
+        {
+            InvalidCodePath;
         } break;
     }
 }
@@ -223,7 +312,7 @@ STANDARD_ECS_JOB_SERVER(FillCollisionSpatialPartition)
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     
-    if(!(physic->flags & EntityFlag_equipment))
+    if(!(physic->flags & EntityFlag_notInWorld))
     {
         Rect3 bounds = AddRadius(physic->bounds, V3(g_maxDelta, g_maxDelta, g_maxDelta));
         AddToSpatialPartition(server->frameByFramePool, &server->collisionPartition, physic->P, bounds, ID);
@@ -442,6 +531,20 @@ internal void HandleEntityMovement(ServerState* server, PhysicComponent* physic,
     }
 }
 
+internal void UpdateObjectPositions(ServerState* server, UniversePos P, EntityID* IDs, u32 IDCount)
+{
+    for(u16 IDIndex = 0; IDIndex < IDCount; ++IDIndex)
+    {
+        EntityID ID = IDs[IDIndex];
+        if(IsValid(ID))
+        {
+            PhysicComponent* equipmentPhysic = GetComponent(server, ID, PhysicComponent);
+            equipmentPhysic->P = P;
+            equipmentPhysic->flags |= EntityFlag_notInWorld;
+        }
+    }
+}
+
 internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
@@ -460,14 +563,14 @@ internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
     if(equipped)
     {
-        for(u16 pieceIndex = 0; pieceIndex < Count_usingSlot; ++pieceIndex)
+        UpdateObjectPositions(server, physic->P, equipped->IDs, Count_usingSlot);
+        for(u32 usingIndex = 0; usingIndex < Count_usingSlot; ++usingIndex)
         {
-            EntityID usingID = equipped->IDs[pieceIndex];
-            if(IsValid(usingID))
+            EntityID usingID = equipped->IDs[usingIndex];
+            ContainerComponent* container = GetComponent(server, usingID, ContainerComponent);
+            if(container)
             {
-                PhysicComponent* usingPhysic = GetComponent(server, usingID, PhysicComponent);
-                usingPhysic->P = physic->P;
-                usingPhysic->flags |= EntityFlag_equipment;
+                UpdateObjectPositions(server, physic->P, container->IDs, container->objectCount);
             }
         }
     }
@@ -476,14 +579,14 @@ internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
     if(equipment)
     {
-        for(u16 pieceIndex = 0; pieceIndex < Count_equipmentSlot; ++pieceIndex)
+        UpdateObjectPositions(server, physic->P, equipment->IDs, Count_equipmentSlot);
+        for(u32 equipIndex = 0; equipIndex < Count_equipmentSlot; ++equipIndex)
         {
-            EntityID equipmentID = equipment->IDs[pieceIndex];
-            if(IsValid(equipmentID))
+            EntityID equipID = equipment->IDs[equipIndex];
+            ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
+            if(container)
             {
-                PhysicComponent* equipmentPhysic = GetComponent(server, equipmentID, PhysicComponent);
-                equipmentPhysic->P = physic->P;
-                equipmentPhysic->flags |= EntityFlag_equipment;
+                UpdateObjectPositions(server, physic->P, container->IDs, container->objectCount);
             }
         }
     }
@@ -497,6 +600,7 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime
     
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+    ContainerComponent* container = GetComponent(server, ID, ContainerComponent);
     
     r32 maxDistance = 3.0f * CHUNK_DIM;
     r32 maxDistanceSq = Square(maxDistance);
@@ -540,6 +644,18 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime
                         //if(IsValid(usingID))
                         {
                             QueueUsingID(player, ID, slotIndex, usingID);
+                        }
+                    }
+                }
+                
+                if(container)
+                {
+                    for(u16 objectIndex = 0; objectIndex < container->maxObjectCount; ++objectIndex)
+                    {
+                        EntityID objectID = container->IDs[objectIndex];
+                        //if(IsValid(usingID))
+                        {
+                            QueueContainerID(player, ID, objectIndex, objectID);
                         }
                     }
                 }

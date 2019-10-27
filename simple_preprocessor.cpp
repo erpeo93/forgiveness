@@ -630,6 +630,8 @@ void ParseArchetype(Tokenizer* tokenizer)
                             
                             (*active) += sprintf(*active, "archetypeLayouts[Archetype_%s].has%.*s.exists = true; ", meta->name, t.textLength, t.text);
                             
+                            (*active) += sprintf(*active, "archetypeLayouts[Archetype_%s].has%.*s.init = Init%.*s; ", meta->name, t.textLength, t.text, t.textLength, t.text);
+                            
                             if(NextTokenIs(tokenizer, Token_Asterisk))
                             {
                                 Token asterisk = GetToken(tokenizer);
@@ -740,13 +742,6 @@ int main(int argc, char** argv)
         printf("\"%s\",\n", arch->name);
     }
     printf("};\n");
-    
-    printf("#define META_ARCHETYPES_INIT_FUNC()\\\n");
-    for(MetaArchetype* arch = firstMetaArchetype; arch; arch = arch->next)
-    {
-        printf("InitFunc[Archetype_%s] = Init%s;", arch->name, arch->name);
-    }
-    printf("\n;");
     printf("\n");
     
     for( int fileIndex = 0; fileIndex < sizeof( fileNames ) / sizeof( fileNames[0] ); ++fileIndex )

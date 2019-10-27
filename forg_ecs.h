@@ -1,32 +1,49 @@
 #pragma once
+introspection() struct EntityID
+{
+    u32 archetype_archetypeIndex; // NOTE(Leonardo): 8 bit archetype, 24 bits index
+};
+
+#define INIT_COMPONENT_FUNCTION(name) void name(void* state, void* componentPtr, EntityID ID, struct CommonEntityInitParams* common, struct ServerEntityInitParams* s, struct ClientEntityInitParams* c)
+typedef INIT_COMPONENT_FUNCTION(init_component_function);
+
 struct ArchetypeComponent
 {
     b32 exists;
     b32 pointer;
     u32 offset;
+    init_component_function* init;
 };
 
 struct ArchetypeLayout
 {
     u32 totalSize;
-    
-    ArchetypeComponent hasBaseComponent;
-    ArchetypeComponent hasAnimationComponent;
-    ArchetypeComponent hasRockComponent;
-    ArchetypeComponent hasPlantComponent;
-    ArchetypeComponent hasGrassComponent;
-    ArchetypeComponent hasPhysicComponent;
-    ArchetypeComponent hasPlayerComponent;
-    ArchetypeComponent hasImageComponent;
-    ArchetypeComponent hasLayoutComponent;
-    ArchetypeComponent hasEffectComponent;
-    ArchetypeComponent hasEquipmentComponent;
-    ArchetypeComponent hasUsingComponent;
-    ArchetypeComponent hasEquipmentMappingComponent;
-    ArchetypeComponent hasUsingMappingComponent;
-    ArchetypeComponent hasAnimationEffectsComponent;
-    ArchetypeComponent hasCollisionEffectsComponent;
-    ArchetypeComponent hasOverlappingEffectsComponent;
+    union
+    {
+        ArchetypeComponent hasComponents[256];
+        struct
+        {
+            ArchetypeComponent hasBaseComponent;
+            ArchetypeComponent hasAnimationComponent;
+            ArchetypeComponent hasRockComponent;
+            ArchetypeComponent hasPlantComponent;
+            ArchetypeComponent hasGrassComponent;
+            ArchetypeComponent hasPhysicComponent;
+            ArchetypeComponent hasPlayerComponent;
+            ArchetypeComponent hasStandardImageComponent;
+            ArchetypeComponent hasLayoutComponent;
+            ArchetypeComponent hasEffectComponent;
+            ArchetypeComponent hasEquipmentComponent;
+            ArchetypeComponent hasUsingComponent;
+            ArchetypeComponent hasEquipmentMappingComponent;
+            ArchetypeComponent hasUsingMappingComponent;
+            ArchetypeComponent hasAnimationEffectsComponent;
+            ArchetypeComponent hasCollisionEffectsComponent;
+            ArchetypeComponent hasOverlappingEffectsComponent;
+            ArchetypeComponent hasContainerComponent;
+            ArchetypeComponent hasContainerMappingComponent;
+        };
+    };
 };
 
 #define HasComponent_(arch, component) archetypeLayouts[arch].has##component.exists
@@ -50,11 +67,6 @@ struct ArchetypeLayout
 #define FreeArchetype(state, idAddress) Free_(&state->archetypes[GetArchetype(*idAddress)], GetArchetypeIndex(*idAddress))
 #define DeletedArchetype(state, id) Deleted_(&state->archetypes[GetArchetype(id)], GetArchetypeIndex(id))
 
-
-introspection() struct EntityID
-{
-    u32 archetype_archetypeIndex; // NOTE(Leonardo): 8 bit archetype, 24 bits index
-};
 
 inline EntityID BuildEntityID(u16 archetype, u32 archetypeIndex)
 {

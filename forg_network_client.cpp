@@ -183,6 +183,11 @@ STANDARD_ECS_JOB_CLIENT(DeleteEntities)
 
 internal void DispatchGameEffect(GameModeWorld* worldMode, EntityID ID);
 internal void CollateDebugEvent(DebugState* debugState, DebugCollationState* collation, DebugEvent* event);
+internal void InitEntity(GameModeWorld* worldMode, EntityID ID, 
+                         CommonEntityInitParams* common, 
+                         ServerEntityInitParams* s, 
+                         ClientEntityInitParams* c);
+
 internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
     ClientPlayer* player = &worldMode->player;
@@ -311,7 +316,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         params.ID = currentServerID;
                         params.seed = seed;
                         
-                        InitFunc[GetArchetype(currentServerID)](worldMode, currentClientID, &definition->common, &params);
+                        InitEntity(worldMode, currentClientID, &definition->common, 0, &params);
                         
                         AddClientIDMapping(worldMode, currentServerID, currentClientID);
                     }
@@ -390,6 +395,33 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     {
                         equipped->mappings[index].slotHash = 0;
                         equipped->mappings[index].pieceHash = 0;
+                    }
+                    
+                }
+            } break;
+            
+            case Type_ContainerMapping:
+            {
+                u16 index;
+                EntityID ID;
+                Unpack("HL", &index, &ID.archetype_archetypeIndex);
+                
+                ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
+                
+                if(container)
+                {
+                    Assert(index < ArrayCount(container->mappings));
+                    container->mappings[index].ID = ID;
+                    if(IsValid(ID))
+                    {
+                        BaseComponent* objectBase = GetComponent(worldMode, ID, BaseComponent);
+                        container->mappings[index].slotHash = StringHash(MetaTable_usingSlot[index]);
+                        container->mappings[index].pieceHash = objectBase->nameHash;
+                    }
+                    else
+                    {
+                        container->mappings[index].slotHash = 0;
+                        container->mappings[index].pieceHash = 0;
                     }
                     
                 }

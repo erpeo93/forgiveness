@@ -18,56 +18,16 @@ internal GameProperty GetProperty(u32 seed)
 }
 
 #ifdef FORG_SERVER
-internal void InitPhysicComponent(PhysicComponent* physic, UniversePos P, Vec3 boundOffset, Vec3 boundDim, EntityRef definitionID, u32 seed)
+INIT_COMPONENT_FUNCTION(InitPhysicComponent)
 {
-    physic->P = P;
-    physic->bounds = StandardBounds(boundDim, boundOffset);
-    physic->definitionID = definitionID;
-    physic->seed = seed;
+    PhysicComponent* physic = (PhysicComponent*) componentPtr;
+    
+    physic->P = s->P;
+    physic->bounds = StandardBounds(common->boundDim, common->boundOffset);
+    physic->definitionID = s->definitionID;
+    physic->seed = s->seed;
     physic->speed = {};
     physic->acc = {};
-}
-
-
-INIT_ENTITY(AnimalArchetype)
-{
-    ServerState* server = (ServerState*) state;
-    
-    ServerEntityInitParams* params = (ServerEntityInitParams*) par;
-    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
-    
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    InitPhysicComponent(physic, params->P, common->boundOffset, common->boundDim, params->definitionID, params->seed);
-}
-
-INIT_ENTITY(RockArchetype)
-{
-    ServerState* server = (ServerState*) state;
-    ServerEntityInitParams* params = (ServerEntityInitParams*) par;
-    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
-    
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    InitPhysicComponent(physic, params->P, common->boundOffset, common->boundDim, params->definitionID, params->seed);
-}
-
-INIT_ENTITY(PlantArchetype)
-{
-    ServerState* server = (ServerState*) state;
-    ServerEntityInitParams* params = (ServerEntityInitParams*) par;
-    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
-    
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    InitPhysicComponent(physic, params->P, common->boundOffset, common->boundDim, params->definitionID, params->seed);
-}
-
-INIT_ENTITY(GrassArchetype)
-{
-    ServerState* server = (ServerState*) state;
-    ServerEntityInitParams* params = (ServerEntityInitParams*) par;
-    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
-    
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    InitPhysicComponent(physic, params->P, common->boundOffset, common->boundDim, params->definitionID, params->seed);
 }
 
 internal void AddRandomEffects(EffectComponent* effects, EffectBinding* bindings, ArrayCounter bindingCount, GameProperty property)
@@ -87,48 +47,58 @@ internal void AddRandomEffects(EffectComponent* effects, EffectBinding* bindings
     }
 }
 
-INIT_ENTITY(ObjectArchetype)
+INIT_COMPONENT_FUNCTION(InitEffectComponent)
 {
     ServerState* server = (ServerState*) state;
-    ServerEntityInitParams* params = (ServerEntityInitParams*) par;
-    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
-    
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    InitPhysicComponent(physic, params->P, common->boundOffset, common->boundDim, params->definitionID, params->seed);
-    
-    EffectComponent* effect = GetComponent(server, ID, EffectComponent);
-    GameProperty property = GetProperty(params->seed);
-    AddRandomEffects(effect, params->bindings, params->bindingCount, property);
+    EffectComponent* effect = (EffectComponent*) componentPtr;
+    GameProperty property = GetProperty(s->seed);
+    AddRandomEffects(effect, s->bindings, s->bindingCount, property);
 }
 
-INIT_ENTITY(PortalArchetype)
+INIT_COMPONENT_FUNCTION(InitCollisionEffectsComponent)
 {
-    ServerState* server = (ServerState*) state;
-    ServerEntityInitParams* params = (ServerEntityInitParams*) par;
-    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
-    
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    InitPhysicComponent(physic, params->P, common->boundOffset, common->boundDim, params->definitionID, params->seed);
-    
-    CollisionEffectsComponent* collision = GetComponent(server, ID, CollisionEffectsComponent);
-    for(u32 effectIndex = 0; effectIndex < params->collisionEffectsCount; ++effectIndex)
+    CollisionEffectsComponent* collision = (CollisionEffectsComponent*) componentPtr;
+    for(u32 effectIndex = 0; effectIndex < s->collisionEffectsCount; ++effectIndex)
     {
         if(collision->effectCount < ArrayCount(collision->effects))
         {
             GameEffect* dest = collision->effects + collision->effectCount++;
-            *dest = params->collisionEffects[effectIndex];
+            *dest = s->collisionEffects[effectIndex];
         }
     }
 }
 
-#else
-
-internal void InitBaseComponent(BaseComponent* base, Vec3 boundOffset, Vec3 boundDim, u32 seed, u64 nameHash, EntityID serverID)
+INIT_COMPONENT_FUNCTION(InitPlayerComponent)
 {
-    base->seed = seed;
-    base->bounds = StandardBounds(boundDim, boundOffset);
-    base->nameHash = nameHash;
-    base->serverID = serverID;
+    
+}
+
+INIT_COMPONENT_FUNCTION(InitEquipmentComponent)
+{
+    
+}
+
+INIT_COMPONENT_FUNCTION(InitUsingComponent)
+{
+    
+}
+
+INIT_COMPONENT_FUNCTION(InitContainerComponent)
+{
+    ServerState* server = (ServerState*) state;
+    ContainerComponent* dest = (ContainerComponent*) componentPtr;
+    dest->maxObjectCount = 1;
+    dest->objectCount = 0;
+}
+
+#else
+INIT_COMPONENT_FUNCTION(InitBaseComponent)
+{
+    BaseComponent* base = (BaseComponent*) componentPtr;
+    base->seed = c->seed;
+    base->bounds = StandardBounds(common->boundDim, common->boundOffset);
+    base->nameHash = StringHash(c->name.name);
+    base->serverID = c->ID;
 }
 
 internal void InitShadow(ShadowComponent* shadow, ClientEntityInitParams* params)
@@ -155,101 +125,54 @@ internal void InitImageReference_(Assets* assets, ImageReference* dest,ImageProp
     }
 }
 
-INIT_ENTITY(AnimalArchetype)
+INIT_COMPONENT_FUNCTION(InitAnimationComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
-    ClientEntityInitParams* params = (ClientEntityInitParams*) par;
-    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
-    
-    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name), params->ID);
-    
-    AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
-    animation->skeletonHash =params->skeleton.subtypeHash;
-    animation->skinHash =params->skin.subtypeHash;
+    AnimationComponent* animation = (AnimationComponent*) componentPtr;
+    animation->skeletonHash =c->skeleton.subtypeHash;
+    animation->skinHash =c->skin.subtypeHash;
     animation->flipOnYAxis = 0;
-    
-    InitShadow(&animation->shadow, params);
+    InitShadow(&animation->shadow, c);
 }
 
-INIT_ENTITY(RockArchetype)
+INIT_COMPONENT_FUNCTION(InitRockComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
-    ClientEntityInitParams* params = (ClientEntityInitParams*) par;
-    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
     
-    Assets* assets = worldMode->gameState->assets;
-    
-    
-    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name), params->ID);
-    
-    RockComponent* dest = GetComponent(worldMode, ID, RockComponent);
-    
-    ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
-    InitImageReference(assets, &image, &params, entity);
-    
-    InitShadow(&image->shadow, params);
 }
 
-
-INIT_ENTITY(PlantArchetype)
+INIT_COMPONENT_FUNCTION(InitGrassComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
-    ClientEntityInitParams* params = (ClientEntityInitParams*) par;
-    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
     
-    Assets* assets = worldMode->gameState->assets;
-    
-    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name), params->ID);
-    
-    PlantComponent* dest = GetComponent(worldMode, ID, PlantComponent);
-    InitImageReference(assets, &dest, &params, leaf);
-    
-    ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
-    InitImageReference(assets, &image, &params, entity);
-    
-    InitShadow(&image->shadow, params);
 }
 
-INIT_ENTITY(GrassArchetype)
+INIT_COMPONENT_FUNCTION(InitPlantComponent)
 {
     GameModeWorld* worldMode = (GameModeWorld*) state;
     Assets* assets = worldMode->gameState->assets;
-    ClientEntityInitParams* params = (ClientEntityInitParams*) par;
-    
-    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
-    
-    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name), params->ID);
-    
-    GrassComponent* dest = GetComponent(worldMode, ID, GrassComponent);
-    
-    ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
-    InitImageReference(assets, &image, &params, entity);
-    
-    InitShadow(&image->shadow, params);
+    PlantComponent* dest = (PlantComponent*) componentPtr;
+    InitImageReference(assets, &dest, &c, leaf);
 }
 
-INIT_ENTITY(ObjectArchetype)
+INIT_COMPONENT_FUNCTION(InitStandardImageComponent)
 {
     GameModeWorld* worldMode = (GameModeWorld*) state;
     Assets* assets = worldMode->gameState->assets;
-    ClientEntityInitParams* params = (ClientEntityInitParams*) par;
-    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
+    StandardImageComponent* dest = (StandardImageComponent*) componentPtr;
+    InitImageReference(assets, &dest, &c, entity);
+}
+
+INIT_COMPONENT_FUNCTION(InitLayoutComponent)
+{
+    GameModeWorld* worldMode = (GameModeWorld*) state;
+    Assets* assets = worldMode->gameState->assets;
     
-    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name), params->ID);
-    
-    LayoutComponent* dest = GetComponent(worldMode, ID, LayoutComponent);
-    InitShadow(&dest->shadow, params);
-    dest->rootHash = StringHash(params->layoutRootName.name);
+    LayoutComponent* dest = (LayoutComponent*) componentPtr;
+    InitShadow(&dest->shadow, c);
+    dest->rootHash = StringHash(c->layoutRootName.name);
     dest->rootScale = V2(1, 1);
     dest->rootAngle = 0;
-    for(u32 pieceIndex = 0; pieceIndex < params->pieceCount; ++pieceIndex)
+    for(u32 pieceIndex = 0; pieceIndex < c->pieceCount; ++pieceIndex)
     {
-        LayoutPieceProperties* piece = params->layoutPieces + pieceIndex;
+        LayoutPieceProperties* piece = c->layoutPieces + pieceIndex;
         if(dest->pieceCount < ArrayCount(dest->pieces))
         {
             LayoutPiece* destPiece = dest->pieces + dest->pieceCount++;
@@ -259,7 +182,7 @@ INIT_ENTITY(ObjectArchetype)
         }
     }
     
-    GameProperty property = GetProperty(params->seed);
+    GameProperty property = GetProperty(c->seed);
     for(u32 pieceIndex = 0; pieceIndex < dest->pieceCount; ++pieceIndex)
     {
         LayoutPiece* destPiece = dest->pieces + pieceIndex;
@@ -267,21 +190,65 @@ INIT_ENTITY(ObjectArchetype)
     }
 }
 
-INIT_ENTITY(PortalArchetype)
+INIT_COMPONENT_FUNCTION(InitEquipmentMappingComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
-    ClientEntityInitParams* params = (ClientEntityInitParams*) par;
-    CommonEntityInitParams* common = (CommonEntityInitParams*) com;
     
-    Assets* assets = worldMode->gameState->assets;
-    
-    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    InitBaseComponent(base, common->boundOffset, common->boundDim, params->seed, StringHash(params->name.name), params->ID);
-    
-    ImageComponent* image = GetComponent(worldMode, ID, ImageComponent);
-    InitImageReference(assets, &image, &params, entity);
-    
-    InitShadow(&image->shadow, params);
 }
 
+INIT_COMPONENT_FUNCTION(InitUsingMappingComponent)
+{
+    
+}
+
+INIT_COMPONENT_FUNCTION(InitAnimationMappingComponent)
+{
+    
+}
+
+INIT_COMPONENT_FUNCTION(InitAnimationEffectsComponent)
+{
+    
+}
+
+INIT_COMPONENT_FUNCTION(InitContainerMappingComponent)
+{
+}
+
+#endif
+
+
+#ifdef FORG_SERVER
+internal void InitEntity(ServerState* server, EntityID ID, 
+                         CommonEntityInitParams* common, 
+                         ServerEntityInitParams* s, 
+                         ClientEntityInitParams* c)
+{
+    ArchetypeLayout* layout = archetypeLayouts + GetArchetype(ID);
+    for(u32 componentIndex = 0; componentIndex < ArrayCount(layout->hasComponents); ++componentIndex)
+    {
+        ArchetypeComponent* component = layout->hasComponents + componentIndex;
+        if(component->exists)
+        {
+            void* componentPtr = AdvanceVoidPtrBytes(GetPtr(server, ID), component->offset);
+            component->init(server, componentPtr, ID, common, s, c);
+        }
+    }
+}
+#else
+internal void InitEntity(GameModeWorld* worldMode, EntityID ID, 
+                         CommonEntityInitParams* common, 
+                         ServerEntityInitParams* s, 
+                         ClientEntityInitParams* c)
+{
+    ArchetypeLayout* layout = archetypeLayouts + GetArchetype(ID);
+    for(u32 componentIndex = 0; componentIndex < ArrayCount(layout->hasComponents); ++componentIndex)
+    {
+        ArchetypeComponent* component = layout->hasComponents + componentIndex;
+        if(component->exists)
+        {
+            void* componentPtr = AdvanceVoidPtrBytes(GetPtr(worldMode, ID), component->offset);
+            component->init(worldMode, componentPtr, ID, common, s, c);
+        }
+    }
+}
 #endif
