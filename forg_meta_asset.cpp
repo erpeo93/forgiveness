@@ -362,6 +362,35 @@ internal void Dump_r32(Stream* output, FieldDefinition* field, r32 value, b32 is
     }
 }
 
+internal b32 Parse_b32(Tokenizer* tokenizer, b32 defaultVal)
+{
+    b32 result = defaultVal;
+    
+    Token t = GetToken(tokenizer);
+    if(t.type == Token_String)
+    {
+        t = Stringize(t);
+    }
+    result = (b32) StringToB32(t.text);
+    
+    return result;
+}
+
+internal void Dump_b32(Stream* output, FieldDefinition* field, b32 value, b32 isInArray)
+{
+    if(isInArray)
+    {
+        OutputToStream(output, "\"%s\"", value ? "true" : "false");
+    }
+    else
+    {
+        if(value != field->def.def_b32)
+        {
+            OutputToStream(output, "%s=\"%s\";", field->name, value ? "true" : "false");
+        }
+    }
+}
+
 
 internal Hash64 Parse_Hash64(Tokenizer* tokenizer, Hash64 defaultVal)
 {
@@ -727,6 +756,7 @@ internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArr
 internal b32 Edit_i32(EditorLayout* layout, char* name, i32* number, b32 isInArray, AssetID assetID);
 internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArray, AssetID assetID);
 internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID, b32 clamp01 = false);
+internal b32 Edit_b32(EditorLayout* layout, char* name, b32* flag, b32 isInArray, AssetID assetID);
 internal b32 Edit_Color(EditorLayout* layout, char* name, Color* color, b32 isInArray, AssetID assetID);
 internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray, AssetID assetID, b32 clamp01 = false);
 internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray, AssetID assetID, b32 clamp01 = false);
@@ -788,6 +818,7 @@ STANDARD_OPERATION_FUNCTION(u16);
 STANDARD_OPERATION_FUNCTION(u32);
 STANDARD_OPERATION_FUNCTION(i32);
 STANDARD_OPERATION_FUNCTION(r32);
+STANDARD_OPERATION_FUNCTION(b32);
 STANDARD_OPERATION_FUNCTION(Color);
 STANDARD_OPERATION_FUNCTION(GameProperty);
 STANDARD_OPERATION_FUNCTION(Vec2);
@@ -956,6 +987,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
             DUMB_OPERATION(u32);
             DUMB_OPERATION(i32);
             DUMB_OPERATION(r32);
+            DUMB_OPERATION(b32);
             DUMB_OPERATION(Vec2);
             DUMB_OPERATION(Vec3);
             DUMB_OPERATION(Vec4);

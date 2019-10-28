@@ -164,6 +164,7 @@ enum Packet_Type
     Type_EquipmentMapping,
     Type_UsingMapping,
     Type_ContainerMapping,
+    Type_ContainerOpenedBy,
     
     Type_EffectDispatch,
     

@@ -88,7 +88,6 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
     ServerState* server = (ServerState*) state;
     ContainerComponent* dest = (ContainerComponent*) componentPtr;
     dest->maxObjectCount = 1;
-    dest->objectCount = 0;
 }
 
 #else
@@ -170,6 +169,8 @@ INIT_COMPONENT_FUNCTION(InitLayoutComponent)
     dest->rootHash = StringHash(c->layoutRootName.name);
     dest->rootScale = V2(1, 1);
     dest->rootAngle = 0;
+    
+    
     for(u32 pieceIndex = 0; pieceIndex < c->pieceCount; ++pieceIndex)
     {
         LayoutPieceProperties* piece = c->layoutPieces + pieceIndex;
@@ -182,10 +183,27 @@ INIT_COMPONENT_FUNCTION(InitLayoutComponent)
         }
     }
     
+    for(u32 pieceIndex = 0; pieceIndex < c->openPieceCount; ++pieceIndex)
+    {
+        LayoutPieceProperties* piece = c->openLayoutPieces + pieceIndex;
+        if(dest->openPieceCount < ArrayCount(dest->openPieces))
+        {
+            LayoutPiece* destPiece = dest->openPieces + dest->openPieceCount++;
+            InitImageReference_(assets, &destPiece->image, &piece->properties);
+            destPiece->nameHash = StringHash(piece->name.name);
+            destPiece->height = piece->height;
+        }
+    }
+    
     GameProperty property = GetProperty(c->seed);
     for(u32 pieceIndex = 0; pieceIndex < dest->pieceCount; ++pieceIndex)
     {
         LayoutPiece* destPiece = dest->pieces + pieceIndex;
+        AddGameProperty_(&destPiece->image.properties, property, GameProperty_Optional);
+    }
+    for(u32 pieceIndex = 0; pieceIndex < dest->openPieceCount; ++pieceIndex)
+    {
+        LayoutPiece* destPiece = dest->openPieces + pieceIndex;
         AddGameProperty_(&destPiece->image.properties, property, GameProperty_Optional);
     }
 }

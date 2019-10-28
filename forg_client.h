@@ -96,6 +96,9 @@ struct LayoutComponent
     u64 rootHash;
     u32 pieceCount;
     LayoutPiece pieces[8];
+    
+    u32 openPieceCount;
+    LayoutPiece openPieces[8];
 };
 
 struct LayoutContainer

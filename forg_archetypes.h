@@ -142,6 +142,9 @@ introspection() struct ClientEntityInitParams
     ArrayCounter pieceCount MetaCounter(layoutPieces);
     LayoutPieceProperties* layoutPieces;
     
+    ArrayCounter openPieceCount MetaCounter(openLayoutPieces);
+    LayoutPieceProperties* openLayoutPieces;
+    
     Vec3 shadowOffset;
     Vec2 shadowScale MetaDefault("V2(1, 1)");
     Vec4 shadowColor MetaDefault("V4(1, 1, 1, 0.5f)");

@@ -427,6 +427,15 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 }
             } break;
             
+            case Type_ContainerOpenedBy:
+            {
+                EntityID ID;
+                Unpack("L", &ID.archetype_archetypeIndex);
+                
+                ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
+                container->openedBy = ID;
+            } break;
+            
             case Type_EffectDispatch:
             {
                 DispatchGameEffect(worldMode, currentClientID);

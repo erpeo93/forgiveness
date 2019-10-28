@@ -12,8 +12,8 @@ struct UsingComponent
 #define MAX_CONTAINER_OBJECT 64
 struct ContainerComponent
 {
+    EntityID openedBy;
     u32 maxObjectCount;
-    u32 objectCount;
     EntityID IDs[MAX_CONTAINER_OBJECT];
 };
 
@@ -37,6 +37,7 @@ struct UsingMappingComponent
 
 struct ContainerMappingComponent
 {
+    EntityID openedBy;
     ObjectMapping mappings[MAX_CONTAINER_OBJECT];
 };
 

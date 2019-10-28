@@ -182,6 +182,13 @@ internal void QueueContainerID(PlayerComponent* player, EntityID ID, u16 slotInd
     QueueStandardPacket(player, ID);
 }
 
+internal void QueueOpenedByID(PlayerComponent* player, EntityID ID, EntityID openedBy)
+{
+    StartPacket(player, ContainerOpenedBy);
+    Pack("L", openedBy.archetype_archetypeIndex);
+    QueueStandardPacket(player, ID);
+}
+
 
 internal void QueueEffectDispatch(PlayerComponent* player, EntityID ID)
 {

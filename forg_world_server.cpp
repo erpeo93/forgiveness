@@ -110,7 +110,6 @@ internal b32 Store(ServerState* server, ContainerComponent* container, EntityID 
     {
         if(FindPlace(container->IDs, container->maxObjectCount, ID))
         {
-            ++container->objectCount;
             result = true;
         }
     }
@@ -123,16 +122,11 @@ internal b32 Remove(ServerState* server, ContainerComponent* container, EntityID
     b32 result = false;
     if(container)
     {
-        for(u32 objectIndex = 0; objectIndex < container->objectCount; ++objectIndex)
+        for(u32 objectIndex = 0; objectIndex < container->maxObjectCount; ++objectIndex)
         {
             if(AreEqual(container->IDs[objectIndex], ID))
             {
-                container->IDs[objectIndex] = container->IDs[--container->objectCount];
-                if(!container->objectCount)
-                {
-                    container->IDs[0] = {};
-                }
-                
+                container->IDs[objectIndex] = {};
                 result = true;
                 break;
             }
@@ -278,6 +272,46 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         {
             InvalidCodePath;
         } break;
+        
+        case open:
+        {
+            EntityID targetID = command->targetID;
+            ContainerComponent* container = GetComponent(server, targetID, ContainerComponent);
+            if(container)
+            {
+                if(!IsValid(container->openedBy))
+                {
+                    container->openedBy = ID;
+                }
+            }
+        } break;
+    }
+}
+
+STANDARD_ECS_JOB_SERVER(HandleOpenedContainers)
+{
+    ContainerComponent* container = GetComponent(server, ID, ContainerComponent);
+    if(IsValid(container->openedBy))
+    {
+        PhysicComponent* opened = GetComponent(server, ID, PhysicComponent);
+        PhysicComponent* opener = GetComponent(server, container->openedBy, PhysicComponent);
+        
+        UniversePos P1 = opened->P;
+        UniversePos P2 = opener->P;
+        
+        if(P1.chunkZ == P2.chunkZ)
+        {
+            r32 maxDistanceSq = Square(1.0f);
+            Vec3 delta = SubtractOnSameZChunk(P1, P2);
+            if(LengthSq(delta) > maxDistanceSq)
+            {
+                container->openedBy = {};
+            }
+        }
+        else
+        {
+            container->openedBy = {};
+        }
     }
 }
 
@@ -570,7 +604,7 @@ internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
             ContainerComponent* container = GetComponent(server, usingID, ContainerComponent);
             if(container)
             {
-                UpdateObjectPositions(server, physic->P, container->IDs, container->objectCount);
+                UpdateObjectPositions(server, physic->P, container->IDs, container->maxObjectCount);
             }
         }
     }
@@ -586,7 +620,7 @@ internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
             ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
             if(container)
             {
-                UpdateObjectPositions(server, physic->P, container->IDs, container->objectCount);
+                UpdateObjectPositions(server, physic->P, container->IDs, container->maxObjectCount);
             }
         }
     }
@@ -650,6 +684,7 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime
                 
                 if(container)
                 {
+                    QueueOpenedByID(player, ID, container->openedBy);
                     for(u16 objectIndex = 0; objectIndex < container->maxObjectCount; ++objectIndex)
                     {
                         EntityID objectID = container->IDs[objectIndex];

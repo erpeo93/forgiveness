@@ -786,31 +786,31 @@ internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArr
     return result;
 }
 
-internal b32 Edit_b32(EditorLayout* layout, char* name, b32* flag, b32 isInArray, AssetID assetID)
+internal b32 Edit_b32(EditorLayout* layout, char* name, b32* value, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
     
-    AUID ID = auID(flag);
+    AUID ID = auID(value);
     AUIDData* data = GetAUIDData(layout->context, ID);
     
-    Vec4 color = *flag ? V4(0, 0.7f, 0, 1) : V4(0.7f, 0, 0, 1);
+    Vec4 color = *value ? V4(0, 0.7f, 0, 1) : V4(0.7f, 0, 0, 1);
     
     if(PointInRect(data->dim, layout->mouseP))
     {
-        color = *flag ? V4(0, 1, 0, 1) : V4(1, 0, 0, 1);
+        color = *value ? V4(0, 1, 0, 1) : V4(1, 0, 0, 1);
         SetNextHotAUID(layout->context, ID);
     }
     
     if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
     {
-        b32 before = *flag;
-        *flag = !*flag;
-        AddUndoRedoCopy(layout->context, sizeof(b32), &before, flag, sizeof(b32), flag, assetID);
+        b32 before = *value;
+        *value = !*value;
+        AddUndoRedoCopy(layout->context, sizeof(b32), &before, value, sizeof(b32), value, assetID);
         
     }
     
     ShowName(layout, name);
-    Rect2 elementRect = ShowStandard(layout, color, "%s", *flag ? "true" : "false");
+    Rect2 elementRect = ShowStandard(layout, color, "%s", *value ? "true" : "false");
     data->dim = elementRect;
     
     return result;

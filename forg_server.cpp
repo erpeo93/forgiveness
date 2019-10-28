@@ -699,6 +699,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     EXECUTE_JOB(server, HandlePlayerCommands, ArchetypeHas(PlayerComponent), elapsedTime);
     EXECUTE_JOB(server, DispatchEquipmentEffects, ArchetypeHas(PhysicComponent) && (ArchetypeHas(EquipmentComponent) || ArchetypeHas(UsingComponent)), elapsedTime);
     EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime);
+    EXECUTE_JOB(server, HandleOpenedContainers, ArchetypeHas(ContainerComponent), elapsedTime);
     EXECUTE_JOB(server, SendEntityUpdate, ArchetypeHas(PhysicComponent), elapsedTime);
     
     Clear(&tempPool);

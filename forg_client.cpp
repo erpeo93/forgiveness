@@ -322,8 +322,9 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
 {
     u64 emptySpaceHash = StringHash("emptySpace");
     
-    LayoutPiece* pieces = layout->pieces;
-    u32 pieceCount = layout->pieceCount;
+    LayoutPiece* pieces = container->container ? layout->openPieces : layout->pieces;
+    u32 pieceCount = container->container ? layout->openPieceCount : layout->pieceCount;
+    
     Rect2 result = InvertedInfinityRect2();
     RandomSequence seq = Seed(seed);
     for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
@@ -475,10 +476,14 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
         transform.scale = layout->rootScale;
         transform.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
         
-        LayoutContainer container = {};
-        container.container = GetComponent(worldMode, ID, ContainerMappingComponent);
+        ContainerMappingComponent* container = GetComponent(worldMode, ID, ContainerMappingComponent);
+        LayoutContainer layoutContainer = {};
+        if(AreEqual(container->openedBy, worldMode->player.serverID))
+        {
+            layoutContainer.container = container; 
+        }
         
-        RenderLayout(worldMode, group, P, transform, layout, base->seed, lights, &container);
+        RenderLayout(worldMode, group, P, transform, layout, base->seed, lights, &layoutContainer);
     }
 }
 
@@ -786,6 +791,13 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             GameCommand* command = &myPlayer->currentCommand;
                             command->targetID = hotInteraction.ID;
                             command->action = pick;
+                        }
+                        
+                        if(Pressed(&input->mouseRight))
+                        {
+                            GameCommand* command = &myPlayer->currentCommand;
+                            command->targetID = hotInteraction.ID;
+                            command->action = open;
                         }
                     } break;
                     
