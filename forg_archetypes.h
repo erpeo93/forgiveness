@@ -101,9 +101,14 @@ introspection() struct CommonEntityInitParams
     Vec3 boundOffset;
     Vec3 boundDim MetaDefault("V3(1, 1, 1)");
     
-    Enumerator groundAction MetaEnumerator("action");
-    Enumerator equipmentAction MetaEnumerator("action");
-    Enumerator containerAction MetaEnumerator("action");
+    ArrayCounter groundActionCount MetaCounter("groundActions");
+    Enumerator* groundActions MetaEnumerator("action");
+    
+    ArrayCounter equipmentActionCount MetaCounter("equipmentActions");
+    Enumerator* equipmentActions MetaEnumerator("action");
+    
+    ArrayCounter containerActionCount MetaCounter("containerActions");
+    Enumerator* containerActions MetaEnumerator("action");
 };
 
 introspection() struct ServerEntityInitParams

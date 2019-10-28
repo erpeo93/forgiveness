@@ -17,6 +17,18 @@ internal GameProperty GetProperty(u32 seed)
     return result;
 }
 
+internal u16 ExistMetaPropertyValue(u16 propertyType, Token value);;
+internal void AddPossibleActions(PossibleActionList* list, Enumerator* actions, u32 actionCount)
+{
+    for(u32 actionIndex = 0; actionIndex < actionCount; ++actionIndex)
+    {
+        if(list->actionCount < ArrayCount(list->actions))
+        {
+            list->actions[list->actionCount++] = ExistMetaPropertyValue(Property_action, Tokenize(actions[actionIndex].value));
+        }
+    }
+}
+
 #ifdef FORG_SERVER
 INIT_COMPONENT_FUNCTION(InitPhysicComponent)
 {
@@ -91,20 +103,13 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
 }
 
 
-internal u16 ExistMetaPropertyValue(u16 propertyType, Token value);
-internal void AddPossibleAction(PossibleActionList* list, Enumerator action)
-{
-    list->possibleAction = ExistMetaPropertyValue(Property_action, Tokenize(action.value));
-}
-
 INIT_COMPONENT_FUNCTION(InitInteractionComponent)
 {
     ServerState* server = (ServerState*) state;
     InteractionComponent* dest = (InteractionComponent*) componentPtr;
-    
-    AddPossibleAction(&dest->ground, common->groundAction);
-    AddPossibleAction(&dest->equipment, common->equipmentAction);
-    AddPossibleAction(&dest->container, common->containerAction);
+    AddPossibleActions(&dest->ground, common->groundActions, common->groundActionCount);
+    AddPossibleActions(&dest->equipment, common->equipmentActions, common->equipmentActionCount);
+    AddPossibleActions(&dest->container, common->containerActions, common->containerActionCount);
 }
 #else
 INIT_COMPONENT_FUNCTION(InitBaseComponent)
@@ -250,18 +255,13 @@ INIT_COMPONENT_FUNCTION(InitContainerMappingComponent)
     dest->zoomCoeff = c->lootingZoomCoeff;
 }
 
-internal void AddPossibleAction(PossibleActionList* list, Enumerator action)
-{
-    list->possibleAction = ExistMetaPropertyValue(Property_action, Tokenize(action.value));
-}
-
 INIT_COMPONENT_FUNCTION(InitInteractionComponent)
 {
     InteractionComponent* dest = (InteractionComponent*) componentPtr;
     
-    AddPossibleAction(&dest->ground, common->groundAction);
-    AddPossibleAction(&dest->equipment, common->equipmentAction);
-    AddPossibleAction(&dest->container, common->containerAction);
+    AddPossibleActions(&dest->ground, common->groundActions, common->groundActionCount);
+    AddPossibleActions(&dest->equipment, common->equipmentActions, common->equipmentActionCount);
+    AddPossibleActions(&dest->container, common->containerActions, common->containerActionCount);
 }
 #endif
 

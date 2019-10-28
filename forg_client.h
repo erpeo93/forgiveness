@@ -171,14 +171,14 @@ enum InteractionType
 struct EntityHotInteraction
 {
     InteractionType type;
-    u16 action;
+    u16 actionCount;
+    u16 actions[8];
     EntityID ID;
 };
 
 inline b32 AreEqual(EntityHotInteraction i1, EntityHotInteraction i2)
 {
     b32 result = (i1.type == i2.type && 
-                  i1.action == i2.action && 
                   AreEqual(i1.ID, i2.ID));
     return result;
 }
@@ -245,6 +245,7 @@ struct GameModeWorld
     VoronoiDiagram* activeDiagram;
     
     
+    r32 cameraSpeed;
     Vec3 cameraWorldOffset;
     Vec3 destCameraWorldOffset;
     Vec2 cameraEntityOffset;
@@ -271,6 +272,8 @@ struct GameModeWorld
     EditorUIContext editorUI;
     
     i32 currentHotIndex;
+    i32 currentActionIndex;
+    
     u32 hotCount;
     EntityHotInteraction hotInteractions[8];
     EntityHotInteraction lastFrameHotInteraction;

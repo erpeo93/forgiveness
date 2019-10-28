@@ -34,7 +34,8 @@ struct OverlappingEffectsComponent
 
 struct PossibleActionList
 {
-    u16 possibleAction;
+    u16 actionCount;
+    u16 actions[8];
 };
 
 struct InteractionComponent

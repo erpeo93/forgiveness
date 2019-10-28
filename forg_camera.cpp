@@ -6,15 +6,15 @@ inline Vec3 GetRelativeP(GameModeWorld* worldMode, BaseComponent* base)
 
 inline void MoveTowards_(GameModeWorld* worldMode, Vec2 cameraWorldOffset, Vec2 cameraEntityOffset, r32 zoomCoeff = 1.0f)
 {
+}
+
+inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, r32 cameraSpeed, Vec2 cameraWorldOffset = V2(0, 0), Vec2 cameraEntityOffset = V2(0, 0), r32 zoomCoeff = 1.0f)
+{
+    cameraWorldOffset += GetRelativeP(worldMode, base).xy;
     worldMode->destCameraEntityOffset = cameraEntityOffset;
     worldMode->destCameraWorldOffset = V3(cameraWorldOffset, worldMode->defaultCameraZ / zoomCoeff);
     worldMode->destCameraWorldOffset += worldMode->editorCameraOffset;
-}
-
-inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, Vec2 cameraWorldOffset = V2(0, 0), Vec2 cameraEntityOffset = V2(0, 0), r32 zoomCoeff = 1.0f)
-{
-    cameraWorldOffset += GetRelativeP(worldMode, base).xy;
-    MoveTowards_(worldMode, cameraWorldOffset, cameraEntityOffset, zoomCoeff);
+    worldMode->cameraSpeed = cameraSpeed;
 }
 
 internal void SetupGameCamera(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input, Vec2 dMouseP)
@@ -62,8 +62,7 @@ internal void SetupGameCamera(GameModeWorld* worldMode, RenderGroup* group, Plat
 
 internal void UpdateGameCamera(GameModeWorld* worldMode, PlatformInput* input)
 {
+    worldMode->cameraWorldOffset += worldMode->cameraSpeed * input->timeToAdvance * (worldMode->destCameraWorldOffset - worldMode->cameraWorldOffset);
     
-    worldMode->cameraWorldOffset += 6.0f * input->timeToAdvance * (worldMode->destCameraWorldOffset - worldMode->cameraWorldOffset);
-    
-    worldMode->cameraEntityOffset += 6.0f * input->timeToAdvance * (worldMode->destCameraEntityOffset - worldMode->cameraEntityOffset);
+    worldMode->cameraEntityOffset += worldMode->cameraSpeed * input->timeToAdvance * (worldMode->destCameraEntityOffset - worldMode->cameraEntityOffset);
 }

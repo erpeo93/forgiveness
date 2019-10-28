@@ -330,9 +330,12 @@ FieldDefinition fieldDefinitionOfCommonEntityInitParams[] =
  {
 {0, MetaType_Vec3, "Vec3", "boundOffset", (u32) (&((CommonEntityInitParams*)0)->boundOffset), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
 {0, MetaType_Vec3, "Vec3", "boundDim", (u32) (&((CommonEntityInitParams*)0)->boundDim), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
-{0, MetaType_Enumerator, "Enumerator", "groundAction", (u32) (&((CommonEntityInitParams*)0)->groundAction), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_action, ArrayCount(MetaTable_action)}, 
-{0, MetaType_Enumerator, "Enumerator", "equipmentAction", (u32) (&((CommonEntityInitParams*)0)->equipmentAction), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_action, ArrayCount(MetaTable_action)}, 
-{0, MetaType_Enumerator, "Enumerator", "containerAction", (u32) (&((CommonEntityInitParams*)0)->containerAction), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_action, ArrayCount(MetaTable_action)}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "groundActionCount", (u32) (&((CommonEntityInitParams*)0)->groundActionCount), {}, sizeof(ArrayCounter),"invalid","groundActions", (u32)(&((CommonEntityInitParams*)0)->groundActions), 0}, 
+{MetaFlag_Pointer, MetaType_Enumerator, "Enumerator", "groundActions", (u32) (&((CommonEntityInitParams*)0)->groundActions), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_action, ArrayCount(MetaTable_action)}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "equipmentActionCount", (u32) (&((CommonEntityInitParams*)0)->equipmentActionCount), {}, sizeof(ArrayCounter),"invalid","equipmentActions", (u32)(&((CommonEntityInitParams*)0)->equipmentActions), 0}, 
+{MetaFlag_Pointer, MetaType_Enumerator, "Enumerator", "equipmentActions", (u32) (&((CommonEntityInitParams*)0)->equipmentActions), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_action, ArrayCount(MetaTable_action)}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "containerActionCount", (u32) (&((CommonEntityInitParams*)0)->containerActionCount), {}, sizeof(ArrayCounter),"invalid","containerActions", (u32)(&((CommonEntityInitParams*)0)->containerActions), 0}, 
+{MetaFlag_Pointer, MetaType_Enumerator, "Enumerator", "containerActions", (u32) (&((CommonEntityInitParams*)0)->containerActions), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_action, ArrayCount(MetaTable_action)}, 
 };
 
 FieldDefinition fieldDefinitionOfServerEntityInitParams[] = 

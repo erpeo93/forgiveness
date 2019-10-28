@@ -325,7 +325,7 @@ internal void Dump_Enumerator(Stream* output, FieldDefinition* field, Enumerator
 {
     if(isInArray)
     {
-        InvalidCodePath;
+        OutputToStream(output, "\"%s\"", value.value);
     }
     else
     {
