@@ -38,6 +38,7 @@ struct UsingMappingComponent
 struct ContainerMappingComponent
 {
     EntityID openedBy;
+    r32 zoomCoeff;
     ObjectMapping mappings[MAX_CONTAINER_OBJECT];
 };
 

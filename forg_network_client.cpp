@@ -433,7 +433,30 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 Unpack("L", &ID.archetype_archetypeIndex);
                 
                 ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
+                
                 container->openedBy = ID;
+                
+                b32 wasLooting = IsValid(worldMode->lootingID);
+                
+                if(IsValid(ID))
+                {
+                    worldMode->lootingID = currentClientID;
+                }
+                else
+                {
+                    worldMode->lootingID = {};
+                }
+                
+                if(!IsValid(worldMode->lootingID))
+                {
+                    worldMode->lootingMode = false;
+                }
+                
+                if(IsValid(worldMode->lootingID) && !wasLooting)
+                {
+                    worldMode->lootingMode = true;
+                    worldMode->inventoryMode = false;
+                }
             } break;
             
             case Type_EffectDispatch:

@@ -32,3 +32,14 @@ struct OverlappingEffectsComponent
     GameEffect effects[8];
 };
 
+struct PossibleActionList
+{
+    u16 possibleAction;
+};
+
+struct InteractionComponent
+{
+    PossibleActionList ground;
+    PossibleActionList equipment;
+    PossibleActionList container;
+};

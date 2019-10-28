@@ -8,7 +8,7 @@ inline void MoveTowards_(GameModeWorld* worldMode, Vec2 cameraWorldOffset, Vec2 
 {
     worldMode->destCameraEntityOffset = cameraEntityOffset;
     worldMode->destCameraWorldOffset = V3(cameraWorldOffset, worldMode->defaultCameraZ / zoomCoeff);
-    worldMode->destCameraWorldOffset += worldMode->additionalCameraOffset;
+    worldMode->destCameraWorldOffset += worldMode->editorCameraOffset;
 }
 
 inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, Vec2 cameraWorldOffset = V2(0, 0), Vec2 cameraEntityOffset = V2(0, 0), r32 zoomCoeff = 1.0f)
@@ -17,10 +17,10 @@ inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, Vec
     MoveTowards_(worldMode, cameraWorldOffset, cameraEntityOffset, zoomCoeff);
 }
 
-internal void UpdateAndSetupGameCamera(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input, Vec2 dMouseP)
+internal void SetupGameCamera(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input, Vec2 dMouseP)
 {
     
-#if 0    
+#if FORGIVENESS_INTERNAL
     if(input->altDown && IsDown(&input->mouseLeft))
     {
         r32 rotationSpeed = 0.001f * PI32;
@@ -57,7 +57,13 @@ internal void UpdateAndSetupGameCamera(GameModeWorld* worldMode, RenderGroup* gr
         
         SetCameraTransform(group, Camera_Debug, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal, worldMode->cameraEntityOffset);
     }
+}
+
+
+internal void UpdateGameCamera(GameModeWorld* worldMode, PlatformInput* input)
+{
     
     worldMode->cameraWorldOffset += 6.0f * input->timeToAdvance * (worldMode->destCameraWorldOffset - worldMode->cameraWorldOffset);
+    
     worldMode->cameraEntityOffset += 6.0f * input->timeToAdvance * (worldMode->destCameraEntityOffset - worldMode->cameraEntityOffset);
 }

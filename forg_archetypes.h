@@ -6,12 +6,14 @@ Archetype() struct AnimalArchetype
     PlayerComponent* player;
     EquipmentComponent equipment;
     UsingComponent equipped;
+    InteractionComponent interaction;
 #else
     BaseComponent base;
     AnimationComponent animation;
     EquipmentMappingComponent equipment;
     UsingMappingComponent equipped;
     AnimationEffectsComponent animationEffects;
+    InteractionComponent interaction;
 #endif
 };
 
@@ -19,10 +21,12 @@ Archetype() struct RockArchetype
 {
 #ifdef FORG_SERVER
     PhysicComponent physic;
+    InteractionComponent interaction;
 #else
     BaseComponent base;
     RockComponent rock;
     StandardImageComponent image;
+    InteractionComponent interaction;
 #endif
 };
 
@@ -31,10 +35,12 @@ Archetype() struct PlantArchetype
 #ifdef FORG_SERVER
     PhysicComponent physic;
     PlayerComponent* player;
+    InteractionComponent interaction;
 #else
     BaseComponent base;
     PlantComponent plant;
     StandardImageComponent image;
+    InteractionComponent interaction;
 #endif
 };
 
@@ -56,9 +62,11 @@ Archetype() struct ObjectArchetype
     PhysicComponent physic;
     PlayerComponent* player;
     EffectComponent effect;
+    InteractionComponent interaction;
 #else
     BaseComponent base;
     LayoutComponent layout;
+    InteractionComponent interaction;
 #endif
 };
 
@@ -68,10 +76,12 @@ Archetype() struct ContainerArchetype
     PhysicComponent physic;
     EffectComponent effect;
     ContainerComponent container;
+    InteractionComponent interaction;
 #else
     BaseComponent base;
     LayoutComponent layout;
     ContainerMappingComponent container;
+    InteractionComponent interaction;
 #endif
 };
 
@@ -90,6 +100,10 @@ introspection() struct CommonEntityInitParams
 {
     Vec3 boundOffset;
     Vec3 boundDim MetaDefault("V3(1, 1, 1)");
+    
+    Enumerator groundAction MetaEnumerator("action");
+    Enumerator equipmentAction MetaEnumerator("action");
+    Enumerator containerAction MetaEnumerator("action");
 };
 
 introspection() struct ServerEntityInitParams
@@ -148,6 +162,8 @@ introspection() struct ClientEntityInitParams
     Vec3 shadowOffset;
     Vec2 shadowScale MetaDefault("V2(1, 1)");
     Vec4 shadowColor MetaDefault("V4(1, 1, 1, 0.5f)");
+    
+    r32 lootingZoomCoeff MetaDefault("3.0f");
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

@@ -42,6 +42,7 @@ struct ArchetypeLayout
             ArchetypeComponent hasOverlappingEffectsComponent;
             ArchetypeComponent hasContainerComponent;
             ArchetypeComponent hasContainerMappingComponent;
+            ArchetypeComponent hasInteractionComponent;
         };
     };
 };

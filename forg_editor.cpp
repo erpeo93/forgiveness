@@ -2080,7 +2080,7 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
                     NextRaw(&layout);
                     Edit_b32(&layout, "entity bounds", &layout.context->renderEntityBounds, 0, {});
                     NextRaw(&layout);
-                    Edit_Vec3(&layout, "camera offset", &worldMode->additionalCameraOffset, 0, {});
+                    Edit_Vec3(&layout, "camera offset", &worldMode->editorCameraOffset, 0, {});
                     NextRaw(&layout);
                     Edit_b32(&layout, "tile view", &worldMode->worldTileView, 0, {});
                     NextRaw(&layout);

@@ -162,22 +162,24 @@ struct ServerClientIDMapping
     };
 };
 
-enum EntityInteractionType
+enum InteractionType
 {
-    EntityInteraction_Standard,
-    EntityInteraction_Inventory,
-    EntityInteraction_Container,
+    Interaction_Standard,
+    Interaction_Equipment,
 };
 
 struct EntityHotInteraction
 {
-    u32 type;
+    InteractionType type;
+    u16 action;
     EntityID ID;
 };
 
 inline b32 AreEqual(EntityHotInteraction i1, EntityHotInteraction i2)
 {
-    b32 result = (i1.type == i2.type && AreEqual(i1.ID, i2.ID));
+    b32 result = (i1.type == i2.type && 
+                  i1.action == i2.action && 
+                  AreEqual(i1.ID, i2.ID));
     return result;
 }
 
@@ -186,6 +188,8 @@ struct GameModeWorld
     struct GameState* gameState;
     
     b32 inventoryMode;
+    b32 lootingMode;
+    EntityID lootingID;
     EntityID openIDLeft;
     EntityID openIDRight;
     
@@ -249,7 +253,7 @@ struct GameModeWorld
     u32 chunkApron;
     b32 worldTileView;
     b32 worldChunkView;
-    Vec3 additionalCameraOffset;
+    Vec3 editorCameraOffset;
     r32 defaultCameraZ;
     
     b32 useDebugCamera;

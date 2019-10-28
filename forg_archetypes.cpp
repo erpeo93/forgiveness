@@ -90,6 +90,22 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
     dest->maxObjectCount = 1;
 }
 
+
+internal u16 ExistMetaPropertyValue(u16 propertyType, Token value);
+internal void AddPossibleAction(PossibleActionList* list, Enumerator action)
+{
+    list->possibleAction = ExistMetaPropertyValue(Property_action, Tokenize(action.value));
+}
+
+INIT_COMPONENT_FUNCTION(InitInteractionComponent)
+{
+    ServerState* server = (ServerState*) state;
+    InteractionComponent* dest = (InteractionComponent*) componentPtr;
+    
+    AddPossibleAction(&dest->ground, common->groundAction);
+    AddPossibleAction(&dest->equipment, common->equipmentAction);
+    AddPossibleAction(&dest->container, common->containerAction);
+}
 #else
 INIT_COMPONENT_FUNCTION(InitBaseComponent)
 {
@@ -230,8 +246,23 @@ INIT_COMPONENT_FUNCTION(InitAnimationEffectsComponent)
 
 INIT_COMPONENT_FUNCTION(InitContainerMappingComponent)
 {
+    ContainerMappingComponent* dest = (ContainerMappingComponent*) componentPtr;
+    dest->zoomCoeff = c->lootingZoomCoeff;
 }
 
+internal void AddPossibleAction(PossibleActionList* list, Enumerator action)
+{
+    list->possibleAction = ExistMetaPropertyValue(Property_action, Tokenize(action.value));
+}
+
+INIT_COMPONENT_FUNCTION(InitInteractionComponent)
+{
+    InteractionComponent* dest = (InteractionComponent*) componentPtr;
+    
+    AddPossibleAction(&dest->ground, common->groundAction);
+    AddPossibleAction(&dest->equipment, common->equipmentAction);
+    AddPossibleAction(&dest->container, common->containerAction);
+}
 #endif
 
 

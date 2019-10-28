@@ -511,6 +511,8 @@ internal void HandleKeyboardInteraction(GameModeWorld* worldMode, ClientPlayer* 
     command->acceleration = {};
     command->targetID = {};
     
+    Vec2 cameraOffset = {};
+    
     if(IsDown(&input->moveLeft))
     {
         command->acceleration.x = -1.0f;
@@ -535,16 +537,33 @@ internal void HandleKeyboardInteraction(GameModeWorld* worldMode, ClientPlayer* 
     
     if(Pressed(&input->mouseCenter))
     {
-        worldMode->inventoryMode = !worldMode->inventoryMode;
+        if(IsValid(worldMode->lootingID))
+        {
+            if(worldMode->lootingMode)
+            {
+                worldMode->lootingMode = false;
+                worldMode->inventoryMode = true;
+            }
+            else
+            {
+                worldMode->lootingMode = true;
+                worldMode->inventoryMode = false;
+            }
+        }
+        else
+        {
+            worldMode->inventoryMode = !worldMode->inventoryMode;
+        }
     }
 }
 
-internal void AddPossibleInteraction(GameModeWorld* worldMode, u32 type, EntityID ID)
+internal void AddPossibleInteraction(GameModeWorld* worldMode, InteractionType type, PossibleActionList* list, EntityID ID)
 {
     if(worldMode->hotCount < ArrayCount(worldMode->hotInteractions))
     {
         EntityHotInteraction* dest = worldMode->hotInteractions + worldMode->hotCount++;
         dest->type = type;
+        dest->action = list->possibleAction;
         dest->ID = ID;
     }
 }
@@ -557,12 +576,32 @@ internal void HandleEquipmentInteraction(GameModeWorld* worldMode, EntityID ID)
         for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->mappings); ++equipIndex)
         {
             ObjectMapping* mapping = equipment->mappings + equipIndex;
-            if(IsValid(mapping->ID))
+			if(IsValid(mapping->ID))
             {
-                if(PointInRect(mapping->projectedOnScreen, worldMode->screenMouseP))
+                InteractionComponent* interaction = GetComponent(worldMode, mapping->ID, InteractionComponent);
+                
+                if(interaction && PointInRect(mapping->projectedOnScreen, worldMode->screenMouseP))
                 {
-                    AddPossibleInteraction(worldMode, EntityInteraction_Inventory, mapping->ID);
+                    AddPossibleInteraction(worldMode, Interaction_Equipment, &interaction->equipment, mapping->ID);
                 }
+            }
+        }
+    }
+}
+
+internal void AddContainerObjectsInteractions(GameModeWorld* worldMode, ObjectMapping* mappings, u32 mappingCount)
+{
+	for(u32 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
+	{
+        ObjectMapping* mapping = mappings + mappingIndex;
+        
+        if(IsValid(mapping->ID))
+        {
+            InteractionComponent* interaction = GetComponent(worldMode, mapping->ID, InteractionComponent);
+            
+            if(interaction && PointInRect(mapping->projectedOnScreen, worldMode->screenMouseP))
+            {
+                AddPossibleInteraction(worldMode, Interaction_Standard, &interaction->container, mapping->ID);
             }
         }
     }
@@ -575,14 +614,7 @@ internal void HandleContainerInteraction(GameModeWorld* worldMode)
         ContainerMappingComponent* container = GetComponent(worldMode, worldMode->openIDRight, ContainerMappingComponent);
         if(container)
         {
-            for(u32 mappingIndex = 0; mappingIndex < ArrayCount(container->mappings); ++mappingIndex)
-            {
-                ObjectMapping* mapping = container->mappings + mappingIndex;
-                if(PointInRect(mapping->projectedOnScreen, worldMode->screenMouseP))
-                {
-                    AddPossibleInteraction(worldMode, EntityInteraction_Container, mapping->ID);
-                }
-            }
+			AddContainerObjectsInteractions(worldMode, container->mappings, ArrayCount(container->mappings));
         }
     }
     
@@ -591,14 +623,7 @@ internal void HandleContainerInteraction(GameModeWorld* worldMode)
         ContainerMappingComponent* container = GetComponent(worldMode, worldMode->openIDLeft, ContainerMappingComponent);
         if(container)
         {
-            for(u32 mappingIndex = 0; mappingIndex < ArrayCount(container->mappings); ++mappingIndex)
-            {
-                ObjectMapping* mapping = container->mappings + mappingIndex;
-                if(PointInRect(mapping->projectedOnScreen, worldMode->screenMouseP))
-                {
-                    AddPossibleInteraction(worldMode, EntityInteraction_Container, mapping->ID);
-                }
-            }
+            AddContainerObjectsInteractions(worldMode, container->mappings, ArrayCount(container->mappings));
         }
     }
 }
@@ -664,12 +689,14 @@ INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
     if(!AreEqual(ID, worldMode->player.clientID))
     {
         BaseComponent* component = GetComponent(worldMode, ID, BaseComponent);
+		InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
+        
         r32 cameraZ;
         Rect3 bound = GetEntityBound(worldMode, component);
         Rect2 screenBounds = ProjectOnScreen(group, bound, &cameraZ);
         if(ShouldBeRendered(worldMode, component) && PointInRect(screenBounds, worldMode->screenMouseP))
         {
-            AddPossibleInteraction(worldMode, EntityInteraction_Standard, ID);
+            AddPossibleInteraction(worldMode, Interaction_Standard, &interaction->ground, ID);
         }
     }
 }
@@ -737,23 +764,35 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
             }
 #endif
-            
             Clear(group, V4(0.1f, 0.1f, 0.1f, 1.0f));
             ResetLightGrid(worldMode);
             
-            r32 zoom = worldMode->inventoryMode ? 3.5f : 1.0f;
-            MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), zoom);
-            UpdateAndSetupGameCamera(worldMode, group, input, deltaMouseScreenP);
+            SetupGameCamera(worldMode, group, input, deltaMouseScreenP);
+            MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), 1.0f);
             
             UpdateEntities(worldMode, input->timeToAdvance, myPlayer);
             
             worldMode->hotCount = 0;
             HandleKeyboardInteraction(worldMode, myPlayer, input);
-            EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent), input->timeToAdvance);
-            if(worldMode->inventoryMode)
+            EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent) && ArchetypeHas(InteractionComponent), input->timeToAdvance);
+            
+			if(worldMode->lootingMode)
+			{
+                Assert(IsValid(worldMode->lootingID));
+                ContainerMappingComponent* container = GetComponent(worldMode, worldMode->lootingID, ContainerMappingComponent);
+                BaseComponent* lootingBase = GetComponent(worldMode, worldMode->lootingID, BaseComponent);
+                
+                if(container && lootingBase)
+                {
+                    AddContainerObjectsInteractions(worldMode, container->mappings, ArrayCount(container->mappings));
+                    MoveCameraTowards(worldMode, lootingBase, V2(0, 0), V2(0, 0), container->zoomCoeff);
+                }
+			}
+            else if(worldMode->inventoryMode)
             {
                 HandleEquipmentInteraction(worldMode, myPlayer->clientID);
                 HandleContainerInteraction(worldMode);
+                MoveCameraTowards(worldMode, player, V2(0, 0), V2(0, 0), 2.0f);
             }
             
             if(worldMode->hotCount > 0)
@@ -784,24 +823,17 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 switch(hotInteraction.type)
                 {
-                    case EntityInteraction_Standard:
+                    case Interaction_Standard:
                     {
                         if(Pressed(&input->mouseLeft))
                         {
                             GameCommand* command = &myPlayer->currentCommand;
-                            command->targetID = hotInteraction.ID;
-                            command->action = pick;
-                        }
-                        
-                        if(Pressed(&input->mouseRight))
-                        {
-                            GameCommand* command = &myPlayer->currentCommand;
-                            command->targetID = hotInteraction.ID;
-                            command->action = open;
+                            command->targetID = base->serverID;
+                            command->action = hotInteraction.action;
                         }
                     } break;
                     
-                    case EntityInteraction_Inventory:
+                    case Interaction_Equipment:
                     {
                         if(Pressed(&input->mouseLeft))
                         {
@@ -829,7 +861,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                         if(Pressed(&input->mouseRight))
                         {
                             GameCommand command = {};
-                            command.action = disequip;
+                            command.action = hotInteraction.action;
                             command.targetID = base->serverID;
                             SendInventoryCommand(command);
                             
@@ -843,28 +875,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             }
                         }
                     } break;
-                    
-                    case EntityInteraction_Container:
-                    {
-                        if(Pressed(&input->mouseLeft))
-                        {
-                            GameCommand* command = &myPlayer->currentCommand;
-                            command->targetID = hotInteraction.ID;
-                            command->action = useFromContainer;
-                        }
-                        
-                        if(Pressed(&input->mouseRight))
-                        {
-                            GameCommand* command = &myPlayer->currentCommand;
-                            command->targetID = hotInteraction.ID;
-                            command->action = dropFromContainer;
-                        }
-                        
-                        
-                    } break;
                 }
             }
             
+            UpdateGameCamera(worldMode, input);
             BeginDepthPeel(group);
             
             Vec3 ambientLightColor = HandleDaynightCycle(worldMode, input);
@@ -905,12 +919,14 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
             //worldMode->boltCache->deltaP = deltaP;
             //UpdateAndRenderBolts(worldMode, worldMode->boltCache, input->timeToAdvance, group);
-            
-            if(worldMode->inventoryMode)
+            if(worldMode->lootingMode)
+			{
+			}
+            else if(worldMode->inventoryMode)
             {
                 DrawOpenedContainers(worldMode, group);
-                DrawUsingSlots();
             }
+			DrawUsingSlots();
             
             RenderEditor(group, worldMode, deltaMouseScreenP, input);
             EndDepthPeel(group);
