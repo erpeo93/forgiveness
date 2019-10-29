@@ -10,11 +10,16 @@ struct UsingComponent
 };
 
 #define MAX_CONTAINER_OBJECT 64
+#define MAX_USING_OBJECT 8
 struct ContainerComponent
 {
     EntityID openedBy;
-    u32 maxObjectCount;
-    EntityID IDs[MAX_CONTAINER_OBJECT];
+    
+    u32 maxStoredCount;
+    EntityID storedIDs[MAX_CONTAINER_OBJECT];
+    
+    u32 maxUsingCount;
+    EntityID usingIDs[MAX_USING_OBJECT];
 };
 
 struct ObjectMapping
@@ -35,11 +40,16 @@ struct UsingMappingComponent
     ObjectMapping mappings[Count_usingSlot];
 };
 
+
+
 struct ContainerMappingComponent
 {
     EntityID openedBy;
     r32 zoomCoeff;
-    ObjectMapping mappings[MAX_CONTAINER_OBJECT];
+    Vec2 desiredOpenedDim;
+    
+    ObjectMapping storedMappings[MAX_CONTAINER_OBJECT];
+    ObjectMapping usingMappings[MAX_USING_OBJECT];
 };
 
 enum EntityFlags

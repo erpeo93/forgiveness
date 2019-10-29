@@ -87,6 +87,27 @@ internal b32 FindPlace(EntityID* IDs, u32 idCount, EntityID ID)
     return result;
 }
 
+internal b32 Store(ServerState* server, ContainerComponent* container, EntityID ID)
+{
+    b32 result = false;
+    if(container)
+    {
+        if(FindPlace(container->usingIDs, container->maxUsingCount, ID))
+        {
+            result = true;
+        }
+        else
+        {
+            if(FindPlace(container->storedIDs, container->maxStoredCount, ID))
+            {
+                result = true;
+            }
+        }
+    }
+    
+    return result;
+}
+
 internal b32 Use(ServerState* server, EntityID ID, PhysicComponent* targetPhysic, EntityID targetID)
 {
     b32 result = false;
@@ -100,17 +121,25 @@ internal b32 Use(ServerState* server, EntityID ID, PhysicComponent* targetPhysic
         }
     }
     
-    return result;
-}
-
-internal b32 Store(ServerState* server, ContainerComponent* container, EntityID ID)
-{
-    b32 result = false;
-    if(container)
+    if(!result)
     {
-        if(FindPlace(container->IDs, container->maxObjectCount, ID))
+        EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+        if(equipment)
         {
-            result = true;
+            for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->IDs); ++equipIndex)
+            {
+                EntityID equipmentID = equipment->IDs[equipIndex];
+                if(IsValid(equipmentID))
+                {
+                    ContainerComponent* container = GetComponent(server, equipmentID, ContainerComponent);
+                    if(container && FindPlace(container->usingIDs, container->maxUsingCount, targetID))
+                    {
+                        targetPhysic->flags = AddFlags(targetPhysic->flags, EntityFlag_notInWorld);
+                        result = true;
+                        break;
+                    }
+                }
+            }
         }
     }
     
@@ -122,16 +151,29 @@ internal b32 Remove(ServerState* server, ContainerComponent* container, EntityID
     b32 result = false;
     if(container)
     {
-        for(u32 objectIndex = 0; objectIndex < container->maxObjectCount; ++objectIndex)
+        for(u32 objectIndex = 0; objectIndex < container->maxStoredCount; ++objectIndex)
         {
-            if(AreEqual(container->IDs[objectIndex], ID))
+            if(AreEqual(container->storedIDs[objectIndex], ID))
             {
-                container->IDs[objectIndex] = {};
+                container->storedIDs[objectIndex] = {};
                 result = true;
                 break;
             }
         }
         
+        if(!result)
+        {
+            for(u32 objectIndex = 0; objectIndex < container->maxUsingCount; ++objectIndex)
+            {
+                if(AreEqual(container->usingIDs[objectIndex], ID))
+                {
+                    container->usingIDs[objectIndex] = {};
+                    result = true;
+                    break;
+                }
+            }
+            
+        }
     }
     return result;
 }
@@ -209,6 +251,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         case use:
         {
             EntityID targetID = command->targetID;
+            PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
             EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
             UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
             if(equipment && equipped)
@@ -217,9 +260,10 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                 {
                     if(AreEqual(equipment->IDs[equipIndex], targetID))
                     {
-                        if(FindPlace(equipped->IDs, ArrayCount(equipped->IDs), targetID))
+                        if(Use(server, ID, targetPhysic, targetID))
                         {
                             equipment->IDs[equipIndex] = {};
+                            break;
                         }
                     }
                 }
@@ -401,10 +445,27 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
     }
 }
 
-STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
+internal void DispatchEntityEffects(ServerState* server, EntityID ID, r32 elapsedTime)
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    
+    EffectComponent* effects = GetComponent(server, ID, EffectComponent);
+    if(physic && effects)
+    {
+        for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
+        {
+            GameEffect* effect = effects->effects + effectIndex;
+            effects->timers[effectIndex] += elapsedTime;
+            if(effects->timers[effectIndex] >= effect->timer)
+            {
+                effects->timers[effectIndex] = 0;
+                DispatchGameEffect(server, ID, physic->P, effect);
+            }
+        }
+    }
+}
+
+STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
+{
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
     if(equipment)
     {
@@ -413,22 +474,20 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
             EntityID equipID = equipment->IDs[equipmentIndex];
             if(IsValid(equipID))
             {
-                EffectComponent* effects = GetComponent(server, equipID, EffectComponent);
-                Assert(effects);
-                for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
+                DispatchEntityEffects(server, equipID, elapsedTime);
+                
+                ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
+                for(u32 usingIndex = 0; usingIndex < container->maxUsingCount; ++usingIndex)
                 {
-                    GameEffect* effect = effects->effects + effectIndex;
-                    effects->timers[effectIndex] += elapsedTime;
-                    if(effects->timers[effectIndex] >= effect->timer)
+                    EntityID usingID = container->usingIDs[usingIndex];
+                    if(IsValid(usingID))
                     {
-                        effects->timers[effectIndex] = 0;
-                        DispatchGameEffect(server, ID, physic->P, effect);
+                        DispatchEntityEffects(server, usingID, elapsedTime);
                     }
                 }
             }
         }
     }
-    
     
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
     if(equipped)
@@ -438,19 +497,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
             EntityID usingID = equipped->IDs[equipmentIndex];
             if(IsValid(usingID))
             {
-                EffectComponent* effects = GetComponent(server, usingID, EffectComponent);
-                
-                Assert(effects);
-                for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
-                {
-                    GameEffect* effect = effects->effects + effectIndex;
-                    effects->timers[effectIndex] += elapsedTime;
-                    if(effects->timers[effectIndex] >= effect->timer)
-                    {
-                        effects->timers[effectIndex] = 0;
-                        DispatchGameEffect(server, ID, physic->P, effect);
-                    }
-                }
+                DispatchEntityEffects(server, usingID, elapsedTime);
             }
         }
     }
@@ -601,10 +648,9 @@ internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
         for(u32 usingIndex = 0; usingIndex < Count_usingSlot; ++usingIndex)
         {
             EntityID usingID = equipped->IDs[usingIndex];
-            ContainerComponent* container = GetComponent(server, usingID, ContainerComponent);
-            if(container)
+            if(IsValid(usingID))
             {
-                UpdateObjectPositions(server, physic->P, container->IDs, container->maxObjectCount);
+                Assert(!HasComponent(usingID, ContainerComponent));
             }
         }
     }
@@ -620,7 +666,8 @@ internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
             ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
             if(container)
             {
-                UpdateObjectPositions(server, physic->P, container->IDs, container->maxObjectCount);
+                UpdateObjectPositions(server, physic->P, container->storedIDs, container->maxStoredCount);
+                UpdateObjectPositions(server, physic->P, container->usingIDs, container->maxUsingCount);
             }
         }
     }
@@ -678,6 +725,10 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime
                         //if(IsValid(usingID))
                         {
                             QueueUsingID(player, ID, slotIndex, usingID);
+                            if(IsValid(usingID))
+                            {
+                                Assert(!HasComponent(usingID, ContainerComponent));
+                            }
                         }
                     }
                 }
@@ -685,12 +736,21 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime
                 if(container)
                 {
                     QueueOpenedByID(player, ID, container->openedBy);
-                    for(u16 objectIndex = 0; objectIndex < container->maxObjectCount; ++objectIndex)
+                    for(u16 objectIndex = 0; objectIndex < container->maxStoredCount; ++objectIndex)
                     {
-                        EntityID objectID = container->IDs[objectIndex];
+                        EntityID objectID = container->storedIDs[objectIndex];
                         //if(IsValid(usingID))
                         {
-                            QueueContainerID(player, ID, objectIndex, objectID);
+                            QueueContainerStoredID(player, ID, objectIndex, objectID);
+                        }
+                    }
+                    
+                    for(u16 objectIndex = 0; objectIndex < container->maxUsingCount; ++objectIndex)
+                    {
+                        EntityID objectID = container->usingIDs[objectIndex];
+                        //if(IsValid(usingID))
+                        {
+                            QueueContainerUsingID(player, ID, objectIndex, objectID);
                         }
                     }
                 }

@@ -109,6 +109,9 @@ introspection() struct CommonEntityInitParams
     
     ArrayCounter containerActionCount MetaCounter("containerActions");
     Enumerator* containerActions MetaEnumerator("action");
+    
+    ArrayCounter equippedActionCount MetaCounter("equippedActions");
+    Enumerator* equippedActions MetaEnumerator("action");
 };
 
 introspection() struct ServerEntityInitParams
@@ -169,6 +172,7 @@ introspection() struct ClientEntityInitParams
     Vec4 shadowColor MetaDefault("V4(1, 1, 1, 0.5f)");
     
     r32 lootingZoomCoeff MetaDefault("3.0f");
+    Vec2 desiredOpenedDim MetaDefault("V2(400, 400)");
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

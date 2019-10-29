@@ -17,10 +17,10 @@ inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, r32
     worldMode->cameraSpeed = cameraSpeed;
 }
 
-internal void SetupGameCamera(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input, Vec2 dMouseP)
+internal void SetupGameCamera(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
-    
 #if FORGIVENESS_INTERNAL
+    Vec2 dMouseP = worldMode->deltaMouseP;
     if(input->altDown && IsDown(&input->mouseLeft))
     {
         r32 rotationSpeed = 0.001f * PI32;

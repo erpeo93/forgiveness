@@ -322,8 +322,29 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
 {
     u64 emptySpaceHash = StringHash("emptySpace");
     
-    LayoutPiece* pieces = container->container ? layout->openPieces : layout->pieces;
-    u32 pieceCount = container->container ? layout->openPieceCount : layout->pieceCount;
+    LayoutPiece* pieces = 0;
+    u32 pieceCount = 0;
+    
+    switch(container->drawMode)
+    {
+        case LayoutContainerDraw_Standard:
+        {
+            pieces = layout->pieces;
+            pieceCount = layout->pieceCount;
+        } break;
+        
+        case LayoutContainerDraw_Open:
+        {
+            pieces = layout->openPieces;
+            pieceCount = layout->openPieceCount;
+        } break;
+        
+        case LayoutContainerDraw_Using:
+        {
+            pieces = layout->usingPieces;
+            pieceCount = layout->usingPieceCount;
+        } break;
+    }
     
     Rect2 result = InvertedInfinityRect2();
     RandomSequence seq = Seed(seed);
@@ -333,68 +354,67 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
         BitmapId BID = GetImageFromReference(group->assets, &piece->image, &seq);
         if(piece->nameHash == nameHash)
         {
-            if((piece->nameHash != emptySpaceHash) || container->container)
+            if(IsValid(BID))
             {
-                if(IsValid(BID))
+                transform.additionalZBias += 0.01f * pieceIndex;
+                BitmapDim dim = PushBitmap(group, transform, BID, P, piece->height, V4(1, 1, 1, 1), lights);
+                if(transform.upright)
                 {
-                    transform.additionalZBias += 0.01f * pieceIndex;
-                    BitmapDim dim = PushBitmap(group, transform, BID, P, piece->height, V4(1, 1, 1, 1), lights);
-                    if(transform.upright)
-                    {
-                        result = ProjectOnScreen(group, dim);
-                    }
-                    else
-                    {
-                        result = RectMinDim(dim.P.xy, dim.size);
-                    }
+                    result = ProjectOnScreen(group, dim);
+                }
+                else
+                {
+                    result = RectMinDim(dim.P.xy, dim.size);
+                }
+                
+                if(piece->nameHash == emptySpaceHash && container->container)
+                {
+                    ObjectMapping* mappings = (container->drawMode == LayoutContainerDraw_Using) ? container->container->usingMappings : container->container->storedMappings;
+                    u32 mappingCount = (container->drawMode == LayoutContainerDraw_Using) ? ArrayCount(container->container->usingMappings) : ArrayCount(container->container->storedMappings);
                     
-                    if(piece->nameHash == emptySpaceHash && container->container)
+                    if(container->currentObjectIndex < mappingCount)
                     {
-                        ContainerMappingComponent* objects = container->container;
-                        if(container->currentObjectIndex < ArrayCount(objects->mappings))
+                        ObjectMapping* mapping = mappings + container->currentObjectIndex++;
+                        EntityID objectID = mapping->ID;
+                        
+                        if(IsValid(objectID))
                         {
-                            ObjectMapping* mapping = objects->mappings + container->currentObjectIndex++;
-                            EntityID objectID = mapping->ID;
-                            
-                            if(IsValid(objectID))
+                            BaseComponent* objectBase = GetComponent(worldMode, objectID, BaseComponent);
+                            transform.modulationPercentage = GetModulationPercentageAndResetFocus(objectBase);
+                            LayoutComponent* objectLayout = GetComponent(worldMode, objectID, LayoutComponent);
+                            if(objectBase && objectLayout)
                             {
-                                BaseComponent* objectBase = GetComponent(worldMode, objectID, BaseComponent);
-                                transform.modulationPercentage = GetModulationPercentageAndResetFocus(objectBase);
-                                LayoutComponent* objectLayout = GetComponent(worldMode, objectID, LayoutComponent);
-                                if(objectBase && objectLayout)
+                                Rect2 objectRect = result;
+                                LayoutContainer objectContainer = {};
+                                
+                                mapping->projectedOnScreen = Offset(result, 0.5f * group->screenDim);
+                                if(transform.upright)
                                 {
-                                    Rect2 objectRect = result;
-                                    LayoutContainer objectContainer = {};
-                                    
-                                    mapping->projectedOnScreen = Offset(result, 0.5f * group->screenDim);
-                                    if(transform.upright)
-                                    {
-                                        RenderLayoutInRectCameraAligned(worldMode, group, P, dim.P, objectRect, transform, objectLayout, objectBase->seed, lights, &objectContainer);
-                                    }
-                                    else
-                                    {
-                                        RenderLayoutInRect(worldMode, group, objectRect, transform, objectLayout, objectBase->seed, lights, &objectContainer);
-                                    }
+                                    RenderLayoutInRectCameraAligned(worldMode, group, P, dim.P, objectRect, transform, objectLayout, objectBase->seed, lights, &objectContainer);
+                                }
+                                else
+                                {
+                                    RenderLayoutInRect(worldMode, group, objectRect, transform, objectLayout, objectBase->seed, lights, &objectContainer);
                                 }
                             }
                         }
                     }
+                }
+                
+                PAKBitmap* bitmap = GetBitmapInfo(group->assets, BID);
+                for(u32 attachmentIndex = 0; attachmentIndex < bitmap->attachmentPointCount; ++attachmentIndex)
+                {
+                    PAKAttachmentPoint* attachmentPoint = GetAttachmentPoint(group->assets, BID, attachmentIndex);
                     
-                    PAKBitmap* bitmap = GetBitmapInfo(group->assets, BID);
-                    for(u32 attachmentIndex = 0; attachmentIndex < bitmap->attachmentPointCount; ++attachmentIndex)
+                    if(attachmentPoint)
                     {
-                        PAKAttachmentPoint* attachmentPoint = GetAttachmentPoint(group->assets, BID, attachmentIndex);
+                        Vec3 newP = GetAlignP(dim, attachmentPoint->alignment);
+                        ObjectTransform finalTransform = transform;
+                        finalTransform.angle += attachmentPoint->angle;
+                        finalTransform.scale = Hadamart(finalTransform.scale, attachmentPoint->scale);
                         
-                        if(attachmentPoint)
-                        {
-                            Vec3 newP = GetAlignP(dim, attachmentPoint->alignment);
-                            ObjectTransform finalTransform = transform;
-                            finalTransform.angle += attachmentPoint->angle;
-                            finalTransform.scale = Hadamart(finalTransform.scale, attachmentPoint->scale);
-                            
-                            Rect2 subRect = RenderLayoutRecursive_(worldMode, group, newP, finalTransform, layout, StringHash(attachmentPoint->name), seed, lights, container);
-                            result = Union(result, subRect);
-                        }
+                        Rect2 subRect = RenderLayoutRecursive_(worldMode, group, newP, finalTransform, layout, StringHash(attachmentPoint->name), seed, lights, container);
+                        result = Union(result, subRect);
                     }
                 }
             }
@@ -478,9 +498,10 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
         
         ContainerMappingComponent* container = GetComponent(worldMode, ID, ContainerMappingComponent);
         LayoutContainer layoutContainer = {};
-        if(AreEqual(container->openedBy, worldMode->player.serverID))
+        if(container && AreEqual(container->openedBy, worldMode->player.serverID))
         {
             layoutContainer.container = container; 
+            layoutContainer.drawMode = LayoutContainerDraw_Open;
         }
         
         RenderLayout(worldMode, group, P, transform, layout, base->seed, lights, &layoutContainer);
@@ -564,6 +585,11 @@ internal Vec2 HandleKeyboardInteraction(GameModeWorld* worldMode, ClientPlayer* 
     return cameraOffset;
 }
 
+internal void ResetInteractions(GameModeWorld* worldMode)
+{
+    worldMode->hotCount = 0;
+}
+
 internal void AddPossibleInteraction(GameModeWorld* worldMode, InteractionType type, PossibleActionList* list, EntityID ID)
 {
     if(worldMode->hotCount < ArrayCount(worldMode->hotInteractions))
@@ -571,6 +597,8 @@ internal void AddPossibleInteraction(GameModeWorld* worldMode, InteractionType t
         EntityHotInteraction* dest = worldMode->hotInteractions + worldMode->hotCount++;
         dest->type = type;
         dest->actionCount = 0;
+        dest->actions[0] = 0;
+        
         for(u32 actionIndex = 0; actionIndex < list->actionCount; ++actionIndex)
         {
             if(dest->actionCount < ArrayCount(dest->actions))
@@ -582,28 +610,7 @@ internal void AddPossibleInteraction(GameModeWorld* worldMode, InteractionType t
     }
 }
 
-internal void HandleEquipmentInteraction(GameModeWorld* worldMode, EntityID ID)
-{
-    EquipmentMappingComponent* equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
-    if(equipment)
-    {
-        for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->mappings); ++equipIndex)
-        {
-            ObjectMapping* mapping = equipment->mappings + equipIndex;
-			if(IsValid(mapping->ID))
-            {
-                InteractionComponent* interaction = GetComponent(worldMode, mapping->ID, InteractionComponent);
-                
-                if(interaction && PointInRect(mapping->projectedOnScreen, worldMode->screenMouseP))
-                {
-                    AddPossibleInteraction(worldMode, Interaction_Equipment, &interaction->equipment, mapping->ID);
-                }
-            }
-        }
-    }
-}
-
-internal void AddContainerObjectsInteractions(GameModeWorld* worldMode, ObjectMapping* mappings, u32 mappingCount)
+internal void AddContainerObjectsInteractions(GameModeWorld* worldMode, ObjectMapping* mappings, u32 mappingCount, InteractionType interactionType)
 {
 	for(u32 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
 	{
@@ -613,11 +620,21 @@ internal void AddContainerObjectsInteractions(GameModeWorld* worldMode, ObjectMa
         {
             InteractionComponent* interaction = GetComponent(worldMode, mapping->ID, InteractionComponent);
             
-            if(interaction && PointInRect(mapping->projectedOnScreen, worldMode->screenMouseP))
+            if(interaction && PointInRect(mapping->projectedOnScreen, worldMode->absoluteMouseP))
             {
-                AddPossibleInteraction(worldMode, Interaction_Standard, &interaction->container, mapping->ID);
+                ResetInteractions(worldMode);
+                AddPossibleInteraction(worldMode, interactionType, interaction->actions + interactionType, mapping->ID);
             }
         }
+    }
+}
+
+internal void HandleEquipmentInteraction(GameModeWorld* worldMode, EntityID ID)
+{
+    EquipmentMappingComponent* equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
+    if(equipment)
+    {
+        AddContainerObjectsInteractions(worldMode, equipment->mappings, ArrayCount(equipment->mappings), Interaction_Equipment);
     }
 }
 
@@ -628,7 +645,7 @@ internal void HandleContainerInteraction(GameModeWorld* worldMode)
         ContainerMappingComponent* container = GetComponent(worldMode, worldMode->openIDRight, ContainerMappingComponent);
         if(container)
         {
-			AddContainerObjectsInteractions(worldMode, container->mappings, ArrayCount(container->mappings));
+			AddContainerObjectsInteractions(worldMode, container->storedMappings, ArrayCount(container->storedMappings), Interaction_Container);
         }
     }
     
@@ -637,65 +654,127 @@ internal void HandleContainerInteraction(GameModeWorld* worldMode)
         ContainerMappingComponent* container = GetComponent(worldMode, worldMode->openIDLeft, ContainerMappingComponent);
         if(container)
         {
-            AddContainerObjectsInteractions(worldMode, container->mappings, ArrayCount(container->mappings));
+            AddContainerObjectsInteractions(worldMode, container->storedMappings, ArrayCount(container->storedMappings), Interaction_Container);
         }
     }
 }
 
-
-internal void DrawOpenedContainers(GameModeWorld* worldMode, RenderGroup* group)
+internal void HandleUsingSlotInteraction(GameModeWorld* worldMode)
 {
-    Vec2 rightP = V2(300, -200);
-    Vec2 leftP = V2(-700, -200);
-    Vec2 desiredDim = V2(400, 400);
-    
-    if(IsValid(worldMode->openIDRight))
+    UsingMappingComponent* equipped = GetComponent(worldMode, worldMode->player.clientID, UsingMappingComponent);
+    if(equipped)
     {
-        SetOrthographicTransformScreenDim(group);
-        
-        BaseComponent* base = GetComponent(worldMode, worldMode->openIDRight, BaseComponent);
-        LayoutComponent* layout = GetComponent(worldMode, worldMode->openIDRight, LayoutComponent);
-        LayoutContainer container = {};
-        
-        container.container = GetComponent(worldMode, worldMode->openIDRight, ContainerMappingComponent);
-        
-        ObjectTransform transform = FlatTransform(10.0f);
-        transform.angle = layout->rootAngle;
-        transform.scale = layout->rootScale;
-        transform.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
-        
-        RenderLayoutInRect(worldMode, group, RectMinDim(rightP, desiredDim), transform, layout, base->seed, {}, &container);
+        AddContainerObjectsInteractions(worldMode, equipped->mappings, ArrayCount(equipped->mappings), Interaction_Equipped);
     }
     
-    if(IsValid(worldMode->openIDLeft))
+    EquipmentMappingComponent* equipment = GetComponent(worldMode, worldMode->player.clientID, EquipmentMappingComponent);
+    if(equipment)
     {
-        SetOrthographicTransformScreenDim(group);
-        
-        BaseComponent* base = GetComponent(worldMode, worldMode->openIDLeft, BaseComponent);
-        LayoutComponent* layout = GetComponent(worldMode, worldMode->openIDLeft, LayoutComponent);
-        
-        LayoutContainer container = {};
-        container.container = GetComponent(worldMode, worldMode->openIDLeft, ContainerMappingComponent);
-        
-        ObjectTransform transform = FlatTransform(10.0f);
-        transform.angle = layout->rootAngle;
-        transform.scale = layout->rootScale * 300.0f;
-        transform.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
-        
-        RenderLayoutInRect(worldMode, group, RectMinDim(leftP, desiredDim), transform, layout, base->seed, {}, &container);
+        for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->mappings); ++equipIndex)
+        {
+            EntityID ID = equipment->mappings[equipIndex].ID;
+            ContainerMappingComponent* container = GetComponent(worldMode, ID, ContainerMappingComponent);
+            if(container)
+            {
+                AddContainerObjectsInteractions(worldMode, container->usingMappings, ArrayCount(container->usingMappings), Interaction_Equipped);
+            }
+        }
     }
-    
 }
 
-internal void DrawUsingSlots()
+internal void OverdrawLayout(GameModeWorld* worldMode, RenderGroup* group, EntityID ID, Rect2 rect, LayoutContainerDrawMode drawMode)
 {
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    LayoutComponent* layout = GetComponent(worldMode, ID, LayoutComponent);
+    LayoutContainer container = {};
+    container.container = GetComponent(worldMode, ID, ContainerMappingComponent);
+    container.drawMode = drawMode;
     
-#if 0    
+    ObjectTransform transform = FlatTransform(1.0f);
+    transform.angle = layout->rootAngle;
+    transform.scale = layout->rootScale;
+    transform.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
+    RenderLayoutInRect(worldMode, group, rect, transform, layout, base->seed, {}, &container);
+}
+
+internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
+{
     SetOrthographicTransformScreenDim(group);
-    Draw(leftHand, V2(0, -400));
-    Draw(rightHand, V2(0, 400));
-#endif
     
+    Vec2 mouseP = worldMode->absoluteMouseP - 0.5f * group->screenDim;
+    if(worldMode->lootingMode)
+    {
+    }
+    else if(worldMode->inventoryMode)
+    {
+        Vec2 rightP = V2(400, 0);
+        Vec2 leftP = V2(-400, 0);
+        Vec2 defaultDim = V2(400, 400);
+        if(IsValid(worldMode->openIDRight))
+        {
+            ContainerMappingComponent* container = GetComponent(worldMode, worldMode->openIDRight, ContainerMappingComponent);
+            Vec2 dim = container ? container->desiredOpenedDim : defaultDim;
+            Rect2 rect = RectCenterDim(rightP, dim);
+            OverdrawLayout(worldMode, group, worldMode->openIDRight, rect, LayoutContainerDraw_Open);
+        }
+        
+        if(IsValid(worldMode->openIDLeft))
+        {
+            ContainerMappingComponent* container = GetComponent(worldMode, worldMode->openIDLeft, ContainerMappingComponent);
+            Vec2 dim = container ? container->desiredOpenedDim : defaultDim;
+            Rect2 rect = RectCenterDim(leftP, dim);
+            OverdrawLayout(worldMode, group, worldMode->openIDLeft, rect, 
+                           LayoutContainerDraw_Open);
+        }
+    }
+    
+    Vec2 minP = -0.5f * group->screenDim;
+    Vec2 dim = V2(100, 100);
+    r32 margin = 20.0f;
+    
+    UsingMappingComponent* usingMappings = GetComponent(worldMode, worldMode->player.clientID, UsingMappingComponent);
+    if(usingMappings)
+    {
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(usingMappings->mappings); ++slotIndex)
+        {
+            ObjectMapping* mapping = usingMappings->mappings + slotIndex;
+            Rect2 rect = RectMinDim(minP, dim);
+            PushRectOutline(group, FlatTransform(2.0f), rect, V4(0, 0, 0, 1), 2.0f);
+            if(IsValid(mapping->ID))
+            {
+                OverdrawLayout(worldMode, group, mapping->ID, rect, LayoutContainerDraw_Standard);
+            }
+            
+            minP.x += dim.x + margin;
+        }
+    }
+    
+    minP = -0.5f * group->screenDim + V2(0, 2.0f * dim.y);
+    EquipmentMappingComponent* equipment = GetComponent(worldMode, worldMode->player.clientID, EquipmentMappingComponent);
+    if(equipment)
+    {
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->mappings); ++slotIndex)
+        {
+            ObjectMapping* mapping = equipment->mappings + slotIndex;
+            Rect2 rect = RectMinDim(minP, dim);
+            PushRectOutline(group, FlatTransform(2.0f), rect, V4(0, 0, 0, 1), 2.0f);
+            
+            if(IsValid(mapping->ID))
+            {
+                OverdrawLayout(worldMode, group, mapping->ID, rect, LayoutContainerDraw_Standard);
+            }
+            
+            minP.x += dim.x + margin;
+        }
+    }
+    
+    FontId fontID = QueryFonts(group->assets, "game", 0, 0);
+    if(IsValid(fontID))
+    {
+        Vec3 tooltipP = V3(mouseP, 0);
+        Vec4 color = worldMode->multipleActions ? V4(1, 0, 0, 1) : V4(1, 1, 1, 1);
+        PushText(group, fontID, worldMode->tooltip, tooltipP, 0.7f, color);
+    }
 }
 
 INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
@@ -708,9 +787,9 @@ INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
         r32 cameraZ;
         Rect3 bound = GetEntityBound(worldMode, component);
         Rect2 screenBounds = ProjectOnScreen(group, bound, &cameraZ);
-        if(ShouldBeRendered(worldMode, component) && PointInRect(screenBounds, worldMode->screenMouseP))
+        if(ShouldBeRendered(worldMode, component) && PointInRect(screenBounds, worldMode->absoluteMouseP))
         {
-            AddPossibleInteraction(worldMode, Interaction_Standard, &interaction->ground, ID);
+            AddPossibleInteraction(worldMode, Interaction_Ground, interaction->actions + Interaction_Ground, ID);
         }
     }
 }
@@ -757,8 +836,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     Vec3 unprojectedWorldMouseP = UnprojectAtZ(group, &group->gameCamera, screenMouseP, 0);
     Vec3 groundMouseP = ProjectOnGround(unprojectedWorldMouseP, group->gameCamera.P);
     
-    Vec2 deltaMouseScreenP = screenMouseP - worldMode->screenMouseP;
-    worldMode->screenMouseP = screenMouseP;
+    worldMode->deltaMouseP = screenMouseP - worldMode->absoluteMouseP;
+    worldMode->absoluteMouseP = screenMouseP;
+    
     
     if(IsValid(myPlayer->clientID))
     {
@@ -781,10 +861,12 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             Clear(group, V4(0.1f, 0.1f, 0.1f, 1.0f));
             ResetLightGrid(worldMode);
             
-            SetupGameCamera(worldMode, group, input, deltaMouseScreenP);
+            SetupGameCamera(worldMode, group, input);
             UpdateEntities(worldMode, input->timeToAdvance, myPlayer);
             
             worldMode->hotCount = 0;
+            worldMode->tooltip[0] = 0;
+            
             Vec2 cameraOffset = HandleKeyboardInteraction(worldMode, myPlayer, input);
             EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent) && ArchetypeHas(InteractionComponent), input->timeToAdvance);
             MoveCameraTowards(worldMode, player, 0.5f, cameraOffset, V2(0, 0), 1.0f);
@@ -796,7 +878,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
                 if(container && lootingBase)
                 {
-                    AddContainerObjectsInteractions(worldMode, container->mappings, ArrayCount(container->mappings));
+                    AddContainerObjectsInteractions(worldMode, container->storedMappings, ArrayCount(container->storedMappings), Interaction_Container);
                     MoveCameraTowards(worldMode, lootingBase, 5.0f, V2(0, 0), V2(0, 0), container->zoomCoeff);
                 }
 			}
@@ -804,8 +886,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             {
                 HandleEquipmentInteraction(worldMode, myPlayer->clientID);
                 HandleContainerInteraction(worldMode);
-                MoveCameraTowards(worldMode, player, 6.0f, V2(0, 0), V2(0, 0), 2.0f);
+                MoveCameraTowards(worldMode, player, 2.0f, V2(0, 0), V2(0, 0), 2.0f);
             }
+            HandleUsingSlotInteraction(worldMode);
+            
             
             if(worldMode->hotCount > 0)
             {
@@ -845,6 +929,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 EntityID hotID = hotInteraction.ID;
                 u16 hotAction = hotInteraction.actions[worldMode->currentActionIndex];
                 
+                worldMode->multipleActions = (hotInteraction.actionCount > 1);
+                FormatString(worldMode->tooltip, sizeof(worldMode->tooltip), "%s", MetaTable_action[hotAction]);
+                
                 BaseComponent* base = GetComponent(worldMode, hotID, BaseComponent);
                 if(base)
                 {
@@ -852,7 +939,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 }
                 switch(hotInteraction.type)
                 {
-                    case Interaction_Standard:
+                    case Interaction_Ground:
+                    case Interaction_Container:
+                    case Interaction_Equipped:
                     {
                         if(Pressed(&input->mouseLeft))
                         {
@@ -904,6 +993,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                             }
                         }
                     } break;
+                    
+                    InvalidDefaultCase;
                 }
             }
             
@@ -948,16 +1039,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
             //worldMode->boltCache->deltaP = deltaP;
             //UpdateAndRenderBolts(worldMode, worldMode->boltCache, input->timeToAdvance, group);
-            if(worldMode->lootingMode)
-			{
-			}
-            else if(worldMode->inventoryMode)
-            {
-                DrawOpenedContainers(worldMode, group);
-            }
-			DrawUsingSlots();
-            //DrawTooltip();
-            RenderEditor(group, worldMode, deltaMouseScreenP, input);
+            
+            RenderUIOverlay(worldMode, group);
+            RenderEditor(worldMode, group, input);
             EndDepthPeel(group);
             
             myPlayer->oldUniverseP = myPlayer->universeP;

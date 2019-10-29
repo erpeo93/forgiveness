@@ -163,7 +163,8 @@ enum Packet_Type
     Type_entityBasics,
     Type_EquipmentMapping,
     Type_UsingMapping,
-    Type_ContainerMapping,
+    Type_ContainerStoredMapping,
+    Type_ContainerUsingMapping,
     Type_ContainerOpenedBy,
     
     Type_EffectDispatch,

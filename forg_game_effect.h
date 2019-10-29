@@ -38,9 +38,18 @@ struct PossibleActionList
     u16 actions[8];
 };
 
+
+enum InteractionType
+{
+    Interaction_Ground,
+    Interaction_Equipment,
+    Interaction_Container,
+    Interaction_Equipped,
+    
+    Interaction_Count
+};
+
 struct InteractionComponent
 {
-    PossibleActionList ground;
-    PossibleActionList equipment;
-    PossibleActionList container;
+    PossibleActionList actions[Interaction_Count];
 };

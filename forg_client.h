@@ -94,15 +94,27 @@ struct LayoutComponent
     Vec2 rootScale;
     r32 rootAngle;
     u64 rootHash;
+    
     u32 pieceCount;
     LayoutPiece pieces[8];
     
     u32 openPieceCount;
     LayoutPiece openPieces[8];
+    
+    u32 usingPieceCount;
+    LayoutPiece usingPieces[8];
 };
 
+enum LayoutContainerDrawMode
+{
+    LayoutContainerDraw_Standard,
+    LayoutContainerDraw_Open,
+    LayoutContainerDraw_Using,
+    
+};
 struct LayoutContainer
 {
+    LayoutContainerDrawMode drawMode;
     u32 currentObjectIndex;
     ContainerMappingComponent* container;
 };
@@ -162,12 +174,6 @@ struct ServerClientIDMapping
     };
 };
 
-enum InteractionType
-{
-    Interaction_Standard,
-    Interaction_Equipment,
-};
-
 struct EntityHotInteraction
 {
     InteractionType type;
@@ -186,12 +192,6 @@ inline b32 AreEqual(EntityHotInteraction i1, EntityHotInteraction i2)
 struct GameModeWorld
 {
     struct GameState* gameState;
-    
-    b32 inventoryMode;
-    b32 lootingMode;
-    EntityID lootingID;
-    EntityID openIDLeft;
-    EntityID openIDRight;
     
     u32 worldSeed;
     b32 editingEnabled;
@@ -236,8 +236,8 @@ struct GameModeWorld
     b32 canAdvance;
 #endif
     
-    Vec2 screenMouseP;
-    
+    Vec2 absoluteMouseP;
+    Vec2 deltaMouseP;
     
     b32 voronoiValid;
     b32 generatingVoronoi;
@@ -270,6 +270,14 @@ struct GameModeWorld
     SoundState* soundState;
     
     EditorUIContext editorUI;
+    char tooltip[128];
+    b32 multipleActions;
+    
+    b32 inventoryMode;
+    b32 lootingMode;
+    EntityID lootingID;
+    EntityID openIDLeft;
+    EntityID openIDRight;
     
     i32 currentHotIndex;
     i32 currentActionIndex;

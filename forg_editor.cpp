@@ -1917,10 +1917,10 @@ internal void AddTooltip(EditorLayout* layout, char* text)
 }
 
 internal void DEBUGOverlay(EditorLayout* layout);
-internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 deltaMouseP, PlatformInput* input)
+internal void RenderEditor(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
     EditorUIContext* context = &worldMode->editorUI;
-    Vec2 mouseP = worldMode->screenMouseP - 0.5f * group->screenDim;
+    Vec2 mouseP = worldMode->absoluteMouseP - 0.5f * group->screenDim;
     if(Pressed(&context->input->editorButton))
     {
         context->showEditor = !context->showEditor;
@@ -1966,7 +1966,7 @@ internal void RenderEditor(RenderGroup* group, GameModeWorld* worldMode, Vec2 de
             }
             context->fontScale = Max(context->fontScale, 0.4f);
             context->nextHot = {};
-            EditorLayout layout = StandardLayout(&editorPool, fontID, group, context, mouseP, deltaMouseP);
+            EditorLayout layout = StandardLayout(&editorPool, fontID, group, context, mouseP, worldMode->deltaMouseP);
             EditorTabs active = context->activeTab;
             
             AUID auid = auID(context, "left");

@@ -176,6 +176,25 @@ internal void AddClientIDMapping(GameModeWorld* worldMode, EntityID serverID, En
     FREELIST_INSERT(mapping, worldMode->mappings[hashIndex]);
 }
 
+internal void StoreObjectMapping(GameModeWorld* worldMode, ObjectMapping* mappings, u32 mappingCount, u16 index, EntityID ID, u64 stringHash)
+{
+    Assert(index < mappingCount);
+    
+    ObjectMapping* mapping = mappings + index;
+    mapping->ID = ID;
+    if(IsValid(ID))
+    {
+        BaseComponent* objectBase = GetComponent(worldMode, ID, BaseComponent);
+        mapping->slotHash = stringHash;
+        mapping->pieceHash = objectBase->nameHash;
+    }
+    else
+    {
+        mapping->slotHash = 0;
+        mapping->pieceHash = 0;
+    }
+}
+
 STANDARD_ECS_JOB_CLIENT(DeleteEntities)
 {
     FreeArchetype(worldMode, &ID);
@@ -356,19 +375,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 if(equipment)
                 {
-                    Assert(index < ArrayCount(equipment->mappings));
-                    equipment->mappings[index].ID = ID;
-                    if(IsValid(ID))
-                    {
-                        BaseComponent* equipmentBase = GetComponent(worldMode, ID, BaseComponent);
-                        equipment->mappings[index].slotHash = StringHash(MetaTable_equipmentSlot[index]);
-                        equipment->mappings[index].pieceHash = equipmentBase->nameHash;
-                    }
-                    else
-                    {
-                        equipment->mappings[index].slotHash = 0;
-                        equipment->mappings[index].pieceHash = 0;
-                    }
+                    StoreObjectMapping(worldMode, equipment->mappings, ArrayCount(equipment->mappings), index, ID, StringHash(MetaTable_equipmentSlot[index]));
                     
                 }
             } break;
@@ -383,24 +390,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 if(equipped)
                 {
-                    Assert(index < ArrayCount(equipped->mappings));
-                    equipped->mappings[index].ID = ID;
-                    if(IsValid(ID))
-                    {
-                        BaseComponent* equipmentBase = GetComponent(worldMode, ID, BaseComponent);
-                        equipped->mappings[index].slotHash = StringHash(MetaTable_usingSlot[index]);
-                        equipped->mappings[index].pieceHash = equipmentBase->nameHash;
-                    }
-                    else
-                    {
-                        equipped->mappings[index].slotHash = 0;
-                        equipped->mappings[index].pieceHash = 0;
-                    }
-                    
+                    StoreObjectMapping(worldMode, equipped->mappings, ArrayCount(equipped->mappings), index, ID, StringHash(MetaTable_usingSlot[index]));
                 }
             } break;
             
-            case Type_ContainerMapping:
+            case Type_ContainerStoredMapping:
             {
                 u16 index;
                 EntityID ID;
@@ -410,20 +404,21 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 if(container)
                 {
-                    Assert(index < ArrayCount(container->mappings));
-                    container->mappings[index].ID = ID;
-                    if(IsValid(ID))
-                    {
-                        BaseComponent* objectBase = GetComponent(worldMode, ID, BaseComponent);
-                        container->mappings[index].slotHash = StringHash(MetaTable_usingSlot[index]);
-                        container->mappings[index].pieceHash = objectBase->nameHash;
-                    }
-                    else
-                    {
-                        container->mappings[index].slotHash = 0;
-                        container->mappings[index].pieceHash = 0;
-                    }
-                    
+                    StoreObjectMapping(worldMode, container->storedMappings, ArrayCount(container->storedMappings), index, ID, 0);
+                }
+            } break;
+            
+            case Type_ContainerUsingMapping:
+            {
+                u16 index;
+                EntityID ID;
+                Unpack("HL", &index, &ID.archetype_archetypeIndex);
+                
+                ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
+                
+                if(container)
+                {
+                    StoreObjectMapping(worldMode, container->usingMappings, ArrayCount(container->usingMappings), index, ID, 0);
                 }
             } break;
             

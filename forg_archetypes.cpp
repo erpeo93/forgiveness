@@ -99,18 +99,10 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
 {
     ServerState* server = (ServerState*) state;
     ContainerComponent* dest = (ContainerComponent*) componentPtr;
-    dest->maxObjectCount = 1;
+    dest->maxStoredCount = 1;
+    dest->maxUsingCount = 1;
 }
 
-
-INIT_COMPONENT_FUNCTION(InitInteractionComponent)
-{
-    ServerState* server = (ServerState*) state;
-    InteractionComponent* dest = (InteractionComponent*) componentPtr;
-    AddPossibleActions(&dest->ground, common->groundActions, common->groundActionCount);
-    AddPossibleActions(&dest->equipment, common->equipmentActions, common->equipmentActionCount);
-    AddPossibleActions(&dest->container, common->containerActions, common->containerActionCount);
-}
 #else
 INIT_COMPONENT_FUNCTION(InitBaseComponent)
 {
@@ -253,18 +245,17 @@ INIT_COMPONENT_FUNCTION(InitContainerMappingComponent)
 {
     ContainerMappingComponent* dest = (ContainerMappingComponent*) componentPtr;
     dest->zoomCoeff = c->lootingZoomCoeff;
+    dest->desiredOpenedDim = c->desiredOpenedDim;
 }
-
+#endif
 INIT_COMPONENT_FUNCTION(InitInteractionComponent)
 {
     InteractionComponent* dest = (InteractionComponent*) componentPtr;
-    
-    AddPossibleActions(&dest->ground, common->groundActions, common->groundActionCount);
-    AddPossibleActions(&dest->equipment, common->equipmentActions, common->equipmentActionCount);
-    AddPossibleActions(&dest->container, common->containerActions, common->containerActionCount);
+    AddPossibleActions(dest->actions + Interaction_Ground, common->groundActions, common->groundActionCount);
+    AddPossibleActions(dest->actions + Interaction_Equipment, common->equipmentActions, common->equipmentActionCount);
+    AddPossibleActions(dest->actions + Interaction_Container, common->containerActions, common->containerActionCount);
+    AddPossibleActions(dest->actions + Interaction_Equipped, common->equippedActions, common->equippedActionCount);
 }
-#endif
-
 
 #ifdef FORG_SERVER
 internal void InitEntity(ServerState* server, EntityID ID, 
