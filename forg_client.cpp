@@ -739,6 +739,7 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
         {
             ObjectMapping* mapping = usingMappings->mappings + slotIndex;
             Rect2 rect = RectMinDim(minP, dim);
+            mapping->projectedOnScreen = rect;
             PushRectOutline(group, FlatTransform(2.0f), rect, V4(0, 0, 0, 1), 2.0f);
             if(IsValid(mapping->ID))
             {
@@ -757,6 +758,7 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
         {
             ObjectMapping* mapping = equipment->mappings + slotIndex;
             Rect2 rect = RectMinDim(minP, dim);
+            mapping->projectedOnScreen = rect;
             PushRectOutline(group, FlatTransform(2.0f), rect, V4(0, 0, 0, 1), 2.0f);
             
             if(IsValid(mapping->ID))
