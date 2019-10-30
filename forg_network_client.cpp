@@ -182,7 +182,7 @@ internal void StoreObjectMapping(GameModeWorld* worldMode, ObjectMapping* mappin
     
     ObjectMapping* mapping = mappings + index;
     mapping->ID = ID;
-    if(IsValid(ID))
+    if(IsValidID(ID))
     {
         BaseComponent* objectBase = GetComponent(worldMode, ID, BaseComponent);
         mapping->slotHash = stringHash;
@@ -322,7 +322,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 Unpack("LLLlllVVHHL", &definitionID.subtypeHashIndex, &definitionID.index, &seed, &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset, &speed, &action.property, &action.value, &flags);
                 
-                if(!IsValid(currentClientID))
+                if(!IsValidID(currentClientID))
                 {
                     Assets* assets = gameState->assets;
                     EntityDefinition* definition = GetData(assets, EntityDefinition, definitionID);
@@ -431,9 +431,9 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 container->openedBy = ID;
                 
-                b32 wasLooting = IsValid(worldMode->lootingID);
+                b32 wasLooting = IsValidID(worldMode->lootingID);
                 
-                if(IsValid(ID))
+                if(IsValidID(ID))
                 {
                     worldMode->lootingID = currentClientID;
                 }
@@ -442,12 +442,12 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     worldMode->lootingID = {};
                 }
                 
-                if(!IsValid(worldMode->lootingID))
+                if(!IsValidID(worldMode->lootingID))
                 {
                     worldMode->lootingMode = false;
                 }
                 
-                if(IsValid(worldMode->lootingID) && !wasLooting)
+                if(IsValidID(worldMode->lootingID) && !wasLooting)
                 {
                     worldMode->lootingMode = true;
                     worldMode->inventoryMode = false;

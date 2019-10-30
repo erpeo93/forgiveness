@@ -10,7 +10,7 @@ struct UsingComponent
 };
 
 #define MAX_CONTAINER_OBJECT 64
-#define MAX_USING_OBJECT 8
+#define MAX_USING_OBJECT 2
 struct ContainerComponent
 {
     EntityID openedBy;

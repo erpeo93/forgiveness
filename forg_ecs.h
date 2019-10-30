@@ -151,7 +151,7 @@ inline b32 IsValid(ArchIterator iter)
     return result;
 }
 
-inline b32 IsValid(EntityID ID)
+inline b32 IsValidID(EntityID ID)
 {
     b32 result = (GetArchetypeIndex(ID) > 0);
     return result;

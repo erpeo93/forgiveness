@@ -100,7 +100,7 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
     ServerState* server = (ServerState*) state;
     ContainerComponent* dest = (ContainerComponent*) componentPtr;
     dest->maxStoredCount = 1;
-    dest->maxUsingCount = 1;
+    dest->maxUsingCount = ArrayCount(dest->usingIDs);
 }
 
 #else

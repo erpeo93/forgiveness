@@ -44,7 +44,7 @@ inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery delivery
         packet->size += sizeof(ForgNetworkApplicationData);
         queue->nextSendApplicationData.index++;
         
-        if(IsValid(ID))
+        if(IsValidID(ID))
         {
             writeEntityHeader = true;
         }

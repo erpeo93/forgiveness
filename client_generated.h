@@ -35,9 +35,8 @@ char* MetaTable_action[] =
 "pick",
 "use",
 "disequip",
-"useFromContainer",
-"dropFromContainer",
 "open",
+"drop",
 };
 
 char* MetaTable_essence[] = 

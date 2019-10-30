@@ -255,7 +255,7 @@ inline Rect2 TextOp(EditorLayout* layout, char* string, Vec2 p, TextOperation op
     {
         result = PushText_(layout->group, layout->fontID, layout->font, layout->fontInfo, 
                            string, V3(p.x, p.y, 0), layout->fontScale, 
-                           op, color, false, true);
+                           op, color, false, true, 0.0f);
     }
     
     return result;
@@ -1920,7 +1920,7 @@ internal void DEBUGOverlay(EditorLayout* layout);
 internal void RenderEditor(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
     EditorUIContext* context = &worldMode->editorUI;
-    Vec2 mouseP = worldMode->absoluteMouseP - 0.5f * group->screenDim;
+    Vec2 mouseP = worldMode->relativeMouseP;
     if(Pressed(&context->input->editorButton))
     {
         context->showEditor = !context->showEditor;

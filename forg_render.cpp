@@ -853,7 +853,7 @@ enum TextOperation
     TextOp_getSize,
 };
 
-internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont* info, char* string, Vec3 P, r32 fontScale, TextOperation op, Vec4 color, b32 startingSpace, b32 drawShadow)
+internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont* info, char* string, Vec3 P, r32 fontScale, TextOperation op, Vec4 color, b32 startingSpace, b32 drawShadow, r32 ZBias)
 {
     Rect2 result = InvertedInfinityRect2();
     
@@ -890,10 +890,10 @@ internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont*
                     {
                         if(drawShadow)
                         {
-                            PushBitmap(group, FlatTransform(), ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight, V4( 0.0f, 0.0f, 0.0f, 1.0f ));
+                            PushBitmap(group, FlatTransform(ZBias), ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight, V4( 0.0f, 0.0f, 0.0f, 1.0f ));
                         }
                         
-                        PushBitmap(group, FlatTransform(), ID, P, glyphHeight, color);
+                        PushBitmap(group, FlatTransform(ZBias), ID, P, glyphHeight, color);
                     }
                 }
             }
@@ -907,14 +907,14 @@ internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont*
 }
 
 
-internal void PushText(RenderGroup* group, FontId fontID, char* string, Vec3 P,r32 fontScale = 1.0f, Vec4 color = V4(1, 1, 1, 1), b32 startingSpace = false, b32 drawShadow = true)
+internal void PushText(RenderGroup* group, FontId fontID, char* string, Vec3 P,r32 fontScale = 1.0f, Vec4 color = V4(1, 1, 1, 1), b32 startingSpace = false, b32 drawShadow = true, r32 ZBias = 0.0f)
 {
     PushFont(group, fontID);
     Font* font = GetFont(group->assets, fontID);
     if(font)
     {
         PAKFont* info = GetFontInfo(group->assets, fontID);
-        PushText_(group, fontID, font, info, string, P, fontScale, TextOp_draw, color, startingSpace, drawShadow);
+        PushText_(group, fontID, font, info, string, P, fontScale, TextOp_draw, color, startingSpace, drawShadow, ZBias);
     }
 }
 
@@ -928,7 +928,7 @@ internal Rect2 GetTextDim(RenderGroup* group, FontId fontID, char* string, Vec3 
     {
         PAKFont* info = GetFontInfo(group->assets, fontID);
         
-        result = PushText_(group, fontID, font, info, string, P, fontScale, TextOp_getSize, V4(1, 1, 1, 1), startingSpace, false);
+        result = PushText_(group, fontID, font, info, string, P, fontScale, TextOp_getSize, V4(1, 1, 1, 1), startingSpace, false, 0.0f);
     }
     
     return result;
@@ -1078,7 +1078,7 @@ inline Vec2 ProjectOnScreen(RenderGroup* group, Vec3 worldP, r32* clipZ)
         *clipZ = clipSpace.z;
         
         Vec2 screenCenter = 0.5f * group->screenDim;
-        result = Hadamart(clipSpace.xy, screenCenter) + screenCenter;
+        result = Hadamart(clipSpace.xy, screenCenter);
         
     }
     

@@ -435,6 +435,17 @@ internal r32 GetModulationPercentageAndResetFocus(GameModeWorld* worldMode, Enti
     return result;
 }
 
+internal b32 IsValidMappingID(GameModeWorld* worldMode, EntityID ID)
+{
+    b32 result = IsValidID(ID);
+    if(result && AreEqual(ID, worldMode->draggingID))
+    {
+        result = false;
+    }
+    
+    return result;
+}
+
 internal Rect2 RenderLayout(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, struct LayoutContainer* container);
 internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, u64 hash, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights)
 {
@@ -444,12 +455,11 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
         if(!alreadyRendered[mappingIndex])
         {
             ObjectMapping* mapping = mappings + mappingIndex;
-            if(IsValid(mapping->ID) && (hash == mapping->slotHash || hash == mapping->pieceHash))
+            if(IsValidMappingID(worldMode, mapping->ID) && (hash == mapping->slotHash || hash == mapping->pieceHash))
             {
                 alreadyRendered[mappingIndex] = true;
                 
                 EntityID equipmentID = mapping->ID;
-                
                 BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);
                 InteractionComponent* equipmentInteraction = GetComponent(worldMode, equipmentID, InteractionComponent);
                 LayoutComponent* equipmentLayout = GetComponent(worldMode, equipmentID, LayoutComponent);

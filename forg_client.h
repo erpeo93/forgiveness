@@ -237,7 +237,7 @@ struct GameModeWorld
     b32 canAdvance;
 #endif
     
-    Vec2 absoluteMouseP;
+    Vec2 relativeMouseP;
     Vec2 deltaMouseP;
     
     b32 voronoiValid;
@@ -276,6 +276,7 @@ struct GameModeWorld
     
     b32 inventoryMode;
     b32 lootingMode;
+    EntityID draggingID;
     EntityID lootingID;
     EntityID openIDLeft;
     EntityID openIDRight;

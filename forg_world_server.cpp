@@ -71,12 +71,39 @@ internal EntityRef EntityReference(ServerState* server, char* kind, char* type)
     return result;
 }
 
+internal void MakeIntangible(ServerState* server, EntityID ID)
+{
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    physic->flags = AddFlags(physic->flags, EntityFlag_notInWorld);
+}
+
+internal void MakeTangible(ServerState* server, EntityID ID)
+{
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    physic->flags = ClearFlags(physic->flags, EntityFlag_notInWorld);
+}
+
+internal b32 Find(EntityID* IDs, u32 idCount, EntityID ID)
+{
+    b32 result = false;
+    for(u32 idIndex = 0; idIndex < idCount; ++idIndex)
+    {
+        if(AreEqual(IDs[idIndex], ID))
+        {
+            result = true;
+            break;
+        }
+    }
+    
+    return result;
+}
+
 internal b32 FindPlace(EntityID* IDs, u32 idCount, EntityID ID)
 {
     b32 result = false;
     for(u32 idIndex = 0; idIndex < idCount; ++idIndex)
     {
-        if(!IsValid(IDs[idIndex]))
+        if(!IsValidID(IDs[idIndex]))
         {
             IDs[idIndex] = ID;
             result = true;
@@ -108,7 +135,7 @@ internal b32 Store(ServerState* server, ContainerComponent* container, EntityID 
     return result;
 }
 
-internal b32 Use(ServerState* server, EntityID ID, PhysicComponent* targetPhysic, EntityID targetID)
+internal b32 Use(ServerState* server, EntityID ID, EntityID targetID)
 {
     b32 result = false;
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
@@ -116,7 +143,7 @@ internal b32 Use(ServerState* server, EntityID ID, PhysicComponent* targetPhysic
     {
         if(FindPlace(equipped->IDs, ArrayCount(equipped->IDs), targetID))
         {
-            targetPhysic->flags = AddFlags(targetPhysic->flags, EntityFlag_notInWorld);
+            MakeIntangible(server, targetID);
             result = true;
         }
     }
@@ -129,12 +156,12 @@ internal b32 Use(ServerState* server, EntityID ID, PhysicComponent* targetPhysic
             for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->IDs); ++equipIndex)
             {
                 EntityID equipmentID = equipment->IDs[equipIndex];
-                if(IsValid(equipmentID))
+                if(IsValidID(equipmentID))
                 {
                     ContainerComponent* container = GetComponent(server, equipmentID, ContainerComponent);
                     if(container && FindPlace(container->usingIDs, container->maxUsingCount, targetID))
                     {
-                        targetPhysic->flags = AddFlags(targetPhysic->flags, EntityFlag_notInWorld);
+                        MakeIntangible(server, targetID);
                         result = true;
                         break;
                     }
@@ -201,7 +228,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                 physic->acc = {};
                 
                 EntityID targetID = command->targetID;
-                if(IsValid(targetID) && HasComponent(targetID, PhysicComponent))
+                if(IsValidID(targetID) && HasComponent(targetID, PhysicComponent))
                 {
                     PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
                     
@@ -213,7 +240,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                     {
                         if(AreEqual(targetPhysic->definitionID, ref))
                         {
-                            if(!Use(server, ID, targetPhysic, targetID))
+                            if(!Use(server, ID, targetID))
                             {
                                 EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
                                 if(equipment)
@@ -225,7 +252,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                                         ContainerComponent* container = GetComponent(server, equipmentID, ContainerComponent);
                                         if(Store(server, container, targetID))
                                         {
-                                            targetPhysic->flags = AddFlags(targetPhysic->flags, EntityFlag_notInWorld);
+                                            MakeIntangible(server, targetID);
                                             break;
                                         }
                                     }
@@ -239,7 +266,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                             {
                                 if(FindPlace(equipment->IDs, ArrayCount(equipment->IDs), targetID))
                                 {
-                                    targetPhysic->flags = AddFlags(targetPhysic->flags, EntityFlag_notInWorld);
+                                    MakeIntangible(server, targetID);
                                 }
                             }
                         }
@@ -260,7 +287,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                 {
                     if(AreEqual(equipment->IDs[equipIndex], targetID))
                     {
-                        if(Use(server, ID, targetPhysic, targetID))
+                        if(Use(server, ID, targetID))
                         {
                             equipment->IDs[equipIndex] = {};
                             break;
@@ -273,17 +300,16 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         case disequip:
         {
             EntityID targetID = command->targetID;
-            PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
             EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
             UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
             
-            if(equipment && equipped && targetPhysic)
+            if(equipment && equipped)
             {
                 for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->IDs); ++equipIndex)
                 {
                     if(AreEqual(equipment->IDs[equipIndex], targetID))
                     {
-                        targetPhysic->flags = ClearFlags(targetPhysic->flags, EntityFlag_notInWorld);
+                        MakeTangible(server, targetID);
                         equipment->IDs[equipIndex] = {};
                         break;
                     }
@@ -291,41 +317,85 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             }
         } break;
         
-        case dropFromContainer:
+        case open:
         {
             EntityID targetID = command->targetID;
-            PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
-            EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
             
-            if(equipment && targetPhysic)
+            b32 canOpen = true;
+            EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+            if(equipment && Find(equipment->IDs, ArrayCount(equipment->IDs), targetID))
             {
-                for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->IDs); ++equipIndex)
+                canOpen = false;
+            }
+            UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+            if(equipped && Find(equipped->IDs, ArrayCount(equipped->IDs), targetID))
+            {
+                canOpen = false;
+            }
+            
+            if(canOpen)
+            {
+                ContainerComponent* container = GetComponent(server, targetID, ContainerComponent);
+                if(container)
                 {
-                    EntityID equipmentID = equipment->IDs[equipIndex];
-                    ContainerComponent* container = GetComponent(server, equipmentID, ContainerComponent);
-                    if(Remove(server, container, targetID))
+                    if(!IsValidID(container->openedBy))
                     {
-                        targetPhysic->flags = ClearFlags(targetPhysic->flags, EntityFlag_notInWorld);
-                        break;
+                        container->openedBy = ID;
                     }
                 }
             }
         } break;
         
-        case useFromContainer:
-        {
-            InvalidCodePath;
-        } break;
-        
-        case open:
+        case drop:
         {
             EntityID targetID = command->targetID;
-            ContainerComponent* container = GetComponent(server, targetID, ContainerComponent);
-            if(container)
+            if(IsValidID(targetID))
             {
-                if(!IsValid(container->openedBy))
+                b32 removed = false;
+                EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+                if(equipment)
                 {
-                    container->openedBy = ID;
+                    for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->IDs); ++slotIndex)
+                    {
+                        EntityID equipmentID = equipment->IDs[slotIndex];
+                        if(AreEqual(equipmentID, targetID))
+                        {
+                            removed = true;
+                            equipment->IDs[slotIndex] = {};
+                            break;
+                        }
+                        else
+                        {
+                            if(Remove(server, GetComponent(server, equipmentID, ContainerComponent), targetID))
+                            {
+                                removed = true;
+                            }
+                        }
+                    }
+                }
+                
+                if(!removed)
+                {
+                    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+                    if(equipped)
+                    {
+                        for(u32 usingIndex = 0; usingIndex < ArrayCount(equipped->IDs); ++usingIndex)
+                        {
+                            EntityID usingID = equipped->IDs[usingIndex];
+                            Assert(!HasComponent(usingID, ContainerComponent));
+                            if(AreEqual(equipped->IDs[usingIndex], targetID))
+                            {
+                                removed = true;
+                                equipped->IDs[usingIndex] = {};
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if(removed)
+                {
+                    MakeTangible(server, targetID);
                 }
             }
         } break;
@@ -335,7 +405,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
 STANDARD_ECS_JOB_SERVER(HandleOpenedContainers)
 {
     ContainerComponent* container = GetComponent(server, ID, ContainerComponent);
-    if(IsValid(container->openedBy))
+    if(IsValidID(container->openedBy))
     {
         PhysicComponent* opened = GetComponent(server, ID, PhysicComponent);
         PhysicComponent* opener = GetComponent(server, container->openedBy, PhysicComponent);
@@ -472,7 +542,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
         for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->IDs); ++equipmentIndex)
         {
             EntityID equipID = equipment->IDs[equipmentIndex];
-            if(IsValid(equipID))
+            if(IsValidID(equipID))
             {
                 DispatchEntityEffects(server, equipID, elapsedTime);
                 
@@ -480,7 +550,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
                 for(u32 usingIndex = 0; usingIndex < container->maxUsingCount; ++usingIndex)
                 {
                     EntityID usingID = container->usingIDs[usingIndex];
-                    if(IsValid(usingID))
+                    if(IsValidID(usingID))
                     {
                         DispatchEntityEffects(server, usingID, elapsedTime);
                     }
@@ -495,7 +565,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
         for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->IDs); ++equipmentIndex)
         {
             EntityID usingID = equipped->IDs[equipmentIndex];
-            if(IsValid(usingID))
+            if(IsValidID(usingID))
             {
                 DispatchEntityEffects(server, usingID, elapsedTime);
             }
@@ -592,7 +662,7 @@ internal void HandleEntityMovement(ServerState* server, PhysicComponent* physic,
             }
         }
         
-        if(IsValid(collisionTriggerID))
+        if(IsValidID(collisionTriggerID))
         {
             DispatchCollisitonEffects(server, collisionP, ID, collisionTriggerID);
         }
@@ -617,7 +687,7 @@ internal void UpdateObjectPositions(ServerState* server, UniversePos P, EntityID
     for(u16 IDIndex = 0; IDIndex < IDCount; ++IDIndex)
     {
         EntityID ID = IDs[IDIndex];
-        if(IsValid(ID))
+        if(IsValidID(ID))
         {
             PhysicComponent* equipmentPhysic = GetComponent(server, ID, PhysicComponent);
             equipmentPhysic->P = P;
@@ -648,7 +718,7 @@ internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
         for(u32 usingIndex = 0; usingIndex < Count_usingSlot; ++usingIndex)
         {
             EntityID usingID = equipped->IDs[usingIndex];
-            if(IsValid(usingID))
+            if(IsValidID(usingID))
             {
                 Assert(!HasComponent(usingID, ContainerComponent));
             }
@@ -725,7 +795,7 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime
                         //if(IsValid(usingID))
                         {
                             QueueUsingID(player, ID, slotIndex, usingID);
-                            if(IsValid(usingID))
+                            if(IsValidID(usingID))
                             {
                                 Assert(!HasComponent(usingID, ContainerComponent));
                             }
