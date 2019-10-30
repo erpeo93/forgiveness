@@ -628,7 +628,7 @@ internal void AddContainerObjectsInteractions(GameModeWorld* worldMode, ObjectMa
                     ResetInteractions(worldMode);
                     AddPossibleInteraction(worldMode, interactionType, interaction->actions + interactionType, mapping->ID);
                 }
-                else if((interactionType == Interaction_Equipment || interactionType == Interaction_Equipped) && PointInRect(base->projectedOnScreen, worldMode->absoluteMouseP))
+                else if((interactionType == Interaction_Equipment) && PointInRect(base->projectedOnScreen, worldMode->absoluteMouseP))
                 {
                     AddPossibleInteraction(worldMode, interactionType, interaction->actions + interactionType, mapping->ID);
                 }
@@ -643,6 +643,12 @@ internal void HandleEquipmentInteraction(GameModeWorld* worldMode, EntityID ID)
     if(equipment)
     {
         AddContainerObjectsInteractions(worldMode, equipment->mappings, ArrayCount(equipment->mappings), Interaction_Equipment);
+    }
+    
+    UsingMappingComponent* equipped = GetComponent(worldMode, ID, UsingMappingComponent);
+    if(equipped)
+    {
+        AddContainerObjectsInteractions(worldMode, equipped->mappings, ArrayCount(equipped->mappings), Interaction_Equipment);
     }
 }
 
@@ -667,7 +673,7 @@ internal void HandleContainerInteraction(GameModeWorld* worldMode)
     }
 }
 
-internal void HandleUsingSlotInteraction(GameModeWorld* worldMode)
+internal void HandleOverlayObjectsInteraction(GameModeWorld* worldMode)
 {
     UsingMappingComponent* equipped = GetComponent(worldMode, worldMode->player.clientID, UsingMappingComponent);
     if(equipped)
@@ -900,7 +906,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 HandleContainerInteraction(worldMode);
                 MoveCameraTowards(worldMode, player, 2.0f, V2(0, 0), V2(0, 0), 2.0f);
             }
-            HandleUsingSlotInteraction(worldMode);
+            HandleOverlayObjectsInteraction(worldMode);
             
             
             if(worldMode->hotCount > 0)
