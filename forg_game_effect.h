@@ -51,5 +51,6 @@ enum InteractionType
 
 struct InteractionComponent
 {
+    b32 isOnFocus;
     PossibleActionList actions[Interaction_Count];
 };

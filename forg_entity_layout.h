@@ -24,7 +24,7 @@ struct ContainerComponent
 
 struct ObjectMapping
 {
-    Rect2 projectedOnScreen;
+    Rect2 projOnScreen;
     u64 slotHash;
     u64 pieceHash;
     EntityID ID;

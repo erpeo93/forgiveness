@@ -203,7 +203,7 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
         params.equipped = GetComponent(worldMode, ID, UsingMappingComponent);
         params.tint = V4(1, 1, 1, 1);
-        params.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
+        params.modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, ID); 
         
         AnimationEffectsComponent* effects = GetComponent(worldMode, ID, AnimationEffectsComponent);
         if(effects)
@@ -249,7 +249,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
         StandardImageComponent* image = GetComponent(worldMode, ID, StandardImageComponent);
         RenderShadow(worldMode, group, P, &image->shadow, deepness, width);
         
-        r32 modulationPercentage = GetModulationPercentageAndResetFocus(base); 
+        r32 modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, ID); 
         
         PlantComponent* plant = GetComponent(worldMode, ID, PlantComponent);
         
@@ -309,7 +309,7 @@ RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
         if(IsValid(BID))
         {
             ObjectTransform transform = UprightTransform();
-            transform.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
+            transform.modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, ID); 
             PushBitmap(group, UprightTransform(), BID, P, height, V4(1, 1, 1, 1), lights);
         }
     }
@@ -380,14 +380,14 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                         if(IsValid(objectID))
                         {
                             BaseComponent* objectBase = GetComponent(worldMode, objectID, BaseComponent);
-                            transform.modulationPercentage = GetModulationPercentageAndResetFocus(objectBase);
+                            transform.modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, objectID);
                             LayoutComponent* objectLayout = GetComponent(worldMode, objectID, LayoutComponent);
                             if(objectBase && objectLayout)
                             {
                                 Rect2 objectRect = result;
                                 LayoutContainer objectContainer = {};
                                 
-                                mapping->projectedOnScreen = Offset(result, 0.5f * group->screenDim);
+                                mapping->projOnScreen = Offset(result, 0.5f * group->screenDim);
                                 if(transform.upright)
                                 {
                                     RenderLayoutInRectCameraAligned(worldMode, group, P, dim.P, objectRect, transform, objectLayout, objectBase->seed, lights, &objectContainer);
@@ -494,7 +494,7 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
         ObjectTransform transform = UprightTransform();
         transform.angle = layout->rootAngle;
         transform.scale = layout->rootScale;
-        transform.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
+        transform.modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, ID); 
         
         ContainerMappingComponent* container = GetComponent(worldMode, ID, ContainerMappingComponent);
         LayoutContainer layoutContainer = {};
@@ -619,11 +619,19 @@ internal void AddContainerObjectsInteractions(GameModeWorld* worldMode, ObjectMa
         if(IsValid(mapping->ID))
         {
             InteractionComponent* interaction = GetComponent(worldMode, mapping->ID, InteractionComponent);
+            BaseComponent* base = GetComponent(worldMode, mapping->ID, BaseComponent);
             
-            if(interaction && PointInRect(mapping->projectedOnScreen, worldMode->absoluteMouseP))
+            if(interaction)
             {
-                ResetInteractions(worldMode);
-                AddPossibleInteraction(worldMode, interactionType, interaction->actions + interactionType, mapping->ID);
+                if(PointInRect(mapping->projOnScreen, worldMode->absoluteMouseP))
+                {
+                    ResetInteractions(worldMode);
+                    AddPossibleInteraction(worldMode, interactionType, interaction->actions + interactionType, mapping->ID);
+                }
+                else if((interactionType == Interaction_Equipment || interactionType == Interaction_Equipped) && PointInRect(base->projectedOnScreen, worldMode->absoluteMouseP))
+                {
+                    AddPossibleInteraction(worldMode, interactionType, interaction->actions + interactionType, mapping->ID);
+                }
             }
         }
     }
@@ -693,7 +701,7 @@ internal void OverdrawLayout(GameModeWorld* worldMode, RenderGroup* group, Entit
     ObjectTransform transform = FlatTransform(1.0f);
     transform.angle = layout->rootAngle;
     transform.scale = layout->rootScale;
-    transform.modulationPercentage = GetModulationPercentageAndResetFocus(base); 
+    transform.modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, ID); 
     RenderLayoutInRect(worldMode, group, rect, transform, layout, base->seed, {}, &container);
 }
 
@@ -738,11 +746,13 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
         for(u32 slotIndex = 0; slotIndex < ArrayCount(usingMappings->mappings); ++slotIndex)
         {
             ObjectMapping* mapping = usingMappings->mappings + slotIndex;
+            
             Rect2 rect = RectMinDim(minP, dim);
-            mapping->projectedOnScreen = rect;
             PushRectOutline(group, FlatTransform(2.0f), rect, V4(0, 0, 0, 1), 2.0f);
             if(IsValid(mapping->ID))
             {
+                BaseComponent* usingBase = GetComponent(worldMode, mapping->ID, BaseComponent);
+                mapping->projOnScreen = Offset(rect, 0.5f * group->screenDim);
                 OverdrawLayout(worldMode, group, mapping->ID, rect, LayoutContainerDraw_Standard);
             }
             
@@ -758,7 +768,7 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
         {
             ObjectMapping* mapping = equipment->mappings + slotIndex;
             Rect2 rect = RectMinDim(minP, dim);
-            mapping->projectedOnScreen = rect;
+            mapping->projOnScreen = rect;
             PushRectOutline(group, FlatTransform(2.0f), rect, V4(0, 0, 0, 1), 2.0f);
             
             if(IsValid(mapping->ID))
@@ -781,24 +791,25 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
 
 INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
 {
+    InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
+    interaction->isOnFocus = false;
+    
     if(!AreEqual(ID, worldMode->player.clientID))
     {
-        BaseComponent* component = GetComponent(worldMode, ID, BaseComponent);
-		InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
-        
+        BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+		
         r32 cameraZ;
-        Rect3 bound = GetEntityBound(worldMode, component);
-        Rect2 screenBounds = ProjectOnScreen(group, bound, &cameraZ);
-        if(ShouldBeRendered(worldMode, component) && PointInRect(screenBounds, worldMode->absoluteMouseP))
+        base->worldBounds = GetEntityBound(worldMode, base);
+        
+        if(ShouldBeRendered(worldMode, base))
         {
-            AddPossibleInteraction(worldMode, Interaction_Ground, interaction->actions + Interaction_Ground, ID);
+            base->projectedOnScreen = ProjectOnScreen(group, base->worldBounds, &cameraZ);
+            if(PointInRect(base->projectedOnScreen, worldMode->absoluteMouseP))
+            {
+                AddPossibleInteraction(worldMode, Interaction_Ground, interaction->actions + Interaction_Ground, ID);
+            }
         }
     }
-}
-
-internal void UpdateEntities(GameModeWorld* worldMode, r32 timeToAdvance, ClientPlayer* myPlayer)
-{
-    
 }
 
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
@@ -864,7 +875,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             ResetLightGrid(worldMode);
             
             SetupGameCamera(worldMode, group, input);
-            UpdateEntities(worldMode, input->timeToAdvance, myPlayer);
             
             worldMode->hotCount = 0;
             worldMode->tooltip[0] = 0;
@@ -935,10 +945,12 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 FormatString(worldMode->tooltip, sizeof(worldMode->tooltip), "%s", MetaTable_action[hotAction]);
                 
                 BaseComponent* base = GetComponent(worldMode, hotID, BaseComponent);
-                if(base)
+                InteractionComponent* interaction = GetComponent(worldMode, hotID, InteractionComponent);
+                if(interaction)
                 {
-                    base->isOnFocus = true;
+                    interaction->isOnFocus = true;
                 }
+                
                 switch(hotInteraction.type)
                 {
                     case Interaction_Ground:

@@ -424,13 +424,13 @@ inline void ApplyAssAlterations(PieceAss* ass, AssAlteration* assAlt, Bone* pare
 }
 #endif
 
-internal r32 GetModulationPercentageAndResetFocus(BaseComponent* base)
+internal r32 GetModulationPercentageAndResetFocus(GameModeWorld* worldMode, EntityID ID)
 {
     r32 result = 0;
-    if(base->isOnFocus)
+    InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
+    if(interaction && interaction->isOnFocus)
     {
         result = 0.7f;
-        base->isOnFocus = false;
     }
     return result;
 }
@@ -451,6 +451,7 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                 EntityID equipmentID = mapping->ID;
                 
                 BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);
+                InteractionComponent* equipmentInteraction = GetComponent(worldMode, equipmentID, InteractionComponent);
                 LayoutComponent* equipmentLayout = GetComponent(worldMode, equipmentID, LayoutComponent);
                 
                 if(equipmentBase && equipmentLayout)
@@ -459,15 +460,15 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                     finalTransform.angle += equipmentLayout->rootAngle;
                     finalTransform.scale = Hadamart(finalTransform.scale, equipmentLayout->rootScale);
                     
-                    if(equipmentBase->isOnFocus)
+                    if(equipmentInteraction && equipmentInteraction->isOnFocus)
                     {
-                        finalTransform.modulationPercentage = GetModulationPercentageAndResetFocus(equipmentBase);
+                        finalTransform.modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, equipmentID);
                     }
                     
                     LayoutContainer container = {};
                     //container.container = GetComponent(worldMode, equipmentID, ContainerMappingComponent);
                     
-                    mapping->projectedOnScreen = RenderLayout(worldMode, group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights, &container);
+                    equipmentBase->projectedOnScreen = RenderLayout(worldMode, group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights, &container);
                 }
                 break;
             }

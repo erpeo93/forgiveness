@@ -55,7 +55,8 @@ struct BaseComponent
     Rect3 bounds;
     GameProperty action;
     u32 flags;
-    b32 isOnFocus;
+    Rect3 worldBounds;
+    Rect2 projectedOnScreen;
     EntityID serverID;
 };
 
