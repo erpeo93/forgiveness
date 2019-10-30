@@ -36,7 +36,7 @@ INIT_COMPONENT_FUNCTION(InitPhysicComponent)
     
     physic->P = s->P;
     physic->bounds = StandardBounds(common->boundDim, common->boundOffset);
-    physic->definitionID = s->definitionID;
+    physic->definitionID = common->definitionID;
     physic->seed = s->seed;
     physic->speed = {};
     physic->acc = {};

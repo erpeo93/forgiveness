@@ -210,12 +210,6 @@ FieldDefinition fieldDefinitionOfworld_generator[] =
 {MetaFlag_Pointer, MetaType_ZSlice, "ZSlice", "zSlices", (u32) (&((world_generator*)0)->zSlices), {}, sizeof(ZSlice),"invalid",0, 0, 0}, 
 };
 
-FieldDefinition fieldDefinitionOfEntityRef[] = 
- {
-{0, MetaType_u32, "u32", "subtypeHashIndex", (u32) (&((EntityRef*)0)->subtypeHashIndex), {}, sizeof(u32),"invalid",0, 0, 0}, 
-{0, MetaType_u16, "u16", "index", (u32) (&((EntityRef*)0)->index), {}, sizeof(u16),"invalid",0, 0, 0}, 
-};
-
 FieldDefinition fieldDefinitionOfSpawnerEntity[] = 
  {
 {0, MetaType_EntityRef, "EntityRef", "type", (u32) (&((SpawnerEntity*)0)->type), {}, sizeof(EntityRef),"invalid",0, 0, 0}, 
@@ -320,6 +314,12 @@ FieldDefinition fieldDefinitionOfground_generator[] =
 {MetaFlag_Pointer, MetaType_TileMapping, "TileMapping", "tiles", (u32) (&((ground_generator*)0)->tiles), {}, sizeof(TileMapping),"invalid",0, 0, 0}, 
 };
 
+FieldDefinition fieldDefinitionOfEntityRef[] = 
+ {
+{0, MetaType_u32, "u32", "subtypeHashIndex", (u32) (&((EntityRef*)0)->subtypeHashIndex), {}, sizeof(u32),"invalid",0, 0, 0}, 
+{0, MetaType_u16, "u16", "index", (u32) (&((EntityRef*)0)->index), {}, sizeof(u16),"invalid",0, 0, 0}, 
+};
+
 FieldDefinition fieldDefinitionOfEntityID[] = 
  {
 {0, MetaType_u32, "u32", "archetype_archetypeIndex", (u32) (&((EntityID*)0)->archetype_archetypeIndex), {}, sizeof(u32),"invalid",0, 0, 0}, 
@@ -327,6 +327,7 @@ FieldDefinition fieldDefinitionOfEntityID[] =
 
 FieldDefinition fieldDefinitionOfCommonEntityInitParams[] = 
  {
+{MetaFlag_Uneditable, MetaType_EntityRef, "EntityRef", "definitionID", (u32) (&((CommonEntityInitParams*)0)->definitionID), {}, sizeof(EntityRef),"invalid",0, 0, 0}, 
 {0, MetaType_Vec3, "Vec3", "boundOffset", (u32) (&((CommonEntityInitParams*)0)->boundOffset), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
 {0, MetaType_Vec3, "Vec3", "boundDim", (u32) (&((CommonEntityInitParams*)0)->boundDim), {}, sizeof(Vec3),"invalid",0, 0, 0}, 
 {0, MetaType_ArrayCounter, "ArrayCounter", "groundActionCount", (u32) (&((CommonEntityInitParams*)0)->groundActionCount), {}, sizeof(ArrayCounter),"invalid","groundActions", (u32)(&((CommonEntityInitParams*)0)->groundActions), 0}, 
@@ -343,7 +344,6 @@ FieldDefinition fieldDefinitionOfServerEntityInitParams[] =
  {
 {MetaFlag_Uneditable, MetaType_UniversePos, "UniversePos", "P", (u32) (&((ServerEntityInitParams*)0)->P), {}, sizeof(UniversePos),"invalid",0, 0, 0}, 
 {MetaFlag_Uneditable, MetaType_u32, "u32", "seed", (u32) (&((ServerEntityInitParams*)0)->seed), {}, sizeof(u32),"invalid",0, 0, 0}, 
-{MetaFlag_Uneditable, MetaType_EntityRef, "EntityRef", "definitionID", (u32) (&((ServerEntityInitParams*)0)->definitionID), {}, sizeof(EntityRef),"invalid",0, 0, 0}, 
 {0, MetaType_ArrayCounter, "ArrayCounter", "bindingCount", (u32) (&((ServerEntityInitParams*)0)->bindingCount), {}, sizeof(ArrayCounter),"invalid","bindings", (u32)(&((ServerEntityInitParams*)0)->bindings), 0}, 
 {MetaFlag_Pointer, MetaType_EffectBinding, "EffectBinding", "bindings", (u32) (&((ServerEntityInitParams*)0)->bindings), {}, sizeof(EffectBinding),"invalid",0, 0, 0}, 
 {0, MetaType_ArrayCounter, "ArrayCounter", "collisionEffectsCount", (u32) (&((ServerEntityInitParams*)0)->collisionEffectsCount), {}, sizeof(ArrayCounter),"invalid","collisionEffects", (u32)(&((ServerEntityInitParams*)0)->collisionEffects), 0}, 
@@ -442,6 +442,7 @@ AddToMetaDefinitions(ImageProperty, fieldDefinitionOfImageProperty);\
 AddToMetaDefinitions(ServerEntityInitParams, fieldDefinitionOfServerEntityInitParams);\
 AddToMetaDefinitions(CommonEntityInitParams, fieldDefinitionOfCommonEntityInitParams);\
 AddToMetaDefinitions(EntityID, fieldDefinitionOfEntityID);\
+AddToMetaDefinitions(EntityRef, fieldDefinitionOfEntityRef);\
 AddToMetaDefinitions(ground_generator, fieldDefinitionOfground_generator);\
 AddToMetaDefinitions(TileMapping, fieldDefinitionOfTileMapping);\
 AddToMetaDefinitions(tile_definition, fieldDefinitionOftile_definition);\
@@ -452,7 +453,6 @@ AddToMetaDefinitions(AssetID, fieldDefinitionOfAssetID);\
 AddToMetaDefinitions(Spawner, fieldDefinitionOfSpawner);\
 AddToMetaDefinitions(SpawnerOption, fieldDefinitionOfSpawnerOption);\
 AddToMetaDefinitions(SpawnerEntity, fieldDefinitionOfSpawnerEntity);\
-AddToMetaDefinitions(EntityRef, fieldDefinitionOfEntityRef);\
 AddToMetaDefinitions(world_generator, fieldDefinitionOfworld_generator);\
 AddToMetaDefinitions(ZSlice, fieldDefinitionOfZSlice);\
 AddToMetaDefinitions(BiomePyramid, fieldDefinitionOfBiomePyramid);\
@@ -502,7 +502,7 @@ meta_propertiesString[Property_action] = "action";\
 meta_propertiesString[Property_tileType] = "tileType";\
 
 #define META_DEFAULT_VALUES_CPP_SUCKS()\
-fieldDefinitionOfGameEffect[0].def.def_r32 =1;fieldDefinitionOfGameEffect[1].def.def_GameProperty ={Property_gameEffect};fieldDefinitionOfWaterPhase[0].def.def_r32 =0;fieldDefinitionOfWaterPhase[6].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[7].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[8].def.def_r32 =1.0f;fieldDefinitionOfWaterPhase[9].def.def_r32 =0.5f;fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[5].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfworld_generator[7].def.def_r32 =0.05f;fieldDefinitionOfworld_generator[9].def.def_u32 =1;fieldDefinitionOfSpawnerEntity[3].def.def_r32 =1;fieldDefinitionOfSpawnerEntity[4].def.def_r32 =1;fieldDefinitionOfSpawnerEntity[5].def.def_i32 =1;fieldDefinitionOfSpawnerEntity[6].def.def_i32 =0;fieldDefinitionOfSpawnerEntity[7].def.def_i32 =1;fieldDefinitionOfSpawnerOption[0].def.def_r32 =1.0f;fieldDefinitionOfSpawner[2].def.def_r32 =1.0f;fieldDefinitionOfSpawner[3].def.def_r32 =1.0f;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, 0};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, 0};fieldDefinitionOftile_definition[2].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfCommonEntityInitParams[1].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfImageProperties[0].def.def_GameAssetType ={AssetType_Image, 0};fieldDefinitionOfLayoutPieceProperties[1].def.def_r32 =1.0f;fieldDefinitionOfClientEntityInitParams[2].def.def_GameAssetType ={AssetType_Skeleton, 0};fieldDefinitionOfClientEntityInitParams[3].def.def_GameAssetType ={AssetType_Image, 0};fieldDefinitionOfClientEntityInitParams[13].def.def_Vec2 =V2(1, 1);fieldDefinitionOfClientEntityInitParams[14].def.def_Vec4 =V4(1, 1, 1, 0.5f);fieldDefinitionOfClientEntityInitParams[15].def.def_r32 =3.0f;fieldDefinitionOfClientEntityInitParams[16].def.def_Vec2 =V2(400, 400);fieldDefinitionOfRockDefinition[1].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfRockDefinition[4].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[6].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[9].def.def_u32 =1;fieldDefinitionOfRockDefinition[10].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[11].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[12].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[13].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[17].def.def_u32 =1;
+fieldDefinitionOfGameEffect[0].def.def_r32 =1;fieldDefinitionOfGameEffect[1].def.def_GameProperty ={Property_gameEffect};fieldDefinitionOfWaterPhase[0].def.def_r32 =0;fieldDefinitionOfWaterPhase[6].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[7].def.def_Vec3 =V3(0, 0, 1);fieldDefinitionOfWaterPhase[8].def.def_r32 =1.0f;fieldDefinitionOfWaterPhase[9].def.def_r32 =0.5f;fieldDefinitionOfNoiseParams[0].def.def_r32 =1;fieldDefinitionOfNoiseParams[1].def.def_u32 =1;fieldDefinitionOfNoiseParams[3].def.def_r32 =0;fieldDefinitionOfNoiseParams[4].def.def_r32 =1;fieldDefinitionOfworld_generator[5].def.def_r32 =1;fieldDefinitionOfworld_generator[6].def.def_r32 =1;fieldDefinitionOfworld_generator[7].def.def_r32 =0.05f;fieldDefinitionOfworld_generator[9].def.def_u32 =1;fieldDefinitionOfSpawnerEntity[3].def.def_r32 =1;fieldDefinitionOfSpawnerEntity[4].def.def_r32 =1;fieldDefinitionOfSpawnerEntity[5].def.def_i32 =1;fieldDefinitionOfSpawnerEntity[6].def.def_i32 =0;fieldDefinitionOfSpawnerEntity[7].def.def_i32 =1;fieldDefinitionOfSpawnerOption[0].def.def_r32 =1.0f;fieldDefinitionOfSpawner[2].def.def_r32 =1.0f;fieldDefinitionOfSpawner[3].def.def_r32 =1.0f;fieldDefinitionOfGroundColorationArrayTest[0].def.def_u32 =2;fieldDefinitionOfGroundColorationArrayTest[1].def.def_u32 =3;fieldDefinitionOfground_coloration[0].def.def_Vec4 =V4(1, 0, 1, 1);fieldDefinitionOfground_coloration[3].def.def_GameAssetType ={AssetType_Font, 0};fieldDefinitionOftile_definition[0].def.def_GameAssetType ={AssetType_Image, 0};fieldDefinitionOftile_definition[2].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfCommonEntityInitParams[2].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfImageProperties[0].def.def_GameAssetType ={AssetType_Image, 0};fieldDefinitionOfLayoutPieceProperties[1].def.def_r32 =1.0f;fieldDefinitionOfClientEntityInitParams[2].def.def_GameAssetType ={AssetType_Skeleton, 0};fieldDefinitionOfClientEntityInitParams[3].def.def_GameAssetType ={AssetType_Image, 0};fieldDefinitionOfClientEntityInitParams[13].def.def_Vec2 =V2(1, 1);fieldDefinitionOfClientEntityInitParams[14].def.def_Vec4 =V4(1, 1, 1, 0.5f);fieldDefinitionOfClientEntityInitParams[15].def.def_r32 =3.0f;fieldDefinitionOfClientEntityInitParams[16].def.def_Vec2 =V2(400, 400);fieldDefinitionOfRockDefinition[1].def.def_Vec4 =V4(1, 1, 1, 1);fieldDefinitionOfRockDefinition[4].def.def_Vec3 =V3(1, 1, 1);fieldDefinitionOfRockDefinition[6].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[9].def.def_u32 =1;fieldDefinitionOfRockDefinition[10].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[11].def.def_r32 =0.5f;fieldDefinitionOfRockDefinition[12].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[13].def.def_r32 =0.6f;fieldDefinitionOfRockDefinition[17].def.def_u32 =1;
 ;
 #define META_ARCHETYPES_BOTH()\
 archetypeLayouts[Archetype_AnimalArchetype].totalSize = sizeof(AnimalArchetype); archetypeLayouts[Archetype_RockArchetype].totalSize = sizeof(RockArchetype); archetypeLayouts[Archetype_PlantArchetype].totalSize = sizeof(PlantArchetype); archetypeLayouts[Archetype_GrassArchetype].totalSize = sizeof(GrassArchetype); archetypeLayouts[Archetype_ObjectArchetype].totalSize = sizeof(ObjectArchetype); archetypeLayouts[Archetype_ContainerArchetype].totalSize = sizeof(ContainerArchetype); archetypeLayouts[Archetype_PortalArchetype].totalSize = sizeof(PortalArchetype); 

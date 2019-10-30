@@ -48,6 +48,7 @@
 
 struct BaseComponent
 {
+    EntityRef definitionID;
     u32 seed;
     u64 nameHash;
     UniversePos universeP;
@@ -180,13 +181,16 @@ struct EntityHotInteraction
     InteractionType type;
     u16 actionCount;
     u16 actions[8];
-    EntityID ID;
+    
+    EntityID containerID;
+    EntityID entityID;
 };
 
 inline b32 AreEqual(EntityHotInteraction i1, EntityHotInteraction i2)
 {
     b32 result = (i1.type == i2.type && 
-                  AreEqual(i1.ID, i2.ID));
+                  AreEqual(i1.containerID, i2.containerID) &&
+                  AreEqual(i1.entityID, i2.entityID));
     return result;
 }
 
@@ -276,8 +280,11 @@ struct GameModeWorld
     
     b32 inventoryMode;
     b32 lootingMode;
+    
+    b32 testingDraggingOnEquipment;
     EntityID draggingID;
-    EntityID lootingID;
+    
+    EntityID lootingIDServer;
     EntityID openIDLeft;
     EntityID openIDRight;
     

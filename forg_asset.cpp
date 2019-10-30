@@ -2135,3 +2135,42 @@ internal AssetID QueryAnimations(Assets* assets, u64 skeletonHash, RandomSequenc
     return result;
 }
 #endif
+
+inline b32 AreEqual(EntityRef r1, EntityRef r2)
+{
+    b32 result = (r1.subtypeHashIndex == r2.subtypeHashIndex &&
+                  r1.index == r2.index);
+    return result;
+}
+
+inline EntityRef EntityReference(AssetID definitionID)
+{
+    EntityRef result;
+    result.subtypeHashIndex = definitionID.subtypeHashIndex;
+    result.index = definitionID.index;
+    return result;
+}
+
+internal EntityRef EntityReference(Assets* assets, char* kind, char* type)
+{
+    char type_[128];
+    FormatString(type_, sizeof(type_), "%s.dat", type);
+    EntityRef result;
+    result.subtypeHashIndex = GetAssetSubtype(assets, AssetType_EntityDefinition, kind);
+    result.index = GetAssetIndex(assets, AssetType_EntityDefinition, result.subtypeHashIndex, Tokenize(type_));
+    return result;
+}
+
+internal b32 CanUse(Assets* assets, EntityRef ref)
+{
+    EntityRef sword = EntityReference(assets, "default", "sword");
+    b32 result = AreEqual(sword, ref);
+    return result;
+}
+
+internal b32 CanEquip(Assets* assets, EntityRef ref)
+{
+    EntityRef bag = EntityReference(assets, "default", "bag");
+    b32 result = AreEqual(bag, ref);
+    return result;
+}

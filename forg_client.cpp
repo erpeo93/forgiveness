@@ -561,7 +561,7 @@ internal Vec2 HandleKeyboardInteraction(GameModeWorld* worldMode, ClientPlayer* 
     
     if(Pressed(&input->mouseCenter))
     {
-        if(IsValidID(worldMode->lootingID))
+        if(IsValidID(worldMode->lootingIDServer))
         {
             if(worldMode->lootingMode)
             {
@@ -588,7 +588,7 @@ internal void ResetInteractions(GameModeWorld* worldMode)
     worldMode->hotCount = 0;
 }
 
-internal void AddPossibleInteraction(GameModeWorld* worldMode, InteractionType type, PossibleActionList* list, EntityID ID)
+internal void AddPossibleInteraction(GameModeWorld* worldMode, InteractionType type, PossibleActionList* list, EntityID containerID, EntityID entityID)
 {
     if(worldMode->hotCount < ArrayCount(worldMode->hotInteractions))
     {
@@ -597,38 +597,51 @@ internal void AddPossibleInteraction(GameModeWorld* worldMode, InteractionType t
         dest->actionCount = 0;
         dest->actions[0] = 0;
         
-        for(u32 actionIndex = 0; actionIndex < list->actionCount; ++actionIndex)
+        if(list)
         {
-            if(dest->actionCount < ArrayCount(dest->actions))
+            for(u32 actionIndex = 0; actionIndex < list->actionCount; ++actionIndex)
             {
-                dest->actions[dest->actionCount++] = list->actions[actionIndex];
+                if(dest->actionCount < ArrayCount(dest->actions))
+                {
+                    dest->actions[dest->actionCount++] = list->actions[actionIndex];
+                }
             }
         }
-        dest->ID = ID;
+        dest->containerID = containerID;
+        dest->entityID = entityID;
     }
 }
 
-internal void AddContainerObjectsInteractions(GameModeWorld* worldMode, ObjectMapping* mappings, u32 mappingCount, InteractionType interactionType)
+internal void AddContainerObjectsInteractions(GameModeWorld* worldMode, ObjectMapping* mappings, u32 mappingCount, EntityID containerID, InteractionType interactionType)
 {
 	for(u32 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
 	{
         ObjectMapping* mapping = mappings + mappingIndex;
         
-        if(IsValidMappingID(worldMode, mapping->ID))
+        if(!IsValidID(mapping->ID))
         {
-            InteractionComponent* interaction = GetComponent(worldMode, mapping->ID, InteractionComponent);
-            BaseComponent* base = GetComponent(worldMode, mapping->ID, BaseComponent);
-            
-            if(interaction)
+            if(PointInRect(mapping->projOnScreen, worldMode->relativeMouseP))
             {
-                if(PointInRect(mapping->projOnScreen, worldMode->relativeMouseP))
+                AddPossibleInteraction(worldMode, interactionType, 0, containerID, {});
+            }
+        }
+        else
+        {
+            if(IsValidMappingID(worldMode, mapping->ID))
+            {
+                InteractionComponent* interaction = GetComponent(worldMode, mapping->ID, InteractionComponent);
+                BaseComponent* base = GetComponent(worldMode, mapping->ID, BaseComponent);
+                if(interaction)
                 {
-                    ResetInteractions(worldMode);
-                    AddPossibleInteraction(worldMode, interactionType, interaction->actions + interactionType, mapping->ID);
-                }
-                else if((interactionType == Interaction_Equipment) && PointInRect(base->projectedOnScreen, worldMode->relativeMouseP))
-                {
-                    AddPossibleInteraction(worldMode, interactionType, interaction->actions + interactionType, mapping->ID);
+                    if(PointInRect(mapping->projOnScreen, worldMode->relativeMouseP))
+                    {
+                        ResetInteractions(worldMode);
+                        AddPossibleInteraction(worldMode, interactionType, interaction->actions + interactionType, containerID, mapping->ID);
+                    }
+                    else if((interactionType == Interaction_Equipment) && PointInRect(base->projectedOnScreen, worldMode->relativeMouseP))
+                    {
+                        AddPossibleInteraction(worldMode, interactionType, interaction->actions + interactionType, containerID, mapping->ID);
+                    }
                 }
             }
         }
@@ -640,13 +653,13 @@ internal void HandleEquipmentInteraction(GameModeWorld* worldMode, EntityID ID)
     EquipmentMappingComponent* equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
     if(equipment)
     {
-        AddContainerObjectsInteractions(worldMode, equipment->mappings, ArrayCount(equipment->mappings), Interaction_Equipment);
+        AddContainerObjectsInteractions(worldMode, equipment->mappings, ArrayCount(equipment->mappings), ID, Interaction_Equipment);
     }
     
     UsingMappingComponent* equipped = GetComponent(worldMode, ID, UsingMappingComponent);
     if(equipped)
     {
-        AddContainerObjectsInteractions(worldMode, equipped->mappings, ArrayCount(equipped->mappings), Interaction_Equipment);
+        AddContainerObjectsInteractions(worldMode, equipped->mappings, ArrayCount(equipped->mappings), ID, Interaction_Equipment);
     }
 }
 
@@ -657,7 +670,7 @@ internal void HandleContainerInteraction(GameModeWorld* worldMode)
         ContainerMappingComponent* container = GetComponent(worldMode, worldMode->openIDRight, ContainerMappingComponent);
         if(container)
         {
-			AddContainerObjectsInteractions(worldMode, container->storedMappings, ArrayCount(container->storedMappings), Interaction_Container);
+			AddContainerObjectsInteractions(worldMode, container->storedMappings, ArrayCount(container->storedMappings), worldMode->openIDRight, Interaction_Container);
         }
     }
     
@@ -666,7 +679,7 @@ internal void HandleContainerInteraction(GameModeWorld* worldMode)
         ContainerMappingComponent* container = GetComponent(worldMode, worldMode->openIDLeft, ContainerMappingComponent);
         if(container)
         {
-            AddContainerObjectsInteractions(worldMode, container->storedMappings, ArrayCount(container->storedMappings), Interaction_Container);
+            AddContainerObjectsInteractions(worldMode, container->storedMappings, ArrayCount(container->storedMappings), worldMode->openIDLeft, Interaction_Container);
         }
     }
 }
@@ -676,7 +689,7 @@ internal void HandleOverlayObjectsInteraction(GameModeWorld* worldMode)
     UsingMappingComponent* equipped = GetComponent(worldMode, worldMode->player.clientID, UsingMappingComponent);
     if(equipped)
     {
-        AddContainerObjectsInteractions(worldMode, equipped->mappings, ArrayCount(equipped->mappings), Interaction_Equipped);
+        AddContainerObjectsInteractions(worldMode, equipped->mappings, ArrayCount(equipped->mappings), worldMode->player.serverID, Interaction_Equipped);
     }
     
     EquipmentMappingComponent* equipment = GetComponent(worldMode, worldMode->player.clientID, EquipmentMappingComponent);
@@ -688,7 +701,7 @@ internal void HandleOverlayObjectsInteraction(GameModeWorld* worldMode)
             ContainerMappingComponent* container = GetComponent(worldMode, ID, ContainerMappingComponent);
             if(container)
             {
-                AddContainerObjectsInteractions(worldMode, container->usingMappings, ArrayCount(container->usingMappings), Interaction_Equipped);
+                AddContainerObjectsInteractions(worldMode, container->usingMappings, ArrayCount(container->usingMappings), ID, Interaction_Equipped);
             }
         }
     }
@@ -801,9 +814,9 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
     
     if(IsValidID(worldMode->draggingID))
     {
-		if(worldMode->testingDragging)
+		if(worldMode->testingDraggingOnEquipment)
 		{
-			worldMode->testingDragging = false;
+			worldMode->testingDraggingOnEquipment = false;
 		}
 		else
 		{
@@ -838,10 +851,22 @@ INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
             base->projectedOnScreen = ProjectOnScreen(group, base->worldBounds, &cameraZ);
             if(PointInRect(base->projectedOnScreen, worldMode->relativeMouseP))
             {
-                AddPossibleInteraction(worldMode, Interaction_Ground, interaction->actions + Interaction_Ground, ID);
+                AddPossibleInteraction(worldMode, Interaction_Ground, interaction->actions + Interaction_Ground, {}, ID);
             }
         }
     }
+}
+
+internal b32 MouseInsidePlayerRectProjectedOnScreen(GameModeWorld* worldMode)
+{
+    b32 result = false;
+    return result;
+}
+
+internal void SetTooltip(GameModeWorld* worldMode, u32 actionCount, char* tooltip)
+{
+    worldMode->multipleActions = (actionCount > 1);
+    FormatString(worldMode->tooltip, sizeof(worldMode->tooltip), "%s", tooltip);
 }
 
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
@@ -917,13 +942,14 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
 			if(worldMode->lootingMode)
 			{
-                Assert(IsValidID(worldMode->lootingID));
-                ContainerMappingComponent* container = GetComponent(worldMode, worldMode->lootingID, ContainerMappingComponent);
-                BaseComponent* lootingBase = GetComponent(worldMode, worldMode->lootingID, BaseComponent);
+                Assert(IsValidID(worldMode->lootingIDServer));
+                EntityID lootingID = GetClientIDMapping(worldMode, worldMode->lootingIDServer);
+                ContainerMappingComponent* container = GetComponent(worldMode, lootingID, ContainerMappingComponent);
+                BaseComponent* lootingBase = GetComponent(worldMode, lootingID, BaseComponent);
                 
                 if(container && lootingBase)
                 {
-                    AddContainerObjectsInteractions(worldMode, container->storedMappings, ArrayCount(container->storedMappings), Interaction_Container);
+                    AddContainerObjectsInteractions(worldMode, container->storedMappings, ArrayCount(container->storedMappings), worldMode->lootingIDServer, Interaction_Container);
                     MoveCameraTowards(worldMode, lootingBase, 5.0f, V2(0, 0), V2(0, 0), container->zoomCoeff);
                 }
 			}
@@ -937,213 +963,217 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             if(worldMode->hotCount > 0)
             {
-				if(dragging && MouseInsidePlayerRectProjectedOnScreen())
+				if(IsValidID(worldMode->draggingID) && MouseInsidePlayerRectProjectedOnScreen(worldMode))
 				{
-					if(CanUse(player, draggingID))
+                    InteractionComponent* interaction = GetComponent(worldMode, worldMode->draggingID, InteractionComponent);
+                    
+                    BaseComponent* draggingBase = GetComponent(worldMode, worldMode->draggingID, BaseComponent);
+					if(CanUse(group->assets, draggingBase->definitionID))
 					{
-						equip->isOnFocus = true;
-						InsertUsing();
-						worldMode->testingEquipment = true;
-						
-						Tooltip("use");
-						if(Pressed(leftMouse))
-						{
-							SendUseCommand();
-						}
+						interaction->isOnFocus = true;
+						if(Use())
+                        {
+                            worldMode->testingDraggingOnEquipment = true;
+                            SetTooltip(worldMode, 1, "use");
+                            if(Pressed(&input->mouseLeft))
+                            {
+                                InvalidCodePath;
+                                //SendUseCommand();
+                            }
+                        }
 					}
-
-					if(CanEquip(player, draggingID))
+                    else if(CanEquip(group->assets, draggingBase->definitionID))
 					{
-						equip->isOnFocus = true;
-						InsertEquipment();
-						worldMode->testingEquipment = true;
-						
-						Tooltip("equip");
-						if(Pressed(leftMouse))
-						{
-							SendEquipCommand();
-						}
+						interaction->isOnFocus = true;
+						if(Equip())
+                        {
+                            worldMode->testingDraggingOnEquipment = true;
+                            SetTooltip(worldMode, 1, "equip");
+                            if(Pressed(&input->mouseLeft))
+                            {
+                                InvalidCodePath;
+                                //SendEquipCommand();
+                            }
+                        }
 					}
 				}
 				else
 				{
 					b32 interactionChanged = true;
-                for(u32 hotIndex = 0; hotIndex < worldMode->hotCount; ++hotIndex)
-                {
-                    EntityHotInteraction hotInteraction = worldMode->hotInteractions[hotIndex];
-                    
-                    if(AreEqual(hotInteraction, worldMode->lastFrameHotInteraction))
+                    for(u32 hotIndex = 0; hotIndex < worldMode->hotCount; ++hotIndex)
                     {
-                        worldMode->currentHotIndex = (i32) hotIndex;
-                        interactionChanged = false;
-                        break;
+                        EntityHotInteraction hotInteraction = worldMode->hotInteractions[hotIndex];
+                        
+                        if(AreEqual(hotInteraction, worldMode->lastFrameHotInteraction))
+                        {
+                            worldMode->currentHotIndex = (i32) hotIndex;
+                            interactionChanged = false;
+                            break;
+                        }
                     }
-                }
-                if(interactionChanged)
-                {
-                    worldMode->currentActionIndex = 0;
-                }
-                
-                
-                if(Pressed(&input->switchButton))
-                {
-                    ++worldMode->currentHotIndex;
-                }
-                
-                worldMode->currentHotIndex = Wrap(0, worldMode->currentHotIndex, (i32) worldMode->hotCount);
-                
-                EntityHotInteraction hotInteraction = worldMode->hotInteractions[worldMode->currentHotIndex];
-                
-                worldMode->currentActionIndex += input->mouseWheelOffset;
-                worldMode->currentActionIndex = Wrap(0, worldMode->currentActionIndex, (i32) hotInteraction.actionCount);
-                
-                
-                worldMode->lastFrameHotInteraction = hotInteraction;
-                
-                EntityID hotID = hotInteraction.ID;
-                u16 hotAction = hotInteraction.actions[worldMode->currentActionIndex];
-                
-				id(!draggingID)
-				{
-					worldMode->multipleActions = (hotInteraction.actionCount > 1);
-					FormatString(worldMode->tooltip, sizeof(worldMode->tooltip), "%s", MetaTable_action[hotAction]);
-				}
-                
-                BaseComponent* base = GetComponent(worldMode, hotID, BaseComponent);
-                InteractionComponent* interaction = GetComponent(worldMode, hotID, InteractionComponent);
-                if(interaction)
-                {
-                    interaction->isOnFocus = true;
-                }
-                
-                switch(hotInteraction.type)
-                {
-                    case Interaction_Ground:
+                    if(interactionChanged)
                     {
-						Assert(IsValid(selected));
-						if(Dragging)
-						{
-							//nothing possible!
-						}
-						else
-						{
-							if(Pressed(&input->mouseLeft))
-							{
-								GameCommand* command = &myPlayer->currentCommand;
-								command->targetID = base->serverID;
-								command->action = hotAction;
-							}
-						}
-                    } break;
+                        worldMode->currentActionIndex = 0;
+                    }
                     
-                    case Interaction_Container:
-                    case Interaction_Equipped:
-                    {
-						if(dragging)
-						{
-							if(Valid(base->targetID))
-							{
-								switchRequest(hotInteraction.containerID);
-							}
-							else
-							{
-								storeRequest(hotInteraction.containerID); 
-							}
-						}
-						else
-						{
-							if(IsValid(selectedID))
-							{
-								if(Pressed(&input->mouseLeft))
-                        {
-                            GameCommand* command = &myPlayer->currentCommand;
-                            command->targetID = base->serverID;
-                            command->action = hotAction;
-                        }
-                        
-                        if(Pressed(&input->mouseRight))
-                        {
-									worldMode->draggingID = base->serverID;
-                                
-									if(AreEqual(worldMode->draggingID, worldMode->openIDLeft))
-									{
-										worldMode->openIDLeft = {};
-									}
-                                
-									if(AreEqual(worldMode->draggingID, worldMode->openIDRight))
-									{
-										worldMode->openIDRight = {};
-									}
-                        }
-							}
-						}
-                    } break;
                     
-                    case Interaction_Equipment:
+                    if(Pressed(&input->switchButton))
                     {
-						if(dragging)
-						{
-							nothing to do!
-						}
-						else
-						{
-							Assert(IsValid(selected));
-							if(Pressed(&input->mouseLeft))
+                        ++worldMode->currentHotIndex;
+                    }
+                    
+                    worldMode->currentHotIndex = Wrap(0, worldMode->currentHotIndex, (i32) worldMode->hotCount);
+                    
+                    EntityHotInteraction hotInteraction = worldMode->hotInteractions[worldMode->currentHotIndex];
+                    
+                    worldMode->currentActionIndex += input->mouseWheelOffset;
+                    worldMode->currentActionIndex = Wrap(0, worldMode->currentActionIndex, (i32) hotInteraction.actionCount);
+                    
+                    
+                    worldMode->lastFrameHotInteraction = hotInteraction;
+                    
+                    EntityID hotID = hotInteraction.entityID;
+                    u16 hotAction = hotInteraction.actions[worldMode->currentActionIndex];
+                    if(!IsValidID(worldMode->draggingID))
+                    {
+                        SetTooltip(worldMode, hotInteraction.actionCount, MetaTable_action[hotAction]);
+                    }
+                    
+                    BaseComponent* base = GetComponent(worldMode, hotID, BaseComponent);
+                    InteractionComponent* interaction = GetComponent(worldMode, hotID, InteractionComponent);
+                    if(interaction)
+                    {
+                        interaction->isOnFocus = true;
+                    }
+                    
+                    switch(hotInteraction.type)
+                    {
+                        case Interaction_Ground:
                         {
-                            GameCommand command = {};
-                            command.action = hotAction;
-                            command.targetID = base->serverID;
-                            SendInventoryCommand(command);
-                            
-                            switch(command.action)
+                            Assert(IsValidID(hotID));
+                            if(IsValidID(worldMode->draggingID))
                             {
-                                case open:
-                                {
-                                    if(AreEqual(hotID, worldMode->openIDLeft))
-                                    {
-                                        worldMode->openIDLeft = {};
-                                    }
-                                    else if(AreEqual(hotID, worldMode->openIDRight))
-                                    {
-                                        worldMode->openIDRight = {};
-                                    }
-                                    else
-                                    {
-                                        if(!IsValidID(worldMode->openIDLeft))
-                                        {
-                                            worldMode->openIDLeft = hotID;
-                                        }
-                                        else if(!IsValidID(worldMode->openIDRight))
-                                        {
-                                            worldMode->openIDRight = hotID;
-                                        }
-                                    }
-                                } break;
+                                //nothing possible!
                             }
-                        }
-                        
-                        if(Pressed(&input->mouseRight))
-                        {
-                            if(!IsValidID(worldMode->draggingID))
+                            else
                             {
-                                worldMode->draggingID = base->serverID;
-                                
-                                if(AreEqual(worldMode->draggingID, worldMode->openIDLeft))
+                                if(Pressed(&input->mouseLeft))
                                 {
-                                    worldMode->openIDLeft = {};
-                                }
-                                
-                                if(AreEqual(worldMode->draggingID, worldMode->openIDRight))
-                                {
-                                    worldMode->openIDRight = {};
+                                    GameCommand* command = &myPlayer->currentCommand;
+                                    command->targetID = base->serverID;
+                                    command->action = hotAction;
                                 }
                             }
-                        }
-						}
-                    } break;
-                    
-                    InvalidDefaultCase;
-                }
+                        } break;
+                        
+                        case Interaction_Container:
+                        case Interaction_Equipped:
+                        {
+                            if(IsValidID(worldMode->draggingID))
+                            {
+                                if(IsValidID(hotID))
+                                {
+                                    InvalidCodePath;
+                                    //switchRequest(hotInteraction.containerID);
+                                }
+                                else
+                                {
+                                    InvalidCodePath;
+                                    //storeRequest(hotInteraction.containerID); 
+                                }
+                            }
+                            else
+                            {
+                                if(IsValidID(hotID))
+                                {
+                                    if(Pressed(&input->mouseLeft))
+                                    {
+                                        GameCommand* command = &myPlayer->currentCommand;
+                                        command->targetID = base->serverID;
+                                        command->action = hotAction;
+                                    }
+                                    
+                                    if(Pressed(&input->mouseRight))
+                                    {
+                                        worldMode->draggingID = base->serverID;
+                                        if(AreEqual(worldMode->draggingID, worldMode->openIDLeft))
+                                        {
+                                            worldMode->openIDLeft = {};
+                                        }
+                                        
+                                        if(AreEqual(worldMode->draggingID, worldMode->openIDRight))
+                                        {
+                                            worldMode->openIDRight = {};
+                                        }
+                                    }
+                                }
+                            }
+                        } break;
+                        
+                        case Interaction_Equipment:
+                        {
+                            if(IsValidID(worldMode->draggingID))
+                            {
+                            }
+                            else
+                            {
+                                Assert(IsValidID(hotID));
+                                if(Pressed(&input->mouseLeft))
+                                {
+                                    GameCommand command = {};
+                                    command.action = hotAction;
+                                    command.targetID = base->serverID;
+                                    SendInventoryCommand(command);
+                                    
+                                    switch(command.action)
+                                    {
+                                        case open:
+                                        {
+                                            if(AreEqual(hotID, worldMode->openIDLeft))
+                                            {
+                                                worldMode->openIDLeft = {};
+                                            }
+                                            else if(AreEqual(hotID, worldMode->openIDRight))
+                                            {
+                                                worldMode->openIDRight = {};
+                                            }
+                                            else
+                                            {
+                                                if(!IsValidID(worldMode->openIDLeft))
+                                                {
+                                                    worldMode->openIDLeft = hotID;
+                                                }
+                                                else if(!IsValidID(worldMode->openIDRight))
+                                                {
+                                                    worldMode->openIDRight = hotID;
+                                                }
+                                            }
+                                        } break;
+                                    }
+                                }
+                                
+                                if(Pressed(&input->mouseRight))
+                                {
+                                    if(!IsValidID(worldMode->draggingID))
+                                    {
+                                        worldMode->draggingID = base->serverID;
+                                        
+                                        if(AreEqual(worldMode->draggingID, worldMode->openIDLeft))
+                                        {
+                                            worldMode->openIDLeft = {};
+                                        }
+                                        
+                                        if(AreEqual(worldMode->draggingID, worldMode->openIDRight))
+                                        {
+                                            worldMode->openIDRight = {};
+                                        }
+                                    }
+                                }
+                            }
+                        } break;
+                        
+                        InvalidDefaultCase;
+                    }
 				}
             }
             else

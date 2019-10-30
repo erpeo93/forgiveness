@@ -17,7 +17,7 @@ internal EntityID AddEntity_(ServerState* server, UniversePos P, AssetID definit
     EntityID result = {};
     ServerEntityInitParams params = definition->server;
     params.P = P;
-    params.definitionID = EntityReference(definitionID);
+    definition->common.definitionID = EntityReference(definitionID);
     params.seed = seed;
     
     u8 archetype = SafeTruncateToU8(ConvertEnumerator(EntityArchetype, definition->archetype));
@@ -58,16 +58,6 @@ internal GameProperty GameProp_(u16 property, u16 value)
     result.property = property;
     result.value = value;
     
-    return result;
-}
-
-internal EntityRef EntityReference(ServerState* server, char* kind, char* type)
-{
-    char type_[128];
-    FormatString(type_, sizeof(type_), "%s.dat", type);
-    EntityRef result;
-    result.subtypeHashIndex = GetAssetSubtype(server->assets, AssetType_EntityDefinition, kind);
-    result.index = GetAssetIndex(server->assets, AssetType_EntityDefinition, result.subtypeHashIndex, Tokenize(type_));
     return result;
 }
 
@@ -232,13 +222,10 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                 {
                     PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
                     
-                    EntityRef ref = EntityReference(server, "default", "sword");
-                    EntityRef ref2 = EntityReference(server, "default", "bag");
-                    
                     if(!IsSet(targetPhysic->flags, EntityFlag_notInWorld) && 
                        targetPhysic->P.chunkZ == physic->P.chunkZ)
                     {
-                        if(AreEqual(targetPhysic->definitionID, ref))
+                        if(CanUse(server->assets, targetPhysic->definitionID))
                         {
                             if(!Use(server, ID, targetID))
                             {
@@ -259,7 +246,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                                 }
                             }
                         }
-                        else if(AreEqual(targetPhysic->definitionID, ref2))
+                        else if(CanEquip(server->assets, targetPhysic->definitionID))
                         {
                             EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
                             if(equipment)

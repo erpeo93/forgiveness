@@ -164,28 +164,6 @@ inline NoiseParams NoisePar(r32 frequency, u32 octaves, r32 min, r32 max,r32 per
     return result;
 }
 
-introspection() struct EntityRef
-{
-    u32 subtypeHashIndex;
-    u16 index;
-};
-
-
-inline b32 AreEqual(EntityRef r1, EntityRef r2)
-{
-    b32 result = (r1.subtypeHashIndex == r2.subtypeHashIndex &&
-                  r1.index == r2.index);
-    return result;
-}
-
-inline EntityRef EntityReference(AssetID definitionID)
-{
-    EntityRef result;
-    result.subtypeHashIndex = definitionID.subtypeHashIndex;
-    result.index = definitionID.index;
-    return result;
-}
-
 introspection() struct SpawnerEntity
 {
     EntityRef type;

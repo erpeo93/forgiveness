@@ -335,6 +335,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         params.ID = currentServerID;
                         params.seed = seed;
                         
+                        definition->common.definitionID = EntityReference(definitionID);
                         InitEntity(worldMode, currentClientID, &definition->common, 0, &params);
                         
                         AddClientIDMapping(worldMode, currentServerID, currentClientID);
@@ -431,23 +432,23 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 container->openedBy = ID;
                 
-                b32 wasLooting = IsValidID(worldMode->lootingID);
+                b32 wasLooting = IsValidID(worldMode->lootingIDServer);
                 
                 if(IsValidID(ID))
                 {
-                    worldMode->lootingID = currentClientID;
+                    worldMode->lootingIDServer = currentServerID;
                 }
                 else
                 {
-                    worldMode->lootingID = {};
+                    worldMode->lootingIDServer = {};
                 }
                 
-                if(!IsValidID(worldMode->lootingID))
+                if(!IsValidID(worldMode->lootingIDServer))
                 {
                     worldMode->lootingMode = false;
                 }
                 
-                if(IsValidID(worldMode->lootingID) && !wasLooting)
+                if(IsValidID(worldMode->lootingIDServer) && !wasLooting)
                 {
                     worldMode->lootingMode = true;
                     worldMode->inventoryMode = false;

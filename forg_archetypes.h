@@ -98,8 +98,11 @@ Archetype() struct PortalArchetype
 
 introspection() struct CommonEntityInitParams
 {
+    EntityRef definitionID MetaUneditable();
+    
     Vec3 boundOffset;
     Vec3 boundDim MetaDefault("V3(1, 1, 1)");
+    
     
     ArrayCounter groundActionCount MetaCounter("groundActions");
     Enumerator* groundActions MetaEnumerator("action");
@@ -118,7 +121,6 @@ introspection() struct ServerEntityInitParams
 {
     UniversePos P MetaUneditable();
     u32 seed MetaUneditable();
-    EntityRef definitionID MetaUneditable();
     
     ArrayCounter bindingCount MetaCounter(bindings);
     EffectBinding* bindings;
