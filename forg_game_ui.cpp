@@ -1,0 +1,655 @@
+
+internal Vec2 HandleKeyboardInteraction(GameUIContext* UI, ClientPlayer* player, PlatformInput* input)
+{
+    GameCommand* command = &player->currentCommand;
+    
+    command->action = idle;
+    command->acceleration = {};
+    command->targetID = {};
+    
+    Vec2 cameraOffset = {};
+    
+    r32 cameraOffsetMagnitudo = 0.6f;
+    if(IsDown(&input->moveLeft))
+    {
+        command->acceleration.x = -1.0f;
+        cameraOffset.x = -cameraOffsetMagnitudo;
+    }
+    if(IsDown(&input->moveRight))
+    {
+        command->acceleration.x = 1.0f;
+        cameraOffset.x = cameraOffsetMagnitudo;
+    }
+    if(IsDown(&input->moveDown))
+    {
+        command->acceleration.y = -1.0f;
+        cameraOffset.y = -cameraOffsetMagnitudo;
+    }
+    if(IsDown(&input->moveUp))
+    {
+        command->acceleration.y = 1.0f;
+        cameraOffset.y = cameraOffsetMagnitudo;
+    }
+    
+    if(LengthSq(command->acceleration) > 0)
+    {
+        command->action = move;
+    }
+    
+    if(Pressed(&input->mouseCenter))
+    {
+        if(IsValidID(UI->lootingIDServer))
+        {
+            if(UI->lootingMode)
+            {
+                UI->lootingMode = false;
+                UI->inventoryMode = true;
+            }
+            else
+            {
+                UI->lootingMode = true;
+                UI->inventoryMode = false;
+            }
+        }
+        else
+        {
+            UI->inventoryMode = !UI->inventoryMode;
+        }
+    }
+    
+    return cameraOffset;
+}
+
+internal void ResetInteractions(GameUIContext* UI)
+{
+    UI->hotCount = 0;
+}
+
+internal void AddPossibleInteraction(GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID containerID, u16 objectIndex, EntityID entityID)
+{
+    if(UI->hotCount < ArrayCount(UI->hotInteractions))
+    {
+        EntityHotInteraction* dest = UI->hotInteractions + UI->hotCount++;
+        dest->type = type;
+        dest->actionCount = 0;
+        dest->actions[0] = 0;
+        
+        if(list)
+        {
+            for(u32 actionIndex = 0; actionIndex < list->actionCount; ++actionIndex)
+            {
+                if(dest->actionCount < ArrayCount(dest->actions))
+                {
+                    dest->actions[dest->actionCount++] = list->actions[actionIndex];
+                }
+            }
+        }
+        dest->containerIDServer = containerID;
+        dest->objectIndex = objectIndex;
+        
+        dest->entityIDServer = entityID;
+    }
+}
+
+internal void AddContainerObjectsInteractions(GameUIContext* UI, GameModeWorld* worldMode, ObjectMapping* mappings, u16  mappingCount, EntityID containerID, InteractionType interactionType)
+{
+	for(u16 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
+	{
+        ObjectMapping* mapping = mappings + mappingIndex;
+        
+        if(!IsValidMappingID(UI, mapping->ID))
+        {
+            if(PointInRect(mapping->projOnScreen, worldMode->relativeMouseP))
+            {
+                ResetInteractions(UI);
+                AddPossibleInteraction(UI, interactionType, 0, containerID, mappingIndex, {});
+            }
+        }
+        else
+        {
+            if(IsValidMappingID(UI, mapping->ID))
+            {
+                InteractionComponent* interaction = GetComponent(worldMode, mapping->ID, InteractionComponent);
+                BaseComponent* base = GetComponent(worldMode, mapping->ID, BaseComponent);
+                if(interaction)
+                {
+                    if(PointInRect(mapping->projOnScreen, worldMode->relativeMouseP))
+                    {
+                        ResetInteractions(UI);
+                        AddPossibleInteraction(UI, interactionType, interaction->actions + interactionType, containerID, mappingIndex, mapping->ID);
+                    }
+                    else if((interactionType == Interaction_Equipment) && PointInRect(base->projectedOnScreen, worldMode->relativeMouseP))
+                    {
+                        AddPossibleInteraction(UI, interactionType, interaction->actions + interactionType, containerID, mappingIndex, mapping->ID);
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal void HandleEquipmentInteraction(GameUIContext* UI, GameModeWorld* worldMode, EntityID ID)
+{
+    EquipmentMappingComponent* equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
+    if(equipment)
+    {
+        AddContainerObjectsInteractions(UI, worldMode, equipment->mappings, ArrayCount(equipment->mappings), ID, Interaction_Equipment);
+    }
+    
+    UsingMappingComponent* equipped = GetComponent(worldMode, ID, UsingMappingComponent);
+    if(equipped)
+    {
+        AddContainerObjectsInteractions(UI, worldMode, equipped->mappings, ArrayCount(equipped->mappings), ID, Interaction_Equipment);
+    }
+}
+
+internal void HandleContainerInteraction(GameUIContext* UI, GameModeWorld* worldMode)
+{
+    if(IsValidID(UI->openIDRight))
+    {
+        ContainerMappingComponent* container = GetComponent(worldMode, UI->openIDRight, ContainerMappingComponent);
+        if(container)
+        {
+			AddContainerObjectsInteractions(UI, worldMode, container->storedMappings, ArrayCount(container->storedMappings), UI->openIDRight, Interaction_Container);
+        }
+    }
+    
+    if(IsValidID(UI->openIDLeft))
+    {
+        ContainerMappingComponent* container = GetComponent(worldMode, UI->openIDLeft, ContainerMappingComponent);
+        if(container)
+        {
+            AddContainerObjectsInteractions(UI, worldMode, container->storedMappings, ArrayCount(container->storedMappings), UI->openIDLeft, Interaction_Container);
+        }
+    }
+}
+
+internal void HandleOverlayObjectsInteraction(GameUIContext* UI, GameModeWorld* worldMode)
+{
+    UsingMappingComponent* equipped = GetComponent(worldMode, worldMode->player.clientID, UsingMappingComponent);
+    if(equipped)
+    {
+        AddContainerObjectsInteractions(UI, worldMode, equipped->mappings, ArrayCount(equipped->mappings), worldMode->player.serverID, Interaction_Equipped);
+    }
+    
+    EquipmentMappingComponent* equipment = GetComponent(worldMode, worldMode->player.clientID, EquipmentMappingComponent);
+    if(equipment)
+    {
+        for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->mappings); ++equipIndex)
+        {
+            EntityID ID = equipment->mappings[equipIndex].ID;
+            ContainerMappingComponent* container = GetComponent(worldMode, ID, ContainerMappingComponent);
+            if(container)
+            {
+                AddContainerObjectsInteractions(UI, worldMode, container->usingMappings, ArrayCount(container->usingMappings), ID, Interaction_Equipped);
+            }
+        }
+    }
+}
+
+internal void OverdrawLayout(GameModeWorld* worldMode, RenderGroup* group, EntityID ID, Rect2 rect, LayoutContainerDrawMode drawMode)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    LayoutComponent* layout = GetComponent(worldMode, ID, LayoutComponent);
+    LayoutContainer container = {};
+    container.container = GetComponent(worldMode, ID, ContainerMappingComponent);
+    container.drawMode = drawMode;
+    
+    ObjectTransform transform = FlatTransform(2.0f);
+    transform.angle = layout->rootAngle;
+    transform.scale = layout->rootScale;
+    transform.modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, ID); 
+    RenderLayoutInRect(worldMode, group, rect, transform, layout, base->seed, {}, &container);
+}
+
+internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
+{
+    GameUIContext* UI = &worldMode->gameUI;
+    
+    SetOrthographicTransformScreenDim(group);
+    Vec2 mouseP = worldMode->relativeMouseP;
+    if(UI->lootingMode)
+    {
+    }
+    else if(UI->inventoryMode)
+    {
+        Vec2 rightP = V2(400, 0);
+        Vec2 leftP = V2(-400, 0);
+        Vec2 defaultDim = V2(400, 400);
+        if(IsValidID(UI->openIDRight))
+        {
+            ContainerMappingComponent* container = GetComponent(worldMode, UI->openIDRight, ContainerMappingComponent);
+            Vec2 dim = container ? container->desiredOpenedDim : defaultDim;
+            Rect2 rect = RectCenterDim(rightP, dim);
+            OverdrawLayout(worldMode, group, UI->openIDRight, rect, LayoutContainerDraw_Open);
+        }
+        
+        if(IsValidID(UI->openIDLeft))
+        {
+            ContainerMappingComponent* container = GetComponent(worldMode, UI->openIDLeft, ContainerMappingComponent);
+            Vec2 dim = container ? container->desiredOpenedDim : defaultDim;
+            Rect2 rect = RectCenterDim(leftP, dim);
+            OverdrawLayout(worldMode, group, UI->openIDLeft, rect, 
+                           LayoutContainerDraw_Open);
+        }
+    }
+    
+    Vec2 minP = -0.5f * group->screenDim + V2(10, 10);
+    Vec2 dim = V2(100, 100);
+    r32 margin = 20.0f;
+    
+    ObjectTransform overdrawTransform = FlatTransform(2.0f);
+    
+    UsingMappingComponent* usingMappings = GetComponent(worldMode, worldMode->player.clientID, UsingMappingComponent);
+    if(usingMappings)
+    {
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(usingMappings->mappings); ++slotIndex)
+        {
+            ObjectMapping* mapping = usingMappings->mappings + slotIndex;
+            
+            Rect2 rect = RectMinDim(minP, dim);
+            mapping->projOnScreen = rect;
+            PushRectOutline(group, overdrawTransform, rect, V4(0, 0, 0, 1), 2.0f);
+            if(IsValidMappingID(UI, mapping->ID))
+            {
+                BaseComponent* usingBase = GetComponent(worldMode, mapping->ID, BaseComponent);
+                OverdrawLayout(worldMode, group, mapping->ID, rect, LayoutContainerDraw_Standard);
+            }
+            
+            minP.x += dim.x + margin;
+        }
+    }
+    
+    minP = -0.5f * group->screenDim + V2(0, 2.0f * dim.y);
+    EquipmentMappingComponent* equipment = GetComponent(worldMode, worldMode->player.clientID, EquipmentMappingComponent);
+    if(equipment)
+    {
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->mappings); ++slotIndex)
+        {
+            ObjectMapping* mapping = equipment->mappings + slotIndex;
+            if(IsValidMappingID(UI, mapping->ID))
+            {
+				ContainerMappingComponent* container = GetComponent(worldMode, mapping->ID, ContainerMappingComponent);
+                
+				for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingMappings); ++usingIndex)
+				{
+					Rect2 rect = RectMinDim(minP, dim);
+					PushRectOutline(group, overdrawTransform, rect, V4(0, 0, 0, 1), 2.0f);
+					OverdrawLayout(worldMode, group, mapping->ID, rect, LayoutContainerDraw_Standard);
+                    
+					Rect2 objectRect = Scale(rect, 0.6f);
+					PushRect(group, overdrawTransform, objectRect, V4(0, 0, 0, 0.8f));
+                    
+					ObjectMapping* usingMapping = container->usingMappings + usingIndex;
+					usingMapping->projOnScreen = objectRect;
+                    if(IsValidMappingID(UI, usingMapping->ID))
+					{
+						OverdrawLayout(worldMode, group, usingMapping->ID, objectRect, LayoutContainerDraw_Standard);
+					}
+					minP.x += dim.x + margin;
+				}
+                
+            }
+        }
+    }
+    
+    if(IsValidID(UI->draggingIDServer))
+    {
+        EntityID draggingID = GetClientIDMapping(worldMode, UI->draggingIDServer);
+		if(UI->testingDraggingOnEquipment)
+		{
+			UI->testingDraggingOnEquipment = false;
+		}
+		else
+		{
+			Rect2 dragRect = RectCenterDim(worldMode->relativeMouseP, V2(100, 100));
+			OverdrawLayout(worldMode, group, draggingID, dragRect, LayoutContainerDraw_Standard);
+		}
+    }
+    
+    FontId fontID = QueryFonts(group->assets, "game", 0, 0);
+    if(IsValid(fontID))
+    {
+        Vec3 tooltipP = V3(mouseP, 0);
+        Vec4 color = UI->multipleActions ? V4(1, 0, 0, 1) : V4(1, 1, 1, 1);
+        PushText(group, fontID, UI->tooltip, tooltipP, 0.7f, color, false, true, 10.0f);
+    }
+}
+
+INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
+{
+    InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
+    interaction->isOnFocus = false;
+    
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    base->worldBounds = GetEntityBound(worldMode, base);
+    
+    if(ShouldBeRendered(worldMode, base))
+    {
+        r32 cameraZ;
+        base->projectedOnScreen = ProjectOnScreen(group, base->worldBounds, &cameraZ);
+        
+        if(!AreEqual(ID, worldMode->player.clientID) && !AreEqual(ID, GetClientIDMapping(worldMode, worldMode->gameUI.lootingIDServer)))
+        {
+            if(PointInRect(base->projectedOnScreen, worldMode->relativeMouseP))
+            {
+                AddPossibleInteraction(&worldMode->gameUI, Interaction_Ground, interaction->actions + Interaction_Ground, {}, 0, ID);
+            }
+        }
+    }
+}
+
+internal b32 MouseInsidePlayerRectProjectedOnScreen(GameModeWorld* worldMode)
+{
+    BaseComponent* playerBase = GetComponent(worldMode, worldMode->player.clientID, BaseComponent);
+    b32 result = (PointInRect(playerBase->projectedOnScreen, worldMode->relativeMouseP));
+    return result;
+}
+
+internal void SetTooltip(GameUIContext* UI, u32 actionCount, char* tooltip)
+{
+    UI->multipleActions = (actionCount > 1);
+    FormatString(UI->tooltip, sizeof(UI->tooltip), "%s", tooltip);
+}
+
+internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, ClientPlayer* myPlayer, PlatformInput* input)
+{
+    GameUIContext* UI = &worldMode->gameUI;
+    ResetInteractions(UI);
+    
+    BaseComponent* player = GetComponent(worldMode, myPlayer->clientID, BaseComponent);
+    
+    UI->hotCount = 0;
+    UI->tooltip[0] = 0;
+    Vec2 cameraOffset = HandleKeyboardInteraction(UI, myPlayer, input);
+    EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent) && ArchetypeHas(InteractionComponent), input->timeToAdvance);
+    MoveCameraTowards(worldMode, player, 0.5f, cameraOffset, V2(0, 0), 1.0f);
+    if(UI->lootingMode)
+    {
+        HandleEquipmentInteraction(UI, worldMode, myPlayer->clientID);
+        Assert(IsValidID(UI->lootingIDServer));
+        EntityID lootingID = GetClientIDMapping(worldMode, UI->lootingIDServer);
+        ContainerMappingComponent* container = GetComponent(worldMode, lootingID, ContainerMappingComponent);
+        BaseComponent* lootingBase = GetComponent(worldMode, lootingID, BaseComponent);
+        
+        if(container && lootingBase)
+        {
+            AddContainerObjectsInteractions(UI, worldMode, container->storedMappings, ArrayCount(container->storedMappings), UI->lootingIDServer, Interaction_Container);
+            MoveCameraTowards(worldMode, lootingBase, 5.0f, V2(0, 0), V2(0, 0), container->zoomCoeff);
+        }
+    }
+    else if(UI->inventoryMode)
+    {
+        HandleEquipmentInteraction(UI, worldMode, myPlayer->clientID);
+        HandleContainerInteraction(UI, worldMode);
+        MoveCameraTowards(worldMode, player, 2.0f, V2(0, 0), V2(0, 0), 2.0f);
+    }
+    
+    HandleOverlayObjectsInteraction(UI, worldMode);
+    
+    if(IsValidID(UI->draggingIDServer) && MouseInsidePlayerRectProjectedOnScreen(worldMode))
+    {
+        EntityID draggingID = GetClientIDMapping(worldMode, UI->draggingIDServer);
+        
+        InteractionComponent* interaction = GetComponent(worldMode, draggingID, InteractionComponent);
+        
+        BaseComponent* draggingBase = GetComponent(worldMode, draggingID, BaseComponent);
+        if(CanUse(group->assets, draggingBase->definitionID))
+        {
+            interaction->isOnFocus = true;
+            //if(Use())
+            {
+                UI->testingDraggingOnEquipment = true;
+                SetTooltip(UI, 1, "use");
+                
+                if(Pressed(&input->mouseLeft))
+                {
+                    GameCommand command = {};
+                    command.action = use;
+                    command.targetID = UI->draggingIDServer;
+                    command.containerID = UI->draggingContainerIDServer;
+                    SendInventoryCommand(command);
+                    UI->draggingIDServer = {};
+                }
+            }
+        }
+        else if(CanEquip(group->assets, draggingBase->definitionID))
+        {
+            interaction->isOnFocus = true;
+            //if(Equip())
+            {
+                UI->testingDraggingOnEquipment = true;
+                SetTooltip(UI, 1, "equip");
+                if(Pressed(&input->mouseLeft))
+                {
+                    GameCommand command = {};
+                    command.action = use;
+                    command.targetID = UI->draggingIDServer;
+                    command.containerID = UI->draggingContainerIDServer;
+                    SendInventoryCommand(command);
+                    UI->draggingIDServer = {};
+                }
+            }
+        }
+    }
+    else
+    {
+        if(UI->hotCount > 0)
+        {
+            
+            b32 interactionChanged = true;
+            for(u32 hotIndex = 0; hotIndex < UI->hotCount; ++hotIndex)
+            {
+                EntityHotInteraction hotInteraction = UI->hotInteractions[hotIndex];
+                
+                if(AreEqual(hotInteraction, UI->lastFrameHotInteraction))
+                {
+                    UI->currentHotIndex = (i32) hotIndex;
+                    interactionChanged = false;
+                    break;
+                }
+            }
+            if(interactionChanged)
+            {
+                UI->currentActionIndex = 0;
+            }
+            
+            
+            if(Pressed(&input->switchButton))
+            {
+                ++UI->currentHotIndex;
+            }
+            
+            UI->currentHotIndex = Wrap(0, UI->currentHotIndex, (i32) UI->hotCount);
+            
+            EntityHotInteraction hotInteraction = UI->hotInteractions[UI->currentHotIndex];
+            
+            UI->currentActionIndex += input->mouseWheelOffset;
+            UI->currentActionIndex = Wrap(0, UI->currentActionIndex, (i32) hotInteraction.actionCount);
+            
+            
+            UI->lastFrameHotInteraction = hotInteraction;
+            
+            EntityID hotID = hotInteraction.entityIDServer;
+            u16 hotAction = hotInteraction.actions[UI->currentActionIndex];
+            
+            b32 validInteraction = true;
+            switch(hotInteraction.type)
+            {
+                case Interaction_Ground:
+                {
+                    Assert(IsValidID(hotID));
+                    if(IsValidID(UI->draggingIDServer))
+                    {
+                        validInteraction = false;
+                    }
+                    else
+                    {
+                        if(Pressed(&input->mouseLeft))
+                        {
+                            GameCommand* command = &myPlayer->currentCommand;
+                            command->targetID = hotID;
+                            command->action = hotAction;
+                        }
+                    }
+                } break;
+                
+                case Interaction_Container:
+                case Interaction_Equipped:
+                {
+                    if(IsValidID(UI->draggingIDServer))
+                    {
+                        validInteraction = false;
+                        if(IsValidID(hotID))
+                        {
+                            //switchRequest(hotInteraction.containerID);
+                        }
+                        else
+                        {
+                            SetTooltip(UI, 1, "move");
+                            if(Pressed(&input->mouseLeft))
+                            {
+                                GameCommand command = {};
+                                command.action = (hotInteraction.type == Interaction_Container) ? SafeTruncateToU16(storeInventory) : SafeTruncateToU16(useInventory);
+                                
+                                command.containerID = UI->draggingContainerIDServer;
+                                command.targetID = UI->draggingIDServer;
+                                command.targetContainerID = hotInteraction.containerIDServer;
+                                command.targetObjectIndex = hotInteraction.objectIndex;
+                                SendInventoryCommand(command); 
+                                UI->draggingIDServer = {};
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if(IsValidID(hotID))
+                        {
+                            if(Pressed(&input->mouseLeft))
+                            {
+                                GameCommand* command = &myPlayer->currentCommand;
+                                command->targetID = hotID;
+                                command->action = hotAction;
+                            }
+                            
+                            if(Pressed(&input->mouseRight))
+                            {
+                                UI->draggingIDServer = hotID;
+                                UI->draggingContainerIDServer = hotInteraction.containerIDServer;
+                                
+                                if(AreEqual(UI->draggingIDServer, UI->openIDLeft))
+                                {
+                                    UI->openIDLeft = {};
+                                }
+                                
+                                if(AreEqual(UI->draggingIDServer, UI->openIDRight))
+                                {
+                                    UI->openIDRight = {};
+                                }
+                            }
+                        }
+                    }
+                } break;
+                
+                case Interaction_Equipment:
+                {
+                    if(IsValidID(UI->draggingIDServer))
+                    {
+                        validInteraction = (hotInteraction.actionCount == 1 && hotInteraction.actions[0] == open);
+                    }
+                    else
+                    {
+                        if(Pressed(&input->mouseRight))
+                        {
+                            if(!IsValidID(UI->draggingIDServer))
+                            {
+                                UI->draggingIDServer = hotID;
+                                UI->draggingContainerIDServer = hotInteraction.containerIDServer;
+                                
+                                if(AreEqual(UI->draggingIDServer, UI->openIDLeft))
+                                {
+                                    UI->openIDLeft = {};
+                                }
+                                
+                                if(AreEqual(UI->draggingIDServer, UI->openIDRight))
+                                {
+                                    UI->openIDRight = {};
+                                }
+                            }
+                        }
+                    }
+                    
+                    Assert(IsValidID(hotID));
+                    if(validInteraction && Pressed(&input->mouseLeft))
+                    {
+                        GameCommand command = {};
+                        command.action = hotAction;
+                        command.targetID = hotID;
+                        SendInventoryCommand(command);
+                        
+                        switch(command.action)
+                        {
+                            case open:
+                            {
+                                if(AreEqual(hotID, UI->openIDLeft))
+                                {
+                                    UI->openIDLeft = {};
+                                }
+                                else if(AreEqual(hotID, UI->openIDRight))
+                                {
+                                    UI->openIDRight = {};
+                                }
+                                else
+                                {
+                                    if(!IsValidID(UI->openIDLeft))
+                                    {
+                                        UI->openIDLeft = hotID;
+                                    }
+                                    else if(!IsValidID(UI->openIDRight))
+                                    {
+                                        UI->openIDRight = hotID;
+                                    }
+                                }
+                            } break;
+                        }
+                    }
+                    
+                } break;
+                
+                InvalidDefaultCase;
+            }
+            
+            if(validInteraction)
+            {
+                InteractionComponent* interaction = GetComponent(worldMode, hotID, InteractionComponent);
+                if(interaction)
+                {
+                    interaction->isOnFocus = true;
+                }
+                
+                if(hotAction)
+                {
+                    SetTooltip(UI, hotInteraction.actionCount, MetaTable_action[hotAction]);
+                }
+            }
+        }
+        else
+        {
+            if(IsValidID(UI->draggingIDServer))
+            {
+                UI->multipleActions = false;
+                SetTooltip(UI, false, "drop");
+                
+                if(Pressed(&input->mouseLeft) || Pressed(&input->mouseRight))
+                {
+                    GameCommand command = {};
+                    command.action = drop;
+                    command.targetID = UI->draggingIDServer;
+                    command.containerID = UI->draggingContainerIDServer;
+                    SendInventoryCommand(command);
+                    UI->draggingIDServer = {};
+                }
+            }
+        }
+    }
+}

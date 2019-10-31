@@ -12,7 +12,7 @@ inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, r32
 {
     cameraWorldOffset += GetRelativeP(worldMode, base).xy;
     worldMode->destCameraEntityOffset = cameraEntityOffset;
-    worldMode->destCameraEntityOffset += 0.5f * GetDim(base->worldBounds).xy;
+    //worldMode->destCameraEntityOffset += 0.5f * GetDim(base->worldBounds).xy;
     
     
     worldMode->destCameraWorldOffset = V3(cameraWorldOffset, worldMode->defaultCameraZ / zoomCoeff);

@@ -1,3 +1,5 @@
+#if 0
+
 #define JC_VORONOI_IMPLEMENTATION
 #undef internal
 #include "jc_voronoi.h"
@@ -324,6 +326,7 @@ PLATFORM_WORK_CALLBACK(RenderVoronoiEdges)
         ++counter;
     }
 }
+#endif
 
 internal Vec4 BlendTilesColor(WorldTile* t0, WorldTile* t1, WorldTile* t2, WorldTile* t3)
 {
@@ -407,6 +410,8 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
     
     b32 changedChunk = (origin.chunkX != oldOrigin.chunkX || origin.chunkY != oldOrigin.chunkY || origin.chunkZ != oldOrigin.chunkZ);
     
+    
+#if 0    
     RandomSequence assetSeq = Seed(worldSeed);
     AssetID waterID = QueryDataFiles(group->assets, WaterParams, "default", &assetSeq, 0);
     if(false && IsValid(waterID))
@@ -554,6 +559,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
         }
         
     }
+#endif
     
     
     

@@ -431,27 +431,31 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
                 
                 container->openedBy = ID;
+                GameUIContext* UI = &worldMode->gameUI;
+                b32 wasLooting = IsValidID(UI->lootingIDServer);
                 
-                b32 wasLooting = IsValidID(worldMode->lootingIDServer);
-                
-                if(IsValidID(ID))
+                if(AreEqual(currentServerID, UI->lootingIDServer))
                 {
-                    worldMode->lootingIDServer = currentServerID;
+                    if(!IsValidID(ID))
+                    {
+                        UI->lootingIDServer = {};
+                    }
                 }
-                else
+                else if(AreEqual(ID, worldMode->player.serverID))
                 {
-                    worldMode->lootingIDServer = {};
-                }
-                
-                if(!IsValidID(worldMode->lootingIDServer))
-                {
-                    worldMode->lootingMode = false;
+                    UI->lootingIDServer = currentServerID;
                 }
                 
-                if(IsValidID(worldMode->lootingIDServer) && !wasLooting)
+                
+                if(!IsValidID(UI->lootingIDServer))
                 {
-                    worldMode->lootingMode = true;
-                    worldMode->inventoryMode = false;
+                    UI->lootingMode = false;
+                }
+                
+                if(IsValidID(UI->lootingIDServer) && !wasLooting)
+                {
+                    UI->lootingMode = true;
+                    UI->inventoryMode = false;
                 }
             } break;
             

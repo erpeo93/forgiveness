@@ -24,7 +24,6 @@ Archetype() struct RockArchetype
     InteractionComponent interaction;
 #else
     BaseComponent base;
-    RockComponent rock;
     StandardImageComponent image;
     InteractionComponent interaction;
 #endif

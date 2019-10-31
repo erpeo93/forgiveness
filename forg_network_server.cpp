@@ -1,3 +1,35 @@
+PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
+{
+    ReceiveNetworkPacketWork* work = (ReceiveNetworkPacketWork*) param;
+    
+    while(true)
+    {
+        work->ReceiveData(work->network);
+    }
+}
+
+#if FORGIVENESS_INTERNAL
+DebugTable* globalDebugTable;
+internal void HandleDebugMessage(PlatformServerMemory* memory, PlayerComponent* player, u32 packetType, unsigned char* packetPtr)
+{
+    InvalidCodePath;
+#if 0    
+    ServerState* server = (ServerState*) memory->server;
+    switch( packetType )
+    {
+        case Type_InputRecording:
+        {
+            b32 recording;
+            b32 startAutomatically;
+            unpack( packetPtr, "ll", &recording, &startAutomatically );
+            platformAPI.PlatformInputRecordingCommand( server, recording, startAutomatically );
+        } break;
+    }
+#endif
+    
+}
+#endif
+
 internal void ResetQueue(ForgNetworkPacketQueue* queue)
 {
     Clear(&queue->tempPool);
@@ -291,3 +323,89 @@ internal void QueueDebugEvent(PlayerComponent* player, DebugEvent* event)
 }
 #endif
 
+
+STANDARD_ECS_JOB_SERVER(SendEntityUpdate)
+{
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    unsigned char buff_[KiloBytes(2)];
+    u16 totalSize = PrepareEntityUpdate(server, physic, buff_);
+    
+    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+    ContainerComponent* container = GetComponent(server, ID, ContainerComponent);
+    
+    r32 maxDistance = 3.0f * CHUNK_DIM;
+    r32 maxDistanceSq = Square(maxDistance);
+    
+    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, physic->P);
+    for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
+    {
+        PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
+        PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
+        
+        if(physic->P.chunkZ == playerPhysic->P.chunkZ)
+        {
+            Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
+            if(LengthSq(distance) < maxDistanceSq)
+            {
+                QueueEntityHeader(player, ID);
+                u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, ID);
+                Assert(writeHere);
+                if(writeHere)
+                {
+                    Copy(totalSize, writeHere, buff_);
+                }
+                
+                if(equipment)
+                {
+                    for(u16 slotIndex = 0; slotIndex < Count_equipmentSlot; ++slotIndex)
+                    {
+                        EntityID equipmentID = equipment->IDs[slotIndex];
+                        //if(IsValid(equipmentID))
+                        {
+                            QueueEquipmentID(player, ID, slotIndex, equipmentID);
+                        }
+                    }
+                }
+                
+                if(equipped)
+                {
+                    for(u16 slotIndex = 0; slotIndex < Count_usingSlot; ++slotIndex)
+                    {
+                        EntityID usingID = equipped->IDs[slotIndex];
+                        //if(IsValid(usingID))
+                        {
+                            QueueUsingID(player, ID, slotIndex, usingID);
+                            if(IsValidID(usingID))
+                            {
+                                Assert(!HasComponent(usingID, ContainerComponent));
+                            }
+                        }
+                    }
+                }
+                
+                if(container)
+                {
+                    QueueOpenedByID(player, ID, container->openedBy);
+                    for(u16 objectIndex = 0; objectIndex < container->maxStoredCount; ++objectIndex)
+                    {
+                        EntityID objectID = container->storedIDs[objectIndex];
+                        //if(IsValid(usingID))
+                        {
+                            QueueContainerStoredID(player, ID, objectIndex, objectID);
+                        }
+                    }
+                    
+                    for(u16 objectIndex = 0; objectIndex < container->maxUsingCount; ++objectIndex)
+                    {
+                        EntityID objectID = container->usingIDs[objectIndex];
+                        //if(IsValid(usingID))
+                        {
+                            QueueContainerUsingID(player, ID, objectIndex, objectID);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -46,7 +46,7 @@ struct TileDefinition
     TileDefinition* nextFree;
 };
 
-introspection() struct WaterPhase
+struct WaterPhase
 {
     r32 referenceHeight MetaDefault("0");
     
@@ -75,7 +75,7 @@ introspection() struct WaterPhase
     NoiseParams noise;
 };
 
-introspection() struct WaterParams
+struct WaterParams
 {
     ArrayCounter phaseCount MetaCounter(phases);
     WaterPhase* phases;

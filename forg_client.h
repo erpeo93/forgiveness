@@ -12,7 +12,6 @@
 #include "forg_simd.h"
 #include "forg_random.h"
 #include "forg_file_formats.h"
-#include "asset_builder.h"
 #include "forg_asset.h"
 
 
@@ -25,22 +24,18 @@
 #include "forg_meta.h"
 #include "forg_render_tier.h"
 #include "forg_render.h"
-#include "forg_mesh.h"
 #include "forg_animation.h"
 #include "forg_sound.h"
 #include "forg_AI.h"
 #include "forg_world.h"
 #include "forg_editor.h"
-#include "forg_physics.h"
 #include "forg_network.h"
 #include "forg_network_client.h"
 #include "forg_particles.h"
 #include "forg_bolt.h"
 #include "forg_book.h"
 #include "forg_cutscene.h"
-#include "forg_plant.h"
-#include "forg_rock.h"
-#include "forg_ground.h"
+#include "forg_game_ui.h"
 
 #if FORGIVENESS_INTERNAL
 #include "forg_debug.h"
@@ -60,6 +55,24 @@ struct BaseComponent
     Rect2 projectedOnScreen;
     EntityID serverID;
 };
+
+internal r32 GetHeight(BaseComponent* base)
+{
+    r32 height = GetDim(base->bounds).z;
+    return height;
+}
+
+internal r32 GetWidth(BaseComponent* base)
+{
+    r32 height = GetDim(base->bounds).x;
+    return height;
+}
+
+internal r32 GetDeepness(BaseComponent* base)
+{
+    r32 height = GetDim(base->bounds).y;
+    return height;
+}
 
 struct ImageReference
 {
@@ -176,32 +189,12 @@ struct ServerClientIDMapping
     };
 };
 
-struct EntityHotInteraction
-{
-    InteractionType type;
-    u16 actionCount;
-    u16 actions[8];
-    
-    u16 objectIndex;
-    EntityID containerIDServer;
-    EntityID entityIDServer;
-};
-
-inline b32 AreEqual(EntityHotInteraction i1, EntityHotInteraction i2)
-{
-    b32 result = (i1.type == i2.type && 
-                  AreEqual(i1.containerIDServer, i2.containerIDServer) &&
-                  AreEqual(i1.entityIDServer, i2.entityIDServer));
-    return result;
-}
-
 struct GameModeWorld
 {
     struct GameState* gameState;
     
     u32 worldSeed;
     b32 editingEnabled;
-    u32 editorRoles;
     
     b32 gamePaused;
     r32 originalTimeToAdvance;
@@ -219,17 +212,8 @@ struct GameModeWorld
     
     TempLight* firstFreeTempLight;
     
-    TicketMutex plantMutex;
-    PlantSegment* firstFreePlantSegment;
-    PlantStem* firstFreePlantStem;
-    Plant* firstFreePlant;
-    
     RandomSequence entropy;
-    RandomSequence leafFlowerFruitSequence;
     ParticleCache* particleCache;
-    
-    RandomSequence boltSequence;
-    r32 boltTime;
     BoltCache* boltCache;
     
     u32 loginFileToReceiveCount;
@@ -244,18 +228,6 @@ struct GameModeWorld
     
     Vec2 relativeMouseP;
     Vec2 deltaMouseP;
-    
-    b32 voronoiValid;
-    b32 generatingVoronoi;
-    VoronoiDiagram voronoiPingPong[2];
-    VoronoiDiagram* activeDiagram;
-    
-    
-    r32 cameraSpeed;
-    Vec3 cameraWorldOffset;
-    Vec3 destCameraWorldOffset;
-    Vec2 cameraEntityOffset;
-    Vec2 destCameraEntityOffset;
     
     u32 chunkApron;
     b32 worldTileView;
@@ -272,30 +244,16 @@ struct GameModeWorld
     r32 cameraOrbit;
     r32 cameraPitch;
     r32 cameraDolly;
+    r32 cameraSpeed;
+    Vec3 cameraWorldOffset;
+    Vec3 destCameraWorldOffset;
+    Vec2 cameraEntityOffset;
+    Vec2 destCameraEntityOffset;
     
     SoundState* soundState;
     
     EditorUIContext editorUI;
-    char tooltip[128];
-    b32 multipleActions;
-    
-    b32 inventoryMode;
-    b32 lootingMode;
-    
-    b32 testingDraggingOnEquipment;
-    EntityID draggingIDServer;
-    EntityID draggingContainerIDServer;
-    
-    EntityID lootingIDServer;
-    EntityID openIDLeft;
-    EntityID openIDRight;
-    
-    i32 currentHotIndex;
-    i32 currentActionIndex;
-    
-    u32 hotCount;
-    EntityHotInteraction hotInteractions[8];
-    EntityHotInteraction lastFrameHotInteraction;
+    GameUIContext gameUI;
 };
 
 enum GameMode
@@ -323,9 +281,6 @@ struct GameState
         GameModeTitleScreen* titleScreen;
         GameModeWorld* world;
     };
-    
-    
-    u32 editorRoles;
     
     Assets* assets;
     

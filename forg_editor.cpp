@@ -1917,7 +1917,7 @@ internal void AddTooltip(EditorLayout* layout, char* text)
 }
 
 internal void DEBUGOverlay(EditorLayout* layout);
-internal void RenderEditor(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
+internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
     EditorUIContext* context = &worldMode->editorUI;
     Vec2 mouseP = worldMode->relativeMouseP;

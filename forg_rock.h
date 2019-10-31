@@ -1,14 +1,14 @@
 #pragma once
 
 
-introspection() struct RockMineral
+struct RockMineral
 {
     r32 lerp;
     r32 lerpDelta;
     Vec4 color;
 };
 
-introspection() struct RockDefinition
+struct RockDefinition
 {
     b32 collides;
     
@@ -48,10 +48,3 @@ inline Vec3 GetRockDim(RockDefinition* rock, RandomSequence* sequence)
     Vec3 result = rock->scale + Hadamart(rock->scaleDelta, RandomBilV3(sequence));
     return result;
 }
-
-
-#ifndef FORG_SERVER
-struct RockComponent
-{
-};
-#endif

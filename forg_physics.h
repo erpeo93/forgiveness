@@ -1,26 +1,4 @@
 #pragma once
-struct MoveStep
-{
-    Vec3 delta;
-};
-
-struct MoveSpec
-{
-    r32 acceleration;
-    r32 drag;
-    
-    u32 stepCount;
-    Vec3* steps;
-};
-
-inline MoveSpec DefaultMoveSpec(r32 accelerationCoeff)
-{
-    MoveSpec moveSpec = {27.0f, -7.8f};
-    moveSpec.acceleration *= accelerationCoeff;
-    
-    return moveSpec;
-}
-
 struct Wall
 {
     r32 x;

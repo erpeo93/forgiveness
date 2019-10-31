@@ -1,15 +1,3 @@
-internal void UpdateSeasonTimer(ServerState* server, r32 elapsedTime)
-{
-    // NOTE(Leonardo): advance server "status"
-    server->seasonTime += elapsedTime;
-    if(server->seasonTime >= SEASON_DURATION)
-    {
-        server->seasonTime = 0;
-        server->season = (WorldSeason) ((server->season == Season_Count - 1) ? 0 : server->season + 1);
-    }
-    server->seasonLerp = Clamp01MapToRange(0.5f * SEASON_DURATION, server->seasonTime, SEASON_DURATION);
-}
-
 internal EntityID AddEntity_(ServerState* server, UniversePos P, AssetID definitionID, u32 seed, PlayerComponent* player = 0)
 {
     Assert(IsValid(definitionID));
@@ -51,14 +39,15 @@ internal EntityID AddEntity(ServerState* server, UniversePos P, RandomSequence* 
     return result;
 }
 
-#define GameProp(property, value) GameProp_(Property_##property, value)
-internal GameProperty GameProp_(u16 property, u16 value)
+#define SpawnPlayer(server, player, P) SpawnPlayer_(server, player, P, false)
+#define RespawnPlayer(server, player, P) SpawnPlayer_(server, player, P, true)
+internal void SpawnPlayer_(ServerState* server, PlayerComponent* player, UniversePos P, b32 deleteEntities)
 {
-    GameProperty result;
-    result.property = property;
-    result.value = value;
+    EntityRef type = EntityReference(server->assets, "default", "human");
+    EntityID ID = AddEntity(server, P, &server->entropy, type, player);
     
-    return result;
+    ResetQueue(player->queues + GuaranteedDelivery_None);
+    QueueGameAccessConfirm(player, server->worldSeed, ID, deleteEntities);
 }
 
 internal void MakeIntangible(ServerState* server, EntityID ID)
@@ -195,11 +184,80 @@ internal b32 Remove(ServerState* server, ContainerComponent* container, EntityID
     return result;
 }
 
+internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetID)
+{
+    b32 result = false;
+    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    if(equipment)
+    {
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->IDs); ++slotIndex)
+        {
+            EntityID equipmentID = equipment->IDs[slotIndex];
+            if(AreEqual(equipmentID, targetID))
+            {
+                result = true;
+                equipment->IDs[slotIndex] = {};
+                break;
+            }
+            else
+            {
+                if(Remove(server, GetComponent(server, equipmentID, ContainerComponent), targetID))
+                {
+                    result= true;
+                }
+            }
+        }
+    }
+    
+    if(!result)
+    {
+        UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+        if(equipped)
+        {
+            for(u32 usingIndex = 0; usingIndex < ArrayCount(equipped->IDs); ++usingIndex)
+            {
+                EntityID usingID = equipped->IDs[usingIndex];
+                Assert(!HasComponent(usingID, ContainerComponent));
+                if(AreEqual(equipped->IDs[usingIndex], targetID))
+                {
+                    result = true;
+                    equipped->IDs[usingIndex] = {};
+                    break;
+                }
+            }
+        }
+    }
+    
+    return result;
+}
+
+internal b32 RemoveAccordingToCommand(ServerState* server, EntityID ID, GameCommand* command)
+{
+    b32 removed = false;
+    if(AreEqual(command->containerID, ID))
+    {
+        if(RemoveFromEntity(server, ID, command->targetID))
+        {
+            removed = true;
+        }
+    }
+    else
+    {
+        ContainerComponent* sourceContainer = GetComponent(server, command->containerID, ContainerComponent);
+        if(Remove(server, sourceContainer, command->targetID))
+        {
+            removed = true;
+        }
+    }
+    
+    return removed;
+}
+
 internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* command)
 {
-    
     switch(command->action)
     {
+        case none:
         case idle:
         case move:
         {
@@ -353,49 +411,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             EntityID targetID = command->targetID;
             if(IsValidID(targetID))
             {
-                b32 removed = false;
-                EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-                if(equipment)
-                {
-                    for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->IDs); ++slotIndex)
-                    {
-                        EntityID equipmentID = equipment->IDs[slotIndex];
-                        if(AreEqual(equipmentID, targetID))
-                        {
-                            removed = true;
-                            equipment->IDs[slotIndex] = {};
-                            break;
-                        }
-                        else
-                        {
-                            if(Remove(server, GetComponent(server, equipmentID, ContainerComponent), targetID))
-                            {
-                                removed = true;
-                            }
-                        }
-                    }
-                }
-                
-                if(!removed)
-                {
-                    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-                    if(equipped)
-                    {
-                        for(u32 usingIndex = 0; usingIndex < ArrayCount(equipped->IDs); ++usingIndex)
-                        {
-                            EntityID usingID = equipped->IDs[usingIndex];
-                            Assert(!HasComponent(usingID, ContainerComponent));
-                            if(AreEqual(equipped->IDs[usingIndex], targetID))
-                            {
-                                removed = true;
-                                equipped->IDs[usingIndex] = {};
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                if(removed)
+                if(RemoveAccordingToCommand(server, ID, command))
                 {
                     MakeTangible(server, targetID);
                 }
@@ -407,10 +423,9 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             EntityID targetID = command->targetID;
             if(IsValidID(targetID))
             {
-                ContainerComponent* sourceContainer = GetComponent(server, command->containerID, ContainerComponent);
-                ContainerComponent* destContainer = GetComponent(server, command->targetContainerID, ContainerComponent);
-                if(Remove(server, sourceContainer, targetID))
+                if(RemoveAccordingToCommand(server, ID, command))
                 {
+                    ContainerComponent* destContainer = GetComponent(server, command->targetContainerID, ContainerComponent);
                     if(destContainer &&
                        (command->targetObjectIndex < destContainer->maxStoredCount) &&!IsValidID(destContainer->storedIDs[command->targetObjectIndex]))
                     {
@@ -424,23 +439,45 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             }
         } break;
         
+        
         case useInventory:
         {
             EntityID targetID = command->targetID;
-            if(IsValidID(targetID))
+            PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
+            
+            if(CanUse(server->assets, targetPhysic->definitionID))
             {
-                ContainerComponent* sourceContainer = GetComponent(server, command->containerID, ContainerComponent);
-                ContainerComponent* destContainer = GetComponent(server, command->targetContainerID, ContainerComponent);
-                if(Remove(server, sourceContainer, targetID))
+                if(IsValidID(targetID))
                 {
-                    if(destContainer &&
-                       (command->targetObjectIndex < destContainer->maxUsingCount) &&!IsValidID(destContainer->usingIDs[command->targetObjectIndex]))
+                    if(RemoveAccordingToCommand(server, ID, command))
                     {
-                        destContainer->usingIDs[command->targetObjectIndex] = targetID;
-                    }
-                    else
-                    {
-                        MakeTangible(server, targetID);
+                        b32 added = false;
+                        if(AreEqual(command->targetContainerID, ID))
+                        {
+                            UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+                            if(equipped &&
+                               (command->targetObjectIndex < ArrayCount(equipped->IDs)) &&!IsValidID(equipped->IDs[command->targetObjectIndex]))
+                            {
+                                equipped->IDs[command->targetObjectIndex] = targetID;
+                                added = true;
+                            }
+                        }
+                        else
+                        {
+                            ContainerComponent* destContainer = GetComponent(server, command->targetContainerID, ContainerComponent);
+                            if(destContainer &&
+                               (command->targetObjectIndex < destContainer->maxUsingCount) &&!IsValidID(destContainer->usingIDs[command->targetObjectIndex]))
+                            {
+                                destContainer->usingIDs[command->targetObjectIndex] = targetID;
+                                added = true;
+                            }
+                        }
+                        
+                        
+                        if(!added)
+                        {
+                            MakeTangible(server, targetID);
+                        }
                     }
                 }
             }
@@ -512,138 +549,6 @@ STANDARD_ECS_JOB_SERVER(FillCollisionSpatialPartition)
     {
         Rect3 bounds = AddRadius(physic->bounds, V3(g_maxDelta, g_maxDelta, g_maxDelta));
         AddToSpatialPartition(server->frameByFramePool, &server->collisionPartition, physic->P, bounds, ID);
-    }
-}
-
-internal void SendEffectDispatch(ServerState* server, EntityID ID)
-{
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    
-    r32 maxDistance = 3.0f * CHUNK_DIM;
-    r32 maxDistanceSq = Square(maxDistance);
-    
-    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, physic->P);
-    for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
-    {
-        PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
-        PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
-        
-        if(physic->P.chunkZ == playerPhysic->P.chunkZ)
-        {
-            Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
-            if(LengthSq(distance) < maxDistanceSq)
-            {
-                QueueEffectDispatch(player, ID);
-            }
-        }
-    }
-}
-
-internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect)
-{
-    switch(effect->effectType.value)
-    {
-        case spawnEntity:
-        {
-            SendEffectDispatch(server, ID);
-            //AddEntity(server, P, &server->entropy, effect->spawnType);
-        } break;
-        
-        case moveOnZSlice:
-        {
-            if(HasComponent(ID, PhysicComponent))
-            {
-                PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-                if(++physic->P.chunkZ == (i32) server->maxDeepness)
-                {
-                    physic->P.chunkZ = 0;
-                }
-            }
-        } break;
-    }
-}
-
-internal void DispatchEntityEffects(ServerState* server, EntityID ID, r32 elapsedTime)
-{
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    EffectComponent* effects = GetComponent(server, ID, EffectComponent);
-    if(physic && effects)
-    {
-        for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
-        {
-            GameEffect* effect = effects->effects + effectIndex;
-            effects->timers[effectIndex] += elapsedTime;
-            if(effects->timers[effectIndex] >= effect->timer)
-            {
-                effects->timers[effectIndex] = 0;
-                DispatchGameEffect(server, ID, physic->P, effect);
-            }
-        }
-    }
-}
-
-STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
-{
-    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-    if(equipment)
-    {
-        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->IDs); ++equipmentIndex)
-        {
-            EntityID equipID = equipment->IDs[equipmentIndex];
-            if(IsValidID(equipID))
-            {
-                DispatchEntityEffects(server, equipID, elapsedTime);
-                
-                ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
-                for(u32 usingIndex = 0; usingIndex < container->maxUsingCount; ++usingIndex)
-                {
-                    EntityID usingID = container->usingIDs[usingIndex];
-                    if(IsValidID(usingID))
-                    {
-                        DispatchEntityEffects(server, usingID, elapsedTime);
-                    }
-                }
-            }
-        }
-    }
-    
-    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-    if(equipped)
-    {
-        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->IDs); ++equipmentIndex)
-        {
-            EntityID usingID = equipped->IDs[equipmentIndex];
-            if(IsValidID(usingID))
-            {
-                DispatchEntityEffects(server, usingID, elapsedTime);
-            }
-        }
-    }
-}
-
-internal void DispatchCollisitonEffects(ServerState* server, UniversePos P, EntityID actor, EntityID trigger)
-{
-    CollisionEffectsComponent* effects = GetComponent(server, trigger, CollisionEffectsComponent);
-    if(effects)
-    {
-        for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
-        {
-            GameEffect* effect = effects->effects + effectIndex;
-            DispatchGameEffect(server, actor, P, effect);
-        }
-    }
-}
-
-internal void DispatchOverlappingEffects(ServerState* server, UniversePos P, EntityID actor, EntityID overlap)
-{
-    OverlappingEffectsComponent* effects = GetComponent(server, overlap, OverlappingEffectsComponent);
-    if(effects)
-    {
-        for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
-        {
-            GameEffect* effect = effects->effects + effectIndex;
-            DispatchGameEffect(server, actor, P, effect);
-        }
     }
 }
 
@@ -744,7 +649,7 @@ internal void UpdateObjectPositions(ServerState* server, UniversePos P, EntityID
     }
 }
 
-internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
+STANDARD_ECS_JOB_SERVER(UpdateEntity)
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     HandleEntityMovement(server, physic, ID, elapsedTime);
@@ -791,325 +696,8 @@ internal void UpdateEntity(ServerState* server, EntityID ID, r32 elapsedTime)
     }
 }
 
-internal void SendEntityUpdate(ServerState* server, EntityID ID, r32 elapsedTime)
-{
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    unsigned char buff_[KiloBytes(2)];
-    u16 totalSize = PrepareEntityUpdate(server, physic, buff_);
-    
-    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-    ContainerComponent* container = GetComponent(server, ID, ContainerComponent);
-    
-    r32 maxDistance = 3.0f * CHUNK_DIM;
-    r32 maxDistanceSq = Square(maxDistance);
-    
-    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, physic->P);
-    for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
-    {
-        PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
-        PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
-        
-        if(physic->P.chunkZ == playerPhysic->P.chunkZ)
-        {
-            Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
-            if(LengthSq(distance) < maxDistanceSq)
-            {
-                QueueEntityHeader(player, ID);
-                u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, ID);
-                Assert(writeHere);
-                if(writeHere)
-                {
-                    Copy(totalSize, writeHere, buff_);
-                }
-                
-                if(equipment)
-                {
-                    for(u16 slotIndex = 0; slotIndex < Count_equipmentSlot; ++slotIndex)
-                    {
-                        EntityID equipmentID = equipment->IDs[slotIndex];
-                        //if(IsValid(equipmentID))
-                        {
-                            QueueEquipmentID(player, ID, slotIndex, equipmentID);
-                        }
-                    }
-                }
-                
-                if(equipped)
-                {
-                    for(u16 slotIndex = 0; slotIndex < Count_usingSlot; ++slotIndex)
-                    {
-                        EntityID usingID = equipped->IDs[slotIndex];
-                        //if(IsValid(usingID))
-                        {
-                            QueueUsingID(player, ID, slotIndex, usingID);
-                            if(IsValidID(usingID))
-                            {
-                                Assert(!HasComponent(usingID, ContainerComponent));
-                            }
-                        }
-                    }
-                }
-                
-                if(container)
-                {
-                    QueueOpenedByID(player, ID, container->openedBy);
-                    for(u16 objectIndex = 0; objectIndex < container->maxStoredCount; ++objectIndex)
-                    {
-                        EntityID objectID = container->storedIDs[objectIndex];
-                        //if(IsValid(usingID))
-                        {
-                            QueueContainerStoredID(player, ID, objectIndex, objectID);
-                        }
-                    }
-                    
-                    for(u16 objectIndex = 0; objectIndex < container->maxUsingCount; ++objectIndex)
-                    {
-                        EntityID objectID = container->usingIDs[objectIndex];
-                        //if(IsValid(usingID))
-                        {
-                            QueueContainerUsingID(player, ID, objectIndex, objectID);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-internal UniversePos BuildPFromSpawnerGrid(r32 cellDim, u32 cellX, u32 cellY, i32 chunkZ)
-{
-    UniversePos result = {};
-    result.chunkZ = chunkZ;
-    result.chunkOffset.x = cellDim * cellX;
-    result.chunkOffset.y = cellDim * cellY;
-    
-    result = NormalizePosition(result);
-    return result;
-}
-
-struct PoissonP
-{
-    UniversePos P;
-    PoissonP* next;
-};
-
-internal b32 Valid(PoissonP* positions, UniversePos P, r32 maxDelta)
-{
-    b32 result = true;
-    
-    r32 maxDistanceSq = Square(maxDelta);
-    for(PoissonP* poisson = positions; poisson; poisson = poisson->next)
-    {
-        Vec3 delta = SubtractOnSameZChunk(P, poisson->P);
-        if(LengthSq(delta) < maxDistanceSq)
-        {
-            result = false;
-            break;
-        }
-    }
-    
-    return result;
-}
-
-internal void AddToPoission(PoissonP** positions, MemoryPool* pool, UniversePos P)
-{
-    PoissonP* newP = PushStruct(pool, PoissonP);
-    newP->P = P;
-    newP->next = *positions;
-    *positions = newP;
-}
-
-internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos referenceP, RandomSequence* seq)
-{
-    if(spawner->optionCount)
-    {
-        r32 totalWeight = 0;
-        for(u32 optionIndex = 0; optionIndex < spawner->optionCount; ++optionIndex)
-        {
-            totalWeight += spawner->options[optionIndex].weight;
-        }
-        r32 weight = totalWeight * RandomUni(seq);
-        
-        
-        SpawnerOption* option = 0;
-        
-        r32 runningWeight = 0;
-        for(u32 optionIndex = 0; optionIndex < spawner->optionCount; ++optionIndex)
-        {
-            SpawnerOption* test = spawner->options + optionIndex;
-            runningWeight += test->weight;
-            if(weight <= runningWeight)
-            {
-                option = test;
-                break;
-            }
-        }
-        
-        PoissonP* entities = 0;
-        PoissonP* clusters = 0;
-        
-        MemoryPool tempPool = {};
-        for(u32 entityIndex = 0; entityIndex < option->entityCount; ++entityIndex)
-        {
-            SpawnerEntity* spawn = option->entities + entityIndex;
-            i32 clusterCount = spawn->clusterCount + RoundReal32ToI32(spawn->clusterCountV * RandomBil(seq));
-            
-            for(i32 clusterIndex = 0; clusterIndex < clusterCount; ++clusterIndex)
-            {
-                UniversePos P = referenceP;
-                Vec3 maxClusterOffset = V3(VOXEL_SIZE * spawn->maxClusterOffset, 0);
-                
-                b32 valid = false;
-                u32 tries = 0;
-                while(!valid && tries++ < 100)
-                {
-                    P = referenceP;
-                    P.chunkOffset += Hadamart(maxClusterOffset, RandomBilV3(seq));
-                    P = NormalizePosition(P);
-                    if(Valid(clusters, P, spawn->minClusterDistance))
-                    {
-                        valid = true;
-                        AddToPoission(&clusters, &tempPool, P);
-                    }
-                }
-                
-                if(valid)
-                {
-                    UniversePos clusterP = P;
-                    i32 count = spawn->count + RoundReal32ToI32(spawn->countV * RandomBil(seq));
-                    for(i32 index = 0; index < count; ++index)
-                    {
-                        Vec3 maxOffset = V3(VOXEL_SIZE * spawn->maxOffset, 0);
-                        
-                        valid = false;
-                        tries = 0;
-                        while(!valid && tries++ < 100)
-                        {
-                            P = clusterP;
-                            P.chunkOffset += Hadamart(maxOffset, RandomBilV3(seq));
-                            P = NormalizePosition(P);
-                            
-                            if(Valid(entities, P, spawn->minEntityDistance))
-                            {
-                                AddToPoission(&entities, &tempPool, P);
-                                valid = true;
-                            }
-                        }
-                        
-                        
-                        if(valid)
-                        {
-                            AddEntity(server, P, seq, spawn->type, 0);
-                        }
-                    }
-                }
-            }
-        }
-        
-        Clear(&tempPool);
-    }
-}
-
-
-internal void SpawnEntities(ServerState* server, r32 elapsedTime)
-{
-    MemoryPool tempPool = {};
-    u16 spawnerCount;
-    AssetID* spawners = GetAllDataAsset(&tempPool, server->assets, Spawner, "default", 0, &spawnerCount);
-    for(u32 spawnerIndex = 0; spawnerIndex < spawnerCount; ++spawnerIndex)
-    {
-        AssetID sID = spawners[spawnerIndex];
-        Spawner* spawner = GetData(server->assets, Spawner, sID);
-        if(spawner->targetTime > 0)
-        {
-            spawner->time += elapsedTime;
-            if(spawner->time >= spawner->targetTime)
-            {
-                spawner->time = 0;
-                r32 cellDim = VOXEL_SIZE * spawner->cellDim;
-                u32 cellCount = TruncateReal32ToU32(WORLD_SIDE / cellDim);
-                
-                u32 cellX = RandomChoice(&server->entropy, cellCount);
-                u32 cellY = RandomChoice(&server->entropy, cellCount);
-                i32 Z = 0;
-                UniversePos P = BuildPFromSpawnerGrid(cellDim, cellX, cellY, Z);
-                TriggerSpawner(server, spawner, P, &server->entropy);
-            }
-        }
-    }
-    
-    Clear(&tempPool);
-}
-
-internal void BuildWorld(ServerState* server, b32 spawnEntities)
-{
-    
-    RandomSequence generatorSeq = Seed(server->worldSeed);
-    GameProperties properties = {};
-    AssetID ID = QueryDataFiles(server->assets, world_generator, "default", &generatorSeq, &properties);
-    if(IsValid(ID))
-    {
-        world_generator* generator = GetData(server->assets, world_generator, ID);
-        server->nullTile = NullTile(generator);
-        
-        server->maxDeepness = generator->maxDeepness;
-        
-        Clear(&server->chunkPool);
-        server->chunks = PushArray(&server->chunkPool, WorldChunk, generator->maxDeepness * WORLD_CHUNK_SPAN * WORLD_CHUNK_SPAN);
-        WorldChunk* chunk = server->chunks;
-        for(u32 chunkZ = 0; chunkZ < generator->maxDeepness; ++chunkZ)
-        {
-            for(u32 chunkY = 0; chunkY < WORLD_CHUNK_SPAN; ++chunkY)
-            {
-                for(u32 chunkX = 0; chunkX < WORLD_CHUNK_SPAN; ++chunkX)
-                {
-                    BuildChunk(server->assets, &server->chunkPool, generator,
-                               chunk, chunkX, chunkY, chunkZ, server->worldSeed, 0);
-                    ++chunk;
-                }
-            }
-        }
-    }
-    else
-    {
-        InvalidCodePath;
-    }
-    
-    RandomSequence seq = Seed(server->worldSeed);
-    if(spawnEntities)
-    {
-        MemoryPool tempPool = {};
-        u16 spawnerCount;
-        AssetID* spawners = GetAllDataAsset(&tempPool, server->assets, Spawner, "default", 0, &spawnerCount);
-        
-        for(u32 spawnerIndex = 0; spawnerIndex < spawnerCount; ++spawnerIndex)
-        {
-            AssetID sID = spawners[spawnerIndex];
-            Spawner* spawner = GetData(server->assets, Spawner, sID);
-            r32 cellDim = VOXEL_SIZE * spawner->cellDim;
-            u32 cellCount = TruncateReal32ToU32(WORLD_SIDE / cellDim);
-            for(i32 chunkZ = 0; chunkZ < (i32) server->maxDeepness; ++chunkZ)
-            {
-                for(u32 Y = 0; Y < cellCount; ++Y)
-                {
-                    for(u32 X = 0; X < cellCount; ++X)
-                    {
-                        if(RandomUni(&seq) <= spawner->percentageOfStartingCells)
-                        {
-                            UniversePos P = BuildPFromSpawnerGrid(cellDim, X, Y, chunkZ);
-                            TriggerSpawner(server, spawner, P, &seq);
-                        }
-                    }
-                }
-            }
-        }
-        
-        Clear(&tempPool);
-    }
-}
-
 STANDARD_ECS_JOB_SERVER(DeleteAllEntities)
 {
     FreeArchetype(server, &ID);
 }
+

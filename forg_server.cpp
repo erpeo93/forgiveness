@@ -16,63 +16,11 @@
 #define ONLY_DATA_FILES
 #include "forg_asset.cpp"
 #include "forg_meta.cpp"
-#include "asset_builder.cpp"
 #include "miniz.c"
+#include "asset_builder.cpp"
 #include "forg_world_generation.cpp"
+#include "forg_game_effect.cpp"
 #include "forg_world_server.cpp"
-#if FORGIVENESS_INTERNAL
-DebugTable* globalDebugTable;
-internal void HandleDebugMessage(PlatformServerMemory* memory, PlayerComponent* player, u32 packetType, unsigned char* packetPtr)
-{
-    InvalidCodePath;
-#if 0    
-    ServerState* server = (ServerState*) memory->server;
-    switch( packetType )
-    {
-        case Type_InputRecording:
-        {
-            b32 recording;
-            b32 startAutomatically;
-            unpack( packetPtr, "ll", &recording, &startAutomatically );
-            platformAPI.PlatformInputRecordingCommand( server, recording, startAutomatically );
-        } break;
-    }
-#endif
-    
-}
-#endif
-
-PLATFORM_WORK_CALLBACK(ReceiveNetworkPackets)
-{
-    ReceiveNetworkPacketWork* work = (ReceiveNetworkPacketWork*) param;
-    
-    while(true)
-    {
-        work->ReceiveData(work->network);
-    }
-}
-
-#define SpawnPlayer(server, player, P) SpawnPlayer_(server, player, P, false)
-#define RespawnPlayer(server, player, P) SpawnPlayer_(server, player, P, true)
-internal void SpawnPlayer_(ServerState* server, PlayerComponent* player, UniversePos P, b32 deleteEntities)
-{
-    EntityRef type = EntityReference(server->assets, "default", "human");
-    EntityID ID = AddEntity(server, P, &server->entropy, type, player);
-    
-    ResetQueue(player->queues + GuaranteedDelivery_None);
-    QueueGameAccessConfirm(player, server->worldSeed, ID, deleteEntities);
-}
-
-internal void StoreFileHash(ServerState* server, PlayerComponent* player, u16 type, u64 subtypeHash, u64 dataHash)
-{
-    FileHash* hash;
-    FREELIST_ALLOC(hash, server->firstFreeFileHash, PushStruct(&server->gamePool, FileHash));
-    hash->type = type;
-    hash->subtypeHash = subtypeHash;
-    hash->dataHash = dataHash;
-    
-    FREELIST_INSERT(hash, player->firstFileHash);
-}
 
 internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* player,  unsigned char* packetPtr, u16 dataSize)
 {
@@ -179,7 +127,13 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             }
             else
             {
-                StoreFileHash(server, player, type, subtypeHash, dataHash);
+                FileHash* hash;
+                FREELIST_ALLOC(hash, server->firstFreeFileHash, PushStruct(&server->gamePool, FileHash));
+                hash->type = type;
+                hash->subtypeHash = subtypeHash;
+                hash->dataHash = dataHash;
+                
+                FREELIST_INSERT(hash, player->firstFileHash);
             }
         } break;
         
@@ -413,132 +367,6 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
     }
 }
 
-PLATFORM_WORK_CALLBACK(WatchForFileChanges)
-{
-    TimestampHash* hash = (TimestampHash*) param;
-    while(true)
-    {
-        WatchReloadFileChanges(hash, ASSETS_RAW_PATH, RELOAD_PATH, RELOAD_SEND_PATH);
-    }
-}
-
-inline void ReadCompressFile(ServerState* server, GameFile* file, u32 uncompressedSize, u8* uncompressedContent)
-{
-    Clear(&file->pool);
-    file->uncompressedSize = uncompressedSize;          
-    file->compressedSize = compressBound(file->uncompressedSize);
-    file->content = PushSize(&file->pool, file->compressedSize);
-    u32 cmp_status = compress(file->content, (mz_ulong*) &file->compressedSize, (const unsigned char*) uncompressedContent, file->uncompressedSize);
-    Assert(cmp_status == Z_OK);
-    PAKFileHeader* header = (PAKFileHeader*) uncompressedContent;
-    file->type = GetMetaAssetType(header->type);
-    
-    Assert(StrLen(header->subtype) <= ArrayCount(file->subtype));
-    FormatString(file->subtype, sizeof(file->subtype), "%s", header->subtype);
-    file->dataHash = DataHash((char*) uncompressedContent, uncompressedSize);
-}
-
-internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, PlatformFileGroup* group, PlatformFileInfo* info, b32 sendToPlayers)
-{
-    b32 deleteFile = false;
-    TempMemory fileMemory = BeginTemporaryMemory(pool);
-    
-    PlatformFileHandle handle = platformAPI.OpenFile(group, info);
-    PAKFileHeader header;
-    platformAPI.ReadFromFile(&handle, 0, sizeof(PAKFileHeader), &header);
-    
-    u16 type = GetMetaAssetType(header.type);
-    u64 subtypeHash = StringHash(header.subtype);
-    
-    u32 fileIndex = 0;
-    GameFile* file = 0;
-    
-    for(u32 testIndex = 0; testIndex < server->fileCount; ++testIndex)
-    {
-        GameFile* test = server->files + testIndex;
-        if(test->type == type && StringHash(test->subtype) == subtypeHash)
-        {
-            file = test;
-            fileIndex = testIndex;
-            break;
-        }
-    }
-    
-    char nameNoExtension[128];
-    TrimToFirstCharacter(nameNoExtension, sizeof(nameNoExtension), info->name, '.');
-    if(file && (file->counter == 0))
-    {
-        deleteFile = true;
-        u8* uncompressedContent = (u8*) PushSize(pool, info->size);
-        platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
-        
-        
-        u32 destFileIndex = 0;
-        AssetFile* destFile = CloseAssetFileFor(server->assets, type, subtypeHash, &destFileIndex);
-        Assert(destFile);
-        ReopenReloadAssetFile(server->assets, destFile, destFileIndex, type, header.subtype, uncompressedContent, SafeTruncateUInt64ToU32(info->size), pool);
-        
-        ReadCompressFile(server, file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
-        
-        if(sendToPlayers)
-        {
-            for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
-            {
-                if(HasComponent_(archetypeIndex, PlayerComponent))
-                {
-                    for(ArchIterator iter = First(server, archetypeIndex); 
-                        IsValid(iter); 
-                        iter = Next(iter))
-                    {
-                        PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
-                        if(player && player->connectionSlot)
-                        {
-                            FileToSend* toSend;
-                            FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
-                            
-                            toSend->acked = false;
-                            toSend->playerIndex = player->runningFileIndex++;
-                            toSend->serverFileIndex = fileIndex;
-                            toSend->sendingOffset = 0;
-                            
-                            ++file->counter;
-                            if(!player->firstReloadedFileToSend)
-                            {
-                                player->firstReloadedFileToSend = toSend;
-                            }
-                            else
-                            {
-                                for(FileToSend* firstToSend = player->firstReloadedFileToSend;; firstToSend = firstToSend->next)
-                                {
-                                    if(!firstToSend->next)
-                                    {
-                                        firstToSend->next = toSend;
-                                        break;
-                                    }
-                                }
-                            }
-                            
-                            QueueFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    EndTemporaryMemory(fileMemory);
-    
-    BeginTicketMutex(&server->fileHash.fileMutex);
-    platformAPI.CloseFile(&handle);
-    if(deleteFile)
-    {
-        char* path = sendToPlayers ? RELOAD_SEND_PATH : RELOAD_PATH;
-        platformAPI.ReplaceFile(PlatformFile_AssetPack, path, 
-                                nameNoExtension, 0, 0, 0);
-    }
-    EndTicketMutex(&server->fileHash.fileMutex);
-}
-
 extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 {
     
@@ -640,6 +468,11 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         BuildWorld(server, false);
     }
     
+    
+    
+    
+    
+    
     PlatformFileGroup reloadedFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, RELOAD_PATH);
     for(PlatformFileInfo* info = reloadedFiles.firstFileInfo; info; info = info->next)
     {
@@ -660,6 +493,11 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         }
     }
     platformAPI.GetAllFilesEnd(&reloadedSendFiles);
+    
+    
+    
+    
+    
     
     // TODO(Leonardo): change the API of the network library to return a networkConnection*!
     u16 newConnections[16] = {};

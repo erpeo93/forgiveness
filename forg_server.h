@@ -26,12 +26,9 @@
 #include "forg_physics.h"
 #include "forg_game_effect.h"
 #include "forg_AI.h"
-#include "forg_plant.h"
-#include "forg_rock.h"
 #include "forg_network.h"
 #include "forg_meta.h"
-#include "forg_ground.h"
-
+#include "forg_game_ui.h"
 PlatformAPI platformAPI;
 
 struct GameFile
@@ -150,9 +147,6 @@ struct TimestampHash
 
 struct ServerState
 {
-    WorldSeason season;
-    r32 seasonLerp;
-    r32 seasonTime;
     u32 worldSeed;
     
     TaskWithMemory tasks[6];
@@ -161,15 +155,13 @@ struct ServerState
     
     ResizableArray archetypes[Archetype_Count];
     ResizableArray PlayerComponent_;
-    //SpacePartition collisionPartition;
-    //SpacePartition playerPartition;
     
     WorldTile nullTile;
     u32 maxDeepness;
     WorldChunk* chunks;
+    MemoryPool chunkPool;
     
     MemoryPool* frameByFramePool;
-    MemoryPool chunkPool;
     MemoryPool gamePool;
     MemoryPool networkPool;
     

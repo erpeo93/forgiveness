@@ -2632,3 +2632,129 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
     }
 }
 
+
+inline void ReadCompressFile(ServerState* server, GameFile* file, u32 uncompressedSize, u8* uncompressedContent)
+{
+    Clear(&file->pool);
+    file->uncompressedSize = uncompressedSize;          
+    file->compressedSize = compressBound(file->uncompressedSize);
+    file->content = PushSize(&file->pool, file->compressedSize);
+    u32 cmp_status = compress(file->content, (mz_ulong*) &file->compressedSize, (const unsigned char*) uncompressedContent, file->uncompressedSize);
+    Assert(cmp_status == Z_OK);
+    PAKFileHeader* header = (PAKFileHeader*) uncompressedContent;
+    file->type = GetMetaAssetType(header->type);
+    
+    Assert(StrLen(header->subtype) <= ArrayCount(file->subtype));
+    FormatString(file->subtype, sizeof(file->subtype), "%s", header->subtype);
+    file->dataHash = DataHash((char*) uncompressedContent, uncompressedSize);
+}
+
+internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, PlatformFileGroup* group, PlatformFileInfo* info, b32 sendToPlayers)
+{
+    b32 deleteFile = false;
+    TempMemory fileMemory = BeginTemporaryMemory(pool);
+    
+    PlatformFileHandle handle = platformAPI.OpenFile(group, info);
+    PAKFileHeader header;
+    platformAPI.ReadFromFile(&handle, 0, sizeof(PAKFileHeader), &header);
+    
+    u16 type = GetMetaAssetType(header.type);
+    u64 subtypeHash = StringHash(header.subtype);
+    
+    u32 fileIndex = 0;
+    GameFile* file = 0;
+    
+    for(u32 testIndex = 0; testIndex < server->fileCount; ++testIndex)
+    {
+        GameFile* test = server->files + testIndex;
+        if(test->type == type && StringHash(test->subtype) == subtypeHash)
+        {
+            file = test;
+            fileIndex = testIndex;
+            break;
+        }
+    }
+    
+    char nameNoExtension[128];
+    TrimToFirstCharacter(nameNoExtension, sizeof(nameNoExtension), info->name, '.');
+    if(file && (file->counter == 0))
+    {
+        deleteFile = true;
+        u8* uncompressedContent = (u8*) PushSize(pool, info->size);
+        platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
+        
+        
+        u32 destFileIndex = 0;
+        AssetFile* destFile = CloseAssetFileFor(server->assets, type, subtypeHash, &destFileIndex);
+        Assert(destFile);
+        ReopenReloadAssetFile(server->assets, destFile, destFileIndex, type, header.subtype, uncompressedContent, SafeTruncateUInt64ToU32(info->size), pool);
+        
+        ReadCompressFile(server, file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
+        
+        if(sendToPlayers)
+        {
+            for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
+            {
+                if(HasComponent_(archetypeIndex, PlayerComponent))
+                {
+                    for(ArchIterator iter = First(server, archetypeIndex); 
+                        IsValid(iter); 
+                        iter = Next(iter))
+                    {
+                        PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
+                        if(player && player->connectionSlot)
+                        {
+                            FileToSend* toSend;
+                            FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
+                            
+                            toSend->acked = false;
+                            toSend->playerIndex = player->runningFileIndex++;
+                            toSend->serverFileIndex = fileIndex;
+                            toSend->sendingOffset = 0;
+                            
+                            ++file->counter;
+                            if(!player->firstReloadedFileToSend)
+                            {
+                                player->firstReloadedFileToSend = toSend;
+                            }
+                            else
+                            {
+                                for(FileToSend* firstToSend = player->firstReloadedFileToSend;; firstToSend = firstToSend->next)
+                                {
+                                    if(!firstToSend->next)
+                                    {
+                                        firstToSend->next = toSend;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            QueueFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    EndTemporaryMemory(fileMemory);
+    
+    BeginTicketMutex(&server->fileHash.fileMutex);
+    platformAPI.CloseFile(&handle);
+    if(deleteFile)
+    {
+        char* path = sendToPlayers ? RELOAD_SEND_PATH : RELOAD_PATH;
+        platformAPI.ReplaceFile(PlatformFile_AssetPack, path, 
+                                nameNoExtension, 0, 0, 0);
+    }
+    EndTicketMutex(&server->fileHash.fileMutex);
+}
+
+PLATFORM_WORK_CALLBACK(WatchForFileChanges)
+{
+    TimestampHash* hash = (TimestampHash*) param;
+    while(true)
+    {
+        WatchReloadFileChanges(hash, ASSETS_RAW_PATH, RELOAD_PATH, RELOAD_SEND_PATH);
+    }
+}

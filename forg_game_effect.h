@@ -31,26 +31,3 @@ struct OverlappingEffectsComponent
     u32 effectCount;
     GameEffect effects[8];
 };
-
-struct PossibleActionList
-{
-    u16 actionCount;
-    u16 actions[8];
-};
-
-
-enum InteractionType
-{
-    Interaction_Ground,
-    Interaction_Equipment,
-    Interaction_Container,
-    Interaction_Equipped,
-    
-    Interaction_Count
-};
-
-struct InteractionComponent
-{
-    b32 isOnFocus;
-    PossibleActionList actions[Interaction_Count];
-};

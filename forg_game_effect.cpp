@@ -1,0 +1,149 @@
+#ifdef FORG_SERVER
+internal void SendEffectDispatch(ServerState* server, EntityID ID)
+{
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    
+    r32 maxDistance = 3.0f * CHUNK_DIM;
+    r32 maxDistanceSq = Square(maxDistance);
+    
+    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, physic->P);
+    for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
+    {
+        PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
+        PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
+        
+        if(physic->P.chunkZ == playerPhysic->P.chunkZ)
+        {
+            Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
+            if(LengthSq(distance) < maxDistanceSq)
+            {
+                QueueEffectDispatch(player, ID);
+            }
+        }
+    }
+}
+
+internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect)
+{
+    switch(effect->effectType.value)
+    {
+        case spawnEntity:
+        {
+            SendEffectDispatch(server, ID);
+            //AddEntity(server, P, &server->entropy, effect->spawnType);
+        } break;
+        
+        case moveOnZSlice:
+        {
+            if(HasComponent(ID, PhysicComponent))
+            {
+                PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+                if(++physic->P.chunkZ == (i32) server->maxDeepness)
+                {
+                    physic->P.chunkZ = 0;
+                }
+            }
+        } break;
+    }
+}
+
+internal void DispatchEntityEffects(ServerState* server, EntityID ID, r32 elapsedTime)
+{
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    EffectComponent* effects = GetComponent(server, ID, EffectComponent);
+    if(physic && effects)
+    {
+        for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
+        {
+            GameEffect* effect = effects->effects + effectIndex;
+            effects->timers[effectIndex] += elapsedTime;
+            if(effects->timers[effectIndex] >= effect->timer)
+            {
+                effects->timers[effectIndex] = 0;
+                DispatchGameEffect(server, ID, physic->P, effect);
+            }
+        }
+    }
+}
+
+STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
+{
+    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    if(equipment)
+    {
+        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->IDs); ++equipmentIndex)
+        {
+            EntityID equipID = equipment->IDs[equipmentIndex];
+            if(IsValidID(equipID))
+            {
+                DispatchEntityEffects(server, equipID, elapsedTime);
+                
+                ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
+                for(u32 usingIndex = 0; usingIndex < container->maxUsingCount; ++usingIndex)
+                {
+                    EntityID usingID = container->usingIDs[usingIndex];
+                    if(IsValidID(usingID))
+                    {
+                        DispatchEntityEffects(server, usingID, elapsedTime);
+                    }
+                }
+            }
+        }
+    }
+    
+    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+    if(equipped)
+    {
+        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->IDs); ++equipmentIndex)
+        {
+            EntityID usingID = equipped->IDs[equipmentIndex];
+            if(IsValidID(usingID))
+            {
+                DispatchEntityEffects(server, usingID, elapsedTime);
+            }
+        }
+    }
+}
+
+internal void DispatchCollisitonEffects(ServerState* server, UniversePos P, EntityID actor, EntityID trigger)
+{
+    CollisionEffectsComponent* effects = GetComponent(server, trigger, CollisionEffectsComponent);
+    if(effects)
+    {
+        for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
+        {
+            GameEffect* effect = effects->effects + effectIndex;
+            DispatchGameEffect(server, actor, P, effect);
+        }
+    }
+}
+
+internal void DispatchOverlappingEffects(ServerState* server, UniversePos P, EntityID actor, EntityID overlap)
+{
+    OverlappingEffectsComponent* effects = GetComponent(server, overlap, OverlappingEffectsComponent);
+    if(effects)
+    {
+        for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
+        {
+            GameEffect* effect = effects->effects + effectIndex;
+            DispatchGameEffect(server, actor, P, effect);
+        }
+    }
+}
+#else
+internal void DispatchGameEffect(GameModeWorld* worldMode, EntityID ID)
+{
+    // TODO(Leonardo): for now let's hardcode this, but in the future we would like to customize these on a entity basis
+#if 0    
+    EntityDefinitionDef* = GetDefinition();
+    AddAllAnimationEffectsFor(def, effect->effectType.value);
+#else
+    AnimationEffectsComponent* effects = GetComponent(worldMode, ID, AnimationEffectsComponent);
+    if(effects)
+    {
+        effects->timer = 0.3f;
+        effects->tint = V4(0, 0, 0, 1);
+    }
+#endif
+}
+#endif

@@ -111,6 +111,7 @@ INIT_COMPONENT_FUNCTION(InitBaseComponent)
     base->bounds = StandardBounds(common->boundDim, common->boundOffset);
     base->nameHash = StringHash(c->name.name);
     base->serverID = c->ID;
+    base->definitionID = common->definitionID;
 }
 
 internal void InitShadow(ShadowComponent* shadow, ClientEntityInitParams* params)

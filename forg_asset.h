@@ -52,6 +52,16 @@ enum GamePropertyFlags
 };
 
 typedef PAKProperty GameProperty;
+#define GameProp(property, value) GameProp_(Property_##property, value)
+internal GameProperty GameProp_(u16 property, u16 value)
+{
+    GameProperty result;
+    result.property = property;
+    result.value = value;
+    
+    return result;
+}
+
 struct GameProperties
 {
     GameProperty properties[MAX_PROPERTIES_PER_ASSET];

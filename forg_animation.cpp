@@ -435,10 +435,10 @@ internal r32 GetModulationPercentageAndResetFocus(GameModeWorld* worldMode, Enti
     return result;
 }
 
-internal b32 IsValidMappingID(GameModeWorld* worldMode, EntityID ID)
+internal b32 IsValidMappingID(GameUIContext* UI, EntityID ID)
 {
     b32 result = IsValidID(ID);
-    if(result && AreEqual(ID, worldMode->draggingIDServer))
+    if(result && AreEqual(ID, UI->draggingIDServer))
     {
         result = false;
     }
@@ -455,7 +455,7 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
         if(!alreadyRendered[mappingIndex])
         {
             ObjectMapping* mapping = mappings + mappingIndex;
-            if(IsValidMappingID(worldMode, mapping->ID) && (hash == mapping->slotHash || hash == mapping->pieceHash))
+            if(IsValidMappingID(&worldMode->gameUI, mapping->ID) && (hash == mapping->slotHash || hash == mapping->pieceHash))
             {
                 alreadyRendered[mappingIndex] = true;
                 
