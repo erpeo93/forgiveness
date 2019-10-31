@@ -221,13 +221,10 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
         
         case Type_InventoryCommand:
         {
-            u16 action;
-            EntityID targetID;
-            
-            unpack(packetPtr, "HL", &action, &targetID);
             GameCommand* command = &player->inventoryCommand;
-            command->action = action;
-            command->targetID = targetID;
+            unpack(packetPtr, "HLLHL", &command->action, &command->targetID, 
+                   &command->containerID, 
+                   &command->targetObjectIndex, &command->targetContainerID);
             
             Assert(!player->inventoryCommandValid);
             player->inventoryCommandValid = true;

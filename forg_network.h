@@ -210,6 +210,11 @@ struct GameCommand
     u16 action;
     Vec3 acceleration;
     EntityID targetID;
+    
+    // NOTE(Leonardo): only for inventory commands!
+    EntityID containerID;
+    u16 targetObjectIndex;
+    EntityID targetContainerID;
 };
 
 inline b32 AreEqual(GameCommand c1, GameCommand c2)

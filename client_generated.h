@@ -37,6 +37,8 @@ char* MetaTable_action[] =
 "disequip",
 "open",
 "drop",
+"storeInventory",
+"useInventory",
 };
 
 char* MetaTable_essence[] = 

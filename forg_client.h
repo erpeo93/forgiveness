@@ -182,15 +182,16 @@ struct EntityHotInteraction
     u16 actionCount;
     u16 actions[8];
     
-    EntityID containerID;
-    EntityID entityID;
+    u16 objectIndex;
+    EntityID containerIDServer;
+    EntityID entityIDServer;
 };
 
 inline b32 AreEqual(EntityHotInteraction i1, EntityHotInteraction i2)
 {
     b32 result = (i1.type == i2.type && 
-                  AreEqual(i1.containerID, i2.containerID) &&
-                  AreEqual(i1.entityID, i2.entityID));
+                  AreEqual(i1.containerIDServer, i2.containerIDServer) &&
+                  AreEqual(i1.entityIDServer, i2.entityIDServer));
     return result;
 }
 
@@ -282,7 +283,8 @@ struct GameModeWorld
     b32 lootingMode;
     
     b32 testingDraggingOnEquipment;
-    EntityID draggingID;
+    EntityID draggingIDServer;
+    EntityID draggingContainerIDServer;
     
     EntityID lootingIDServer;
     EntityID openIDLeft;

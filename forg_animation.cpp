@@ -438,7 +438,7 @@ internal r32 GetModulationPercentageAndResetFocus(GameModeWorld* worldMode, Enti
 internal b32 IsValidMappingID(GameModeWorld* worldMode, EntityID ID)
 {
     b32 result = IsValidID(ID);
-    if(result && AreEqual(ID, worldMode->draggingID))
+    if(result && AreEqual(ID, worldMode->draggingIDServer))
     {
         result = false;
     }

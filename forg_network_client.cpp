@@ -96,7 +96,7 @@ internal void SendCommand(u16 index, GameCommand command)
 internal void SendInventoryCommand(GameCommand command)
 {
     StartPacket(InventoryCommand);
-    Pack("HL", command.action, command.targetID);
+    Pack("HLLHL", command.action, command.targetID, command.containerID, command.targetObjectIndex, command.targetContainerID);
     CloseAndSendOrderedPacket();
 }
 

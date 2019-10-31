@@ -266,18 +266,33 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         {
             EntityID targetID = command->targetID;
             PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
-            EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-            UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-            if(equipment && equipped)
+            
+            if(IsValidID(command->containerID))
             {
-                for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->IDs); ++equipIndex)
+                ContainerComponent* container = GetComponent(server, command->containerID, ContainerComponent);
+                if(Remove(server, container, targetID))
                 {
-                    if(AreEqual(equipment->IDs[equipIndex], targetID))
+                    Use(server, ID, targetID);
+                }
+            }
+            else
+            {
+                EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+                UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+                if(equipment && equipped)
+                {
+                    for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->IDs); ++equipIndex)
                     {
-                        if(Use(server, ID, targetID))
+                        if(AreEqual(equipment->IDs[equipIndex], targetID))
                         {
-                            equipment->IDs[equipIndex] = {};
-                            break;
+                            if(CanUse(server->assets, targetPhysic->definitionID))
+                            {
+                                if(Use(server, ID, targetID))
+                                {
+                                    equipment->IDs[equipIndex] = {};
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
@@ -386,6 +401,52 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                 }
             }
         } break;
+        
+        case storeInventory:
+        {
+            EntityID targetID = command->targetID;
+            if(IsValidID(targetID))
+            {
+                ContainerComponent* sourceContainer = GetComponent(server, command->containerID, ContainerComponent);
+                ContainerComponent* destContainer = GetComponent(server, command->targetContainerID, ContainerComponent);
+                if(Remove(server, sourceContainer, targetID))
+                {
+                    if(destContainer &&
+                       (command->targetObjectIndex < destContainer->maxStoredCount) &&!IsValidID(destContainer->storedIDs[command->targetObjectIndex]))
+                    {
+                        destContainer->storedIDs[command->targetObjectIndex] = targetID;
+                    }
+                    else
+                    {
+                        MakeTangible(server, targetID);
+                    }
+                }
+            }
+        } break;
+        
+        case useInventory:
+        {
+            EntityID targetID = command->targetID;
+            if(IsValidID(targetID))
+            {
+                ContainerComponent* sourceContainer = GetComponent(server, command->containerID, ContainerComponent);
+                ContainerComponent* destContainer = GetComponent(server, command->targetContainerID, ContainerComponent);
+                if(Remove(server, sourceContainer, targetID))
+                {
+                    if(destContainer &&
+                       (command->targetObjectIndex < destContainer->maxUsingCount) &&!IsValidID(destContainer->usingIDs[command->targetObjectIndex]))
+                    {
+                        destContainer->usingIDs[command->targetObjectIndex] = targetID;
+                    }
+                    else
+                    {
+                        MakeTangible(server, targetID);
+                    }
+                }
+            }
+        } break;
+        
+        InvalidDefaultCase;
     }
 }
 
