@@ -203,16 +203,3 @@ enum EditorTextFlags
     EditorText_OnTop = (1 << 1),
     EditorText_DarkBackground = (1 << 2)
 };
-
-#define EditorRole_Everyone 0xffffffff
-printFlags(noPrefix) enum EditorRole
-{
-    EditorRole_SoundDesigner = (1 << 1),
-    EditorRole_Composer = (1 << 2),
-    EditorRole_GameDesigner = (1 << 3),
-    EditorRole_Writer = (1 << 4),
-    EditorRole_Animator = (1 << 5),
-    EditorRole_Artist = (1 << 6),
-    EditorRole_WebDeveloper = (1 << 7),
-    EditorRole_3DModeller = (1 << 8),
-};

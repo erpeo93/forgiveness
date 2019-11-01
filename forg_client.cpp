@@ -166,10 +166,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             ResetLightGrid(worldMode);
             
             SetupGameCamera(worldMode, group, input);
-            
             HandleUIInteraction(worldMode, group, myPlayer, input);
-            
             UpdateGameCamera(worldMode, input);
+            
+            
             BeginDepthPeel(group);
             
             Vec3 ambientLightColor = V3(1, 1, 1);
@@ -178,7 +178,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             //AddLightToGridCurrentFrame(worldMode, V3(1, 0, 0), V3(1, 0, 0), 8);
             FinalizeLightGrid(worldMode, group);
             
-            
             EXECUTE_RENDERING_JOB(worldMode, group, RenderCharacterAnimation, ArchetypeHas(BaseComponent) && ArchetypeHas(AnimationComponent), input->timeToAdvance);
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
@@ -186,7 +185,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             EXECUTE_RENDERING_JOB(worldMode, group, RenderPlants, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderLayoutEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(LayoutComponent), input->timeToAdvance);
-            
             
             if(worldMode->editorUI.renderEntityBounds)
             {

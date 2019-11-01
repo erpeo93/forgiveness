@@ -11,6 +11,8 @@ enum InteractionType
     Interaction_Equipment,
     Interaction_Container,
     Interaction_Equipped,
+    Interaction_Dragging,
+    Interaction_MoveContainerOnScreen,
     
     Interaction_Count
 };
@@ -55,10 +57,17 @@ struct GameUIContext
     EntityID openIDLeft;
     EntityID openIDRight;
     
+    EntityID predictionContainerID;
+    EntityID predictionObjectID;
+    r32 predictionTime;
+    
     i32 currentHotIndex;
     i32 currentActionIndex;
     
     u32 hotCount;
     EntityHotInteraction hotInteractions[8];
     EntityHotInteraction lastFrameHotInteraction;
+    
+    Vec2 equipmentPositions[Count_equipmentSlot];
+    Rect2 equipmentOnScreen[Count_equipmentSlot];
 };

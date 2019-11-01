@@ -539,6 +539,24 @@ inline BitmapDim PushBitmap(RenderGroup* renderGroup, ObjectTransform transform,
     return result;
 }
 
+inline BitmapDim GetBitmapDim(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, r32 height = 0)
+{
+    
+    BitmapDim result = {};
+    ColoredBitmap bitmap = GetBitmap(renderGroup->assets, ID);
+    if(bitmap.bitmap)
+    {
+        transform.dontRender = true;
+        result = PushBitmap_(renderGroup, transform, bitmap, P, height, V4(1, 1, 1, 1), {}, bitmap.pivot);
+    }
+    else
+    {
+        LoadBitmap(renderGroup->assets, ID);
+    }
+    
+    return result;
+}
+
 inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, Vec2 pivot, r32 height = 0,  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
 {
     BitmapDim result = {};

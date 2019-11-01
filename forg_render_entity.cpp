@@ -2,7 +2,8 @@ internal b32 ShouldBeRendered(GameModeWorld* worldMode, BaseComponent* base)
 
 {
     b32 result = ((base->universeP.chunkZ == worldMode->player.universeP.chunkZ) &&
-                  !(base->flags & EntityFlag_notInWorld));
+                  !(base->flags & EntityFlag_notInWorld) &&
+                  !(base->flags & EntityFlag_occluding));
     return result;
 }
 
@@ -184,6 +185,7 @@ internal void RenderLayoutInRect(GameModeWorld* worldMode, RenderGroup* group, R
 internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u64 nameHash, u32 seed, Lights lights, LayoutContainer* container)
 {
     u64 emptySpaceHash = StringHash("emptySpace");
+    u64 usingSpaceHash = StringHash("usingSpace");
     
     LayoutPiece* pieces = 0;
     u32 pieceCount = 0;
@@ -220,7 +222,7 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
             if(IsValid(BID))
             {
                 transform.additionalZBias += 0.01f * pieceIndex;
-                BitmapDim dim = PushBitmap(group, transform, BID, P, piece->height, V4(1, 1, 1, 1), lights);
+                BitmapDim dim = GetBitmapDim(group, transform, BID, P, piece->height);
                 if(transform.upright)
                 {
                     result = ProjectOnScreen(group, dim);
@@ -230,7 +232,17 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                     result = RectMinDim(dim.P.xy, dim.size);
                 }
                 
-                if(piece->nameHash == emptySpaceHash && container->container)
+                r32 alpha = 1.0f;
+                if((piece->nameHash == emptySpaceHash || piece->nameHash == usingSpaceHash) && container->container)
+                {
+                    if(worldMode && !PointInRect(result, worldMode->relativeMouseP))
+                    {
+                        alpha = 0.7f;
+                    }
+                }
+                
+                PushBitmap(group, transform, BID, P, piece->height, V4(1, 1, 1, alpha), lights);
+                if((piece->nameHash == emptySpaceHash || piece->nameHash == usingSpaceHash) && container->container)
                 {
                     ObjectMapping* mappings = (container->drawMode == LayoutContainerDraw_Using) ? container->container->usingMappings : container->container->storedMappings;
                     u32 mappingCount = (container->drawMode == LayoutContainerDraw_Using) ? ArrayCount(container->container->usingMappings) : ArrayCount(container->container->storedMappings);
@@ -293,10 +305,11 @@ internal Rect2 RenderLayout(GameModeWorld* worldMode, RenderGroup* group, Vec3 P
     return result;
 }
 
-internal Rect2 GetLayoutDim(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed)
+internal Rect2 GetLayoutDim(RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, LayoutContainer* container)
 {
     transform.dontRender = true;
     LayoutContainer fakeContainer = {};
+    fakeContainer.drawMode = container->drawMode;
     Rect2 result = RenderLayoutRecursive_(0, group, P, transform, layout, layout->rootHash, seed, {}, &fakeContainer);
     return result;
 }
@@ -306,12 +319,12 @@ internal void RenderLayoutInRect(GameModeWorld* worldMode, RenderGroup* group, R
     Vec3 fakeP = V3(GetCenter(rect), 0);
     Vec2 desiredDim = GetDim(rect);
     
-    Rect2 layoutDim = GetLayoutDim(group, fakeP, transform, layout, seed);
+    Rect2 layoutDim = GetLayoutDim(group, fakeP, transform, layout, seed, container);
     Vec2 dim = GetDim(layoutDim);
     r32 scale = Min(desiredDim.x / dim.x, desiredDim.y / dim.y);
     transform.scale *= scale;
     
-    Rect2 finalLayoutDim = GetLayoutDim(group, fakeP, transform, layout, seed);
+    Rect2 finalLayoutDim = GetLayoutDim(group, fakeP, transform, layout, seed, container);
     Vec2 drawnP = GetCenter(finalLayoutDim);
     
     Vec3 offset = V3(drawnP - GetCenter(rect), 0);
@@ -323,12 +336,12 @@ internal void RenderLayoutInRect(GameModeWorld* worldMode, RenderGroup* group, R
 internal void RenderLayoutInRectCameraAligned(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, Vec3 rectP, Rect2 cameraRect, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container)
 {
     Vec2 desiredDim = GetDim(cameraRect);
-    Rect2 layoutDim = GetLayoutDim(group, P, transform, layout, seed);
+    Rect2 layoutDim = GetLayoutDim(group, P, transform, layout, seed, container);
     Vec2 dim = GetDim(layoutDim);
     r32 scale = Min(desiredDim.x / dim.x, desiredDim.y / dim.y);
     transform.scale *= scale;
     
-    Rect2 finalLayoutDim = GetLayoutDim(group, P, transform, layout, seed);
+    Rect2 finalLayoutDim = GetLayoutDim(group, P, transform, layout, seed, container);
     
     Vec3 drawnCenter = UnprojectAtZ(group, &group->gameCamera, GetCenter(finalLayoutDim), rectP.z);
     Vec3 desiredCenter = UnprojectAtZ(group, &group->gameCamera, GetCenter(cameraRect), rectP.z);

@@ -47,6 +47,7 @@ struct ContainerMappingComponent
     EntityID openedBy;
     r32 zoomCoeff;
     Vec2 desiredOpenedDim;
+    Vec2 desiredUsingDim;
     
     ObjectMapping storedMappings[MAX_CONTAINER_OBJECT];
     ObjectMapping usingMappings[MAX_USING_OBJECT];
@@ -55,6 +56,7 @@ struct ContainerMappingComponent
 enum EntityFlags
 {
     EntityFlag_notInWorld = (1 << 0),
+    EntityFlag_occluding = (1 << 1),
 };
 
 inline b32 IsSet(u32 flags, u32 flag)

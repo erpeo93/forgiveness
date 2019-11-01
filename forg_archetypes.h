@@ -124,6 +124,9 @@ introspection() struct ServerEntityInitParams
     ArrayCounter bindingCount MetaCounter(bindings);
     EffectBinding* bindings;
     
+    u16 storeCount;
+    u16 usingCount;
+    
     ArrayCounter collisionEffectsCount MetaCounter(collisionEffects);
     GameEffect* collisionEffects;
 };
@@ -168,12 +171,16 @@ introspection() struct ClientEntityInitParams
     ArrayCounter openPieceCount MetaCounter(openLayoutPieces);
     LayoutPieceProperties* openLayoutPieces;
     
+    ArrayCounter usingPieceCount MetaCounter(usingLayoutPieces);
+    LayoutPieceProperties* usingLayoutPieces;
+    
     Vec3 shadowOffset;
     Vec2 shadowScale MetaDefault("V2(1, 1)");
     Vec4 shadowColor MetaDefault("V4(1, 1, 1, 0.5f)");
     
     r32 lootingZoomCoeff MetaDefault("3.0f");
     Vec2 desiredOpenedDim MetaDefault("V2(400, 400)");
+    Vec2 desiredUsingDim MetaDefault("V2(200, 200)");
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

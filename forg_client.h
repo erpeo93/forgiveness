@@ -13,8 +13,6 @@
 #include "forg_random.h"
 #include "forg_file_formats.h"
 #include "forg_asset.h"
-
-
 #define Property(name) enum name
 #include "../properties/test.properties"
 #include "forg_world_generation.h"
@@ -36,7 +34,7 @@
 #include "forg_book.h"
 #include "forg_cutscene.h"
 #include "forg_game_ui.h"
-
+#include "forg_render_entity.h"
 #if FORGIVENESS_INTERNAL
 #include "forg_debug.h"
 #endif
@@ -74,12 +72,6 @@ internal r32 GetDeepness(BaseComponent* base)
     return height;
 }
 
-struct ImageReference
-{
-    u64 typeHash;
-    GameProperties properties;
-};
-
 struct PlantComponent
 {
     ImageReference leaf;
@@ -90,55 +82,10 @@ struct GrassComponent
     
 };
 
-struct StandardImageComponent
-{
-    ShadowComponent shadow;
-    ImageReference entity;
-};
-
-struct LayoutPiece
-{
-    u64 nameHash;
-    r32 height;
-    ImageReference image;
-};
-
-struct LayoutComponent
-{
-    ShadowComponent shadow;
-    Vec2 rootScale;
-    r32 rootAngle;
-    u64 rootHash;
-    
-    u32 pieceCount;
-    LayoutPiece pieces[8];
-    
-    u32 openPieceCount;
-    LayoutPiece openPieces[8];
-    
-    u32 usingPieceCount;
-    LayoutPiece usingPieces[8];
-};
-
-enum LayoutContainerDrawMode
-{
-    LayoutContainerDraw_Standard,
-    LayoutContainerDraw_Open,
-    LayoutContainerDraw_Using,
-    
-};
-struct LayoutContainer
-{
-    LayoutContainerDrawMode drawMode;
-    u32 currentObjectIndex;
-    ContainerMappingComponent* container;
-};
-
 #include "forg_archetypes.h"
 #include "client_generated.h"
 global_variable ArchetypeLayout archetypeLayouts[Archetype_Count];
 global_variable PlatformAPI platformAPI;
-
 
 struct ReceivingAssetFile
 {

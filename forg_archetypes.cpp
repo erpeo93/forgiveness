@@ -99,8 +99,8 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
 {
     ServerState* server = (ServerState*) state;
     ContainerComponent* dest = (ContainerComponent*) componentPtr;
-    dest->maxStoredCount = 1;
-    dest->maxUsingCount = ArrayCount(dest->usingIDs);
+    dest->maxStoredCount = s->storeCount;
+    dest->maxUsingCount = s->usingCount;
 }
 
 #else
@@ -173,6 +173,27 @@ INIT_COMPONENT_FUNCTION(InitStandardImageComponent)
     InitImageReference(assets, &dest, &c, entity);
 }
 
+internal void InitLayout(Assets* assets, LayoutPiece* destPieces, u32* destPieceCount, u32 maxDestPieceCount, LayoutPieceProperties* pieces, u32 pieceCount, GameProperty property)
+{
+    for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
+    {
+        LayoutPieceProperties* piece = pieces + pieceIndex;
+        if(*destPieceCount < maxDestPieceCount)
+        {
+            LayoutPiece* destPiece = destPieces + (*destPieceCount)++;
+            InitImageReference_(assets, &destPiece->image, &piece->properties);
+            destPiece->nameHash = StringHash(piece->name.name);
+            destPiece->height = piece->height;
+        }
+    }
+    
+    for(u32 pieceIndex = 0; pieceIndex < *destPieceCount; ++pieceIndex)
+    {
+        LayoutPiece* destPiece = destPieces + pieceIndex;
+        AddGameProperty_(&destPiece->image.properties, property, GameProperty_Optional);
+    }
+}
+
 INIT_COMPONENT_FUNCTION(InitLayoutComponent)
 {
     GameModeWorld* worldMode = (GameModeWorld*) state;
@@ -183,43 +204,11 @@ INIT_COMPONENT_FUNCTION(InitLayoutComponent)
     dest->rootHash = StringHash(c->layoutRootName.name);
     dest->rootScale = V2(1, 1);
     dest->rootAngle = 0;
-    
-    
-    for(u32 pieceIndex = 0; pieceIndex < c->pieceCount; ++pieceIndex)
-    {
-        LayoutPieceProperties* piece = c->layoutPieces + pieceIndex;
-        if(dest->pieceCount < ArrayCount(dest->pieces))
-        {
-            LayoutPiece* destPiece = dest->pieces + dest->pieceCount++;
-            InitImageReference_(assets, &destPiece->image, &piece->properties);
-            destPiece->nameHash = StringHash(piece->name.name);
-            destPiece->height = piece->height;
-        }
-    }
-    
-    for(u32 pieceIndex = 0; pieceIndex < c->openPieceCount; ++pieceIndex)
-    {
-        LayoutPieceProperties* piece = c->openLayoutPieces + pieceIndex;
-        if(dest->openPieceCount < ArrayCount(dest->openPieces))
-        {
-            LayoutPiece* destPiece = dest->openPieces + dest->openPieceCount++;
-            InitImageReference_(assets, &destPiece->image, &piece->properties);
-            destPiece->nameHash = StringHash(piece->name.name);
-            destPiece->height = piece->height;
-        }
-    }
-    
     GameProperty property = GetProperty(c->seed);
-    for(u32 pieceIndex = 0; pieceIndex < dest->pieceCount; ++pieceIndex)
-    {
-        LayoutPiece* destPiece = dest->pieces + pieceIndex;
-        AddGameProperty_(&destPiece->image.properties, property, GameProperty_Optional);
-    }
-    for(u32 pieceIndex = 0; pieceIndex < dest->openPieceCount; ++pieceIndex)
-    {
-        LayoutPiece* destPiece = dest->openPieces + pieceIndex;
-        AddGameProperty_(&destPiece->image.properties, property, GameProperty_Optional);
-    }
+    
+    InitLayout(assets, dest->pieces, &dest->pieceCount, ArrayCount(dest->pieces), c->layoutPieces, c->pieceCount, property);
+    InitLayout(assets, dest->openPieces, &dest->openPieceCount, ArrayCount(dest->openPieces), c->openLayoutPieces, c->openPieceCount, property);
+    InitLayout(assets, dest->usingPieces, &dest->usingPieceCount, ArrayCount(dest->usingPieces), c->usingLayoutPieces, c->usingPieceCount, property);
 }
 
 INIT_COMPONENT_FUNCTION(InitEquipmentMappingComponent)
@@ -247,6 +236,7 @@ INIT_COMPONENT_FUNCTION(InitContainerMappingComponent)
     ContainerMappingComponent* dest = (ContainerMappingComponent*) componentPtr;
     dest->zoomCoeff = c->lootingZoomCoeff;
     dest->desiredOpenedDim = c->desiredOpenedDim;
+    dest->desiredUsingDim = c->desiredUsingDim;
 }
 #endif
 INIT_COMPONENT_FUNCTION(InitInteractionComponent)

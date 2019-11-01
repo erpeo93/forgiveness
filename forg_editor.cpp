@@ -2022,16 +2022,29 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
             {
                 case EditorTab_Assets:
                 {
-                    for(u32 fileIndex = 0; fileIndex < group->assets->fileCount; ++fileIndex)
+                    for(u16 assetType = 1; assetType < AssetType_Count; ++assetType)
                     {
-                        AssetFile* file = GetAssetFile(group->assets, fileIndex);
-                        PAKFileHeader* header = GetFileInfo(group->assets, fileIndex);
-                        
-                        AssetSubtypeArray* assets = GetAssetSubtypeForFile(group->assets, header);
-                        if(assets)
+                        NextRaw(&layout);
+                        char* assetTypeName = GetAssetTypeName(assetType);
+                        if(EditorCollapsible(&layout, assetTypeName, auID(assetTypeName, "showAssets")))
                         {
-                            RenderEditAssetFile(worldMode, &layout, group->assets, header);
-                            NextRaw(&layout);
+                            Push(&layout);
+                            for(u32 fileIndex = 0; fileIndex < group->assets->fileCount; ++fileIndex)
+                            {
+                                AssetFile* file = GetAssetFile(group->assets, fileIndex);
+                                PAKFileHeader* header = GetFileInfo(group->assets, fileIndex);
+                                
+                                if(GetMetaAssetType(header->type) == assetType)
+                                {
+                                    AssetSubtypeArray* assets = GetAssetSubtypeForFile(group->assets, header);
+                                    if(assets)
+                                    {
+                                        NextRaw(&layout);
+                                        RenderEditAssetFile(worldMode, &layout, group->assets, header);
+                                    }
+                                }
+                            }
+                            Pop(&layout);
                         }
                     }
                 } break;

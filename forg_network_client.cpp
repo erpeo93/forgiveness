@@ -182,16 +182,12 @@ internal void StoreObjectMapping(GameModeWorld* worldMode, ObjectMapping* mappin
     
     ObjectMapping* mapping = mappings + index;
     mapping->ID = ID;
+    mapping->slotHash = stringHash;
+    
     if(IsValidID(ID))
     {
         BaseComponent* objectBase = GetComponent(worldMode, ID, BaseComponent);
-        mapping->slotHash = stringHash;
         mapping->pieceHash = objectBase->nameHash;
-    }
-    else
-    {
-        mapping->slotHash = 0;
-        mapping->pieceHash = 0;
     }
 }
 
