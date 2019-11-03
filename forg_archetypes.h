@@ -95,13 +95,24 @@ Archetype() struct PortalArchetype
 #endif
 };
 
+introspection() struct UseLayout
+{
+    ArrayCounter slotCount MetaCounter("slots");
+    Enumerator* slots MetaEnumerator("usingSlot");
+};
+
+introspection() struct EquipLayout
+{
+    ArrayCounter slotCount MetaCounter("slots");
+    Enumerator* slots MetaEnumerator("equipmentSlot");
+};
+
 introspection() struct CommonEntityInitParams
 {
     EntityRef definitionID MetaUneditable();
     
     Vec3 boundOffset;
     Vec3 boundDim MetaDefault("V3(1, 1, 1)");
-    
     
     ArrayCounter groundActionCount MetaCounter("groundActions");
     Enumerator* groundActions MetaEnumerator("action");
@@ -114,6 +125,14 @@ introspection() struct CommonEntityInitParams
     
     ArrayCounter equippedActionCount MetaCounter("equippedActions");
     Enumerator* equippedActions MetaEnumerator("action");
+    
+    ArrayCounter usingConfigurationCount MetaCounter("usingConfigurations");
+    UseLayout* usingConfigurations;
+    
+    ArrayCounter equipConfigurationCount MetaCounter("equipConfigurations");
+    EquipLayout* equipConfigurations;
+    
+    Enumerator inventorySlotType MetaEnumerator("inventorySlotType");
 };
 
 introspection() struct ServerEntityInitParams
@@ -125,7 +144,10 @@ introspection() struct ServerEntityInitParams
     EffectBinding* bindings;
     
     u16 storeCount;
+    u16 specialStoreCount;
+    
     u16 usingCount;
+    u16 specialUsingCount;
     
     ArrayCounter collisionEffectsCount MetaCounter(collisionEffects);
     GameEffect* collisionEffects;
@@ -149,6 +171,7 @@ introspection() struct LayoutPieceProperties
     AssetLabel name;
     r32 height MetaDefault("1.0f");
     ImageProperties properties;
+    Enumerator inventorySlotType MetaEnumerator("inventorySlotType");
 };
 
 introspection() struct ClientEntityInitParams

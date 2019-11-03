@@ -17,10 +17,23 @@ enum InteractionType
     Interaction_Count
 };
 
+struct UsingEquipOption
+{
+    u16 slots[2];
+};
+
 struct InteractionComponent
 {
     b32 isOnFocus;
     PossibleActionList actions[Interaction_Count];
+    
+    u32 usingConfigurationCount;
+    UsingEquipOption usingConfigurations[4];
+    
+    u32 equipConfigurationCount;
+    UsingEquipOption equipConfigurations[4];
+    
+    u16 inventorySlotType;
 };
 
 struct EntityHotInteraction
@@ -30,8 +43,10 @@ struct EntityHotInteraction
     u16 actions[8];
     
     u16 objectIndex;
+    InventorySlot* slot;
     EntityID containerIDServer;
     EntityID entityIDServer;
+    u16 optionIndex;
 };
 
 inline b32 AreEqual(EntityHotInteraction i1, EntityHotInteraction i2)
@@ -49,7 +64,11 @@ struct GameUIContext
     
     b32 inventoryMode;
     b32 lootingMode;
+    
     b32 testingDraggingOnEquipment;
+    UsingEquipOption* draggingTestUsingOption;
+    UsingEquipOption* draggingTestEquipOption;
+    
     EntityID draggingIDServer;
     EntityID draggingContainerIDServer;
     

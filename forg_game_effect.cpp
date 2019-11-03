@@ -71,17 +71,17 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
     if(equipment)
     {
-        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->IDs); ++equipmentIndex)
+        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->slots); ++equipmentIndex)
         {
-            EntityID equipID = equipment->IDs[equipmentIndex];
+            EntityID equipID = equipment->slots[equipmentIndex].ID;
             if(IsValidID(equipID))
             {
                 DispatchEntityEffects(server, equipID, elapsedTime);
                 
                 ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
-                for(u32 usingIndex = 0; usingIndex < container->maxUsingCount; ++usingIndex)
+                for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
                 {
-                    EntityID usingID = container->usingIDs[usingIndex];
+                    EntityID usingID = container->usingObjects[usingIndex].ID;
                     if(IsValidID(usingID))
                     {
                         DispatchEntityEffects(server, usingID, elapsedTime);
@@ -94,9 +94,9 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
     if(equipped)
     {
-        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->IDs); ++equipmentIndex)
+        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->slots); ++equipmentIndex)
         {
-            EntityID usingID = equipped->IDs[equipmentIndex];
+            EntityID usingID = equipped->slots[equipmentIndex].ID;
             if(IsValidID(usingID))
             {
                 DispatchEntityEffects(server, usingID, elapsedTime);
@@ -147,3 +147,8 @@ internal void DispatchGameEffect(GameModeWorld* worldMode, EntityID ID)
 #endif
 }
 #endif
+internal b32 CompatibleSlot(InteractionComponent* interaction, InventorySlot* slot)
+{
+    b32 result = (interaction->inventorySlotType == slot->type);
+    return result;
+}

@@ -1,4 +1,3 @@
-
 internal Vec2 HandleKeyboardInteraction(GameUIContext* UI, ClientPlayer* player, PlatformInput* input)
 {
     GameCommand* command = &player->currentCommand;
@@ -65,8 +64,10 @@ internal void ResetInteractions(GameUIContext* UI)
     UI->hotCount = 0;
 }
 
-internal void AddPossibleInteraction(GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID containerID, u16 objectIndex, EntityID entityID)
+internal EntityHotInteraction* AddPossibleInteraction(GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityID, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
 {
+    EntityHotInteraction* result = 0;
+    
     if(UI->hotCount < ArrayCount(UI->hotInteractions))
     {
         EntityHotInteraction* dest = UI->hotInteractions + UI->hotCount++;
@@ -86,9 +87,14 @@ internal void AddPossibleInteraction(GameUIContext* UI, InteractionType type, Po
         }
         dest->containerIDServer = containerID;
         dest->objectIndex = objectIndex;
-        
+        dest->slot = slot;
         dest->entityIDServer = entityID;
+        dest->optionIndex = optionIndex;
+        
+        result = dest;
     }
+    
+    return result;
 }
 
 internal void AddContainerObjectsInteractions(GameUIContext* UI, GameModeWorld* worldMode, ObjectMapping* mappings, u16  mappingCount, EntityID containerID, InteractionType interactionType)
@@ -96,33 +102,30 @@ internal void AddContainerObjectsInteractions(GameUIContext* UI, GameModeWorld* 
 	for(u16 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
 	{
         ObjectMapping* mapping = mappings + mappingIndex;
-        
-        if(!IsValidMappingID(UI, mapping->ID))
+        EntityID ID = mapping->object.ID;
+        if(IsValidInventoryMapping(UI, mapping))
         {
-            if(PointInRect(mapping->projOnScreen, worldMode->relativeMouseP))
+            InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
+            BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+            if(interaction)
             {
-                ResetInteractions(UI);
-                AddPossibleInteraction(UI, interactionType, 0, containerID, mappingIndex, {});
+                if(PointInRect(mapping->projOnScreen, worldMode->relativeMouseP))
+                {
+                    ResetInteractions(UI);
+                    AddPossibleInteraction(UI, interactionType, interaction->actions + interactionType, ID, containerID, mappingIndex, &mapping->object);
+                }
+                else if((interactionType == Interaction_Equipment) && PointInRect(base->projectedOnScreen, worldMode->relativeMouseP))
+                {
+                    AddPossibleInteraction(UI, interactionType, interaction->actions + interactionType, ID, containerID, mappingIndex, &mapping->object);
+                }
             }
         }
         else
         {
-            if(IsValidMappingID(UI, mapping->ID))
+            if(PointInRect(mapping->projOnScreen, worldMode->relativeMouseP))
             {
-                InteractionComponent* interaction = GetComponent(worldMode, mapping->ID, InteractionComponent);
-                BaseComponent* base = GetComponent(worldMode, mapping->ID, BaseComponent);
-                if(interaction)
-                {
-                    if(PointInRect(mapping->projOnScreen, worldMode->relativeMouseP))
-                    {
-                        ResetInteractions(UI);
-                        AddPossibleInteraction(UI, interactionType, interaction->actions + interactionType, containerID, mappingIndex, mapping->ID);
-                    }
-                    else if((interactionType == Interaction_Equipment) && PointInRect(base->projectedOnScreen, worldMode->relativeMouseP))
-                    {
-                        AddPossibleInteraction(UI, interactionType, interaction->actions + interactionType, containerID, mappingIndex, mapping->ID);
-                    }
-                }
+                ResetInteractions(UI);
+                AddPossibleInteraction(UI, interactionType, 0, {}, containerID, mappingIndex, &mapping->object);
             }
         }
     }
@@ -136,10 +139,13 @@ internal void HandleEquipmentInteraction(GameUIContext* UI, GameModeWorld* world
         AddContainerObjectsInteractions(UI, worldMode, equipment->mappings, ArrayCount(equipment->mappings), ID, Interaction_Equipment);
     }
     
-    UsingMappingComponent* equipped = GetComponent(worldMode, ID, UsingMappingComponent);
-    if(equipped)
+    if(!IsValidID(UI->draggingIDServer))
     {
-        AddContainerObjectsInteractions(UI, worldMode, equipped->mappings, ArrayCount(equipped->mappings), ID, Interaction_Equipment);
+        UsingMappingComponent* equipped = GetComponent(worldMode, ID, UsingMappingComponent);
+        if(equipped)
+        {
+            AddContainerObjectsInteractions(UI, worldMode, equipped->mappings, ArrayCount(equipped->mappings), ID, Interaction_Equipment);
+        }
     }
 }
 
@@ -151,6 +157,8 @@ internal void HandleContainerInteraction(GameUIContext* UI, GameModeWorld* world
         if(container)
         {
 			AddContainerObjectsInteractions(UI, worldMode, container->storedMappings, ArrayCount(container->storedMappings), UI->openIDRight, Interaction_Container);
+            
+            AddContainerObjectsInteractions(UI, worldMode, container->usingMappings, ArrayCount(container->usingMappings), UI->openIDRight, Interaction_Equipped);
         }
     }
     
@@ -160,20 +168,14 @@ internal void HandleContainerInteraction(GameUIContext* UI, GameModeWorld* world
         if(container)
         {
             AddContainerObjectsInteractions(UI, worldMode, container->storedMappings, ArrayCount(container->storedMappings), UI->openIDLeft, Interaction_Container);
+            
+            AddContainerObjectsInteractions(UI, worldMode, container->usingMappings, ArrayCount(container->usingMappings), UI->openIDLeft, Interaction_Equipped);
         }
     }
 }
 
-internal void HandleOverlayObjectsInteraction(GameUIContext* UI, GameModeWorld* worldMode)
+internal void HandleOverlayObjectsInteraction(GameUIContext* UI, GameModeWorld* worldMode, b32 onlyUsingSlots)
 {
-    for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(UI->equipmentOnScreen); ++equipmentIndex)
-    {
-        if(PointInRect(UI->equipmentOnScreen[equipmentIndex], worldMode->relativeMouseP))
-        {
-            ResetInteractions(UI);
-            AddPossibleInteraction(UI, Interaction_MoveContainerOnScreen, 0, {}, SafeTruncateToU16(equipmentIndex), {});
-        }
-    }
     
     UsingMappingComponent* equipped = GetComponent(worldMode, worldMode->player.clientID, UsingMappingComponent);
     if(equipped)
@@ -181,22 +183,34 @@ internal void HandleOverlayObjectsInteraction(GameUIContext* UI, GameModeWorld* 
         AddContainerObjectsInteractions(UI, worldMode, equipped->mappings, ArrayCount(equipped->mappings), worldMode->player.serverID, Interaction_Equipped);
     }
     
-    EquipmentMappingComponent* equipment = GetComponent(worldMode, worldMode->player.clientID, EquipmentMappingComponent);
-    if(equipment)
+    if(!onlyUsingSlots)
     {
-        for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->mappings); ++equipIndex)
+        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(UI->equipmentOnScreen); ++equipmentIndex)
         {
-            EntityID ID = equipment->mappings[equipIndex].ID;
-            ContainerMappingComponent* container = GetComponent(worldMode, ID, ContainerMappingComponent);
-            if(container)
+            if(PointInRect(UI->equipmentOnScreen[equipmentIndex], worldMode->relativeMouseP))
             {
-                AddContainerObjectsInteractions(UI, worldMode, container->usingMappings, ArrayCount(container->usingMappings), ID, Interaction_Equipped);
+                ResetInteractions(UI);
+                AddPossibleInteraction(UI, Interaction_MoveContainerOnScreen, 0, {}, {}, SafeTruncateToU16(equipmentIndex), 0);
+            }
+        }
+        
+        EquipmentMappingComponent* equipment = GetComponent(worldMode, worldMode->player.clientID, EquipmentMappingComponent);
+        if(equipment)
+        {
+            for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->mappings); ++equipIndex)
+            {
+                EntityID ID = equipment->mappings[equipIndex].object.ID;
+                ContainerMappingComponent* container = GetComponent(worldMode, ID, ContainerMappingComponent);
+                if(container)
+                {
+                    AddContainerObjectsInteractions(UI, worldMode, container->usingMappings, ArrayCount(container->usingMappings), ID, Interaction_Equipped);
+                }
             }
         }
     }
 }
 
-internal void OverdrawLayout(GameModeWorld* worldMode, RenderGroup* group, EntityID ID, Rect2 rect, LayoutContainerDrawMode drawMode)
+internal void OverdrawLayout(GameModeWorld* worldMode, RenderGroup* group, EntityID ID, Rect2 rect, LayoutContainerDrawMode drawMode, r32 zBias = 2.0f)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     LayoutComponent* layout = GetComponent(worldMode, ID, LayoutComponent);
@@ -204,11 +218,84 @@ internal void OverdrawLayout(GameModeWorld* worldMode, RenderGroup* group, Entit
     container.container = GetComponent(worldMode, ID, ContainerMappingComponent);
     container.drawMode = drawMode;
     
-    ObjectTransform transform = FlatTransform(2.0f);
+    ObjectTransform transform = FlatTransform(zBias);
     transform.angle = layout->rootAngle;
     transform.scale = layout->rootScale;
-    transform.modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, ID); 
+    transform.modulationPercentage = GetModulationPercentage(worldMode, ID); 
     RenderLayoutInRect(worldMode, group, rect, transform, layout, base->seed, {}, &container);
+}
+
+internal void OverdrawVisibleStuff(GameUIContext* UI, GameModeWorld* worldMode, RenderGroup* group, b32 onlyUsingSlots)
+{
+    Vec2 minP = -0.5f * group->screenDim + V2(30, 10);
+    Vec2 dim = V2(100, 100);
+    r32 margin = 20.0f;
+    
+    ObjectTransform overdrawTransform = FlatTransform(2.0f);
+    
+    UsingMappingComponent* usingMappings = GetComponent(worldMode, worldMode->player.clientID, UsingMappingComponent);
+    if(usingMappings)
+    {
+        for(u16 slotIndex = 0; slotIndex < ArrayCount(usingMappings->mappings); ++slotIndex)
+        {
+            ObjectMapping* mapping = usingMappings->mappings + slotIndex;
+            EntityID ID = mapping->object.ID;
+            
+            Rect2 rect = RectMinDim(minP, dim);
+            mapping->projOnScreen = rect;
+            
+            b32 hot = PointInRect(rect, worldMode->relativeMouseP);
+            if(hot)
+            {
+                PushRectOutline(group, overdrawTransform, rect, V4(0, 0, 0, 0.4f), 2.0f);
+            }
+            if(IsValidUsingMapping(UI, mapping, slotIndex))
+            {
+                BaseComponent* usingBase = GetComponent(worldMode, ID, BaseComponent);
+                OverdrawLayout(worldMode, group, ID, rect, LayoutContainerDraw_Standard);
+            }
+            
+            minP.x += dim.x + margin;
+        }
+    }
+    
+    if(!onlyUsingSlots)
+    {
+        EquipmentMappingComponent* equipment = GetComponent(worldMode, worldMode->player.clientID, EquipmentMappingComponent);
+        if(equipment)
+        {
+            for(u16 slotIndex = 0; slotIndex < ArrayCount(equipment->mappings); ++slotIndex)
+            {
+                ObjectMapping* mapping = equipment->mappings + slotIndex;
+                if(IsValidEquipmentMapping(UI, mapping, slotIndex))
+                {
+                    EntityID mappingID = mapping->object.ID;
+                    ContainerMappingComponent* container = GetComponent(worldMode, mappingID, ContainerMappingComponent);
+                    Vec2 equipmentP = UI->equipmentPositions[slotIndex];
+                    if(!equipmentP.x && !equipmentP.y)
+                    {
+                        UI->equipmentPositions[slotIndex].y = 100.0f;
+                        UI->equipmentPositions[slotIndex].x = 100 + 200.0f * slotIndex;
+                        UI->equipmentPositions[slotIndex] -= 0.5f * group->screenDim;
+                        
+                        equipmentP = UI->equipmentPositions[slotIndex];
+                    }
+                    Vec2 equipmentDim = container ? container->desiredUsingDim : V2(200, 200);
+                    Rect2 rect = RectMinDim(equipmentP, equipmentDim);
+                    
+                    b32 hot = PointInRect(rect, worldMode->relativeMouseP);
+                    if(hot)
+                    {
+                        PushRectOutline(group, overdrawTransform, rect, V4(0, 0, 0, 0.4f), 2.0f);
+                    }
+                    
+                    UI->equipmentOnScreen[slotIndex] = rect;
+                    OverdrawLayout(worldMode, group, mappingID, rect, LayoutContainerDraw_Using);
+                }
+                minP.x += dim.x + margin;
+            }
+        }
+    }
 }
 
 internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
@@ -219,6 +306,7 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
     Vec2 mouseP = worldMode->relativeMouseP;
     if(UI->lootingMode)
     {
+        OverdrawVisibleStuff(UI, worldMode, group, false);
     }
     else if(UI->inventoryMode)
     {
@@ -241,72 +329,14 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
             OverdrawLayout(worldMode, group, UI->openIDLeft, rect, 
                            LayoutContainerDraw_Open);
         }
+        
+        OverdrawVisibleStuff(UI, worldMode, group, true);
     }
-    
-    Vec2 minP = -0.5f * group->screenDim + V2(30, 10);
-    Vec2 dim = V2(100, 100);
-    r32 margin = 20.0f;
-    
-    ObjectTransform overdrawTransform = FlatTransform(2.0f);
-    
-    UsingMappingComponent* usingMappings = GetComponent(worldMode, worldMode->player.clientID, UsingMappingComponent);
-    if(usingMappings)
+    else
     {
-        for(u32 slotIndex = 0; slotIndex < ArrayCount(usingMappings->mappings); ++slotIndex)
-        {
-            ObjectMapping* mapping = usingMappings->mappings + slotIndex;
-            
-            Rect2 rect = RectMinDim(minP, dim);
-            mapping->projOnScreen = rect;
-            
-            b32 hot = PointInRect(rect, worldMode->relativeMouseP);
-            if(hot)
-            {
-                PushRectOutline(group, overdrawTransform, rect, V4(0, 0, 0, 0.4f), 2.0f);
-            }
-            if(IsValidMappingID(UI, mapping->ID))
-            {
-                BaseComponent* usingBase = GetComponent(worldMode, mapping->ID, BaseComponent);
-                OverdrawLayout(worldMode, group, mapping->ID, rect, LayoutContainerDraw_Standard);
-            }
-            
-            minP.x += dim.x + margin;
-        }
+        OverdrawVisibleStuff(UI, worldMode, group, false);
     }
     
-    EquipmentMappingComponent* equipment = GetComponent(worldMode, worldMode->player.clientID, EquipmentMappingComponent);
-    if(equipment)
-    {
-        for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->mappings); ++slotIndex)
-        {
-            ObjectMapping* mapping = equipment->mappings + slotIndex;
-            if(IsValidMappingID(UI, mapping->ID))
-            {
-                ContainerMappingComponent* container = GetComponent(worldMode, mapping->ID, ContainerMappingComponent);
-                Vec2 equipmentP = UI->equipmentPositions[slotIndex];
-                if(!equipmentP.x && !equipmentP.y)
-                {
-                    UI->equipmentPositions[slotIndex].y = 100.0f;
-                    UI->equipmentPositions[slotIndex].x = 100 + 200.0f * slotIndex;
-                    UI->equipmentPositions[slotIndex] -= 0.5f * group->screenDim;
-                    
-                    equipmentP = UI->equipmentPositions[slotIndex];
-                }
-                Vec2 equipmentDim = container ? container->desiredUsingDim : V2(200, 200);
-                Rect2 rect = RectMinDim(equipmentP, equipmentDim);
-                
-                b32 hot = PointInRect(rect, worldMode->relativeMouseP);
-                if(hot)
-                {
-                    PushRectOutline(group, overdrawTransform, rect, V4(0, 0, 0, 0.4f), 2.0f);
-                }
-                
-                UI->equipmentOnScreen[slotIndex] = rect;
-                OverdrawLayout(worldMode, group, mapping->ID, rect, LayoutContainerDraw_Using);
-            }
-            minP.x += dim.x + margin;
-        }
-    }
     
     if(IsValidID(UI->draggingIDServer))
     {
@@ -314,11 +344,13 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
 		if(UI->testingDraggingOnEquipment)
 		{
 			UI->testingDraggingOnEquipment = false;
+			UI->draggingTestUsingOption = 0;
+			UI->draggingTestEquipOption = 0;
 		}
 		else
 		{
 			Rect2 dragRect = RectCenterDim(worldMode->relativeMouseP, V2(100, 100));
-			OverdrawLayout(worldMode, group, draggingID, dragRect, LayoutContainerDraw_Standard);
+			OverdrawLayout(worldMode, group, draggingID, dragRect, LayoutContainerDraw_Standard, 10.0f);
 		}
     }
     
@@ -348,7 +380,7 @@ INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
         {
             if(PointInRect(base->projectedOnScreen, worldMode->relativeMouseP))
             {
-                AddPossibleInteraction(&worldMode->gameUI, Interaction_Ground, interaction->actions + Interaction_Ground, {}, 0, ID);
+                AddPossibleInteraction(&worldMode->gameUI, Interaction_Ground, interaction->actions + Interaction_Ground, ID);
             }
         }
     }
@@ -379,9 +411,224 @@ internal void RemoveMapping(ObjectMapping* mappings, u32 mappingCount, EntityID 
     for(u32 index = 0; index < mappingCount; ++index)
     {
         ObjectMapping* mapping = mappings + index;
-        if(AreEqual(mapping->ID, ID))
+        if(AreEqual(mapping->object.ID, ID))
         {
-            mapping->ID = {};
+            mapping->object.ID = {};
+        }
+    }
+}
+
+internal b32 UsingEquipOptionApplicable(UsingEquipOption* option, ObjectMapping* mappings, u32 mappingCount, EntityID targetID)
+{
+    b32 result = false;
+    
+    if(option->slots[0] != 0xffff)
+    {
+        result = true;
+        
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(option->slots); ++slotIndex)
+        {
+            u16 slot = option->slots[slotIndex];
+            
+            if(slot == 0xffff)
+            {
+                break;
+            }
+            
+            Assert(slot < mappingCount);
+            EntityID currentID = mappings[slot].object.ID;
+            if(!AreEqual(currentID, targetID) && IsValidID(currentID))
+            {
+                result = false;
+                break;
+            }
+        }
+    }
+    
+    return result;
+}
+
+internal UsingEquipOption* CanUse(GameModeWorld* worldMode, EntityID ID, EntityID targetID, u16* optionIndexPtr)
+{
+    r32 minDistanceFromOptionSlotSq = R32_MAX;
+    UsingEquipOption* result = 0;
+    
+    UsingMappingComponent* usingComponent = GetComponent(worldMode, ID, UsingMappingComponent);
+    InteractionComponent* interaction = GetComponent(worldMode, targetID, InteractionComponent);
+    if(usingComponent && interaction)
+    {
+        for(u16 optionIndex = 0; optionIndex < interaction->usingConfigurationCount; ++optionIndex)
+        {
+            UsingEquipOption* option = interaction->usingConfigurations + optionIndex;
+            if(UsingEquipOptionApplicable(option, 
+                                          usingComponent->mappings, ArrayCount(usingComponent->mappings), 
+                                          targetID))
+            {
+                r32 nearestOptionDistance = R32_MAX;
+                for(u32 slotIndex = 0; slotIndex < ArrayCount(option->slots); ++slotIndex)
+                {
+                    u16 slot = option->slots[slotIndex];
+                    
+                    if(slot == 0xffff)
+                    {
+                        break;
+                    }
+                    
+                    ObjectMapping* mapping = usingComponent->mappings + slot;
+                    r32 distanceSq = mapping->distanceFromMouseSq;
+                    if(distanceSq < nearestOptionDistance)
+                    {
+                        nearestOptionDistance = distanceSq;
+                    }
+                }
+                if(nearestOptionDistance < minDistanceFromOptionSlotSq)
+                {
+                    minDistanceFromOptionSlotSq = nearestOptionDistance;
+                    result = option;
+                    *optionIndexPtr = optionIndex;
+                }
+            }
+        }
+    }
+    
+    return result;
+}
+
+internal UsingEquipOption* ExistValidUseOptionThatContains(GameModeWorld* worldMode, EntityID ID, EntityID targetID, u16 slot, u16* optionIndexPtr)
+{
+    UsingEquipOption* result = 0;
+    
+    UsingMappingComponent* usingComponent = GetComponent(worldMode, GetClientIDMapping(worldMode, ID), UsingMappingComponent);
+    InteractionComponent* interaction = GetComponent(worldMode, GetClientIDMapping(worldMode, targetID), InteractionComponent);
+    if(usingComponent && interaction)
+    {
+        for(u16 optionIndex = 0; optionIndex < interaction->usingConfigurationCount; ++optionIndex)
+        {
+            UsingEquipOption* option = interaction->usingConfigurations + optionIndex;
+            b32 valid = false;
+            for(u32 slotIndex = 0; slotIndex < ArrayCount(option->slots); ++slotIndex)
+            {
+                if(option->slots[slotIndex] == slot)
+                {
+                    valid = true;
+                    break;
+                }
+            }
+            
+            if(valid)
+            {
+                if(UsingEquipOptionApplicable(option, 
+                                              usingComponent->mappings, ArrayCount(usingComponent->mappings), 
+                                              targetID))
+                {
+                    result = option;
+                    *optionIndexPtr = optionIndex;
+                    break;
+                }
+            }
+        }
+    }
+    
+    return result;
+}
+
+internal UsingEquipOption* CanEquip(GameModeWorld* worldMode, EntityID ID, EntityID targetID, u16* optionIndexPtr)
+{
+    r32 minDistanceFromOptionSlotSq = R32_MAX;
+    UsingEquipOption* result = 0;
+    
+    EquipmentMappingComponent* equipComponent = GetComponent(worldMode, ID, EquipmentMappingComponent);
+    InteractionComponent* interaction = GetComponent(worldMode, targetID, InteractionComponent);
+    if(equipComponent && interaction)
+    {
+        for(u16 optionIndex = 0; optionIndex < ArrayCount(interaction->equipConfigurations); ++optionIndex)
+        {
+            UsingEquipOption* option = interaction->equipConfigurations + optionIndex;
+            if(UsingEquipOptionApplicable(option, 
+                                          equipComponent->mappings, ArrayCount(equipComponent->mappings), 
+                                          targetID))
+            {
+                r32 nearestOptionDistance = R32_MAX;
+                for(u32 slotIndex = 0; slotIndex < ArrayCount(option->slots); ++slotIndex)
+                {
+                    u16 slot = option->slots[slotIndex];
+                    if(slot == 0xffff)
+                    {
+                        break;
+                    }
+                    
+                    ObjectMapping* mapping = equipComponent->mappings + slot;
+                    if(IsValidID(mapping->object.ID))
+                    {
+                        BaseComponent* base = GetComponent(worldMode, GetClientIDMapping(worldMode, mapping->object.ID), BaseComponent);
+                        
+                        r32 distanceSq = LengthSq(GetCenter(base->projectedOnScreen) - worldMode->relativeMouseP);
+                        if(distanceSq < nearestOptionDistance)
+                        {
+                            nearestOptionDistance = distanceSq;
+                        }
+                    }
+                }
+                if(nearestOptionDistance < minDistanceFromOptionSlotSq)
+                {
+                    minDistanceFromOptionSlotSq = nearestOptionDistance;
+                    result = option;
+                    *optionIndexPtr = optionIndex;
+                }
+            }
+        }
+    }
+    
+    return result;
+}
+
+
+internal void FakeUse(GameUIContext* UI, GameModeWorld* worldMode, EntityID ID, EntityID targetIDServer, u16 optionIndex)
+{
+    EntityID targetID = GetClientIDMapping(worldMode, targetIDServer);
+    
+    InteractionComponent* interaction = GetComponent(worldMode, targetID, InteractionComponent);
+    Assert(optionIndex < interaction->usingConfigurationCount);
+    UsingEquipOption* option = interaction->usingConfigurations + optionIndex;
+    Assert(option);
+    UsingMappingComponent* equipped = GetComponent(worldMode, ID, UsingMappingComponent);
+    UI->draggingTestUsingOption = option;
+    
+    if(interaction && equipped)
+    {
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(option->slots); ++slotIndex)
+        {
+            u16 slot = option->slots[slotIndex];
+            if(slot == 0xffff)
+            {
+                break;
+            }
+            StoreObjectMapping(worldMode, equipped->mappings, ArrayCount(equipped->mappings), slot, 0, targetIDServer, StringHash(MetaTable_usingSlot[slot]));
+        }
+    }
+}
+
+
+internal void FakeEquip(GameUIContext* UI, GameModeWorld* worldMode, EntityID ID, EntityID targetIDServer, u16 optionIndex)
+{
+    EntityID targetID = GetClientIDMapping(worldMode, targetIDServer);
+    InteractionComponent* interaction = GetComponent(worldMode, targetID, InteractionComponent);
+    Assert(optionIndex < interaction->equipConfigurationCount);
+    UsingEquipOption* option = interaction->equipConfigurations + optionIndex;
+    Assert(option);
+    UI->draggingTestEquipOption = option;
+    
+    EquipmentMappingComponent* equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
+    if(interaction && equipment)
+    {
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(option->slots); ++slotIndex)
+        {
+            u16 slot = option->slots[slotIndex];
+            if(slot == 0xffff)
+            {
+                break;
+            }
+            StoreObjectMapping(worldMode, equipment->mappings, ArrayCount(equipment->mappings), slot, 0, targetIDServer, StringHash(MetaTable_equipmentSlot[slot]));
         }
     }
 }
@@ -422,25 +669,45 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
             AddContainerObjectsInteractions(UI, worldMode, container->storedMappings, ArrayCount(container->storedMappings), UI->lootingIDServer, Interaction_Container);
             MoveCameraTowards(worldMode, lootingBase, 5.0f, V2(0, 0), V2(0, 0), container->zoomCoeff);
         }
+        
+        HandleOverlayObjectsInteraction(UI, worldMode, false);
     }
     else if(UI->inventoryMode)
     {
         HandleEquipmentInteraction(UI, worldMode, myPlayer->clientID);
         HandleContainerInteraction(UI, worldMode);
         MoveCameraTowards(worldMode, player, 2.0f, V2(0, 0), V2(0, 0), 2.0f);
+        HandleOverlayObjectsInteraction(UI, worldMode, true);
     }
-    
-    HandleOverlayObjectsInteraction(UI, worldMode);
+    else
+    {
+        HandleOverlayObjectsInteraction(UI, worldMode, false);
+    }
     
     if(IsValidID(UI->draggingIDServer) && MouseInsidePlayerRectProjectedOnScreen(worldMode))
     {
         EntityID draggingID = GetClientIDMapping(worldMode, UI->draggingIDServer);
         
-        BaseComponent* draggingBase = GetComponent(worldMode, draggingID, BaseComponent);
-        if(CanUse(group->assets, draggingBase->definitionID) ||
-           CanEquip(group->assets, draggingBase->definitionID))
+        u16 optionIndex;
+        
+        if(CanUse(worldMode, myPlayer->clientID, draggingID, &optionIndex))
         {
-            AddPossibleInteraction(UI, Interaction_Dragging, 0, {}, 0, {});
+            EntityHotInteraction* interaction = AddPossibleInteraction(UI, Interaction_Dragging, 0, {}, {}, 0, 0, optionIndex);
+            if(interaction)
+            {
+                interaction->actionCount = 1;
+                interaction->actions[0] = use;
+            }
+        }
+        else if(CanEquip(worldMode, myPlayer->clientID, draggingID, &optionIndex))
+        {
+            EntityHotInteraction* interaction = AddPossibleInteraction(UI, Interaction_Dragging, 0, {}, {}, 0, 0, optionIndex);
+            if(interaction)
+            {
+                interaction->actionCount = 1;
+                interaction->actions[0] = equip;
+                
+            }
         }
     }
     
@@ -514,20 +781,63 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                     }
                     else
                     {
-                        SetTooltip(UI, 1, "move");
-                        if(Pressed(&input->mouseLeft))
+                        InteractionComponent* interaction = GetComponent(worldMode, GetClientIDMapping(worldMode, UI->draggingIDServer), InteractionComponent);
+                        b32 valid = false;
+                        u16 action;
+                        u16 optionIndex = 0;
+                        
+                        if(hotInteraction.type == Interaction_Container)
                         {
-                            GameCommand command = {};
-                            command.action = (hotInteraction.type == Interaction_Container) ? SafeTruncateToU16(storeInventory) : SafeTruncateToU16(useInventory);
+                            if(CompatibleSlot(interaction, hotInteraction.slot))
+                            {
+                                SetTooltip(UI, 1, "move");
+                                valid = true;
+                            }
+                            action = storeInventory;
+                        }
+                        else
+                        {
+                            if(AreEqual(hotInteraction.containerIDServer, myPlayer->serverID))
+                            {
+                                if(ExistValidUseOptionThatContains(worldMode, myPlayer->serverID, UI->draggingIDServer, hotInteraction.objectIndex, &optionIndex))
+                                {
+                                    UI->testingDraggingOnEquipment = true;
+                                    InteractionComponent* draggingInteraction = GetComponent(worldMode, GetClientIDMapping(worldMode, UI->draggingIDServer), InteractionComponent);
+                                    draggingInteraction->isOnFocus = true;
+                                    FakeUse(UI, worldMode, myPlayer->clientID, UI->draggingIDServer, optionIndex);
+                                    SetTooltip(UI, 1, "use");
+                                    valid = true;
+                                }
+                            }
+                            else
+                            {
+                                if(CompatibleSlot(interaction, hotInteraction.slot))
+                                {
+                                    SetTooltip(UI, 1, "move");
+                                    valid = true;
+                                }
+                            }
                             
-                            command.containerID = UI->draggingContainerIDServer;
-                            command.targetID = UI->draggingIDServer;
-                            command.targetContainerID = hotInteraction.containerIDServer;
-                            command.targetObjectIndex = hotInteraction.objectIndex;
-                            SendInventoryCommand(command); 
-                            UI->draggingIDServer = {};
-                            
-                            AddObjectRemovedPrediction(worldMode, UI, command.containerID, command.targetID);
+                            action = useInventory;
+                        }
+                        
+                        
+                        if(valid)
+                        {
+                            if(Pressed(&input->mouseLeft))
+                            {
+                                GameCommand command = {};
+                                command.action = action;
+                                command.containerID = UI->draggingContainerIDServer;
+                                command.targetID = UI->draggingIDServer;
+                                command.targetContainerID = hotInteraction.containerIDServer;
+                                command.targetObjectIndex = hotInteraction.objectIndex;
+                                command.optionIndex = optionIndex;
+                                SendInventoryCommand(command); 
+                                UI->draggingIDServer = {};
+                                
+                                AddObjectRemovedPrediction(worldMode, UI, command.containerID, command.targetID);
+                            }
                         }
                     }
                 }
@@ -589,9 +899,9 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                     }
                 }
                 
-                Assert(IsValidID(hotID));
                 if(validInteraction && Pressed(&input->mouseLeft))
                 {
+                    Assert(IsValidID(hotID));
                     GameCommand command = {};
                     command.action = hotAction;
                     command.targetID = hotID;
@@ -631,12 +941,29 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                 UI->testingDraggingOnEquipment = true;
                 SetTooltip(UI, 1, "equip");
                 
+                
+                
+                InteractionComponent* draggingInteraction = GetComponent(worldMode, GetClientIDMapping(worldMode, UI->draggingIDServer), InteractionComponent);
+                draggingInteraction->isOnFocus = true;
+                
+                
+                if(hotInteraction.actions[0] == use)
+                {
+                    FakeUse(UI, worldMode, myPlayer->clientID, UI->draggingIDServer, hotInteraction.optionIndex);
+                }
+                else
+                {
+                    Assert(hotInteraction.actions[0] == equip);
+                    FakeEquip(UI, worldMode, myPlayer->clientID, UI->draggingIDServer, hotInteraction.optionIndex);
+                }
+                
                 if(Pressed(&input->mouseLeft))
                 {
                     GameCommand command = {};
-                    command.action = use;
+                    command.action = hotInteraction.actions[0];
                     command.targetID = UI->draggingIDServer;
                     command.containerID = UI->draggingContainerIDServer;
+                    command.optionIndex = hotInteraction.optionIndex;
                     SendInventoryCommand(command);
                     UI->draggingIDServer = {};
                     

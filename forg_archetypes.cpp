@@ -17,6 +17,7 @@ internal GameProperty GetProperty(u32 seed)
     return result;
 }
 
+#define PropertyToU16(property, enum) ExistMetaPropertyValue(Property_##property, Tokenize((enum).value))
 internal u16 ExistMetaPropertyValue(u16 propertyType, Token value);;
 internal void AddPossibleActions(PossibleActionList* list, Enumerator* actions, u32 actionCount)
 {
@@ -24,7 +25,7 @@ internal void AddPossibleActions(PossibleActionList* list, Enumerator* actions, 
     {
         if(list->actionCount < ArrayCount(list->actions))
         {
-            list->actions[list->actionCount++] = ExistMetaPropertyValue(Property_action, Tokenize(actions[actionIndex].value));
+            list->actions[list->actionCount++] = PropertyToU16(action, actions[actionIndex]);
         }
     }
 }
@@ -99,8 +100,25 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
 {
     ServerState* server = (ServerState*) state;
     ContainerComponent* dest = (ContainerComponent*) componentPtr;
-    dest->maxStoredCount = s->storeCount;
-    dest->maxUsingCount = s->usingCount;
+    
+    u16 totalStoreCount = s->storeCount + s->specialStoreCount;
+    Assert(totalStoreCount <= ArrayCount(dest->storedObjects));
+    for(u16 index = 0; index < totalStoreCount; ++index)
+    {
+        InventorySlot* slot = dest->storedObjects + index;
+        slot->type = (index < s->storeCount) ? (u16) InventorySlot_Standard : (u16) InventorySlot_Special;
+        slot->ID = {};
+    }
+    
+    u16 totalUsingCount = s->usingCount + s->specialUsingCount;
+    Assert(totalUsingCount <= ArrayCount(dest->usingObjects));
+    for(u16 index = 0; index < totalUsingCount; ++index)
+    {
+        InventorySlot* slot = dest->usingObjects + index;
+        slot->type = index < s->usingCount ? (u16) InventorySlot_Standard : (u16) InventorySlot_Special;
+        slot->ID = {};
+    }
+    
 }
 
 #else
@@ -184,6 +202,11 @@ internal void InitLayout(Assets* assets, LayoutPiece* destPieces, u32* destPiece
             InitImageReference_(assets, &destPiece->image, &piece->properties);
             destPiece->nameHash = StringHash(piece->name.name);
             destPiece->height = piece->height;
+            destPiece->inventorySlotType = PropertyToU16(inventorySlotType, piece->inventorySlotType);
+            if(destPiece->inventorySlotType == 0xffff)
+            {
+                destPiece->inventorySlotType = InventorySlot_Standard;
+            }
         }
     }
     
@@ -246,6 +269,54 @@ INIT_COMPONENT_FUNCTION(InitInteractionComponent)
     AddPossibleActions(dest->actions + Interaction_Equipment, common->equipmentActions, common->equipmentActionCount);
     AddPossibleActions(dest->actions + Interaction_Container, common->containerActions, common->containerActionCount);
     AddPossibleActions(dest->actions + Interaction_Equipped, common->equippedActions, common->equippedActionCount);
+    
+    for(u32 usingOption = 0; usingOption < common->usingConfigurationCount; ++usingOption)
+    {
+        UseLayout* source = common->usingConfigurations + usingOption;
+        if(dest->usingConfigurationCount < ArrayCount(dest->usingConfigurations))
+        {
+            UsingEquipOption* destOption = dest->usingConfigurations + dest->usingConfigurationCount++;
+            
+            for(u32 slotIndex = 0; slotIndex < ArrayCount(destOption->slots); ++slotIndex)
+            {
+                destOption->slots[slotIndex] = 0xffff;
+            }
+            
+            for(u32 slotIndex = 0; slotIndex < source->slotCount; ++slotIndex)
+            {
+                if(slotIndex < ArrayCount(destOption->slots))
+                {
+                    destOption->slots[slotIndex] = PropertyToU16(usingSlot, source->slots[slotIndex]);
+                }
+            }
+            
+        }
+    }
+    
+    for(u32 equipOption = 0; equipOption < common->equipConfigurationCount; ++equipOption)
+    {
+        EquipLayout* source = common->equipConfigurations + equipOption;
+        if(dest->equipConfigurationCount < ArrayCount(dest->equipConfigurations))
+        {
+            UsingEquipOption* destOption = dest->equipConfigurations + dest->equipConfigurationCount++;
+            
+            for(u32 slotIndex = 0; slotIndex < ArrayCount(destOption->slots); ++slotIndex)
+            {
+                destOption->slots[slotIndex] = 0xffff;
+            }
+            
+            for(u32 slotIndex = 0; slotIndex < source->slotCount; ++slotIndex)
+            {
+                if(slotIndex < ArrayCount(destOption->slots))
+                {
+                    destOption->slots[slotIndex] = PropertyToU16(equipmentSlot, source->slots[slotIndex]);
+                }
+            }
+            
+        }
+    }
+    
+    dest->inventorySlotType = PropertyToU16(inventorySlotType, common->inventorySlotType);
 }
 
 #ifdef FORG_SERVER

@@ -424,7 +424,7 @@ inline void ApplyAssAlterations(PieceAss* ass, AssAlteration* assAlt, Bone* pare
 }
 #endif
 
-internal r32 GetModulationPercentageAndResetFocus(GameModeWorld* worldMode, EntityID ID)
+internal r32 GetModulationPercentage(GameModeWorld* worldMode, EntityID ID)
 {
     r32 result = 0;
     InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
@@ -435,51 +435,120 @@ internal r32 GetModulationPercentageAndResetFocus(GameModeWorld* worldMode, Enti
     return result;
 }
 
-internal b32 IsValidMappingID(GameUIContext* UI, EntityID ID)
+internal b32 IsValidUsingMapping(GameUIContext* UI, ObjectMapping* mapping, u16 slotIndex)
 {
-    b32 result = IsValidID(ID);
-    if(result && AreEqual(ID, UI->draggingIDServer))
+    b32 result = IsValidID(mapping->object.ID);
+    if(result)
+    {
+        if(AreEqual(mapping->object.ID, UI->draggingIDServer))
+        {
+            result = false;
+            if(UI->testingDraggingOnEquipment)
+            {
+                UsingEquipOption* test = UI->draggingTestUsingOption;
+                if(test)
+                {
+                    for(u32 i = 0; i < ArrayCount(test->slots); ++i)
+                    {
+                        if(slotIndex == test->slots[i])
+                        {
+                            result = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return result;
+}
+
+internal b32 IsValidEquipmentMapping(GameUIContext* UI, ObjectMapping* mapping, u16 slotIndex)
+{
+    b32 result = IsValidID(mapping->object.ID);
+    if(result)
+    {
+        if(AreEqual(mapping->object.ID, UI->draggingIDServer))
+        {
+            result = false;
+            if(UI->testingDraggingOnEquipment)
+            {
+                UsingEquipOption* test = UI->draggingTestEquipOption;
+                if(test)
+                {
+                    for(u32 i = 0; i < ArrayCount(test->slots); ++i)
+                    {
+                        if(slotIndex == test->slots[i])
+                        {
+                            result = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return result;
+}
+
+internal b32 IsValidInventoryMapping(GameUIContext* UI, ObjectMapping* mapping)
+{
+    b32 result = IsValidID(mapping->object.ID);
+    if(result && !UI->testingDraggingOnEquipment && AreEqual(mapping->object.ID, UI->draggingIDServer))
     {
         result = false;
     }
-    
+    return result;
+}
+
+internal b32 IsValidMapping(GameUIContext* UI, ObjectMapping* mapping, u16 slotIndex, b32 equipmentMappings)
+{
+    b32 result = equipmentMappings ? IsValidEquipmentMapping(UI, mapping, slotIndex) : IsValidUsingMapping(UI, mapping, slotIndex);
     return result;
 }
 
 internal Rect2 RenderLayout(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, struct LayoutContainer* container);
-internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, u64 hash, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights)
+internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, u64 hash, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights, b32 equipmentMappings)
 {
     Assert(hash);
-    for(u32 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
+    for(u16 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
     {
         if(!alreadyRendered[mappingIndex])
         {
             ObjectMapping* mapping = mappings + mappingIndex;
-            if(IsValidMappingID(&worldMode->gameUI, mapping->ID) && (hash == mapping->slotHash || hash == mapping->pieceHash))
+            
+            if(hash == mapping->slotHash || hash == mapping->pieceHash)
             {
+                Vec3 pieceP = P + GetCameraOffset(group, transform.cameraOffset);
+                r32 ignored;
+                mapping->distanceFromMouseSq = LengthSq(ProjectOnScreen(group, pieceP, &ignored) - worldMode->relativeMouseP);
                 alreadyRendered[mappingIndex] = true;
                 
-                EntityID equipmentID = mapping->ID;
-                BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);
-                InteractionComponent* equipmentInteraction = GetComponent(worldMode, equipmentID, InteractionComponent);
-                LayoutComponent* equipmentLayout = GetComponent(worldMode, equipmentID, LayoutComponent);
-                
-                if(equipmentBase && equipmentLayout)
+                if(IsValidMapping(&worldMode->gameUI, mapping, mappingIndex, equipmentMappings))
                 {
-                    ObjectTransform finalTransform = transform;
-                    finalTransform.angle += equipmentLayout->rootAngle;
-                    finalTransform.scale = Hadamart(finalTransform.scale, equipmentLayout->rootScale);
+                    EntityID equipmentID = mapping->object.ID;
+                    BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);
+                    InteractionComponent* equipmentInteraction = GetComponent(worldMode, equipmentID, InteractionComponent);
+                    LayoutComponent* equipmentLayout = GetComponent(worldMode, equipmentID, LayoutComponent);
                     
-                    if(equipmentInteraction && equipmentInteraction->isOnFocus)
+                    if(equipmentBase && equipmentLayout)
                     {
-                        finalTransform.modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, equipmentID);
+                        ObjectTransform finalTransform = transform;
+                        finalTransform.angle += equipmentLayout->rootAngle;
+                        finalTransform.scale = Hadamart(finalTransform.scale, equipmentLayout->rootScale);
+                        
+                        if(equipmentInteraction && equipmentInteraction->isOnFocus)
+                        {
+                            finalTransform.modulationPercentage = GetModulationPercentage(worldMode, equipmentID);
+                        }
+                        
+                        LayoutContainer container = {};
+                        //container.container = GetComponent(worldMode, equipmentID, ContainerMappingComponent);
+                        
+                        equipmentBase->projectedOnScreen = RenderLayout(worldMode, group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights, &container);
                     }
-                    
-                    LayoutContainer container = {};
-                    //container.container = GetComponent(worldMode, equipmentID, ContainerMappingComponent);
-                    
-                    equipmentBase->projectedOnScreen = RenderLayout(worldMode, group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights, &container);
                 }
+                
                 break;
             }
         }
@@ -487,7 +556,7 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
 }
 
 internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
-                                   PAKBitmap* bitmapInfo, BitmapId BID, BitmapDim dim, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights)
+                                   PAKBitmap* bitmapInfo, BitmapId BID, BitmapDim dim, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights, b32 equipmentMappings)
 {
     for(u32 attachmentPointIndex = 0; attachmentPointIndex < bitmapInfo->attachmentPointCount; ++attachmentPointIndex)
     {
@@ -503,7 +572,7 @@ internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
                 attachmentTransform.angle += point->angle;
                 attachmentTransform.scale = Hadamart(attachmentTransform.scale, point->scale);
                 attachmentTransform.additionalZBias = point->zOffset;
-                RenderAttachmentPoint(worldMode, group, P, pointHash, attachmentTransform, mappings, mappingCount, alreadyRendered, lights);
+                RenderAttachmentPoint(worldMode, group, P, pointHash, attachmentTransform, mappings, mappingCount, alreadyRendered, lights, equipmentMappings);
             }
         }
     }
@@ -560,7 +629,7 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
                     }
                     Vec3 P = params->P + offset;
                     
-                    RenderAttachmentPoint(worldMode, group, P, piece->nameHash, equippedTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights);
+                    RenderAttachmentPoint(worldMode, group, P, piece->nameHash, equippedTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights, false);
                 }
             }
         }
@@ -595,13 +664,13 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
                                 if(params->equipment)
                                 {
                                     RenderObjectMappings(worldMode, group,
-                                                         bitmapInfo, BID, dim, equipmentTransform, params->equipment->mappings, ArrayCount(params->equipment->mappings), equipmentRendered, lights);
+                                                         bitmapInfo, BID, dim, equipmentTransform, params->equipment->mappings, ArrayCount(params->equipment->mappings), equipmentRendered, lights, true);
                                 }
                                 
                                 if(params->equipped)
                                 {
                                     RenderObjectMappings(worldMode, group,
-                                                         bitmapInfo, BID, dim, equipmentTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights);
+                                                         bitmapInfo, BID, dim, equipmentTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights, false);
                                 }
                             }
                         }

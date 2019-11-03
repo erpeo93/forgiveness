@@ -34,6 +34,7 @@ char* MetaTable_action[] =
 "attack",
 "pick",
 "use",
+"equip",
 "disequip",
 "open",
 "drop",
@@ -79,6 +80,13 @@ char* MetaTable_layoutType[] =
 "onGroundOpen",
 "equipped",
 "equippedOpen",
+};
+
+char* MetaTable_inventorySlotType[] = 
+ {
+"InventorySlot_Invalid",
+"InventorySlot_Standard",
+"InventorySlot_Special",
 };
 
 FieldDefinition fieldDefinitionOfGameEffect[] = 
@@ -289,6 +297,18 @@ FieldDefinition fieldDefinitionOfEntityID[] =
 {0, MetaType_u32, "u32", "archetype_archetypeIndex", (u32) (&((EntityID*)0)->archetype_archetypeIndex), {}, sizeof(u32),"invalid",0, 0, 0}, 
 };
 
+FieldDefinition fieldDefinitionOfUseLayout[] = 
+ {
+{0, MetaType_ArrayCounter, "ArrayCounter", "slotCount", (u32) (&((UseLayout*)0)->slotCount), {}, sizeof(ArrayCounter),"invalid","slots", (u32)(&((UseLayout*)0)->slots), 0}, 
+{MetaFlag_Pointer, MetaType_Enumerator, "Enumerator", "slots", (u32) (&((UseLayout*)0)->slots), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_usingSlot, ArrayCount(MetaTable_usingSlot)}, 
+};
+
+FieldDefinition fieldDefinitionOfEquipLayout[] = 
+ {
+{0, MetaType_ArrayCounter, "ArrayCounter", "slotCount", (u32) (&((EquipLayout*)0)->slotCount), {}, sizeof(ArrayCounter),"invalid","slots", (u32)(&((EquipLayout*)0)->slots), 0}, 
+{MetaFlag_Pointer, MetaType_Enumerator, "Enumerator", "slots", (u32) (&((EquipLayout*)0)->slots), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_equipmentSlot, ArrayCount(MetaTable_equipmentSlot)}, 
+};
+
 FieldDefinition fieldDefinitionOfCommonEntityInitParams[] = 
  {
 {MetaFlag_Uneditable, MetaType_EntityRef, "EntityRef", "definitionID", (u32) (&((CommonEntityInitParams*)0)->definitionID), {}, sizeof(EntityRef),"invalid",0, 0, 0}, 
@@ -302,6 +322,11 @@ FieldDefinition fieldDefinitionOfCommonEntityInitParams[] =
 {MetaFlag_Pointer, MetaType_Enumerator, "Enumerator", "containerActions", (u32) (&((CommonEntityInitParams*)0)->containerActions), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_action, ArrayCount(MetaTable_action)}, 
 {0, MetaType_ArrayCounter, "ArrayCounter", "equippedActionCount", (u32) (&((CommonEntityInitParams*)0)->equippedActionCount), {}, sizeof(ArrayCounter),"invalid","equippedActions", (u32)(&((CommonEntityInitParams*)0)->equippedActions), 0}, 
 {MetaFlag_Pointer, MetaType_Enumerator, "Enumerator", "equippedActions", (u32) (&((CommonEntityInitParams*)0)->equippedActions), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_action, ArrayCount(MetaTable_action)}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "usingConfigurationCount", (u32) (&((CommonEntityInitParams*)0)->usingConfigurationCount), {}, sizeof(ArrayCounter),"invalid","usingConfigurations", (u32)(&((CommonEntityInitParams*)0)->usingConfigurations), 0}, 
+{MetaFlag_Pointer, MetaType_UseLayout, "UseLayout", "usingConfigurations", (u32) (&((CommonEntityInitParams*)0)->usingConfigurations), {}, sizeof(UseLayout),"invalid",0, 0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "equipConfigurationCount", (u32) (&((CommonEntityInitParams*)0)->equipConfigurationCount), {}, sizeof(ArrayCounter),"invalid","equipConfigurations", (u32)(&((CommonEntityInitParams*)0)->equipConfigurations), 0}, 
+{MetaFlag_Pointer, MetaType_EquipLayout, "EquipLayout", "equipConfigurations", (u32) (&((CommonEntityInitParams*)0)->equipConfigurations), {}, sizeof(EquipLayout),"invalid",0, 0, 0}, 
+{0, MetaType_Enumerator, "Enumerator", "inventorySlotType", (u32) (&((CommonEntityInitParams*)0)->inventorySlotType), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_inventorySlotType, ArrayCount(MetaTable_inventorySlotType)}, 
 };
 
 FieldDefinition fieldDefinitionOfServerEntityInitParams[] = 
@@ -311,7 +336,9 @@ FieldDefinition fieldDefinitionOfServerEntityInitParams[] =
 {0, MetaType_ArrayCounter, "ArrayCounter", "bindingCount", (u32) (&((ServerEntityInitParams*)0)->bindingCount), {}, sizeof(ArrayCounter),"invalid","bindings", (u32)(&((ServerEntityInitParams*)0)->bindings), 0}, 
 {MetaFlag_Pointer, MetaType_EffectBinding, "EffectBinding", "bindings", (u32) (&((ServerEntityInitParams*)0)->bindings), {}, sizeof(EffectBinding),"invalid",0, 0, 0}, 
 {0, MetaType_u16, "u16", "storeCount", (u32) (&((ServerEntityInitParams*)0)->storeCount), {}, sizeof(u16),"invalid",0, 0, 0}, 
+{0, MetaType_u16, "u16", "specialStoreCount", (u32) (&((ServerEntityInitParams*)0)->specialStoreCount), {}, sizeof(u16),"invalid",0, 0, 0}, 
 {0, MetaType_u16, "u16", "usingCount", (u32) (&((ServerEntityInitParams*)0)->usingCount), {}, sizeof(u16),"invalid",0, 0, 0}, 
+{0, MetaType_u16, "u16", "specialUsingCount", (u32) (&((ServerEntityInitParams*)0)->specialUsingCount), {}, sizeof(u16),"invalid",0, 0, 0}, 
 {0, MetaType_ArrayCounter, "ArrayCounter", "collisionEffectsCount", (u32) (&((ServerEntityInitParams*)0)->collisionEffectsCount), {}, sizeof(ArrayCounter),"invalid","collisionEffects", (u32)(&((ServerEntityInitParams*)0)->collisionEffects), 0}, 
 {MetaFlag_Pointer, MetaType_GameEffect, "GameEffect", "collisionEffects", (u32) (&((ServerEntityInitParams*)0)->collisionEffects), {}, sizeof(GameEffect),"invalid",0, 0, 0}, 
 };
@@ -334,6 +361,7 @@ FieldDefinition fieldDefinitionOfLayoutPieceProperties[] =
 {0, MetaType_AssetLabel, "AssetLabel", "name", (u32) (&((LayoutPieceProperties*)0)->name), {}, sizeof(AssetLabel),"invalid",0, 0, 0}, 
 {0, MetaType_r32, "r32", "height", (u32) (&((LayoutPieceProperties*)0)->height), {}, sizeof(r32),"invalid",0, 0, 0}, 
 {0, MetaType_ImageProperties, "ImageProperties", "properties", (u32) (&((LayoutPieceProperties*)0)->properties), {}, sizeof(ImageProperties),"invalid",0, 0, 0}, 
+{0, MetaType_Enumerator, "Enumerator", "inventorySlotType", (u32) (&((LayoutPieceProperties*)0)->inventorySlotType), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_inventorySlotType, ArrayCount(MetaTable_inventorySlotType)}, 
 };
 
 FieldDefinition fieldDefinitionOfClientEntityInitParams[] = 
@@ -376,6 +404,8 @@ AddToMetaDefinitions(ImageProperties, fieldDefinitionOfImageProperties);\
 AddToMetaDefinitions(ImageProperty, fieldDefinitionOfImageProperty);\
 AddToMetaDefinitions(ServerEntityInitParams, fieldDefinitionOfServerEntityInitParams);\
 AddToMetaDefinitions(CommonEntityInitParams, fieldDefinitionOfCommonEntityInitParams);\
+AddToMetaDefinitions(EquipLayout, fieldDefinitionOfEquipLayout);\
+AddToMetaDefinitions(UseLayout, fieldDefinitionOfUseLayout);\
 AddToMetaDefinitions(EntityID, fieldDefinitionOfEntityID);\
 AddToMetaDefinitions(EntityRef, fieldDefinitionOfEntityRef);\
 AddToMetaDefinitions(ground_generator, fieldDefinitionOfground_generator);\
@@ -402,6 +432,7 @@ AddToMetaDefinitions(EffectBinding, fieldDefinitionOfEffectBinding);\
 AddToMetaDefinitions(GameEffect, fieldDefinitionOfGameEffect);
 
 #define META_PROPERTIES_ADD()\
+AddToMetaProperties(inventorySlotType, MetaTable_inventorySlotType);\
 AddToMetaProperties(layoutType, MetaTable_layoutType);\
 AddToMetaProperties(usingSlot, MetaTable_usingSlot);\
 AddToMetaProperties(equipmentSlot, MetaTable_equipmentSlot);\
@@ -414,6 +445,7 @@ AddToMetaProperties(tileType, MetaTable_tileType);
 enum PropertyType
 {
 Property_Invalid,
+Property_inventorySlotType,
 Property_layoutType,
 Property_usingSlot,
 Property_equipmentSlot,
@@ -425,6 +457,7 @@ Property_tileType,
 Property_Count,
 };
 #define META_ASSET_PROPERTIES_STRINGS()\
+meta_propertiesString[Property_inventorySlotType] = "inventorySlotType";\
 meta_propertiesString[Property_layoutType] = "layoutType";\
 meta_propertiesString[Property_usingSlot] = "usingSlot";\
 meta_propertiesString[Property_equipmentSlot] = "equipmentSlot";\

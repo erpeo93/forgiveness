@@ -1,33 +1,37 @@
 #pragma once
+struct InventorySlot
+{
+    u16 type;
+    EntityID ID;
+};
+
 struct EquipmentComponent
 {
-    EntityID IDs[Count_equipmentSlot];
+    InventorySlot slots[Count_equipmentSlot];
 };
 
 struct UsingComponent
 {
-    EntityID IDs[Count_usingSlot];
+    InventorySlot slots[Count_usingSlot];
 };
 
 #define MAX_CONTAINER_OBJECT 64
-#define MAX_USING_OBJECT 2
+#define MAX_USING_OBJECT 8
 struct ContainerComponent
 {
     EntityID openedBy;
     
-    u32 maxStoredCount;
-    EntityID storedIDs[MAX_CONTAINER_OBJECT];
-    
-    u32 maxUsingCount;
-    EntityID usingIDs[MAX_USING_OBJECT];
+    InventorySlot storedObjects[MAX_CONTAINER_OBJECT];
+    InventorySlot usingObjects[MAX_USING_OBJECT];
 };
 
 struct ObjectMapping
 {
+    r32 distanceFromMouseSq;
     Rect2 projOnScreen;
     u64 slotHash;
     u64 pieceHash;
-    EntityID ID;
+    InventorySlot object;
 };
 
 struct EquipmentMappingComponent

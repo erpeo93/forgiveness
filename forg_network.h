@@ -215,6 +215,7 @@ struct GameCommand
     EntityID containerID;
     u16 targetObjectIndex;
     EntityID targetContainerID;
+    u16 optionIndex;
 };
 
 inline b32 AreEqual(GameCommand c1, GameCommand c2)

@@ -176,9 +176,9 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
         case Type_InventoryCommand:
         {
             GameCommand* command = &player->inventoryCommand;
-            unpack(packetPtr, "HLLHL", &command->action, &command->targetID, 
+            unpack(packetPtr, "HLLHLH", &command->action, &command->targetID, 
                    &command->containerID, 
-                   &command->targetObjectIndex, &command->targetContainerID);
+                   &command->targetObjectIndex, &command->targetContainerID, &command->optionIndex);
             
             Assert(!player->inventoryCommandValid);
             player->inventoryCommandValid = true;

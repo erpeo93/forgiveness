@@ -96,7 +96,7 @@ internal void SendCommand(u16 index, GameCommand command)
 internal void SendInventoryCommand(GameCommand command)
 {
     StartPacket(InventoryCommand);
-    Pack("HLLHL", command.action, command.targetID, command.containerID, command.targetObjectIndex, command.targetContainerID);
+    Pack("HLLHLH", command.action, command.targetID, command.containerID, command.targetObjectIndex, command.targetContainerID, command.optionIndex);
     CloseAndSendOrderedPacket();
 }
 
@@ -176,12 +176,13 @@ internal void AddClientIDMapping(GameModeWorld* worldMode, EntityID serverID, En
     FREELIST_INSERT(mapping, worldMode->mappings[hashIndex]);
 }
 
-internal void StoreObjectMapping(GameModeWorld* worldMode, ObjectMapping* mappings, u32 mappingCount, u16 index, EntityID ID, u64 stringHash)
+internal void StoreObjectMapping(GameModeWorld* worldMode, ObjectMapping* mappings, u32 mappingCount, u16 index, u16 type, EntityID ID, u64 stringHash)
 {
     Assert(index < mappingCount);
     
     ObjectMapping* mapping = mappings + index;
-    mapping->ID = ID;
+    mapping->object.type = type;
+    mapping->object.ID = ID;
     mapping->slotHash = stringHash;
     
     if(IsValidID(ID))
@@ -365,14 +366,15 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             case Type_EquipmentMapping:
             {
                 u16 index;
+                u16 type;
                 EntityID ID;
-                Unpack("HL", &index, &ID.archetype_archetypeIndex);
+                Unpack("HHL", &index, &type, &ID.archetype_archetypeIndex);
                 
                 EquipmentMappingComponent* equipment = GetComponent(worldMode, currentClientID, EquipmentMappingComponent);
                 
                 if(equipment)
                 {
-                    StoreObjectMapping(worldMode, equipment->mappings, ArrayCount(equipment->mappings), index, ID, StringHash(MetaTable_equipmentSlot[index]));
+                    StoreObjectMapping(worldMode, equipment->mappings, ArrayCount(equipment->mappings), index, type, ID, StringHash(MetaTable_equipmentSlot[index]));
                     
                 }
             } break;
@@ -380,42 +382,44 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             case Type_UsingMapping:
             {
                 u16 index;
+                u16 type;
                 EntityID ID;
-                Unpack("HL", &index, &ID.archetype_archetypeIndex);
+                Unpack("HHL", &index, &type, &ID.archetype_archetypeIndex);
                 
                 UsingMappingComponent* equipped = GetComponent(worldMode, currentClientID, UsingMappingComponent);
-                
                 if(equipped)
                 {
-                    StoreObjectMapping(worldMode, equipped->mappings, ArrayCount(equipped->mappings), index, ID, StringHash(MetaTable_usingSlot[index]));
+                    StoreObjectMapping(worldMode, equipped->mappings, ArrayCount(equipped->mappings), index, type, ID, StringHash(MetaTable_usingSlot[index]));
                 }
             } break;
             
             case Type_ContainerStoredMapping:
             {
                 u16 index;
+                u16 type;
                 EntityID ID;
-                Unpack("HL", &index, &ID.archetype_archetypeIndex);
+                Unpack("HHL", &index, &type, &ID.archetype_archetypeIndex);
                 
                 ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
                 
                 if(container)
                 {
-                    StoreObjectMapping(worldMode, container->storedMappings, ArrayCount(container->storedMappings), index, ID, 0);
+                    StoreObjectMapping(worldMode, container->storedMappings, ArrayCount(container->storedMappings), index, type, ID, 0);
                 }
             } break;
             
             case Type_ContainerUsingMapping:
             {
                 u16 index;
+                u16 type;
                 EntityID ID;
-                Unpack("HL", &index, &ID.archetype_archetypeIndex);
+                Unpack("HHL", &index, &type, &ID.archetype_archetypeIndex);
                 
                 ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
                 
                 if(container)
                 {
-                    StoreObjectMapping(worldMode, container->usingMappings, ArrayCount(container->usingMappings), index, ID, 0);
+                    StoreObjectMapping(worldMode, container->usingMappings, ArrayCount(container->usingMappings), index, type, ID, 0);
                 }
             } break;
             

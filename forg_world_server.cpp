@@ -62,12 +62,13 @@ internal void MakeTangible(ServerState* server, EntityID ID)
     physic->flags = ClearFlags(physic->flags, EntityFlag_notInWorld);
 }
 
-internal b32 Find(EntityID* IDs, u32 idCount, EntityID ID)
+internal b32 Find(InventorySlot* slots, u32 slotCount, EntityID ID)
 {
     b32 result = false;
-    for(u32 idIndex = 0; idIndex < idCount; ++idIndex)
+    for(u32 slotIndex = 0; slotIndex < slotCount; ++slotIndex)
     {
-        if(AreEqual(IDs[idIndex], ID))
+        InventorySlot* slot = slots + slotIndex;
+        if(AreEqual(slot->ID, ID))
         {
             result = true;
             break;
@@ -77,35 +78,109 @@ internal b32 Find(EntityID* IDs, u32 idCount, EntityID ID)
     return result;
 }
 
-internal b32 FindPlace(EntityID* IDs, u32 idCount, EntityID ID)
+internal b32 UsingEquipOptionApplicable(UsingEquipOption* option, InventorySlot* slots, u32 slotCount, EntityID targetID)
 {
     b32 result = false;
-    for(u32 idIndex = 0; idIndex < idCount; ++idIndex)
-    {
-        if(!IsValidID(IDs[idIndex]))
-        {
-            IDs[idIndex] = ID;
-            result = true;
-            break;
-        }
-    }
     
-    return result;
-}
-
-internal b32 Store(ServerState* server, ContainerComponent* container, EntityID ID)
-{
-    b32 result = false;
-    if(container)
+    if(option->slots[0] != 0xffff)
     {
-        if(FindPlace(container->usingIDs, container->maxUsingCount, ID))
+        result = true;
+        
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(option->slots); ++slotIndex)
         {
-            result = true;
-        }
-        else
-        {
-            if(FindPlace(container->storedIDs, container->maxStoredCount, ID))
+            u16 slot = option->slots[slotIndex];
+            
+            if(slot == 0xffff)
             {
+                break;
+            }
+            
+            Assert(slot < slotCount);
+            EntityID currentID = slots[slot].ID;
+            if(!AreEqual(currentID, targetID) && IsValidID(currentID))
+            {
+                result = false;
+                break;
+            }
+        }
+    }
+    
+    return result;
+}
+
+internal void ApplyOption(UsingEquipOption* option, InventorySlot* slots, u32 slotCount, EntityID targetID)
+{
+    for(u16 slotIndex = 0; slotIndex < ArrayCount(option->slots); ++slotIndex)
+    {
+        u16 slot = option->slots[slotIndex];
+        if(slot == 0xffff)
+        {
+            break;
+        }
+        
+        Assert(slot < slotCount);
+        slots[slot].ID = targetID;
+    }
+}
+
+internal UsingEquipOption* CanUse(ServerState* server, EntityID ID, EntityID targetID)
+{
+    UsingEquipOption* result = 0;
+    
+    UsingComponent* usingComponent = GetComponent(server, ID, UsingComponent);
+    InteractionComponent* interaction = GetComponent(server, targetID, InteractionComponent);
+    if(usingComponent && interaction)
+    {
+        for(u32 optionIndex = 0; optionIndex < interaction->usingConfigurationCount; ++optionIndex)
+        {
+            UsingEquipOption* option = interaction->usingConfigurations + optionIndex;
+            if(UsingEquipOptionApplicable(option, usingComponent->slots, ArrayCount(usingComponent->slots), targetID))
+            {
+                result = option;
+                break;
+            }
+        }
+    }
+    
+    return result;
+}
+
+internal void Use_(ServerState* server, UsingEquipOption* option, EntityID ID, EntityID targetID)
+{
+    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+    ApplyOption(option, equipped->slots, ArrayCount(equipped->slots), targetID);
+    MakeIntangible(server, targetID);
+}
+
+internal b32 Use(ServerState* server, EntityID ID, EntityID targetID)
+{
+    b32 result = false;
+    
+    UsingEquipOption* option = CanUse(server, ID, targetID);
+    if(option)
+    {
+        Use_(server, option, ID, targetID);
+        result = true;
+    }
+    
+    return result;
+}
+
+internal b32 UseOptionIndex(ServerState* server, EntityID ID, EntityID targetID, u16 optionIndex)
+{
+    b32 result = false;
+    
+    UsingComponent* usingComponent = GetComponent(server, ID, UsingComponent);
+    InteractionComponent* interaction = GetComponent(server, targetID, InteractionComponent);
+    
+    if(usingComponent && interaction)
+    {
+        if(optionIndex < interaction->usingConfigurationCount)
+        {
+            UsingEquipOption* option = interaction->usingConfigurations + optionIndex;
+            if(UsingEquipOptionApplicable(option, usingComponent->slots, ArrayCount(usingComponent->slots), targetID))
+            {
+                Use_(server, option, ID, targetID);
                 result = true;
             }
         }
@@ -114,37 +189,21 @@ internal b32 Store(ServerState* server, ContainerComponent* container, EntityID 
     return result;
 }
 
-internal b32 Use(ServerState* server, EntityID ID, EntityID targetID)
+internal UsingEquipOption* CanEquip(ServerState* server, EntityID ID, EntityID targetID)
 {
-    b32 result = false;
-    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-    if(equipped)
-    {
-        if(FindPlace(equipped->IDs, ArrayCount(equipped->IDs), targetID))
-        {
-            MakeIntangible(server, targetID);
-            result = true;
-        }
-    }
+    UsingEquipOption* result = 0;
+    EquipmentComponent* equipComponent = GetComponent(server, ID, EquipmentComponent);
+    InteractionComponent* interaction = GetComponent(server, targetID, InteractionComponent);
     
-    if(!result)
+    if(equipComponent && interaction)
     {
-        EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-        if(equipment)
+        for(u32 optionIndex = 0; optionIndex < interaction->equipConfigurationCount; ++optionIndex)
         {
-            for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->IDs); ++equipIndex)
+            UsingEquipOption* option = interaction->equipConfigurations + optionIndex;
+            if(UsingEquipOptionApplicable(option, equipComponent->slots, ArrayCount(equipComponent->slots), targetID))
             {
-                EntityID equipmentID = equipment->IDs[equipIndex];
-                if(IsValidID(equipmentID))
-                {
-                    ContainerComponent* container = GetComponent(server, equipmentID, ContainerComponent);
-                    if(container && FindPlace(container->usingIDs, container->maxUsingCount, targetID))
-                    {
-                        MakeIntangible(server, targetID);
-                        result = true;
-                        break;
-                    }
-                }
+                result = option;
+                break;
             }
         }
     }
@@ -152,16 +211,65 @@ internal b32 Use(ServerState* server, EntityID ID, EntityID targetID)
     return result;
 }
 
-internal b32 Remove(ServerState* server, ContainerComponent* container, EntityID ID)
+internal void Equip_(ServerState* server, UsingEquipOption* option, EntityID ID, EntityID targetID)
+{
+    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    ApplyOption(option, equipment->slots, ArrayCount(equipment->slots), targetID);
+    MakeIntangible(server, targetID);
+}
+
+internal b32 Equip(ServerState* server, EntityID ID, EntityID targetID)
+{
+    b32 result = false;
+    UsingEquipOption* option = CanEquip(server, ID, targetID);
+    if(option)
+    {
+        Equip_(server, option, ID, targetID);
+        result = true;
+    }
+    
+    return result;
+}
+
+internal b32 EquipOptionIndex(ServerState* server, EntityID ID, EntityID targetID, u16 optionIndex)
+{
+    b32 result = false;
+    
+    EquipmentComponent* equipComponent = GetComponent(server, ID, EquipmentComponent);
+    InteractionComponent* interaction = GetComponent(server, targetID, InteractionComponent);
+    
+    if(equipComponent && interaction)
+    {
+        if(optionIndex < interaction->equipConfigurationCount)
+        {
+            UsingEquipOption* option = interaction->equipConfigurations + optionIndex;
+            if(UsingEquipOptionApplicable(option, equipComponent->slots, ArrayCount(equipComponent->slots), targetID))
+            {
+                Equip_(server, option, ID, targetID);
+                result = true;
+            }
+        }
+    }
+    
+    return result;
+}
+
+internal b32 RemoveFromContainer(ServerState* server, ContainerComponent* container, EntityID ID)
 {
     b32 result = false;
     if(container)
     {
-        for(u32 objectIndex = 0; objectIndex < container->maxStoredCount; ++objectIndex)
+        for(u32 objectIndex = 0; objectIndex < ArrayCount(container->storedObjects); ++objectIndex)
         {
-            if(AreEqual(container->storedIDs[objectIndex], ID))
+            InventorySlot* slot = container->storedObjects + objectIndex;
+            if(slot->type == InventorySlot_Invalid)
             {
-                container->storedIDs[objectIndex] = {};
+                break;
+            }
+            
+            if(AreEqual(slot->ID, ID))
+            {
+                slot->ID = {};
                 result = true;
                 break;
             }
@@ -169,17 +277,29 @@ internal b32 Remove(ServerState* server, ContainerComponent* container, EntityID
         
         if(!result)
         {
-            for(u32 objectIndex = 0; objectIndex < container->maxUsingCount; ++objectIndex)
+            for(u32 objectIndex = 0; objectIndex < ArrayCount(container->usingObjects); ++objectIndex)
             {
-                if(AreEqual(container->usingIDs[objectIndex], ID))
+                InventorySlot* slot = container->usingObjects + objectIndex;
+                
+                if(slot->type == InventorySlot_Invalid)
                 {
-                    container->usingIDs[objectIndex] = {};
+                    break;
+                }
+                
+                if(AreEqual(slot->ID, ID))
+                {
+                    slot->ID = {};
                     result = true;
                     break;
                 }
             }
             
         }
+    }
+    
+    if(result)
+    {
+        MakeTangible(server, ID);
     }
     return result;
 }
@@ -190,18 +310,18 @@ internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetI
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
     if(equipment)
     {
-        for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->IDs); ++slotIndex)
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->slots); ++slotIndex)
         {
-            EntityID equipmentID = equipment->IDs[slotIndex];
-            if(AreEqual(equipmentID, targetID))
+            InventorySlot* slot = equipment->slots + slotIndex;
+            if(AreEqual(slot->ID, targetID))
             {
                 result = true;
-                equipment->IDs[slotIndex] = {};
+                slot->ID = {};
                 break;
             }
             else
             {
-                if(Remove(server, GetComponent(server, equipmentID, ContainerComponent), targetID))
+                if(RemoveFromContainer(server, GetComponent(server, slot->ID, ContainerComponent), targetID))
                 {
                     result= true;
                 }
@@ -214,18 +334,23 @@ internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetI
         UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
         if(equipped)
         {
-            for(u32 usingIndex = 0; usingIndex < ArrayCount(equipped->IDs); ++usingIndex)
+            for(u32 usingIndex = 0; usingIndex < ArrayCount(equipped->slots); ++usingIndex)
             {
-                EntityID usingID = equipped->IDs[usingIndex];
-                Assert(!HasComponent(usingID, ContainerComponent));
-                if(AreEqual(equipped->IDs[usingIndex], targetID))
+                InventorySlot* slot = equipped->slots + usingIndex;
+                Assert(!HasComponent(slot->ID, ContainerComponent));
+                if(AreEqual(slot->ID, targetID))
                 {
                     result = true;
-                    equipped->IDs[usingIndex] = {};
+                    slot->ID = {};
                     break;
                 }
             }
         }
+    }
+    
+    if(result)
+    {
+        MakeTangible(server, targetID);
     }
     
     return result;
@@ -244,13 +369,79 @@ internal b32 RemoveAccordingToCommand(ServerState* server, EntityID ID, GameComm
     else
     {
         ContainerComponent* sourceContainer = GetComponent(server, command->containerID, ContainerComponent);
-        if(Remove(server, sourceContainer, command->targetID))
+        if(RemoveFromContainer(server, sourceContainer, command->targetID))
         {
             removed = true;
         }
     }
     
     return removed;
+}
+
+internal b32 Store_(ServerState* server, InventorySlot* slots, u32 slotCount, u16 index, EntityID ID)
+{
+    b32 result = false;
+    
+    Assert(index < slotCount);
+    InventorySlot* slot = slots + index;
+    
+    InteractionComponent* interaction = GetComponent(server, ID, InteractionComponent);
+    
+    if(!IsValidID(slot->ID) &&
+       interaction && CompatibleSlot(interaction, slot))
+    {
+        slot->ID = ID;
+        MakeIntangible(server, ID);
+        result = true;
+    }
+    
+    return result;
+    
+}
+
+internal b32 Store(ServerState* server, EntityID containerID, EntityID ID, u16 objectIndex)
+{
+    ContainerComponent* container = GetComponent(server, containerID, ContainerComponent);
+    b32 result = Store_(server, container->storedObjects, ArrayCount(container->storedObjects), 
+                        objectIndex, ID);
+    return result;
+}
+
+internal b32 StoreInUsingSlots(ServerState* server, EntityID containerID, EntityID ID, u16 objectIndex)
+{
+    ContainerComponent* container = GetComponent(server, containerID, ContainerComponent);
+    b32 result = Store_(server, container->usingObjects, ArrayCount(container->usingObjects), 
+                        objectIndex, ID);
+    return result;
+}
+
+internal b32 StoreInContainer(ServerState* server, EntityID containerID, EntityID ID)
+{
+    b32 result = false;
+    
+    ContainerComponent* container = GetComponent(server, containerID, ContainerComponent);
+    for(u16 slotIndex = 0; slotIndex < ArrayCount(container->usingObjects); ++slotIndex)
+    {
+        if(StoreInUsingSlots(server, containerID, ID, slotIndex))
+        {
+            result = true;
+            break;
+        }
+    }
+    
+    if(!result)
+    {
+        for(u16 slotIndex = 0; slotIndex < ArrayCount(container->storedObjects); ++slotIndex)
+        {
+            if(Store(server, containerID, ID, slotIndex))
+            {
+                result = true;
+                break;
+            }
+        }
+    }
+    
+    return result;
 }
 
 internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* command)
@@ -279,39 +470,28 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                 if(IsValidID(targetID) && HasComponent(targetID, PhysicComponent))
                 {
                     PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
-                    
                     if(!IsSet(targetPhysic->flags, EntityFlag_notInWorld) && 
                        targetPhysic->P.chunkZ == physic->P.chunkZ)
                     {
-                        if(CanUse(server->assets, targetPhysic->definitionID))
+                        if(!Use(server, ID, targetID))
                         {
-                            if(!Use(server, ID, targetID))
+                            if(!Equip(server, ID, targetID))
                             {
                                 EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+                                
                                 if(equipment)
                                 {
-                                    for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->IDs); equipmentIndex++)
+                                    for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->slots); ++equipIndex)
                                     {
-                                        EntityID equipmentID = equipment->IDs[equipmentIndex];
-                                        
-                                        ContainerComponent* container = GetComponent(server, equipmentID, ContainerComponent);
-                                        if(Store(server, container, targetID))
+                                        EntityID equipID = equipment->slots[equipIndex].ID;
+                                        if(IsValidID(equipID) && HasComponent(equipID, ContainerComponent))
                                         {
-                                            MakeIntangible(server, targetID);
-                                            break;
+                                            if(StoreInContainer(server, equipID, targetID))
+                                            {
+                                                break;
+                                            }
                                         }
                                     }
-                                }
-                            }
-                        }
-                        else if(CanEquip(server->assets, targetPhysic->definitionID))
-                        {
-                            EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-                            if(equipment)
-                            {
-                                if(FindPlace(equipment->IDs, ArrayCount(equipment->IDs), targetID))
-                                {
-                                    MakeIntangible(server, targetID);
                                 }
                             }
                         }
@@ -323,58 +503,46 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         case use:
         {
             EntityID targetID = command->targetID;
-            PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
-            
-            if(IsValidID(command->containerID))
+            if(AreEqual(command->containerID, ID))
             {
-                ContainerComponent* container = GetComponent(server, command->containerID, ContainerComponent);
-                if(Remove(server, container, targetID))
+                if(RemoveFromEntity(server, ID, targetID))
                 {
-                    Use(server, ID, targetID);
+                    UseOptionIndex(server, ID, targetID, command->optionIndex);
                 }
             }
             else
             {
-                EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-                UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-                if(equipment && equipped)
+                ContainerComponent* container = GetComponent(server, command->containerID, ContainerComponent);
+                if(RemoveFromContainer(server, container, targetID))
                 {
-                    for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->IDs); ++equipIndex)
-                    {
-                        if(AreEqual(equipment->IDs[equipIndex], targetID))
-                        {
-                            if(CanUse(server->assets, targetPhysic->definitionID))
-                            {
-                                if(Use(server, ID, targetID))
-                                {
-                                    equipment->IDs[equipIndex] = {};
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                    UseOptionIndex(server, ID, targetID, command->optionIndex);
+                }
+            }
+        } break;
+        
+        case equip:
+        {
+            EntityID targetID = command->targetID;
+            if(IsValidID(command->containerID))
+            {
+                ContainerComponent* container = GetComponent(server, command->containerID, ContainerComponent);
+                if(RemoveFromContainer(server, container, targetID))
+                {
+                    EquipOptionIndex(server, ID, targetID, command->optionIndex);
+                }
+            }
+            else
+            {
+                if(RemoveFromEntity(server, ID, targetID))
+                {
+                    EquipOptionIndex(server, ID, targetID, command->optionIndex);
                 }
             }
         } break;
         
         case disequip:
         {
-            EntityID targetID = command->targetID;
-            EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-            UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-            
-            if(equipment && equipped)
-            {
-                for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->IDs); ++equipIndex)
-                {
-                    if(AreEqual(equipment->IDs[equipIndex], targetID))
-                    {
-                        MakeTangible(server, targetID);
-                        equipment->IDs[equipIndex] = {};
-                        break;
-                    }
-                }
-            }
+            RemoveFromEntity(server, ID, command->targetID);
         } break;
         
         case open:
@@ -383,12 +551,12 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             
             b32 canOpen = true;
             EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-            if(equipment && Find(equipment->IDs, ArrayCount(equipment->IDs), targetID))
+            if(equipment && Find(equipment->slots, ArrayCount(equipment->slots), targetID))
             {
                 canOpen = false;
             }
             UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-            if(equipped && Find(equipped->IDs, ArrayCount(equipped->IDs), targetID))
+            if(equipped && Find(equipped->slots, ArrayCount(equipped->slots), targetID))
             {
                 canOpen = false;
             }
@@ -408,34 +576,15 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         
         case drop:
         {
-            EntityID targetID = command->targetID;
-            if(IsValidID(targetID))
-            {
-                if(RemoveAccordingToCommand(server, ID, command))
-                {
-                    MakeTangible(server, targetID);
-                }
-            }
+            RemoveAccordingToCommand(server, ID, command);
         } break;
         
         case storeInventory:
         {
             EntityID targetID = command->targetID;
-            if(IsValidID(targetID))
+            if(RemoveAccordingToCommand(server, ID, command))
             {
-                if(RemoveAccordingToCommand(server, ID, command))
-                {
-                    ContainerComponent* destContainer = GetComponent(server, command->targetContainerID, ContainerComponent);
-                    if(destContainer &&
-                       (command->targetObjectIndex < destContainer->maxStoredCount) &&!IsValidID(destContainer->storedIDs[command->targetObjectIndex]))
-                    {
-                        destContainer->storedIDs[command->targetObjectIndex] = targetID;
-                    }
-                    else
-                    {
-                        MakeTangible(server, targetID);
-                    }
-                }
+                Store(server, command->targetContainerID, targetID, command->targetObjectIndex);
             }
         } break;
         
@@ -443,41 +592,17 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         case useInventory:
         {
             EntityID targetID = command->targetID;
-            PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
-            
-            if(CanUse(server->assets, targetPhysic->definitionID))
+            if(IsValidID(targetID))
             {
-                if(IsValidID(targetID))
+                if(RemoveAccordingToCommand(server, ID, command))
                 {
-                    if(RemoveAccordingToCommand(server, ID, command))
+                    if(AreEqual(command->targetContainerID, ID))
                     {
-                        b32 added = false;
-                        if(AreEqual(command->targetContainerID, ID))
-                        {
-                            UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-                            if(equipped &&
-                               (command->targetObjectIndex < ArrayCount(equipped->IDs)) &&!IsValidID(equipped->IDs[command->targetObjectIndex]))
-                            {
-                                equipped->IDs[command->targetObjectIndex] = targetID;
-                                added = true;
-                            }
-                        }
-                        else
-                        {
-                            ContainerComponent* destContainer = GetComponent(server, command->targetContainerID, ContainerComponent);
-                            if(destContainer &&
-                               (command->targetObjectIndex < destContainer->maxUsingCount) &&!IsValidID(destContainer->usingIDs[command->targetObjectIndex]))
-                            {
-                                destContainer->usingIDs[command->targetObjectIndex] = targetID;
-                                added = true;
-                            }
-                        }
-                        
-                        
-                        if(!added)
-                        {
-                            MakeTangible(server, targetID);
-                        }
+                        UseOptionIndex(server, ID, targetID, command->optionIndex);
+                    }
+                    else
+                    {
+                        StoreInUsingSlots(server, command->targetContainerID, targetID, command->targetObjectIndex);
                     }
                 }
             }
@@ -635,14 +760,14 @@ internal void HandleEntityMovement(ServerState* server, PhysicComponent* physic,
     }
 }
 
-internal void UpdateObjectPositions(ServerState* server, UniversePos P, EntityID* IDs, u32 IDCount)
+internal void UpdateObjectPositions(ServerState* server, UniversePos P, InventorySlot* slots, u32 slotCount)
 {
-    for(u16 IDIndex = 0; IDIndex < IDCount; ++IDIndex)
+    for(u16 slotIndex = 0; slotIndex < slotCount; ++slotIndex)
     {
-        EntityID ID = IDs[IDIndex];
-        if(IsValidID(ID))
+        InventorySlot* slot = slots + slotIndex;
+        if(IsValidID(slot->ID))
         {
-            PhysicComponent* equipmentPhysic = GetComponent(server, ID, PhysicComponent);
+            PhysicComponent* equipmentPhysic = GetComponent(server, slot->ID, PhysicComponent);
             equipmentPhysic->P = P;
             equipmentPhysic->flags |= EntityFlag_notInWorld;
         }
@@ -667,13 +792,13 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
     if(equipped)
     {
-        UpdateObjectPositions(server, physic->P, equipped->IDs, Count_usingSlot);
+        UpdateObjectPositions(server, physic->P, equipped->slots, Count_usingSlot);
         for(u32 usingIndex = 0; usingIndex < Count_usingSlot; ++usingIndex)
         {
-            EntityID usingID = equipped->IDs[usingIndex];
-            if(IsValidID(usingID))
+            InventorySlot* slot = equipped->slots + usingIndex;
+            if(IsValidID(slot->ID))
             {
-                Assert(!HasComponent(usingID, ContainerComponent));
+                Assert(!HasComponent(slot->ID, ContainerComponent));
             }
         }
     }
@@ -682,15 +807,15 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
     if(equipment)
     {
-        UpdateObjectPositions(server, physic->P, equipment->IDs, Count_equipmentSlot);
+        UpdateObjectPositions(server, physic->P, equipment->slots, Count_equipmentSlot);
         for(u32 equipIndex = 0; equipIndex < Count_equipmentSlot; ++equipIndex)
         {
-            EntityID equipID = equipment->IDs[equipIndex];
-            ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
+            InventorySlot* slot = equipment->slots + equipIndex;
+            ContainerComponent* container = GetComponent(server, slot->ID, ContainerComponent);
             if(container)
             {
-                UpdateObjectPositions(server, physic->P, container->storedIDs, container->maxStoredCount);
-                UpdateObjectPositions(server, physic->P, container->usingIDs, container->maxUsingCount);
+                UpdateObjectPositions(server, physic->P, container->storedObjects, ArrayCount(container->storedObjects));
+                UpdateObjectPositions(server, physic->P, container->usingObjects, ArrayCount(container->usingObjects));
             }
         }
     }

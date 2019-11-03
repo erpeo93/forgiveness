@@ -193,31 +193,31 @@ inline void QueueEntityHeaderReliably(PlayerComponent* player, EntityID ID)
     QueueOrderedPacket(player);
 }
 
-internal void QueueEquipmentID(PlayerComponent* player, EntityID ID, u16 slotIndex, EntityID equipmentID)
+internal void QueueEquipmentID(PlayerComponent* player, EntityID ID, u16 slotIndex, u16 slotType, EntityID equipmentID)
 {
     StartPacket(player, EquipmentMapping);
-    Pack("HL", slotIndex, equipmentID.archetype_archetypeIndex);
+    Pack("HHL", slotIndex, slotType, equipmentID.archetype_archetypeIndex);
     QueueStandardPacket(player, ID);
 }
 
-internal void QueueUsingID(PlayerComponent* player, EntityID ID, u16 slotIndex, EntityID usingID)
+internal void QueueUsingID(PlayerComponent* player, EntityID ID, u16 slotIndex, u16 slotType, EntityID usingID)
 {
     StartPacket(player, UsingMapping);
-    Pack("HL", slotIndex, usingID.archetype_archetypeIndex);
+    Pack("HHL", slotIndex, slotType, usingID.archetype_archetypeIndex);
     QueueStandardPacket(player, ID);
 }
 
-internal void QueueContainerStoredID(PlayerComponent* player, EntityID ID, u16 slotIndex, EntityID objectID)
+internal void QueueContainerStoredID(PlayerComponent* player, EntityID ID, u16 slotIndex, u16 slotType, EntityID objectID)
 {
     StartPacket(player, ContainerStoredMapping);
-    Pack("HL", slotIndex, objectID.archetype_archetypeIndex);
+    Pack("HHL", slotIndex, slotType, objectID.archetype_archetypeIndex);
     QueueStandardPacket(player, ID);
 }
 
-internal void QueueContainerUsingID(PlayerComponent* player, EntityID ID, u16 slotIndex, EntityID objectID)
+internal void QueueContainerUsingID(PlayerComponent* player, EntityID ID, u16 slotIndex, u16 slotType, EntityID objectID)
 {
     StartPacket(player, ContainerUsingMapping);
-    Pack("HL", slotIndex, objectID.archetype_archetypeIndex);
+    Pack("HHL", slotIndex, slotType, objectID.archetype_archetypeIndex);
     QueueStandardPacket(player, ID);
 }
 
@@ -360,11 +360,8 @@ STANDARD_ECS_JOB_SERVER(SendEntityUpdate)
                 {
                     for(u16 slotIndex = 0; slotIndex < Count_equipmentSlot; ++slotIndex)
                     {
-                        EntityID equipmentID = equipment->IDs[slotIndex];
-                        //if(IsValid(equipmentID))
-                        {
-                            QueueEquipmentID(player, ID, slotIndex, equipmentID);
-                        }
+                        InventorySlot* slot = equipment->slots + slotIndex;
+                        QueueEquipmentID(player, ID, slotIndex, slot->type, slot->ID);
                     }
                 }
                 
@@ -372,14 +369,11 @@ STANDARD_ECS_JOB_SERVER(SendEntityUpdate)
                 {
                     for(u16 slotIndex = 0; slotIndex < Count_usingSlot; ++slotIndex)
                     {
-                        EntityID usingID = equipped->IDs[slotIndex];
-                        //if(IsValid(usingID))
+                        InventorySlot* slot = equipped->slots + slotIndex;
+                        QueueUsingID(player, ID, slotIndex, slot->type, slot->ID);
+                        if(IsValidID(slot->ID))
                         {
-                            QueueUsingID(player, ID, slotIndex, usingID);
-                            if(IsValidID(usingID))
-                            {
-                                Assert(!HasComponent(usingID, ContainerComponent));
-                            }
+                            Assert(!HasComponent(slot->ID, ContainerComponent));
                         }
                     }
                 }
@@ -387,22 +381,16 @@ STANDARD_ECS_JOB_SERVER(SendEntityUpdate)
                 if(container)
                 {
                     QueueOpenedByID(player, ID, container->openedBy);
-                    for(u16 objectIndex = 0; objectIndex < container->maxStoredCount; ++objectIndex)
+                    for(u16 objectIndex = 0; objectIndex < ArrayCount(container->storedObjects); ++objectIndex)
                     {
-                        EntityID objectID = container->storedIDs[objectIndex];
-                        //if(IsValid(usingID))
-                        {
-                            QueueContainerStoredID(player, ID, objectIndex, objectID);
-                        }
+                        InventorySlot* slot = container->storedObjects + objectIndex;
+                        QueueContainerStoredID(player, ID, objectIndex, slot->type, slot->ID);
                     }
                     
-                    for(u16 objectIndex = 0; objectIndex < container->maxUsingCount; ++objectIndex)
+                    for(u16 objectIndex = 0; objectIndex < ArrayCount(container->usingObjects); ++objectIndex)
                     {
-                        EntityID objectID = container->usingIDs[objectIndex];
-                        //if(IsValid(usingID))
-                        {
-                            QueueContainerUsingID(player, ID, objectIndex, objectID);
-                        }
+                        InventorySlot* slot = container->usingObjects + objectIndex;
+                        QueueContainerUsingID(player, ID, objectIndex, slot->type, slot->ID);
                     }
                 }
             }

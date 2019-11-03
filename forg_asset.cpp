@@ -2160,17 +2160,3 @@ internal EntityRef EntityReference(Assets* assets, char* kind, char* type)
     result.index = GetAssetIndex(assets, AssetType_EntityDefinition, result.subtypeHashIndex, Tokenize(type_));
     return result;
 }
-
-internal b32 CanUse(Assets* assets, EntityRef ref)
-{
-    EntityRef sword = EntityReference(assets, "default", "sword");
-    b32 result = AreEqual(sword, ref);
-    return result;
-}
-
-internal b32 CanEquip(Assets* assets, EntityRef ref)
-{
-    EntityRef bag = EntityReference(assets, "default", "bag");
-    b32 result = AreEqual(bag, ref);
-    return result;
-}

@@ -61,6 +61,8 @@ enum MetaType
     MetaType_LayoutPieceProperties,
     MetaType_EffectBinding,
     MetaType_GameEffect,
+    MetaType_UseLayout,
+    MetaType_EquipLayout,
 };
 
 enum FieldMetaFlags

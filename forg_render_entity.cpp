@@ -67,7 +67,7 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
         params.equipped = GetComponent(worldMode, ID, UsingMappingComponent);
         params.tint = V4(1, 1, 1, 1);
-        params.modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, ID); 
+        params.modulationPercentage = GetModulationPercentage(worldMode, ID); 
         
         AnimationEffectsComponent* effects = GetComponent(worldMode, ID, AnimationEffectsComponent);
         if(effects)
@@ -113,7 +113,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
         StandardImageComponent* image = GetComponent(worldMode, ID, StandardImageComponent);
         RenderShadow(worldMode, group, P, &image->shadow, deepness, width);
         
-        r32 modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, ID); 
+        r32 modulationPercentage = GetModulationPercentage(worldMode, ID); 
         
         PlantComponent* plant = GetComponent(worldMode, ID, PlantComponent);
         
@@ -173,7 +173,7 @@ RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
         if(IsValid(BID))
         {
             ObjectTransform transform = UprightTransform();
-            transform.modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, ID); 
+            transform.modulationPercentage = GetModulationPercentage(worldMode, ID); 
             PushBitmap(group, UprightTransform(), BID, P, height, V4(1, 1, 1, 1), lights);
         }
     }
@@ -182,6 +182,54 @@ RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
 
 internal void RenderLayoutInRectCameraAligned(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, Vec3 rectP, Rect2 cameraRect, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container);
 internal void RenderLayoutInRect(GameModeWorld* worldMode, RenderGroup* group, Rect2 rect, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container);
+internal void DrawObjectMapping(GameModeWorld* worldMode, RenderGroup* group, ObjectMapping* mapping, ObjectTransform transform, Vec3 P, BitmapDim spaceDim, Rect2 rect, Lights lights)
+{
+    if(IsValidInventoryMapping(&worldMode->gameUI, mapping))
+    {
+        EntityID objectID = mapping->object.ID;
+        BaseComponent* objectBase = GetComponent(worldMode, objectID, BaseComponent);
+        transform.modulationPercentage = GetModulationPercentage(worldMode, objectID);
+        LayoutComponent* objectLayout = GetComponent(worldMode, objectID, LayoutComponent);
+        if(objectBase && objectLayout)
+        {
+            LayoutContainer objectContainer = {};
+            
+            if(transform.upright)
+            {
+                RenderLayoutInRectCameraAligned(worldMode, group, P, spaceDim.P, rect, transform, objectLayout, objectBase->seed, lights, &objectContainer);
+            }
+            else
+            {
+                RenderLayoutInRect(worldMode, group, rect, transform, objectLayout, objectBase->seed, lights, &objectContainer);
+            }
+        }
+    }
+}
+
+
+internal ObjectMapping* FindCompatibleMapping(ObjectMapping* mappings, u32 mappingCount, b32* alreadyDrawn, u32 alreadyDrawnCount, u16 inventorySlotType)
+{
+    Assert(mappingCount == alreadyDrawnCount);
+    
+    ObjectMapping* result = 0;
+    for(u32 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
+    {
+        ObjectMapping* mapping = mappings + mappingIndex;
+        InventorySlot* slot = &mapping->object;
+        if(slot->type == inventorySlotType)
+        {
+            if(!alreadyDrawn[mappingIndex])
+            {
+                alreadyDrawn[mappingIndex] = true;
+                result = mapping;
+                break;
+            }
+        }
+    }
+    
+    return result;
+}
+
 internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u64 nameHash, u32 seed, Lights lights, LayoutContainer* container)
 {
     u64 emptySpaceHash = StringHash("emptySpace");
@@ -242,37 +290,30 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                 }
                 
                 PushBitmap(group, transform, BID, P, piece->height, V4(1, 1, 1, alpha), lights);
-                if((piece->nameHash == emptySpaceHash || piece->nameHash == usingSpaceHash) && container->container)
+                if(container->container)
                 {
-                    ObjectMapping* mappings = (container->drawMode == LayoutContainerDraw_Using) ? container->container->usingMappings : container->container->storedMappings;
-                    u32 mappingCount = (container->drawMode == LayoutContainerDraw_Using) ? ArrayCount(container->container->usingMappings) : ArrayCount(container->container->storedMappings);
-                    
-                    if(container->currentObjectIndex < mappingCount)
+                    ContainerMappingComponent* c = container->container;
+                    if(piece->nameHash == emptySpaceHash)
                     {
-                        ObjectMapping* mapping = mappings + container->currentObjectIndex++;
-                        mapping->projOnScreen = result;
-                        
-                        EntityID objectID = mapping->ID;
-                        if(IsValidMappingID(&worldMode->gameUI, objectID))
+                        ObjectMapping* mapping = FindCompatibleMapping(c->storedMappings, ArrayCount(c->storedMappings),container->storedObjectsDrawn, ArrayCount(container->storedObjectsDrawn),piece->inventorySlotType);
+                        if(mapping)
                         {
-                            BaseComponent* objectBase = GetComponent(worldMode, objectID, BaseComponent);
-                            transform.modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, objectID);
-                            LayoutComponent* objectLayout = GetComponent(worldMode, objectID, LayoutComponent);
-                            if(objectBase && objectLayout)
-                            {
-                                Rect2 objectRect = result;
-                                LayoutContainer objectContainer = {};
-                                
-                                if(transform.upright)
-                                {
-                                    RenderLayoutInRectCameraAligned(worldMode, group, P, dim.P, objectRect, transform, objectLayout, objectBase->seed, lights, &objectContainer);
-                                }
-                                else
-                                {
-                                    RenderLayoutInRect(worldMode, group, objectRect, transform, objectLayout, objectBase->seed, lights, &objectContainer);
-                                }
-                            }
+                            mapping->projOnScreen = result;
+                            DrawObjectMapping(worldMode, group, mapping, transform, P, dim, result, lights);
                         }
+                        
+                        result = InvertedInfinityRect2();
+                    }
+                    
+                    else if(piece->nameHash == usingSpaceHash)
+                    {
+                        ObjectMapping* mapping = FindCompatibleMapping(c->usingMappings, ArrayCount(c->usingMappings), container->usingObjectsDrawn, ArrayCount(container->usingObjectsDrawn),piece->inventorySlotType);
+                        if(mapping)
+                        {
+                            mapping->projOnScreen = result;
+                            DrawObjectMapping(worldMode, group, mapping, transform, P, dim, result, lights);
+                        }
+                        result = InvertedInfinityRect2();
                     }
                 }
                 
@@ -370,7 +411,7 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
         ObjectTransform transform = UprightTransform();
         transform.angle = layout->rootAngle;
         transform.scale = layout->rootScale;
-        transform.modulationPercentage = GetModulationPercentageAndResetFocus(worldMode, ID); 
+        transform.modulationPercentage = GetModulationPercentage(worldMode, ID); 
         
         ContainerMappingComponent* container = GetComponent(worldMode, ID, ContainerMappingComponent);
         LayoutContainer layoutContainer = {};
