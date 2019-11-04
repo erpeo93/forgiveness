@@ -216,6 +216,9 @@ struct GameCommand
     u16 targetObjectIndex;
     EntityID targetContainerID;
     u16 optionIndex;
+    
+    // NOTE(Leonardo): only for skill commands!
+    u16 skillIndex;
 };
 
 inline b32 AreEqual(GameCommand c1, GameCommand c2)

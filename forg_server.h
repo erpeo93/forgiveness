@@ -29,6 +29,7 @@
 #include "forg_network.h"
 #include "forg_meta.h"
 #include "forg_game_ui.h"
+#include "forg_skill.h"
 PlatformAPI platformAPI;
 
 struct GameFile

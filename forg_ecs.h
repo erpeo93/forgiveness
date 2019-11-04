@@ -43,6 +43,7 @@ struct ArchetypeLayout
             ArchetypeComponent hasContainerComponent;
             ArchetypeComponent hasContainerMappingComponent;
             ArchetypeComponent hasInteractionComponent;
+            ArchetypeComponent hasSkillComponent;
         };
     };
 };

@@ -406,18 +406,6 @@ internal void AddObjectRemovedPrediction(GameModeWorld* worldMode, GameUIContext
     UI->predictionObjectID = GetClientIDMapping(worldMode, ID);
 }
 
-internal void RemoveMapping(ObjectMapping* mappings, u32 mappingCount, EntityID ID)
-{
-    for(u32 index = 0; index < mappingCount; ++index)
-    {
-        ObjectMapping* mapping = mappings + index;
-        if(AreEqual(mapping->object.ID, ID))
-        {
-            mapping->object.ID = {};
-        }
-    }
-}
-
 internal b32 UsingEquipOptionApplicable(UsingEquipOption* option, ObjectMapping* mappings, u32 mappingCount, EntityID targetID)
 {
     b32 result = false;
@@ -441,52 +429,6 @@ internal b32 UsingEquipOptionApplicable(UsingEquipOption* option, ObjectMapping*
             {
                 result = false;
                 break;
-            }
-        }
-    }
-    
-    return result;
-}
-
-internal UsingEquipOption* CanUse(GameModeWorld* worldMode, EntityID ID, EntityID targetID, u16* optionIndexPtr)
-{
-    r32 minDistanceFromOptionSlotSq = R32_MAX;
-    UsingEquipOption* result = 0;
-    
-    UsingMappingComponent* usingComponent = GetComponent(worldMode, ID, UsingMappingComponent);
-    InteractionComponent* interaction = GetComponent(worldMode, targetID, InteractionComponent);
-    if(usingComponent && interaction)
-    {
-        for(u16 optionIndex = 0; optionIndex < interaction->usingConfigurationCount; ++optionIndex)
-        {
-            UsingEquipOption* option = interaction->usingConfigurations + optionIndex;
-            if(UsingEquipOptionApplicable(option, 
-                                          usingComponent->mappings, ArrayCount(usingComponent->mappings), 
-                                          targetID))
-            {
-                r32 nearestOptionDistance = R32_MAX;
-                for(u32 slotIndex = 0; slotIndex < ArrayCount(option->slots); ++slotIndex)
-                {
-                    u16 slot = option->slots[slotIndex];
-                    
-                    if(slot == 0xffff)
-                    {
-                        break;
-                    }
-                    
-                    ObjectMapping* mapping = usingComponent->mappings + slot;
-                    r32 distanceSq = mapping->distanceFromMouseSq;
-                    if(distanceSq < nearestOptionDistance)
-                    {
-                        nearestOptionDistance = distanceSq;
-                    }
-                }
-                if(nearestOptionDistance < minDistanceFromOptionSlotSq)
-                {
-                    minDistanceFromOptionSlotSq = nearestOptionDistance;
-                    result = option;
-                    *optionIndexPtr = optionIndex;
-                }
             }
         }
     }
@@ -532,6 +474,78 @@ internal UsingEquipOption* ExistValidUseOptionThatContains(GameModeWorld* worldM
     return result;
 }
 
+
+internal UsingEquipOption* FindNearestCompatibleOption(GameModeWorld* worldMode, ObjectMapping* mappings, u32 mappingCount, UsingEquipOption* options, u32 optionCount, u16* optionIndexPtr, EntityID targetID, b32 useBaseComponentDistance)
+{
+    UsingEquipOption* result = 0;
+    
+    r32 minDistanceFromOptionSlotSq = R32_MAX;
+    for(u16 optionIndex = 0; optionIndex < optionCount; ++optionIndex)
+    {
+        UsingEquipOption* option = options + optionIndex;
+        if(UsingEquipOptionApplicable(option, 
+                                      mappings, mappingCount, 
+                                      targetID))
+        {
+            r32 nearestOptionDistance = R32_MAX;
+            for(u32 slotIndex = 0; slotIndex < ArrayCount(option->slots); ++slotIndex)
+            {
+                u16 slot = option->slots[slotIndex];
+                if(slot == 0xffff)
+                {
+                    break;
+                }
+                
+                ObjectMapping* mapping = mappings + slot;
+                
+                r32 distanceSq = R32_MAX;
+                if(false && useBaseComponentDistance)
+                {
+                    if(IsValidID(mapping->object.ID))
+                    {
+                        BaseComponent* base = GetComponent(worldMode, GetClientIDMapping(worldMode, mapping->object.ID), BaseComponent);
+                        
+                        distanceSq = LengthSq(GetCenter(base->projectedOnScreen) - worldMode->relativeMouseP);
+                    }
+                }
+                else
+                {
+                    distanceSq = mapping->distanceFromMouseSq;
+                }
+                
+                if(distanceSq < nearestOptionDistance)
+                {
+                    nearestOptionDistance = distanceSq;
+                }
+            }
+            if(nearestOptionDistance < minDistanceFromOptionSlotSq)
+            {
+                minDistanceFromOptionSlotSq = nearestOptionDistance;
+                result = option;
+                *optionIndexPtr = optionIndex;
+            }
+        }
+    }
+    
+    return result;
+}
+
+internal UsingEquipOption* CanUse(GameModeWorld* worldMode, EntityID ID, EntityID targetID, u16* optionIndexPtr)
+{
+    r32 minDistanceFromOptionSlotSq = R32_MAX;
+    UsingEquipOption* result = 0;
+    
+    UsingMappingComponent* usingComponent = GetComponent(worldMode, ID, UsingMappingComponent);
+    InteractionComponent* interaction = GetComponent(worldMode, targetID, InteractionComponent);
+    if(usingComponent && interaction)
+    {
+        result = FindNearestCompatibleOption(worldMode, usingComponent->mappings, ArrayCount(usingComponent->mappings),
+                                             interaction->usingConfigurations, interaction->usingConfigurationCount, optionIndexPtr, targetID, false);
+    }
+    
+    return result;
+}
+
 internal UsingEquipOption* CanEquip(GameModeWorld* worldMode, EntityID ID, EntityID targetID, u16* optionIndexPtr)
 {
     r32 minDistanceFromOptionSlotSq = R32_MAX;
@@ -541,42 +555,8 @@ internal UsingEquipOption* CanEquip(GameModeWorld* worldMode, EntityID ID, Entit
     InteractionComponent* interaction = GetComponent(worldMode, targetID, InteractionComponent);
     if(equipComponent && interaction)
     {
-        for(u16 optionIndex = 0; optionIndex < ArrayCount(interaction->equipConfigurations); ++optionIndex)
-        {
-            UsingEquipOption* option = interaction->equipConfigurations + optionIndex;
-            if(UsingEquipOptionApplicable(option, 
-                                          equipComponent->mappings, ArrayCount(equipComponent->mappings), 
-                                          targetID))
-            {
-                r32 nearestOptionDistance = R32_MAX;
-                for(u32 slotIndex = 0; slotIndex < ArrayCount(option->slots); ++slotIndex)
-                {
-                    u16 slot = option->slots[slotIndex];
-                    if(slot == 0xffff)
-                    {
-                        break;
-                    }
-                    
-                    ObjectMapping* mapping = equipComponent->mappings + slot;
-                    if(IsValidID(mapping->object.ID))
-                    {
-                        BaseComponent* base = GetComponent(worldMode, GetClientIDMapping(worldMode, mapping->object.ID), BaseComponent);
-                        
-                        r32 distanceSq = LengthSq(GetCenter(base->projectedOnScreen) - worldMode->relativeMouseP);
-                        if(distanceSq < nearestOptionDistance)
-                        {
-                            nearestOptionDistance = distanceSq;
-                        }
-                    }
-                }
-                if(nearestOptionDistance < minDistanceFromOptionSlotSq)
-                {
-                    minDistanceFromOptionSlotSq = nearestOptionDistance;
-                    result = option;
-                    *optionIndexPtr = optionIndex;
-                }
-            }
-        }
+        result = FindNearestCompatibleOption(worldMode, equipComponent->mappings, ArrayCount(equipComponent->mappings),
+                                             interaction->equipConfigurations, interaction->equipConfigurationCount, optionIndexPtr, targetID, true);
     }
     
     return result;
@@ -658,7 +638,7 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
         Vec3 deltaP = SubtractOnSameZChunk(player->universeP, lootingBase->universeP);
         if(deltaP.y <= 0)
         {
-            if(Abs(deltaP.x) < 0.5f * GetWidth(lootingBase))
+            if(LengthSq(player->velocity) < 0.1f && Abs(deltaP.x) < 0.5f * GetWidth(lootingBase))
             {
                 player->flags = AddFlags(player->flags, EntityFlag_occluding);
             }
@@ -1025,20 +1005,20 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
             EquipmentMappingComponent* equipment = GetComponent(worldMode, UI->predictionContainerID, EquipmentMappingComponent);
             if(equipment)
             {
-                RemoveMapping(equipment->mappings, ArrayCount(equipment->mappings), UI->predictionObjectID);
+                RemoveObjectMapping(equipment->mappings, ArrayCount(equipment->mappings), UI->predictionObjectID);
             }
             
             UsingMappingComponent* equipped = GetComponent(worldMode, UI->predictionContainerID, UsingMappingComponent);
             if(equipped)
             {
-                RemoveMapping(equipped->mappings, ArrayCount(equipped->mappings), UI->predictionObjectID);
+                RemoveObjectMapping(equipped->mappings, ArrayCount(equipped->mappings), UI->predictionObjectID);
             }
         }
         else
         {
             ContainerMappingComponent* container = GetComponent(worldMode, UI->predictionContainerID, ContainerMappingComponent);
-            RemoveMapping(container->storedMappings, ArrayCount(container->storedMappings), UI->predictionObjectID);
-            RemoveMapping(container->usingMappings, ArrayCount(container->usingMappings), UI->predictionObjectID);
+            RemoveObjectMapping(container->storedMappings, ArrayCount(container->storedMappings), UI->predictionObjectID);
+            RemoveObjectMapping(container->usingMappings, ArrayCount(container->usingMappings), UI->predictionObjectID);
         }
     }
 }

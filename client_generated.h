@@ -40,6 +40,7 @@ char* MetaTable_action[] =
 "drop",
 "storeInventory",
 "useInventory",
+"cast",
 };
 
 char* MetaTable_essence[] = 

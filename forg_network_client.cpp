@@ -192,6 +192,18 @@ internal void StoreObjectMapping(GameModeWorld* worldMode, ObjectMapping* mappin
     }
 }
 
+internal void RemoveObjectMapping(ObjectMapping* mappings, u32 mappingCount, EntityID ID)
+{
+    for(u32 index = 0; index < mappingCount; ++index)
+    {
+        ObjectMapping* mapping = mappings + index;
+        if(AreEqual(mapping->object.ID, ID))
+        {
+            mapping->object.ID = {};
+        }
+    }
+}
+
 STANDARD_ECS_JOB_CLIENT(DeleteEntities)
 {
     FreeArchetype(worldMode, &ID);

@@ -123,6 +123,22 @@ internal void ApplyOption(UsingEquipOption* option, InventorySlot* slots, u32 sl
     }
 }
 
+internal UsingEquipOption* ValidOption(UsingEquipOption* options, u32 optionCount, InventorySlot* slots, u32 slotCount, EntityID targetID)
+{
+    UsingEquipOption* result = 0;
+    for(u32 optionIndex = 0; optionIndex < optionCount; ++optionIndex)
+    {
+        UsingEquipOption* option = options + optionIndex;
+        if(UsingEquipOptionApplicable(option, slots, slotCount, targetID))
+        {
+            result = option;
+            break;
+        }
+    }
+    
+    return result;
+}
+
 internal UsingEquipOption* CanUse(ServerState* server, EntityID ID, EntityID targetID)
 {
     UsingEquipOption* result = 0;
@@ -131,15 +147,23 @@ internal UsingEquipOption* CanUse(ServerState* server, EntityID ID, EntityID tar
     InteractionComponent* interaction = GetComponent(server, targetID, InteractionComponent);
     if(usingComponent && interaction)
     {
-        for(u32 optionIndex = 0; optionIndex < interaction->usingConfigurationCount; ++optionIndex)
-        {
-            UsingEquipOption* option = interaction->usingConfigurations + optionIndex;
-            if(UsingEquipOptionApplicable(option, usingComponent->slots, ArrayCount(usingComponent->slots), targetID))
-            {
-                result = option;
-                break;
-            }
-        }
+        result = ValidOption(interaction->usingConfigurations, interaction->usingConfigurationCount,
+                             usingComponent->slots, ArrayCount(usingComponent->slots), targetID);
+    }
+    
+    return result;
+}
+
+internal UsingEquipOption* CanEquip(ServerState* server, EntityID ID, EntityID targetID)
+{
+    UsingEquipOption* result = 0;
+    EquipmentComponent* equipComponent = GetComponent(server, ID, EquipmentComponent);
+    InteractionComponent* interaction = GetComponent(server, targetID, InteractionComponent);
+    
+    if(equipComponent && interaction)
+    {
+        result = ValidOption(interaction->equipConfigurations, interaction->equipConfigurationCount,
+                             equipComponent->slots, ArrayCount(equipComponent->slots), targetID);
     }
     
     return result;
@@ -152,6 +176,14 @@ internal void Use_(ServerState* server, UsingEquipOption* option, EntityID ID, E
     MakeIntangible(server, targetID);
 }
 
+
+internal void Equip_(ServerState* server, UsingEquipOption* option, EntityID ID, EntityID targetID)
+{
+    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    ApplyOption(option, equipment->slots, ArrayCount(equipment->slots), targetID);
+    MakeIntangible(server, targetID);
+}
+
 internal b32 Use(ServerState* server, EntityID ID, EntityID targetID)
 {
     b32 result = false;
@@ -160,6 +192,19 @@ internal b32 Use(ServerState* server, EntityID ID, EntityID targetID)
     if(option)
     {
         Use_(server, option, ID, targetID);
+        result = true;
+    }
+    
+    return result;
+}
+
+internal b32 Equip(ServerState* server, EntityID ID, EntityID targetID)
+{
+    b32 result = false;
+    UsingEquipOption* option = CanEquip(server, ID, targetID);
+    if(option)
+    {
+        Equip_(server, option, ID, targetID);
         result = true;
     }
     
@@ -184,48 +229,6 @@ internal b32 UseOptionIndex(ServerState* server, EntityID ID, EntityID targetID,
                 result = true;
             }
         }
-    }
-    
-    return result;
-}
-
-internal UsingEquipOption* CanEquip(ServerState* server, EntityID ID, EntityID targetID)
-{
-    UsingEquipOption* result = 0;
-    EquipmentComponent* equipComponent = GetComponent(server, ID, EquipmentComponent);
-    InteractionComponent* interaction = GetComponent(server, targetID, InteractionComponent);
-    
-    if(equipComponent && interaction)
-    {
-        for(u32 optionIndex = 0; optionIndex < interaction->equipConfigurationCount; ++optionIndex)
-        {
-            UsingEquipOption* option = interaction->equipConfigurations + optionIndex;
-            if(UsingEquipOptionApplicable(option, equipComponent->slots, ArrayCount(equipComponent->slots), targetID))
-            {
-                result = option;
-                break;
-            }
-        }
-    }
-    
-    return result;
-}
-
-internal void Equip_(ServerState* server, UsingEquipOption* option, EntityID ID, EntityID targetID)
-{
-    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-    ApplyOption(option, equipment->slots, ArrayCount(equipment->slots), targetID);
-    MakeIntangible(server, targetID);
-}
-
-internal b32 Equip(ServerState* server, EntityID ID, EntityID targetID)
-{
-    b32 result = false;
-    UsingEquipOption* option = CanEquip(server, ID, targetID);
-    if(option)
-    {
-        Equip_(server, option, ID, targetID);
-        result = true;
     }
     
     return result;
@@ -456,6 +459,17 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             {
                 PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
                 physic->acc = command->acceleration;
+                
+                physic->action = {};
+                if(LengthSq(physic->speed) > 0.1f)
+                {
+                    physic->action = GameProp(action, move);
+                }
+                else
+                {
+                    physic->action = GameProp(action, idle);
+                }
+                
             }
         } break;
         
@@ -502,41 +516,17 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         
         case use:
         {
-            EntityID targetID = command->targetID;
-            if(AreEqual(command->containerID, ID))
+            if(RemoveAccordingToCommand(server, ID, command))
             {
-                if(RemoveFromEntity(server, ID, targetID))
-                {
-                    UseOptionIndex(server, ID, targetID, command->optionIndex);
-                }
-            }
-            else
-            {
-                ContainerComponent* container = GetComponent(server, command->containerID, ContainerComponent);
-                if(RemoveFromContainer(server, container, targetID))
-                {
-                    UseOptionIndex(server, ID, targetID, command->optionIndex);
-                }
+                UseOptionIndex(server, ID, command->targetID, command->optionIndex);
             }
         } break;
         
         case equip:
         {
-            EntityID targetID = command->targetID;
-            if(IsValidID(command->containerID))
+            if(RemoveAccordingToCommand(server, ID, command))
             {
-                ContainerComponent* container = GetComponent(server, command->containerID, ContainerComponent);
-                if(RemoveFromContainer(server, container, targetID))
-                {
-                    EquipOptionIndex(server, ID, targetID, command->optionIndex);
-                }
-            }
-            else
-            {
-                if(RemoveFromEntity(server, ID, targetID))
-                {
-                    EquipOptionIndex(server, ID, targetID, command->optionIndex);
-                }
+                EquipOptionIndex(server, ID, command->targetID, command->optionIndex);
             }
         } break;
         
@@ -588,7 +578,6 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             }
         } break;
         
-        
         case useInventory:
         {
             EntityID targetID = command->targetID;
@@ -608,6 +597,19 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             }
         } break;
         
+        case cast:
+        {
+            SkillComponent* skills = GetComponent(server, ID, SkillComponent);
+            if(skills)
+            {
+                if(command->skillIndex < ArrayCount(skills->activeSkills))
+                {
+                    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+                    Skill* active = skills->activeSkills + command->skillIndex;
+                    DispatchGameEffect(server, ID, physic->P, &active->effect);
+                }
+            }
+        } break;
         InvalidDefaultCase;
     }
 }
@@ -778,16 +780,6 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     HandleEntityMovement(server, physic, ID, elapsedTime);
-    
-    physic->action = {};
-    if(LengthSq(physic->speed) > 0.1f)
-    {
-        physic->action = GameProp(action, move);
-    }
-    else
-    {
-        physic->action = GameProp(action, idle);
-    }
     
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
     if(equipped)
