@@ -1858,6 +1858,7 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                             params.P = P;
                             params.scale = minPixelHeight;
                             params.transform = FlatTransform();
+                            params.tint = V4(1, 1, 1, 1);
                             
                             Rect2 animationDim = GetAnimationDim(worldMode, layout->group, ID, &component, &params);
                             

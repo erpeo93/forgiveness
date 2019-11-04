@@ -30,7 +30,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
         case spawnEntity:
         {
             SendEffectDispatch(server, ID);
-            //AddEntity(server, P, &server->entropy, effect->spawnType);
+            AddEntity(server, P, &server->entropy, effect->spawnType, 0);
         } break;
         
         case moveOnZSlice:

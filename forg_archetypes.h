@@ -7,6 +7,7 @@ Archetype() struct AnimalArchetype
     EquipmentComponent equipment;
     UsingComponent equipped;
     InteractionComponent interaction;
+    SkillComponent skills;
 #else
     BaseComponent base;
     AnimationComponent animation;

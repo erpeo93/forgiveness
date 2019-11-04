@@ -41,6 +41,7 @@ INIT_COMPONENT_FUNCTION(InitPhysicComponent)
     physic->seed = s->seed;
     physic->speed = {};
     physic->acc = {};
+    physic->action = GameProp(action, idle);
 }
 
 internal void AddRandomEffects(EffectComponent* effects, EffectBinding* bindings, ArrayCounter bindingCount, GameProperty property)
@@ -121,6 +122,25 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
     
 }
 
+internal EntityRef EntityReference(Assets* assets, char* kind, char* type);
+INIT_COMPONENT_FUNCTION(InitSkillComponent)
+{
+    ServerState* server = (ServerState*) state;
+    
+    SkillComponent* skills = (SkillComponent*) componentPtr;
+    
+    for(u32 skillIndex = 0; skillIndex < ArrayCount(skills->activeSkills); ++skillIndex)
+    {
+        skills->activeSkills[skillIndex].effect.effectType = GameProp(gameEffect, spawnEntity);
+    }
+    
+    skills->activeSkills[0].effect.spawnType = EntityReference(server->assets, "default", "wolf");
+    skills->activeSkills[1].effect.spawnType = EntityReference(server->assets, "default", "crocodile");
+    skills->activeSkills[2].effect.spawnType = EntityReference(server->assets, "default", "turtle");
+    skills->activeSkills[3].effect.spawnType = EntityReference(server->assets, "default", "human");
+    skills->activeSkills[4].effect.spawnType = EntityReference(server->assets, "default", "sword");
+    skills->activeSkills[5].effect.spawnType = EntityReference(server->assets, "default", "bag");
+}
 #else
 INIT_COMPONENT_FUNCTION(InitBaseComponent)
 {
@@ -162,6 +182,7 @@ INIT_COMPONENT_FUNCTION(InitAnimationComponent)
     animation->skeletonHash =c->skeleton.subtypeHash;
     animation->skinHash =c->skin.subtypeHash;
     animation->flipOnYAxis = 0;
+    animation->scale = 1.0f;
     InitShadow(&animation->shadow, c);
 }
 

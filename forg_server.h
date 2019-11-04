@@ -25,6 +25,7 @@
 #include "forg_random.h"
 #include "forg_physics.h"
 #include "forg_game_effect.h"
+#include "forg_skill.h"
 #include "forg_AI.h"
 #include "forg_network.h"
 #include "forg_meta.h"
@@ -100,6 +101,9 @@ struct PlayerComponent
     
     b32 inventoryCommandValid;
     GameCommand inventoryCommand;
+    
+    b32 skillCommandValid;
+    GameCommand skillCommand;
     
     FileHash* firstFileHash;
     

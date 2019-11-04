@@ -13,6 +13,7 @@ enum InteractionType
     Interaction_Equipped,
     Interaction_Dragging,
     Interaction_MoveContainerOnScreen,
+    Interaction_SkillSelection,
     
     Interaction_Count
 };
@@ -47,6 +48,7 @@ struct EntityHotInteraction
     EntityID containerIDServer;
     EntityID entityIDServer;
     u16 optionIndex;
+    u16 skillIndex;
 };
 
 inline b32 AreEqual(EntityHotInteraction i1, EntityHotInteraction i2)
@@ -59,6 +61,8 @@ inline b32 AreEqual(EntityHotInteraction i1, EntityHotInteraction i2)
 
 struct GameUIContext
 {
+    b32 initialized;
+    
     char tooltip[128];
     b32 multipleActions;
     
@@ -89,4 +93,9 @@ struct GameUIContext
     
     Vec2 equipmentPositions[Count_equipmentSlot];
     Rect2 equipmentOnScreen[Count_equipmentSlot];
+    
+    
+    u32 selectedSkillIndex;
+    u32 hotSkillIndex;
+    Rect2 skillRects[MAX_ACTIVE_SKILLS];
 };

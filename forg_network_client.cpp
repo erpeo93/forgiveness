@@ -100,6 +100,13 @@ internal void SendInventoryCommand(GameCommand command)
     CloseAndSendOrderedPacket();
 }
 
+internal void SendSkillCommand(GameCommand command)
+{
+    StartPacket(SkillCommand);
+    Pack("HH", command.action, command.skillIndex);
+    CloseAndSendOrderedPacket();
+}
+
 inline void SendMovePlayerRequest(Vec3 offset)
 {
     StartPacket(MovePlayerInOtherRegion);

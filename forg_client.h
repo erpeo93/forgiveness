@@ -33,8 +33,12 @@
 #include "forg_bolt.h"
 #include "forg_book.h"
 #include "forg_cutscene.h"
+#include "forg_skill.h"
 #include "forg_game_ui.h"
 #include "forg_render_entity.h"
+
+
+
 #if FORGIVENESS_INTERNAL
 #include "forg_debug.h"
 #endif

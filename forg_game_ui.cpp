@@ -35,6 +35,11 @@ internal Vec2 HandleKeyboardInteraction(GameUIContext* UI, ClientPlayer* player,
         command->action = move;
     }
     
+    return cameraOffset;
+}
+
+internal void HandleMouseInteraction(GameUIContext* UI, ClientPlayer* player, PlatformInput* input)
+{
     if(Pressed(&input->mouseCenter))
     {
         if(IsValidID(UI->lootingIDServer))
@@ -56,7 +61,14 @@ internal Vec2 HandleKeyboardInteraction(GameUIContext* UI, ClientPlayer* player,
         }
     }
     
-    return cameraOffset;
+    if(!IsValidID(UI->draggingIDServer) && Pressed(&input->mouseRight))
+    {
+        GameCommand command = {};
+        command.action = cast;
+        command.skillIndex = SafeTruncateToU16(UI->selectedSkillIndex);
+        command.targetOffset = {};
+        SendSkillCommand(command);
+    }
 }
 
 internal void ResetInteractions(GameUIContext* UI)
@@ -298,6 +310,43 @@ internal void OverdrawVisibleStuff(GameUIContext* UI, GameModeWorld* worldMode, 
     }
 }
 
+internal void OverdrawSkillSlots(GameUIContext* UI, GameModeWorld* worldMode, RenderGroup* group)
+{
+    Vec2 P = V2(100, -400);
+    Vec2 skillDim = V2(80, 80);
+    r32 margin = 10;
+    
+    Vec4 skillColors[MAX_ACTIVE_SKILLS] = 
+    {
+        V4(1, 0, 1, 1),
+        V4(1, 1, 1, 1),
+        V4(1, 0, 0, 1),
+        V4(0, 0, 1, 1),
+        V4(0, 1, 1, 1),
+        V4(0, 1, 0, 1),
+    };
+    
+    for(u32 skillIndex = 0; skillIndex < MAX_ACTIVE_SKILLS; ++skillIndex)
+    {
+        Vec4 color = skillColors[skillIndex];
+        if(skillIndex != UI->hotSkillIndex && skillIndex != UI->selectedSkillIndex)
+        {
+            color.a *= 0.7f;
+        }
+        
+        Rect2 skillRect = RectMinDim(P, skillDim);
+        UI->skillRects[skillIndex] = skillRect;
+        PushRect(group, FlatTransform(2.0f), skillRect, color);
+        
+        if(skillIndex == UI->selectedSkillIndex)
+        {
+            PushRectOutline(group, FlatTransform(2.0f), skillRect, V4(0, 0, 0, 1), 2.0f);
+        }
+        
+        P.x += (margin + skillDim.x);
+    }
+}
+
 internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
 {
     GameUIContext* UI = &worldMode->gameUI;
@@ -335,6 +384,7 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
     else
     {
         OverdrawVisibleStuff(UI, worldMode, group, false);
+        OverdrawSkillSlots(UI, worldMode, group);
     }
     
     
@@ -613,9 +663,28 @@ internal void FakeEquip(GameUIContext* UI, GameModeWorld* worldMode, EntityID ID
     }
 }
 
+internal void HandleSkillsInteraction(GameUIContext* UI, GameModeWorld* worldMode)
+{
+    for(u32 skillIndex = 0; skillIndex < MAX_ACTIVE_SKILLS; ++skillIndex)
+    {
+        if(PointInRect(UI->skillRects[skillIndex], worldMode->relativeMouseP))
+        {
+            EntityHotInteraction* interaction = AddPossibleInteraction(UI, Interaction_SkillSelection, 0, {}, {}, 0, 0, 0);
+            interaction->skillIndex = SafeTruncateToU16(skillIndex);
+        }
+    }
+}
+
 internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, ClientPlayer* myPlayer, PlatformInput* input)
 {
     GameUIContext* UI = &worldMode->gameUI;
+    
+    if(!UI->initialized)
+    {
+        UI->initialized = true;
+        UI->hotSkillIndex = 0xffff;
+    }
+    
     ResetInteractions(UI);
     
     BaseComponent* player = GetComponent(worldMode, myPlayer->clientID, BaseComponent);
@@ -623,6 +692,8 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
     UI->hotCount = 0;
     UI->tooltip[0] = 0;
     Vec2 cameraOffset = HandleKeyboardInteraction(UI, myPlayer, input);
+    HandleMouseInteraction(UI, myPlayer, input);
+    
     EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent) && ArchetypeHas(InteractionComponent), input->timeToAdvance);
     MoveCameraTowards(worldMode, player, 0.5f, cameraOffset, V2(0, 0), 1.0f);
     
@@ -662,6 +733,7 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
     else
     {
         HandleOverlayObjectsInteraction(UI, worldMode, false);
+        HandleSkillsInteraction(UI, worldMode);
     }
     
     if(IsValidID(UI->draggingIDServer) && MouseInsidePlayerRectProjectedOnScreen(worldMode))
@@ -956,6 +1028,15 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                 if(IsDown(&input->mouseRight))
                 {
                     UI->equipmentPositions[hotInteraction.objectIndex] += worldMode->deltaMouseP;
+                }
+            } break;
+            
+            case Interaction_SkillSelection:
+            {
+                UI->hotSkillIndex = hotInteraction.skillIndex;
+                if(Pressed(&input->mouseLeft))
+                {
+                    UI->selectedSkillIndex = UI->hotSkillIndex;
                 }
             } break;
             

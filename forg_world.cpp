@@ -54,10 +54,11 @@ inline UniversePos NormalizePosition(UniversePos pos)
     return result;
 }
 
-inline UniversePos Offset(UniversePos pos, Vec2 offset)
+inline UniversePos Offset(UniversePos pos, Vec3 offset)
 {
     pos.chunkOffset.x += offset.x;
     pos.chunkOffset.y += offset.y;
+    pos.chunkOffset.z += offset.z;
     UniversePos result = NormalizePosition(pos);
     
     return result;

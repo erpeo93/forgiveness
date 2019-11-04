@@ -158,6 +158,7 @@ enum Packet_Type
     
     Type_Command,
     Type_InventoryCommand,
+    Type_SkillCommand,
     
     Type_entityHeader,
     Type_entityBasics,
@@ -218,6 +219,7 @@ struct GameCommand
     u16 optionIndex;
     
     // NOTE(Leonardo): only for skill commands!
+    Vec3 targetOffset;
     u16 skillIndex;
 };
 

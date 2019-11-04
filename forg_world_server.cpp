@@ -606,9 +606,12 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                 {
                     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
                     Skill* active = skills->activeSkills + command->skillIndex;
-                    DispatchGameEffect(server, ID, physic->P, &active->effect);
+                    
+                    UniversePos targetP = Offset(physic->P, command->targetOffset);
+                    DispatchGameEffect(server, ID, targetP, &active->effect);
                 }
             }
+            
         } break;
         InvalidDefaultCase;
     }
@@ -651,6 +654,12 @@ STANDARD_ECS_JOB_SERVER(HandlePlayerCommands)
         {
             DispatchCommand(server, ID, &player->inventoryCommand);
             player->inventoryCommandValid = false;
+        }
+        
+        if(player->skillCommandValid)
+        {
+            DispatchCommand(server, ID, &player->skillCommand);
+            player->skillCommandValid = false;
         }
     }
 }

@@ -184,6 +184,15 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             player->inventoryCommandValid = true;
         } break;
         
+        case Type_SkillCommand:
+        {
+            GameCommand* command = &player->skillCommand;
+            unpack(packetPtr, "HH", &command->action, &command->skillIndex);
+            
+            Assert(!player->skillCommandValid);
+            player->skillCommandValid = true;
+        } break;
+        
         case Type_FileHeader:
         {
             u32 index;
