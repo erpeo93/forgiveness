@@ -1201,14 +1201,12 @@ inline Rect2 ProjectOnScreen(RenderGroup* group, Rect3 rect, r32* cameraZ)
 
 inline Vec3 UnprojectAtZ( RenderGroup* group, CameraTransform* camera, Vec2 screenP, r32 Z)
 {
-    Vec4 probeZ = V4(0, 0, Z, 1.0f );
+    Vec4 probeZ = V4(0, 0, Z, 1.0f);
     probeZ = camera->proj.forward * probeZ;
     r32 clipZ =probeZ.z;
     r32 clipW = probeZ.w;
     
-    Vec2 screenCenter = 0.5f * group->screenDim;
-    
-    Vec2 clipSpaceXY = (screenP - screenCenter);
+    Vec2 clipSpaceXY = (screenP);
     clipSpaceXY.x *= (2.0f / group->screenDim.x);
     clipSpaceXY.y *= (2.0f / group->screenDim.y);
     
@@ -1239,13 +1237,5 @@ inline Rect3 GetScreenBoundsAtTargetDistance(RenderGroup* group)
 {
     r32 z = 0.0f;
     Rect3 result = GetScreenBoundsAtDistance( group, z );
-    return result;
-}
-
-inline Vec3 WorldPFromScreenP(RenderGroup* group, Vec2 screenOffset)
-{
-    Vec2 realScreenP = screenOffset + group->gameCamera.screenCameraOffset;
-    Vec3 result = realScreenP.x * group->gameCamera.X + realScreenP.y * group->gameCamera.Y;
-    
     return result;
 }

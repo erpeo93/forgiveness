@@ -1,9 +1,10 @@
 internal Vec2 HandleKeyboardInteraction(GameUIContext* UI, ClientPlayer* player, PlatformInput* input)
 {
-    GameCommand* command = &player->currentCommand;
+    GameCommand* command = &UI->standardCommand;
+    CommandParameters* parameters = &UI->commandParameters;
     
     command->action = idle;
-    command->acceleration = {};
+    parameters->acceleration = {};
     command->targetID = {};
     
     Vec2 cameraOffset = {};
@@ -11,26 +12,26 @@ internal Vec2 HandleKeyboardInteraction(GameUIContext* UI, ClientPlayer* player,
     r32 cameraOffsetMagnitudo = 0.6f;
     if(IsDown(&input->moveLeft))
     {
-        command->acceleration.x = -1.0f;
+        parameters->acceleration.x = -1.0f;
         cameraOffset.x = -cameraOffsetMagnitudo;
     }
     if(IsDown(&input->moveRight))
     {
-        command->acceleration.x = 1.0f;
+        parameters->acceleration.x = 1.0f;
         cameraOffset.x = cameraOffsetMagnitudo;
     }
     if(IsDown(&input->moveDown))
     {
-        command->acceleration.y = -1.0f;
+        parameters->acceleration.y = -1.0f;
         cameraOffset.y = -cameraOffsetMagnitudo;
     }
     if(IsDown(&input->moveUp))
     {
-        command->acceleration.y = 1.0f;
+        parameters->acceleration.y = 1.0f;
         cameraOffset.y = cameraOffsetMagnitudo;
     }
     
-    if(LengthSq(command->acceleration) > 0)
+    if(LengthSq(parameters->acceleration) > 0)
     {
         command->action = move;
     }
@@ -38,8 +39,9 @@ internal Vec2 HandleKeyboardInteraction(GameUIContext* UI, ClientPlayer* player,
     return cameraOffset;
 }
 
-internal void HandleMouseInteraction(GameUIContext* UI, ClientPlayer* player, PlatformInput* input)
+internal void HandleMouseInteraction(GameUIContext* UI, GameModeWorld* worldMode, ClientPlayer* player, PlatformInput* input)
 {
+    CommandParameters* parameters = &UI->commandParameters;
     if(Pressed(&input->mouseCenter))
     {
         if(IsValidID(UI->lootingIDServer))
@@ -66,9 +68,33 @@ internal void HandleMouseInteraction(GameUIContext* UI, ClientPlayer* player, Pl
         GameCommand command = {};
         command.action = cast;
         command.skillIndex = SafeTruncateToU16(UI->selectedSkillIndex);
-        command.targetOffset = {};
-        SendSkillCommand(command);
+        UI->castingSkill = true;
+        UI->skillCommand = command;
     }
+    
+    if(UI->castingSkill)
+    {
+        parameters->targetOffset = worldMode->groundMouseP;
+        if(Released(&input->mouseRight))
+        {
+            UI->castingSkill = false;
+        }
+    }
+}
+
+internal GameCommand ComputeFinalCommand(GameUIContext* UI)
+{
+    GameCommand result;
+    if(UI->castingSkill)
+    {
+        result = UI->skillCommand;
+    }
+    else
+    {
+        result = UI->standardCommand;
+    }
+    
+    return result;
 }
 
 internal void ResetInteractions(GameUIContext* UI)
@@ -692,7 +718,7 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
     UI->hotCount = 0;
     UI->tooltip[0] = 0;
     Vec2 cameraOffset = HandleKeyboardInteraction(UI, myPlayer, input);
-    HandleMouseInteraction(UI, myPlayer, input);
+    HandleMouseInteraction(UI, worldMode, myPlayer, input);
     
     EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent) && ArchetypeHas(InteractionComponent), input->timeToAdvance);
     MoveCameraTowards(worldMode, player, 0.5f, cameraOffset, V2(0, 0), 1.0f);
@@ -814,7 +840,7 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                 {
                     if(Pressed(&input->mouseLeft))
                     {
-                        GameCommand* command = &myPlayer->currentCommand;
+                        GameCommand* command = &UI->standardCommand;
                         command->targetID = hotID;
                         command->action = hotAction;
                     }
@@ -899,7 +925,7 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                     {
                         if(Pressed(&input->mouseLeft))
                         {
-                            GameCommand* command = &myPlayer->currentCommand;
+                            GameCommand* command = &UI->standardCommand;
                             command->targetID = hotID;
                             command->action = hotAction;
                         }

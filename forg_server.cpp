@@ -22,7 +22,7 @@
 #include "forg_game_effect.cpp"
 #include "forg_world_server.cpp"
 
-internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* player,  unsigned char* packetPtr, u16 dataSize)
+internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, PlayerComponent* player,  unsigned char* packetPtr, u16 dataSize)
 {
     u32 challenge = 1111;
     
@@ -147,7 +147,7 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
                 P.chunkZ = 0;
                 P.chunkX = 1;
                 P.chunkY = 1;
-                SpawnPlayer(server, player, P);
+                SpawnPlayer(server, playerIndex, P);
             }
             else
             {
@@ -159,17 +159,17 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
         {
             u16 index;
             u16 action;
-            Vec3 acc;
             EntityID targetID;
-            unpack(packetPtr, "HHVL", &index, &action, &acc, &targetID);
+            u16 skillIndex;
+            unpack(packetPtr, "HHLH", &index, &action, &targetID, &skillIndex);
             
             if(CommandIndexValid(index, player->expectingCommandIndex))
             {
                 player->expectingCommandIndex = index + 1;
                 GameCommand* command = &player->requestCommand;
                 command->action = action;
-                command->acceleration = acc;
                 command->targetID = targetID;
+                command->skillIndex = skillIndex;
             }
         } break;
         
@@ -184,13 +184,10 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             player->inventoryCommandValid = true;
         } break;
         
-        case Type_SkillCommand:
+        case Type_CommandParameters:
         {
-            GameCommand* command = &player->skillCommand;
-            unpack(packetPtr, "HH", &command->action, &command->skillIndex);
-            
-            Assert(!player->skillCommandValid);
-            player->skillCommandValid = true;
+            CommandParameters* parameters = &player->commandParameters;
+            unpack(packetPtr, "VV", &parameters->acceleration, &parameters->targetOffset);
         } break;
         
         case Type_FileHeader:
@@ -235,7 +232,8 @@ internal void DispatchApplicationPacket(ServerState* server, PlayerComponent* pl
             unpack(packetPtr, "llllV", &createEntities, &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset);
             EXECUTE_JOB(server, DeleteAllEntities, (1 == 1), 0);
             BuildWorld(server, createEntities);
-            RespawnPlayer(server, player, P);
+            QueueGameAccessConfirm(player, server->worldSeed, {}, true);
+            SpawnPlayer(server, playerIndex, P);
         } break;
         
 #if 0        
@@ -350,7 +348,7 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
                         NetworkPacketReceived* test = receiver->orderedWindow + index;
                         if(test->dataSize)
                         {
-                            DispatchApplicationPacket(server, player, test->data + sizeof(ForgNetworkApplicationData), test->dataSize - sizeof(ForgNetworkApplicationData));
+                            DispatchApplicationPacket(server, iter.index, player, test->data + sizeof(ForgNetworkApplicationData), test->dataSize - sizeof(ForgNetworkApplicationData));
                             test->dataSize = 0;
                             ++dispatched;
                         }
@@ -368,7 +366,7 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
                     if(ApplicationIndexGreater(applicationData, receiver->unorderedBiggestReceived))
                     {
                         receiver->unorderedBiggestReceived = applicationData;
-                        DispatchApplicationPacket(server, player, packetPtr, received.dataSize - sizeof(ForgNetworkApplicationData));
+                        DispatchApplicationPacket(server, iter.index, player, packetPtr, received.dataSize - sizeof(ForgNetworkApplicationData));
                     }
                 }
             }

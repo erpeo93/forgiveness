@@ -385,7 +385,7 @@ internal void AddToPoission(PoissonP** positions, MemoryPool* pool, UniversePos 
     *positions = newP;
 }
 
-internal EntityID AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, EntityRef type, PlayerComponent* player);
+internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, EntityRef type, u32 playerIndex);
 internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos referenceP, RandomSequence* seq)
 {
     if(spawner->optionCount)
@@ -506,6 +506,31 @@ internal void SpawnEntities(ServerState* server, r32 elapsedTime)
     }
     
     Clear(&tempPool);
+    
+    for(NewEntity* newEntity = server->firstNewEntity; newEntity; newEntity = newEntity->next)
+    {
+        Assert(IsValid(newEntity->definitionID));
+        EntityDefinition* definition = GetData(server->assets, EntityDefinition, newEntity->definitionID);
+        EntityID ID = {};
+        ServerEntityInitParams params = definition->server;
+        params.P = newEntity->P;
+        definition->common.definitionID = EntityReference(newEntity->definitionID);
+        params.seed = newEntity->seed;
+        
+        u8 archetype = SafeTruncateToU8(ConvertEnumerator(EntityArchetype, definition->archetype));
+        AcquireArchetype(server, archetype, (&ID));
+        InitEntity(server, ID, &definition->common, &params, 0); 
+        if(newEntity->playerIndex > 0)
+        {
+            Assert(HasComponent(ID, PlayerComponent));
+            PlayerComponent* player = (PlayerComponent*) Get_(&server->PlayerComponent_, newEntity->playerIndex);
+            SetComponent(server, ID, PlayerComponent, player);
+            ResetQueue(player->queues + GuaranteedDelivery_None);
+            QueueGameAccessConfirm(player, server->worldSeed, ID, false);
+        }
+    }
+    
+    FREELIST_FREE(server->firstNewEntity, NewEntity, server->firstFreeNewEntity);
 }
 
 internal void BuildWorld(ServerState* server, b32 spawnEntities)

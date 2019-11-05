@@ -137,9 +137,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
 #endif
     
     Vec2 screenMouseP = V2(input->mouseX, input->mouseY) - 0.5f * group->screenDim;
-    Vec3 unprojectedWorldMouseP = UnprojectAtZ(group, &group->gameCamera, screenMouseP, 0);
-    Vec3 groundMouseP = ProjectOnGround(unprojectedWorldMouseP, group->gameCamera.P);
-    
     worldMode->deltaMouseP = screenMouseP - worldMode->relativeMouseP;
     worldMode->relativeMouseP = screenMouseP;
     
@@ -166,6 +163,10 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             ResetLightGrid(worldMode);
             
             SetupGameCamera(worldMode, group, input);
+            
+            Vec3 unprojectedWorldMouseP = UnprojectAtZ(group, &group->gameCamera, screenMouseP, 0);
+            worldMode->groundMouseP = ProjectOnGround(unprojectedWorldMouseP, group->gameCamera.P);
+            
             HandleUIInteraction(worldMode, group, myPlayer, input);
             UpdateGameCamera(worldMode, input);
             
@@ -211,12 +212,15 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         }
     }
     
-    if(!AreEqual(myPlayer->lastCommand, myPlayer->currentCommand))
+    GameCommand command = ComputeFinalCommand(&worldMode->gameUI);
+    if(!AreEqual(myPlayer->lastCommand, command))
     {
-        myPlayer->lastCommand = myPlayer->currentCommand;
+        myPlayer->lastCommand = command;
         ++myPlayer->currentCommandIndex;
     }
-    SendCommand(myPlayer->currentCommandIndex, myPlayer->currentCommand);
+    
+    SendCommand(myPlayer->currentCommandIndex, command);
+    SendCommandParameters(worldMode->gameUI.commandParameters);
     
     
     return result;

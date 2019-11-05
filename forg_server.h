@@ -71,8 +71,10 @@ struct PhysicComponent
     u32 seed;
     Vec3 speed;
     Vec3 acc;
-    GameProperty action;
     u32 flags;
+    
+    GameProperty action;
+    r32 actionTime;
 };
 
 struct FileHash
@@ -102,8 +104,7 @@ struct PlayerComponent
     b32 inventoryCommandValid;
     GameCommand inventoryCommand;
     
-    b32 skillCommandValid;
-    GameCommand skillCommand;
+    CommandParameters commandParameters;
     
     FileHash* firstFileHash;
     
@@ -150,6 +151,20 @@ struct TimestampHash
     SavedTypeSubtypeCountHash* countHashSlots[128];
 };
 
+struct NewEntity
+{
+    UniversePos P;
+    AssetID definitionID;
+    u32 seed;
+    u32 playerIndex;
+    
+    union
+    {
+        NewEntity* next;
+        NewEntity* nextFree;
+    };
+};
+
 struct ServerState
 {
     u32 worldSeed;
@@ -187,6 +202,9 @@ struct ServerState
     FileHash* firstFreeFileHash;
     
     Assets* assets;
+    
+    NewEntity* firstFreeNewEntity;
+    NewEntity* firstNewEntity;
     
 #if FORGIVENESS_INTERNAL
     b32 captureFrame;

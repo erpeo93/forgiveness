@@ -1,33 +1,32 @@
-internal EntityID AddEntity_(ServerState* server, UniversePos P, AssetID definitionID, u32 seed, PlayerComponent* player = 0)
+internal EntityID AddEntitySync(NewEntity* newEntity)
 {
-    Assert(IsValid(definitionID));
-    EntityDefinition* definition = GetData(server->assets, EntityDefinition, definitionID);
-    EntityID result = {};
-    ServerEntityInitParams params = definition->server;
-    params.P = P;
-    definition->common.definitionID = EntityReference(definitionID);
-    params.seed = seed;
-    
-    u8 archetype = SafeTruncateToU8(ConvertEnumerator(EntityArchetype, definition->archetype));
-    AcquireArchetype(server, archetype, (&result));
-    InitEntity(server, result, &definition->common, &params, 0); 
-    if(HasComponent(result, PlayerComponent))
-    {
-        SetComponent(server, result, PlayerComponent, player);
-    }
-    return result;
 }
 
-internal EntityID AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, GameProperties* definitionProperties, PlayerComponent* player = 0)
+internal void SpawnNewEntities(ServerState* server)
+{
+}
+
+internal void AddEntity_(ServerState* server, UniversePos P, AssetID definitionID, u32 seed, u32 playerIndex = 0)
+{
+    NewEntity* newEntity;
+    FREELIST_ALLOC(newEntity, server->firstFreeNewEntity, PushStruct(&server->gamePool, NewEntity));
+    newEntity->P = P;
+    newEntity->definitionID = definitionID;
+    newEntity->seed = seed;
+    newEntity->playerIndex = playerIndex;
+    
+    FREELIST_INSERT(newEntity, server->firstNewEntity);
+}
+
+internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, GameProperties* definitionProperties, u32 playerIndex = 0)
 {
     AssetID definitionID = QueryDataFiles(server->assets, EntityDefinition, "default", seq, definitionProperties);
     
     u32 seed = GetNextUInt32(seq);
-    EntityID result = AddEntity_(server, P, definitionID, seed, player);
-    return result;
+    AddEntity_(server, P, definitionID, seed, playerIndex);
 }
 
-internal EntityID AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, EntityRef type, PlayerComponent* player = 0)
+internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, EntityRef type, u32 playerIndex = 0)
 {
     AssetID definitionID;
     definitionID.type = AssetType_EntityDefinition;
@@ -35,19 +34,13 @@ internal EntityID AddEntity(ServerState* server, UniversePos P, RandomSequence* 
     definitionID.index = type.index;
     
     u32 seed = GetNextUInt32(seq);
-    EntityID result = AddEntity_(server, P, definitionID, seed, player);
-    return result;
+    AddEntity_(server, P, definitionID, seed, playerIndex);
 }
 
-#define SpawnPlayer(server, player, P) SpawnPlayer_(server, player, P, false)
-#define RespawnPlayer(server, player, P) SpawnPlayer_(server, player, P, true)
-internal void SpawnPlayer_(ServerState* server, PlayerComponent* player, UniversePos P, b32 deleteEntities)
+internal void SpawnPlayer(ServerState* server, u32 playerIndex, UniversePos P)
 {
     EntityRef type = EntityReference(server->assets, "default", "human");
-    EntityID ID = AddEntity(server, P, &server->entropy, type, player);
-    
-    ResetQueue(player->queues + GuaranteedDelivery_None);
-    QueueGameAccessConfirm(player, server->worldSeed, ID, deleteEntities);
+    AddEntity(server, P, &server->entropy, type, playerIndex);
 }
 
 internal void MakeIntangible(ServerState* server, EntityID ID)
@@ -447,63 +440,86 @@ internal b32 StoreInContainer(ServerState* server, EntityID containerID, EntityI
     return result;
 }
 
-internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* command)
+internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* command, CommandParameters* parameters, r32 elapsedTime)
 {
+    Assert(HasComponent(ID, PhysicComponent));
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    GameProperty newAction = GameProp(action, command->action);
+    if(AreEqual(newAction, physic->action))
+    {
+        physic->actionTime += elapsedTime;
+    }
+    else
+    {
+        physic->actionTime = 0;
+        physic->action = newAction;
+    }
+    
     switch(command->action)
     {
         case none:
         case idle:
         case move:
         {
-            if(HasComponent(ID, PhysicComponent))
+            physic->acc = parameters->acceleration;
+            
+#if 0            
+            physic->action = {};
+            if(LengthSq(physic->speed) > 0.1f)
             {
-                PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-                physic->acc = command->acceleration;
-                
-                physic->action = {};
-                if(LengthSq(physic->speed) > 0.1f)
-                {
-                    physic->action = GameProp(action, move);
-                }
-                else
-                {
-                    physic->action = GameProp(action, idle);
-                }
-                
+                physic->action = GameProp(action, move);
             }
+            else
+            {
+                physic->action = GameProp(action, idle);
+            }
+#endif
         } break;
         
+        case cast:
+        {
+            physic->acc = {};
+            if(physic->actionTime > 0.5f)
+            {
+                SkillComponent* skills = GetComponent(server, ID, SkillComponent);
+                if(skills)
+                {
+                    if(command->skillIndex < ArrayCount(skills->activeSkills))
+                    {
+                        Skill* active = skills->activeSkills + command->skillIndex;
+                        UniversePos targetP = Offset(physic->P, parameters->targetOffset);
+                        DispatchGameEffect(server, ID, targetP, &active->effect);
+                    }
+                }
+                physic->actionTime = 0;
+            }
+        } break;
         case pick:
         {
-            if(HasComponent(ID, PhysicComponent))
+            physic->acc = {};
+            EntityID targetID = command->targetID;
+            if(IsValidID(targetID) && HasComponent(targetID, PhysicComponent))
             {
-                PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-                physic->acc = {};
-                
-                EntityID targetID = command->targetID;
-                if(IsValidID(targetID) && HasComponent(targetID, PhysicComponent))
+                PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
+                if(!IsSet(targetPhysic->flags, EntityFlag_notInWorld) && 
+                   targetPhysic->P.chunkZ == physic->P.chunkZ)
                 {
-                    PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
-                    if(!IsSet(targetPhysic->flags, EntityFlag_notInWorld) && 
-                       targetPhysic->P.chunkZ == physic->P.chunkZ)
+                    if(!Use(server, ID, targetID))
                     {
-                        if(!Use(server, ID, targetID))
+                        if(!Equip(server, ID, targetID))
                         {
-                            if(!Equip(server, ID, targetID))
+                            EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+                            
+                            if(equipment)
                             {
-                                EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-                                
-                                if(equipment)
+                                for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->slots); ++equipIndex)
                                 {
-                                    for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->slots); ++equipIndex)
+                                    EntityID equipID = equipment->slots[equipIndex].ID;
+                                    if(IsValidID(equipID) && HasComponent(equipID, ContainerComponent))
                                     {
-                                        EntityID equipID = equipment->slots[equipIndex].ID;
-                                        if(IsValidID(equipID) && HasComponent(equipID, ContainerComponent))
+                                        if(StoreInContainer(server, equipID, targetID))
                                         {
-                                            if(StoreInContainer(server, equipID, targetID))
-                                            {
-                                                break;
-                                            }
+                                            break;
                                         }
                                     }
                                 }
@@ -597,22 +613,6 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             }
         } break;
         
-        case cast:
-        {
-            SkillComponent* skills = GetComponent(server, ID, SkillComponent);
-            if(skills)
-            {
-                if(command->skillIndex < ArrayCount(skills->activeSkills))
-                {
-                    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-                    Skill* active = skills->activeSkills + command->skillIndex;
-                    
-                    UniversePos targetP = Offset(physic->P, command->targetOffset);
-                    DispatchGameEffect(server, ID, targetP, &active->effect);
-                }
-            }
-            
-        } break;
         InvalidDefaultCase;
     }
 }
@@ -649,17 +649,11 @@ STANDARD_ECS_JOB_SERVER(HandlePlayerCommands)
     PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
     if(player)
     {
-        DispatchCommand(server, ID, &player->requestCommand);
+        DispatchCommand(server, ID, &player->requestCommand, &player->commandParameters, elapsedTime);
         if(player->inventoryCommandValid)
         {
-            DispatchCommand(server, ID, &player->inventoryCommand);
+            DispatchCommand(server, ID, &player->inventoryCommand, &player->commandParameters, elapsedTime);
             player->inventoryCommandValid = false;
-        }
-        
-        if(player->skillCommandValid)
-        {
-            DispatchCommand(server, ID, &player->skillCommand);
-            player->skillCommandValid = false;
         }
     }
 }

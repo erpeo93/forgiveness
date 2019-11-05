@@ -124,7 +124,6 @@ struct ClientPlayer
     ReceivingAssetFile receiveFileSentinel;
     
     u16 currentCommandIndex;
-    GameCommand currentCommand;
     GameCommand lastCommand;
 };
 
@@ -177,6 +176,7 @@ struct GameModeWorld
     b32 canAdvance;
 #endif
     
+    Vec3 groundMouseP;
     Vec2 relativeMouseP;
     Vec2 deltaMouseP;
     

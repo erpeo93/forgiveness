@@ -98,4 +98,10 @@ struct GameUIContext
     u32 selectedSkillIndex;
     u32 hotSkillIndex;
     Rect2 skillRects[MAX_ACTIVE_SKILLS];
+    
+    GameCommand standardCommand;
+    b32 castingSkill;
+    GameCommand skillCommand;
+    
+    CommandParameters commandParameters;
 };

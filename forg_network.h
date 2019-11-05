@@ -158,7 +158,7 @@ enum Packet_Type
     
     Type_Command,
     Type_InventoryCommand,
-    Type_SkillCommand,
+    Type_CommandParameters,
     
     Type_entityHeader,
     Type_entityBasics,
@@ -209,23 +209,26 @@ struct GameAccessRequest
 struct GameCommand
 {
     u16 action;
-    Vec3 acceleration;
     EntityID targetID;
+    u16 skillIndex;
     
     // NOTE(Leonardo): only for inventory commands!
     EntityID containerID;
     u16 targetObjectIndex;
     EntityID targetContainerID;
     u16 optionIndex;
-    
-    // NOTE(Leonardo): only for skill commands!
+};
+
+struct CommandParameters
+{
+    Vec3 acceleration;
     Vec3 targetOffset;
-    u16 skillIndex;
 };
 
 inline b32 AreEqual(GameCommand c1, GameCommand c2)
 {
-    b32 result = (c1.acceleration == c2.acceleration && 
+    b32 result = (c1.action == c2.action &&
+                  c1.skillIndex == c2.skillIndex &&
                   AreEqual(c1.targetID, c2.targetID));
     return result;
 }

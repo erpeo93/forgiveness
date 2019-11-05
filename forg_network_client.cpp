@@ -89,7 +89,7 @@ internal void SendInputRecordingMessage( b32 recording, b32 startAutomatically )
 internal void SendCommand(u16 index, GameCommand command)
 {
     StartPacket(Command);
-    Pack("HHVL", index, command.action, command.acceleration, command.targetID);
+    Pack("HHLH", index, command.action, command.targetID, command.skillIndex);
     CloseAndSendStandardPacket();
 }
 
@@ -100,11 +100,11 @@ internal void SendInventoryCommand(GameCommand command)
     CloseAndSendOrderedPacket();
 }
 
-internal void SendSkillCommand(GameCommand command)
+internal void SendCommandParameters(CommandParameters parameters)
 {
-    StartPacket(SkillCommand);
-    Pack("HH", command.action, command.skillIndex);
-    CloseAndSendOrderedPacket();
+    StartPacket(CommandParameters);
+    Pack("VV", parameters.acceleration, parameters.targetOffset);
+    CloseAndSendStandardPacket();
 }
 
 inline void SendMovePlayerRequest(Vec3 offset)
