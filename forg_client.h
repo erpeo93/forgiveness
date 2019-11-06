@@ -56,6 +56,8 @@ struct BaseComponent
     Rect3 worldBounds;
     Rect2 projectedOnScreen;
     EntityID serverID;
+    
+    EntityID draggingID;
 };
 
 internal r32 GetHeight(BaseComponent* base)

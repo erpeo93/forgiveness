@@ -81,15 +81,24 @@ internal GameCommand ComputeFinalCommand(GameUIContext* UI)
 internal void ResetInteractions(GameUIContext* UI)
 {
     UI->hotCount = 0;
+    UI->anyValidInteraction = false;
 }
 
-internal EntityHotInteraction* AddPossibleInteraction(GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityID, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
+internal EntityHotInteraction* AddPossibleInteraction_(GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityID, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
 {
     EntityHotInteraction* result = 0;
     
     if(UI->hotCount < ArrayCount(UI->hotInteractions))
     {
-        EntityHotInteraction* dest = UI->hotInteractions + UI->hotCount++;
+        EntityHotInteraction* dest = UI->hotInteractions;
+        if(UI->hotCount == 1 && !UI->anyValidInteraction)
+        {
+        }
+        else
+        {
+            dest = UI->hotInteractions + UI->hotCount++;
+        }
+        
         dest->type = type;
         dest->actionCount = 0;
         dest->actions[0] = 0;
@@ -113,6 +122,14 @@ internal EntityHotInteraction* AddPossibleInteraction(GameUIContext* UI, Interac
         result = dest;
     }
     
+    return result;
+}
+
+
+internal EntityHotInteraction* AddPossibleInteraction(GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityID, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
+{
+    EntityHotInteraction* result = AddPossibleInteraction_(UI, type, list, entityID, containerID, objectIndex, slot, optionIndex);
+    UI->anyValidInteraction = true;
     return result;
 }
 
@@ -323,34 +340,34 @@ internal void OverdrawSkillSlots(GameUIContext* UI, GameModeWorld* worldMode, Re
     Vec2 skillDim = V2(80, 80);
     r32 margin = 10;
     
-    Vec4 skillColors[MAX_ACTIVE_SKILLS] = 
-    {
-        V4(1, 0, 1, 1),
-        V4(1, 1, 1, 1),
-        V4(1, 0, 0, 1),
-        V4(0, 0, 1, 1),
-        V4(0, 1, 1, 1),
-        V4(0, 1, 0, 1),
-    };
-    
     for(u32 skillIndex = 0; skillIndex < MAX_ACTIVE_SKILLS; ++skillIndex)
     {
-        Vec4 color = skillColors[skillIndex];
-        if(skillIndex != UI->hotSkillIndex && skillIndex != UI->selectedSkillIndex)
+        UI->skillRects[skillIndex] = InvertedInfinityRect2();
+    }
+    
+    SkillMappingComponent* skills = GetComponent(worldMode, worldMode->player.clientID, SkillMappingComponent);
+    if(skills)
+    {
+        for(u32 skillIndex = 0; skillIndex < MAX_ACTIVE_SKILLS; ++skillIndex)
         {
-            color.a *= 0.7f;
+            SkillMapping* skill = skills->mappings + skillIndex;
+            Vec4 color = skill->color;
+            if(skillIndex != UI->hotSkillIndex && skillIndex != UI->selectedSkillIndex)
+            {
+                color.a *= 0.7f;
+            }
+            
+            Rect2 skillRect = RectMinDim(P, skillDim);
+            UI->skillRects[skillIndex] = skillRect;
+            PushRect(group, FlatTransform(2.0f), skillRect, color);
+            
+            if(skillIndex == UI->selectedSkillIndex)
+            {
+                PushRectOutline(group, FlatTransform(2.0f), skillRect, V4(0, 0, 0, 1), 2.0f);
+            }
+            
+            P.x += (margin + skillDim.x);
         }
-        
-        Rect2 skillRect = RectMinDim(P, skillDim);
-        UI->skillRects[skillIndex] = skillRect;
-        PushRect(group, FlatTransform(2.0f), skillRect, color);
-        
-        if(skillIndex == UI->selectedSkillIndex)
-        {
-            PushRectOutline(group, FlatTransform(2.0f), skillRect, V4(0, 0, 0, 1), 2.0f);
-        }
-        
-        P.x += (margin + skillDim.x);
     }
 }
 
@@ -462,9 +479,14 @@ internal void SetTooltip(GameUIContext* UI, u32 actionCount, char* tooltip)
 
 internal void AddObjectRemovedPrediction(GameModeWorld* worldMode, GameUIContext* UI, EntityID containerID, EntityID ID)
 {
-    UI->predictionTime = 0.2f;
-    UI->predictionContainerID = GetClientIDMapping(worldMode, containerID);
-    UI->predictionObjectID = GetClientIDMapping(worldMode, ID);
+    UI->ignoreDraggingMappingTimer = 0.2f;
+    if(IsValidID(containerID))
+    {
+        Assert(IsValidID(ID));
+        UI->predictionTime = 0.2f;
+        UI->predictionContainerID = GetClientIDMapping(worldMode, containerID);
+        UI->predictionObjectID = GetClientIDMapping(worldMode, ID);
+    }
 }
 
 internal b32 UsingEquipOptionApplicable(UsingEquipOption* option, ObjectMapping* mappings, u32 mappingCount, EntityID targetID)
@@ -680,10 +702,17 @@ internal void HandleSkillsInteraction(GameUIContext* UI, GameModeWorld* worldMod
     {
         if(PointInRect(UI->skillRects[skillIndex], worldMode->relativeMouseP))
         {
+            ResetInteractions(UI);
             EntityHotInteraction* interaction = AddPossibleInteraction(UI, Interaction_SkillSelection, 0, {}, {}, 0, 0, 0);
             interaction->skillIndex = SafeTruncateToU16(skillIndex);
         }
     }
+}
+
+internal b32 CanDrag(GameUIContext* UI, EntityID targetID)
+{
+    b32 result = true;
+    return result;
 }
 
 internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, ClientPlayer* myPlayer, PlatformInput* input)
@@ -695,38 +724,69 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
         UI->initialized = true;
         UI->hotSkillIndex = 0xffff;
     }
-    
+    BaseComponent* player = GetComponent(worldMode, myPlayer->clientID, BaseComponent);
+    player->flags = ClearFlags(player->flags, EntityFlag_occluding);
     ResetInteractions(UI);
+    UI->tooltip[0] = 0;
     UI->hotGameWorldID = {};
     
-    BaseComponent* player = GetComponent(worldMode, myPlayer->clientID, BaseComponent);
+    if(UI->ignoreDraggingMappingTimer > 0)
+    {
+        UI->ignoreDraggingMappingTimer -= input->timeToAdvance;
+    }
+    else
+    {
+        if(IsValidID(player->draggingID) && !IsValidID(UI->draggingIDServer))
+        {
+            UI->draggingIDServer = player->draggingID;
+            UI->draggingContainerIDServer = myPlayer->serverID;
+        }
+    }
     
-    UI->hotCount = 0;
-    UI->tooltip[0] = 0;
+    AddPossibleInteraction_(&worldMode->gameUI, Interaction_Ground, 0, {});
+    
     Vec2 cameraOffset = HandleKeyboardInteraction(UI, myPlayer, input);
     HandleMouseInteraction(UI, worldMode, myPlayer, input);
     
     EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent) && ArchetypeHas(InteractionComponent), input->timeToAdvance);
     MoveCameraTowards(worldMode, player, 0.5f, cameraOffset, V2(0, 0), 1.0f);
     
-    player->flags = ClearFlags(player->flags, EntityFlag_occluding);
     
-    
-    if(IsValidID(UI->lockedWorldID))
+    if(UI->lockedInteraction)
     {
-        EntityID lockedIDClient = GetClientIDMapping(worldMode, UI->lockedWorldID);
-        InteractionComponent* lockedInteraction = GetComponent(worldMode, lockedIDClient, InteractionComponent);
-        BaseComponent* lockedBase = GetComponent(worldMode, lockedIDClient, BaseComponent);
-        lockedInteraction->isOnFocus = true;
-        
         if(UI->castingSkillMode)
         {
-            CommandParameters* parameters = &UI->commandParameters;
-            parameters->targetOffset = worldMode->groundMouseP;
-            if(Released(&input->mouseRight) || !ShouldBeRendered(worldMode, lockedBase))
+            b32 interactionEnded = false;
+            switch(UI->castingSkillMode)
+            {
+                case CastingSkill_Target:
+                {
+                    EntityID lockedIDClient = GetClientIDMapping(worldMode, UI->lockedWorldID);
+                    InteractionComponent* lockedInteraction = GetComponent(worldMode, lockedIDClient, InteractionComponent);
+                    lockedInteraction->isOnFocus = true;
+                    BaseComponent* lockedBase = GetComponent(worldMode, lockedIDClient, BaseComponent);
+                    if(Released(&input->mouseRight) || !ShouldBeRendered(worldMode, lockedBase))
+                    {
+                        interactionEnded = true;
+                    }
+                } break;
+                
+                case CastingSkill_Offset:
+                {
+                    CommandParameters* parameters = &UI->commandParameters;
+                    parameters->targetOffset = worldMode->groundMouseP;
+                    if(Released(&input->mouseRight))
+                    {
+                        interactionEnded = true;
+                    }
+                } break;
+            }
+            
+            if(interactionEnded)
             {
                 UI->castingSkillMode = CastingSkill_None;
                 UI->lockedWorldID = {};
+                UI->lockedInteraction = false;
             }
         }
     }
@@ -839,37 +899,66 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
             {
                 case Interaction_Ground:
                 {
-                    Assert(IsValidID(hotID));
                     if(IsValidID(UI->draggingIDServer))
                     {
                         validInteraction = false;
                     }
                     else
                     {
-                        if(Pressed(&input->mouseLeft))
+                        if(CanDrag(UI, hotID))
                         {
-                            GameCommand* command = &UI->standardCommand;
-                            command->targetID = hotID;
-                            command->action = hotAction;
+                            if(Pressed(&input->mouseRight))
+                            {
+                                if(IsValidID(hotID))
+                                {
+                                    GameCommand command = {};
+                                    command.action = drag;
+                                    command.targetID = hotID;
+                                    SendInventoryCommand(command); 
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if(Pressed(&input->mouseRight))
+                            {
+                                GameCommand command = {};
+                                command.action = cast;
+                                command.skillIndex = SafeTruncateToU16(UI->selectedSkillIndex);
+                                SkillMappingComponent* skills = GetComponent(worldMode, myPlayer->clientID, SkillMappingComponent);
+                                
+                                if(skills)
+                                {
+                                    Assert(command.skillIndex < ArrayCount(skills->mappings));
+                                    SkillMapping* skill = skills->mappings + command.skillIndex;
+                                    if(skill->targetSkill)
+                                    {
+                                        if(IsValidID(hotID))
+                                        {
+                                            command.targetID = hotID;
+                                            UI->lockedWorldID = hotID;
+                                            UI->lockedInteraction = true;
+                                            UI->castingSkillMode = CastingSkill_Target;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        UI->lockedInteraction = true;
+                                        UI->castingSkillMode = CastingSkill_Offset;
+                                    }
+                                    UI->skillCommand = command;
+                                }
+                            }
                         }
                         
-                        if(Pressed(&input->mouseRight))
+                        if(Pressed(&input->mouseLeft))
                         {
-                            GameCommand command = {};
-                            command.action = cast;
-                            command.skillIndex = SafeTruncateToU16(UI->selectedSkillIndex);
-                            
-                            if(true)
+                            if(IsValidID(hotID))
                             {
-                                command.targetID = hotID;
-                                UI->lockedWorldID = hotID;
-                                UI->castingSkillMode = CastingSkill_Target;
+                                GameCommand* command = &UI->standardCommand;
+                                command->targetID = hotID;
+                                command->action = hotAction;
                             }
-                            else
-                            {
-                                UI->castingSkillMode = CastingSkill_Offset;
-                            }
-                            UI->skillCommand = command;
                         }
                     }
                 } break;
@@ -1109,28 +1198,27 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                     SetTooltip(UI, hotInteraction.actionCount, MetaTable_action[hotAction]);
                 }
             }
-        }
-        else
-        {
-            if(IsValidID(UI->draggingIDServer))
+            else
             {
-                UI->multipleActions = false;
-                SetTooltip(UI, false, "drop");
-                
-                if(Pressed(&input->mouseLeft) || Pressed(&input->mouseRight))
+                if(IsValidID(UI->draggingIDServer))
                 {
-                    GameCommand command = {};
-                    command.action = drop;
-                    command.targetID = UI->draggingIDServer;
-                    command.containerID = UI->draggingContainerIDServer;
-                    SendInventoryCommand(command);
-                    UI->draggingIDServer = {};
+                    UI->multipleActions = false;
+                    SetTooltip(UI, false, "drop");
                     
-                    AddObjectRemovedPrediction(worldMode, UI, command.containerID, command.targetID);
+                    if(Pressed(&input->mouseLeft) || Pressed(&input->mouseRight))
+                    {
+                        GameCommand command = {};
+                        command.action = drop;
+                        command.targetID = UI->draggingIDServer;
+                        command.containerID = UI->draggingContainerIDServer;
+                        SendInventoryCommand(command);
+                        UI->draggingIDServer = {};
+                        
+                        AddObjectRemovedPrediction(worldMode, UI, command.containerID, command.targetID);
+                    }
                 }
             }
         }
-        
     }
     
     if(UI->predictionTime > 0)

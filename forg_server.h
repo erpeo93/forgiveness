@@ -75,6 +75,8 @@ struct PhysicComponent
     
     GameProperty action;
     r32 actionTime;
+    
+    EntityID draggingID;
 };
 
 struct FileHash

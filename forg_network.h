@@ -166,6 +166,7 @@ enum Packet_Type
     Type_UsingMapping,
     Type_ContainerStoredMapping,
     Type_ContainerUsingMapping,
+    Type_DraggingMapping,
     Type_ContainerOpenedBy,
     
     Type_EffectDispatch,

@@ -1,9 +1,14 @@
 internal b32 ShouldBeRendered(GameModeWorld* worldMode, BaseComponent* base)
 
 {
-    b32 result = ((base->universeP.chunkZ == worldMode->player.universeP.chunkZ) &&
+    b32 result = false;
+    if(base)
+    {
+        result = ((base->universeP.chunkZ == worldMode->player.universeP.chunkZ) &&
+                  
                   !(base->flags & EntityFlag_notInWorld) &&
                   !(base->flags & EntityFlag_occluding));
+    }
     return result;
 }
 
@@ -55,9 +60,8 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         
         AddOptionalGamePropertyRaw(&animation->skeletonProperties, base->action);
         
-        
         AnimationParams params = {};
-        params.elapsedTime = elapsedTime;
+        params.elapsedTime = elapsedTime * animation->speed;
         params.angle = 0;
         params.P = P;
         params.lights = GetLights(worldMode, P);

@@ -11,10 +11,11 @@
 #include "forg_physics.cpp"
 #include "forg_resizable_array.cpp"
 #include "forg_network_server.cpp"
-#include "forg_archetypes.cpp"
-
 #define ONLY_DATA_FILES
 #include "forg_asset.cpp"
+
+
+#include "forg_archetypes.cpp"
 #include "forg_meta.cpp"
 #include "miniz.c"
 #include "asset_builder.cpp"

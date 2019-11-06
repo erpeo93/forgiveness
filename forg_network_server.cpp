@@ -229,6 +229,14 @@ internal void QueueOpenedByID(PlayerComponent* player, EntityID ID, EntityID ope
 }
 
 
+internal void QueueDraggingID(PlayerComponent* player, EntityID ID, EntityID dragging)
+{
+    StartPacket(player, DraggingMapping);
+    Pack("L", dragging.archetype_archetypeIndex);
+    QueueStandardPacket(player, ID);
+}
+
+
 internal void QueueEffectDispatch(PlayerComponent* player, EntityID ID)
 {
     StartPacket(player, EffectDispatch);
@@ -393,6 +401,8 @@ STANDARD_ECS_JOB_SERVER(SendEntityUpdate)
                         QueueContainerUsingID(player, ID, objectIndex, slot->type, slot->ID);
                     }
                 }
+                
+                QueueDraggingID(player, ID, physic->draggingID);
             }
         }
     }

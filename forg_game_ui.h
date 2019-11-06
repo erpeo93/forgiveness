@@ -90,10 +90,12 @@ struct GameUIContext
     EntityID predictionContainerID;
     EntityID predictionObjectID;
     r32 predictionTime;
+    r32 ignoreDraggingMappingTimer;
     
     i32 currentHotIndex;
     i32 currentActionIndex;
     
+    b32 anyValidInteraction;
     u32 hotCount;
     EntityHotInteraction hotInteractions[8];
     EntityHotInteraction lastFrameHotInteraction;
@@ -110,6 +112,7 @@ struct GameUIContext
     CastingSkillMode castingSkillMode;
     EntityID hotGameWorldID;
     EntityID lockedWorldID;
+    b32 lockedInteraction;
     GameCommand skillCommand;
     
     CommandParameters commandParameters;

@@ -1,4 +1,4 @@
-inline r32 LerpAnglesWithSpin(i32 spin, r32 angle1, r32 angle2, r32 lerp )
+inline r32 LerpAnglesWithSpin(i32 spin, r32 angle1, r32 angle2, r32 lerp)
 {
     r32 result = 0;
     if(spin == -1)

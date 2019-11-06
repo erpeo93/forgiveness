@@ -122,7 +122,6 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
     
 }
 
-internal EntityRef EntityReference(Assets* assets, char* kind, char* type);
 INIT_COMPONENT_FUNCTION(InitSkillComponent)
 {
     ServerState* server = (ServerState*) state;
@@ -131,15 +130,15 @@ INIT_COMPONENT_FUNCTION(InitSkillComponent)
     
     for(u32 skillIndex = 0; skillIndex < ArrayCount(skills->activeSkills); ++skillIndex)
     {
-        skills->activeSkills[skillIndex].effect.effectType = GameProp(gameEffect, moveOnZSlice);
+        RandomSequence seq = Seed(skillIndex);
+        AssetID assetID = QueryDataFiles(server->assets, SkillDefinition, "default", &seq, 0);
+        
+        SkillDefinition* skillDefinition = GetData(server->assets, SkillDefinition, assetID);
+        Skill* dest = skills->activeSkills + skillIndex;
+        dest->targetTime = skillDefinition->targetTime;
+        dest->effect = skillDefinition->effect;
     }
     
-    skills->activeSkills[0].effect.spawnType = EntityReference(server->assets, "default", "wolf");
-    skills->activeSkills[1].effect.spawnType = EntityReference(server->assets, "default", "crocodile");
-    skills->activeSkills[2].effect.spawnType = EntityReference(server->assets, "default", "turtle");
-    skills->activeSkills[3].effect.spawnType = EntityReference(server->assets, "default", "human");
-    skills->activeSkills[4].effect.spawnType = EntityReference(server->assets, "default", "sword");
-    skills->activeSkills[5].effect.spawnType = EntityReference(server->assets, "default", "bag");
 }
 #else
 INIT_COMPONENT_FUNCTION(InitBaseComponent)
@@ -183,6 +182,7 @@ INIT_COMPONENT_FUNCTION(InitAnimationComponent)
     animation->skinHash =c->skin.subtypeHash;
     animation->flipOnYAxis = 0;
     animation->scale = 1.0f;
+    animation->speed = 1.0f;
     InitShadow(&animation->shadow, c);
 }
 
@@ -281,6 +281,28 @@ INIT_COMPONENT_FUNCTION(InitContainerMappingComponent)
     dest->zoomCoeff = c->lootingZoomCoeff;
     dest->desiredOpenedDim = c->desiredOpenedDim;
     dest->desiredUsingDim = c->desiredUsingDim;
+}
+
+INIT_COMPONENT_FUNCTION(InitSkillMappingComponent)
+{
+    GameModeWorld* worldMode = (GameModeWorld*) state;
+    Assets* assets = worldMode->gameState->assets;
+    
+    SkillMappingComponent* skills = (SkillMappingComponent*) componentPtr;
+    
+    for(u32 skillIndex = 0; skillIndex < ArrayCount(skills->mappings); ++skillIndex)
+    {
+        RandomSequence seq = Seed(skillIndex);
+        AssetID assetID = QueryDataFiles(assets, SkillDefinition, "default", &seq, 0);
+        
+        SkillDefinition* skillDefinition = GetData(assets, SkillDefinition, assetID);
+        
+        SkillMapping* mapping = skills->mappings + skillIndex;
+        FormatString(mapping->name, sizeof(mapping->name), "%s", skillDefinition->name.name);
+        mapping->targetSkill = skillDefinition->targetSkill;
+        mapping->color = skillDefinition->color;
+    }
+    
 }
 #endif
 INIT_COMPONENT_FUNCTION(InitInteractionComponent)

@@ -47,6 +47,8 @@ struct AnimationComponent
     
     r32 scale;
     
+    r32 speed;
+    
     ShadowComponent shadow;
 };
 

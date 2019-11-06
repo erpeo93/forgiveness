@@ -681,6 +681,7 @@ int main(int argc, char** argv)
         "forg_ecs.h",
         "forg_archetypes.h",
         "forg_rock.h",
+        "forg_skill.h",
     };
     
     

@@ -442,6 +442,15 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 }
             } break;
             
+            case Type_DraggingMapping:
+            {
+                EntityID ID;
+                Unpack("L", &ID);
+                BaseComponent* base = GetComponent(worldMode, currentClientID, BaseComponent);
+                
+                base->draggingID = ID;
+            } break;
+            
             case Type_ContainerOpenedBy:
             {
                 EntityID ID;
