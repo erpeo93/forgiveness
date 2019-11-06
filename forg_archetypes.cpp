@@ -131,7 +131,7 @@ INIT_COMPONENT_FUNCTION(InitSkillComponent)
     
     for(u32 skillIndex = 0; skillIndex < ArrayCount(skills->activeSkills); ++skillIndex)
     {
-        skills->activeSkills[skillIndex].effect.effectType = GameProp(gameEffect, spawnEntity);
+        skills->activeSkills[skillIndex].effect.effectType = GameProp(gameEffect, moveOnZSlice);
     }
     
     skills->activeSkills[0].effect.spawnType = EntityReference(server->assets, "default", "wolf");

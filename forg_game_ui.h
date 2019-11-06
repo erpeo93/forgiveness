@@ -59,6 +59,13 @@ inline b32 AreEqual(EntityHotInteraction i1, EntityHotInteraction i2)
     return result;
 }
 
+enum CastingSkillMode
+{
+    CastingSkill_None,
+    CastingSkill_Target,
+    CastingSkill_Offset,
+};
+
 struct GameUIContext
 {
     b32 initialized;
@@ -100,7 +107,9 @@ struct GameUIContext
     Rect2 skillRects[MAX_ACTIVE_SKILLS];
     
     GameCommand standardCommand;
-    b32 castingSkill;
+    CastingSkillMode castingSkillMode;
+    EntityID hotGameWorldID;
+    EntityID lockedWorldID;
     GameCommand skillCommand;
     
     CommandParameters commandParameters;

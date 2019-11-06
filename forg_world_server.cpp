@@ -488,12 +488,13 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                     {
                         Skill* active = skills->activeSkills + command->skillIndex;
                         UniversePos targetP = Offset(physic->P, parameters->targetOffset);
-                        DispatchGameEffect(server, ID, targetP, &active->effect);
+                        DispatchGameEffect(server, ID, targetP, &active->effect, command->targetID);
                     }
                 }
                 physic->actionTime = 0;
             }
         } break;
+        
         case pick:
         {
             physic->acc = {};

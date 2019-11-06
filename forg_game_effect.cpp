@@ -23,7 +23,7 @@ internal void SendEffectDispatch(ServerState* server, EntityID ID)
     }
 }
 
-internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect)
+internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect, EntityID targetID)
 {
     switch(effect->effectType.value)
     {
@@ -35,13 +35,18 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
         
         case moveOnZSlice:
         {
-            if(HasComponent(ID, PhysicComponent))
+            EntityID destID = targetID;
+            if(HasComponent(destID, PhysicComponent))
             {
-                PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+                PhysicComponent* physic = GetComponent(server, destID, PhysicComponent);
                 if(++physic->P.chunkZ == (i32) server->maxDeepness)
                 {
                     physic->P.chunkZ = 0;
                 }
+            }
+            else
+            {
+                InvalidCodePath;
             }
         } break;
     }
@@ -60,7 +65,7 @@ internal void DispatchEntityEffects(ServerState* server, EntityID ID, r32 elapse
             if(effects->timers[effectIndex] >= effect->timer)
             {
                 effects->timers[effectIndex] = 0;
-                DispatchGameEffect(server, ID, physic->P, effect);
+                DispatchGameEffect(server, ID, physic->P, effect, {});
             }
         }
     }
@@ -113,7 +118,7 @@ internal void DispatchCollisitonEffects(ServerState* server, UniversePos P, Enti
         for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
         {
             GameEffect* effect = effects->effects + effectIndex;
-            DispatchGameEffect(server, actor, P, effect);
+            DispatchGameEffect(server, trigger, P, effect, actor);
         }
     }
 }
@@ -126,7 +131,7 @@ internal void DispatchOverlappingEffects(ServerState* server, UniversePos P, Ent
         for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
         {
             GameEffect* effect = effects->effects + effectIndex;
-            DispatchGameEffect(server, actor, P, effect);
+            DispatchGameEffect(server, overlap, P, effect, actor);
         }
     }
 }

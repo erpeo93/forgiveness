@@ -343,7 +343,7 @@ STANDARD_ECS_JOB_SERVER(SendEntityUpdate)
         PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
         PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
         
-        if(physic->P.chunkZ == playerPhysic->P.chunkZ)
+        //if(physic->P.chunkZ == playerPhysic->P.chunkZ)
         {
             Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
             if(LengthSq(distance) < maxDistanceSq)
