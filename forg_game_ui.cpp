@@ -95,7 +95,16 @@ internal GameCommand ComputeFinalCommand(GameUIContext* UI, GameModeWorld* world
             Vec3 toTarget = SubtractOnSameZChunk(lockedBase->universeP, player->universeP);
             u16 action = lockedCommand.action;
             r32 distanceSq = LengthSq(toTarget);
-            if(!ActionIsPossible(interaction, action, distanceSq))
+            
+            b32 usingValid = IsValidID(lockedCommand.usingID);
+            BaseComponent* usingBase = GetComponent(worldMode, GetClientIDMapping(worldMode, lockedCommand.usingID), BaseComponent);
+            EntityRef usingRef = {};
+            if(usingBase)
+            {
+                usingRef = usingBase->definitionID;
+            }
+            
+            if(!ActionIsPossible(interaction, action, distanceSq, usingValid, usingRef))
             {
                 GameCommand command = {};
                 command.action = move;
@@ -124,7 +133,7 @@ internal b32 LeftMouseAction(u16 action)
     return result;
 }
 
-internal EntityHotInteraction* AddPossibleInteraction_(GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityID, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
+internal EntityHotInteraction* AddPossibleInteraction_(GameModeWorld* worldMode, GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityID, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
 {
     EntityHotInteraction* result = 0;
     
@@ -142,6 +151,7 @@ internal EntityHotInteraction* AddPossibleInteraction_(GameUIContext* UI, Intera
         dest->type = type;
         dest->actionCount = 0;
         dest->actions[0] = 0;
+        dest->usingIDServer = {};
         
         if(list)
         {
@@ -150,7 +160,22 @@ internal EntityHotInteraction* AddPossibleInteraction_(GameUIContext* UI, Intera
                 if(dest->actionCount < ArrayCount(dest->actions))
                 {
                     PossibleAction* action = list->actions + actionIndex;
-                    if(LeftMouseAction(action->action))
+                    
+                    b32 valid = true;
+                    if(type == Interaction_Ground && IsValidID(UI->draggingIDServer))
+                    {
+                        EntityID draggingIDClient = GetClientIDMapping(worldMode, UI->draggingIDServer);
+                        
+                        BaseComponent* draggingBase = GetComponent(worldMode, draggingIDClient, BaseComponent);
+                        valid = false;
+                        if(draggingBase && 
+                           AreEqual(action->requiredUsingType, draggingBase->definitionID))
+                        {
+                            valid = true;
+                        }
+                    }
+                    
+                    if(valid && LeftMouseAction(action->action))
                     {
                         dest->actions[dest->actionCount++] = action->action;
                     }
@@ -170,9 +195,9 @@ internal EntityHotInteraction* AddPossibleInteraction_(GameUIContext* UI, Intera
 }
 
 
-internal EntityHotInteraction* AddPossibleInteraction(GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityID, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
+internal EntityHotInteraction* AddPossibleInteraction(GameModeWorld* worldMode, GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityID, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
 {
-    EntityHotInteraction* result = AddPossibleInteraction_(UI, type, list, entityID, containerID, objectIndex, slot, optionIndex);
+    EntityHotInteraction* result = AddPossibleInteraction_(worldMode, UI, type, list, entityID, containerID, objectIndex, slot, optionIndex);
     UI->anyValidInteraction = true;
     return result;
 }
@@ -193,12 +218,12 @@ internal void AddContainerObjectsInteractions(GameUIContext* UI, GameModeWorld* 
                 {
                     mapping->hot = true;
                     ResetInteractions(UI);
-                    AddPossibleInteraction(UI, interactionType, interaction->actions + interactionType, ID, containerID, mappingIndex, &mapping->object);
+                    AddPossibleInteraction(worldMode, UI, interactionType, interaction->actions + interactionType, ID, containerID, mappingIndex, &mapping->object);
                 }
                 else if((interactionType == Interaction_Equipment) && PointInRect(base->projectedOnScreen, worldMode->relativeMouseP))
                 {
                     mapping->hot = true;
-                    AddPossibleInteraction(UI, interactionType, interaction->actions + interactionType, ID, containerID, mappingIndex, &mapping->object);
+                    AddPossibleInteraction(worldMode, UI, interactionType, interaction->actions + interactionType, ID, containerID, mappingIndex, &mapping->object);
                 }
             }
         }
@@ -214,7 +239,7 @@ internal void AddContainerObjectsInteractions(GameUIContext* UI, GameModeWorld* 
                     {
                         mapping->hot = true;
                         ResetInteractions(UI);
-                        AddPossibleInteraction(UI, interactionType, 0, {}, containerID, mappingIndex, &mapping->object);
+                        AddPossibleInteraction(worldMode, UI, interactionType, 0, {}, containerID, mappingIndex, &mapping->object);
                     }
                 }
             }
@@ -281,7 +306,7 @@ internal void HandleOverlayObjectsInteraction(GameUIContext* UI, GameModeWorld* 
             if(PointInRect(UI->equipmentOnScreen[equipmentIndex], worldMode->relativeMouseP))
             {
                 ResetInteractions(UI);
-                AddPossibleInteraction(UI, Interaction_MoveContainerOnScreen, 0, {}, {}, SafeTruncateToU16(equipmentIndex), 0);
+                AddPossibleInteraction(worldMode, UI, Interaction_MoveContainerOnScreen, 0, {}, {}, SafeTruncateToU16(equipmentIndex), 0);
             }
         }
         
@@ -474,10 +499,10 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
         OverdrawSkillSlots(UI, worldMode, group);
     }
     
-    if(IsValidID(UI->draggingIDServer))
+    EntityID draggingID = GetClientIDMapping(worldMode, UI->draggingIDServer);
+    if(IsValidID(draggingID))
     {
-        EntityID draggingID = GetClientIDMapping(worldMode, UI->draggingIDServer);
-		if(UI->testingDraggingOnEquipment)
+        if(UI->testingDraggingOnEquipment)
 		{
 			UI->testingDraggingOnEquipment = false;
 			UI->draggingTestUsingOption = 0;
@@ -501,6 +526,8 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
 
 INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
 {
+    GameUIContext* UI = &worldMode->gameUI;
+    
     InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
     interaction->isOnFocus = false;
     
@@ -516,7 +543,16 @@ INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
         {
             if(PointInRect(base->projectedOnScreen, worldMode->relativeMouseP))
             {
-                AddPossibleInteraction(&worldMode->gameUI, Interaction_Ground, interaction->actions + Interaction_Ground, ID);
+				if(IsValidID(UI->draggingIDServer))
+				{
+					PossibleActionList* list = interaction->actions + InteractionList_Dragging;
+					EntityHotInteraction* addedInteraction = AddPossibleInteraction(worldMode, UI, Interaction_Ground, interaction->actions + InteractionList_Dragging, ID);
+					addedInteraction->usingIDServer = UI->draggingIDServer;
+				}
+				else
+				{
+					AddPossibleInteraction(worldMode, UI, Interaction_Ground, interaction->actions + InteractionList_Ground, ID);
+				}
             }
         }
     }
@@ -761,7 +797,7 @@ internal void HandleSkillsInteraction(GameUIContext* UI, GameModeWorld* worldMod
         if(PointInRect(UI->skillRects[skillIndex], worldMode->relativeMouseP))
         {
             ResetInteractions(UI);
-            EntityHotInteraction* interaction = AddPossibleInteraction(UI, Interaction_SkillSelection, 0, {}, {}, 0, 0, 0);
+            EntityHotInteraction* interaction = AddPossibleInteraction(worldMode, UI, Interaction_SkillSelection, 0, {}, {}, 0, 0, 0);
             interaction->skillIndex = SafeTruncateToU16(skillIndex);
         }
     }
@@ -785,16 +821,8 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
     {
         UI->ignoreDraggingMappingTimer -= input->timeToAdvance;
     }
-    else
-    {
-        if(IsValidID(player->draggingID) && !IsValidID(UI->draggingIDServer))
-        {
-            UI->draggingIDServer = player->draggingID;
-            UI->draggingContainerIDServer = myPlayer->serverID;
-        }
-    }
     
-    AddPossibleInteraction_(&worldMode->gameUI, Interaction_Ground, 0, {});
+    AddPossibleInteraction_(worldMode, &worldMode->gameUI, Interaction_Ground, 0, {});
     
     Vec2 cameraOffset = {};
     if(!UI->keyboardInteractionDisabled)
@@ -912,15 +940,15 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
             HandleSkillsInteraction(UI, worldMode);
         }
         
-        if(IsValidID(UI->draggingIDServer) && MouseInsidePlayerRectProjectedOnScreen(worldMode))
+        EntityID draggingID = GetClientIDMapping(worldMode, UI->draggingIDServer);
+        if(IsValidID(draggingID) && MouseInsidePlayerRectProjectedOnScreen(worldMode))
         {
-            EntityID draggingID = GetClientIDMapping(worldMode, UI->draggingIDServer);
             
             u16 optionIndex;
             
             if(CanUse(worldMode, myPlayer->clientID, draggingID, &optionIndex))
             {
-                EntityHotInteraction* interaction = AddPossibleInteraction(UI, Interaction_Dragging, 0, {}, {}, 0, 0, optionIndex);
+                EntityHotInteraction* interaction = AddPossibleInteraction(worldMode, UI, Interaction_Dragging, 0, {}, {}, 0, 0, optionIndex);
                 if(interaction)
                 {
                     interaction->actionCount = 1;
@@ -929,7 +957,7 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
             }
             else if(CanEquip(worldMode, myPlayer->clientID, draggingID, &optionIndex))
             {
-                EntityHotInteraction* interaction = AddPossibleInteraction(UI, Interaction_Dragging, 0, {}, {}, 0, 0, optionIndex);
+                EntityHotInteraction* interaction = AddPossibleInteraction(worldMode, UI, Interaction_Dragging, 0, {}, {}, 0, 0, optionIndex);
                 if(interaction)
                 {
                     interaction->actionCount = 1;
@@ -981,97 +1009,87 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
             {
                 case Interaction_Ground:
                 {
-                    if(IsValidID(UI->draggingIDServer))
+                    validInteraction = false;
+                    if(Pressed(&input->mouseRight) && !IsValidID(UI->draggingIDServer))
                     {
-                        validInteraction = false;
-                        
-#if 0                        
-                        BrainCommand* command = ExistBrainCommand(hotID, draggingID);
-						if(command)
-						{
-							ground->isOnFocus = true;
-							SetTooltip(action);
-							if(Pressed(mouseLeft))
-							{
-								SendBrainCommand(action, hotID, draggingID);
-                                if(command->remove)
-                                {
-                                    UI->draggingIDServer = {};
-                                    AddObjectRemovedPrediction(worldMode, UI, command.containerID, command.targetID);
-                                }
-							}
-						}
-#endif
-                        
-                    }
-                    else
-                    {
-                        if(Pressed(&input->mouseRight))
+                        b32 draggingInteraction = false;
+                        if(IsValidID(hotID))
                         {
-                            b32 draggingInteraction = false;
+                            EntityID hotIDClient = GetClientIDMapping(worldMode, hotID);
+                            InteractionComponent* interaction = GetComponent(worldMode, hotIDClient, InteractionComponent);
+                            BaseComponent* hotBase = GetComponent(worldMode, hotIDClient, BaseComponent);
+                            r32 distanceSq = LengthSq(SubtractOnSameZChunk(hotBase->universeP, player->universeP));
                             
-                            if(IsValidID(hotID))
-                            {
-                                EntityID hotIDClient = GetClientIDMapping(worldMode, hotID);
-                                InteractionComponent* interaction = GetComponent(worldMode, hotIDClient, InteractionComponent);
-                                BaseComponent* hotBase = GetComponent(worldMode, hotIDClient, BaseComponent);
-                                r32 distanceSq = LengthSq(SubtractOnSameZChunk(hotBase->universeP, player->universeP));
-                                
-                                if(ActionIsPossible(interaction, drag, distanceSq))
-                                {
-                                    GameCommand command = {};
-                                    command.action = drag;
-                                    command.targetID = hotID;
-                                    SendInventoryCommand(command); 
-                                    draggingInteraction = true;
-                                }
-                            }
-                            
-                            if(!draggingInteraction)
+                            if(ActionIsPossible(interaction, drag, distanceSq))
                             {
                                 GameCommand command = {};
-                                command.action = cast;
-                                command.skillIndex = SafeTruncateToU16(UI->selectedSkillIndex);
-                                SkillMappingComponent* skills = GetComponent(worldMode, myPlayer->clientID, SkillMappingComponent);
+                                command.action = drag;
+                                command.targetID = hotID;
+                                SendInventoryCommand(command); 
+                                draggingInteraction = true;
+                                validInteraction = true;
                                 
-                                if(skills)
+                                UI->draggingIDServer = hotID;
+                                UI->draggingContainerIDServer = myPlayer->serverID;
+                            }
+                        }
+                        
+                        if(!draggingInteraction)
+                        {
+                            GameCommand command = {};
+                            command.action = cast;
+                            command.skillIndex = SafeTruncateToU16(UI->selectedSkillIndex);
+                            SkillMappingComponent* skills = GetComponent(worldMode, myPlayer->clientID, SkillMappingComponent);
+                            
+                            if(skills)
+                            {
+                                Assert(command.skillIndex < ArrayCount(skills->mappings));
+                                SkillMapping* skill = skills->mappings + command.skillIndex;
+                                if(skill->targetSkill)
                                 {
-                                    Assert(command.skillIndex < ArrayCount(skills->mappings));
-                                    SkillMapping* skill = skills->mappings + command.skillIndex;
-                                    if(skill->targetSkill)
+                                    if(IsValidID(hotID))
                                     {
-                                        if(IsValidID(hotID))
-                                        {
-                                            UI->lockedInteractionType = LockedInteraction_SkillTarget;
-                                            command.targetID = hotID;
-                                        }
+                                        UI->lockedInteractionType = LockedInteraction_SkillTarget;
+                                        command.targetID = hotID;
+                                        validInteraction = true;
                                     }
                                     else
                                     {
-                                        UI->lockedInteractionType = LockedInteraction_SkillOffset;
+                                        validInteraction = false;
                                     }
+                                }
+                                else
+                                {
+                                    UI->lockedInteractionType = LockedInteraction_SkillOffset;
+                                    validInteraction = true;
+                                }
+                                
+                                if(validInteraction)
+                                {
                                     UI->lockedCommand = command;
                                 }
                             }
                         }
-                        else if(Pressed(&input->mouseLeft))
+                    }
+                    else if(IsValidID(hotID))
+                    {
+                        if(Pressed(&input->mouseLeft))
                         {
-                            if(IsValidID(hotID))
-                            {
-                                EntityID hotIDClient = GetClientIDMapping(worldMode, hotID);
-                                InteractionComponent* interaction = GetComponent(worldMode, hotIDClient, InteractionComponent);
-                                BaseComponent* hotBase = GetComponent(worldMode, hotIDClient, BaseComponent);
-                                r32 distanceSq = LengthSq(SubtractOnSameZChunk(hotBase->universeP, player->universeP));
-                                
-                                GameCommand command = {};
-                                command.targetID = hotID;
-                                command.action = hotAction;
-                                
-                                UI->lockedInteractionType = LockedInteraction_ReachTarget;
-                                UI->lockedCommand = command;
-                            }
+                            EntityID hotIDClient = GetClientIDMapping(worldMode, hotID);
+                            InteractionComponent* interaction = GetComponent(worldMode, hotIDClient, InteractionComponent);
+                            BaseComponent* hotBase = GetComponent(worldMode, hotIDClient, BaseComponent);
+                            r32 distanceSq = LengthSq(SubtractOnSameZChunk(hotBase->universeP, player->universeP));
                             
+                            GameCommand command = {};
+                            command.targetID = hotID;
+                            command.action = hotAction;
+                            command.usingID = hotInteraction.usingIDServer;
+                            
+                            UI->lockedInteractionType = LockedInteraction_ReachTarget;
+                            UI->lockedCommand = command;
                         }
+                        
+                        validInteraction = true;
                     }
                 } break;
                 

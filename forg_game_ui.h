@@ -3,6 +3,7 @@ struct PossibleAction
 {
     u16 action;
     r32 distanceSq;
+    EntityRef requiredUsingType;
 };
 
 struct PossibleActionList
@@ -30,6 +31,7 @@ enum InteractionListType
     InteractionList_Equipment,
     InteractionList_Container,
     InteractionList_Equipped,
+    InteractionList_Dragging,
     InteractionList_Count,
 };
 
@@ -52,22 +54,43 @@ struct InteractionComponent
     u16 inventorySlotType;
 };
 
-internal b32 ActionIsPossible(InteractionComponent* interaction, u16 action, r32 distanceSq)
+
+inline b32 AreEqual(EntityRef r1, EntityRef r2);
+internal b32 ActionIsPossible(InteractionComponent* interaction, u16 action, r32 distanceSq, b32 usingValid = false, EntityRef usingType = {})
 {
     b32 result = false;
     if(interaction)
     {
-        PossibleActionList* list = interaction->actions + Interaction_Ground;
-        for(u32 actionIndex = 0; actionIndex < list->actionCount; ++actionIndex)
+        if(usingValid)
         {
-            PossibleAction* possibleAction = list->actions + actionIndex;
-            if(possibleAction->action == action)
+            PossibleActionList* list = interaction->actions + InteractionList_Dragging;
+            for(u32 actionIndex = 0; actionIndex < list->actionCount; ++actionIndex)
             {
-                if(distanceSq <= possibleAction->distanceSq)
+                PossibleAction* possibleAction = list->actions + actionIndex;
+                if(possibleAction->action == action && AreEqual(usingType, possibleAction->requiredUsingType))
                 {
-                    result = true;
+                    if(distanceSq <= possibleAction->distanceSq)
+                    {
+                        result = true;
+                    }
+                    break;
                 }
-                break;
+            }
+        }
+        else
+        {
+            PossibleActionList* list = interaction->actions + InteractionList_Ground;
+            for(u32 actionIndex = 0; actionIndex < list->actionCount; ++actionIndex)
+            {
+                PossibleAction* possibleAction = list->actions + actionIndex;
+                if(possibleAction->action == action)
+                {
+                    if(distanceSq <= possibleAction->distanceSq)
+                    {
+                        result = true;
+                    }
+                    break;
+                }
             }
         }
     }
@@ -84,6 +107,7 @@ struct EntityHotInteraction
     InventorySlot* slot;
     EntityID containerIDServer;
     EntityID entityIDServer;
+    EntityID usingIDServer;
     u16 optionIndex;
     u16 skillIndex;
 };

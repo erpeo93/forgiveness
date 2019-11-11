@@ -211,8 +211,9 @@ struct GameAccessRequest
 struct GameCommand
 {
     u16 action;
-    EntityID targetID;
     u16 skillIndex;
+    EntityID targetID;
+    EntityID usingID;
     
     // NOTE(Leonardo): only for inventory commands!
     EntityID containerID;
@@ -231,7 +232,8 @@ inline b32 AreEqual(GameCommand c1, GameCommand c2)
 {
     b32 result = (c1.action == c2.action &&
                   c1.skillIndex == c2.skillIndex &&
-                  AreEqual(c1.targetID, c2.targetID));
+                  AreEqual(c1.targetID, c2.targetID) &&
+                  AreEqual(c1.usingID, c2.usingID));
     return result;
 }
 

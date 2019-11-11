@@ -119,6 +119,7 @@ introspection() struct PossibleActionDefinition
 {
     Enumerator action MetaEnumerator("action");
     r32 distance MetaDefault("1.0f");
+    EntityRef requiredUsingType;
 };
 
 introspection() struct CommonEntityInitParams
@@ -139,6 +140,12 @@ introspection() struct CommonEntityInitParams
     
     ArrayCounter equippedActionCount MetaCounter("equippedActions");
     PossibleActionDefinition* equippedActions;
+    
+    ArrayCounter draggingActionCount MetaCounter("draggingActions");
+    PossibleActionDefinition* draggingActions;
+    
+    
+    
     
     ArrayCounter usingConfigurationCount MetaCounter("usingConfigurations");
     UseLayout* usingConfigurations;

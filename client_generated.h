@@ -44,6 +44,7 @@ char* MetaTable_action[] =
 "useInventory",
 "cast",
 "drag",
+"setOnFire",
 };
 
 char* MetaTable_essence[] = 
@@ -324,6 +325,7 @@ FieldDefinition fieldDefinitionOfPossibleActionDefinition[] =
  {
 {0, MetaType_Enumerator, "Enumerator", "action", (u32) (&((PossibleActionDefinition*)0)->action), {}, sizeof(Enumerator),"invalid",0, 0, 0, MetaTable_action, ArrayCount(MetaTable_action)}, 
 {0, MetaType_r32, "r32", "distance", (u32) (&((PossibleActionDefinition*)0)->distance), {}, sizeof(r32),"invalid",0, 0, 0}, 
+{0, MetaType_EntityRef, "EntityRef", "requiredUsingType", (u32) (&((PossibleActionDefinition*)0)->requiredUsingType), {}, sizeof(EntityRef),"invalid",0, 0, 0}, 
 };
 
 FieldDefinition fieldDefinitionOfCommonEntityInitParams[] = 
@@ -339,6 +341,8 @@ FieldDefinition fieldDefinitionOfCommonEntityInitParams[] =
 {MetaFlag_Pointer, MetaType_PossibleActionDefinition, "PossibleActionDefinition", "containerActions", (u32) (&((CommonEntityInitParams*)0)->containerActions), {}, sizeof(PossibleActionDefinition),"invalid",0, 0, 0}, 
 {0, MetaType_ArrayCounter, "ArrayCounter", "equippedActionCount", (u32) (&((CommonEntityInitParams*)0)->equippedActionCount), {}, sizeof(ArrayCounter),"invalid","equippedActions", (u32)(&((CommonEntityInitParams*)0)->equippedActions), 0}, 
 {MetaFlag_Pointer, MetaType_PossibleActionDefinition, "PossibleActionDefinition", "equippedActions", (u32) (&((CommonEntityInitParams*)0)->equippedActions), {}, sizeof(PossibleActionDefinition),"invalid",0, 0, 0}, 
+{0, MetaType_ArrayCounter, "ArrayCounter", "draggingActionCount", (u32) (&((CommonEntityInitParams*)0)->draggingActionCount), {}, sizeof(ArrayCounter),"invalid","draggingActions", (u32)(&((CommonEntityInitParams*)0)->draggingActions), 0}, 
+{MetaFlag_Pointer, MetaType_PossibleActionDefinition, "PossibleActionDefinition", "draggingActions", (u32) (&((CommonEntityInitParams*)0)->draggingActions), {}, sizeof(PossibleActionDefinition),"invalid",0, 0, 0}, 
 {0, MetaType_ArrayCounter, "ArrayCounter", "usingConfigurationCount", (u32) (&((CommonEntityInitParams*)0)->usingConfigurationCount), {}, sizeof(ArrayCounter),"invalid","usingConfigurations", (u32)(&((CommonEntityInitParams*)0)->usingConfigurations), 0}, 
 {MetaFlag_Pointer, MetaType_UseLayout, "UseLayout", "usingConfigurations", (u32) (&((CommonEntityInitParams*)0)->usingConfigurations), {}, sizeof(UseLayout),"invalid",0, 0, 0}, 
 {0, MetaType_ArrayCounter, "ArrayCounter", "equipConfigurationCount", (u32) (&((CommonEntityInitParams*)0)->equipConfigurationCount), {}, sizeof(ArrayCounter),"invalid","equipConfigurations", (u32)(&((CommonEntityInitParams*)0)->equipConfigurations), 0}, 

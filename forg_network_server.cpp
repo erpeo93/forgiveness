@@ -186,6 +186,16 @@ internal void QueueCompletedCommand(PlayerComponent* player, GameCommand* comman
     QueueOrderedPacket(player);
 }
 
+internal void QueueCompletedCommand(ServerState* server, EntityID ID, GameCommand* command)
+{
+    PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
+    if(player)
+    {
+        QueueCompletedCommand(player, command);
+        
+    }
+}
+
 inline void QueueEntityHeader(PlayerComponent* player, EntityID ID)
 {
     StartPacket(player, entityHeader);

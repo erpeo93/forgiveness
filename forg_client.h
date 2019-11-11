@@ -56,7 +56,6 @@ struct BaseComponent
     Rect3 worldBounds;
     Rect2 projectedOnScreen;
     EntityID serverID;
-    
     EntityID draggingID;
 };
 

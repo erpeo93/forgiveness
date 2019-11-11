@@ -161,8 +161,9 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
             u16 index;
             u16 action;
             EntityID targetID;
+            EntityID usingID;
             u16 skillIndex;
-            unpack(packetPtr, "HHLH", &index, &action, &targetID, &skillIndex);
+            unpack(packetPtr, "HHLHL", &index, &action, &targetID, &skillIndex, &usingID);
             
             if(CommandIndexValid(index, player->expectingCommandIndex))
             {
@@ -171,6 +172,7 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
                 command->action = action;
                 command->targetID = targetID;
                 command->skillIndex = skillIndex;
+                command->usingID = usingID;
             }
         } break;
         

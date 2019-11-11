@@ -21,6 +21,7 @@ internal GameProperty GetProperty(u32 seed)
 internal u16 ExistMetaPropertyValue(u16 propertyType, Token value);;
 internal void AddPossibleActions(PossibleActionList* list, PossibleActionDefinition* actions, u32 actionCount)
 {
+    list->actionCount = 0;
     for(u32 actionIndex = 0; actionIndex < actionCount; ++actionIndex)
     {
         if(list->actionCount < ArrayCount(list->actions))
@@ -33,6 +34,7 @@ internal void AddPossibleActions(PossibleActionList* list, PossibleActionDefinit
                 
                 dest->action = action;
                 dest->distanceSq = Square(source->distance);
+                dest->requiredUsingType = source->requiredUsingType;
             }
         }
     }
@@ -234,6 +236,7 @@ INIT_COMPONENT_FUNCTION(InitStandardImageComponent)
 
 internal void InitLayout(Assets* assets, LayoutPiece* destPieces, u32* destPieceCount, u32 maxDestPieceCount, LayoutPieceProperties* pieces, u32 pieceCount, GameProperty property)
 {
+    *destPieceCount = 0;
     for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
     {
         LayoutPieceProperties* piece = pieces + pieceIndex;
@@ -332,6 +335,7 @@ INIT_COMPONENT_FUNCTION(InitInteractionComponent)
     AddPossibleActions(dest->actions + InteractionList_Equipment, common->equipmentActions, common->equipmentActionCount);
     AddPossibleActions(dest->actions + InteractionList_Container, common->containerActions, common->containerActionCount);
     AddPossibleActions(dest->actions + InteractionList_Equipped, common->equippedActions, common->equippedActionCount);
+    AddPossibleActions(dest->actions + InteractionList_Dragging, common->draggingActions, common->draggingActionCount);
     
     for(u32 usingOption = 0; usingOption < common->usingConfigurationCount; ++usingOption)
     {

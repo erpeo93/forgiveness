@@ -529,6 +529,8 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                     }
                 }
             }
+            
+            QueueCompletedCommand(server, ID, command);
         } break;
         
         case drag:
@@ -557,7 +559,34 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                     physic->action = GameProp(action, idle);
                 }
             }
+            
+            QueueCompletedCommand(server, ID, command);
         } break;
+        
+        case setOnFire:
+        {
+            if(IsValidID(command->usingID))
+            {
+                InteractionComponent* interaction = GetComponent(server, command->targetID, InteractionComponent);
+                
+                PhysicComponent* targetPhysic = GetComponent(server, command->targetID, PhysicComponent);
+                
+                PhysicComponent* usingPhysic = GetComponent(server, command->usingID, PhysicComponent);
+                r32 distanceSq = LengthSq(SubtractOnSameZChunk(targetPhysic->P, physic->P));
+                
+                if(ActionIsPossible(interaction, setOnFire, distanceSq, true, usingPhysic->definitionID))
+                {
+                    DeleteEntity(server, command->usingID);
+                }
+            }
+            else
+            {
+                InvalidCodePath;
+            }
+            
+            QueueCompletedCommand(server, ID, command);
+        } break;
+        
         
         case use:
         {
@@ -609,11 +638,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                         if(!IsValidID(container->openedBy))
                         {
                             container->openedBy = ID;
-                            PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
-                            if(player)
-                            {
-                                QueueCompletedCommand(player, command);
-                            }
+                            QueueCompletedCommand(server, ID, command);
                         }
                     }
                 }
@@ -803,8 +828,16 @@ internal void UpdateObjectPositions(ServerState* server, UniversePos P, Inventor
         if(IsValidID(slot->ID))
         {
             PhysicComponent* equipmentPhysic = GetComponent(server, slot->ID, PhysicComponent);
-            equipmentPhysic->P = P;
-            equipmentPhysic->flags |= EntityFlag_notInWorld;
+            
+            if(IsSet(equipmentPhysic->flags, EntityFlag_deleted))
+            {
+                slot->ID = {};
+            }
+            else
+            {
+                equipmentPhysic->P = P;
+                equipmentPhysic->flags |= EntityFlag_notInWorld;
+            }
         }
     }
 }
@@ -836,11 +869,14 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
         for(u32 equipIndex = 0; equipIndex < Count_equipmentSlot; ++equipIndex)
         {
             InventorySlot* slot = equipment->slots + equipIndex;
-            ContainerComponent* container = GetComponent(server, slot->ID, ContainerComponent);
-            if(container)
+            if(IsValidID(slot->ID))
             {
-                UpdateObjectPositions(server, physic->P, container->storedObjects, ArrayCount(container->storedObjects));
-                UpdateObjectPositions(server, physic->P, container->usingObjects, ArrayCount(container->usingObjects));
+                ContainerComponent* container = GetComponent(server, slot->ID, ContainerComponent);
+                if(container)
+                {
+                    UpdateObjectPositions(server, physic->P, container->storedObjects, ArrayCount(container->storedObjects));
+                    UpdateObjectPositions(server, physic->P, container->usingObjects, ArrayCount(container->usingObjects));
+                }
             }
         }
     }

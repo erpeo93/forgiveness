@@ -89,7 +89,7 @@ internal void SendInputRecordingMessage( b32 recording, b32 startAutomatically )
 internal void SendCommand(u16 index, GameCommand command)
 {
     StartPacket(Command);
-    Pack("HHLH", index, command.action, command.targetID, command.skillIndex);
+    Pack("HHLHL", index, command.action, command.targetID, command.skillIndex, command.usingID);
     CloseAndSendStandardPacket();
 }
 
@@ -170,6 +170,26 @@ internal EntityID GetClientIDMapping(GameModeWorld* worldMode, EntityID serverID
     }
     
     return result;
+}
+
+internal void RemoveClientIDMapping(GameModeWorld* worldMode, EntityID serverID)
+{
+    EntityID result = {};
+    u32 hashIndex = ServerClientIDMappingHashIndex(worldMode, serverID);
+    for(ServerClientIDMapping** mappingPtr = &worldMode->mappings[hashIndex]; *mappingPtr;)
+    {
+        ServerClientIDMapping* mapping = *mappingPtr;
+        if(AreEqual(mapping->serverID, serverID))
+        {
+            *mappingPtr = mapping->next;
+            FREELIST_DEALLOC(mapping, worldMode->firstFreeMapping);
+            break;
+        }
+        else
+        {
+            mappingPtr = &mapping->next;
+        }
+    }
 }
 
 internal void AddClientIDMapping(GameModeWorld* worldMode, EntityID serverID, EntityID clientID)
@@ -351,7 +371,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 Unpack("LLLlllVVHHL", &definitionID.subtypeHashIndex, &definitionID.index, &seed, &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset, &speed, &action.property, &action.value, &flags);
                 
-                
                 if(!IsValidID(currentClientID) && !IsSet(flags, EntityFlag_deleted))
                 {
                     Assets* assets = gameState->assets;
@@ -367,7 +386,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         
                         definition->common.definitionID = EntityReference(definitionID);
                         InitEntity(worldMode, currentClientID, &definition->common, 0, &params);
-                        
                         AddClientIDMapping(worldMode, currentServerID, currentClientID);
                     }
                 }
@@ -397,6 +415,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     if(IsSet(base->flags, EntityFlag_deleted))
                     {
                         FreeArchetype(worldMode, currentClientID);
+                        RemoveClientIDMapping(worldMode, currentServerID);
+                        if(AreEqual(currentServerID, worldMode->gameUI.draggingIDServer))
+						{
+							worldMode->gameUI.draggingIDServer = {};
+						}
                     }
                 }
             } break;
@@ -466,7 +489,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 EntityID ID;
                 Unpack("L", &ID);
                 BaseComponent* base = GetComponent(worldMode, currentClientID, BaseComponent);
-                
                 base->draggingID = ID;
             } break;
             
@@ -601,410 +623,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 }
                 packetPtr += sizeToCopy;
             } break;
-#if 0                
-            case Type_plantUpdate:
-            {
-                InvalidCodePath;
-                
-                r32 age;
-                r32 life;
-                
-                r32 leafDensity;
-                r32 flowerDensity;
-                r32 fruitDensity;
-                
-                
-                
-                Unpack("ddddd", &age, &life, &leafDensity, &flowerDensity, &fruitDensity);
-                Plant* plant = currentEntity->plant;
-                if(plant)
-                {
-                    plant->serverAge = age;
-                    plant->life = life;
-                    plant->leafDensity = leafDensity;
-                    plant->flowerDensity = flowerDensity;
-                    plant->fruitDensity = fruitDensity;
-                }
-                
-            } break;
-#endif
-            
-            
-#if 0            
-            case Type_equipmentSlot:
-            {
-                u8 slotIndex;
-                u64 identifier;
-                Unpack("CQ", &slotIndex, &identifier);
-                
-                currentEntity->equipment[slotIndex].ID = identifier;
-            } break;
-            
-            
-            case Type_containerHeader:
-            {
-                u64 identifier;
-                Unpack("Q", &identifier);
-                currentContainer = GetEntityClient(worldMode, identifier, true);
-                currentContainer->identifier = identifier;
-            } break;
-            
-            case Type_containerInfo:
-            {
-                u8 maxObjectCount;
-                Unpack("C", &maxObjectCount);
-                currentContainer->objects.maxObjectCount = maxObjectCount;
-                currentContainer->objects.objectCount = 0;
-            } break;
-            
-            case Type_objectRemoved:
-            {
-                u8 objectIndex;
-                Unpack("C", &objectIndex);
-                
-                currentContainer->objects.objects[objectIndex].taxonomy = 0;
-                Assert(currentContainer->objects.objectCount > 0);
-                --currentContainer->objects.objectCount;
-            } break;
-            
-            case Type_objectAdded:
-            {
-                u8 objectIndex;
-                
-                Unpack("C", &objectIndex);
-                Object* dest = currentContainer->objects.objects + objectIndex;
-                Unpack("LQHh", &dest->taxonomy, &dest->gen, &dest->quantity, &dest->status);
-                ++currentContainer->objects.objectCount;
-            } break;
-            
-            case Type_deletedEntity:
-            {
-                u64 deletedID;
-                Unpack("Q", &deletedID);
-                ClientEntity* entityC = GetEntityClient(worldMode, deletedID);
-                if(entityC)
-                {
-                    entityC->beingDeleted = true;
-                    entityC->animation.goOutTime = 0.0f;
-                }
-                
-                if(deletedID == worldMode->player.targetIdentifier)
-                {
-                    for(u32 actionIndex = 0; actionIndex < Action_Count; ++actionIndex)
-                    {
-                        worldMode->player.targetPossibleActions[actionIndex] = PossibleAction_CantBeDone;
-                    }
-                }
-            } break;
-            
-            case Type_essenceDelta:
-            {
-                u32 essenceTaxonomy;
-                i16 delta;
-                
-                Unpack("Lh", &essenceTaxonomy, &delta);
-                
-                b32 found = false;
-                for(u32 essenceIndex = 0; essenceIndex < MAX_DIFFERENT_ESSENCES; ++essenceIndex)
-                {
-                    EssenceSlot* essence = worldMode->player.essences + essenceIndex;
-                    if(essence->taxonomy == essenceTaxonomy)
-                    {
-                        u32 diff = delta < 0 ? (u32) -delta : (u32) delta;
-                        if(delta < 0)
-                        {
-                            Assert(essence->quantity >= diff);
-                            essence->quantity -= diff;
-                        }
-                        else
-                        {
-                            essence->quantity += diff;
-                        }
-                        
-                        found = true;
-                        break;
-                    }
-                }
-                
-                
-                if(!found)
-                {
-                    Assert(worldMode->player.essenceCount < MAX_DIFFERENT_ESSENCES);
-                    Assert(delta > 0);
-                    
-                    EssenceSlot* newEssence = worldMode->player.essences + worldMode->player.essenceCount++;
-                    newEssence->taxonomy = essenceTaxonomy;
-                    newEssence->quantity = delta;
-                }
-                
-            } break;
-            
-            case Type_effectTriggered:
-            {
-                u64 actorID;
-                u64 targetID;
-                u32 effectTaxonomy;
-                
-                Unpack("QQL", &actorID, &targetID, &effectTaxonomy);
-                
-                ClientEntity* actor = GetEntityClient(worldMode, actorID);
-                if(actor)
-                {
-                    b32 found = false;
-                    u32 currentTaxonomy = actor->taxonomy;
-                    while(currentTaxonomy && !found)
-                    {
-                        TaxonomySlot* slot = GetSlotForTaxonomy(worldMode->table, currentTaxonomy);
-                        AnimationEffects* effects = &slot->animationEffects;
-                        for(AnimationEffect* effect = effects->firstAnimationEffect; effect; effect = effect->next)
-                        {
-                            if(effect->triggerEffectTaxonomy == effectTaxonomy)
-                            {
-                                ClientAnimationEffect* newEffect;
-                                FREELIST_ALLOC(newEffect, worldMode->firstFreeEffect, PushStruct(worldMode->persistentPool, ClientAnimationEffect, NoClear()));
-                                
-                                newEffect->effect = *effect;
-                                newEffect->effect.targetID = targetID;
-                                FREELIST_INSERT(newEffect, actor->firstActiveEffect);
-                                found = true;
-                                break;
-                            }
-                        }
-                        currentTaxonomy = GetParentTaxonomy(worldMode->table, currentTaxonomy);
-                    }
-                }
-                
-            } break;
-            
-            case Type_possibleActions:
-            {
-                EntityPossibleActions u;
-                Unpack("LQl", &u.actionCount, &u.identifier, &u.overlapping);
-                
-                PossibleActionType* possibleActions;
-                b32 idMatch = true;
-                if(u.overlapping)
-                {
-                    worldMode->player.overlappingIdentifier = u.identifier;
-                    possibleActions = worldMode->player.overlappingPossibleActions;
-                }
-                else
-                {
-                    idMatch = (worldMode->player.targetIdentifier == u.identifier);
-                    possibleActions = worldMode->player.targetPossibleActions;
-                }
-                
-                if(idMatch)
-                {
-                    for(u32 actionIndex = 0; actionIndex < Action_Count; ++actionIndex)
-                    {
-                        possibleActions[actionIndex] = PossibleAction_CantBeDone;
-                    }
-                }
-                
-                
-                for(u32 counter = 0; counter < u.actionCount; ++counter)
-                {
-                    u32 actionIndex;
-                    u8 possible;
-                    Unpack("LC", &actionIndex, &possible);
-                    if(idMatch)
-                    {
-                        possibleActions[actionIndex] = (PossibleActionType) possible;
-                    }
-                }
-            } break;
-            
-            case Type_AvailableRecipes:
-            {
-                
-                //BookMode* mode = UI->bookModes + UIBook_Recipes;
-                
-                u32 categoryCount;
-                Unpack("L", &categoryCount);
-                for(u32 categoryIndex = 0; categoryIndex < categoryCount; ++categoryIndex)
-                {
-                    b32 ignored;
-                    u32 taxonomy;
-                    Unpack("lL", &ignored, &taxonomy);
-                    
-                    if(categoryIndex == 0)
-                    {
-                        //mode->rootTaxonomy = taxonomy;
-                        //mode->filterTaxonomy = taxonomy;
-                    }
-                    else
-                    {
-                        //AddToRecipeCategoryBlock(UI, taxonomy);
-                    }
-                }
-            } break;
-            
-            case Type_NewRecipe:
-            {
-                Recipe recipe;
-                Unpack("LQ", &recipe.taxonomy, &recipe.gen);
-                
-                //AddToRecipeBlock(UI, recipe);
-            } break;
-            
-            case Type_SkillCategories:
-            {
-                //BookMode* mode = UI->bookModes + UIBook_Skills;
-                
-                u32 categoryCount;
-                Unpack("L", &categoryCount);
-                for(u32 categoryIndex = 0; categoryIndex < categoryCount; ++categoryIndex)
-                {
-                    SkillCategory skillCategory;
-                    Unpack("lL", &skillCategory.unlocked, &skillCategory.taxonomy);
-                    
-                    if(categoryIndex == 0)
-                    {
-                        //mode->rootTaxonomy = skillCategory.taxonomy;
-                        //mode->filterTaxonomy = skillCategory.taxonomy;
-                    }
-                    else
-                    {
-                        //AddToSkillCategoryBlock(UI, skillCategory);
-                    }
-                }
-            } break;
-            
-            case Type_UnlockSkillCategoryRequest:
-            {
-                u32 taxonomy;
-                Unpack("L", &taxonomy);
-                
-                
-#if RESTRUCTURING                
-                BookElementsBlock* block = UI->bookModes[UIBook_Skills].elements;
-                
-                b32 found = false;
-                while(block && !found)
-                {
-                    for(u32 elementIndex = 0; elementIndex < block->elementCount; ++elementIndex)
-                    {
-                        BookElement* element = block->elements + elementIndex;
-                        if(element->taxonomy == taxonomy)
-                        {
-                            element->unlocked = true;
-                            found = true;
-                            break;
-                        }
-                    }
-                    
-                    block = block->next;
-                }
-#endif
-                
-            } break;
-            
-            case Type_SkillLevel:
-            {
-                SkillSlot skill;
-                b32 isPassive;
-                b32 levelUp;
-                
-                Unpack("lLLl", &levelUp, &skill.taxonomy, &skill.level, &isPassive);
-                
-                
-#if RESTRUCTURING                
-                if(levelUp)
-                {
-                    BookElementsBlock* block = UI->bookModes[UIBook_Skills].elements;
-                    
-                    b32 found = false;
-                    while(block && !found)
-                    {
-                        for(u32 elementIndex = 0; elementIndex < block->elementCount; ++elementIndex)
-                        {
-                            BookElement* element = block->elements + elementIndex;
-                            if(element->taxonomy == skill.taxonomy)
-                            {
-                                element->skillLevel = skill.level;
-                                found = true;
-                                break;
-                            }
-                        }
-                        block = block->next;
-                    }
-                    
-                    //Assert(found);
-                }
-                else
-                {
-                    AddToSkillBlock(UI, skill);
-                }
-#endif
-                
-            } break;
-            
-            case Type_StartedAction:
-            {
-                u64 target;
-                u8 action;
-                Unpack("CQ", &action, &target);
-                
-                if(action == Action_Cast)
-                {
-                    u32 skillTaxonomy;
-                    Unpack("L", &skillTaxonomy);
-                    AddSkillAnimationEffects(worldMode, currentEntity, skillTaxonomy, target, AnimationEffect_ActionStart);
-                }
-                
-                SignalAnimationSyncCompleted(&currentEntity->animation, action, AnimationSync_Preparing);
-                
-                ClientEntity* targetEntity = GetEntityClient(worldMode, target);
-                if(targetEntity)
-                {
-                    Vec3 relative = targetEntity->P - currentEntity->P;
-                    currentEntity->animation.flipOnYAxis = (relative.x < 0);
-                    currentEntity->actionID = target;
-                }
-                
-                AddAnimationEffects(worldMode, currentEntity, (EntityAction) action, target, AnimationEffect_ActionStart);
-            } break;
-            
-            case Type_CompletedAction:
-            {
-                u64 target;
-                u8 action;
-                Unpack("CQ", &action, &target);
-                
-                if(action == Action_Cast)
-                {
-                    u32 skillTaxonomy;
-                    Unpack("L", &skillTaxonomy);
-                    AddSkillAnimationEffects(worldMode, currentEntity, skillTaxonomy, target, AnimationEffect_ActionCompleted);
-                }
-                
-                SignalAnimationSyncCompleted(&currentEntity->animation, action, AnimationSync_WaitingForCompletion);
-                currentEntity->actionID = 0;
-                
-                AddAnimationEffects(worldMode, currentEntity, (EntityAction) action, target, AnimationEffect_ActionCompleted);
-            } break;
-            
-            case Type_StartedDragging:
-            {
-                u64 target;
-                Unpack("Q", &target);
-                
-                ClientEntity* player = GetEntityClient(worldMode, worldMode->player.identifier);
-                player->draggingID = target;
-            } break;
-            
-            case Type_EndedDragging:
-            {
-                ClientEntity* player = GetEntityClient(worldMode, worldMode->player.identifier);
-                player->draggingID = 0;
-            } break;
-            
-            case Type_PatchLocalServer:
-            {
-                worldMode->patchingLocalServer = false;
-            } break;
-#endif
             
 #if FORGIVENESS_INTERNAL
             case Type_InputRecording:
