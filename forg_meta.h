@@ -63,6 +63,7 @@ enum MetaType
     MetaType_GameEffect,
     MetaType_UseLayout,
     MetaType_EquipLayout,
+    MetaType_PossibleActionDefinition,
 };
 
 enum FieldMetaFlags

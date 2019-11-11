@@ -128,10 +128,14 @@ inline b32 PositionInsideWorld(UniversePos* pos)
 
 inline Vec3 SubtractOnSameZChunk(UniversePos A, UniversePos B)
 {
-    Vec3 result = A.chunkOffset - B.chunkOffset;
+    Vec3 result = V3(R32_MAX, R32_MAX, R32_MAX);
     
-    r32 chunkSide = VOXEL_SIZE * CHUNK_DIM;
-    result += chunkSide * V3((r32) (A.chunkX - B.chunkX), (r32) (A.chunkY - B.chunkY), 0.0f);
+    if(A.chunkZ == B.chunkZ)
+    {
+        result = A.chunkOffset - B.chunkOffset;
+        r32 chunkSide = VOXEL_SIZE * CHUNK_DIM;
+        result += chunkSide * V3((r32) (A.chunkX - B.chunkX), (r32) (A.chunkY - B.chunkY), 0.0f);
+    }
     
     return result;
 }

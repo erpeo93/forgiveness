@@ -213,7 +213,7 @@ internal void RemoveObjectMapping(ObjectMapping* mappings, u32 mappingCount, Ent
 
 STANDARD_ECS_JOB_CLIENT(DeleteEntities)
 {
-    FreeArchetype(worldMode, &ID);
+    FreeArchetype(worldMode, ID);
 }
 
 internal void DispatchGameEffect(GameModeWorld* worldMode, EntityID ID);
@@ -319,6 +319,19 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 }
             } break;
             
+            case Type_CompletedCommand:
+            {
+                GameCommand command = {};
+                Unpack("HLH", &command.action, &command.targetID, &command.skillIndex);
+                
+                GameUIContext* UI = &worldMode->gameUI;
+                if(AreEqual(command, UI->lockedCommand))
+                {
+                    UI->lockedInteractionType = LockedInteraction_Completed;
+                    UI->keyboardInteractionDisabled = true;
+                }
+            } break;
+            
             case Type_entityHeader:
             {
                 Unpack("L", &currentServerID.archetype_archetypeIndex);
@@ -338,7 +351,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 Unpack("LLLlllVVHHL", &definitionID.subtypeHashIndex, &definitionID.index, &seed, &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset, &speed, &action.property, &action.value, &flags);
                 
-                if(!IsValidID(currentClientID))
+                
+                if(!IsValidID(currentClientID) && !IsSet(flags, EntityFlag_deleted))
                 {
                     Assets* assets = gameState->assets;
                     EntityDefinition* definition = GetData(assets, EntityDefinition, definitionID);
@@ -378,6 +392,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     if(AreEqual(currentClientID, player->clientID))
                     {
                         player->universeP = P;
+                    }
+                    
+                    if(IsSet(base->flags, EntityFlag_deleted))
+                    {
+                        FreeArchetype(worldMode, currentClientID);
                     }
                 }
             } break;

@@ -31,6 +31,7 @@
 #include "forg_meta.h"
 #include "forg_game_ui.h"
 #include "forg_skill.h"
+#include "forg_brain.h"
 PlatformAPI platformAPI;
 
 struct GameFile
@@ -75,8 +76,6 @@ struct PhysicComponent
     
     GameProperty action;
     r32 actionTime;
-    
-    EntityID draggingID;
 };
 
 struct FileHash

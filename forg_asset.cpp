@@ -1153,15 +1153,21 @@ internal b32 WriteAssetMarkupDataToStream(Stream* stream, AssetType type, PAKAss
         {
             if(derivedAsset)
             {
-                if(asset->animation.syncThreesoldMS != 0)
+                if(asset->animation.pingPongLooping)
                 {
-                    OutputToStream(stream, "%s=%f;", ANIMATION_PROPERTY_SYNC_THREESOLD, asset->animation.syncThreesoldMS);
+                    OutputToStream(stream, "%s=true;", ANIMATION_PROPERTY_PING_PONG);
                     nothingWrote = false;
                 }
                 
-                if(asset->animation.preparationThreesoldMS != 0)
+                if(asset->animation.singleCycle)
                 {
-                    OutputToStream(stream, "%s=%f;", ANIMATION_PROPERTY_PREPARATION_THREESOLD, asset->animation.preparationThreesoldMS);
+                    OutputToStream(stream, "%s=true;", ANIMATION_PROPERTY_SINGLE_CYCLE);
+                    nothingWrote = false;
+                }
+                
+                if(asset->animation.loopingBaselineMS != 0)
+                {
+                    OutputToStream(stream, "%s=%d;", ANIMATION_PROPERTY_LOOPING_BASELINE, asset->animation.loopingBaselineMS);
                     nothingWrote = false;
                 }
             }
@@ -1247,8 +1253,11 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
         
         case AssetType_Skeleton:
         {
-            char* print = asset->paka.skeleton.flippedByDefault ? "true" : "false";
-            OutputToStream(&metaDataStream, "\"%s\":%s=%s;", asset->paka.sourceName, SKELETON_FLIPPED, print);
+            if(!derivedAsset)
+            {
+                char* print = asset->paka.skeleton.flippedByDefault ? "true" : "false";
+                OutputToStream(&metaDataStream, "\"%s\":%s=%s;", asset->paka.sourceName, SKELETON_FLIPPED, print);
+            }
         } break;
         
         case AssetType_Image:

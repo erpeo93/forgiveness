@@ -12,25 +12,23 @@ internal void SendEffectDispatch(ServerState* server, EntityID ID)
         PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
         PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
         
-        if(physic->P.chunkZ == playerPhysic->P.chunkZ)
+        Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
+        if(LengthSq(distance) < maxDistanceSq)
         {
-            Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
-            if(LengthSq(distance) < maxDistanceSq)
-            {
-                QueueEffectDispatch(player, ID);
-            }
+            QueueEffectDispatch(player, ID);
         }
     }
 }
 
+internal void DeleteEntity(ServerState* server, EntityID ID);
 internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect, EntityID targetID)
 {
     switch(effect->effectType.value)
     {
         case spawnEntity:
         {
-            SendEffectDispatch(server, ID);
-            AddEntity(server, P, &server->entropy, effect->spawnType, 0);
+            //SendEffectDispatch(server, ID);
+            //AddEntity(server, P, &server->entropy, effect->spawnType, 0);
         } break;
         
         case moveOnZSlice:
@@ -47,6 +45,14 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
             else
             {
                 InvalidCodePath;
+            }
+        } break;
+        
+        case deleteEntity:
+        {
+            if(HasComponent(targetID, PhysicComponent))
+            {
+                DeleteEntity(server, targetID);
             }
         } break;
     }

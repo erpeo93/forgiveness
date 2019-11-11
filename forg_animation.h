@@ -1,11 +1,4 @@
 #pragma once
-enum AnimationLoopingType
-{
-    Loop_none,
-    Loop_normal,
-    Loop_pingPong,
-};
-
 struct BoneAlteration
 {
     Vec2 scale;
@@ -34,7 +27,11 @@ struct AnimationEffectsComponent
 
 struct AnimationComponent
 {
+    PAKAnimation* currentAnimation;
+    r32 totalTime;
     r32 time;
+    r32 oldTime;
+    b32 backward;
     
     u64 skinHash;
     GameProperties skinProperties;
@@ -76,4 +73,5 @@ struct AnimationParams
     EquipmentMappingComponent* equipment;
     UsingMappingComponent* equipped;
     r32 modulationPercentage;
+    b32 fakeAnimation;
 };

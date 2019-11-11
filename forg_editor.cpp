@@ -1688,7 +1688,15 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
             
             case AssetType_Skeleton:
             {
-                if(!get.derived)
+                if(get.derived)
+                {
+                    Nest(layout);
+                    Edit_b32(layout, "pingPongLooping", &info->animation.pingPongLooping, false, ID);
+                    Edit_b32(layout, "singleCycle", &info->animation.singleCycle, false, ID);
+                    Edit_u16(layout, "loopingBaselineMS", &info->animation.loopingBaselineMS, false, ID);
+                    Pop(layout);
+                }
+                else
                 {
                     Nest(layout);
                     Edit_b32(layout, "flipped", &info->skeleton.flippedByDefault, false, ID);

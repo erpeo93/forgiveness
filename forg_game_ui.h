@@ -1,8 +1,14 @@
 #pragma once
+struct PossibleAction
+{
+    u16 action;
+    r32 distanceSq;
+};
+
 struct PossibleActionList
 {
     u16 actionCount;
-    u16 actions[8];
+    PossibleAction actions[8];
 };
 
 enum InteractionType
@@ -18,6 +24,15 @@ enum InteractionType
     Interaction_Count
 };
 
+enum InteractionListType
+{
+    InteractionList_Ground,
+    InteractionList_Equipment,
+    InteractionList_Container,
+    InteractionList_Equipped,
+    InteractionList_Count,
+};
+
 struct UsingEquipOption
 {
     u16 slots[2];
@@ -26,7 +41,7 @@ struct UsingEquipOption
 struct InteractionComponent
 {
     b32 isOnFocus;
-    PossibleActionList actions[Interaction_Count];
+    PossibleActionList actions[InteractionList_Count];
     
     u32 usingConfigurationCount;
     UsingEquipOption usingConfigurations[4];
@@ -36,6 +51,28 @@ struct InteractionComponent
     
     u16 inventorySlotType;
 };
+
+internal b32 ActionIsPossible(InteractionComponent* interaction, u16 action, r32 distanceSq)
+{
+    b32 result = false;
+    if(interaction)
+    {
+        PossibleActionList* list = interaction->actions + Interaction_Ground;
+        for(u32 actionIndex = 0; actionIndex < list->actionCount; ++actionIndex)
+        {
+            PossibleAction* possibleAction = list->actions + actionIndex;
+            if(possibleAction->action == action)
+            {
+                if(distanceSq <= possibleAction->distanceSq)
+                {
+                    result = true;
+                }
+                break;
+            }
+        }
+    }
+    return result;
+}
 
 struct EntityHotInteraction
 {
@@ -59,11 +96,13 @@ inline b32 AreEqual(EntityHotInteraction i1, EntityHotInteraction i2)
     return result;
 }
 
-enum CastingSkillMode
+enum LockedInteractionType
 {
-    CastingSkill_None,
-    CastingSkill_Target,
-    CastingSkill_Offset,
+    LockedInteraction_None,
+    LockedInteraction_SkillTarget,
+    LockedInteraction_SkillOffset,
+    LockedInteraction_ReachTarget,
+    LockedInteraction_Completed,
 };
 
 struct GameUIContext
@@ -109,11 +148,11 @@ struct GameUIContext
     Rect2 skillRects[MAX_ACTIVE_SKILLS];
     
     GameCommand standardCommand;
-    CastingSkillMode castingSkillMode;
-    EntityID hotGameWorldID;
-    EntityID lockedWorldID;
-    b32 lockedInteraction;
-    GameCommand skillCommand;
+    
+    LockedInteractionType lockedInteractionType;
+    GameCommand lockedCommand;
+    b32 keyboardInteractionDisabled;
+    
     
     CommandParameters commandParameters;
 };

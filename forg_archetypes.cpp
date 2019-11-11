@@ -19,13 +19,21 @@ internal GameProperty GetProperty(u32 seed)
 
 #define PropertyToU16(property, enum) ExistMetaPropertyValue(Property_##property, Tokenize((enum).value))
 internal u16 ExistMetaPropertyValue(u16 propertyType, Token value);;
-internal void AddPossibleActions(PossibleActionList* list, Enumerator* actions, u32 actionCount)
+internal void AddPossibleActions(PossibleActionList* list, PossibleActionDefinition* actions, u32 actionCount)
 {
     for(u32 actionIndex = 0; actionIndex < actionCount; ++actionIndex)
     {
         if(list->actionCount < ArrayCount(list->actions))
         {
-            list->actions[list->actionCount++] = PropertyToU16(action, actions[actionIndex]);
+            PossibleActionDefinition* source = actions + actionIndex;
+            u16 action = PropertyToU16(action, source->action);
+            if(action != 0xffff)
+            {
+                PossibleAction* dest = list->actions + list->actionCount++;
+                
+                dest->action = action;
+                dest->distanceSq = Square(source->distance);
+            }
         }
     }
 }
@@ -41,6 +49,7 @@ INIT_COMPONENT_FUNCTION(InitPhysicComponent)
     physic->seed = s->seed;
     physic->speed = {};
     physic->acc = {};
+    physic->flags = {};
     physic->action = GameProp(action, idle);
 }
 
@@ -140,6 +149,12 @@ INIT_COMPONENT_FUNCTION(InitSkillComponent)
     }
     
 }
+
+INIT_COMPONENT_FUNCTION(InitBrainComponent)
+{
+    BrainComponent* brain = (BrainComponent*) componentPtr;
+    brain->type = Brain_test;
+}
 #else
 INIT_COMPONENT_FUNCTION(InitBaseComponent)
 {
@@ -149,6 +164,7 @@ INIT_COMPONENT_FUNCTION(InitBaseComponent)
     base->nameHash = StringHash(c->name.name);
     base->serverID = c->ID;
     base->definitionID = common->definitionID;
+    base->flags = {};
 }
 
 internal void InitShadow(ShadowComponent* shadow, ClientEntityInitParams* params)
@@ -184,6 +200,10 @@ INIT_COMPONENT_FUNCTION(InitAnimationComponent)
     animation->scale = 1.0f;
     animation->speed = 1.0f;
     InitShadow(&animation->shadow, c);
+    
+    animation->totalTime = 0;
+    animation->time = 0;
+    animation->oldTime = 0;
 }
 
 INIT_COMPONENT_FUNCTION(InitRockComponent)
@@ -308,10 +328,10 @@ INIT_COMPONENT_FUNCTION(InitSkillMappingComponent)
 INIT_COMPONENT_FUNCTION(InitInteractionComponent)
 {
     InteractionComponent* dest = (InteractionComponent*) componentPtr;
-    AddPossibleActions(dest->actions + Interaction_Ground, common->groundActions, common->groundActionCount);
-    AddPossibleActions(dest->actions + Interaction_Equipment, common->equipmentActions, common->equipmentActionCount);
-    AddPossibleActions(dest->actions + Interaction_Container, common->containerActions, common->containerActionCount);
-    AddPossibleActions(dest->actions + Interaction_Equipped, common->equippedActions, common->equippedActionCount);
+    AddPossibleActions(dest->actions + InteractionList_Ground, common->groundActions, common->groundActionCount);
+    AddPossibleActions(dest->actions + InteractionList_Equipment, common->equipmentActions, common->equipmentActionCount);
+    AddPossibleActions(dest->actions + InteractionList_Container, common->containerActions, common->containerActionCount);
+    AddPossibleActions(dest->actions + InteractionList_Equipped, common->equippedActions, common->equippedActionCount);
     
     for(u32 usingOption = 0; usingOption < common->usingConfigurationCount; ++usingOption)
     {

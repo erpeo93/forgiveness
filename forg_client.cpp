@@ -212,7 +212,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         }
     }
     
-    GameCommand command = ComputeFinalCommand(&worldMode->gameUI);
+    GameCommand command = ComputeFinalCommand(&worldMode->gameUI, worldMode, myPlayer);
     if(!AreEqual(myPlayer->lastCommand, command))
     {
         myPlayer->lastCommand = command;

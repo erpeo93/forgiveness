@@ -179,6 +179,13 @@ internal u16 PrepareEntityUpdate(ServerState* server, PhysicComponent* physic, u
     return totalSize;
 }
 
+internal void QueueCompletedCommand(PlayerComponent* player, GameCommand* command)
+{
+    StartPacket(player, CompletedCommand);
+    Pack("HLH", command->action, command->targetID.archetype_archetypeIndex, command->skillIndex);
+    QueueOrderedPacket(player);
+}
+
 inline void QueueEntityHeader(PlayerComponent* player, EntityID ID)
 {
     StartPacket(player, entityHeader);
@@ -331,7 +338,6 @@ internal void QueueDebugEvent(PlayerComponent* player, DebugEvent* event)
 }
 #endif
 
-
 STANDARD_ECS_JOB_SERVER(SendEntityUpdate)
 {
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
@@ -357,6 +363,7 @@ STANDARD_ECS_JOB_SERVER(SendEntityUpdate)
             if(LengthSq(distance) < maxDistanceSq)
             {
                 QueueEntityHeader(player, ID);
+                
                 u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, ID);
                 Assert(writeHere);
                 if(writeHere)
@@ -375,6 +382,7 @@ STANDARD_ECS_JOB_SERVER(SendEntityUpdate)
                 
                 if(equipped)
                 {
+                    QueueDraggingID(player, ID, equipped->draggingID);
                     for(u16 slotIndex = 0; slotIndex < Count_usingSlot; ++slotIndex)
                     {
                         InventorySlot* slot = equipped->slots + slotIndex;
@@ -401,8 +409,6 @@ STANDARD_ECS_JOB_SERVER(SendEntityUpdate)
                         QueueContainerUsingID(player, ID, objectIndex, slot->type, slot->ID);
                     }
                 }
-                
-                QueueDraggingID(player, ID, physic->draggingID);
             }
         }
     }

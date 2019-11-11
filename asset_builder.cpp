@@ -1729,13 +1729,17 @@ internal void AddProperty(PAKAsset* asset, u64 propertyHash, u64 valueHash)
 
 internal void FillPAKProperty(PAKAsset* asset, Token property, Token value)
 {
-    if(TokenEquals(property, ANIMATION_PROPERTY_SYNC_THREESOLD))
+    if(TokenEquals(property, ANIMATION_PROPERTY_PING_PONG))
     {
-        asset->animation.syncThreesoldMS = SafeTruncateToU16(StringToUInt32(value.text));
+        asset->animation.pingPongLooping = StringToB32(value.text);
     }
-    else if(TokenEquals(property, ANIMATION_PROPERTY_PREPARATION_THREESOLD))
+    else if(TokenEquals(property, ANIMATION_PROPERTY_SINGLE_CYCLE))
     {
-        asset->animation.preparationThreesoldMS = SafeTruncateToU16(StringToUInt32(value.text));
+        asset->animation.singleCycle = StringToB32(value.text);
+    }
+    else if(TokenEquals(property, ANIMATION_PROPERTY_LOOPING_BASELINE))
+    {
+        asset->animation.loopingBaselineMS = SafeTruncateToU16(StringToUInt32(value.text));
     }
     else if(TokenEquals(property, IMAGE_PROPERTY_ALIGN_X))
     {
@@ -2401,8 +2405,6 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                 }
                                 
                                 derivedAsset->animation.durationMS = animation.durationMS;
-                                derivedAsset->animation.syncThreesoldMS = 0;
-                                derivedAsset->animation.preparationThreesoldMS = 0;
                                 Assert(derivedAsset->animation.durationMS > 0);
                                 
                                 derivedAsset->animation.spriteCount = animation.spriteInfoCount;

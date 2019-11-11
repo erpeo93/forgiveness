@@ -13,8 +13,9 @@
 #define MARKUP_FILE_NAME "markup"
 
 #define SKELETON_FLIPPED "flipped"
-#define ANIMATION_PROPERTY_SYNC_THREESOLD "syncThreesold"
-#define ANIMATION_PROPERTY_PREPARATION_THREESOLD "preparationThreesold"
+#define ANIMATION_PROPERTY_PING_PONG "pingPongLooping"
+#define ANIMATION_PROPERTY_SINGLE_CYCLE "singleCycle"
+#define ANIMATION_PROPERTY_LOOPING_BASELINE "loopingBaseline"
 
 #define IMAGE_PROPERTY_ALIGN_X "alignX"
 #define IMAGE_PROPERTY_ALIGN_Y "alignY"

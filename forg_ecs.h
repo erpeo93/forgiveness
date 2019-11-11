@@ -45,6 +45,7 @@ struct ArchetypeLayout
             ArchetypeComponent hasInteractionComponent;
             ArchetypeComponent hasSkillComponent;
             ArchetypeComponent hasSkillMappingComponent;
+            ArchetypeComponent hasBrainComponent;
         };
     };
 };
@@ -67,7 +68,7 @@ struct ArchetypeLayout
 #define FreeComponent(state, component, id) Free_(&state->component##_, id)
 
 #define AcquireArchetype(state, arch, idAddress) SetArchetype(idAddress, arch); Acquire_(&state->archetypes[arch], &(idAddress)->archetype_archetypeIndex, 0xffffff)
-#define FreeArchetype(state, idAddress) Free_(&state->archetypes[GetArchetype(*idAddress)], GetArchetypeIndex(*idAddress))
+#define FreeArchetype(state, id) Free_(&state->archetypes[GetArchetype(id)], GetArchetypeIndex(id))
 #define DeletedArchetype(state, id) Deleted_(&state->archetypes[GetArchetype(id)], GetArchetypeIndex(id))
 
 

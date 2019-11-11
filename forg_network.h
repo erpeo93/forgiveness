@@ -159,6 +159,7 @@ enum Packet_Type
     Type_Command,
     Type_InventoryCommand,
     Type_CommandParameters,
+    Type_CompletedCommand,
     
     Type_entityHeader,
     Type_entityBasics,

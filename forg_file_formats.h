@@ -94,7 +94,7 @@ struct PAKSound
     */
 };
 
-#define PAK_ANIMATION_VERSION 2
+#define PAK_ANIMATION_VERSION 7
 struct PAKAnimation
 {
     u32 spriteCount;
@@ -105,9 +105,9 @@ struct PAKAnimation
     u16 durationMS;
     
     
-    u16 preparationThreesoldMS;
-    u16 syncThreesoldMS;
-    
+    u16 loopingBaselineMS;
+    b32 pingPongLooping;
+    b32 singleCycle;
     // NOTE( Leonardo ): data is:
     /*
     SpriteInfo sprites[spriteCount]

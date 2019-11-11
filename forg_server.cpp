@@ -22,7 +22,7 @@
 #include "forg_world_generation.cpp"
 #include "forg_game_effect.cpp"
 #include "forg_world_server.cpp"
-
+#include "forg_brain.cpp"
 internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, PlayerComponent* player,  unsigned char* packetPtr, u16 dataSize)
 {
     u32 challenge = 1111;
@@ -531,6 +531,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     
     server->frameByFramePool = &tempPool;
     
+    EXECUTE_JOB(server, DeleteDeletedEntities, ArchetypeHas(PhysicComponent), elapsedTime);
     SpawnEntities(server, elapsedTime);
     HandlePlayersNetwork(server, elapsedTime);
     InitSpatialPartition(server->frameByFramePool, &server->playerPartition);
@@ -542,6 +543,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     EXECUTE_JOB(server, HandlePlayerCommands, ArchetypeHas(PlayerComponent), elapsedTime);
     EXECUTE_JOB(server, DispatchEquipmentEffects, ArchetypeHas(PhysicComponent) && (ArchetypeHas(EquipmentComponent) || ArchetypeHas(UsingComponent)), elapsedTime);
     EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime);
+    EXECUTE_JOB(server, UpdateBrain, ArchetypeHas(BrainComponent), elapsedTime);
     EXECUTE_JOB(server, HandleOpenedContainers, ArchetypeHas(ContainerComponent), elapsedTime);
     EXECUTE_JOB(server, SendEntityUpdate, ArchetypeHas(PhysicComponent), elapsedTime);
     

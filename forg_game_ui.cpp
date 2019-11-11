@@ -63,16 +63,45 @@ internal void HandleMouseInteraction(GameUIContext* UI, GameModeWorld* worldMode
     }
 }
 
-internal GameCommand ComputeFinalCommand(GameUIContext* UI)
+internal GameCommand ComputeFinalCommand(GameUIContext* UI, GameModeWorld* worldMode, ClientPlayer* myPlayer)
 {
-    GameCommand result;
-    if(UI->castingSkillMode)
+    BaseComponent* player = GetComponent(worldMode, myPlayer->clientID, BaseComponent);
+    
+    GameCommand result = UI->standardCommand;
+    
+    switch(UI->lockedInteractionType)
     {
-        result = UI->skillCommand;
-    }
-    else
-    {
-        result = UI->standardCommand;
+        case LockedInteraction_None:
+        {
+        } break;
+        
+        case LockedInteraction_SkillTarget:
+        case LockedInteraction_SkillOffset:
+        {
+            result = UI->lockedCommand;
+        } break;
+        
+        case LockedInteraction_ReachTarget:
+        {
+            GameCommand lockedCommand = UI->lockedCommand;
+            result = lockedCommand;
+            
+            EntityID lockedIDClient = GetClientIDMapping(worldMode, lockedCommand.targetID);
+            
+            InteractionComponent* interaction = GetComponent(worldMode, lockedIDClient, InteractionComponent);
+            
+            BaseComponent* lockedBase = GetComponent(worldMode, lockedIDClient, BaseComponent);
+            
+            Vec3 toTarget = SubtractOnSameZChunk(lockedBase->universeP, player->universeP);
+            u16 action = lockedCommand.action;
+            r32 distanceSq = LengthSq(toTarget);
+            if(!ActionIsPossible(interaction, action, distanceSq))
+            {
+                GameCommand command = {};
+                command.action = move;
+                result = command;
+            }
+        } break;
     }
     
     return result;
@@ -82,6 +111,17 @@ internal void ResetInteractions(GameUIContext* UI)
 {
     UI->hotCount = 0;
     UI->anyValidInteraction = false;
+}
+
+internal b32 LeftMouseAction(u16 action)
+{
+    b32 result = true;
+    if(action == drag)
+    {
+        result = false;
+    }
+    
+    return result;
 }
 
 internal EntityHotInteraction* AddPossibleInteraction_(GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityID, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
@@ -109,7 +149,11 @@ internal EntityHotInteraction* AddPossibleInteraction_(GameUIContext* UI, Intera
             {
                 if(dest->actionCount < ArrayCount(dest->actions))
                 {
-                    dest->actions[dest->actionCount++] = list->actions[actionIndex];
+                    PossibleAction* action = list->actions + actionIndex;
+                    if(LeftMouseAction(action->action))
+                    {
+                        dest->actions[dest->actionCount++] = action->action;
+                    }
                 }
             }
         }
@@ -147,11 +191,13 @@ internal void AddContainerObjectsInteractions(GameUIContext* UI, GameModeWorld* 
             {
                 if(PointInRect(mapping->projOnScreen, worldMode->relativeMouseP))
                 {
+                    mapping->hot = true;
                     ResetInteractions(UI);
                     AddPossibleInteraction(UI, interactionType, interaction->actions + interactionType, ID, containerID, mappingIndex, &mapping->object);
                 }
                 else if((interactionType == Interaction_Equipment) && PointInRect(base->projectedOnScreen, worldMode->relativeMouseP))
                 {
+                    mapping->hot = true;
                     AddPossibleInteraction(UI, interactionType, interaction->actions + interactionType, ID, containerID, mappingIndex, &mapping->object);
                 }
             }
@@ -160,8 +206,17 @@ internal void AddContainerObjectsInteractions(GameUIContext* UI, GameModeWorld* 
         {
             if(PointInRect(mapping->projOnScreen, worldMode->relativeMouseP))
             {
-                ResetInteractions(UI);
-                AddPossibleInteraction(UI, interactionType, 0, {}, containerID, mappingIndex, &mapping->object);
+                if(IsValidID(UI->draggingIDServer))
+                {
+                    InteractionComponent* interaction = GetComponent(worldMode, GetClientIDMapping(worldMode, UI->draggingIDServer), InteractionComponent);
+                    
+                    if(CompatibleSlot(interaction, &mapping->object))
+                    {
+                        mapping->hot = true;
+                        ResetInteractions(UI);
+                        AddPossibleInteraction(UI, interactionType, 0, {}, containerID, mappingIndex, &mapping->object);
+                    }
+                }
             }
         }
     }
@@ -375,9 +430,12 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
 {
     GameUIContext* UI = &worldMode->gameUI;
     
-    if(UI->castingSkillMode == CastingSkill_Offset)
+    switch(UI->lockedInteractionType)
     {
-        PushRect(group, FlatTransform(0.01f), UI->commandParameters.targetOffset, V2(0.2f, 0.2f), V4(1, 0, 0, 1));
+        case LockedInteraction_SkillOffset:
+        {
+            PushRect(group, FlatTransform(0.01f), UI->commandParameters.targetOffset, V2(0.2f, 0.2f), V4(1, 0, 0, 1));
+        } break;
     }
     
     SetOrthographicTransformScreenDim(group);
@@ -709,12 +767,6 @@ internal void HandleSkillsInteraction(GameUIContext* UI, GameModeWorld* worldMod
     }
 }
 
-internal b32 CanDrag(GameUIContext* UI, EntityID targetID)
-{
-    b32 result = true;
-    return result;
-}
-
 internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, ClientPlayer* myPlayer, PlatformInput* input)
 {
     GameUIContext* UI = &worldMode->gameUI;
@@ -728,7 +780,6 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
     player->flags = ClearFlags(player->flags, EntityFlag_occluding);
     ResetInteractions(UI);
     UI->tooltip[0] = 0;
-    UI->hotGameWorldID = {};
     
     if(UI->ignoreDraggingMappingTimer > 0)
     {
@@ -745,52 +796,83 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
     
     AddPossibleInteraction_(&worldMode->gameUI, Interaction_Ground, 0, {});
     
-    Vec2 cameraOffset = HandleKeyboardInteraction(UI, myPlayer, input);
+    Vec2 cameraOffset = {};
+    if(!UI->keyboardInteractionDisabled)
+    {
+        cameraOffset = HandleKeyboardInteraction(UI, myPlayer, input);
+    }
     HandleMouseInteraction(UI, worldMode, myPlayer, input);
     
     EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent) && ArchetypeHas(InteractionComponent), input->timeToAdvance);
     MoveCameraTowards(worldMode, player, 0.5f, cameraOffset, V2(0, 0), 1.0f);
     
     
-    if(UI->lockedInteraction)
+    b32 standardInteractionAllowed = true;
+    
+    GameCommand lockedCommand = UI->lockedCommand;
+    EntityID lockedIDClient = GetClientIDMapping(worldMode, lockedCommand.targetID);
+    switch(UI->lockedInteractionType)
     {
-        if(UI->castingSkillMode)
+        case LockedInteraction_SkillTarget:
         {
-            b32 interactionEnded = false;
-            switch(UI->castingSkillMode)
+            InteractionComponent* lockedInteraction = GetComponent(worldMode, lockedIDClient, InteractionComponent);
+            if(lockedInteraction)
             {
-                case CastingSkill_Target:
-                {
-                    EntityID lockedIDClient = GetClientIDMapping(worldMode, UI->lockedWorldID);
-                    InteractionComponent* lockedInteraction = GetComponent(worldMode, lockedIDClient, InteractionComponent);
-                    lockedInteraction->isOnFocus = true;
-                    BaseComponent* lockedBase = GetComponent(worldMode, lockedIDClient, BaseComponent);
-                    if(Released(&input->mouseRight) || !ShouldBeRendered(worldMode, lockedBase))
-                    {
-                        interactionEnded = true;
-                    }
-                } break;
-                
-                case CastingSkill_Offset:
-                {
-                    CommandParameters* parameters = &UI->commandParameters;
-                    parameters->targetOffset = worldMode->groundMouseP;
-                    if(Released(&input->mouseRight))
-                    {
-                        interactionEnded = true;
-                    }
-                } break;
+                lockedInteraction->isOnFocus = true;
             }
+            BaseComponent* lockedBase = GetComponent(worldMode, lockedIDClient, BaseComponent);
+            if(lockedBase)
+            {
+                if(Released(&input->mouseRight) || !ShouldBeRendered(worldMode, lockedBase))
+                {
+                    UI->lockedInteractionType = LockedInteraction_None;
+                }
+            }
+        } break;
+        
+        case LockedInteraction_SkillOffset:
+        {
+            CommandParameters* parameters = &UI->commandParameters;
+            parameters->targetOffset = worldMode->groundMouseP;
+            if(Released(&input->mouseRight))
+            {
+                UI->lockedInteractionType = LockedInteraction_None;
+            }
+        } break;
+        
+        case LockedInteraction_ReachTarget:
+        {
+            CommandParameters* parameters = &UI->commandParameters;
+            BaseComponent* targetBase = GetComponent(worldMode, lockedIDClient, BaseComponent);
+            Vec3 toTarget = SubtractOnSameZChunk(targetBase->universeP, player->universeP);
+            parameters->acceleration += Normalize(toTarget);
             
-            if(interactionEnded)
+            InteractionComponent* lockedInteraction = GetComponent(worldMode, lockedIDClient, InteractionComponent);
+            
+            lockedInteraction->isOnFocus = true;
+            
+            if(Released(&input->mouseLeft))
             {
-                UI->castingSkillMode = CastingSkill_None;
-                UI->lockedWorldID = {};
-                UI->lockedInteraction = false;
+                UI->lockedInteractionType = LockedInteraction_None;
             }
-        }
+        } break;
+        
+        case LockedInteraction_Completed:
+        {
+            CommandParameters* parameters = &UI->commandParameters;
+            parameters->acceleration = {};
+            standardInteractionAllowed = true;
+            
+            if(Released(&input->mouseLeft) || Released(&input->mouseRight))
+            {
+                UI->lockedInteractionType = LockedInteraction_None;
+                UI->keyboardInteractionDisabled = false;
+            }
+        } break;
     }
-    else
+    
+    
+    if(standardInteractionAllowed)
     {
         if(UI->lootingMode)
         {
@@ -902,25 +984,50 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                     if(IsValidID(UI->draggingIDServer))
                     {
                         validInteraction = false;
+                        
+#if 0                        
+                        BrainCommand* command = ExistBrainCommand(hotID, draggingID);
+						if(command)
+						{
+							ground->isOnFocus = true;
+							SetTooltip(action);
+							if(Pressed(mouseLeft))
+							{
+								SendBrainCommand(action, hotID, draggingID);
+                                if(command->remove)
+                                {
+                                    UI->draggingIDServer = {};
+                                    AddObjectRemovedPrediction(worldMode, UI, command.containerID, command.targetID);
+                                }
+							}
+						}
+#endif
+                        
                     }
                     else
                     {
-                        if(CanDrag(UI, hotID))
+                        if(Pressed(&input->mouseRight))
                         {
-                            if(Pressed(&input->mouseRight))
+                            b32 draggingInteraction = false;
+                            
+                            if(IsValidID(hotID))
                             {
-                                if(IsValidID(hotID))
+                                EntityID hotIDClient = GetClientIDMapping(worldMode, hotID);
+                                InteractionComponent* interaction = GetComponent(worldMode, hotIDClient, InteractionComponent);
+                                BaseComponent* hotBase = GetComponent(worldMode, hotIDClient, BaseComponent);
+                                r32 distanceSq = LengthSq(SubtractOnSameZChunk(hotBase->universeP, player->universeP));
+                                
+                                if(ActionIsPossible(interaction, drag, distanceSq))
                                 {
                                     GameCommand command = {};
                                     command.action = drag;
                                     command.targetID = hotID;
                                     SendInventoryCommand(command); 
+                                    draggingInteraction = true;
                                 }
                             }
-                        }
-                        else
-                        {
-                            if(Pressed(&input->mouseRight))
+                            
+                            if(!draggingInteraction)
                             {
                                 GameCommand command = {};
                                 command.action = cast;
@@ -935,30 +1042,35 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                                     {
                                         if(IsValidID(hotID))
                                         {
+                                            UI->lockedInteractionType = LockedInteraction_SkillTarget;
                                             command.targetID = hotID;
-                                            UI->lockedWorldID = hotID;
-                                            UI->lockedInteraction = true;
-                                            UI->castingSkillMode = CastingSkill_Target;
                                         }
                                     }
                                     else
                                     {
-                                        UI->lockedInteraction = true;
-                                        UI->castingSkillMode = CastingSkill_Offset;
+                                        UI->lockedInteractionType = LockedInteraction_SkillOffset;
                                     }
-                                    UI->skillCommand = command;
+                                    UI->lockedCommand = command;
                                 }
                             }
                         }
-                        
-                        if(Pressed(&input->mouseLeft))
+                        else if(Pressed(&input->mouseLeft))
                         {
                             if(IsValidID(hotID))
                             {
-                                GameCommand* command = &UI->standardCommand;
-                                command->targetID = hotID;
-                                command->action = hotAction;
+                                EntityID hotIDClient = GetClientIDMapping(worldMode, hotID);
+                                InteractionComponent* interaction = GetComponent(worldMode, hotIDClient, InteractionComponent);
+                                BaseComponent* hotBase = GetComponent(worldMode, hotIDClient, BaseComponent);
+                                r32 distanceSq = LengthSq(SubtractOnSameZChunk(hotBase->universeP, player->universeP));
+                                
+                                GameCommand command = {};
+                                command.targetID = hotID;
+                                command.action = hotAction;
+                                
+                                UI->lockedInteractionType = LockedInteraction_ReachTarget;
+                                UI->lockedCommand = command;
                             }
+                            
                         }
                     }
                 } break;
@@ -975,18 +1087,14 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                         }
                         else
                         {
-                            InteractionComponent* interaction = GetComponent(worldMode, GetClientIDMapping(worldMode, UI->draggingIDServer), InteractionComponent);
                             b32 valid = false;
                             u16 action;
                             u16 optionIndex = 0;
                             
                             if(hotInteraction.type == Interaction_Container)
                             {
-                                if(CompatibleSlot(interaction, hotInteraction.slot))
-                                {
-                                    SetTooltip(UI, 1, "move");
-                                    valid = true;
-                                }
+                                SetTooltip(UI, 1, "move");
+                                validInteraction = true;
                                 action = storeInventory;
                             }
                             else
@@ -1000,23 +1108,19 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                                         draggingInteraction->isOnFocus = true;
                                         FakeUse(UI, worldMode, myPlayer->clientID, UI->draggingIDServer, optionIndex);
                                         SetTooltip(UI, 1, "use");
-                                        valid = true;
+                                        validInteraction = true;
                                     }
                                 }
                                 else
                                 {
-                                    if(CompatibleSlot(interaction, hotInteraction.slot))
-                                    {
-                                        SetTooltip(UI, 1, "move");
-                                        valid = true;
-                                    }
+                                    SetTooltip(UI, 1, "move");
+                                    validInteraction = true;
                                 }
                                 
                                 action = useInventory;
                             }
                             
-                            
-                            if(valid)
+                            if(validInteraction)
                             {
                                 if(Pressed(&input->mouseLeft))
                                 {
@@ -1029,7 +1133,6 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                                     command.optionIndex = optionIndex;
                                     SendInventoryCommand(command); 
                                     UI->draggingIDServer = {};
-                                    
                                     AddObjectRemovedPrediction(worldMode, UI, command.containerID, command.targetID);
                                 }
                             }

@@ -12,6 +12,7 @@ struct EquipmentComponent
 
 struct UsingComponent
 {
+    EntityID draggingID;
     InventorySlot slots[Count_usingSlot];
 };
 
@@ -27,6 +28,7 @@ struct ContainerComponent
 
 struct ObjectMapping
 {
+    b32 hot;
     r32 distanceFromMouseSq;
     Rect2 projOnScreen;
     u64 slotHash;
@@ -44,8 +46,6 @@ struct UsingMappingComponent
     ObjectMapping mappings[Count_usingSlot];
 };
 
-
-
 struct ContainerMappingComponent
 {
     EntityID openedBy;
@@ -61,6 +61,7 @@ enum EntityFlags
 {
     EntityFlag_notInWorld = (1 << 0),
     EntityFlag_occluding = (1 << 1),
+    EntityFlag_deleted = (1 << 2),
 };
 
 inline b32 IsSet(u32 flags, u32 flag)

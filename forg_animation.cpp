@@ -1,3 +1,19 @@
+internal b32 FinishedSingleCycleAnimation(AnimationComponent* animation)
+{
+    b32 result = false;
+    
+    PAKAnimation* info = animation->currentAnimation;
+    if(info && info->singleCycle)
+    {
+        if(RoundReal32ToU32(animation->totalTime * 1000.0f) > info->durationMS)
+        {
+            result = true;
+        }
+    }
+    
+    return result;
+}
+
 inline r32 LerpAnglesWithSpin(i32 spin, r32 angle1, r32 angle2, r32 lerp)
 {
     r32 result = 0;
@@ -251,19 +267,94 @@ internal Vec2 CalculateFinalBoneOffset_(Bone* frameBones, i32 countBones, Bone* 
     return result;
 }
 
-internal AnimationPiece* GetAnimationPiecesAndAdvanceState(MemoryPool* tempPool, PAKAnimation* animationInfo, Animation* animation,
-                                                           AnimationComponent* component, AnimationParams* params, u32* animationPieceCount, b32 render)
+internal u32 AdvanceAnimationState(PAKAnimation* info, AnimationComponent* animation, r32 elapsedTime, b32 fakeAnimation)
 {
-    u32 animTimeMod = 0;
-    if(render)
+    if(info != animation->currentAnimation)
     {
-        r32 oldTime = component->time;
-        r32 newTime = oldTime + params->elapsedTime;
-        component->time = newTime;
-        u32 timeline = (u32) (component->time * 1000.0f);
-        animTimeMod = timeline % animationInfo->durationMS;
+        if(!fakeAnimation)
+        {
+            animation->totalTime = 0;
+            animation->time = 0;
+            animation->oldTime = 0;
+            animation->currentAnimation = info;
+        }
     }
     
+    animation->totalTime += elapsedTime;
+    if(animation->backward)
+    {
+        elapsedTime = -elapsedTime;
+    }
+    
+    animation->oldTime = animation->time;
+    animation->time = animation->oldTime + elapsedTime;
+    
+    
+    i32 oldTimeline = RoundReal32ToI32(animation->oldTime * 1000.0f);
+    i32 newTimelineMod = oldTimeline + RoundReal32ToI32(elapsedTime * 1000.0f);
+    u32 result = 0;
+    
+    if(info->pingPongLooping)
+    {
+        i32 upTarget = (i32) info->durationMS;
+        i32 lowTarget = (i32) info->loopingBaselineMS;
+        
+        b32 changedDirection = false;
+        if(!animation->backward)
+        {
+            Assert(animation->oldTime <= animation->time);
+            if(newTimelineMod >= upTarget)
+            {
+                changedDirection = true;
+                result = (u32) upTarget;
+            }
+        }
+        else
+        {
+            Assert(animation->oldTime >= animation->time);
+            if(newTimelineMod <= lowTarget)
+            {
+                changedDirection = true;
+                result = (u32) lowTarget;
+            }
+        }
+        
+        if(changedDirection)
+        {
+            animation->time = animation->oldTime;
+            animation->backward = !animation->backward;
+        }
+        else
+        {
+            if(newTimelineMod < 0 || newTimelineMod >= upTarget)
+            {
+                newTimelineMod = 0;
+            }
+            result = (u32) newTimelineMod;
+        }
+    }
+    else
+    {
+        animation->backward = false;
+        newTimelineMod = Max(newTimelineMod, 0);
+        result = (u32) newTimelineMod % info->durationMS;
+        if(RoundReal32ToU32(animation->totalTime * 1000.0f) >= info->durationMS)
+        {
+            u32 old = result;
+            result = Max(result, info->loopingBaselineMS);
+            Assert(result >= old);
+            u32 delta = result - old;
+            animation->time += (r32) delta / 1000.0f;
+        }
+        
+    }
+    
+    return result;
+}
+
+internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKAnimation* animationInfo, Animation* animation,
+                                            AnimationComponent* component, AnimationParams* params, u32 animTimeMod, u32* animationPieceCount, b32 render)
+{
     u32 lowerFrameIndex = 0;
     for(u32 frameIndex = 0; frameIndex < animation->frameCount; frameIndex++)
     {
@@ -344,47 +435,6 @@ internal AnimationPiece* GetAnimationPiecesAndAdvanceState(MemoryPool* tempPool,
         zOffset += 0.01f;
     }
     
-    
-#if 0    
-    r32 waitingForSyncThreesold = 0.8f;
-    if(timeline >= header->durationMS || (state->stopAtNextBarrier && !RequiresAnimationSync((EntityAction) state->action)) || state->waitingForSyncTimer >= waitingForSyncThreesold)
-    {
-        StartNextAction(state);
-    }
-#endif
-    
-#if 0    
-    if(state->stopAtNextBarrier)
-    {
-        // NOTE(Leonardo): if the animation has no barriers, interrupt it immediately!
-        ended = true;
-        
-        u32 oldTimeMod = (u32) (oldAnimationTime * 1000.0f) % header->durationMS;
-        for(u32 barrierIndex = 0; barrierIndex < ArrayCount(header->barriers); barrierIndex++)
-        {
-            r32 realBarrier = header->barriers[barrierIndex];
-            Assert(Normalized(realBarrier));
-            
-            u32 barrier =  (u32) (realBarrier * header->durationMS);
-            if(barrier > 0)
-            {
-                ended = false;
-                if(barrier == header->durationMS)
-                {
-                    animTimeMod = timeline;
-                }
-                
-                if(oldTimeMod <= barrier && animTimeMod >= barrier)
-                {
-                    ended = true;
-                    animTimeMod = barrier;
-                    break;
-                }
-            }
-        }
-    }
-#endif
-    
     return result;
 }
 
@@ -420,7 +470,6 @@ inline void ApplyAssAlterations(PieceAss* ass, AssAlteration* assAlt, Bone* pare
             *proceduralColor = assAlt->color;
         }
     }
-    
 }
 #endif
 
@@ -598,11 +647,19 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
     if(animation)
     {
         PAKAnimation* animationInfo = GetAnimationInfo(group->assets, animationID);
+        
+        
         u16 bitmapCount = 0;
         AssetID* bitmaps = GetAllSkinBitmaps(temp.pool, group->assets, GetAssetSubtype(group->assets, AssetType_Image, component->skinHash), &component->skinProperties, &bitmapCount);
         
+        u32 animTimeMod = 0;
+        if(render)
+        {
+            animTimeMod = AdvanceAnimationState(animationInfo, component, params->elapsedTime, params->fakeAnimation);
+        }
+        
         u32 pieceCount;
-        AnimationPiece* pieces = GetAnimationPiecesAndAdvanceState(temp.pool, animationInfo, animation, component, params, &pieceCount, render);
+        AnimationPiece* pieces = GetAnimationPieces(temp.pool, animationInfo, animation, component, params, animTimeMod, &pieceCount, render);
         
         ObjectTransform transform = params->transform;
         transform.flipOnYAxis = params->flipOnYAxis;

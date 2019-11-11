@@ -78,6 +78,7 @@ Archetype() struct ContainerArchetype
     EffectComponent effect;
     ContainerComponent container;
     InteractionComponent interaction;
+    BrainComponent brain;
 #else
     BaseComponent base;
     LayoutComponent layout;
@@ -97,6 +98,11 @@ Archetype() struct PortalArchetype
 #endif
 };
 
+Archetype() struct NullArchetype
+{
+    
+};
+
 introspection() struct UseLayout
 {
     ArrayCounter slotCount MetaCounter("slots");
@@ -109,6 +115,12 @@ introspection() struct EquipLayout
     Enumerator* slots MetaEnumerator("equipmentSlot");
 };
 
+introspection() struct PossibleActionDefinition
+{
+    Enumerator action MetaEnumerator("action");
+    r32 distance MetaDefault("1.0f");
+};
+
 introspection() struct CommonEntityInitParams
 {
     EntityRef definitionID MetaUneditable();
@@ -117,16 +129,16 @@ introspection() struct CommonEntityInitParams
     Vec3 boundDim MetaDefault("V3(1, 1, 1)");
     
     ArrayCounter groundActionCount MetaCounter("groundActions");
-    Enumerator* groundActions MetaEnumerator("action");
+    PossibleActionDefinition* groundActions;
     
     ArrayCounter equipmentActionCount MetaCounter("equipmentActions");
-    Enumerator* equipmentActions MetaEnumerator("action");
+    PossibleActionDefinition* equipmentActions;
     
     ArrayCounter containerActionCount MetaCounter("containerActions");
-    Enumerator* containerActions MetaEnumerator("action");
+    PossibleActionDefinition* containerActions;
     
     ArrayCounter equippedActionCount MetaCounter("equippedActions");
-    Enumerator* equippedActions MetaEnumerator("action");
+    PossibleActionDefinition* equippedActions;
     
     ArrayCounter usingConfigurationCount MetaCounter("usingConfigurations");
     UseLayout* usingConfigurations;

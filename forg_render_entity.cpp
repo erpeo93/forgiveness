@@ -5,7 +5,6 @@ internal b32 ShouldBeRendered(GameModeWorld* worldMode, BaseComponent* base)
     if(base)
     {
         result = ((base->universeP.chunkZ == worldMode->player.universeP.chunkZ) &&
-                  
                   !(base->flags & EntityFlag_notInWorld) &&
                   !(base->flags & EntityFlag_occluding));
     }
@@ -58,8 +57,6 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         }
         Clear(&animation->skeletonProperties);
         
-        AddOptionalGamePropertyRaw(&animation->skeletonProperties, base->action);
-        
         AnimationParams params = {};
         params.elapsedTime = elapsedTime * animation->speed;
         params.angle = 0;
@@ -72,6 +69,16 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.equipped = GetComponent(worldMode, ID, UsingMappingComponent);
         params.tint = V4(1, 1, 1, 1);
         params.modulationPercentage = GetModulationPercentage(worldMode, ID); 
+        
+        GameProperty action = base->action;
+        if(FinishedSingleCycleAnimation(animation))
+        {
+            action = GameProp(action, idle);
+            params.fakeAnimation = true;
+        }
+        
+        AddOptionalGamePropertyRaw(&animation->skeletonProperties, action);
+        
         
         AnimationEffectsComponent* effects = GetComponent(worldMode, ID, AnimationEffectsComponent);
         if(effects)
@@ -284,16 +291,7 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                     result = RectMinDim(dim.P.xy, dim.size);
                 }
                 
-                r32 alpha = 1.0f;
-                if((piece->nameHash == emptySpaceHash || piece->nameHash == usingSpaceHash) && container->container)
-                {
-                    if(worldMode && !PointInRect(result, worldMode->relativeMouseP))
-                    {
-                        alpha = 0.7f;
-                    }
-                }
-                
-                PushBitmap(group, transform, BID, P, piece->height, V4(1, 1, 1, alpha), lights);
+                r32 alpha = 0.7f;         
                 if(container->container)
                 {
                     ContainerMappingComponent* c = container->container;
@@ -302,6 +300,12 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                         ObjectMapping* mapping = FindCompatibleMapping(c->storedMappings, ArrayCount(c->storedMappings),container->storedObjectsDrawn, ArrayCount(container->storedObjectsDrawn),piece->inventorySlotType);
                         if(mapping)
                         {
+							if(mapping->hot)
+							{
+								alpha = 1.0f;
+							}
+                            
+                            mapping->hot = false;
                             mapping->projOnScreen = result;
                             DrawObjectMapping(worldMode, group, mapping, transform, P, dim, result, lights);
                         }
@@ -314,12 +318,19 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                         ObjectMapping* mapping = FindCompatibleMapping(c->usingMappings, ArrayCount(c->usingMappings), container->usingObjectsDrawn, ArrayCount(container->usingObjectsDrawn),piece->inventorySlotType);
                         if(mapping)
                         {
+							if(mapping->hot)
+							{
+								alpha = 1.0f;
+							}
+                            
+                            mapping->hot = false;
                             mapping->projOnScreen = result;
                             DrawObjectMapping(worldMode, group, mapping, transform, P, dim, result, lights);
                         }
                         result = InvertedInfinityRect2();
                     }
                 }
+				PushBitmap(group, transform, BID, P, piece->height, V4(1, 1, 1, alpha), lights);
                 
                 PAKBitmap* bitmap = GetBitmapInfo(group->assets, BID);
                 for(u32 attachmentIndex = 0; attachmentIndex < bitmap->attachmentPointCount; ++attachmentIndex)
