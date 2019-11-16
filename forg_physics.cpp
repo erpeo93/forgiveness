@@ -18,6 +18,8 @@ internal SpatialPartitionChunk* GetPartitionChunk(SpatialPartition* partition, i
 
 internal void AddToSpatialPartition(MemoryPool* pool, SpatialPartition* partition, UniversePos P, Rect3 bounds, EntityID ID)
 {
+    Assert(IsValidID(ID));
+    
 	P.chunkOffset += GetCenter(bounds);
     
     UniversePos min = P;

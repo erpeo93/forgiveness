@@ -37,6 +37,9 @@ struct RenderSetup
     m4x4 proj;
     u32 renderTargetIndex;
     Vec3 ambientLightColor;
+    r32 totalTimeElapsed;
+    Vec3 windDirection;
+    r32 windStrength;
 };
 
 struct TexturedQuadsCommand
@@ -54,6 +57,9 @@ struct ObjectTransform
     
     r32 additionalZBias;
     r32 modulationPercentage;
+    r32 lightInfluence;
+    r32 lightYInfluence;
+    Vec4 windInfluences;
     
     r32 angle;
     b32 upright;
@@ -73,6 +79,9 @@ struct CameraTransform
     
     m4x4_inv proj;
 };
+
+global_variable Vec4 magicLateralVector;
+global_variable Vec4 magicUpVector;
 
 struct RenderGroup
 {

@@ -206,7 +206,7 @@ internal ZSlice* GetZSlice(world_generator* generator, r32 tileNormZ)
     return result;
 }
 
-inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 tileNormX, r32 tileNormY, r32 tileNormZ, RandomSequence* seq, u32 seed, r32 totalRunningTime)
+inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 tileNormX, r32 tileNormY, r32 tileNormZ, RandomSequence* seq, u32 seed)
 {
     WorldTile result = {};
     
@@ -242,17 +242,6 @@ inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 ti
         result.color = definition->color;
     }
     
-    
-#ifndef FORG_SERVER
-    result.entropy = Seed((i32) (tileNormX * 1000.24f) + (i32)(tileNormY * 1223424.0f));
-    result.waterRandomization = RandomUni(seq);
-    result.movingNegative = false;
-    result.waterTime = totalRunningTime + Length(V2(tileNormX, tileNormY) - V2(0.5f, 0.5f));
-    result.waterSeed = GetNextUInt32(&result.entropy);
-    result.blueNoise = 0;
-    result.alphaNoise = 0;
-#endif
-    
     return result;
 }
 
@@ -262,7 +251,7 @@ internal RandomSequence GetChunkSeed(u32 chunkX, u32 chunkY, u32 worldSeed)
     return result;
 }
 
-internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY, i32 chunkZ, u32 seed, r32 totalRunningTime)
+internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY, i32 chunkZ, u32 seed)
 {
     RandomSequence seq = GetChunkSeed(chunkX, chunkY, seed);
     RandomSequence seqTest = seq;
@@ -335,7 +324,7 @@ internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* gene
                 
                 WorldTile* tile = chunk->tiles + (tileY * CHUNK_DIM) + tileX;
                 
-                *tile = GenerateTile(assets, generator, tileNormX, tileNormY, tileNormZ, &seq, seed, totalRunningTime);
+                *tile = GenerateTile(assets, generator, tileNormX, tileNormY, tileNormZ, &seq, seed);
             }
         }
     }
@@ -385,7 +374,7 @@ internal void AddToPoission(PoissonP** positions, MemoryPool* pool, UniversePos 
     *positions = newP;
 }
 
-internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, EntityRef type, u32 playerIndex);
+internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, EntityRef type, AddEntityParams params);
 internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos referenceP, RandomSequence* seq)
 {
     if(spawner->optionCount)
@@ -466,7 +455,7 @@ internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos 
                         
                         if(valid)
                         {
-                            AddEntity(server, P, seq, spawn->type, 0);
+                            AddEntity(server, P, seq, spawn->type, DefaultAddEntityParams());
                         }
                     }
                 }
@@ -514,6 +503,8 @@ internal void SpawnEntities(ServerState* server, r32 elapsedTime)
         EntityID ID = {};
         ServerEntityInitParams params = definition->server;
         params.P = newEntity->P;
+        params.startingAcceleration = newEntity->acceleration;
+        params.startingSpeed = newEntity->speed;
         definition->common.definitionID = EntityReference(newEntity->definitionID);
         params.seed = newEntity->seed;
         
@@ -556,7 +547,7 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
                 for(u32 chunkX = 0; chunkX < WORLD_CHUNK_SPAN; ++chunkX)
                 {
                     BuildChunk(server->assets, &server->chunkPool, generator,
-                               chunk, chunkX, chunkY, chunkZ, server->worldSeed, 0);
+                               chunk, chunkX, chunkY, chunkZ, server->worldSeed);
                     ++chunk;
                 }
             }

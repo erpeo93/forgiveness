@@ -104,7 +104,8 @@ internal GameCommand ComputeFinalCommand(GameUIContext* UI, GameModeWorld* world
                 usingRef = usingBase->definitionID;
             }
             
-            if(!ActionIsPossible(interaction, action, distanceSq, usingValid, usingRef))
+            r32 targetTime;
+            if(!ActionIsPossible(interaction, action, distanceSq, &targetTime, usingValid, usingRef))
             {
                 GameCommand command = {};
                 command.action = move;
@@ -329,6 +330,8 @@ internal void HandleOverlayObjectsInteraction(GameUIContext* UI, GameModeWorld* 
 internal void OverdrawLayout(GameModeWorld* worldMode, RenderGroup* group, EntityID ID, Rect2 rect, LayoutContainerDrawMode drawMode, r32 zBias = 2.0f)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    Vec4 color = GetTint(worldMode, ID);
+    
     LayoutComponent* layout = GetComponent(worldMode, ID, LayoutComponent);
     LayoutContainer container = {};
     container.container = GetComponent(worldMode, ID, ContainerMappingComponent);
@@ -338,7 +341,7 @@ internal void OverdrawLayout(GameModeWorld* worldMode, RenderGroup* group, Entit
     transform.angle = layout->rootAngle;
     transform.scale = layout->rootScale;
     transform.modulationPercentage = GetModulationPercentage(worldMode, ID); 
-    RenderLayoutInRect(worldMode, group, rect, transform, layout, base->seed, {}, &container);
+    RenderLayoutInRect(worldMode, group, rect, transform, color, layout, base->seed, {}, &container);
 }
 
 internal void OverdrawVisibleStuff(GameUIContext* UI, GameModeWorld* worldMode, RenderGroup* group, b32 onlyUsingSlots)
@@ -913,7 +916,7 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
             Vec3 deltaP = SubtractOnSameZChunk(player->universeP, lootingBase->universeP);
             if(deltaP.y <= 0)
             {
-                if(LengthSq(player->velocity) < 0.1f && Abs(deltaP.x) < 0.5f * GetWidth(lootingBase))
+                if(LengthSq(player->velocity) < 0.1f && Abs(deltaP.x) < 0.5f * GetWidth(lootingBase->bounds))
                 {
                     player->flags = AddFlags(player->flags, EntityFlag_occluding);
                 }
@@ -1020,7 +1023,8 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                             BaseComponent* hotBase = GetComponent(worldMode, hotIDClient, BaseComponent);
                             r32 distanceSq = LengthSq(SubtractOnSameZChunk(hotBase->universeP, player->universeP));
                             
-                            if(ActionIsPossible(interaction, drag, distanceSq))
+                            r32 targetTime;
+                            if(ActionIsPossible(interaction, drag, distanceSq, &targetTime))
                             {
                                 GameCommand command = {};
                                 command.action = drag;
@@ -1088,7 +1092,6 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                             UI->lockedInteractionType = LockedInteraction_ReachTarget;
                             UI->lockedCommand = command;
                         }
-                        
                         validInteraction = true;
                     }
                 } break;

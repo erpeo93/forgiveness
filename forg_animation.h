@@ -19,10 +19,67 @@ struct ShadowComponent
     Vec4 color;
 };
 
-struct AnimationEffectsComponent
+printTable(noPrefix) enum AnimationEffectType
 {
-    r32 timer;
+    AnimationEffect_Tint,
+    AnimationEffect_Light,
+    AnimationEffect_Particles,
+    AnimationEffect_SlowDown,
+};
+
+struct AnimationEffect
+{
+    u16 ID;
+    u16 type;
+    
+    r32 time;
+    union
+    {
+        Vec4 tint;
+        
+        struct
+        {
+            r32 lightIntensity;
+            Vec3 lightColor;
+        };
+        
+        struct ParticleEffectInstance* particles;
+        
+        r32 slowDownCoeff;
+    };
+    
+};
+
+introspection() struct AnimationEffectDefinition
+{
+    ArrayCounter propertyCount MetaCounter(properties);
+    GameProperty* properties;
+    
+    Enumerator type MetaEnumerator("AnimationEffectType");
+    r32 time;
+    
+    Vec4 tint MetaDefault("V4(1, 1, 1, 1)");
+    
+    r32 lightIntensity MetaDefault("1.0f");
+    Vec3 lightColor MetaDefault("V3(1, 1, 1)");
+    
+    ArrayCounter particlePropertyCount MetaCounter(particleProperties);
+    GameProperty* particleProperties;
+    Vec3 particleEndOffset;
+    
+    r32 slowDownCoeff;
+};
+
+#define MAX_ACTIVE_EFFECTS 8
+struct AnimationEffectComponent
+{
     Vec4 tint;
+    r32 lightIntensity;
+    Vec3 lightColor;
+    r32 slowDownCoeff;
+    
+    u32 effectCount;
+    AnimationEffect effects[MAX_ACTIVE_EFFECTS];
 };
 
 struct AnimationComponent
@@ -60,6 +117,8 @@ struct AnimationPiece
     Vec4 color;
 };
 
+
+#ifndef FORG_SERVER
 struct AnimationParams
 {
     r32 elapsedTime;
@@ -75,3 +134,4 @@ struct AnimationParams
     r32 modulationPercentage;
     b32 fakeAnimation;
 };
+#endif

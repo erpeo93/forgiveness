@@ -2617,14 +2617,23 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             SavedTypeSubtypeCountHash* countHash = GetCorrenspodingFileCountHash(hash, typeStr, subtypeStr);
             
             b32 numberOfFilesChanged = false;
+            b32 numberOfStandardFilesChanged = false;
+            
             if(currentFileCount != countHash->fileCount || currentMarkupFileCount != countHash->markupCount)
             {
                 numberOfFilesChanged = true;
             }
             
+            if(currentFileCount != countHash->fileCount)
+            {
+                numberOfStandardFilesChanged = true;
+            }
+            
+            
+            
             if(updatedStandardFiles || updatedTestFiles || numberOfFilesChanged)
             {
-                if(HotReload(type) || (!numberOfFilesChanged))
+                if(HotReload(type) || (!numberOfStandardFilesChanged))
                 {
                     char* path = (updatedStandardFiles || numberOfFilesChanged) ? destSendPath : destPath;
                     WritePak(hash, sourcePath, subdirName, subsubDirName, path, false);

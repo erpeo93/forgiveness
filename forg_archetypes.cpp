@@ -34,6 +34,7 @@ internal void AddPossibleActions(PossibleActionList* list, PossibleActionDefinit
                 
                 dest->action = action;
                 dest->distanceSq = Square(source->distance);
+                dest->time = source->time;
                 dest->requiredUsingType = source->requiredUsingType;
             }
         }
@@ -49,10 +50,14 @@ INIT_COMPONENT_FUNCTION(InitPhysicComponent)
     physic->bounds = StandardBounds(common->boundDim, common->boundOffset);
     physic->definitionID = common->definitionID;
     physic->seed = s->seed;
-    physic->speed = {};
-    physic->acc = {};
+    physic->acc = s->startingAcceleration;
+    physic->speed = s->startingSpeed;
+    
+    physic->accelerationCoeff = s->accelerationCoeff;
+    physic->drag = s->drag;
     physic->flags = {};
-    physic->action = GameProp(action, idle);
+    physic->action = idle;
+    physic->status = status_frozen;
 }
 
 internal void AddRandomEffects(EffectComponent* effects, EffectBinding* bindings, ArrayCounter bindingCount, GameProperty property)
@@ -157,6 +162,13 @@ INIT_COMPONENT_FUNCTION(InitBrainComponent)
     BrainComponent* brain = (BrainComponent*) componentPtr;
     brain->type = Brain_test;
 }
+
+INIT_COMPONENT_FUNCTION(InitTempEntityComponent)
+{
+	TempEntityComponent* temp = (TempEntityComponent*) componentPtr;
+	temp->time = 0.0f;
+	temp->targetTime = 1.0f;
+}
 #else
 INIT_COMPONENT_FUNCTION(InitBaseComponent)
 {
@@ -167,6 +179,7 @@ INIT_COMPONENT_FUNCTION(InitBaseComponent)
     base->serverID = c->ID;
     base->definitionID = common->definitionID;
     base->flags = {};
+    base->timeSinceLastUpdate = 0;
 }
 
 internal void InitShadow(ShadowComponent* shadow, ClientEntityInitParams* params)
@@ -215,7 +228,9 @@ INIT_COMPONENT_FUNCTION(InitRockComponent)
 
 INIT_COMPONENT_FUNCTION(InitGrassComponent)
 {
-    
+    GameModeWorld* worldMode = (GameModeWorld*) state;
+    GrassComponent* dest = (GrassComponent*) componentPtr;
+    dest->windInfluence = c->windInfluence;
 }
 
 INIT_COMPONENT_FUNCTION(InitPlantComponent)
@@ -224,6 +239,7 @@ INIT_COMPONENT_FUNCTION(InitPlantComponent)
     Assets* assets = worldMode->gameState->assets;
     PlantComponent* dest = (PlantComponent*) componentPtr;
     InitImageReference(assets, &dest, &c, leaf);
+    dest->windInfluence = c->windInfluence;
 }
 
 INIT_COMPONENT_FUNCTION(InitStandardImageComponent)
@@ -232,6 +248,51 @@ INIT_COMPONENT_FUNCTION(InitStandardImageComponent)
     Assets* assets = worldMode->gameState->assets;
     StandardImageComponent* dest = (StandardImageComponent*) componentPtr;
     InitImageReference(assets, &dest, &c, entity);
+    
+    InitShadow(&dest->shadow, c);
+}
+
+internal BitmapId GetImageFromReference(Assets* assets, ImageReference* reference, RandomSequence* seq);
+INIT_COMPONENT_FUNCTION(InitMagicQuadComponent)
+{
+    GameModeWorld* worldMode = (GameModeWorld*) state;
+    Assets* assets = worldMode->gameState->assets;
+    
+    MagicQuadComponent* dest = (MagicQuadComponent*) componentPtr;
+    
+    dest->color = 0xffffffff;
+    InitImageReference(assets, &dest, &c, entity);
+    
+    RandomSequence seq = Seed(c->seed);
+    dest->bitmapID = GetImageFromReference(assets, &dest->entity, &seq);
+    
+    Rect3 bounds = StandardBounds(common->boundDim, common->boundOffset);
+    r32 height = GetHeight(bounds);
+    r32 width = GetWidth(bounds);
+    
+    dest->lateral = width * magicLateralVector;
+    dest->up = height * magicUpVector;
+    dest->offset = {};
+    if(IsValid(dest->bitmapID))
+    {
+        PAKBitmap* bitmap = GetBitmapInfo(assets, dest->bitmapID);
+        dest->offset = (bitmap->align[0] - 0.5f) * dest->lateral.xyz + (bitmap->align[1] - 0.5f) * dest->up.xyz;
+    }
+    
+    dest->lateral *= 0.5f;
+    dest->up *= 0.5f;
+}
+
+INIT_COMPONENT_FUNCTION(InitFrameByFrameAnimationComponent)
+{
+    GameModeWorld* worldMode = (GameModeWorld*) state;
+    Assets* assets = worldMode->gameState->assets;
+    FrameByFrameAnimationComponent* dest = (FrameByFrameAnimationComponent*) componentPtr;
+    
+    dest->runningTime = 0;
+    dest->speed = c->frameByFrameSpeed;
+    dest->typeHash = c->frameByFrameImageType.subtypeHash;
+    InitShadow(&dest->shadow, c);
 }
 
 internal void InitLayout(Assets* assets, LayoutPiece* destPieces, u32* destPieceCount, u32 maxDestPieceCount, LayoutPieceProperties* pieces, u32 pieceCount, GameProperty property)
@@ -293,11 +354,6 @@ INIT_COMPONENT_FUNCTION(InitAnimationMappingComponent)
     
 }
 
-INIT_COMPONENT_FUNCTION(InitAnimationEffectsComponent)
-{
-    
-}
-
 INIT_COMPONENT_FUNCTION(InitContainerMappingComponent)
 {
     ContainerMappingComponent* dest = (ContainerMappingComponent*) componentPtr;
@@ -326,6 +382,33 @@ INIT_COMPONENT_FUNCTION(InitSkillMappingComponent)
         mapping->color = skillDefinition->color;
     }
     
+}
+
+internal void FreeAnimationEffect(AnimationEffect* effect);
+INIT_COMPONENT_FUNCTION(InitAnimationEffectComponent)
+{
+    AnimationEffectComponent* animation = (AnimationEffectComponent*) componentPtr;
+    animation->tint = V4(1, 0, 0, 1);
+    animation->lightIntensity = 2.0f;
+    animation->lightColor = V3(1, 1, 1);
+    for(u32 effectIndex = 0; effectIndex < animation->effectCount; ++effectIndex)
+    {
+        AnimationEffect* effect = animation->effects + effectIndex;
+        FreeAnimationEffect(effect);
+    }
+    animation->effectCount = 0;
+}
+
+INIT_COMPONENT_FUNCTION(InitBoltComponent)
+{
+    GameModeWorld* worldMode = (GameModeWorld*) state;
+    
+    BoltComponent* bolt = (BoltComponent*) componentPtr;
+    bolt->ttl = R32_MAX;
+    bolt->seed = GetNextUInt32(&worldMode->entropy);
+    bolt->timeSinceLastAnimationTick = R32_MAX;
+    bolt->animationSeq = Seed(bolt->seed);
+    bolt->highOffset = V3(0, 0, 4);
 }
 #endif
 INIT_COMPONENT_FUNCTION(InitInteractionComponent)

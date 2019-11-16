@@ -2172,6 +2172,10 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
                     Edit_b32(&layout, "chunk view", &worldMode->worldChunkView, 0, {});
                     NextRaw(&layout);
                     Edit_u32(&layout, "chunk apron", &worldMode->chunkApron, 0, {});
+                    NextRaw(&layout);
+                    Edit_Vec3(&layout, "ambient light color", &worldMode->ambientLightColor, 0, {});
+                    Edit_Vec3(&layout, "wind direction", &worldMode->windDirection, 0, {});
+                    Edit_r32(&layout, "wind strength", &worldMode->windStrength, 0, {});
                 } break;
             }
             

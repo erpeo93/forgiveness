@@ -165,12 +165,21 @@ void ParseField(Tokenizer* tokenizer, Token structToken, Token fieldNameToken, u
                 
                 if(isPointer)
                 {
+                    if(something)
+                    {
+                        AppendString(flags, sizeof(flags), "|");
+                    }
+                    
                     something = true;
                     AppendString(flags, sizeof(flags), "MetaFlag_Pointer");
                 }
                 
                 if(uneditable)
                 {
+                    if(something)
+                    {
+                        AppendString(flags, sizeof(flags), "|");
+                    }
                     something = true;
                     AppendString(flags, sizeof(flags), "MetaFlag_Uneditable");
                 }
@@ -667,21 +676,16 @@ int main(int argc, char** argv)
         "../properties/test.properties",
         "forg_math.h",
         "forg_game_effect.h",
-        "forg_plant.h",
-        "forg_ground.h",
         "forg_world_generation.cpp",
         "forg_world.h",
         "forg_world_generation.h",
-        "forg_AI.cpp",
-        "forg_AI.h",
         "forg_editor.h",
-        "forg_animation.h",
-        "forg_particles.h",
         "forg_asset.h",
         "forg_ecs.h",
         "forg_archetypes.h",
-        "forg_rock.h",
         "forg_skill.h",
+        "forg_animation.h",
+        "forg_particles.h",
     };
     
     

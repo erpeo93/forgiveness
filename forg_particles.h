@@ -21,67 +21,40 @@ struct Particle_4x
     __m128 padding2;
 };
 
-printTable(noPrefix) enum ParticleUpdaterType
+introspection() struct ParticleUpdater
 {
-    ParticleUpdater_Standard,
-    ParticleUpdater_Sine,
+    AssetID bitmapID MetaUneditable();
+    RenderTexture* texture MetaUneditable();
     
-    ParticleUpdater_Count
-};
-
-printTable(noPrefix) enum ParticleUpdaterEndPosition
-{
-    UpdaterEndPos_FixedOffset,
-    UpdaterEndPos_DestPos,
-};
-
-
-struct ParticleUpdater
-{
-    ParticleUpdaterType type;
-    ParticleUpdaterEndPosition destPType;
+    GameAssetType asset MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
     
-    AssetID bitmapID;
-    u64 particleHashID;
-    r32 startDrawingFollowingBitmapAt;
-    Vec3 startOffset;
-    Vec3 endOffset;
+    b32 sineUpdater;
+    r32 totalRadiants;
+    u32 sineSubdivisions MetaDefault("1");
     
     Vec3 ddP;
+    Vec3 finalAcceleration;
     Vec4 ddC;
-    Vec3 UpVector;
     
     r32 dScaleX;
     r32 dScaleY;
     r32 dAngle;
-    
-    r32 totalRadiants;
-    
-    u32 sineSubdivisions;
 };
 
-enum ParticleEmitterType
+introspection() struct ParticleEmitter
 {
-    ParticleEmitter_Standard,
+    r32 particlesPerSec MetaDefault("1.0f");
     
-    ParticleEmitter_Count
-};
-
-struct ParticleEmitter
-{
-    ParticleEmitterType type;
-    
-    r32 particlesPerSec;
-    
-    r32 lifeTime;
+    r32 lifeTime MetaDefault("1.0f");
     r32 lifeTimeV;
     
     Vec3 startPV;
     
-    Vec3 dP;
+    r32 lerpWithUpVector;
+    Vec3 dP MetaDefault("V3(0, 0, 1)");
     Vec3 dPV;
     
-    Vec4 C;
+    Vec4 C MetaDefault("V4(1, 1, 1, 1)");
     Vec4 CV;
     
     Vec4 dC;
@@ -90,65 +63,62 @@ struct ParticleEmitter
     r32 angle;
     r32 angleV;
     
-    r32 scaleX;
+    r32 scaleX MetaDefault("1.0f");
     r32 scaleXV;
     
-    r32 scaleY;
+    r32 scaleY MetaDefault("1.0f");
     r32 scaleYV;
 };
 
-struct ParticlePhase
+introspection() struct ParticlePhase
 {
-    r32 ttlMax;
-    r32 ttlMin;
-    
+    r32 ttl MetaDefault("1.0f");
     ParticleUpdater updater;
 };
 
-
-struct ParticleEffectData
-{
-	Vec3 P;
-    Vec3 destP;
-    r32 updaterAngle;
-};
-
 #define MAX_PHASE_COUNT 8
-struct ParticleEffect
+struct ParticleEffectInstance
 {
     b32 active;
     
-    ParticleEffectData data;
     r32 spawnParticlesLeftOff;
-    struct ParticleEffectDefinition* definition;
-    
     u32 particle4xCount;
     Particle_4x* firstParticle;
     
+    
+    ParticleEmitter emitter;
+    r32 dAngleSineUpdaters;
+    u32 phaseCount;
+    ParticlePhase phases[MAX_PHASE_COUNT];
+    
+    Vec3 P;
+    Vec3 UpVector;
+    r32 updaterAngle;
+    
     union
     {
-        ParticleEffect* next;
-        ParticleEffect* nextFree;
+        ParticleEffectInstance* next;
+        ParticleEffectInstance* nextFree;
     };
 };
 
 struct ParticleCache
 {
     RandomSequence particleEntropy;
-    ParticleEffect* firstActiveEffect;
+    ParticleEffectInstance* firstActiveEffect;
     Vec3 deltaParticleP;
     
-    ParticleEffect* firstFreeEffect;
+    ParticleEffectInstance* firstFreeEffect;
     Particle_4x* firstFreeParticle4x;
     MemoryPool* pool;
 };
 
 
-struct ParticleEffectDefinition
+introspection() struct ParticleEffect
 {
     ParticleEmitter emitter;
     
     r32 dAngleSineUpdaters;
-    u32 phaseCount;
-    ParticlePhase phases[MAX_PHASE_COUNT];
+    ArrayCounter phaseCount MetaCounter(phases);
+    ParticlePhase* phases;
 };

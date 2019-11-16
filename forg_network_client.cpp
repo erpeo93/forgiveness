@@ -242,6 +242,7 @@ internal void InitEntity(GameModeWorld* worldMode, EntityID ID,
                          CommonEntityInitParams* common, 
                          ServerEntityInitParams* s, 
                          ClientEntityInitParams* c);
+internal void DeleteEntityClient(GameModeWorld* worldMode, EntityID clientID, EntityID serverID);
 
 internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
@@ -301,8 +302,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         
                         u64 dataHash = DataHash((char*) content, file->size);
                         EndTemporaryMemory(fileMemory);
-                        
                         SendFileHash(fileType, fileSubtypeHash, dataHash);
+                        
                     }
                 }
                 
@@ -366,10 +367,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 u32 seed;
                 UniversePos P;
                 Vec3 speed;
-                GameProperty action;
+                u16 action;
+                u16 status;
                 u32 flags;
                 
-                Unpack("LLLlllVVHHL", &definitionID.subtypeHashIndex, &definitionID.index, &seed, &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset, &speed, &action.property, &action.value, &flags);
+                Unpack("LLLlllVVHHL", &definitionID.subtypeHashIndex, &definitionID.index, &seed, &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset, &speed, &action, &status, &flags);
                 
                 if(!IsValidID(currentClientID) && !IsSet(flags, EntityFlag_deleted))
                 {
@@ -404,8 +406,13 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     //r32 deltaLength = Length(deltaP);
                     base->universeP = P;
                     base->velocity = speed;
-                    base->action = action;
+                    
+                    base->propertyCount = 2;
+                    base->properties[0] = GameProp(action, action);
+                    base->properties[1] = GameProp(status, status);
+                    
                     base->flags = flags;
+                    base->timeSinceLastUpdate = 0;
                     
                     if(AreEqual(currentClientID, player->clientID))
                     {
@@ -414,12 +421,24 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     
                     if(IsSet(base->flags, EntityFlag_deleted))
                     {
-                        FreeArchetype(worldMode, currentClientID);
-                        RemoveClientIDMapping(worldMode, currentServerID);
-                        if(AreEqual(currentServerID, worldMode->gameUI.draggingIDServer))
-						{
-							worldMode->gameUI.draggingIDServer = {};
-						}
+                        DeleteEntityClient(worldMode, currentClientID, currentServerID);
+                    }
+                }
+            } break;
+            
+            case Type_deletedEntity:
+            {
+                EntityID ID;
+                Unpack("L", &ID);
+                EntityID clientID = GetClientIDMapping(worldMode, ID);
+                BaseComponent* base = GetComponent(worldMode, clientID, BaseComponent);
+                if(base)
+                {
+                    FreeArchetype(worldMode, clientID);
+                    RemoveClientIDMapping(worldMode, ID);
+                    if(AreEqual(ID, worldMode->gameUI.draggingIDServer))
+                    {
+                        worldMode->gameUI.draggingIDServer = {};
                     }
                 }
             } break;
@@ -489,7 +508,10 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 EntityID ID;
                 Unpack("L", &ID);
                 BaseComponent* base = GetComponent(worldMode, currentClientID, BaseComponent);
-                base->draggingID = ID;
+                if(base)
+                {
+                    base->draggingID = ID;
+                }
             } break;
             
             case Type_ContainerOpenedBy:
@@ -499,38 +521,36 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
                 
-                container->openedBy = ID;
-                GameUIContext* UI = &worldMode->gameUI;
-                b32 wasLooting = IsValidID(UI->lootingIDServer);
-                
-                if(AreEqual(currentServerID, UI->lootingIDServer))
+                if(container)
                 {
-                    if(!IsValidID(ID))
+                    container->openedBy = ID;
+                    GameUIContext* UI = &worldMode->gameUI;
+                    b32 wasLooting = IsValidID(UI->lootingIDServer);
+                    
+                    if(AreEqual(currentServerID, UI->lootingIDServer))
                     {
-                        UI->lootingIDServer = {};
+                        if(!IsValidID(ID))
+                        {
+                            UI->lootingIDServer = {};
+                        }
+                    }
+                    else if(AreEqual(ID, worldMode->player.serverID))
+                    {
+                        UI->lootingIDServer = currentServerID;
+                    }
+                    
+                    
+                    if(!IsValidID(UI->lootingIDServer))
+                    {
+                        UI->lootingMode = false;
+                    }
+                    
+                    if(IsValidID(UI->lootingIDServer) && !wasLooting)
+                    {
+                        UI->lootingMode = true;
+                        UI->inventoryMode = false;
                     }
                 }
-                else if(AreEqual(ID, worldMode->player.serverID))
-                {
-                    UI->lootingIDServer = currentServerID;
-                }
-                
-                
-                if(!IsValidID(UI->lootingIDServer))
-                {
-                    UI->lootingMode = false;
-                }
-                
-                if(IsValidID(UI->lootingIDServer) && !wasLooting)
-                {
-                    UI->lootingMode = true;
-                    UI->inventoryMode = false;
-                }
-            } break;
-            
-            case Type_EffectDispatch:
-            {
-                DispatchGameEffect(worldMode, currentClientID);
             } break;
             
             case Type_FileHeader:

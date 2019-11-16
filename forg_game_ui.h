@@ -3,6 +3,7 @@ struct PossibleAction
 {
     u16 action;
     r32 distanceSq;
+    r32 time;
     EntityRef requiredUsingType;
 };
 
@@ -56,7 +57,7 @@ struct InteractionComponent
 
 
 inline b32 AreEqual(EntityRef r1, EntityRef r2);
-internal b32 ActionIsPossible(InteractionComponent* interaction, u16 action, r32 distanceSq, b32 usingValid = false, EntityRef usingType = {})
+internal b32 ActionIsPossible(InteractionComponent* interaction, u16 action, r32 distanceSq, r32* targetTime, b32 usingValid = false, EntityRef usingType = {})
 {
     b32 result = false;
     if(interaction)
@@ -72,6 +73,7 @@ internal b32 ActionIsPossible(InteractionComponent* interaction, u16 action, r32
                     if(distanceSq <= possibleAction->distanceSq)
                     {
                         result = true;
+                        *targetTime = possibleAction->time;
                     }
                     break;
                 }
@@ -88,6 +90,7 @@ internal b32 ActionIsPossible(InteractionComponent* interaction, u16 action, r32
                     if(distanceSq <= possibleAction->distanceSq)
                     {
                         result = true;
+                        *targetTime = possibleAction->time;
                     }
                     break;
                 }

@@ -51,40 +51,44 @@ struct BaseComponent
     UniversePos universeP;
     Vec3 velocity;
     Rect3 bounds;
-    GameProperty action;
     u32 flags;
     Rect3 worldBounds;
     Rect2 projectedOnScreen;
     EntityID serverID;
     EntityID draggingID;
+    r32 timeSinceLastUpdate;
+    
+    u32 propertyCount;
+    GameProperty properties[16];
 };
 
-internal r32 GetHeight(BaseComponent* base)
+internal r32 GetHeight(Rect3 bounds)
 {
-    r32 height = GetDim(base->bounds).z;
+    r32 height = GetDim(bounds).z;
     return height;
 }
 
-internal r32 GetWidth(BaseComponent* base)
+internal r32 GetWidth(Rect3 bounds)
 {
-    r32 height = GetDim(base->bounds).x;
+    r32 height = GetDim(bounds).x;
     return height;
 }
 
-internal r32 GetDeepness(BaseComponent* base)
+internal r32 GetDeepness(Rect3 bounds)
 {
-    r32 height = GetDim(base->bounds).y;
+    r32 height = GetDim(bounds).y;
     return height;
 }
 
 struct PlantComponent
 {
     ImageReference leaf;
+    r32 windInfluence;
 };
 
 struct GrassComponent
 {
-    
+    r32 windInfluence;
 };
 
 #include "forg_archetypes.h"
@@ -142,6 +146,12 @@ struct ServerClientIDMapping
 
 struct GameModeWorld
 {
+    Vec3 ambientLightColor;
+    Vec3 windDirection;
+    r32 windStrength;
+    r32 windTime;
+    
+    
     struct GameState* gameState;
     
     u32 worldSeed;
@@ -149,7 +159,6 @@ struct GameModeWorld
     
     b32 gamePaused;
     r32 originalTimeToAdvance;
-    r32 totalRunningTime;
     
     MemoryPool* persistentPool;
     MemoryPool* temporaryPool;
@@ -165,7 +174,9 @@ struct GameModeWorld
     
     RandomSequence entropy;
     ParticleCache* particleCache;
-    BoltCache* boltCache;
+    ParticleEffectInstance* weatherEffects[Weather_count];
+    
+    BoltDefinition boltDefinition;
     
     u32 loginFileToReceiveCount;
     u32 loginReceivedFileCount;

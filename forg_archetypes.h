@@ -13,9 +13,9 @@ Archetype() struct AnimalArchetype
     AnimationComponent animation;
     EquipmentMappingComponent equipment;
     UsingMappingComponent equipped;
-    AnimationEffectsComponent animationEffects;
     InteractionComponent interaction;
     SkillMappingComponent skillMappings;
+    AnimationEffectComponent animationEffects;
 #endif
 };
 
@@ -53,7 +53,7 @@ Archetype() struct GrassArchetype
 #else
     BaseComponent base;
     GrassComponent grass;
-    StandardImageComponent image;
+    MagicQuadComponent image;
 #endif
 };
 
@@ -94,7 +94,31 @@ Archetype() struct PortalArchetype
     CollisionEffectsComponent collision;
 #else
     BaseComponent base;
+    FrameByFrameAnimationComponent animation;
+#endif
+};
+
+Archetype() struct ProjectileArchetype
+{
+#ifdef FORG_SERVER
+    PhysicComponent physic;
+    TempEntityComponent temp;
+    CollisionEffectsComponent collision;
+#else
+    BaseComponent base;
     StandardImageComponent image;
+#endif
+};
+
+Archetype() struct BoltArchetype
+{
+#ifdef FORG_SERVER
+    PhysicComponent physic;
+    TempEntityComponent temp;
+    CollisionEffectsComponent collision;
+#else
+    BaseComponent base;
+    BoltComponent bolt;
 #endif
 };
 
@@ -119,6 +143,7 @@ introspection() struct PossibleActionDefinition
 {
     Enumerator action MetaEnumerator("action");
     r32 distance MetaDefault("1.0f");
+    r32 time;
     EntityRef requiredUsingType;
 };
 
@@ -160,6 +185,13 @@ introspection() struct ServerEntityInitParams
 {
     UniversePos P MetaUneditable();
     u32 seed MetaUneditable();
+    
+    Vec3 startingAcceleration MetaUneditable();
+    Vec3 startingSpeed MetaUneditable();
+    
+    
+    r32 accelerationCoeff MetaDefault("27.0f");
+    r32 drag MetaDefault("-7.8f");
     
     ArrayCounter bindingCount MetaCounter(bindings);
     EffectBinding* bindings;
@@ -206,6 +238,8 @@ introspection() struct ClientEntityInitParams
     ImageProperties entityProperties;
     ImageProperties leafProperties;
     
+    r32 windInfluence MetaDefault("0");
+    
     AssetLabel name;
     
     AssetLabel layoutRootName;
@@ -225,6 +259,12 @@ introspection() struct ClientEntityInitParams
     r32 lootingZoomCoeff MetaDefault("3.0f");
     Vec2 desiredOpenedDim MetaDefault("V2(400, 400)");
     Vec2 desiredUsingDim MetaDefault("V2(200, 200)");
+    
+    ArrayCounter animationEffectsCount MetaCounter(animationEffects);
+    AnimationEffectDefinition* animationEffects;
+    
+    r32 frameByFrameSpeed MetaDefault("1.0f");
+    GameAssetType frameByFrameImageType MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

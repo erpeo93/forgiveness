@@ -11,6 +11,7 @@
 #include "forg_token.h"
 #include "forg_intrinsics.h"
 #include "forg_math.h"
+#include "forg_simd.h"
 #include "forg_file_formats.h"
 
 #define Property(name) enum name
@@ -29,9 +30,13 @@
 #include "forg_AI.h"
 #include "forg_network.h"
 #include "forg_meta.h"
-#include "forg_game_ui.h"
 #include "forg_skill.h"
 #include "forg_brain.h"
+
+
+#include "forg_game_ui.h"
+#include "forg_particles.h"
+#include "forg_animation.h"
 PlatformAPI platformAPI;
 
 struct GameFile
@@ -72,10 +77,20 @@ struct PhysicComponent
     u32 seed;
     Vec3 speed;
     Vec3 acc;
+    r32 accelerationCoeff;
+    r32 drag;
     u32 flags;
     
-    GameProperty action;
+    u16 action;
+    u16 status;
+    
     r32 actionTime;
+};
+
+struct TempEntityComponent
+{
+	r32 targetTime;
+	r32 time;
 };
 
 struct FileHash
@@ -152,12 +167,28 @@ struct TimestampHash
     SavedTypeSubtypeCountHash* countHashSlots[128];
 };
 
+struct AddEntityParams
+{
+    Vec3 acceleration;
+    Vec3 speed;
+    u32 playerIndex;
+};
+
+internal AddEntityParams DefaultAddEntityParams()
+{
+    AddEntityParams result = {};
+    return result;
+}
+
 struct NewEntity
 {
     UniversePos P;
     AssetID definitionID;
     u32 seed;
     u32 playerIndex;
+    
+    Vec3 acceleration;
+    Vec3 speed;
     
     union
     {

@@ -547,6 +547,7 @@ internal u32 GetAssetSubtype(Assets* assets, u16 type, u64 hash)
     return result;
 }
 
+
 internal u32 GetAssetSubtype(Assets* assets, u16 type, char* subtype)
 {
     u32 result = GetAssetSubtype(assets, type, StringHash(subtype));
@@ -764,7 +765,7 @@ internal void EndAssetBoilerplate(Assets* assets, AssetBoilerplate boilerplate, 
 }
 
 #ifndef ONLY_DATA_FILES
-void LoadBitmap(Assets* assets, AssetID ID, b32 immediate = false)
+internal void LoadBitmap(Assets* assets, AssetID ID, b32 immediate = false)
 {
     AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID, immediate);
     if(boilerplate.valid)
@@ -1828,6 +1829,14 @@ internal AssetID* GetAllAssets_(MemoryPool* tempPool, Assets* assets, u16 assetT
     return result;
 }
 
+internal u16 GetAssetCount(Assets* assets, u16 type, u32 subtype)
+{
+    AssetArray* array = assets->assets + type;
+    AssetSubtypeArray* assetArray = GetSubtype(array, subtype);
+    u16 result = assetArray->standardAssetCount + assetArray->derivedAssetCount;
+    return result;
+}
+
 struct GetGameAssetResult
 {
     Asset* asset;
@@ -2149,6 +2158,16 @@ inline b32 AreEqual(EntityRef r1, EntityRef r2)
 {
     b32 result = (r1.subtypeHashIndex == r2.subtypeHashIndex &&
                   r1.index == r2.index);
+    return result;
+}
+
+internal AssetID EntityRefToAssetID(EntityRef ref)
+{
+    AssetID result = {};
+    result.type = AssetType_EntityDefinition;
+    result.subtypeHashIndex = ref.subtypeHashIndex;
+    result.index = ref.index;
+    
     return result;
 }
 

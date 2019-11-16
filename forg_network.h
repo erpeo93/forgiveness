@@ -163,14 +163,13 @@ enum Packet_Type
     
     Type_entityHeader,
     Type_entityBasics,
+    Type_deletedEntity,
     Type_EquipmentMapping,
     Type_UsingMapping,
     Type_ContainerStoredMapping,
     Type_ContainerUsingMapping,
     Type_DraggingMapping,
     Type_ContainerOpenedBy,
-    
-    Type_EffectDispatch,
     
     Type_FileHeader,
     Type_FileChunk,

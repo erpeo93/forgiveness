@@ -17,7 +17,7 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_network_client.cpp"
 #include "forg_editor.cpp"
 #include "forg_particles.cpp"
-//#include "forg_bolt.cpp"
+#include "forg_bolt.cpp"
 #include "forg_cutscene.cpp"
 #include "forg_ground.cpp"
 #include "forg_UIcommon.cpp"
@@ -41,6 +41,36 @@ RENDERING_ECS_JOB_CLIENT(RenderBound)
     {
         Rect3 entityBound = GetEntityBound(worldMode, base);
         PushCubeOutline(group, entityBound, V4(1, 0, 0, 1), 0.05f);
+    }
+}
+
+internal void DeleteEntityClient(GameModeWorld* worldMode, EntityID clientID, EntityID serverID)
+{
+    FreeArchetype(worldMode, clientID);
+    RemoveClientIDMapping(worldMode, serverID);
+    if(AreEqual(serverID, worldMode->gameUI.draggingIDServer))
+    {
+        worldMode->gameUI.draggingIDServer = {};
+    }
+}
+
+
+STANDARD_ECS_JOB_CLIENT(PushEntityLight)
+{
+    AnimationEffectComponent* animation = GetComponent(worldMode, ID, AnimationEffectComponent);
+    if(animation->lightIntensity)
+    {
+        BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+        Vec3 P = GetRelativeP(worldMode, base);
+        AddLightToGridCurrentFrame(worldMode, P, animation->lightColor, animation->lightIntensity);
+    }
+}
+STANDARD_ECS_JOB_CLIENT(UpdateEntity)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    if(base->timeSinceLastUpdate >= 2.0f)
+    {
+        DeleteEntityClient(worldMode, ID, base->serverID);
     }
 }
 
@@ -73,10 +103,24 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     
     result->particleCache = PushStruct(&gameState->modePool, ParticleCache, AlignClear(16));
     InitParticleCache(result->particleCache, gameState->assets, &gameState->visualEffectsPool);
-#if 0    
-    result->boltCache = PushStruct(&gameState->modePool, BoltCache);
-    InitBoltCache(result->boltCache, &gameState->visualEffectsPool, 11111);
-#endif
+    
+    BoltDefinition* bolt = &result->boltDefinition;
+    bolt->animationTick = 0.01f;
+    bolt->fadeinTime = 0.05f;
+    bolt->fadeoutTime = 0.05f;
+    bolt->ttl = 0.2f;
+    bolt->ttlV = 0;
+    bolt->color = V4(1, 1, 1, 1);
+    bolt->thickness = 0.05f;
+    bolt->thicknessV = 0;
+    bolt->magnitudoStructure = 1.0f;
+    bolt->magnitudoAnimation = 1.0f;
+    bolt->subdivisions = 3;
+    bolt->subdivisionsV = 0;
+    bolt->lightColor = V3(1, 1, 1);
+    bolt->lightIntensity = 4.0f;
+    bolt->lightStartTime = R32_MAX;
+    bolt->lightEndTime = 0;
     
     
     gameState->world = result;
@@ -101,6 +145,12 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     {
         InitArchetype(result, archetypeIndex, 16);
     }
+    
+    
+    result->ambientLightColor = V3(0, 0, 0.2f);
+    result->windDirection = V3(1, 0, 0);
+    result->windStrength = 1.0f;
+    
 }
 
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
@@ -122,7 +172,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         input->timeToAdvance = 0;
     }
     
-    worldMode->totalRunningTime += input->timeToAdvance;
+    worldMode->windTime += input->timeToAdvance * worldMode->windStrength;
     
 #if FORGIVENESS_INTERNAL
     if(Pressed(&input->debugButton1))
@@ -159,6 +209,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 
             }
 #endif
+            
             Clear(group, V4(0.1f, 0.1f, 0.1f, 1.0f));
             ResetLightGrid(worldMode);
             
@@ -166,6 +217,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             Vec3 unprojectedWorldMouseP = UnprojectAtZ(group, &group->gameCamera, screenMouseP, 0);
             worldMode->groundMouseP = ProjectOnGround(unprojectedWorldMouseP, group->gameCamera.P);
+            worldMode->groundMouseP = unprojectedWorldMouseP;
             
             HandleUIInteraction(worldMode, group, myPlayer, input);
             UpdateGameCamera(worldMode, input);
@@ -173,19 +225,28 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             BeginDepthPeel(group);
             
-            Vec3 ambientLightColor = V3(1, 1, 1);
-            PushAmbientLighting(group, ambientLightColor);
-            //AddLightToGridCurrentFrame(worldMode, V3(0, 0, 0), V3(0, 0, 1), 4);
-            //AddLightToGridCurrentFrame(worldMode, V3(1, 0, 0), V3(1, 0, 0), 8);
+            PushGameRenderSettings(group, worldMode->ambientLightColor, worldMode->windTime, worldMode->windDirection, 1.0f);
+            
+            EXECUTE_JOB(worldMode, PushEntityLight, ArchetypeHas(AnimationEffectComponent), input->timeToAdvance);
             FinalizeLightGrid(worldMode, group);
+            
+            
+            EXECUTE_JOB(worldMode, UpdateEntity, ArchetypeHas(BaseComponent), input->timeToAdvance);
+            EXECUTE_JOB(worldMode, UpdateEntityEffects, ArchetypeHas(AnimationEffectComponent), input->timeToAdvance);
+            
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderGrass, ArchetypeHas(GrassComponent) && ArchetypeHas(BaseComponent) && ArchetypeHas(MagicQuadComponent), input->timeToAdvance);
+            
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderCharacterAnimation, ArchetypeHas(BaseComponent) && ArchetypeHas(AnimationComponent), input->timeToAdvance);
             
-            EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderFrameByFrameEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(FrameByFrameAnimationComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderPlants, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderLayoutEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(LayoutComponent), input->timeToAdvance);
+            
+            EXECUTE_RENDERING_JOB(worldMode, group, UpdateAndRenderBolt, ArchetypeHas(BaseComponent) && ArchetypeHas(BoltComponent), input->timeToAdvance);
             
             if(worldMode->editorUI.renderEntityBounds)
             {
@@ -198,10 +259,33 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             PreloadAllGroundBitmaps(group->assets);
             UpdateAndRenderGround(worldMode, group, myPlayer->universeP, myPlayer->oldUniverseP, input->timeToAdvance);
             
+            
+            
+            for(u16 weatherIndex = 0; weatherIndex < Weather_count; ++weatherIndex)
+            {
+                GameProperties weatherProperties = {};
+                if(!worldMode->weatherEffects[weatherIndex])
+                {
+                    AddGameProperty(&weatherProperties, weather, weatherIndex);
+                    AssetID effectID = QueryDataFiles(group->assets, ParticleEffect, "weather", 0, &weatherProperties);
+                    if(IsValid(effectID))
+                    {
+                        ParticleEffect* particles = GetData(group->assets, ParticleEffect, effectID);
+                        
+                        Vec3 startingP = V3(0, 0, 0);
+                        Vec3 UpVector = V3(0, 0, 1);
+                        
+                        worldMode->weatherEffects[weatherIndex] = GetNewParticleEffect(worldMode->particleCache, particles, startingP, UpVector);
+                    }
+                }
+            }
+            
             worldMode->particleCache->deltaParticleP = deltaP;
             UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
-            //worldMode->boltCache->deltaP = deltaP;
-            //UpdateAndRenderBolts(worldMode, worldMode->boltCache, input->timeToAdvance, group);
+            
+            
+            
+            
             
             RenderUIOverlay(worldMode, group);
             RenderEditorOverlay(worldMode, group, input);
@@ -274,6 +358,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         gameState->textureQueue = &memory->textureQueue;
         
         gameState->assets = InitAssets(gameState->slowQueue, gameState->tasks, ArrayCount(gameState->tasks), &gameState->assetsPool, gameState->textureQueue, MegaBytes(256));
+        SetMetaAssets(gameState->assets);
         
         InitializeSoundState(&gameState->soundState, &gameState->audioPool);
         

@@ -11,6 +11,25 @@ struct StandardImageComponent
     ImageReference entity;
 };
 
+struct MagicQuadComponent
+{
+    u32 color;
+    ImageReference entity;
+    AssetID bitmapID;
+    Vec4 lateral;
+    Vec4 up;
+    Vec3 offset;
+};
+
+struct FrameByFrameAnimationComponent
+{
+    r32 runningTime;
+    r32 speed;
+    
+    ShadowComponent shadow;
+    u64 typeHash;
+};
+
 struct LayoutPiece
 {
     u64 nameHash;

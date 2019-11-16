@@ -148,7 +148,9 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
                 P.chunkZ = 0;
                 P.chunkX = 1;
                 P.chunkY = 1;
-                SpawnPlayer(server, playerIndex, P);
+                AddEntityParams params = DefaultAddEntityParams();
+                params.playerIndex = playerIndex;
+                SpawnPlayer(server, P, params);
             }
             else
             {
@@ -225,7 +227,9 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
             unpack(packetPtr, "LHlllV", &ID.subtypeHashIndex, &ID.index, &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset);
             
             u32 seed = GetNextUInt32(&server->entropy);
-            AddEntity_(server, P, ID, seed, 0);
+            
+            AddEntityParams params = DefaultAddEntityParams();
+            AddEntity_(server, P, ID, seed, params);
         } break;
         
         case Type_RecreateWorld:
@@ -236,7 +240,9 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
             EXECUTE_JOB(server, DeleteAllEntities, (1 == 1), 0);
             BuildWorld(server, createEntities);
             QueueGameAccessConfirm(player, server->worldSeed, {}, true);
-            SpawnPlayer(server, playerIndex, P);
+            AddEntityParams params = DefaultAddEntityParams();
+            params.playerIndex = playerIndex;
+            SpawnPlayer(server, P, params);
         } break;
         
 #if 0        
@@ -475,6 +481,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         platformAPI.PushWork(server->slowQueue, WatchForFileChanges, hash);
         server->assets = InitAssets(server->slowQueue, server->tasks, ArrayCount(server->tasks), &server->gamePool, 0, MegaBytes(16));
+        SetMetaAssets(server->assets);
         BuildWorld(server, false);
     }
     
@@ -533,21 +540,23 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     
     server->frameByFramePool = &tempPool;
     
-    EXECUTE_JOB(server, DeleteDeletedEntities, ArchetypeHas(PhysicComponent), elapsedTime);
     SpawnEntities(server, elapsedTime);
     HandlePlayersNetwork(server, elapsedTime);
+    
     InitSpatialPartition(server->frameByFramePool, &server->playerPartition);
     EXECUTE_JOB(server, FillPlayerSpacePartition, ArchetypeHas(PlayerComponent) && ArchetypeHas(PhysicComponent), elapsedTime);
-    
     InitSpatialPartition(server->frameByFramePool, &server->collisionPartition);
     EXECUTE_JOB(server, FillCollisionSpatialPartition, ArchetypeHas(PhysicComponent), elapsedTime);
+    
     
     EXECUTE_JOB(server, HandlePlayerCommands, ArchetypeHas(PlayerComponent), elapsedTime);
     EXECUTE_JOB(server, DispatchEquipmentEffects, ArchetypeHas(PhysicComponent) && (ArchetypeHas(EquipmentComponent) || ArchetypeHas(UsingComponent)), elapsedTime);
     EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime);
     EXECUTE_JOB(server, UpdateBrain, ArchetypeHas(BrainComponent), elapsedTime);
+	EXECUTE_JOB(server, UpdateTempEntity, ArchetypeHas(TempEntityComponent), elapsedTime);
     EXECUTE_JOB(server, HandleOpenedContainers, ArchetypeHas(ContainerComponent), elapsedTime);
     EXECUTE_JOB(server, SendEntityUpdate, ArchetypeHas(PhysicComponent), elapsedTime);
+    EXECUTE_JOB(server, DeleteDeletedEntities, ArchetypeHas(PhysicComponent), elapsedTime);
     
     Clear(&tempPool);
 }

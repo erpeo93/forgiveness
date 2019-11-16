@@ -1,32 +1,14 @@
 #pragma once
 #define MAX_BOLT_SUBDIVISIONS 32
-struct Bolt
+struct BoltComponent
 {
     r32 ttl;
     u32 seed;
-    u32 taxonomy;
     r32 timeSinceLastAnimationTick;
     RandomSequence animationSeq;
-    Vec3 startP;
-    Vec3 endP;
+    Vec3 highOffset;
     
     Vec3 subdivisionAnimationOffsets[MAX_BOLT_SUBDIVISIONS];
-    
-    union
-    {
-        Bolt* next;
-        Bolt* nextFree;
-    };
-};
-
-struct BoltCache
-{
-    Vec3 deltaP;
-    Bolt* firstBolt;
-    RandomSequence entropy;
-    
-    MemoryPool* pool;
-    Bolt* firstFreeBolt;
 };
 
 struct BoltDefinition
@@ -49,8 +31,4 @@ struct BoltDefinition
     r32 lightIntensity;
     r32 lightStartTime;
     r32 lightEndTime;
-    
-    u64 trailerSoundEffect;
-    u64 headerSoundEffect;
-    u64 inFlightSoundEffect;
 };

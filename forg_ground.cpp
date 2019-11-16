@@ -400,7 +400,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                         worldMode->nullTile = NullTile(generator);
                         
                         BuildChunk(group->assets, worldMode->persistentPool, generator, 
-                                   chunk, X, Y, Z, worldSeed, worldMode->totalRunningTime);
+                                   chunk, X, Y, Z, worldSeed);
                     }
                     
                 }
@@ -685,7 +685,13 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                     {
                         if(IsValidSpecial(&chunk->texture))
                         {
-                            PushTexture(group, chunk->texture.textureHandle, chunkLowLeftCornerOffset, V3(chunkSide, 0, 0), V3(0, chunkSide, 0), V4(1, 1, 1, 1));
+                            UniversePos P = {};
+                            P.chunkX = chunkX;
+                            P.chunkY = chunkY;
+                            P.chunkZ = worldMode->player.universeP.chunkZ;
+                            P.chunkOffset = 0.5f * V3(CHUNK_SIDE, CHUNK_SIDE, 0);
+                            Lights lights =  GetLights(worldMode, GetRelativeP(worldMode, P));
+                            PushTexture(group, chunk->texture.textureHandle, chunkLowLeftCornerOffset, V3(chunkSide, 0, 0), V3(0, chunkSide, 0), V4(1, 1, 1, 1), lights, 0, 0, 1, 0);
                         }
                         else
                         {

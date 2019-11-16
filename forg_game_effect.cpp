@@ -1,25 +1,4 @@
 #ifdef FORG_SERVER
-internal void SendEffectDispatch(ServerState* server, EntityID ID)
-{
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    
-    r32 maxDistance = 3.0f * CHUNK_DIM;
-    r32 maxDistanceSq = Square(maxDistance);
-    
-    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, physic->P);
-    for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
-    {
-        PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
-        PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
-        
-        Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
-        if(LengthSq(distance) < maxDistanceSq)
-        {
-            QueueEffectDispatch(player, ID);
-        }
-    }
-}
-
 internal void DeleteEntity(ServerState* server, EntityID ID);
 internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect, EntityID targetID)
 {
@@ -27,8 +6,34 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
     {
         case spawnEntity:
         {
-            //SendEffectDispatch(server, ID);
-            //AddEntity(server, P, &server->entropy, effect->spawnType, 0);
+            AddEntity(server, P, &server->entropy, effect->spawnType, DefaultAddEntityParams());
+        } break;
+        
+        case spawnEntityTowardTarget:
+        {
+            AddEntityParams params = DefaultAddEntityParams();
+            
+            PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
+            PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+            
+            if(targetPhysic && physic)
+            {
+                Vec3 toTarget = SubtractOnSameZChunk(targetPhysic->P, physic->P);
+                params.acceleration = toTarget;
+                params.speed = 2.0f * Normalize(toTarget);
+                AddEntity(server, P, &server->entropy, effect->spawnType, params);
+            }
+        } break;
+        
+        case spawnEntityTowardDirection:
+        {
+            AddEntityParams params = DefaultAddEntityParams();
+            
+            PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+            Vec3 toTarget = SubtractOnSameZChunk(P, physic->P);
+            params.acceleration = toTarget;
+            params.speed = 2.0f * Normalize(toTarget);
+            AddEntity(server, physic->P, &server->entropy, effect->spawnType, params);
         } break;
         
         case moveOnZSlice:
@@ -48,11 +53,19 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
             }
         } break;
         
-        case deleteEntity:
+        case deleteTarget:
         {
             if(HasComponent(targetID, PhysicComponent))
             {
                 DeleteEntity(server, targetID);
+            }
+        } break;
+        
+        case deleteSelf:
+        {
+            if(HasComponent(ID, PhysicComponent))
+            {
+                DeleteEntity(server, ID);
             }
         } break;
     }
@@ -142,21 +155,6 @@ internal void DispatchOverlappingEffects(ServerState* server, UniversePos P, Ent
     }
 }
 #else
-internal void DispatchGameEffect(GameModeWorld* worldMode, EntityID ID)
-{
-    // TODO(Leonardo): for now let's hardcode this, but in the future we would like to customize these on a entity basis
-#if 0    
-    EntityDefinitionDef* = GetDefinition();
-    AddAllAnimationEffectsFor(def, effect->effectType.value);
-#else
-    AnimationEffectsComponent* effects = GetComponent(worldMode, ID, AnimationEffectsComponent);
-    if(effects)
-    {
-        effects->timer = 0.3f;
-        effects->tint = V4(0, 0, 0, 1);
-    }
-#endif
-}
 #endif
 internal b32 CompatibleSlot(InteractionComponent* interaction, InventorySlot* slot)
 {

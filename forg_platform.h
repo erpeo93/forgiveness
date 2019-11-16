@@ -4,13 +4,18 @@ struct TexturedVertex
     Vec4 P;
     Vec3 N;
     Vec2 UV;
-    u32 color;
     
+    u32 color;
     u16 lightStartingIndex;
     u16 lightEndingIndex;
     
-    r32 modulationPercentage;
+    u16 modulationPercentage;
+    u16 lightInfluence;
+    u16 lightYInfluence;
     u16 textureIndex;
+    
+    u16 windInfluence;
+    u16 padding[3];
 };
 
 struct GameRenderSettings

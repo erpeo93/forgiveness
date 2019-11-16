@@ -1,3 +1,10 @@
+inline Vec3 GetRelativeP(GameModeWorld* worldMode, UniversePos P)
+{
+    Vec3 result = SubtractOnSameZChunk(P, worldMode->player.universeP);
+    return result;
+}
+
+
 inline Vec3 GetRelativeP(GameModeWorld* worldMode, BaseComponent* base)
 {
     Vec3 result = SubtractOnSameZChunk(base->universeP, worldMode->player.universeP);
@@ -45,6 +52,10 @@ internal void SetupGameCamera(GameModeWorld* worldMode, RenderGroup* group, Plat
     
     m4x4 cameraO = ZRotation(worldMode->cameraOrbit) * XRotation(worldMode->cameraPitch);
     Vec3 cameraOffsetFinal = cameraO * V3(worldMode->cameraEntityOffset, worldMode->cameraWorldOffset.z + worldMode->cameraDolly) + V3(finalXYOffset, 0);
+    
+    
+    magicLateralVector = V4(GetColumn(cameraO, 0), 0);
+    magicUpVector = V4(GetColumn(cameraO, 1), 0);
     
     SetCameraTransform(group, 0, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal, worldMode->cameraEntityOffset);
     

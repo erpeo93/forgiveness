@@ -37,7 +37,6 @@ struct ArchetypeLayout
             ArchetypeComponent hasUsingComponent;
             ArchetypeComponent hasEquipmentMappingComponent;
             ArchetypeComponent hasUsingMappingComponent;
-            ArchetypeComponent hasAnimationEffectsComponent;
             ArchetypeComponent hasCollisionEffectsComponent;
             ArchetypeComponent hasOverlappingEffectsComponent;
             ArchetypeComponent hasContainerComponent;
@@ -46,6 +45,11 @@ struct ArchetypeLayout
             ArchetypeComponent hasSkillComponent;
             ArchetypeComponent hasSkillMappingComponent;
             ArchetypeComponent hasBrainComponent;
+            ArchetypeComponent hasTempEntityComponent;
+            ArchetypeComponent hasAnimationEffectComponent;
+            ArchetypeComponent hasFrameByFrameAnimationComponent;
+            ArchetypeComponent hasBoltComponent;
+            ArchetypeComponent hasMagicQuadComponent;
         };
     };
 };

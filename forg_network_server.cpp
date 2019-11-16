@@ -174,7 +174,7 @@ internal u16 PrepareEntityUpdate(ServerState* server, PhysicComponent* physic, u
 {
     UniversePos P = physic->P;
     unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
-    Pack("LLLlllVVHHL", physic->definitionID.subtypeHashIndex, physic->definitionID.index, physic->seed, P.chunkX, P.chunkY, P.chunkZ, P.chunkOffset, physic->speed, physic->action.property, physic->action.value, physic->flags);
+    Pack("LLLlllVVHHL", physic->definitionID.subtypeHashIndex, physic->definitionID.index, physic->seed, P.chunkX, P.chunkY, P.chunkZ, P.chunkOffset, physic->speed, physic->action, physic->status, physic->flags);
     u16 totalSize = ForgEndPacket_( buff_, buff );
     return totalSize;
 }
@@ -209,6 +209,14 @@ inline void QueueEntityHeaderReliably(PlayerComponent* player, EntityID ID)
     Pack("L", ID.archetype_archetypeIndex);
     QueueOrderedPacket(player);
 }
+
+internal void QueueDeletedID(PlayerComponent* player, EntityID ID)
+{
+    StartPacket(player, deletedEntity);
+    Pack("L", ID.archetype_archetypeIndex);
+    QueueStandardPacket(player);
+}
+
 
 internal void QueueEquipmentID(PlayerComponent* player, EntityID ID, u16 slotIndex, u16 slotType, EntityID equipmentID)
 {
@@ -250,13 +258,6 @@ internal void QueueDraggingID(PlayerComponent* player, EntityID ID, EntityID dra
 {
     StartPacket(player, DraggingMapping);
     Pack("L", dragging.archetype_archetypeIndex);
-    QueueStandardPacket(player, ID);
-}
-
-
-internal void QueueEffectDispatch(PlayerComponent* player, EntityID ID)
-{
-    StartPacket(player, EffectDispatch);
     QueueStandardPacket(player, ID);
 }
 

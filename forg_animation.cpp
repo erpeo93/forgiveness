@@ -479,7 +479,7 @@ internal r32 GetModulationPercentage(GameModeWorld* worldMode, EntityID ID)
     InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
     if(interaction && interaction->isOnFocus)
     {
-        result = 0.7f;
+        result = 0.2f;
     }
     return result;
 }
@@ -556,7 +556,8 @@ internal b32 IsValidMapping(GameUIContext* UI, ObjectMapping* mapping, u16 slotI
     return result;
 }
 
-internal Rect2 RenderLayout(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, struct LayoutContainer* container);
+internal Rect2 RenderLayout(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, Vec4 color, LayoutComponent* layout, u32 seed, Lights lights, struct LayoutContainer* container);
+internal Vec4 GetTint(GameModeWorld* worldMode, EntityID ID);
 internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, u64 hash, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights, b32 equipmentMappings)
 {
     Assert(hash);
@@ -565,7 +566,6 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
         if(!alreadyRendered[mappingIndex])
         {
             ObjectMapping* mapping = mappings + mappingIndex;
-            
             if(hash == mapping->slotHash || hash == mapping->pieceHash)
             {
                 Vec3 pieceP = P + GetCameraOffset(group, transform.cameraOffset);
@@ -594,7 +594,7 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                         LayoutContainer container = {};
                         //container.container = GetComponent(worldMode, equipmentID, ContainerMappingComponent);
                         
-                        equipmentBase->projectedOnScreen = RenderLayout(worldMode, group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights, &container);
+                        equipmentBase->projectedOnScreen = RenderLayout(worldMode, group, P, finalTransform, GetTint(worldMode, equipmentID), equipmentLayout, equipmentBase->seed, lights, &container);
                     }
                 }
                 
@@ -766,7 +766,6 @@ internal Rect2 RenderAnimation(GameModeWorld* worldMode, RenderGroup* group, Ani
     return result;
 }
 
-
 internal Rect2 GetAnimationDim(GameModeWorld* worldMode, RenderGroup* group, AnimationComponent* component, AnimationParams* params)
 {
     Rect2 result = RenderAnimation(worldMode, group, component, params, false);
@@ -778,113 +777,3 @@ internal Rect2 GetAnimationDim(GameModeWorld* worldMode, RenderGroup* group, Ass
     Rect2 result = RenderAnimation_(worldMode, group, ID, component, params, false);
     return result;
 }
-
-#if 0
-inline void PlaySoundForAnimation(GameModeWorld* worldMode, Assets* assets, TaxonomySlot* slot, u64 nameHash, r32 oldSoundTime, r32 soundTime)
-{
-    SoundState* soundState = worldMode->soundState;
-    u32 soundTaxonomy = slot->taxonomy;
-    b32 found = false;
-    while(soundTaxonomy && !found)
-    {
-        TaxonomySlot* soundSlot = GetSlotForTaxonomy(worldMode->table, soundTaxonomy);
-        for(TaxonomySound* sound = slot->firstSound; sound && !found; sound = sound->next)
-        {
-            if(nameHash == sound->animationNameHash)
-            {
-                b32 play;
-                if(oldSoundTime <= sound->threesold)
-                {
-                    play = (soundTime > sound->threesold || soundTime < oldSoundTime);
-                }
-                else
-                {
-                    play = (soundTime > sound->threesold && soundTime < oldSoundTime);
-                }
-                
-                if(play)
-                {
-                    u64 eventHash = sound->eventNameHash;
-                    
-                    SoundEvent* event = GetSoundEvent(worldMode->table, eventHash);
-                    if(event)
-                    {
-                        u32 labelCount = 0;
-                        SoundLabel* labels = 0;
-                        
-                        PickSoundResult pick = PickSoundFromEvent(assets, event, labelCount, labels, &worldMode->table->eventSequence);
-                        
-                        r32 distanceFromPlayer = 0;
-                        for(u32 pickIndex = 0; pickIndex < pick.soundCount; ++pickIndex)
-                        {
-                            SoundId toPlay = pick.sounds[pickIndex];
-                            r32 delay = pick.delays[pickIndex];
-                            r32 decibelOffset = pick.decibelOffsets[pickIndex];
-                            r32 pitch = pick.pitches[pickIndex];
-                            r32 toleranceDistance = pick.toleranceDistance[pickIndex];
-                            r32 distanceFalloffCoeff = pick.distanceFalloffCoeff[pickIndex];
-                            
-                            if(IsValid(toPlay))
-                            {
-                                PlaySound(worldMode->soundState, assets, toPlay, distanceFromPlayer, decibelOffset, pitch, delay, toleranceDistance, distanceFalloffCoeff);
-                                found = true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        soundTaxonomy = GetParentTaxonomy(worldMode->table, soundTaxonomy);
-    }
-}
-#endif
-
-
-#if 0
-JOB_DEFINITION(RenderPlant)
-{
-    if(!entityC->plant)
-    {
-        Plant* newPlant = worldMode->firstFreePlant;
-        if(!newPlant)
-        {
-            newPlant = PushStruct(worldMode->persistentPool, Plant);
-        }
-        else
-        {
-            worldMode->firstFreePlant = newPlant->nextFree;
-        }
-        entityC->plant = newPlant;
-        
-        Plant* plant = entityC->plant;
-        *plant = {};
-        plant->sequence = Seed((u32)entityC->identifier);
-    }
-    
-    entityC->plant->leafBitmap = FindBitmapByName(group->assets, ASSET_LEAF, slot->plantDefinition->leafParams.bitmapHash);
-    
-    entityC->plant->flowerBitmap = FindBitmapByName(group->assets, ASSET_FLOWER, slot->plantDefinition->flowerParams.bitmapHash);
-    
-    entityC->plant->fruitBitmap = FindBitmapByName(group->assets, ASSET_FRUIT, slot->plantDefinition->fruitParams.bitmapHash);
-    entityC->plant->trunkBitmap = FindBitmapByName(group->assets, ASSET_TRUNK, slot->plantDefinition->trunkStringHash);
-    
-    
-    PlantRenderingParams renderingParams = {};
-    renderingParams.lights = lights;
-    renderingParams.modulationWithFocusColor = entityC->modulationWithFocusColor;
-    renderingParams.season = worldMode->season;
-    renderingParams.lerpWithFollowingSeason = worldMode->seasonLerp;
-    
-    UpdateAndRenderPlant(worldMode, group, renderingParams, slot->plantDefinition, entityC->plant, animationP);
-    
-    for(u32 plantIndex = 0; plantIndex < entityC->plant->plant.plantCount; ++plantIndex)
-    {
-        Vec3 P = animationP + V3(entityC->plant->plant.offsets[plantIndex], 0);
-        
-        Rect3 plantBounds = Offset(bounds, P);
-        entityC->bounds = Union(entityC->bounds, plantBounds);
-    }
-}
-
-#endif

@@ -64,6 +64,11 @@ enum MetaType
     MetaType_UseLayout,
     MetaType_EquipLayout,
     MetaType_PossibleActionDefinition,
+    MetaType_ParticleUpdater,
+    MetaType_ParticleEmitter,
+    MetaType_ParticlePhase,
+    MetaType_AnimationEffectDefinition,
+    MetaType_RenderTexture,
 };
 
 enum FieldMetaFlags

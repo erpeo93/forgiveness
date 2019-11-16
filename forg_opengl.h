@@ -24,6 +24,9 @@ struct OpenGLProgramCommon
     GLuint lightEndingIndexID;
     GLuint textureIndexID;
     GLuint modulationID;
+    GLuint lightInfluenceID;
+    GLuint lightYInfluenceID;
+    GLuint windInfluenceID;
 };
 
 struct GLPointLight
@@ -38,6 +41,7 @@ struct ZBiasProgram
     OpenGLProgramCommon common;
     
     GLuint GLSLTransformID;
+    GLuint timeID;
     GLuint textureSamplerID;
     GLuint depthSamplerID;
     GLuint alphaThreesoldID;
@@ -47,6 +51,9 @@ struct ZBiasProgram
     GLuint directionalLightIntensityID;
     GLuint lightSource0ID;
     GLuint lightSource1ID;
+    
+    GLuint windDirectionID;
+    GLuint windStrengthID;
 };
 
 struct PeelCompositeProgram

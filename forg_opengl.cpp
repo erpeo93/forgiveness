@@ -380,6 +380,13 @@ inline b32 IsValidArray(GLuint index)
     return result;
 }
 
+
+#define OPENGL_BIND_U16(array, structure, field) if(IsValidArray(array))\
+{\
+    glEnableVertexAttribArray(array);\
+    glVertexAttribIPointer(array, 1, GL_UNSIGNED_SHORT, sizeof(structure),(void*) OffsetOf(structure, field));\
+}
+
 internal void OpenGLUseProgramBegin(OpenGLProgramCommon* prog)
 {
     glUseProgram(prog->progHandle);
@@ -387,10 +394,6 @@ internal void OpenGLUseProgramBegin(OpenGLProgramCommon* prog)
     GLuint CArray = prog->vertColorID;
     GLuint PArray = prog->vertPID;
     GLuint NArray = prog->vertNID;
-    GLuint lightStartingArray = prog->lightStartingIndexID;
-    GLuint lightEndingArray = prog->lightEndingIndexID;
-    GLuint textureArray = prog->textureIndexID;
-    GLuint modulationArray = prog->modulationID;
     
     if(IsValidArray(UVArray))
     {
@@ -417,31 +420,13 @@ internal void OpenGLUseProgramBegin(OpenGLProgramCommon* prog)
         glVertexAttribPointer(NArray, 3, GL_FLOAT, false, sizeof(TexturedVertex), (void*) OffsetOf(TexturedVertex, N));
     }
     
-    
-    if(IsValidArray(lightStartingArray))
-    {
-        glEnableVertexAttribArray(lightStartingArray);
-        glVertexAttribIPointer(lightStartingArray, 1, GL_UNSIGNED_SHORT, sizeof(TexturedVertex), (void*) OffsetOf(TexturedVertex, lightStartingIndex));
-    }
-    
-    if(IsValidArray(lightEndingArray))
-    {
-        glEnableVertexAttribArray(lightEndingArray);
-        glVertexAttribIPointer(lightEndingArray, 1, GL_UNSIGNED_SHORT, sizeof(TexturedVertex), (void*) OffsetOf(TexturedVertex, lightEndingIndex));
-    }
-    
-    
-    if(IsValidArray(textureArray))
-    {
-        glEnableVertexAttribArray(textureArray);
-        glVertexAttribIPointer(textureArray, 1, GL_UNSIGNED_SHORT, sizeof(TexturedVertex), (void*) OffsetOf(TexturedVertex, textureIndex));
-    }
-    
-    if(IsValidArray(modulationArray))
-    {
-        glEnableVertexAttribArray(modulationArray);
-        glVertexAttribPointer(modulationArray, 1, GL_FLOAT, false, sizeof(TexturedVertex), (void*) OffsetOf(TexturedVertex, modulationPercentage));
-    }
+    OPENGL_BIND_U16(prog->lightStartingIndexID, TexturedVertex, lightStartingIndex);
+    OPENGL_BIND_U16(prog->lightEndingIndexID, TexturedVertex, lightEndingIndex);
+    OPENGL_BIND_U16(prog->modulationID, TexturedVertex, modulationPercentage);
+    OPENGL_BIND_U16(prog->lightInfluenceID, TexturedVertex, lightInfluence);
+    OPENGL_BIND_U16(prog->lightYInfluenceID, TexturedVertex, lightYInfluence);
+    OPENGL_BIND_U16(prog->textureIndexID, TexturedVertex, textureIndex);
+    OPENGL_BIND_U16(prog->windInfluenceID, TexturedVertex, windInfluence);
 }
 
 internal void OpenGLUseProgramBegin(ZBiasProgram* prog, RenderSetup* setup, r32 alphaThreesold)
@@ -453,10 +438,12 @@ internal void OpenGLUseProgramBegin(ZBiasProgram* prog, RenderSetup* setup, r32 
     glUniform1i(prog->depthSamplerID, 1);
     glUniform1i(prog->lightSource0ID, 2);
     glUniform1i(prog->lightSource1ID, 3);
-    
     glUniform1f(prog->alphaThreesoldID, alphaThreesold);
     
     glUniform3fv(prog->ambientLightColorID, 1, setup->ambientLightColor.E);
+    glUniform1f(prog->timeID, setup->totalTimeElapsed);
+    glUniform3fv(prog->windDirectionID, 1, setup->windDirection.E);
+    glUniform1f(prog->windStrengthID, setup->windStrength);
 }
 
 internal void OpenGLUseProgramBegin(PeelCompositeProgram* prog)
@@ -480,39 +467,21 @@ internal void OpenGLUseProgramBegin(TextureGenProgram* prog)
     OpenGLUseProgramBegin(&prog->common);
 }
 
+#define DISABLE_VERTEX_ATTRIBUTE(attribute)if(IsValidArray(attribute)){glDisableVertexAttribArray(attribute);}
+
 internal void OpenGLUseProgramEnd(OpenGLProgramCommon* prog)
 {
     glUseProgram(0);
     
-    if(IsValidArray(prog->vertUVID))
-    {
-        glDisableVertexAttribArray(prog->vertUVID);
-    }
-    
-    if(IsValidArray(prog->vertColorID))
-    {
-        glDisableVertexAttribArray(prog->vertColorID);
-    }
-    
-    if(IsValidArray(prog->vertPID))
-    {
-        glDisableVertexAttribArray(prog->vertPID);
-    }
-    
-    if(IsValidArray(prog->lightStartingIndexID))
-    {
-        glDisableVertexAttribArray(prog->lightStartingIndexID);
-    }
-    
-    if(IsValidArray(prog->lightEndingIndexID))
-    {
-        glDisableVertexAttribArray(prog->lightEndingIndexID);
-    }
-    
-    if(IsValidArray(prog->textureIndexID))
-    {
-        glDisableVertexAttribArray(prog->textureIndexID);
-    }
+    DISABLE_VERTEX_ATTRIBUTE(prog->vertUVID);
+    DISABLE_VERTEX_ATTRIBUTE(prog->vertColorID);
+    DISABLE_VERTEX_ATTRIBUTE(prog->lightStartingIndexID);
+    DISABLE_VERTEX_ATTRIBUTE(prog->lightEndingIndexID);
+    DISABLE_VERTEX_ATTRIBUTE(prog->textureIndexID);
+    DISABLE_VERTEX_ATTRIBUTE(prog->modulationID);
+    DISABLE_VERTEX_ATTRIBUTE(prog->lightInfluenceID);
+    DISABLE_VERTEX_ATTRIBUTE(prog->lightYInfluenceID);
+    DISABLE_VERTEX_ATTRIBUTE(prog->windInfluenceID);
 }
 
 internal void OpenGLManageTextures(TextureOp* first)
@@ -583,6 +552,9 @@ internal GLuint OpenGLCreateProgram(char* defines, char* headerCode, char* verte
     common->lightEndingIndexID = glGetAttribLocation(programID, "lightEndingIndex");
     common->textureIndexID = glGetAttribLocation(programID, "textureIndex");
     common->modulationID = glGetAttribLocation(programID, "modulationPercentage");
+    common->lightInfluenceID = glGetAttribLocation(programID, "lightInfluence");
+    common->lightYInfluenceID = glGetAttribLocation(programID, "lightYInfluence");
+    common->windInfluenceID = glGetAttribLocation(programID, "windInfluence");
     
     return programID;
 }
@@ -637,9 +609,15 @@ internal void OpenGLCompileZBiasProgram(ZBiasProgram* result, b32 depthPeel)
 in int lightStartingIndex;
 in int lightEndingIndex;
 in int textureIndex;
-in r32 modulationPercentage;
+in int modulationPercentage;
+in int lightInfluence;
+in int lightYInfluence;
+in int windInfluence;
 
     uniform m4x4 transform;
+    uniform r32 time;
+    uniform Vec3 windDirection;
+    uniform r32 windStrength;
          smooth out Vec2 fragUV;
          smooth out Vec4 fragColor;
          smooth out Vec3 worldPos;
@@ -648,12 +626,18 @@ in r32 modulationPercentage;
           flat out int fragLightEndingIndex;
           flat out int fragTextureIndex;
            smooth out r32 modulationWithFocusColor;
+           smooth out r32 lightInfluencePercentage;
+           smooth out r32 lightYInfluencePercentage;
            
     void main(void)
           {
     Vec4 inVertex = V4(vertP.xyz, 1.0f);
+    
+    r32 windInfl = windStrength * float(windInfluence) / 0xffff;
+     Vec3 wind = sin(time+(vertP.x + vertP.y + vertP.z) * 0.1f) * windDirection.xyz * windInfl;
+inVertex.xyz += wind;
+
            r32 zBias = vertP.w;
-           
            Vec4 zVertex = inVertex;
           zVertex.z += zBias;
           
@@ -670,7 +654,9 @@ in r32 modulationPercentage;
                                             fragLightStartingIndex = lightStartingIndex;
                                             fragLightEndingIndex = lightEndingIndex;
                                            fragTextureIndex = textureIndex;
-                                           modulationWithFocusColor = modulationPercentage;
+                                           modulationWithFocusColor = float(modulationPercentage) / 0xffff;
+                                            lightInfluencePercentage = float(lightInfluence) / 0xffff;
+                                            lightYInfluencePercentage = float(lightYInfluence) / 0xffff;
     }
     
    )FOO";
@@ -694,6 +680,9 @@ out Vec4 resultColor;
      flat in int fragTextureIndex;
      
      smooth in r32 modulationWithFocusColor;
+     smooth in r32 lightInfluencePercentage;
+           smooth in r32 lightYInfluencePercentage;
+           
     uniform Vec3 ambientLightColor;
     
     uniform sampler1D lightSource0;
@@ -719,8 +708,6 @@ texSample.rgb *= texSample.rgb;
 resultColor = fragColor * texSample;
      if(resultColor.a > alphaThreesold)
      {
-     
-     
      Vec3 modulationLightColor = ambientLightColor;
      for(int index = fragLightStartingIndex; index < fragLightEndingIndex; ++index)
 {
@@ -731,16 +718,18 @@ Vec4 lightData0 = texelFetch(lightSource0, index, 0);
  Vec3 lightColor = lightData1.rgb;
  r32 lightStrength = lightData0.a;
  
+ r32 lightYDistance = lightP.y - worldPos.y;
+r32 lightYModulation = 1.0f - (lightYInfluencePercentage * Clamp01MapToRange(0.0f, lightYDistance, 0.01f));
+
 Vec3 toLight = lightP - worldPos;
-     r32 lightDistance = length(toLight);
-     
+r32 lightDistance = length(toLight);
      toLight *= (1.0f / lightDistance);
      
 #if 0
 r32 cosAngle = dot(toLight, worldNorm);
      r32 lightInfluence = cosAngle *(lightStrength / (lightDistance * lightDistance));
      #else
-     r32 lightInfluence = lightStrength / (lightDistance * lightDistance);
+     r32 lightInfluence = lightInfluencePercentage * lightYModulation * lightStrength / (lightDistance * lightDistance);
      #endif
      
      lightInfluence = clamp(lightInfluence, 0, 1);
@@ -753,7 +742,7 @@ resultColor.rgb *= modulationLightColor;
 
 
 resultColor.rgb = Clamp01(resultColor.rgb);
-resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.7f, 0.7f, 0.7f));
+resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.4f, 0.4f, 0.4f));
 #if shaderSimTexWriteSRGB
      resultColor.rgb = sqrt(resultColor.rgb);
      #endif
@@ -766,6 +755,7 @@ discard;
    )FOO";
     GLuint prog = OpenGLCreateProgram(defines, globalHeaderCode, vertexCode, fragmentCode, &result->common);
     result->GLSLTransformID = glGetUniformLocation(prog, "transform");
+    result->timeID = glGetUniformLocation(prog, "time");
     result->textureSamplerID = glGetUniformLocation(prog, "textureSampler");
     result->depthSamplerID = glGetUniformLocation(prog, "depthSampler");
     result->alphaThreesoldID = glGetUniformLocation(prog, "alphaThreesold");
@@ -773,6 +763,8 @@ discard;
     result->lightSource0ID = glGetUniformLocation(prog, "lightSource0");
     result->lightSource1ID = glGetUniformLocation(prog, "lightSource1");
     
+    result->windDirectionID = glGetUniformLocation(prog, "windDirection");
+    result->windStrengthID = glGetUniformLocation(prog, "windStrength");
 }
 
 
@@ -1152,7 +1144,6 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     for(u32 walkedSize = 0; walkedSize < commands->usedSize; walkedSize += sizeof(CommandHeader))
     {
         CommandHeader* header = (CommandHeader*) (commands->pushMemory + walkedSize);
-        
         if(useRenderTargets)
         {
             void* data = (header + 1); 
