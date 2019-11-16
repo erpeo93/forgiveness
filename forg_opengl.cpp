@@ -158,9 +158,6 @@ internal OpenGLInfo OpenGLGetInfo(b32 modernContext)
     return result;
 }
 
-
-global_variable u32 globalFrameBufferCount = 0;
-
 inline void OpenGLBindFramebuffer(OpenGLFramebuffer* frameBuffer, u32 renderWidth, u32 renderHeight)
 {
     glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer ? frameBuffer->handle : 0);
@@ -171,6 +168,7 @@ inline OpenGLFramebuffer OpenGLCreateFramebuffer(u32 flags, u32 width, u32 heigh
 {
     OpenGLFramebuffer result = {};
     
+    u32 maxMultisampleCount = 4;
     b32 isMultisample = (flags & OpenGLFramebuffer_multisample);
     b32 isLinearFilter = (flags & OpenGLFramebuffer_linearFilter);
     b32 hasColor = (flags & OpenGLFramebuffer_hasColor);
@@ -190,7 +188,7 @@ inline OpenGLFramebuffer OpenGLCreateFramebuffer(u32 flags, u32 width, u32 heigh
         
         if(slot == GL_TEXTURE_2D_MULTISAMPLE)
         {
-            glTexImage2DMultisample(slot, opengl.maxMultisampleCount,
+            glTexImage2DMultisample(slot, maxMultisampleCount,
                                     opengl.defaultFramebufferTextureFormat,
                                     width, height,
                                     GL_FALSE);
@@ -218,7 +216,8 @@ inline OpenGLFramebuffer OpenGLCreateFramebuffer(u32 flags, u32 width, u32 heigh
         
         if(slot == GL_TEXTURE_2D_MULTISAMPLE)
         {
-            glTexImage2DMultisample(slot, opengl.maxMultisampleCount,
+            
+            glTexImage2DMultisample(slot, maxMultisampleCount,
                                     GL_DEPTH_COMPONENT32F,
                                     width, height,
                                     GL_FALSE);
@@ -248,109 +247,6 @@ inline OpenGLFramebuffer OpenGLCreateFramebuffer(u32 flags, u32 width, u32 heigh
     return result;
 }
 
-inline void GLQuad(Vec3 P0, Vec2 T0, Vec4 C0,
-                   Vec3 P1, Vec2 T1, Vec4 C1,
-                   Vec3 P2, Vec2 T2, Vec4 C2,
-                   Vec3 P3, Vec2 T3, Vec4 C3)
-{
-    glColor4fv(C0.E);
-    glTexCoord2fv(T0.E);
-    glVertex3fv(P0.E);
-    
-    glColor4fv(C1.E);
-    glTexCoord2fv(T1.E);
-    glVertex3fv(P1.E);
-    
-    glColor4fv(C2.E);
-    glTexCoord2fv(T2.E);
-    glVertex3fv(P2.E);
-    
-    glColor4fv(C0.E);
-    glTexCoord2fv(T0.E);
-    glVertex3fv(P0.E);
-    
-    glColor4fv(C2.E);
-    glTexCoord2fv(T2.E);
-    glVertex3fv(P2.E);
-    
-    glColor4fv(C3.E);
-    glTexCoord2fv(T3.E);
-    glVertex3fv(P3.E);
-}
-
-inline void GLLine(Vec3 min, Vec3 max, Vec4 c1, Vec4 c2)
-{
-    glColor4fv(c1.E);
-    glVertex3fv(min.E);
-    
-    glColor4fv(c2.E);
-    glVertex3fv(max.E);
-}
-
-inline void GLQuadOutline(Vec3 P0, Vec4 C0, Vec3 P1, Vec4 C1, Vec3 P2, Vec4 C2, Vec3 P3, Vec4 C3)
-{
-    GLLine(P0, P1, C0, C1);
-    GLLine(P1, P2, C1, C2);
-    GLLine(P2, P3, C2, C3);
-    GLLine(P3, P0, C3, C0);
-}
-
-inline void OpenGLBitmap(Vec3 P, r32 zBias, Vec3 XAxis, Vec3 YAxis, Vec4 color, Bitmap* buffer, Vec2 minUV = V2(0, 0), Vec2 maxUV = V2(1, 1))
-{
-    Vec4 minXminY = V4(P, 0.0f);
-    Vec4 maxXminY = V4(P + XAxis, zBias);
-    Vec4 minXmaxY = V4(P + YAxis, zBias);
-    Vec4 maxXmaxY = V4(P + XAxis + YAxis, zBias);
-    
-    glBegin(GL_TRIANGLES);
-    
-    glColor4f(color.r, color.g, color.b, color.a);
-    
-    glTexCoord2f(minUV.x, minUV.y);
-    glVertex3fv(minXminY.E);
-    
-    glTexCoord2f(maxUV.x, minUV.y);
-    glVertex3fv(maxXminY.E);
-    
-    glTexCoord2f(maxUV.x, maxUV.y);
-    glVertex3fv(maxXmaxY.E);
-    
-    glTexCoord2f(minUV.x, minUV.y);
-    glVertex3fv(minXminY.E);
-    
-    glTexCoord2f(maxUV.x, maxUV.y);
-    glVertex3fv(maxXmaxY.E);
-    
-    glTexCoord2f(minUV.x, maxUV.y);
-    glVertex3fv(minXmaxY.E);
-    
-    glEnd();
-}
-
-inline void OpenGLDisplayBitmap(u32 bufferWidth, u32 bufferHeight, void* memory, u32 windowWidth, u32 windowHeight, GLuint textureHandle)
-{
-    glViewport(0, 0, windowWidth, windowHeight);
-    
-    glBindTexture(GL_TEXTURE_2D, textureHandle);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, bufferWidth, bufferHeight, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, memory);
-    
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-    
-    glEnable(GL_TEXTURE_2D);
-    glEnable(GL_SCISSOR_TEST);
-    glClearColor(1.0f, 0.0f, 1.0f, 0.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    
-    InvalidCodePath;
-    //OpenGLRectangle(V3(0, 0, 0), V2i(windowWidth, windowHeight), V4(1.0f, 1.0f, 1.0f, 1.0f));
-    
-    glBindTexture(GL_TEXTURE_2D, 0);
-}
-
-
 internal void OpenGLAllocateTexture(RenderTexture texture, void* data)
 {
 #if 0    
@@ -379,7 +275,6 @@ inline b32 IsValidArray(GLuint index)
     b32 result = (index != -1);
     return result;
 }
-
 
 #define OPENGL_BIND_U16(array, structure, field) if(IsValidArray(array))\
 {\
@@ -429,16 +324,14 @@ internal void OpenGLUseProgramBegin(OpenGLProgramCommon* prog)
     OPENGL_BIND_U16(prog->windInfluenceID, TexturedVertex, windInfluence);
 }
 
-internal void OpenGLUseProgramBegin(ZBiasProgram* prog, RenderSetup* setup, r32 alphaThreesold)
+internal void OpenGLUseProgramBegin(ZBiasProgram* prog, RenderSetup* setup)
 {
     OpenGLUseProgramBegin(&prog->common);
     m4x4 proj = setup->proj;
     glUniformMatrix4fv(prog->GLSLTransformID, 1, GL_TRUE, proj.E[0]);
     glUniform1i(prog->textureSamplerID, 0);
-    glUniform1i(prog->depthSamplerID, 1);
-    glUniform1i(prog->lightSource0ID, 2);
-    glUniform1i(prog->lightSource1ID, 3);
-    glUniform1f(prog->alphaThreesoldID, alphaThreesold);
+    glUniform1i(prog->lightSource0ID, 1);
+    glUniform1i(prog->lightSource1ID, 2);
     
     glUniform3fv(prog->ambientLightColorID, 1, setup->ambientLightColor.E);
     glUniform1f(prog->timeID, setup->totalTimeElapsed);
@@ -446,25 +339,10 @@ internal void OpenGLUseProgramBegin(ZBiasProgram* prog, RenderSetup* setup, r32 
     glUniform1f(prog->windStrengthID, setup->windStrength);
 }
 
-internal void OpenGLUseProgramBegin(PeelCompositeProgram* prog)
-{
-    OpenGLUseProgramBegin(&prog->common);
-    
-    for(u32 peelIndex = 0; peelIndex < ArrayCount(prog->peelSamplerID); ++peelIndex)
-    {
-        glUniform1i(prog->peelSamplerID[peelIndex], peelIndex);
-    }
-}
-
 internal void OpenGLUseProgramBegin(FinalStretchProgram* prog)
 {
     OpenGLUseProgramBegin(&prog->common);
     glUniform1i(prog->textureSamplerID, 0);
-}
-
-internal void OpenGLUseProgramBegin(TextureGenProgram* prog)
-{
-    OpenGLUseProgramBegin(&prog->common);
 }
 
 #define DISABLE_VERTEX_ATTRIBUTE(attribute)if(IsValidArray(attribute)){glDisableVertexAttribArray(attribute);}
@@ -587,18 +465,16 @@ return(Result);
 
 )FOO";
 
-internal void OpenGLCompileZBiasProgram(ZBiasProgram* result, b32 depthPeel)
+internal void OpenGLCompileZBiasProgram(ZBiasProgram* result)
 {
     
     char defines[4096];
     FormatString(defines, sizeof(defines),  
                  "#version 130\n"
                  "#define shaderSimTexLoadSRGB %d\n"
-                 "#define shaderSimTexWriteSRGB %d\n"
-                 "#define depthPeeling %d\n",
+                 "#define shaderSimTexWriteSRGB %d\n",
                  opengl.shaderSimTexLoadSRGB,
-                 opengl.shaderSimTexWriteSRGB,
-                 depthPeel);
+                 opengl.shaderSimTexWriteSRGB);
     
     char* vertexCode = R"FOO(
         //vertex code
@@ -633,8 +509,9 @@ in int windInfluence;
           {
     Vec4 inVertex = V4(vertP.xyz, 1.0f);
     
-    r32 windInfl = windStrength * float(windInfluence) / 0xffff;
-     Vec3 wind = sin(time+(vertP.x + vertP.y + vertP.z) * 0.1f) * windDirection.xyz * windInfl;
+    r32 windInfl = windStrength * (float(windInfluence) / 0xffff);
+    r32 windFrequency = 1.0f;
+     Vec3 wind = sin(time+(vertP.x + vertP.y + vertP.z) * windFrequency) * windDirection.xyz * windInfl;
 inVertex.xyz += wind;
 
            r32 zBias = vertP.w;
@@ -665,10 +542,9 @@ inVertex.xyz += wind;
     fragmentCode = R"FOO(
     //fragment code
     uniform sampler2DArray textureSampler;
-    #if depthPeeling
-    uniform sampler2D depthSampler;
-    #endif
-    uniform r32 alphaThreesold;
+    uniform sampler1D lightSource0;
+    uniform sampler1D lightSource1;
+    
 out Vec4 resultColor;
     smooth in Vec2 fragUV;
     smooth in Vec4 fragColor;
@@ -684,21 +560,8 @@ out Vec4 resultColor;
            smooth in r32 lightYInfluencePercentage;
            
     uniform Vec3 ambientLightColor;
-    
-    uniform sampler1D lightSource0;
-    uniform sampler1D lightSource1;
-    
     void main(void)
      {
-#if depthPeeling
-     r32 clipDepth = texelFetch(depthSampler, ivec2(gl_FragCoord.xy), 0).r;
-     r32 fragZ = gl_FragCoord.z;
-     if(fragZ <= clipDepth)
-     {
-     discard;
-}
-     #endif
-     
      Vec3 arrayUV = V3(fragUV.x, fragUV.y, fragTextureIndex);
      Vec4 texSample = texture(textureSampler, arrayUV);
      #if shaderSimTexLoadSRGB
@@ -706,7 +569,7 @@ texSample.rgb *= texSample.rgb;
      #endif
      
 resultColor = fragColor * texSample;
-     if(resultColor.a > alphaThreesold)
+     if(resultColor.a > 0)
      {
      Vec3 modulationLightColor = ambientLightColor;
      for(int index = fragLightStartingIndex; index < fragLightEndingIndex; ++index)
@@ -715,11 +578,12 @@ Vec4 lightData0 = texelFetch(lightSource0, index, 0);
  Vec4 lightData1 = texelFetch(lightSource1, index, 0);
  
  Vec3 lightP = lightData0.xyz;
- Vec3 lightColor = lightData1.rgb;
  r32 lightStrength = lightData0.a;
+ Vec3 lightColor = lightData1.rgb;
  
  r32 lightYDistance = lightP.y - worldPos.y;
 r32 lightYModulation = 1.0f - (lightYInfluencePercentage * Clamp01MapToRange(0.0f, lightYDistance, 0.01f));
+lightYModulation = max(lightYModulation, 0.05f);
 
 Vec3 toLight = lightP - worldPos;
 r32 lightDistance = length(toLight);
@@ -738,9 +602,6 @@ r32 cosAngle = dot(toLight, worldNorm);
 
 modulationLightColor = clamp(modulationLightColor, 0, 1);
 resultColor.rgb *= modulationLightColor;
-
-
-
 resultColor.rgb = Clamp01(resultColor.rgb);
 resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.4f, 0.4f, 0.4f));
 #if shaderSimTexWriteSRGB
@@ -757,93 +618,11 @@ discard;
     result->GLSLTransformID = glGetUniformLocation(prog, "transform");
     result->timeID = glGetUniformLocation(prog, "time");
     result->textureSamplerID = glGetUniformLocation(prog, "textureSampler");
-    result->depthSamplerID = glGetUniformLocation(prog, "depthSampler");
-    result->alphaThreesoldID = glGetUniformLocation(prog, "alphaThreesold");
-    result->ambientLightColorID = glGetUniformLocation(prog, "ambientLightColor");
     result->lightSource0ID = glGetUniformLocation(prog, "lightSource0");
     result->lightSource1ID = glGetUniformLocation(prog, "lightSource1");
-    
+    result->ambientLightColorID = glGetUniformLocation(prog, "ambientLightColor");
     result->windDirectionID = glGetUniformLocation(prog, "windDirection");
     result->windStrengthID = glGetUniformLocation(prog, "windStrength");
-}
-
-
-internal void OpenGLCompilePeelComposite(PeelCompositeProgram* result)
-{
-    char defines[4096];
-    FormatString(defines, sizeof(defines),  
-                 "#version 130\n"
-                 "#define shaderSimTexLoadSRGB %d\n"
-                 "#define shaderSimTexWriteSRGB %d\n",
-                 opengl.shaderSimTexLoadSRGB,
-                 opengl.shaderSimTexWriteSRGB);
-    
-    char* vertexCode = R"FOO(
-        in Vec4 vertP;
-        in Vec2 vertUV;
-        in Vec4 vertColor;
-         smooth out Vec2 fragUV;
-         smooth out Vec4 fragColor;
-         
-    void main(void)
-          {
-          gl_Position = vertP;
-          fragUV = vertUV;
-          fragColor = vertColor;
-    }
-    
-   )FOO";
-    
-    char* fragmentCode = R"FOO(
-        //fragment code
-        uniform sampler2D peelSampler[4];
-        smooth in Vec2 fragUV;
-        smooth in Vec4 fragColor;
-        out Vec4 resultColor;
-        
-        void main(void)
-         {
-         Vec4 peel0 = texture(peelSampler[0], fragUV);
-         Vec4 peel1 = texture(peelSampler[1], fragUV);
-         Vec4 peel2 = texture(peelSampler[2], fragUV);
-         Vec4 peel3 = texture(peelSampler[3], fragUV);
-         
-         #if shaderSimTexLoadSRGB
-    peel0.rgb *= peel0.rgb;
-    peel1.rgb *= peel1.rgb;
-         #endif
-         
-#if 0         
-         r32 invA = 0.0f;
-         if(peel1.a > 0)
-         {
-         invA = 1.0f / peel1.a;
-    }
-    peel1.rgb *= invA;
-    #endif
-    
-    resultColor.rgb = peel3.rgb;
-    resultColor.rgb = peel2.rgb * peel2.a + ((1 - peel2.a) * resultColor.rgb); 
-    resultColor.rgb = peel1.rgb * peel1.a + ((1 - peel1.a) * resultColor.rgb); 
-    resultColor.rgb = fragColor.rgb * (peel0.rgb * peel0.a + ((1 - peel0.a) * resultColor.rgb)); 
-    
-#if 0
-    resultColor.rgb = peel1.rgb;
-    resultColor.rgb = peel0.rgb * peel0.a + ((1 - peel0.a) * resultColor.rgb); 
-    #endif
-    
-#if shaderSimTexWriteSRGB
-         resultColor.rgb = sqrt(resultColor.rgb);
-         #endif
-         
-         }
-       )FOO";
-    
-    GLuint prog = OpenGLCreateProgram(defines, globalHeaderCode, vertexCode, fragmentCode, &result->common);
-    result->peelSamplerID[0] = glGetUniformLocation(prog, "peelSampler[0]");
-    result->peelSamplerID[1] = glGetUniformLocation(prog, "peelSampler[1]");
-    result->peelSamplerID[2] = glGetUniformLocation(prog, "peelSampler[2]");
-    result->peelSamplerID[3] = glGetUniformLocation(prog, "peelSampler[3]");
 }
 
 internal void OpenGLCompileFinalStretch(FinalStretchProgram* result)
@@ -890,12 +669,15 @@ internal void OpenGLInit(OpenGLInfo info, b32 frameBufferSupportSRGB)
     opengl.shaderSimTexLoadSRGB = true;
     opengl.shaderSimTexWriteSRGB = true;
     
+    
+#if 0    
     glGetIntegerv(GL_MAX_COLOR_TEXTURE_SAMPLES, &opengl.maxMultisampleCount);
     if(opengl.maxMultisampleCount > 16)
     {
         opengl.maxMultisampleCount = 16;
     }
     opengl.maxMultisampleCount = 1;
+#endif
     
     
     opengl.defaultSpriteTextureFormat = GL_RGBA8;
@@ -908,31 +690,9 @@ internal void OpenGLInit(OpenGLInfo info, b32 frameBufferSupportSRGB)
     }
     if(frameBufferSupportSRGB && info.GLARBFrameBufferSRGB) 
     {
-        
-#if 0        
-        GLuint testTexture;
-        glGenTextures(1, &testTexture);
-        glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, testTexture);
-        glGetError();
-        glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, opengl.maxMultisampleCount,
-                                GL_SRGB8_ALPHA8,
-                                1920, 1080,
-                                GL_FALSE);
-        
-        if(glGetError() == GL_NO_ERROR)
-#endif
-        
-        {
-            opengl.defaultFramebufferTextureFormat = GL_SRGB8_ALPHA8;
-            glEnable(GL_FRAMEBUFFER_SRGB);
-            opengl.shaderSimTexWriteSRGB = false;
-        }
-        
-#if 0        
-        glDeleteTextures(1, &testTexture);
-        glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
-#endif
-        
+        opengl.defaultFramebufferTextureFormat = GL_SRGB8_ALPHA8;
+        glEnable(GL_FRAMEBUFFER_SRGB);
+        opengl.shaderSimTexWriteSRGB = false;
     }
     
 #if FORGIVENESS_INTERNAL
@@ -971,7 +731,6 @@ internal void OpenGLInit(OpenGLInfo info, b32 frameBufferSupportSRGB)
     glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
     
     glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, opengl.defaultSpriteTextureFormat, MAX_IMAGE_DIM, MAX_IMAGE_DIM, opengl.maxTextureCount, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, 0);
-    
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);    
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -1007,16 +766,9 @@ internal void FreeProgram(OpenGLProgramCommon* program)
 
 internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
 {
-    FreeFrameBuffer(&opengl.resolveFramebuffer);
-    FreeFrameBuffer(&opengl.textureGenFrameBuffer);
+    FreeFrameBuffer(&opengl.frameBuffer);
     
-    for(u32 depthPeelIndex = 0; depthPeelIndex < opengl.depthPeelCount; ++depthPeelIndex)
-    {
-        FreeFrameBuffer(&opengl.depthPeelBuffer[depthPeelIndex]);
-    }
-    FreeProgram(&opengl.zBiasDepthPeelLight.common);
-    FreeProgram(&opengl.zBiasNoDepthPeel.common);
-    FreeProgram(&opengl.peelComposite.common);
+    FreeProgram(&opengl.zBias.common);
     FreeProgram(&opengl.finalStretch.common);
     
     glDeleteTextures(1, &opengl.lightSource0);
@@ -1028,28 +780,13 @@ internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
     u32 renderWidth = settings->width;
     u32 renderHeight = settings->height;
     
-    OpenGLCompileZBiasProgram(&opengl.zBiasDepthPeelLight, true);
-    OpenGLCompileZBiasProgram(&opengl.zBiasNoDepthPeel, false);
-    OpenGLCompilePeelComposite(&opengl.peelComposite);
+    OpenGLCompileZBiasProgram(&opengl.zBias);
     OpenGLCompileFinalStretch(&opengl.finalStretch);
-    
-    u32 resolveFlags = (OpenGLFramebuffer_linearFilter | OpenGLFramebuffer_hasColor);
-    opengl.resolveFramebuffer = OpenGLCreateFramebuffer(resolveFlags, renderWidth, renderHeight);
     
     opengl.textureGenFrameBuffer = OpenGLCreateFramebuffer(OpenGLFramebuffer_hasColor, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
     
-    opengl.depthPeelCount = settings->depthPeelCount;
-    if(opengl.depthPeelCount > ArrayCount(opengl.depthPeelBuffer))
-    {
-        opengl.depthPeelCount = ArrayCount(opengl.depthPeelBuffer);
-    }
-    
     u32 flags = (OpenGLFramebuffer_hasColor | OpenGLFramebuffer_hasDepth);
-    for(u32 depthPeelIndex = 0; depthPeelIndex < opengl.depthPeelCount; ++depthPeelIndex)
-    {
-        opengl.depthPeelBuffer[depthPeelIndex] = OpenGLCreateFramebuffer(flags, renderWidth, renderHeight);
-    }
-    
+    opengl.frameBuffer = OpenGLCreateFramebuffer(flags, renderWidth, renderHeight);
     
     glGenTextures(1, &opengl.lightSource0);
     glBindTexture(GL_TEXTURE_1D, opengl.lightSource0);
@@ -1074,7 +811,6 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
 {
     TIMED_FUNCTION();
     
-    
     glDepthMask(GL_TRUE);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDepthFunc(GL_LEQUAL);
@@ -1082,13 +818,9 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
-    
-    //glEnable(GL_SAMPLE_ALPHA_TO_COVERAGE);
-    //glEnable(GL_SAMPLE_ALPHA_TO_ONE);
-    //glEnable(GL_MULTISAMPLE);
-    
     glEnable(GL_SCISSOR_TEST);
-    glDisable(GL_BLEND);
+    
+    glEnable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     
     b32 useRenderTargets = (glBindFramebuffer != 0);
@@ -1099,37 +831,17 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
         OpenGLPrepareForRenderSettings(&commands->settings);
     }
     
-    
-    
-    
     u32 renderWidth = commands->settings.width;
     u32 renderHeight = commands->settings.height;
-    u32 maxRenderTargetIndex = opengl.depthPeelCount - 1;
-    for(u32 targetIndex = 0; targetIndex <= maxRenderTargetIndex; ++targetIndex)
-    {
-        OpenGLBindFramebuffer(opengl.depthPeelBuffer + targetIndex, renderWidth, renderHeight);
-        glScissor(0, 0, renderWidth, renderHeight);
-        glClearDepth(1.0f);
-        if(targetIndex == maxRenderTargetIndex)
-        {
-            glClearColor(commands->clearColor.r, commands->clearColor.g, commands->clearColor.b, commands->clearColor.a);
-        }
-        else
-        {
-            glClearColor(0, 0, 0, 0);
-        }
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    }
     
-    
-    OpenGLBindFramebuffer(opengl.depthPeelBuffer + 0, renderWidth, renderHeight);
-    b32 peeling = false;
-    u32 peelIndex = 0;
-    u32 peelWalkedSize = 0;
+    OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
+    glScissor(0, 0, renderWidth, renderHeight);
+    glClearDepth(1.0f);
+    glClearColor(commands->clearColor.r, commands->clearColor.g, commands->clearColor.b, commands->clearColor.a);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     glBindBuffer(GL_ARRAY_BUFFER, opengl.vertexBuffer);
     glBufferData(GL_ARRAY_BUFFER, commands->vertexCount * sizeof(TexturedVertex), commands->vertexArray, GL_STREAM_DRAW);
-    
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, opengl.indexBuffer);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, commands->indexCount * sizeof(u16), commands->indexArray, GL_STREAM_DRAW);
     
@@ -1139,8 +851,6 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     glTexSubImage1D(GL_TEXTURE_1D, 0, 0, MAX_LIGHTS, GL_RGBA, GL_FLOAT, commands->lightSource1);
     glBindTexture(GL_TEXTURE_1D, 0);
     
-    
-    
     for(u32 walkedSize = 0; walkedSize < commands->usedSize; walkedSize += sizeof(CommandHeader))
     {
         CommandHeader* header = (CommandHeader*) (commands->pushMemory + walkedSize);
@@ -1149,29 +859,6 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
             void* data = (header + 1); 
             switch(header->type)
             {
-                case CommandType_BeginPeels:
-                {
-                    peelWalkedSize = walkedSize;
-                } break;
-                
-                case CommandType_EndPeels:
-                {
-                    if(peelIndex < maxRenderTargetIndex)
-                    {
-                        walkedSize = peelWalkedSize;
-                        ++peelIndex;
-                        peeling = true;
-                    }
-                    else
-                    {
-                        Assert(peelIndex == maxRenderTargetIndex);
-                        peeling = false;
-                    }
-                    
-                    u32 peelFrameBuffer = peelIndex % maxRenderTargetIndex;
-                    OpenGLBindFramebuffer(opengl.depthPeelBuffer + peelFrameBuffer, renderWidth, renderHeight);
-                } break;
-                
                 case CommandType_TexturedQuadsCommand:
                 {
                     glBindBuffer(GL_ARRAY_BUFFER, opengl.vertexBuffer);
@@ -1182,58 +869,25 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
                     
                     glScissor(clipRect.minX, clipRect.minY, clipRect.maxX - clipRect.minX, clipRect.maxY - clipRect.minY);
                     
-                    OpenGLProgramCommon* common;
-                    
                     glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
                     if(element->setup.renderTargetIndex > 0)
                     {
-                        glEnable(GL_BLEND);
-                        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-                        
                         OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
                         glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, opengl.textureArray, 0, element->setup.renderTargetIndex);
                     }
                     
-                    ZBiasProgram* program = &opengl.zBiasNoDepthPeel;
-                    r32 alphaThreesold = 0.0f;
-                    if(peeling)
-                    {
-                        program = &opengl.zBiasDepthPeelLight;
-                        glActiveTexture(GL_TEXTURE1);
-                        glBindTexture(GL_TEXTURE_2D, opengl.depthPeelBuffer[peelIndex - 1].depthHandle);
-                        glActiveTexture(GL_TEXTURE2);
-                        glBindTexture(GL_TEXTURE_1D, opengl.lightSource0);
-                        glActiveTexture(GL_TEXTURE3);
-                        glBindTexture(GL_TEXTURE_1D, opengl.lightSource1);
-                        glActiveTexture(GL_TEXTURE0);
-                        
-                        if(peelIndex == maxRenderTargetIndex)
-                        {
-                            alphaThreesold = 0.9f;
-                        }
-                    }
-                    
-                    OpenGLUseProgramBegin(program, &element->setup, alphaThreesold);
-                    common = &program->common;
+                    ZBiasProgram* program = &opengl.zBias;
+                    OpenGLUseProgramBegin(program, &element->setup);
+                    OpenGLProgramCommon* common = &program->common;
                     
                     glDrawElementsBaseVertex(GL_TRIANGLES, 3 * element->triangleCount, GL_UNSIGNED_SHORT, (GLvoid*) (element->indexArrayOffset * sizeof(u16)), element->vertexArrayOffset);
                     
                     glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
                     OpenGLUseProgramEnd(common);
                     
-                    if(peeling)
-                    {
-                        glActiveTexture(GL_TEXTURE1);
-                        glBindTexture(GL_TEXTURE_2D, 0);
-                        glActiveTexture(GL_TEXTURE0);
-                    }
-                    
                     if(element->setup.renderTargetIndex > 0)
                     {
-                        glDisable(GL_BLEND);
-                        
-                        u32 peelFrameBuffer = peelIndex % maxRenderTargetIndex;
-                        OpenGLBindFramebuffer(opengl.depthPeelBuffer + peelFrameBuffer, renderWidth, renderHeight);
+                        OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
                     }
                     
                     walkedSize += sizeof(TexturedQuadsCommand);
@@ -1243,52 +897,6 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
             }
         }
     }
-    
-#if 0
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, opengl.depthPeelBuffer[3].handle);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    glViewport(drawRegion.minX, drawRegion.minY, windowWidth, windowHeight);
-    glBlitFramebuffer(0, 0, renderWidth, renderHeight,
-                      drawRegion.minX, drawRegion.minY,
-                      drawRegion.maxX, drawRegion.maxY,
-                      GL_COLOR_BUFFER_BIT,
-                      GL_LINEAR);
-#else
-    
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, opengl.resolveFramebuffer.handle);
-    
-    glViewport(0, 0, renderWidth, renderHeight);
-    glScissor(0, 0, renderWidth, renderHeight);
-    
-    glClearColor(0, 0, 0, 0);
-    glClear(GL_COLOR_BUFFER_BIT);
-    
-    glDisable(GL_DEPTH_TEST);
-    glBindBuffer(GL_ARRAY_BUFFER, opengl.screenFillVertexBuffer);
-    OpenGLUseProgramBegin(&opengl.peelComposite);
-    
-    
-    for(u32 peel = 0; peel <= maxRenderTargetIndex; ++peel)
-    {
-        glActiveTexture(GL_TEXTURE0 + peel);
-        glBindTexture(GL_TEXTURE_2D, opengl.depthPeelBuffer[peel].colorHandle);
-    }
-    
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    
-    
-    for(u32 peel = 0; peel <= maxRenderTargetIndex; ++peel)
-    {
-        glActiveTexture(GL_TEXTURE0 + peel);
-        glBindTexture(GL_TEXTURE_2D, 0);
-    }
-    
-    glActiveTexture(GL_TEXTURE0);
-    OpenGLUseProgramEnd(&opengl.peelComposite.common);
-    
-    
-    
-    
     
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     glViewport(0, 0, windowWidth, windowHeight);
@@ -1303,9 +911,7 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     glDisable(GL_DEPTH_TEST);
     glBindBuffer(GL_ARRAY_BUFFER, opengl.screenFillVertexBuffer);
     OpenGLUseProgramBegin(&opengl.finalStretch);
-    glBindTexture(GL_TEXTURE_2D, opengl.resolveFramebuffer.colorHandle);
+    glBindTexture(GL_TEXTURE_2D, opengl.frameBuffer.colorHandle);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     OpenGLUseProgramEnd(&opengl.finalStretch.common);
-    
-#endif
 }

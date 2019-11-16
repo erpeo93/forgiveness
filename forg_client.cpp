@@ -147,7 +147,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     }
     
     
-    result->ambientLightColor = V3(0, 0, 0.2f);
+    result->ambientLightColor = V3(1, 1, 1);
     result->windDirection = V3(1, 0, 0);
     result->windStrength = 1.0f;
     
@@ -221,10 +221,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             HandleUIInteraction(worldMode, group, myPlayer, input);
             UpdateGameCamera(worldMode, input);
-            
-            
-            BeginDepthPeel(group);
-            
             PushGameRenderSettings(group, worldMode->ambientLightColor, worldMode->windTime, worldMode->windDirection, 1.0f);
             
             EXECUTE_JOB(worldMode, PushEntityLight, ArchetypeHas(AnimationEffectComponent), input->timeToAdvance);
@@ -233,6 +229,14 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             EXECUTE_JOB(worldMode, UpdateEntity, ArchetypeHas(BaseComponent), input->timeToAdvance);
             EXECUTE_JOB(worldMode, UpdateEntityEffects, ArchetypeHas(AnimationEffectComponent), input->timeToAdvance);
+            
+            
+            myPlayer->universeP = player->universeP;
+            Vec3 deltaP = -SubtractOnSameZChunk(myPlayer->universeP, myPlayer->oldUniverseP);
+            
+            PreloadAllGroundBitmaps(group->assets);
+            UpdateAndRenderGround(worldMode, group, myPlayer->universeP, myPlayer->oldUniverseP, input->timeToAdvance);
+            
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderGrass, ArchetypeHas(GrassComponent) && ArchetypeHas(BaseComponent) && ArchetypeHas(MagicQuadComponent), input->timeToAdvance);
             
@@ -252,13 +256,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             {
                 EXECUTE_RENDERING_JOB(worldMode, group, RenderBound, ArchetypeHas(BaseComponent), input->timeToAdvance);
             }
-            
-            myPlayer->universeP = player->universeP;
-            Vec3 deltaP = -SubtractOnSameZChunk(myPlayer->universeP, myPlayer->oldUniverseP);
-            
-            PreloadAllGroundBitmaps(group->assets);
-            UpdateAndRenderGround(worldMode, group, myPlayer->universeP, myPlayer->oldUniverseP, input->timeToAdvance);
-            
             
             
             for(u16 weatherIndex = 0; weatherIndex < Weather_count; ++weatherIndex)
@@ -289,8 +286,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             RenderUIOverlay(worldMode, group);
             RenderEditorOverlay(worldMode, group, input);
-            EndDepthPeel(group);
-            
             
             myPlayer->oldUniverseP = myPlayer->universeP;
         }

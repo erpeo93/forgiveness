@@ -111,7 +111,8 @@ struct AnimationPiece
     Vec2 pivot;
     u64 nameHash;
     b32 placeHolder;
-    Vec3 originOffset;
+    Vec2 originOffset;
+    r32 zBias;
     r32 angle;
     Vec2 scale;
     Vec4 color;

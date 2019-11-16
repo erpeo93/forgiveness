@@ -20,7 +20,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
             {
                 Vec3 toTarget = SubtractOnSameZChunk(targetPhysic->P, physic->P);
                 params.acceleration = toTarget;
-                params.speed = 2.0f * Normalize(toTarget);
+                params.speed = 1.0f * Normalize(toTarget);
                 AddEntity(server, P, &server->entropy, effect->spawnType, params);
             }
         } break;
@@ -32,7 +32,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
             PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
             Vec3 toTarget = SubtractOnSameZChunk(P, physic->P);
             params.acceleration = toTarget;
-            params.speed = 2.0f * Normalize(toTarget);
+            params.speed = 1.0f * Normalize(toTarget);
             AddEntity(server, physic->P, &server->entropy, effect->spawnType, params);
         } break;
         

@@ -43,8 +43,6 @@ struct ZBiasProgram
     GLuint GLSLTransformID;
     GLuint timeID;
     GLuint textureSamplerID;
-    GLuint depthSamplerID;
-    GLuint alphaThreesoldID;
     GLuint ambientLightColorID;
     GLuint directionalLightColorID;
     GLuint directionalLightDirectionID;
@@ -56,24 +54,11 @@ struct ZBiasProgram
     GLuint windStrengthID;
 };
 
-struct PeelCompositeProgram
-{
-    OpenGLProgramCommon common;
-    
-    GLuint peelSamplerID[4];
-};
-
 struct FinalStretchProgram
 {
     OpenGLProgramCommon common;
     GLuint textureSamplerID;
 };
-
-struct TextureGenProgram
-{
-    OpenGLProgramCommon common;
-};
-
 
 struct OpenGLFramebuffer
 {
@@ -94,11 +79,8 @@ enum OpenGLFramebufferFlags
 struct Opengl
 {
     GameRenderSettings settings;
-    b32 multisampling;
-    u32 depthPeelCount;
     
-    OpenGLFramebuffer depthPeelBuffer[16];
-    OpenGLFramebuffer resolveFramebuffer;
+    OpenGLFramebuffer frameBuffer;
     OpenGLFramebuffer textureGenFrameBuffer;
     
     b32 shaderSimTexLoadSRGB;
@@ -111,13 +93,10 @@ struct Opengl
     GLuint defaultSpriteTextureFormat;
     GLuint defaultFramebufferTextureFormat;
     
-    GLint maxMultisampleCount;
     b32 sRGBSupport;
     b32 supportSRGBFrameBuffer;
     
-    ZBiasProgram zBiasNoDepthPeel;
-    ZBiasProgram zBiasDepthPeelLight;
-    PeelCompositeProgram peelComposite;
+    ZBiasProgram zBias;
     FinalStretchProgram finalStretch;
     
     GLuint vertexBuffer;

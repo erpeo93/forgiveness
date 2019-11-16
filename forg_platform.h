@@ -20,8 +20,6 @@ struct TexturedVertex
 
 struct GameRenderSettings
 {
-    u32 depthPeelCount;
-    b32 multisamplingHint;
     u32 width;
     u32 height;
 };
@@ -58,8 +56,6 @@ inline GameRenderCommands DefaultRenderCommands(u8* pushBuffer, u32 pushBufferSi
     GameRenderCommands result = {};
     result.settings.width = width;
     result.settings.height = height;
-    result.settings.depthPeelCount = 4;
-    result.settings.multisamplingHint = false;
     
     result.clearColor = clearColor;
     result.maxVertexCount = maxVertexCount;
@@ -78,9 +74,7 @@ inline GameRenderCommands DefaultRenderCommands(u8* pushBuffer, u32 pushBufferSi
 inline b32 AreEqual(GameRenderSettings* A, GameRenderSettings* B)
 {
     b32 result = 
-        (A->depthPeelCount == B->depthPeelCount &&
-         A->multisamplingHint == B->multisamplingHint &&
-         A->width == B->width &&
+        (A->width == B->width &&
          A->height == B->height);
     
     return result;

@@ -426,7 +426,8 @@ internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKAnimation* 
         Vec2 boneOffset = ass->boneOffset * params->scale;
         
         Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
-        dest->originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset);
+        dest->originOffset = parentBone->finalOriginOffset + offsetFromBone;
+        dest->zBias = zOffset + ass->additionalZOffset;
         
         dest->angle = parentBone->finalAngle + ass->angle;
         dest->scale = ass->scale;
@@ -678,8 +679,9 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
                     ObjectTransform equippedTransform = transform;
                     equippedTransform.angle = piece->angle;
                     equippedTransform.scale = piece->scale;
+                    equippedTransform.additionalZBias = piece->zBias;
                     
-                    Vec3 offset = GetCameraOffset(group, piece->originOffset);
+                    Vec3 offset = GetCameraOffset(group, V3(piece->originOffset, 0));
                     if(transform.flipOnYAxis)
                     {
                         offset.x = -offset.x;
@@ -707,7 +709,8 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
                             transform.angle = piece->angle;
                             Vec3 P = params->P;
                             
-                            transform.cameraOffset = piece->originOffset;
+                            transform.cameraOffset = V3(piece->originOffset, 0);
+                            transform.additionalZBias = piece->zBias;
                             r32 height = bitmapInfo->nativeHeight * params->scale;
                             
                             Vec4 color = Hadamart(piece->color, params->tint);
