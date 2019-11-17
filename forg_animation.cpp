@@ -269,6 +269,7 @@ internal Vec2 CalculateFinalBoneOffset_(Bone* frameBones, i32 countBones, Bone* 
 
 internal u32 AdvanceAnimationState(PAKAnimation* info, AnimationComponent* animation, r32 elapsedTime, b32 fakeAnimation)
 {
+    TIMED_FUNCTION();
     if(info != animation->currentAnimation)
     {
         if(!fakeAnimation)
@@ -355,6 +356,7 @@ internal u32 AdvanceAnimationState(PAKAnimation* info, AnimationComponent* anima
 internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKAnimation* animationInfo, Animation* animation,
                                             AnimationComponent* component, AnimationParams* params, u32 animTimeMod, u32* animationPieceCount, b32 render)
 {
+    TIMED_FUNCTION();
     u32 lowerFrameIndex = 0;
     for(u32 frameIndex = 0; frameIndex < animation->frameCount; frameIndex++)
     {
@@ -426,8 +428,8 @@ internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKAnimation* 
         Vec2 boneOffset = ass->boneOffset * params->scale;
         
         Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
-        dest->originOffset = parentBone->finalOriginOffset + offsetFromBone;
-        dest->zBias = zOffset + ass->additionalZOffset;
+        dest->originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset);
+        dest->zBias = zOffset;
         
         dest->angle = parentBone->finalAngle + ass->angle;
         dest->scale = ass->scale;
@@ -624,12 +626,22 @@ internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
                 attachmentTransform.additionalZBias = point->zOffset;
                 RenderAttachmentPoint(worldMode, group, P, pointHash, attachmentTransform, mappings, mappingCount, alreadyRendered, lights, equipmentMappings);
             }
+            else
+            {
+                break;
+            }
+        }
+        else
+        {
+            break;
         }
     }
 }
 
 internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, AssetID animationID, AnimationComponent* component, AnimationParams* params, b32 render = true)
 {
+    TIMED_FUNCTION();
+    
     TempMemory temp = BeginTemporaryMemory(worldMode->persistentPool);
     
     b32* usingRendered = 0;
@@ -648,10 +660,13 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
     if(animation)
     {
         PAKAnimation* animationInfo = GetAnimationInfo(group->assets, animationID);
-        
-        
         u16 bitmapCount = 0;
         AssetID* bitmaps = GetAllSkinBitmaps(temp.pool, group->assets, GetAssetSubtype(group->assets, AssetType_Image, component->skinHash), &component->skinProperties, &bitmapCount);
+        PAKBitmap** bitmapInfos = PushArray(temp.pool, PAKBitmap*, bitmapCount, NoClear());
+        for(u16 bitmapIndex = 0; bitmapIndex < bitmapCount; ++bitmapIndex)
+        {
+            bitmapInfos[bitmapIndex] = GetBitmapInfo(group->assets, bitmaps[bitmapIndex]);
+        }
         
         u32 animTimeMod = 0;
         if(render)
@@ -681,7 +696,7 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
                     equippedTransform.scale = piece->scale;
                     equippedTransform.additionalZBias = piece->zBias;
                     
-                    Vec3 offset = GetCameraOffset(group, V3(piece->originOffset, 0));
+                    Vec3 offset = GetCameraOffset(group, piece->originOffset);
                     if(transform.flipOnYAxis)
                     {
                         offset.x = -offset.x;
@@ -693,6 +708,7 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
             }
         }
         
+        BEGIN_BLOCK("animation pieces");
         for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
         {
             AnimationPiece* piece = pieces + pieceIndex;
@@ -700,44 +716,46 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
             {
                 for(u32 bitmapIndex = 0; bitmapIndex < bitmapCount; ++bitmapIndex)
                 {
-                    AssetID BID = bitmaps[bitmapIndex];
-                    if(IsValid(BID))
+                    PAKBitmap* bitmapInfo = bitmapInfos[bitmapIndex];
+                    if(bitmapInfo->nameHash == piece->nameHash)
                     {
-                        PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, BID);
-                        if(bitmapInfo->nameHash == piece->nameHash)
+                        AssetID BID = bitmaps[bitmapIndex];
+                        Assert(IsValid(BID));
+                        
+                        transform.angle = piece->angle;
+                        Vec3 P = params->P;
+                        
+                        transform.cameraOffset = piece->originOffset;
+                        transform.additionalZBias = piece->zBias;
+                        r32 height = bitmapInfo->nativeHeight * params->scale;
+                        Vec4 color = Hadamart(piece->color, params->tint);
+                        BitmapDim dim = PushBitmapWithPivot(group, transform, BID, P, piece->pivot, height, color, lights);
+                        result = Union(result, RectMinDim(dim.P.xy, dim.size));
+                        
+                        ObjectTransform equipmentTransform = transform;
+                        equipmentTransform.cameraOffset = {};
+                        if(render)
                         {
-                            transform.angle = piece->angle;
-                            Vec3 P = params->P;
-                            
-                            transform.cameraOffset = V3(piece->originOffset, 0);
-                            transform.additionalZBias = piece->zBias;
-                            r32 height = bitmapInfo->nativeHeight * params->scale;
-                            
-                            Vec4 color = Hadamart(piece->color, params->tint);
-                            BitmapDim dim = PushBitmapWithPivot(group, transform, BID, P, piece->pivot, height, color, lights);
-                            result = Union(result, RectMinDim(dim.P.xy, dim.size));
-                            
-                            ObjectTransform equipmentTransform = transform;
-                            equipmentTransform.cameraOffset = {};
-                            if(render)
+                            if(params->equipment)
                             {
-                                if(params->equipment)
-                                {
-                                    RenderObjectMappings(worldMode, group,
-                                                         bitmapInfo, BID, dim, equipmentTransform, params->equipment->mappings, ArrayCount(params->equipment->mappings), equipmentRendered, lights, true);
-                                }
-                                
-                                if(params->equipped)
-                                {
-                                    RenderObjectMappings(worldMode, group,
-                                                         bitmapInfo, BID, dim, equipmentTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights, false);
-                                }
+                                RenderObjectMappings(worldMode, group,
+                                                     bitmapInfo, BID, dim, equipmentTransform, params->equipment->mappings, ArrayCount(params->equipment->mappings), equipmentRendered, lights, true);
+                            }
+                            
+                            if(params->equipped)
+                            {
+                                RenderObjectMappings(worldMode, group,
+                                                     bitmapInfo, BID, dim, equipmentTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights, false);
                             }
                         }
+                        
+                        break;
                     }
                 }
             }
         }
+        
+        END_BLOCK();
     }
     else
     {

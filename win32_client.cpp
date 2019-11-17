@@ -237,6 +237,8 @@ OpenGLGlobalFunction(glDrawElementsBaseVertex);
 #include "forg_opengl.h"
 global_variable Opengl opengl;
 
+#include "forg_image.h"
+#include "forg_image.cpp"
 #include "forg_opengl.cpp"
 #include "forg_render_tier.cpp"
 
@@ -1018,6 +1020,8 @@ internal void Win32UpdateWindow( PlatformWorkQueue* renderQueue, GameRenderComma
     }
     else
     {
+        InvalidCodePath;
+        
         Bitmap dest_ = {};
         dest_.width = globalScreenBuffer.width;
         dest_.height = globalScreenBuffer.height;
@@ -1032,7 +1036,6 @@ internal void Win32UpdateWindow( PlatformWorkQueue* renderQueue, GameRenderComma
         }
         else
         {
-            
 #if 0            
             if( windowWidth == 2 * dest->width && windowHeight == 2 * dest->height )
             {
@@ -1504,8 +1507,9 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                     PlatformMemoryBlock* pushBufferBlock = Win32AllocateMemory(pushBufferSize, PlatformMemory_NotRestored);
                     u8* pushBuffer = pushBufferBlock->base;
                     
-                    u32 maxVertexCount = (1 << 21);
-                    u32 maxIndexCount = maxVertexCount * 6;
+                    u32 maxQuadCount = (1 << 16);
+                    u32 maxVertexCount = maxQuadCount * 4;
+                    u32 maxIndexCount = maxQuadCount * 6;
                     
                     PlatformMemoryBlock* vertexBlock = Win32AllocateMemory( maxVertexCount * sizeof( TexturedVertex ), 0 );
                     TexturedVertex* vertexArray = (TexturedVertex*) vertexBlock->base;
@@ -1525,12 +1529,12 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         BEGIN_BLOCK("setup renderer");
                         gameInput.timeToAdvance = targetSecPerFrame;
                         
-                        GameRenderCommands renderCommands =DefaultRenderCommands( pushBuffer, pushBufferSize, globalScreenBuffer.width, globalScreenBuffer.height, maxVertexCount, maxIndexCount,  vertexArray, indexArray, V4( 0, 0, 0, 1 ));
+                        GameRenderCommands renderCommands =DefaultRenderCommands( pushBuffer, pushBufferSize, globalScreenBuffer.width, globalScreenBuffer.height, maxQuadCount,  vertexArray, indexArray, V4( 0, 0, 0, 1 ));
                         Win32Dimension dimension = Win32GetWindowDimension( window );
                         Rect2i drawRegion = AspectRatioFit( renderCommands.settings.width, renderCommands.settings.height, dimension.width, dimension.height );
                         END_BLOCK();
                         
-                        BEGIN_BLOCK( "input processing" );
+                        BEGIN_BLOCK("input processing");
                         POINT mousePos;
                         GetCursorPos( &mousePos );
                         ScreenToClient( window, &mousePos);
@@ -1771,7 +1775,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         END_BLOCK();
 #endif
                         
-#if 0                        
+#if 0
                         r32 secElapsed = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
                         BEGIN_BLOCK( "sleep" );
                         if(secElapsed < targetSecPerFrame)
@@ -1790,7 +1794,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         END_BLOCK();
 #endif
                         
-                        BEGIN_BLOCK( "end frame" );
+                        BEGIN_BLOCK( "texture manage" );
                         
                         BeginTicketMutex( &textureQueue->mutex );
                         TextureOp* firstOp = textureQueue->first;
@@ -1807,10 +1811,12 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                             textureQueue->firstFree = firstOp;
                             EndTicketMutex(&textureQueue->mutex);
                         }
-                        
-                        Win32UpdateWindow( &highQueue, &renderCommands, deviceContext, drawRegion, dimension.width, dimension.height );
-                        winSoundBuffer.buffer->GetCurrentPosition( &lastPlayCursor, &writeCursor );
                         END_BLOCK();
+                        
+                        BEGIN_BLOCK("update window");
+                        Win32UpdateWindow(&highQueue, &renderCommands, deviceContext, drawRegion, dimension.width, dimension.height);
+                        END_BLOCK();
+                        winSoundBuffer.buffer->GetCurrentPosition( &lastPlayCursor, &writeCursor );
                         
                         BEGIN_BLOCK("debug system");
                         if(game.DEBUGFrameEnd)

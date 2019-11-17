@@ -1,4 +1,6 @@
 #include "forg_meta_asset.cpp"
+#include "forg_image.h"
+#include "forg_image.cpp"
 internal AssetFile* GetAssetFile(Assets* assets, u32 fileIndex)
 {
     Assert(fileIndex < assets->fileCount);
@@ -365,10 +367,15 @@ internal void LoadAsset(LoadAssetWork* work)
                 Asset* asset = work->asset;
                 Bitmap* bitmap = &asset->bitmap;
                 TextureOp op = {};
+                
+                GenerateSequentialMIPMAPs(bitmap->width, bitmap->height, (u32*) bitmap->pixels);
+                
                 op.update.data = bitmap->pixels;
                 op.update.texture = work->asset->textureHandle;
                 PlatformTextureOpQueue* queue = work->textureQueue;
                 AddOp(queue, op);
+                
+                
             } break;
             
             InvalidCodePath;
@@ -772,27 +779,34 @@ internal void LoadBitmap(Assets* assets, AssetID ID, b32 immediate = false)
     {
         Asset* asset = boilerplate.asset;
         PAKBitmap* info = &asset->paka.bitmap;
+        
         u32 pixelSize = info->dimension[0] * info->dimension[1] * 4;
+        u32 imageSize = GetTotalMIPsSize(info->dimension[0], info->dimension[1]);
+        
         u32 attachmentSize = info->attachmentPointCount * sizeof(PAKAttachmentPoint);
         u32 groupSize = info->groupNameCount * sizeof(PAKGroupName);
-        u32 size = pixelSize + attachmentSize + groupSize;
         
-        asset->data = AcquireAssetMemory(assets, size, asset);
+        u32 toRequestSize = imageSize + attachmentSize + groupSize;
+        u32 toReadSize = pixelSize + attachmentSize + groupSize;
+        
+        asset->data = AcquireAssetMemory(assets, toRequestSize, asset);
         Bitmap* bitmap = &asset->bitmap;
         
         bitmap->width = SafeTruncateToU16(info->dimension[0]);
         bitmap->height = SafeTruncateToU16(info->dimension[1]);
         bitmap->nativeHeight = info->nativeHeight;
+        bitmap->nativeHeightCoeff = info->nativeHeightCoeff;
         bitmap->widthOverHeight = (r32) bitmap->width / (r32) bitmap->height;
-        bitmap->pixels = asset->data;
-        bitmap->attachmentPoints = (PAKAttachmentPoint*) AdvanceVoidPtrBytes(asset->data, pixelSize);
-        bitmap->groupNames = (PAKGroupName*) AdvanceVoidPtrBytes(asset->data, pixelSize + attachmentSize);
+        
+        bitmap->attachmentPoints = (PAKAttachmentPoint*) asset->data;
+        bitmap->groupNames = (PAKGroupName*) AdvanceVoidPtrBytes(asset->data, attachmentSize);
+        bitmap->pixels = AdvanceVoidPtrBytes(asset->data, attachmentSize + groupSize);
         
         u32 textureHandle = AcquireTextureHandle(assets);
         asset->textureHandle = TextureHandle(textureHandle, bitmap->width, bitmap->height);
         bitmap->textureHandle = asset->textureHandle;
         
-        EndAssetBoilerplate(assets, boilerplate, size, Asset_loaded, Finalize_Bitmap);
+        EndAssetBoilerplate(assets, boilerplate, toReadSize, Asset_loaded, Finalize_Bitmap);
     }
 }
 
@@ -1773,6 +1787,8 @@ internal void PreloadAll_(Assets* assets, u16 type, u32 subtype, b32 immediate)
 
 internal AssetID* GetAllSkinBitmaps(MemoryPool* tempPool, Assets* assets, u32 skin, GameProperties* skinProperties, u32* bitmapCount)
 {
+    TIMED_FUNCTION();
+    
     AssetID* result = 0;
     *bitmapCount = 0;
     

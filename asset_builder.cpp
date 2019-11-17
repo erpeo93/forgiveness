@@ -1,9 +1,6 @@
 #define STB_IMAGE_IMPLEMENTATION 1
 #include "stb_image.h"
 
-#define STB_IMAGE_RESIZE_IMPLEMENTATION 1
-#include "stb_resize_image.h"
-
 #define PLAYER_VIEW_WIDTH_IN_WORLD_METERS 6.0f
 
 #define USE_FONTS_FROM_WINDOWS 1
@@ -643,46 +640,81 @@ internal LoadedBitmap LoadImage(MemoryPool* tempPool, char* path, char* filename
     Assert( n == 4 );
     if( data )
     {
-        u32* source = ( u32* ) data;
+        u32* source = (u32*) data;
         for( i32 Y = 0; Y < y; ++Y )
         {
             for( i32 X = 0; X < x; X++ )
             {
-                u32* sourcePixel = source + ( Y * x ) + X;
+                u32* sourcePixel = source + (Y * x) + X;
                 Vec4 texel = V4( ( r32 ) ( *sourcePixel >> 0 &0xff ),
                                 ( r32 ) ( *sourcePixel >> 8 & 0xff ),
                                 ( r32 ) ( *sourcePixel >> 16 & 0xff ),
                                 ( r32 ) ( *sourcePixel >> 24 & 0xff ) );
                 
-                texel = SRGB255ToLinear1( texel );
+                texel = SRGB255ToLinear1(texel);
                 texel.rgb *= texel.a;
-                texel = Linear1ToSRGB255( texel );
+                texel = Linear1ToSRGB255(texel);
                 
-                *sourcePixel = ( ( u32 ) texel.a << 24 | 
-                                ( u32 ) texel.r << 16 |
-                                ( u32 ) texel.g << 8 |
-                                ( u32 ) texel.b << 0 );
+                *sourcePixel = ((u32) texel.a << 24 | 
+                                (u32) texel.r << 16 |
+                                (u32) texel.g << 8 |
+                                (u32) texel.b << 0);
             }
         }
         
-        r32 xDownsampleFactor = (r32) x / MAX_IMAGE_DIM;
-        r32 yDownsampleFactor = (r32) y / MAX_IMAGE_DIM;
+        u32 widthPad = 0;
+        for(widthPad = 1; (u32) x > widthPad; widthPad *= 2);
+        widthPad = x;
+        
+        u32 heightPad = 0;
+        for(heightPad = 1; (u32) y > heightPad; heightPad *= 2);
+        heightPad = y;
+        
+        r32 nativeHeightCoeff = (r32) y / (r32) heightPad;
+        
+        u32* pad = (u32*) malloc(widthPad * heightPad * n);
+        memset(pad, 0, widthPad * heightPad * n);
+        
+        u32* sourceCopy = (u32*) data;
+        for(u32 h = 0; h < (u32) y; ++h)
+        {
+            for(u32 w = 0; w < (u32) x; ++w)
+            {
+                pad[h * widthPad + w] = *sourceCopy++;
+            }
+        }
+        
+        r32 xDownsampleFactor = (r32) widthPad / MAX_IMAGE_DIM;
+        r32 yDownsampleFactor = (r32) heightPad / MAX_IMAGE_DIM;
         r32 downsampleFactor = Max(xDownsampleFactor, yDownsampleFactor);
         downsampleFactor = Max(downsampleFactor, 1.0f);
         
-        int xFinal = RoundReal32ToI32((r32) x / downsampleFactor);
-        int yFinal = RoundReal32ToI32((r32) y / downsampleFactor);
+        int xFinal = RoundReal32ToI32((r32) widthPad / downsampleFactor);
+        int yFinal = RoundReal32ToI32((r32) heightPad / downsampleFactor);
         
         Assert(xFinal <= MAX_IMAGE_DIM);
         Assert(yFinal <= MAX_IMAGE_DIM);
         
         result.pixels = (u8*) malloc(xFinal * yFinal * n);
-        stbir_resize_uint8(data, x, y, 0, (unsigned char* )result.pixels, xFinal, yFinal, 0, 4);
         
-        stbi_image_free( data );
+        ImageU32 sourceImage = {};
+        sourceImage.pixels = (u32*) pad;
+        sourceImage.width = widthPad;
+        sourceImage.height = heightPad;
+        
+        ImageU32 destImage = {};
+        destImage.pixels = (u32*) result.pixels;
+        destImage.width = xFinal;
+        destImage.height = yFinal;
+        
+        Resize(sourceImage, destImage);
+        
+        stbi_image_free(data);
         result.width = SafeTruncateToU16(xFinal);
         result.height = SafeTruncateToU16(yFinal);
-        result.widthOverHeight = (r32 ) result.width / (r32 ) result.height;
+        result.widthOverHeight = (r32 ) x / (r32 ) y;
+        result.nativeHeight = heightPad * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
+        result.nativeHeightCoeff = nativeHeightCoeff;
         result.downsampleFactor = downsampleFactor;
         result.free = result.pixels;
     }
@@ -2268,12 +2300,12 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                 
                                 dest->bitmap.dimension[0] = bitmap.width;
                                 dest->bitmap.dimension[1] = bitmap.height;
+                                dest->bitmap.nativeHeight = bitmap.nativeHeight;
+                                dest->bitmap.nativeHeightCoeff = bitmap.nativeHeightCoeff;
                                 
-                                dest->bitmap.nativeHeight =bitmap.downsampleFactor * bitmap.height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
-                                
-                                fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out);
                                 fwrite(bitmap.attachmentPoints, bitmap.attachmentPointCount * sizeof(PAKAttachmentPoint), 1, out);
                                 fwrite(bitmap.groupNames, bitmap.groupNameCount * sizeof(PAKGroupName), 1, out);
+                                fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out);
                                 
                                 free(bitmap.free);
                                 free(bitmap.attachmentPoints);
@@ -2362,6 +2394,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                     derivedAsset->bitmap.dimension[0] = bitmap->width;
                                     derivedAsset->bitmap.dimension[1] = bitmap->height;
                                     derivedAsset->bitmap.nativeHeight = 0;
+                                    derivedAsset->bitmap.nativeHeightCoeff = 1;
                                     
                                     fwrite(bitmap->pixels, bitmap->width * bitmap->height * sizeof(u32), 1, out);
                                     free(bitmap->free);

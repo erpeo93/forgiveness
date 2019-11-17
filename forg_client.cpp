@@ -62,7 +62,7 @@ STANDARD_ECS_JOB_CLIENT(PushEntityLight)
     {
         BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
         Vec3 P = GetRelativeP(worldMode, base);
-        AddLightToGridCurrentFrame(worldMode, P, animation->lightColor, animation->lightIntensity);
+        AddLight(worldMode, P, animation->lightColor, animation->lightIntensity);
     }
 }
 STANDARD_ECS_JOB_CLIENT(UpdateEntity)
@@ -146,7 +146,7 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
         InitArchetype(result, archetypeIndex, 16);
     }
     
-    
+    result->defaultZoomCoeff = 1.2f;
     result->ambientLightColor = V3(1, 1, 1);
     result->windDirection = V3(1, 0, 0);
     result->windStrength = 1.0f;
@@ -211,8 +211,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
 #endif
             
             Clear(group, V4(0.1f, 0.1f, 0.1f, 1.0f));
-            ResetLightGrid(worldMode);
             
+            BEGIN_BLOCK("setup rendering and camera");
+            ResetLightGrid(worldMode);
             SetupGameCamera(worldMode, group, input);
             
             Vec3 unprojectedWorldMouseP = UnprojectAtZ(group, &group->gameCamera, screenMouseP, 0);
@@ -222,22 +223,24 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             HandleUIInteraction(worldMode, group, myPlayer, input);
             UpdateGameCamera(worldMode, input);
             PushGameRenderSettings(group, worldMode->ambientLightColor, worldMode->windTime, worldMode->windDirection, 1.0f);
-            
             EXECUTE_JOB(worldMode, PushEntityLight, ArchetypeHas(AnimationEffectComponent), input->timeToAdvance);
             FinalizeLightGrid(worldMode, group);
+            END_BLOCK();
             
-            
+            BEGIN_BLOCK("update entities");
             EXECUTE_JOB(worldMode, UpdateEntity, ArchetypeHas(BaseComponent), input->timeToAdvance);
             EXECUTE_JOB(worldMode, UpdateEntityEffects, ArchetypeHas(AnimationEffectComponent), input->timeToAdvance);
-            
+            END_BLOCK();
             
             myPlayer->universeP = player->universeP;
             Vec3 deltaP = -SubtractOnSameZChunk(myPlayer->universeP, myPlayer->oldUniverseP);
             
+            BEGIN_BLOCK("ground");
             PreloadAllGroundBitmaps(group->assets);
             UpdateAndRenderGround(worldMode, group, myPlayer->universeP, myPlayer->oldUniverseP, input->timeToAdvance);
+            END_BLOCK();
             
-            
+            BEGIN_BLOCK("entity rendering");
             EXECUTE_RENDERING_JOB(worldMode, group, RenderGrass, ArchetypeHas(GrassComponent) && ArchetypeHas(BaseComponent) && ArchetypeHas(MagicQuadComponent), input->timeToAdvance);
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
@@ -256,8 +259,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             {
                 EXECUTE_RENDERING_JOB(worldMode, group, RenderBound, ArchetypeHas(BaseComponent), input->timeToAdvance);
             }
+            END_BLOCK();
             
-            
+            BEGIN_BLOCK("weather and particles");
             for(u16 weatherIndex = 0; weatherIndex < Weather_count; ++weatherIndex)
             {
                 GameProperties weatherProperties = {};
@@ -279,13 +283,12 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             worldMode->particleCache->deltaParticleP = deltaP;
             UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
+            END_BLOCK();
             
-            
-            
-            
-            
+            BEGIN_BLOCK("editor and UI overlay");
             RenderUIOverlay(worldMode, group);
             RenderEditorOverlay(worldMode, group, input);
+            END_BLOCK();
             
             myPlayer->oldUniverseP = myPlayer->universeP;
         }

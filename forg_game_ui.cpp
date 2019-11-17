@@ -835,7 +835,8 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
     HandleMouseInteraction(UI, worldMode, myPlayer, input);
     
     EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent) && ArchetypeHas(InteractionComponent), input->timeToAdvance);
-    MoveCameraTowards(worldMode, player, 0.5f, cameraOffset, V2(0, 0), 1.0f);
+    
+    MoveCameraTowards(worldMode, player, 0.5f, cameraOffset, V2(0, 0), worldMode->defaultZoomCoeff);
     
     
     b32 standardInteractionAllowed = true;

@@ -13,22 +13,10 @@ struct Lights
     u16 endingIndex;
 };
 
-enum Render_command
-{
-    CommandType_TexturedQuadsCommand,
-    CommandType_BeginPeels,
-    CommandType_EndPeels,
-};
-
 enum CameraTransformFlag
 {
     Camera_Orthographic = ( 1 << 1 ),
     Camera_Debug = ( 1 << 2 ),
-};
-
-struct CommandHeader
-{
-    u16 type;
 };
 
 struct RenderSetup
@@ -45,9 +33,9 @@ struct RenderSetup
 struct TexturedQuadsCommand
 {
     RenderSetup setup;
-    u32 triangleCount;
-    u32 vertexArrayOffset; // NOTE(Leonardo): 4 vertices per quad
-    u32 indexArrayOffset; // NOTE(Leonardo): 6 indeces per quad
+    u32 quadCount;
+    u32 vertexArrayOffset;
+    u32 indexArrayOffset;
 };
 
 struct ObjectTransform
@@ -91,8 +79,6 @@ struct RenderGroup
     
     CameraTransform gameCamera;
     CameraTransform debugCamera;
-    
-    TexturedQuadsCommand* currentQuads;
     
     GameRenderCommands* commands;
     Vec2 screenDim;

@@ -1,77 +1,4 @@
-#define PushRenderElement(renderGroup, type) PushRenderElement_(renderGroup, sizeof(type), CommandType_##type)
-inline void* PushRenderElement_(RenderGroup* renderGroup, u32 size, u32 type)
-{
-    void* result = 0;
-    GameRenderCommands* commands = renderGroup->commands;
-    size += sizeof(CommandHeader);
-    
-    if(commands->usedSize + size <= commands->maxBufferSize)
-    {
-        CommandHeader* header = (CommandHeader*) (commands->pushMemory + commands->usedSize);
-        header->type = (u16) type;
-        result = (header + 1);
-        
-        commands->usedSize += size;
-        ++commands->bufferElementCount;
-    }
-    else
-    {
-        InvalidCodePath;
-    }
-    
-    if(type != CommandType_TexturedQuadsCommand)
-    {
-        renderGroup->currentQuads = 0;
-    }
-    return result;
-}
-
-inline void Clear(RenderGroup* renderGroup, Vec4 color)
-{
-    renderGroup->commands->clearColor = color;
-}
-
-inline void BeginDepthPeel(RenderGroup* group)
-{
-    PushRenderElement_(group, 0, CommandType_BeginPeels);
-}
-
-inline void EndDepthPeel(RenderGroup* group)
-{
-    PushRenderElement_(group, 0, CommandType_EndPeels);
-}
-
 global_variable u32 maxIndexesPerBatch = (U16_MAX - 1);
-inline TexturedQuadsCommand* GetCurrentQuads_(RenderGroup* group, u32 triangleCount)
-{
-    Assert((triangleCount * 3) <= maxIndexesPerBatch);
-    TexturedQuadsCommand* result = 0;
-    GameRenderCommands* commands = group->commands;
-    
-    if(group->currentQuads)
-    {
-        u32 currentIndexCount = (group->currentQuads->triangleCount + triangleCount) * 3;
-        if(currentIndexCount > maxIndexesPerBatch)
-        {
-            group->currentQuads = 0;
-        }
-    }
-    
-    if(!group->currentQuads)
-    {
-        group->currentQuads = (TexturedQuadsCommand*) PushRenderElement_(group, sizeof(TexturedQuadsCommand), CommandType_TexturedQuadsCommand);
-        
-        group->currentQuads->triangleCount = 0;
-        group->currentQuads->indexArrayOffset = commands->indexCount;
-        group->currentQuads->vertexArrayOffset = commands->vertexCount;
-        group->currentQuads->setup = group->lastSetup;
-    }
-    
-    result = group->currentQuads;
-    
-    return result;
-}
-
 struct ReservedVertexes
 {
     TexturedQuadsCommand* entry;
@@ -79,44 +6,74 @@ struct ReservedVertexes
 	u32 indexIndex;
 };
 
-inline ReservedVertexes ReserveVertexes_(RenderGroup* group, u32 triangleCount, u32 vertexCount)
+inline ReservedVertexes ReserveQuads(RenderGroup* group, u32 quadCount, u32 sliceIndex)
 {
     ReservedVertexes result = {};
     GameRenderCommands* commands = group->commands;
-    u32 indexCount = triangleCount * 3;
     
+    Assert((quadCount * 6) <= maxIndexesPerBatch);
+    u32 vertexCount = quadCount * 4;
+    u32 indexCount = quadCount * 6;
     
-    if((commands->vertexCount + vertexCount) > commands->maxVertexCount ||
-       (commands->indexCount + indexCount) > commands->maxIndexCount)
+    if((commands->quadCount + quadCount) > commands->maxQuadCount)
     {
         InvalidCodePath;
     }
     else
     {
-        TexturedQuadsCommand* entry = GetCurrentQuads_(group, triangleCount);
-        if(entry)
+        if(commands->currentQuads)
         {
-            entry->triangleCount += triangleCount;
-            result.entry = entry;
-            result.vertIndex = commands->vertexCount;
-            result.indexIndex = commands->indexCount;
+            u32 currentIndexCount = (commands->currentQuads->quadCount + quadCount) * 6;
+            if(currentIndexCount > maxIndexesPerBatch)
+            {
+                commands->currentQuads = 0;
+            }
+        }
+        
+        if(!commands->currentQuads)
+        {
+            u32 size = sizeof(TexturedQuadsCommand);
+            if(commands->usedSize + size <= commands->maxBufferSize)
+            {
+                TexturedQuadsCommand* newQuads = (TexturedQuadsCommand*) (commands->pushMemory + commands->usedSize);
+                newQuads->setup = group->lastSetup;
+                newQuads->quadCount = 0;
+                newQuads->indexArrayOffset = (commands->quadCount * 6);
+                newQuads->vertexArrayOffset = (commands->quadCount * 4);
+                
+                commands->currentQuads = newQuads;
+                commands->usedSize += size;
+            }
+            else
+            {
+                InvalidCodePath;
+            }
+        }
+        
+        TexturedQuadsCommand* quads = commands->currentQuads;
+        if(quads)
+        {
+            result.entry = quads;
+            result.indexIndex = quads->indexArrayOffset + (quads->quadCount * 6);
+            result.vertIndex = quads->vertexArrayOffset + (quads->quadCount * 4);
             
-            commands->vertexCount += vertexCount;
-            commands->indexCount += indexCount;
+            quads->quadCount += quadCount;
+            commands->quadCount += quadCount;
         }
     }
     
     return result;
 }
 
-inline ReservedVertexes ReserveQuads(RenderGroup* group, u32 quadCount)
+internal u32 GetSliceIndex(RenderGroup* group, Vec3 P)
 {
-    u32 triangleCount = quadCount * 2;
-    u32 vertexCount = quadCount * 4;
-    
-    ReservedVertexes result = ReserveVertexes_(group, triangleCount, vertexCount);
-    
+    u32 result = 0;
     return result;
+}
+
+inline void Clear(RenderGroup* renderGroup, Vec4 color)
+{
+    renderGroup->commands->clearColor = color;
 }
 
 inline void PushVertex(TexturedVertex* vert, Vec4 P, Vec3 N, Vec2 UV, u32 C, Lights lights, r32 modulationPercentage, u16 textureIndex, r32 lightInfluence, r32 lightYInfluence, r32 windInfluence)
@@ -136,7 +93,8 @@ inline void PushVertex(TexturedVertex* vert, Vec4 P, Vec3 N, Vec2 UV, u32 C, Lig
 
 inline void PushMagicQuad(RenderGroup* group, Vec4 P, Vec4 lateral, Vec4 up, u32 color, RenderTexture texture, Lights lights, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences)
 {
-    ReservedVertexes vertexes = ReserveQuads(group, 1);
+    u32 sliceIndex = GetSliceIndex(group, P.xyz);
+    ReservedVertexes vertexes = ReserveQuads(group, 1, sliceIndex);
     if(vertexes.entry)
     {
         GameRenderCommands* commands = group->commands;
@@ -243,7 +201,8 @@ inline void PushLineSegment(RenderGroup* group, RenderTexture texture, Vec4 colo
     
     u32 c = StoreColor(color);
     
-    ReservedVertexes vertexes = ReserveQuads(group, 1);
+    u32 sliceIndex = GetSliceIndex(group, fromP);
+    ReservedVertexes vertexes = ReserveQuads(group, 1, sliceIndex);
     PushQuad(group, texture, lights, &vertexes, P0, V2(0, 0), c, P1, V2(1, 0), c, P2, V2(1, 1), c, P3, V2(0, 1), c, 0, 0, 0, {});
 }
 
@@ -283,7 +242,8 @@ inline void PushRect4Colors(RenderGroup* renderGroup, ObjectTransform objectTran
     Vec2 minUV = V2(0.0f, 0.0f);
     Vec2 maxUV = V2(1.0f, 1.0f);
     
-    ReservedVertexes vertexes = ReserveQuads(renderGroup, 1);
+    u32 sliceIndex = GetSliceIndex(renderGroup, P);
+    ReservedVertexes vertexes = ReserveQuads(renderGroup, 1, sliceIndex);
     PushQuad(renderGroup, renderGroup->whiteTexture, lights, &vertexes,
              V4(min.x, min.y, min.z, objectTransform.additionalZBias), V2(minUV.x, minUV.y), c1,
              V4(max.x, min.y, min.z, objectTransform.additionalZBias), V2(maxUV.x, minUV.y), c2,
@@ -381,6 +341,7 @@ inline BitmapDim GetBitmapDim(Bitmap* bitmap, Vec2 pivot, Vec3 P, Vec3 XAxis, Ve
     BitmapDim result;
     
     result.size =  Hadamart(V2(height * bitmap->widthOverHeight, height), scale);
+    
     pivot = Hadamart(pivot, result.size);
     Vec3 finalPivot = pivot.x * XAxis + pivot.y * YAxis;
     result.P = P - finalPivot;
@@ -405,7 +366,8 @@ inline void PushTexture(RenderGroup* group, RenderTexture texture, Vec3 P, Vec3 
     Vec4 maxXmaxY = V4(P + XAxis + YAxis, ZBias);
     
     
-    ReservedVertexes vertexes = ReserveQuads(group, 1);
+    u32 sliceIndex = GetSliceIndex(group, P);
+    ReservedVertexes vertexes = ReserveQuads(group, 1, sliceIndex);
     if((XAxis.x >= 0 && YAxis.y >= 0) ||
        (XAxis.x < 0 && YAxis.y < 0))
     {
@@ -435,7 +397,6 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform transform
     
     if(bitmap->width && bitmap->height)
     {
-        
         r32 angleRad = DegToRad(transform.angle);
         Vec3 XAxis = V3(Cos(angleRad), Sin(angleRad), 0.0f);
         Vec3 YAxis  = V3(Perp(XAxis.xy), 0.0f);
@@ -570,7 +531,9 @@ inline void PushCube_(RenderGroup* group, Vec3 P, r32 height, r32 width, RenderT
     Vec4 BGr = color;
     
     Vec4 wind = {};
-    ReservedVertexes vertexes = ReserveQuads(group, 6);
+    
+    u32 sliceIndex = GetSliceIndex(group, P);
+    ReservedVertexes vertexes = ReserveQuads(group, 6, sliceIndex);
     PushQuad(group, texture, lights, &vertexes, P0, T0, TC, P1, T1, TC, P2, T2, TC, P3, T3, TC, 0, 0, 0, wind);
     PushQuad(group, texture, lights, &vertexes, P7, T0, BC, P6, T1, BC, P5, T2, BC, P4, T3, BC, 0, 0, 0, wind);
     
@@ -650,7 +613,7 @@ inline Rect2i GetClipRect(RenderGroup* group, Rect2 rect, r32 Z)
 inline void PushSetup(RenderGroup* group, RenderSetup* setup)
 {
     group->lastSetup = *setup;
-    group->currentQuads = 0;
+    group->commands->currentQuads = 0;
 }
 
 inline void PushClipRect(RenderGroup* renderGroup, Rect2i rect)

@@ -146,6 +146,7 @@ struct ServerClientIDMapping
 
 struct GameModeWorld
 {
+    r32 defaultZoomCoeff;
     Vec3 ambientLightColor;
     Vec3 windDirection;
     r32 windStrength;

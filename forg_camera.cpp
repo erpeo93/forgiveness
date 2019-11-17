@@ -11,15 +11,10 @@ inline Vec3 GetRelativeP(GameModeWorld* worldMode, BaseComponent* base)
     return result;
 }
 
-inline void MoveTowards_(GameModeWorld* worldMode, Vec2 cameraWorldOffset, Vec2 cameraEntityOffset, r32 zoomCoeff = 1.0f)
-{
-}
-
 inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, r32 cameraSpeed, Vec2 cameraWorldOffset = V2(0, 0), Vec2 cameraEntityOffset = V2(0, 0), r32 zoomCoeff = 1.0f)
 {
     cameraWorldOffset += GetRelativeP(worldMode, base).xy;
     worldMode->destCameraEntityOffset = cameraEntityOffset;
-    //worldMode->destCameraEntityOffset += 0.5f * GetDim(base->worldBounds).xy;
     
     
     worldMode->destCameraWorldOffset = V3(cameraWorldOffset, worldMode->defaultCameraZ / zoomCoeff);

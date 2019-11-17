@@ -812,7 +812,7 @@ RENDERING_ECS_JOB_CLIENT(UpdateAndRenderBolt)
         }
         
         Lights lights = GetLights(worldMode, startP + 0.5f * deltaP);
-        AddLightToGridNextFrame(worldMode, startP + 0.5f * deltaP, definition->lightColor, definition->lightIntensity);
+        AddLight(worldMode, startP + 0.5f * deltaP, definition->lightColor, definition->lightIntensity);
         
         RandomSequence seq = Seed(bolt->seed);
         for(u32 subIndex = 0; subIndex < subdivisions - 1; ++subIndex)
@@ -880,7 +880,7 @@ RENDERING_ECS_JOB_CLIENT(UpdateAndRenderBolt)
         
         if(bolt->ttl <= definition->lightStartTime && bolt->ttl >= definition->lightEndTime)
         {
-            AddLightToGridNextFrame(worldMode, endP, definition->lightColor, definition->lightIntensity);
+            AddLight(worldMode, endP, definition->lightColor, definition->lightIntensity);
         }
         
         EndTemporaryMemory(subdivisionsMemory);

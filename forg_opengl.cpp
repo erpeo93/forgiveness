@@ -267,7 +267,17 @@ internal void OpenGLAllocateTexture(RenderTexture texture, void* data)
     Assert(textureHandle < opengl.maxTextureCount);
     
     glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
+    
+#if 0
+    for(MIPIterator mip = BeginMIPs(texture.width, texture.height, (u32*) data);
+        IsValid(&mip);
+        Advance(&mip))
+    {
+        glTexSubImage3D(GL_TEXTURE_2D_ARRAY, mip.level, 0, 0, textureHandle, mip.image.width, mip.image.height, 1, GL_BGRA_EXT, GL_UNSIGNED_BYTE, mip.image.pixels);
+    }
+#else
     glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, textureHandle, texture.width, texture.height, 1, GL_BGRA_EXT, GL_UNSIGNED_BYTE, data);
+#endif
 }
 
 inline b32 IsValidArray(GLuint index)
@@ -582,8 +592,8 @@ Vec4 lightData0 = texelFetch(lightSource0, index, 0);
  Vec3 lightColor = lightData1.rgb;
  
  r32 lightYDistance = lightP.y - worldPos.y;
-r32 lightYModulation = 1.0f - (lightYInfluencePercentage * Clamp01MapToRange(0.0f, lightYDistance, 0.01f));
-lightYModulation = max(lightYModulation, 0.05f);
+r32 lightYModulation = 1.0f - (lightYInfluencePercentage * Clamp01MapToRange(0.0f, lightYDistance, 1.0f));
+lightYModulation = max(lightYModulation, 0.4f);
 
 Vec3 toLight = lightP - worldPos;
 r32 lightDistance = length(toLight);
@@ -602,6 +612,7 @@ r32 cosAngle = dot(toLight, worldNorm);
 
 modulationLightColor = clamp(modulationLightColor, 0, 1);
 resultColor.rgb *= modulationLightColor;
+
 resultColor.rgb = Clamp01(resultColor.rgb);
 resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.4f, 0.4f, 0.4f));
 #if shaderSimTexWriteSRGB
@@ -617,9 +628,11 @@ discard;
     GLuint prog = OpenGLCreateProgram(defines, globalHeaderCode, vertexCode, fragmentCode, &result->common);
     result->GLSLTransformID = glGetUniformLocation(prog, "transform");
     result->timeID = glGetUniformLocation(prog, "time");
+    
     result->textureSamplerID = glGetUniformLocation(prog, "textureSampler");
     result->lightSource0ID = glGetUniformLocation(prog, "lightSource0");
     result->lightSource1ID = glGetUniformLocation(prog, "lightSource1");
+    
     result->ambientLightColorID = glGetUniformLocation(prog, "ambientLightColor");
     result->windDirectionID = glGetUniformLocation(prog, "windDirection");
     result->windStrengthID = glGetUniformLocation(prog, "windStrength");
@@ -730,8 +743,17 @@ internal void OpenGLInit(OpenGLInfo info, b32 frameBufferSupportSRGB)
     glGenTextures(1, &opengl.textureArray);
     glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
     
-    glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, opengl.defaultSpriteTextureFormat, MAX_IMAGE_DIM, MAX_IMAGE_DIM, opengl.maxTextureCount, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, 0);
+    for(MIPIterator mip = BeginMIPs(MAX_IMAGE_DIM, MAX_IMAGE_DIM, 0);
+        IsValid(&mip);
+        Advance(&mip))
+    {
+        glTexImage3D(GL_TEXTURE_2D_ARRAY, mip.level, opengl.defaultSpriteTextureFormat, mip.image.width, mip.image.height, opengl.maxTextureCount, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, 0);
+    }
+#if 0
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
+#else
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+#endif
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);    
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);    
@@ -773,7 +795,6 @@ internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
     
     glDeleteTextures(1, &opengl.lightSource0);
     glDeleteTextures(1, &opengl.lightSource1);
-    
     
     opengl.settings = *settings;
     
@@ -823,9 +844,6 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     glEnable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     
-    b32 useRenderTargets = (glBindFramebuffer != 0);
-    Assert(useRenderTargets);
-    
     if(!AreEqual(&opengl.settings, &commands->settings))
     {
         OpenGLPrepareForRenderSettings(&commands->settings);
@@ -841,9 +859,9 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     glBindBuffer(GL_ARRAY_BUFFER, opengl.vertexBuffer);
-    glBufferData(GL_ARRAY_BUFFER, commands->vertexCount * sizeof(TexturedVertex), commands->vertexArray, GL_STREAM_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, commands->totalVertexCount * sizeof(TexturedVertex), commands->vertexArray, GL_STREAM_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, opengl.indexBuffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, commands->indexCount * sizeof(u16), commands->indexArray, GL_STREAM_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, commands->totalIndexCount * sizeof(u16), commands->indexArray, GL_STREAM_DRAW);
     
     glBindTexture(GL_TEXTURE_1D, opengl.lightSource0);
     glTexSubImage1D(GL_TEXTURE_1D, 0, 0, MAX_LIGHTS, GL_RGBA, GL_FLOAT, commands->lightSource0);
@@ -851,50 +869,46 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     glTexSubImage1D(GL_TEXTURE_1D, 0, 0, MAX_LIGHTS, GL_RGBA, GL_FLOAT, commands->lightSource1);
     glBindTexture(GL_TEXTURE_1D, 0);
     
-    for(u32 walkedSize = 0; walkedSize < commands->usedSize; walkedSize += sizeof(CommandHeader))
+    glBindBuffer(GL_ARRAY_BUFFER, opengl.vertexBuffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, opengl.indexBuffer);
+    
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_1D, opengl.lightSource0);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_1D, opengl.lightSource1);
+    glActiveTexture(GL_TEXTURE0);
+    
+    
+    //for(u32 sliceIndex = 0; sliceIndex < ArrayCount(commands->slices); ++sliceIndex)
+    for(u32 walkedSize = 0; walkedSize < commands->usedSize; walkedSize += sizeof(TexturedQuadsCommand))
     {
-        CommandHeader* header = (CommandHeader*) (commands->pushMemory + walkedSize);
-        if(useRenderTargets)
+        TexturedQuadsCommand* quads = (TexturedQuadsCommand*) (commands->pushMemory + walkedSize);
+        RenderSetup* setup = &quads->setup;
+        
+        Rect2i clipRect = setup->rect;
+        
+        glScissor(clipRect.minX, clipRect.minY, clipRect.maxX - clipRect.minX, clipRect.maxY - clipRect.minY);
+        
+        glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
+        if(setup->renderTargetIndex > 0)
         {
-            void* data = (header + 1); 
-            switch(header->type)
-            {
-                case CommandType_TexturedQuadsCommand:
-                {
-                    glBindBuffer(GL_ARRAY_BUFFER, opengl.vertexBuffer);
-                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, opengl.indexBuffer);
-                    
-                    TexturedQuadsCommand* element = (TexturedQuadsCommand*) data;
-                    Rect2i clipRect = element->setup.rect;
-                    
-                    glScissor(clipRect.minX, clipRect.minY, clipRect.maxX - clipRect.minX, clipRect.maxY - clipRect.minY);
-                    
-                    glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
-                    if(element->setup.renderTargetIndex > 0)
-                    {
-                        OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
-                        glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, opengl.textureArray, 0, element->setup.renderTargetIndex);
-                    }
-                    
-                    ZBiasProgram* program = &opengl.zBias;
-                    OpenGLUseProgramBegin(program, &element->setup);
-                    OpenGLProgramCommon* common = &program->common;
-                    
-                    glDrawElementsBaseVertex(GL_TRIANGLES, 3 * element->triangleCount, GL_UNSIGNED_SHORT, (GLvoid*) (element->indexArrayOffset * sizeof(u16)), element->vertexArrayOffset);
-                    
-                    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-                    OpenGLUseProgramEnd(common);
-                    
-                    if(element->setup.renderTargetIndex > 0)
-                    {
-                        OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
-                    }
-                    
-                    walkedSize += sizeof(TexturedQuadsCommand);
-                } break;
-                
-                InvalidDefaultCase;
-            }
+            OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
+            glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, opengl.textureArray, 0, setup->renderTargetIndex);
+        }
+        
+        
+        ZBiasProgram* program = &opengl.zBias;
+        OpenGLUseProgramBegin(program, setup);
+        OpenGLProgramCommon* common = &program->common;
+        
+        glDrawElementsBaseVertex(GL_TRIANGLES, 6 * quads->quadCount, GL_UNSIGNED_SHORT, (GLvoid*) (quads->indexArrayOffset * sizeof(u16)), quads->vertexArrayOffset);
+        
+        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+        OpenGLUseProgramEnd(common);
+        
+        if(setup->renderTargetIndex > 0)
+        {
+            OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
         }
     }
     

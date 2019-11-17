@@ -8,6 +8,7 @@ struct LoadedBitmap
     
     Vec2 pivot;
     
+    r32 nativeHeightCoeff;
     r32 nativeHeight;
     r32 widthOverHeight;
     r32 downsampleFactor;

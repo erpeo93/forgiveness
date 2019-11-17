@@ -88,6 +88,7 @@ struct Bitmap
     u16 width;
     u16 height;
     
+    r32 nativeHeightCoeff;
     r32 nativeHeight;
     r32 widthOverHeight;
     

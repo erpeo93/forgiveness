@@ -24,7 +24,6 @@ struct GameRenderSettings
     u32 height;
 };
 
-#define MAX_IMAGE_DIM 512
 #define MAX_LIGHTS 1024
 struct GameRenderCommands
 {
@@ -32,41 +31,71 @@ struct GameRenderCommands
     
     Vec4 clearColor;
     
-    u32 maxVertexCount;
-    u32 vertexCount;
+    u32 totalVertexCount;
     TexturedVertex* vertexArray;
     
-    u32 maxIndexCount;
-    u32 indexCount;
+    u32 totalIndexCount;
     u16* indexArray;
+    
+    u32 quadCount;
+    u32 maxQuadCount;
     
     u32 maxBufferSize;
     u32 usedSize;
     u8* pushMemory;
     
-    u32 bufferElementCount;
+    struct TexturedQuadsCommand* currentQuads;
     
     u16 lightCount;
     Vec4 lightSource0[MAX_LIGHTS];
     Vec4 lightSource1[MAX_LIGHTS];
 };
 
-inline GameRenderCommands DefaultRenderCommands(u8* pushBuffer, u32 pushBufferSize, u32 width, u32 height, u32 maxVertexCount, u32 maxIndexCount,  TexturedVertex* vertexArray, u16* indexArray, Vec4 clearColor)
+inline GameRenderCommands DefaultRenderCommands(u8* pushBuffer, u32 pushBufferSize, u32 width, u32 height, u32 maxQuadCount,  TexturedVertex* vertexArray, u16* indexArray, Vec4 clearColor)
 {
     GameRenderCommands result = {};
     result.settings.width = width;
     result.settings.height = height;
-    
     result.clearColor = clearColor;
-    result.maxVertexCount = maxVertexCount;
-    result.vertexArray = vertexArray;
     
-    result.maxIndexCount = maxIndexCount;
+    result.totalVertexCount = maxQuadCount * 4;
+    result.vertexArray = vertexArray;
+    result.totalIndexCount = maxQuadCount * 6;
     result.indexArray = indexArray;
     
+    result.quadCount = 0;
+    result.maxQuadCount = maxQuadCount;
     
     result.maxBufferSize = pushBufferSize;
+    result.usedSize = 0;
     result.pushMemory = pushBuffer;
+    
+    result.currentQuads = 0;
+    result.lightCount = 0;
+#if 0    
+    RenderZSlice* slice0 = result.slices + 0;
+    slice0->maxBufferSize = pushBufferSize;
+    slice0->pushMemory = pushBuffer;
+    slice0->usedSize = 0;
+    slice0->quadCount = 0;
+    slice0->maxQuadCount = maxQuadCount;
+    slice0->baseVertexOffset = 0;
+    slice0->baseIndexOffset = 0;
+    slice0->currentQuads = 0;
+#endif
+    
+#if 0    
+    RenderZSlice* slice1 = result.slices + 1;
+    slice1->maxBufferSize = pushBufferSize / 2;
+    slice1->pushMemory = pushBuffer + slice0->maxBufferSize;
+    slice1->usedSize = 0;
+    slice1->vertexCount = 0;
+    slice1->indexCount = 0;
+    slice1->maxVertexCount = maxVertexCount / 2;
+    slice1->maxIndexCount = maxIndexCount / 2;
+    slice1->baseVertexOffset = slice0->vertexCount;
+    slice1->baseIndexOffset = slice0->indexCount;
+#endif
     
     return result;
 }

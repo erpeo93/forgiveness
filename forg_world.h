@@ -52,7 +52,6 @@ struct WorldChunk
     SpecialTexture texture;
     Lights lights;
     TempLight* firstTempLight;
-    TempLight* firstTempLightNextFrame;
     WorldChunk* next;
     
     
