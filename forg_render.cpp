@@ -1,4 +1,11 @@
-global_variable u32 maxIndexesPerBatch = (U16_MAX - 1);
+#if 1
+#define maxQuadsPerBatch 2048
+#define maxIndexesPerBatch maxQuadsPerBatch * 6
+#else
+#define maxIndexesPerBatch = (U16_MAX - 1);
+#define maxQuadsPerBatch = maxIndexesPerBatch / 6;
+#endif
+
 struct ReservedVertexes
 {
     TexturedQuadsCommand* entry;
@@ -15,25 +22,23 @@ inline ReservedVertexes ReserveQuads(RenderGroup* group, u32 quadCount, u32 slic
     u32 vertexCount = quadCount * 4;
     u32 indexCount = quadCount * 6;
     
-    if((commands->quadCount + quadCount) > commands->maxQuadCount)
+    Assert(sliceIndex < ArrayCount(commands->slices));
+    RenderZSlice* slice = commands->slices + sliceIndex;
+    if(slice->currentQuads)
     {
-        InvalidCodePath;
-    }
-    else
-    {
-        if(commands->currentQuads)
+        u32 currentIndexCount = (slice->currentQuads->quadCount + quadCount) * 6;
+        if(currentIndexCount > maxIndexesPerBatch)
         {
-            u32 currentIndexCount = (commands->currentQuads->quadCount + quadCount) * 6;
-            if(currentIndexCount > maxIndexesPerBatch)
-            {
-                commands->currentQuads = 0;
-            }
+            slice->currentQuads = 0;
         }
-        
-        if(!commands->currentQuads)
+    }
+    
+    if(!slice->currentQuads)
+    {
+        u32 size = sizeof(TexturedQuadsCommand);
+        if(commands->usedSize + size <= commands->maxBufferSize)
         {
-            u32 size = sizeof(TexturedQuadsCommand);
-            if(commands->usedSize + size <= commands->maxBufferSize)
+            if(commands->quadCount + maxQuadsPerBatch <= commands->maxQuadCount)
             {
                 TexturedQuadsCommand* newQuads = (TexturedQuadsCommand*) (commands->pushMemory + commands->usedSize);
                 newQuads->setup = group->lastSetup;
@@ -41,33 +46,46 @@ inline ReservedVertexes ReserveQuads(RenderGroup* group, u32 quadCount, u32 slic
                 newQuads->indexArrayOffset = (commands->quadCount * 6);
                 newQuads->vertexArrayOffset = (commands->quadCount * 4);
                 
-                commands->currentQuads = newQuads;
+                slice->currentQuads = newQuads;
+                newQuads->next = slice->firstQuads;
+                slice->firstQuads = newQuads;
+                
                 commands->usedSize += size;
+                commands->quadCount += maxQuadsPerBatch;
             }
             else
             {
                 InvalidCodePath;
             }
         }
-        
-        TexturedQuadsCommand* quads = commands->currentQuads;
-        if(quads)
+        else
         {
-            result.entry = quads;
-            result.indexIndex = quads->indexArrayOffset + (quads->quadCount * 6);
-            result.vertIndex = quads->vertexArrayOffset + (quads->quadCount * 4);
-            
-            quads->quadCount += quadCount;
-            commands->quadCount += quadCount;
+            InvalidCodePath;
         }
+    }
+    
+    TexturedQuadsCommand* quads = slice->currentQuads;
+    if(quads)
+    {
+        result.entry = quads;
+        result.indexIndex = quads->indexArrayOffset + (quads->quadCount * 6);
+        result.vertIndex = quads->vertexArrayOffset + (quads->quadCount * 4);
+        
+        quads->quadCount += quadCount;
     }
     
     return result;
 }
 
-internal u32 GetSliceIndex(RenderGroup* group, Vec3 P)
+internal u32 GetSliceIndex(RenderGroup* group, SliceType slice, Vec3 P)
 {
-    u32 result = 0;
+    Assert(slice < ArrayCount(group->commands->slices));
+    return slice;
+}
+
+inline b32 IsUpright(SliceType slice)
+{
+    b32 result = (slice == Slice_Standard);
     return result;
 }
 
@@ -91,9 +109,9 @@ inline void PushVertex(TexturedVertex* vert, Vec4 P, Vec3 N, Vec2 UV, u32 C, Lig
     vert->textureIndex = textureIndex;
 }
 
-inline void PushMagicQuad(RenderGroup* group, Vec4 P, Vec4 lateral, Vec4 up, u32 color, RenderTexture texture, Lights lights, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences)
+inline void PushMagicQuad(RenderGroup* group, SliceType slice, Vec4 P, Vec4 lateral, Vec4 up, u32 color, RenderTexture texture, Lights lights, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences)
 {
-    u32 sliceIndex = GetSliceIndex(group, P.xyz);
+    u32 sliceIndex = GetSliceIndex(group, slice, P.xyz);
     ReservedVertexes vertexes = ReserveQuads(group, 1, sliceIndex);
     if(vertexes.entry)
     {
@@ -201,7 +219,7 @@ inline void PushLineSegment(RenderGroup* group, RenderTexture texture, Vec4 colo
     
     u32 c = StoreColor(color);
     
-    u32 sliceIndex = GetSliceIndex(group, fromP);
+    u32 sliceIndex = GetSliceIndex(group, Slice_Standard, fromP);
     ReservedVertexes vertexes = ReserveQuads(group, 1, sliceIndex);
     PushQuad(group, texture, lights, &vertexes, P0, V2(0, 0), c, P1, V2(1, 0), c, P2, V2(1, 1), c, P3, V2(0, 1), c, 0, 0, 0, {});
 }
@@ -217,7 +235,7 @@ inline void PushRect4Colors(RenderGroup* renderGroup, ObjectTransform objectTran
     Vec3 XAxis = V3(1, 0, 0);
     Vec3 YAxis = V3(0, 1, 0);
     
-    if(objectTransform.upright)
+    if(IsUpright(objectTransform.slice))
     {
         P += objectTransform.cameraOffset.x * renderGroup->gameCamera.X + objectTransform.cameraOffset.y * renderGroup->gameCamera.Y + objectTransform.cameraOffset.z * renderGroup->gameCamera.Z;  
         
@@ -242,7 +260,7 @@ inline void PushRect4Colors(RenderGroup* renderGroup, ObjectTransform objectTran
     Vec2 minUV = V2(0.0f, 0.0f);
     Vec2 maxUV = V2(1.0f, 1.0f);
     
-    u32 sliceIndex = GetSliceIndex(renderGroup, P);
+    u32 sliceIndex = GetSliceIndex(renderGroup, objectTransform.slice, P);
     ReservedVertexes vertexes = ReserveQuads(renderGroup, 1, sliceIndex);
     PushQuad(renderGroup, renderGroup->whiteTexture, lights, &vertexes,
              V4(min.x, min.y, min.z, objectTransform.additionalZBias), V2(minUV.x, minUV.y), c1,
@@ -351,7 +369,7 @@ inline BitmapDim GetBitmapDim(Bitmap* bitmap, Vec2 pivot, Vec3 P, Vec3 XAxis, Ve
     return result;
 }
 
-inline void PushTexture(RenderGroup* group, RenderTexture texture, Vec3 P, Vec3 XAxis = V3(1, 0, 0), Vec3 YAxis = V3(0, 1, 0), Vec4 color = V4(1, 1, 1, 1), Lights lights = {}, r32 modulationPercentage = 0.0f, r32 lightInfluence = 0, r32 lightYInfluence = 0, r32 ZBias = 0.0f, Vec4 windInfluences = {})
+inline void PushTexture(RenderGroup* group, RenderTexture texture, SliceType slice, Vec3 P, Vec3 XAxis = V3(1, 0, 0), Vec3 YAxis = V3(0, 1, 0), Vec4 color = V4(1, 1, 1, 1), Lights lights = {}, r32 modulationPercentage = 0.0f, r32 lightInfluence = 0, r32 lightYInfluence = 0, r32 ZBias = 0.0f, Vec4 windInfluences = {})
 {
     r32 oneTexelU = 1.0f / texture.width;
     r32 oneTexelV = 1.0f / texture.height;
@@ -366,7 +384,7 @@ inline void PushTexture(RenderGroup* group, RenderTexture texture, Vec3 P, Vec3 
     Vec4 maxXmaxY = V4(P + XAxis + YAxis, ZBias);
     
     
-    u32 sliceIndex = GetSliceIndex(group, P);
+    u32 sliceIndex = GetSliceIndex(group, slice, P);
     ReservedVertexes vertexes = ReserveQuads(group, 1, sliceIndex);
     if((XAxis.x >= 0 && YAxis.y >= 0) ||
        (XAxis.x < 0 && YAxis.y < 0))
@@ -408,7 +426,7 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform transform
             transform.cameraOffset.x = -transform.cameraOffset.x;
         }
         
-        if(transform.upright)
+        if(IsUpright(transform.slice))
         {
             P += transform.cameraOffset.x * renderGroup->gameCamera.X + transform.cameraOffset.y * renderGroup->gameCamera.Y + transform.cameraOffset.z * renderGroup->gameCamera.Z;  
             
@@ -443,7 +461,7 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform transform
         
         if(!transform.dontRender)
         {
-            PushTexture(renderGroup, bitmap->textureHandle, P, XAxis, YAxis, color, lights, transform.modulationPercentage, transform.additionalZBias);
+            PushTexture(renderGroup, bitmap->textureHandle, transform.slice, P, XAxis, YAxis, color, lights, transform.modulationPercentage, transform.additionalZBias);
         }
     }
     
@@ -532,7 +550,7 @@ inline void PushCube_(RenderGroup* group, Vec3 P, r32 height, r32 width, RenderT
     
     Vec4 wind = {};
     
-    u32 sliceIndex = GetSliceIndex(group, P);
+    u32 sliceIndex = GetSliceIndex(group, Slice_Flat, P);
     ReservedVertexes vertexes = ReserveQuads(group, 6, sliceIndex);
     PushQuad(group, texture, lights, &vertexes, P0, T0, TC, P1, T1, TC, P2, T2, TC, P3, T3, TC, 0, 0, 0, wind);
     PushQuad(group, texture, lights, &vertexes, P7, T0, BC, P6, T1, BC, P5, T2, BC, P4, T3, BC, 0, 0, 0, wind);
@@ -608,35 +626,6 @@ inline Rect2i GetClipRect(RenderGroup* group, Rect2 rect, r32 Z)
 {
     Rect2i result = GetClipRect_(group, V3(rect.min, Z), GetDim(rect));
     return result;
-}
-
-inline void PushSetup(RenderGroup* group, RenderSetup* setup)
-{
-    group->lastSetup = *setup;
-    group->commands->currentQuads = 0;
-}
-
-inline void PushClipRect(RenderGroup* renderGroup, Rect2i rect)
-{
-    RenderSetup setup = renderGroup->lastSetup;
-    setup.rect = rect;
-    PushSetup(renderGroup, &setup);
-}
-
-inline void PushClipRect(RenderGroup* renderGroup, Rect2 rect, r32 z = 0)
-{
-    Rect2i clipRect = GetClipRect_(renderGroup, V3(GetCenter(rect), z), GetDim(rect));
-    PushClipRect(renderGroup, clipRect);
-}
-
-inline void PushGameRenderSettings(RenderGroup* renderGroup, Vec3 ambientLightColor, r32 totalTimeElapsed, Vec3 windDirection, r32 windStrength)
-{
-    RenderSetup setup = renderGroup->lastSetup;
-    setup.ambientLightColor = ambientLightColor;
-    setup.totalTimeElapsed = totalTimeElapsed;
-    setup.windDirection = windDirection;
-    setup.windStrength = windStrength;
-    PushSetup(renderGroup, &setup);
 }
 
 inline u16 PushPointLight(RenderGroup* renderGroup, Vec3 P, Vec3 color, r32 strength)
@@ -767,65 +756,15 @@ internal void PushTextEnclosed(RenderGroup* group, FontId fontID, char* string, 
     PushText(group, fontID, string, finalP, adjustedFontScale, color, false, drawShadow);
 }
 
-inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLength, Vec3 cameraX = V3(1, 0, 0), Vec3 cameraY = V3(0, 1, 0), Vec3 cameraZ = V3(0, 0, 1), Vec3 cameraP = V3(0, 0, 0), Vec2 screenCameraOffset = V2(0, 0), u32 renderTargetIndex = 0)
+inline void PushSetup_(RenderGroup* group, RenderSetup* setup)
 {
-    b32 orthographic = flags & Camera_Orthographic;
-    b32 isDebug = flags & Camera_Debug;
+    group->lastSetup = *setup;
     
-    CameraTransform* transform = isDebug ? &renderGroup->debugCamera : &renderGroup->gameCamera;
-    
-    transform->X = cameraX;
-    transform->Y = cameraY;
-    transform->Z = cameraZ;
-    transform->P = cameraP;
-    transform->screenCameraOffset = screenCameraOffset;
-    
-    u32 width = renderTargetIndex > 0 ? MAX_IMAGE_DIM : renderGroup->commands->settings.width;
-    u32 height = renderTargetIndex > 0 ? MAX_IMAGE_DIM : renderGroup->commands->settings.height;
-    
-    r32 aspectRatio = SafeRatio1((r32) width, (r32) height);
-    m4x4_inv proj;
-    if(orthographic)
+    for(u32 sliceIndex = 0; sliceIndex < ArrayCount(group->commands->slices); ++sliceIndex)
     {
-        proj = OrthographicProjection(aspectRatio);
+        RenderZSlice* slice = group->commands->slices + sliceIndex;
+        slice->currentQuads = 0;
     }
-    else
-    {
-        proj = PerspectiveProjection(aspectRatio, focalLength);
-    }
-    
-    m4x4_inv cameraTransform = CameraTransformMatrix(cameraX, cameraY, cameraZ, cameraP);
-    
-    transform->proj.forward = proj.forward * cameraTransform.forward;
-    transform->proj.backward = cameraTransform.backward * proj.backward;
-    
-    
-    if(!orthographic)
-    {
-        Vec4 test = transform->proj.forward * V4(1, 1, 0.0f, 1.0f);
-        Vec4 ndc = test * (1.0f / test.w);
-        Vec4 clip = ndc * test.w;
-        Vec3 world = (transform->proj.backward * clip).xyz;
-    }
-    
-    
-    RenderSetup setup;
-    setup.renderTargetIndex = renderTargetIndex;
-    setup.proj = transform->proj.forward;
-    
-    setup.rect = { 0, 0, (i32) width, (i32) height };
-    setup.ambientLightColor = V3(1, 1, 1);
-    PushSetup(renderGroup, &setup);
-}
-
-inline void SetOrthographicTransform(RenderGroup* group, r32 width, r32 height, u32 textureIndex = 0)
-{
-    SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / width, 0.0f, 0.0f), V3(0.0f, 2.0f / width, 0.0f), V3( 0, 0, 1), V3(0, 0, 0), V2(0, 0), textureIndex);
-}
-
-inline void SetOrthographicTransformScreenDim(RenderGroup* group)
-{
-    SetOrthographicTransform(group, (r32) group->commands->settings.width, (r32) group->commands->settings.height, 0);
 }
 
 inline RenderGroup BeginRenderGroup(Assets* assets, GameRenderCommands* commands)
@@ -843,7 +782,7 @@ inline RenderGroup BeginRenderGroup(Assets* assets, GameRenderCommands* commands
     setup.renderTargetIndex = 0;
     setup.ambientLightColor = V3(1, 1, 1);
     
-    PushSetup(&result, &setup);
+    PushSetup_(&result, &setup);
     
     return result;
 }
@@ -980,4 +919,88 @@ inline Rect3 GetScreenBoundsAtDistance(RenderGroup* group, r32 cameraDistanceZ)
     Vec3 max = Unproject(group, &group->gameCamera, group->screenDim, cameraDistanceZ);
     Rect3 result = RectMinMax( min, max );
     return result;
+}
+
+inline void PushClipRect_(RenderGroup* renderGroup, Rect2i rect)
+{
+    RenderSetup setup = renderGroup->lastSetup;
+    setup.rect = rect;
+    PushSetup_(renderGroup, &setup);
+}
+
+inline void PushClipRect(RenderGroup* renderGroup, Rect2 rect, r32 z = 0)
+{
+    Rect2i clipRect = GetClipRect_(renderGroup, V3(GetCenter(rect), z), GetDim(rect));
+    PushClipRect_(renderGroup, clipRect);
+}
+
+inline void PushGameRenderSettings(RenderGroup* renderGroup, Vec3 ambientLightColor, r32 totalTimeElapsed, Vec3 windDirection, r32 windStrength)
+{
+    RenderSetup setup = renderGroup->lastSetup;
+    setup.ambientLightColor = ambientLightColor;
+    setup.totalTimeElapsed = totalTimeElapsed;
+    setup.windDirection = windDirection;
+    setup.windStrength = windStrength;
+    PushSetup_(renderGroup, &setup);
+}
+
+inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLength, Vec3 cameraX = V3(1, 0, 0), Vec3 cameraY = V3(0, 1, 0), Vec3 cameraZ = V3(0, 0, 1), Vec3 cameraP = V3(0, 0, 0), Vec2 screenCameraOffset = V2(0, 0), u32 renderTargetIndex = 0)
+{
+    b32 orthographic = flags & Camera_Orthographic;
+    b32 isDebug = flags & Camera_Debug;
+    
+    CameraTransform* transform = isDebug ? &renderGroup->debugCamera : &renderGroup->gameCamera;
+    
+    transform->X = cameraX;
+    transform->Y = cameraY;
+    transform->Z = cameraZ;
+    transform->P = cameraP;
+    transform->screenCameraOffset = screenCameraOffset;
+    
+    u32 width = renderTargetIndex > 0 ? MAX_IMAGE_DIM : renderGroup->commands->settings.width;
+    u32 height = renderTargetIndex > 0 ? MAX_IMAGE_DIM : renderGroup->commands->settings.height;
+    
+    r32 aspectRatio = SafeRatio1((r32) width, (r32) height);
+    m4x4_inv proj;
+    if(orthographic)
+    {
+        proj = OrthographicProjection(aspectRatio);
+    }
+    else
+    {
+        proj = PerspectiveProjection(aspectRatio, focalLength);
+    }
+    
+    m4x4_inv cameraTransform = CameraTransformMatrix(cameraX, cameraY, cameraZ, cameraP);
+    
+    transform->proj.forward = proj.forward * cameraTransform.forward;
+    transform->proj.backward = cameraTransform.backward * proj.backward;
+    
+    
+    if(!orthographic)
+    {
+        Vec4 test = transform->proj.forward * V4(1, 1, 0.0f, 1.0f);
+        Vec4 ndc = test * (1.0f / test.w);
+        Vec4 clip = ndc * test.w;
+        Vec3 world = (transform->proj.backward * clip).xyz;
+    }
+    
+    
+    RenderSetup setup;
+    setup.renderTargetIndex = renderTargetIndex;
+    setup.proj = transform->proj.forward;
+    
+    setup.rect = { 0, 0, (i32) width, (i32) height };
+    setup.ambientLightColor = V3(1, 1, 1);
+    PushSetup_(renderGroup, &setup);
+}
+
+inline void SetOrthographicTransform(RenderGroup* group, r32 width, r32 height, u32 textureIndex = 0)
+{
+    SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / width, 0.0f, 0.0f), V3(0.0f, 2.0f / width, 0.0f), V3( 0, 0, 1), V3(0, 0, 0), V2(0, 0), textureIndex);
+}
+
+inline void SetOrthographicTransformScreenDim(RenderGroup* group)
+{
+    SetOrthographicTransform(group, (r32) group->commands->settings.width, (r32) group->commands->settings.height, 0);
 }

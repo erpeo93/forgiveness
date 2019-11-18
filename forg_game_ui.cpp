@@ -466,7 +466,6 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
         } break;
     }
     
-    SetOrthographicTransformScreenDim(group);
     Vec2 mouseP = worldMode->relativeMouseP;
     if(UI->lootingMode)
     {

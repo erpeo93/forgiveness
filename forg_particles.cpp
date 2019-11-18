@@ -225,7 +225,7 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectIn
             u32 C = RGBAPack8x4(color * 255.0f);
             
             Vec4 windInfluences = V4(0.1f, 0.1f, 0.1f, 0.1f);
-            PushMagicQuad(group, V4(P, 0), lateral, up, C, *updater->texture, lights, 0, 0, 1, windInfluences);
+            PushMagicQuad(group, Slice_Standard, V4(P, 0), lateral, up, C, *updater->texture, lights, 0, 0, 1, windInfluences);
         }
     }
 }

@@ -858,10 +858,13 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     glClearColor(commands->clearColor.r, commands->clearColor.g, commands->clearColor.b, commands->clearColor.a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
+    u32 totalVertexCount = commands->maxQuadCount * 4;
     glBindBuffer(GL_ARRAY_BUFFER, opengl.vertexBuffer);
-    glBufferData(GL_ARRAY_BUFFER, commands->totalVertexCount * sizeof(TexturedVertex), commands->vertexArray, GL_STREAM_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, totalVertexCount * sizeof(TexturedVertex), commands->vertexArray, GL_STREAM_DRAW);
+    
+    u32 totalIndexCount = commands->maxQuadCount * 6;
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, opengl.indexBuffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, commands->totalIndexCount * sizeof(u16), commands->indexArray, GL_STREAM_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, totalIndexCount * sizeof(u16), commands->indexArray, GL_STREAM_DRAW);
     
     glBindTexture(GL_TEXTURE_1D, opengl.lightSource0);
     glTexSubImage1D(GL_TEXTURE_1D, 0, 0, MAX_LIGHTS, GL_RGBA, GL_FLOAT, commands->lightSource0);
@@ -879,36 +882,37 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     glActiveTexture(GL_TEXTURE0);
     
     
-    //for(u32 sliceIndex = 0; sliceIndex < ArrayCount(commands->slices); ++sliceIndex)
-    for(u32 walkedSize = 0; walkedSize < commands->usedSize; walkedSize += sizeof(TexturedQuadsCommand))
+    for(u32 sliceIndex = 0; sliceIndex < ArrayCount(commands->slices); ++sliceIndex)
     {
-        TexturedQuadsCommand* quads = (TexturedQuadsCommand*) (commands->pushMemory + walkedSize);
-        RenderSetup* setup = &quads->setup;
-        
-        Rect2i clipRect = setup->rect;
-        
-        glScissor(clipRect.minX, clipRect.minY, clipRect.maxX - clipRect.minX, clipRect.maxY - clipRect.minY);
-        
-        glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
-        if(setup->renderTargetIndex > 0)
+        RenderZSlice* slice = commands->slices + sliceIndex;
+        for(TexturedQuadsCommand* quads = slice->firstQuads; quads; quads = quads->next)
         {
-            OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
-            glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, opengl.textureArray, 0, setup->renderTargetIndex);
-        }
-        
-        
-        ZBiasProgram* program = &opengl.zBias;
-        OpenGLUseProgramBegin(program, setup);
-        OpenGLProgramCommon* common = &program->common;
-        
-        glDrawElementsBaseVertex(GL_TRIANGLES, 6 * quads->quadCount, GL_UNSIGNED_SHORT, (GLvoid*) (quads->indexArrayOffset * sizeof(u16)), quads->vertexArrayOffset);
-        
-        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-        OpenGLUseProgramEnd(common);
-        
-        if(setup->renderTargetIndex > 0)
-        {
-            OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
+            RenderSetup* setup = &quads->setup;
+            Rect2i clipRect = setup->rect;
+            
+            glScissor(clipRect.minX, clipRect.minY, clipRect.maxX - clipRect.minX, clipRect.maxY - clipRect.minY);
+            
+            glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
+            if(setup->renderTargetIndex > 0)
+            {
+                OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
+                glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, opengl.textureArray, 0, setup->renderTargetIndex);
+            }
+            
+            
+            ZBiasProgram* program = &opengl.zBias;
+            OpenGLUseProgramBegin(program, setup);
+            OpenGLProgramCommon* common = &program->common;
+            
+            glDrawElementsBaseVertex(GL_TRIANGLES, 6 * quads->quadCount, GL_UNSIGNED_SHORT, (GLvoid*) (quads->indexArrayOffset * sizeof(u16)), quads->vertexArrayOffset);
+            
+            glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+            OpenGLUseProgramEnd(common);
+            
+            if(setup->renderTargetIndex > 0)
+            {
+                OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
+            }
         }
     }
     

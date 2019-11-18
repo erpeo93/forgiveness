@@ -286,6 +286,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             END_BLOCK();
             
             BEGIN_BLOCK("editor and UI overlay");
+            SetOrthographicTransformScreenDim(group);
             RenderUIOverlay(worldMode, group);
             RenderEditorOverlay(worldMode, group, input);
             END_BLOCK();

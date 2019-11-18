@@ -4,7 +4,7 @@
 /*
       -coordinates are assumed to be Y up and X to the right
       -all bitmaps are assumed to be bottom up
-      -all the coordinates passed to the render are in meters
+      -all the coordinates passed to the render are in "world units"
 */
 
 struct Lights
@@ -17,6 +17,15 @@ enum CameraTransformFlag
 {
     Camera_Orthographic = ( 1 << 1 ),
     Camera_Debug = ( 1 << 2 ),
+};
+
+enum SliceType
+{
+    Slice_Ground,
+    Slice_Flat,
+    Slice_Standard,
+    
+    Slice_Count
 };
 
 struct RenderSetup
@@ -36,6 +45,8 @@ struct TexturedQuadsCommand
     u32 quadCount;
     u32 vertexArrayOffset;
     u32 indexArrayOffset;
+    
+    TexturedQuadsCommand* next;
 };
 
 struct ObjectTransform
@@ -49,10 +60,9 @@ struct ObjectTransform
     r32 lightYInfluence;
     Vec4 windInfluences;
     
+    SliceType slice;
     r32 angle;
-    b32 upright;
     b32 flipOnYAxis;
-    
     b32 dontRender;
 };
 
@@ -87,23 +97,28 @@ struct RenderGroup
 };
 
 
-inline ObjectTransform UprightTransform()
+inline ObjectTransform RenderTransform(SliceType slice, r32 additionalZBias = 0)
 {
     ObjectTransform result = {};
+    result.slice = slice;
+    result.additionalZBias = additionalZBias;
     result.scale = V2(1, 1);
-    result.upright = true;
     return result;
 }
 
 inline ObjectTransform FlatTransform(r32 additionalZBias = 0)
 {
-    ObjectTransform result = {};
-    result.scale = V2(1, 1);
-    result.additionalZBias = additionalZBias;
+    ObjectTransform result = RenderTransform(Slice_Flat, additionalZBias);
     return result;
 }
 
-inline void PushSetup(RenderGroup* group, RenderSetup* setup);
+inline ObjectTransform UprightTransform(r32 additionalZBias = 0)
+{
+    ObjectTransform result = RenderTransform(Slice_Standard, additionalZBias);
+    return result;
+}
+
+inline void PushSetup_(RenderGroup* group, RenderSetup* setup);
 struct TransientClipRect
 {
     TransientClipRect( RenderGroup* group, Rect2i newClipRect )
@@ -113,14 +128,14 @@ struct TransientClipRect
         RenderSetup setup = group->lastSetup;
         oldClipRect = setup.rect;
         setup.rect = newClipRect;
-        PushSetup(group, &setup);
+        PushSetup_(group, &setup);
     }
     
     ~TransientClipRect()
     {
         RenderSetup setup = renderGroup->lastSetup;
         setup.rect = oldClipRect;
-        PushSetup(renderGroup, &setup);
+        PushSetup_(renderGroup, &setup);
     }
     
     RenderGroup* renderGroup;

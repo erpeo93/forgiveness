@@ -208,7 +208,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
                                 u32 C = 0xffffffff;
                                 
                                 Vec4 windInfluences = V4(0, 0, plant->windInfluence, plant->windInfluence);
-								PushMagicQuad(group, V4(pointP, 0), lateral, up, C, leafBitmap->textureHandle, lights, modulationPercentage, 0, 0, windInfluences);
+								PushMagicQuad(group, Slice_Standard, V4(pointP, 0), lateral, up, C, leafBitmap->textureHandle, lights, modulationPercentage, 0, 0, windInfluences);
 							}
 						}
 					}
@@ -264,7 +264,7 @@ RENDERING_ECS_JOB_CLIENT(RenderGrass)
                 P -= quad->offset;
                 
                 Vec4 windInfluences = V4(0, 0, grass->windInfluence, grass->windInfluence);
-                PushMagicQuad(group, V4(P, 0), quad->lateral, quad->up, quad->color, bitmap->textureHandle, lights, 0, 0, 0, windInfluences);
+                PushMagicQuad(group, Slice_Standard, V4(P, 0), quad->lateral, quad->up, quad->color, bitmap->textureHandle, lights, 0, 0, 0, windInfluences);
             }
             else
             {
@@ -320,7 +320,7 @@ internal void DrawObjectMapping(GameModeWorld* worldMode, RenderGroup* group, Ob
         {
             LayoutContainer objectContainer = {};
             
-            if(transform.upright)
+            if(IsUpright(transform.slice))
             {
                 RenderLayoutInRectCameraAligned(worldMode, group, P, spaceDim.P, rect, transform, color, objectLayout, objectBase->seed, lights, &objectContainer);
             }
@@ -397,7 +397,7 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
             {
                 transform.additionalZBias += 0.01f * pieceIndex;
                 BitmapDim dim = GetBitmapDim(group, transform, BID, P, piece->height);
-                if(transform.upright)
+                if(IsUpright(transform.slice))
                 {
                     result = ProjectOnScreen(group, dim);
                 }

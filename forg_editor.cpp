@@ -2006,7 +2006,6 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
         if(IsValid(fontID))
         {
             MemoryPool editorPool = {};
-            SetOrthographicTransformScreenDim(group);
             
             if(Pressed(&context->input->undo))
             {

@@ -532,7 +532,7 @@ internal HGLRC Win32InitOpenGL(HDC windowDC, u16 maxTextureCount)
     {
         OpenGLInfo info = OpenGLGetInfo( modernContext );
         OpenGLInit( info, opengl.supportSRGBFrameBuffer );
-        if( wglSwapInterval )
+        if(wglSwapInterval)
         {
             wglSwapInterval(1);
         }
