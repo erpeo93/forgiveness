@@ -2,20 +2,20 @@
 struct TexturedVertex
 {
     Vec4 P;
-    Vec3 N;
     Vec2 UV;
     
     u32 color;
     u16 lightStartingIndex;
     u16 lightEndingIndex;
     
-    u16 modulationPercentage;
-    u16 lightInfluence;
-    u16 lightYInfluence;
     u16 textureIndex;
-    
-    u16 windInfluence;
-    u16 padding[3];
+    u8 modulationPercentage;
+    u8 lightInfluence;
+    u8 lightYInfluence;
+    u8 windInfluence;
+    u8 windFrequency;
+    u8 dissolvePercentage;
+    u8 seed;
 };
 
 struct GameRenderSettings
@@ -26,11 +26,15 @@ struct GameRenderSettings
 
 struct RenderZSlice
 {
-    struct TexturedQuadsCommand* currentQuads;
-    TexturedQuadsCommand* firstQuads;
 };
 
+#define NOISE_WIDTH 128
+#define NOISE_HEIGHT 128
 #define MAX_LIGHTS 1024
+
+#define maxIndexesPerBatch (U16_MAX - 1)
+#define maxQuadsPerBatch (maxIndexesPerBatch / 6)
+
 struct GameRenderCommands
 {
     GameRenderSettings settings;
@@ -46,40 +50,43 @@ struct GameRenderCommands
     TexturedVertex* vertexArray;
     u16* indexArray;
     
-    RenderZSlice slices[4];
+    struct RenderSetup* currentSetup;
+    RenderSetup* firstSetup;
+    RenderSetup* lastSetup;
     
     u16 lightCount;
     Vec4 lightSource0[MAX_LIGHTS];
     Vec4 lightSource1[MAX_LIGHTS];
+    
+    void* noiseTexture;
 };
 
-inline GameRenderCommands DefaultRenderCommands(u8* pushBuffer, u32 pushBufferSize, u32 width, u32 height, u32 maxQuadCount,  TexturedVertex* vertexArray, u16* indexArray, Vec4 clearColor)
+
+inline GameRenderCommands DefaultRenderCommands(u8* pushBuffer, u32 pushBufferSize, u32 width, u32 height, u32 maxQuadCount,  TexturedVertex* vertexArray, u16* indexArray, Vec4 clearColor, void* noiseTexture)
 {
     GameRenderCommands result = {};
     
     result.settings.width = width;
     result.settings.height = height;
-    result.clearColor = clearColor;
-    
-    result.maxQuadCount = maxQuadCount;
-    result.vertexArray = vertexArray;
-    result.indexArray = indexArray;
-    
-    u32 quadStartingOffset = 0;
-    u32 quadsPerSlice = maxQuadCount / ArrayCount(result.slices);
     
     result.maxBufferSize = pushBufferSize;
     result.usedSize = 0;
     result.pushMemory = pushBuffer;
     
-    for(u32 sliceIndex = 0; sliceIndex < ArrayCount(result.slices); ++sliceIndex)
-    {
-        RenderZSlice* slice = result.slices + sliceIndex;
-        slice->firstQuads = 0;
-        slice->currentQuads = 0;
-    }
+    result.clearColor = clearColor;
+    
+    result.quadCount = 0;
+    result.maxQuadCount = maxQuadCount;
+    result.vertexArray = vertexArray;
+    result.indexArray = indexArray;
+    
+    result.currentSetup = 0;
+    result.firstSetup = 0;
+    result.lastSetup = 0;
     
     result.lightCount = 0;
+    
+    result.noiseTexture = noiseTexture;
     
     return result;
 }

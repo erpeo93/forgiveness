@@ -18,7 +18,6 @@ struct OpenGLProgramCommon
     GLuint progHandle;
     GLuint vertUVID;
     GLuint vertPID;
-    GLuint vertNID;
     GLuint vertColorID;
     GLuint lightStartingIndexID;
     GLuint lightEndingIndexID;
@@ -27,6 +26,9 @@ struct OpenGLProgramCommon
     GLuint lightInfluenceID;
     GLuint lightYInfluenceID;
     GLuint windInfluenceID;
+    GLuint windFrequencyID;
+    GLuint dissolvePercentageID;
+    GLuint seedID;
 };
 
 struct GLPointLight
@@ -49,6 +51,7 @@ struct ZBiasProgram
     GLuint directionalLightIntensityID;
     GLuint lightSource0ID;
     GLuint lightSource1ID;
+    GLuint noiseID;
     
     GLuint windDirectionID;
     GLuint windStrengthID;
@@ -78,6 +81,8 @@ enum OpenGLFramebufferFlags
 
 struct Opengl
 {
+    b32 noiseTextureUploaded;
+    
     GameRenderSettings settings;
     
     OpenGLFramebuffer frameBuffer;
@@ -88,6 +93,7 @@ struct Opengl
     
     GLuint lightSource0;
     GLuint lightSource1;
+    GLuint noise;
     
     GLuint blitTextureHandle;
     GLuint defaultSpriteTextureFormat;

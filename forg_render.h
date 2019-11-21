@@ -19,15 +19,6 @@ enum CameraTransformFlag
     Camera_Debug = ( 1 << 2 ),
 };
 
-enum SliceType
-{
-    Slice_Ground,
-    Slice_Flat,
-    Slice_Standard,
-    
-    Slice_Count
-};
-
 struct RenderSetup
 {
     Rect2i rect;
@@ -37,33 +28,33 @@ struct RenderSetup
     r32 totalTimeElapsed;
     Vec3 windDirection;
     r32 windStrength;
-};
-
-struct TexturedQuadsCommand
-{
-    RenderSetup setup;
+    
     u32 quadCount;
     u32 vertexArrayOffset;
     u32 indexArrayOffset;
     
-    TexturedQuadsCommand* next;
+    RenderSetup* next;
 };
 
 struct ObjectTransform
 {
+	r32 additionalZBias;
     Vec3 cameraOffset;
     Vec2 scale;
     
-    r32 additionalZBias;
     r32 modulationPercentage;
+    Vec4 dissolvePercentages;
+    Vec4 tint;
+    
     r32 lightInfluence;
     r32 lightYInfluence;
     Vec4 windInfluences;
+    u8 windFrequency;
     
-    SliceType slice;
     r32 angle;
     b32 flipOnYAxis;
     b32 dontRender;
+    b32 upright;
 };
 
 struct CameraTransform
@@ -97,24 +88,27 @@ struct RenderGroup
 };
 
 
-inline ObjectTransform RenderTransform(SliceType slice, r32 additionalZBias = 0)
+inline ObjectTransform RenderTransform(r32 additionalZBias = 0)
 {
     ObjectTransform result = {};
-    result.slice = slice;
     result.additionalZBias = additionalZBias;
     result.scale = V2(1, 1);
+    result.tint = V4(1, 1, 1, 1);
+    
     return result;
 }
 
-inline ObjectTransform FlatTransform(r32 additionalZBias = 0)
+inline ObjectTransform FlatTransform(r32 additionalZBias = 0, Vec4 color = V4(1, 1, 1, 1))
 {
-    ObjectTransform result = RenderTransform(Slice_Flat, additionalZBias);
+    ObjectTransform result = RenderTransform(additionalZBias);
+    result.tint = color;
     return result;
 }
 
 inline ObjectTransform UprightTransform(r32 additionalZBias = 0)
 {
-    ObjectTransform result = RenderTransform(Slice_Standard, additionalZBias);
+    ObjectTransform result = RenderTransform(additionalZBias);
+    result.upright = true;
     return result;
 }
 

@@ -664,11 +664,9 @@ internal LoadedBitmap LoadImage(MemoryPool* tempPool, char* path, char* filename
         
         u32 widthPad = 0;
         for(widthPad = 1; (u32) x > widthPad; widthPad *= 2);
-        widthPad = x;
         
         u32 heightPad = 0;
         for(heightPad = 1; (u32) y > heightPad; heightPad *= 2);
-        heightPad = y;
         
         r32 nativeHeightCoeff = (r32) y / (r32) heightPad;
         
@@ -1991,11 +1989,6 @@ internal u32 GetFileTypes(AssetType type)
             fileTypes |= PlatformFile_skeleton;
         } break;
         
-        case AssetType_Model:
-        {
-            fileTypes |= PlatformFile_model;
-        } break;
-        
         case AssetType_Count:
         {
             InvalidCodePath;
@@ -2328,6 +2321,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                             }
                         } break;
                         
+#if 0                        
                         case AssetType_Model:
                         {
                             FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
@@ -2342,6 +2336,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                             free(model.vertexes);
                             free(model.faces);
                         } break;
+#endif
                         
                         case AssetType_Font:
                         {

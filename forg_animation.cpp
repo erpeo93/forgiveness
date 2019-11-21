@@ -429,7 +429,7 @@ internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKAnimation* 
         
         Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
         dest->originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset);
-        dest->zBias = zOffset;
+        dest->zBias = 0;
         
         dest->angle = parentBone->finalAngle + ass->angle;
         dest->scale = ass->scale;
@@ -476,16 +476,6 @@ inline void ApplyAssAlterations(PieceAss* ass, AssAlteration* assAlt, Bone* pare
 }
 #endif
 
-internal r32 GetModulationPercentage(GameModeWorld* worldMode, EntityID ID)
-{
-    r32 result = 0;
-    InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
-    if(interaction && interaction->isOnFocus)
-    {
-        result = 0.2f;
-    }
-    return result;
-}
 
 internal b32 IsValidUsingMapping(GameUIContext* UI, ObjectMapping* mapping, u16 slotIndex)
 {
@@ -559,8 +549,8 @@ internal b32 IsValidMapping(GameUIContext* UI, ObjectMapping* mapping, u16 slotI
     return result;
 }
 
+internal EntityAnimationParams GetEntityAnimationParams(GameModeWorld* worldMode, EntityID ID);
 internal Rect2 RenderLayout(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, Vec4 color, LayoutComponent* layout, u32 seed, Lights lights, struct LayoutContainer* container);
-internal Vec4 GetTint(GameModeWorld* worldMode, EntityID ID);
 internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, u64 hash, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights, b32 equipmentMappings)
 {
     Assert(hash);
@@ -589,15 +579,16 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                         finalTransform.angle += equipmentLayout->rootAngle;
                         finalTransform.scale = Hadamart(finalTransform.scale, equipmentLayout->rootScale);
                         
+                        EntityAnimationParams params = GetEntityAnimationParams(worldMode, equipmentID);
+                        
                         if(equipmentInteraction && equipmentInteraction->isOnFocus)
                         {
-                            finalTransform.modulationPercentage = GetModulationPercentage(worldMode, equipmentID);
+                            finalTransform.modulationPercentage = params.modulationPercentage;
                         }
                         
                         LayoutContainer container = {};
                         //container.container = GetComponent(worldMode, equipmentID, ContainerMappingComponent);
-                        
-                        equipmentBase->projectedOnScreen = RenderLayout(worldMode, group, P, finalTransform, GetTint(worldMode, equipmentID), equipmentLayout, equipmentBase->seed, lights, &container);
+                        equipmentBase->projectedOnScreen = RenderLayout(worldMode, group, P, finalTransform, params.tint, equipmentLayout, equipmentBase->seed, lights, &container);
                     }
                 }
                 
@@ -681,7 +672,6 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
         transform.flipOnYAxis = params->flipOnYAxis;
         transform.dontRender = !render;
         transform.modulationPercentage = params->modulationPercentage;
-        
         Lights lights = params->lights;
         
         if(render && params->equipped)
@@ -727,9 +717,11 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
                         
                         transform.cameraOffset = piece->originOffset;
                         transform.additionalZBias = piece->zBias;
+                        transform.dissolvePercentages = params->dissolveCoeff * V4(1, 1, 1, 1);
+                        transform.tint = Hadamart(piece->color, params->tint);
+                        
                         r32 height = bitmapInfo->nativeHeight * params->scale;
-                        Vec4 color = Hadamart(piece->color, params->tint);
-                        BitmapDim dim = PushBitmapWithPivot(group, transform, BID, P, piece->pivot, height, color, lights);
+                        BitmapDim dim = PushBitmapWithPivot(group, transform, BID, P, piece->pivot, height, lights);
                         result = Union(result, RectMinDim(dim.P.xy, dim.size));
                         
                         ObjectTransform equipmentTransform = transform;

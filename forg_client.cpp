@@ -54,6 +54,14 @@ internal void DeleteEntityClient(GameModeWorld* worldMode, EntityID clientID, En
     }
 }
 
+internal void MarkForDeletion(GameModeWorld* worldMode, EntityID clientID)
+{
+    BaseComponent* base = GetComponent(worldMode, clientID, BaseComponent);
+    if(base->deletedTime == 0)
+    {
+        base->deletedTime = base->totalLifeTime;
+    }
+}
 
 STANDARD_ECS_JOB_CLIENT(PushEntityLight)
 {
@@ -68,10 +76,22 @@ STANDARD_ECS_JOB_CLIENT(PushEntityLight)
 STANDARD_ECS_JOB_CLIENT(UpdateEntity)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    
+	base->timeSinceLastUpdate += elapsedTime;
+	base->totalLifeTime += elapsedTime;
+    
     if(base->timeSinceLastUpdate >= 2.0f)
     {
-        DeleteEntityClient(worldMode, ID, base->serverID);
+		MarkForDeletion(worldMode, ID);
     }
+    
+	if(base->deletedTime)
+	{
+		if(base->totalLifeTime >= (base->deletedTime + FADE_OUT_TIME))
+		{
+			DeleteEntityClient(worldMode, ID, base->serverID);
+		}
+	}
 }
 
 internal void PlayGame(GameState* gameState, PlatformInput* input)
@@ -150,7 +170,6 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->ambientLightColor = V3(1, 1, 1);
     result->windDirection = V3(1, 0, 0);
     result->windStrength = 1.0f;
-    
 }
 
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
@@ -218,7 +237,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             Vec3 unprojectedWorldMouseP = UnprojectAtZ(group, &group->gameCamera, screenMouseP, 0);
             worldMode->groundMouseP = ProjectOnGround(unprojectedWorldMouseP, group->gameCamera.P);
-            worldMode->groundMouseP = unprojectedWorldMouseP;
             
             HandleUIInteraction(worldMode, group, myPlayer, input);
             UpdateGameCamera(worldMode, input);
@@ -241,6 +259,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             END_BLOCK();
             
             BEGIN_BLOCK("entity rendering");
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderShadow, ArchetypeHas(BaseComponent) && ArchetypeHas(ShadowComponent), input->timeToAdvance);
+            
             EXECUTE_RENDERING_JOB(worldMode, group, RenderGrass, ArchetypeHas(GrassComponent) && ArchetypeHas(BaseComponent) && ArchetypeHas(MagicQuadComponent), input->timeToAdvance);
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
@@ -253,7 +273,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
             
             EXECUTE_RENDERING_JOB(worldMode, group, RenderLayoutEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(LayoutComponent), input->timeToAdvance);
             
-            EXECUTE_RENDERING_JOB(worldMode, group, UpdateAndRenderBolt, ArchetypeHas(BaseComponent) && ArchetypeHas(BoltComponent), input->timeToAdvance);
+            EXECUTE_RENDERING_JOB(worldMode, group, RenderMultipartEntity, ArchetypeHas(BaseComponent) && ArchetypeHas(MultipartAnimationComponent), input->timeToAdvance);
+            
+            EXECUTE_RENDERING_JOB(worldMode, group, UpdateAndRenderBolt,ArchetypeHas(BaseComponent) && ArchetypeHas(BoltComponent), input->timeToAdvance);
             
             if(worldMode->editorUI.renderEntityBounds)
             {

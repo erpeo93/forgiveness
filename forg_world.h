@@ -14,23 +14,23 @@ introspection() struct UniversePos
     Vec3 chunkOffset;
 };
 
+struct TilePatch
+{
+    r32 offsetTime;
+    r32 colorTime;
+    r32 scaleTime;
+};
+
+#define MAX_TILE_PATCHES 8
 struct WorldTile
 {
 #ifndef FORG_SERVER
-    Lights lights;
-    RandomSequence entropy;
-    r32 waterRandomization;
-    b32 movingNegative;
-    r32 waterTime;
-    u32 waterSeed;
-    r32 blueNoise;
-    r32 alphaNoise;
+    TilePatch patches[MAX_TILE_PATCHES];
+    GameAssetType asset;
 #endif
     
-    Vec4 color;
     GameProperty property;
-    GameAssetType asset;
-    r32 elevation;
+    GameProperty underSeaLevelFluid;
 };
 
 struct TempLight

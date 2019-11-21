@@ -5,11 +5,7 @@ internal void AddEntity_(ServerState* server, UniversePos P, AssetID definitionI
     newEntity->P = P;
     newEntity->definitionID = definitionID;
     newEntity->seed = seed;
-    newEntity->playerIndex = params.playerIndex;
-    
-	newEntity->acceleration = params.acceleration;
-    newEntity->speed = params.speed;
-	
+    newEntity->params = params;
     FREELIST_INSERT(newEntity, server->firstNewEntity);
 }
 
@@ -40,20 +36,21 @@ internal void SpawnPlayer(ServerState* server, UniversePos P, AddEntityParams pa
 
 internal void MakeIntangible(ServerState* server, EntityID ID)
 {
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    physic->flags = AddFlags(physic->flags, EntityFlag_notInWorld);
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    def->flags = AddFlags(def->flags, EntityFlag_notInWorld);
 }
 
 internal void MakeTangible(ServerState* server, EntityID ID)
 {
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    physic->flags = ClearFlags(physic->flags, EntityFlag_notInWorld);
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    def->flags = ClearFlags(def->flags, EntityFlag_notInWorld);
 }
 
 internal void DeleteEntity(ServerState* server, EntityID ID)
 {
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    physic->flags = AddFlags(physic->flags, EntityFlag_deleted);
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    Assert(!IsSet(def->flags, EntityFlag_locked));
+    def->flags = AddFlags(def->flags, EntityFlag_deleted);
 }
 
 internal b32 Find(InventorySlot* slots, u32 slotCount, EntityID ID)
@@ -453,18 +450,23 @@ internal b32 StoreInContainer(ServerState* server, EntityID containerID, EntityI
 internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* command, CommandParameters* parameters, r32 elapsedTime, b32 updateAction)
 {
     Assert(HasComponent(ID, PhysicComponent));
+    Assert(HasComponent(ID, ActionComponent));
+    
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    ActionComponent* action = GetComponent(server, ID, ActionComponent);
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    
     u16 newAction = command->action;
     if(updateAction)
     {
-        if(command->action == physic->action)
+        if(command->action == action->action)
         {
-            physic->actionTime += elapsedTime;
+            action->time += elapsedTime;
         }
         else
         {
-            physic->actionTime = 0;
-            physic->action = newAction;
+            action->time = 0;
+            action->action = newAction;
         }
     }
     
@@ -487,10 +489,10 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                 if(command->skillIndex < ArrayCount(skills->activeSkills))
                 {
                     Skill* active = skills->activeSkills + command->skillIndex;
-                    if(physic->actionTime >= active->targetTime)
+                    if(action->time >= active->targetTime)
                     {
-                        physic->actionTime = 0;
-                        UniversePos targetP = Offset(physic->P, parameters->targetOffset);
+                        action->time = 0;
+                        UniversePos targetP = Offset(def->P, parameters->targetOffset);
                         DispatchGameEffect(server, ID, targetP, &active->effect, command->targetID);
                     }
                 }
@@ -511,16 +513,16 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             EntityID targetID = command->targetID;
             if(IsValidID(targetID) && HasComponent(targetID, PhysicComponent))
             {
-                PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
+                DefaultComponent* targetDef = GetComponent(server, targetID, DefaultComponent);
                 InteractionComponent* interaction = GetComponent(server, command->targetID, InteractionComponent);
-                r32 distanceSq = LengthSq(SubtractOnSameZChunk(targetPhysic->P, physic->P));
+                r32 distanceSq = LengthSq(SubtractOnSameZChunk(targetDef->P, def->P));
                 r32 targetTime;
                 if(ActionIsPossible(interaction, drag, distanceSq, &targetTime))
                 {
-                    if(physic->actionTime >= targetTime)
+                    if(action->time >= targetTime)
                     {
-                        if(!IsSet(targetPhysic->flags, EntityFlag_notInWorld) && 
-                           targetPhysic->P.chunkZ == physic->P.chunkZ)
+                        if(!IsSet(targetDef->flags, EntityFlag_notInWorld) && 
+                           targetDef->P.chunkZ == def->P.chunkZ)
                         {
                             if(!Use(server, ID, targetID))
                             {
@@ -562,13 +564,13 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
             if(equipped)
             {
-                PhysicComponent* targetPhysic = GetComponent(server, command->targetID, PhysicComponent);
+                DefaultComponent* targetDef = GetComponent(server, command->targetID, DefaultComponent);
                 InteractionComponent* interaction = GetComponent(server, command->targetID, InteractionComponent);
-                r32 distanceSq = LengthSq(SubtractOnSameZChunk(targetPhysic->P, physic->P));
+                r32 distanceSq = LengthSq(SubtractOnSameZChunk(targetDef->P, def->P));
                 r32 targetTime;
                 if(ActionIsPossible(interaction, drag, distanceSq, &targetTime))
                 {
-                    if(physic->actionTime >= targetTime)
+                    if(action->time >= targetTime)
                     {
                         if(!IsValidID(equipped->draggingID))
                         {
@@ -593,14 +595,14 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             {
                 InteractionComponent* interaction = GetComponent(server, command->targetID, InteractionComponent);
                 
-                PhysicComponent* targetPhysic = GetComponent(server, command->targetID, PhysicComponent);
+                DefaultComponent* targetDef = GetComponent(server, command->targetID, DefaultComponent);
                 
-                PhysicComponent* usingPhysic = GetComponent(server, command->usingID, PhysicComponent);
-                r32 distanceSq = LengthSq(SubtractOnSameZChunk(targetPhysic->P, physic->P));
+                DefaultComponent* usingDef = GetComponent(server, command->usingID, DefaultComponent);
+                r32 distanceSq = LengthSq(SubtractOnSameZChunk(targetDef->P, def->P));
                 r32 targetTime;
-                if(ActionIsPossible(interaction, setOnFire, distanceSq, &targetTime, true, usingPhysic->definitionID))
+                if(ActionIsPossible(interaction, setOnFire, distanceSq, &targetTime, true, usingDef->definitionID))
                 {
-                    if(physic->actionTime >= targetTime)
+                    if(action->time >= targetTime)
                     {
                         DeleteEntity(server, command->usingID);
                         QueueCompletedCommand(server, ID, command);
@@ -618,14 +620,14 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         case open:
         {
             EntityID targetID = command->targetID;
-            PhysicComponent* targetPhysic = GetComponent(server, command->targetID, PhysicComponent);
+            DefaultComponent* targetDef = GetComponent(server, command->targetID, DefaultComponent);
             InteractionComponent* interaction = GetComponent(server, command->targetID, InteractionComponent);
             
-            r32 distanceSq = LengthSq(SubtractOnSameZChunk(targetPhysic->P, physic->P));
+            r32 distanceSq = LengthSq(SubtractOnSameZChunk(targetDef->P, def->P));
             r32 targetTime;
             if(ActionIsPossible(interaction, open, distanceSq, &targetTime))
             {
-                if(physic->actionTime >= targetTime)
+                if(action->time >= targetTime)
                 {
                     b32 canOpen = true;
                     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
@@ -720,8 +722,8 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
     
     if(resetAction)
     {
-        physic->actionTime = 0;
-        physic->action = idle;
+        action->time = 0;
+        action->action = idle;
     }
 }
 
@@ -732,8 +734,8 @@ STANDARD_ECS_JOB_SERVER(HandleOpenedContainers)
     {
         InteractionComponent* interaction = GetComponent(server, ID, InteractionComponent);
         
-        PhysicComponent* opened = GetComponent(server, ID, PhysicComponent);
-        PhysicComponent* opener = GetComponent(server, container->openedBy, PhysicComponent);
+        DefaultComponent* opened = GetComponent(server, ID, DefaultComponent);
+        DefaultComponent* opener = GetComponent(server, container->openedBy, DefaultComponent);
         r32 distanceSq = LengthSq(SubtractOnSameZChunk(opened->P, opener->P));
         r32 targetTime;
         if(!ActionIsPossible(interaction, open, distanceSq, &targetTime))
@@ -759,31 +761,33 @@ STANDARD_ECS_JOB_SERVER(HandlePlayerCommands)
 
 STANDARD_ECS_JOB_SERVER(FillPlayerSpacePartition)
 {
+	DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
     if(player)
     {
         PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
         r32 maxDistance = 3.0f * CHUNK_DIM;
         Rect3 bounds = AddRadius(physic->bounds, V3(maxDistance, maxDistance, maxDistance));
-        AddToSpatialPartition(server->frameByFramePool, &server->playerPartition, physic->P, bounds, ID);
+        AddToSpatialPartition(server->frameByFramePool, &server->playerPartition, def->P, bounds, ID);
     }
 }
 
 global_variable r32 g_maxDelta = 1.0f;
 STANDARD_ECS_JOB_SERVER(FillCollisionSpatialPartition)
 {
+	DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     
-    if(!(physic->flags & EntityFlag_notInWorld))
+    if(!IsSet(def->flags, EntityFlag_notInWorld))
     {
         Rect3 bounds = AddRadius(physic->bounds, V3(g_maxDelta, g_maxDelta, g_maxDelta));
-        AddToSpatialPartition(server->frameByFramePool, &server->collisionPartition, physic->P, bounds, ID);
+        AddToSpatialPartition(server->frameByFramePool, &server->collisionPartition, def->P, bounds, ID);
     }
 }
 
-internal void HandleEntityMovement(ServerState* server, PhysicComponent* physic, EntityID ID, r32 elapsedTime)
+internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, PhysicComponent* physic, EntityID ID, r32 elapsedTime)
 {
-    UniversePos oldP = physic->P;
+    UniversePos oldP = def->P;
     
     Vec3 acceleration = Normalize(physic->acc) *physic->accelerationCoeff;
     Vec3 velocity = physic->speed;
@@ -805,17 +809,18 @@ internal void HandleEntityMovement(ServerState* server, PhysicComponent* physic,
         r32 tStop = tRemaining;
         
         Rect3 bounds = AddRadius(physic->bounds, deltaP);
-        SpatialPartitionQuery collisionQuery = QuerySpatialPartition(&server->collisionPartition, physic->P, bounds);
+        SpatialPartitionQuery collisionQuery = QuerySpatialPartition(&server->collisionPartition, def->P, bounds);
         
         EntityID collisionTriggerID = {};
         UniversePos collisionP = {};
         
         for(EntityID testID = GetCurrent(&collisionQuery); IsValid(&collisionQuery); testID = Advance(&collisionQuery))
         {
+            DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
             PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
-            if(testPhysic->P.chunkZ == physic->P.chunkZ)
+            if(testDef->P.chunkZ == def->P.chunkZ)
             {
-                Vec3 testP = SubtractOnSameZChunk(testPhysic->P, physic->P);
+                Vec3 testP = SubtractOnSameZChunk(testDef->P, def->P);
                 
                 b32 overlappingEntity = HasComponent(testID, OverlappingEffectsComponent);
                 
@@ -827,14 +832,14 @@ internal void HandleEntityMovement(ServerState* server, PhysicComponent* physic,
                 {
                     if(shouldOverlap)
                     {
-                        DispatchOverlappingEffects(server, testPhysic->P, ID, testID);
+                        DispatchOverlappingEffects(server, testDef->P, ID, testID);
                     }
                 }
                 
                 
                 if(tStop < oldT)
                 {
-                    collisionP = testPhysic->P;
+                    collisionP = testDef->P;
                     collisionTriggerID = testID;
                 }
             }
@@ -847,31 +852,31 @@ internal void HandleEntityMovement(ServerState* server, PhysicComponent* physic,
         }
         
         Vec3 wallNormal = wallNormalMin;
-        physic->P.chunkOffset += tStop * deltaP;
+        def->P.chunkOffset += tStop * deltaP;
         
         physic->speed -= Dot(physic->speed, wallNormal) * wallNormal;
         deltaP -= Dot(deltaP, wallNormal) * wallNormal;
         tRemaining -= tStop;
     }
     
-    physic->P = NormalizePosition(physic->P);
-    if(!PositionInsideWorld(&physic->P))
+    def->P = NormalizePosition(def->P);
+    if(!PositionInsideWorld(&def->P))
     {
-        physic->P = oldP;
+        def->P = oldP;
     }
 }
 
 internal void UpdateObjectPosition(ServerState* server, EntityID* ID, UniversePos P)
 {
-    PhysicComponent* equipmentPhysic = GetComponent(server, *ID, PhysicComponent);
-    if(IsSet(equipmentPhysic->flags, EntityFlag_deleted))
+    DefaultComponent* equipmentDef = GetComponent(server, *ID, DefaultComponent);
+    if(IsSet(equipmentDef->flags, EntityFlag_deleted))
     {
         *ID = {};
     }
     else
     {
-        equipmentPhysic->P = P;
-        equipmentPhysic->flags |= EntityFlag_notInWorld;
+        equipmentDef->P = P;
+        equipmentDef->flags |= EntityFlag_notInWorld;
     }
 }
 internal void UpdateObjectPositions(ServerState* server, UniversePos P, InventorySlot* slots, u32 slotCount)
@@ -888,17 +893,21 @@ internal void UpdateObjectPositions(ServerState* server, UniversePos P, Inventor
 
 STANDARD_ECS_JOB_SERVER(UpdateEntity)
 {
+	DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    HandleEntityMovement(server, physic, ID, elapsedTime);
+    HandleEntityMovement(server, def, physic, ID, elapsedTime);
+    
+    
+    
     
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
     if(equipped)
     {
         if(IsValidID(equipped->draggingID))
         {
-            UpdateObjectPosition(server, &equipped->draggingID, physic->P);
+            UpdateObjectPosition(server, &equipped->draggingID, def->P);
         }
-		UpdateObjectPositions(server, physic->P, equipped->slots, Count_usingSlot);
+		UpdateObjectPositions(server, def->P, equipped->slots, Count_usingSlot);
         for(u32 usingIndex = 0; usingIndex < Count_usingSlot; ++usingIndex)
         {
             InventorySlot* slot = equipped->slots + usingIndex;
@@ -912,7 +921,7 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
     if(equipment)
     {
-        UpdateObjectPositions(server, physic->P, equipment->slots, Count_equipmentSlot);
+        UpdateObjectPositions(server, def->P, equipment->slots, Count_equipmentSlot);
         for(u32 equipIndex = 0; equipIndex < Count_equipmentSlot; ++equipIndex)
         {
             InventorySlot* slot = equipment->slots + equipIndex;
@@ -921,8 +930,8 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
                 ContainerComponent* container = GetComponent(server, slot->ID, ContainerComponent);
                 if(container)
                 {
-                    UpdateObjectPositions(server, physic->P, container->storedObjects, ArrayCount(container->storedObjects));
-                    UpdateObjectPositions(server, physic->P, container->usingObjects, ArrayCount(container->usingObjects));
+                    UpdateObjectPositions(server, def->P, container->storedObjects, ArrayCount(container->storedObjects));
+                    UpdateObjectPositions(server, def->P, container->usingObjects, ArrayCount(container->usingObjects));
                 }
             }
         }
@@ -932,7 +941,6 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
 STANDARD_ECS_JOB_SERVER(UpdateTempEntity)
 {
 	TempEntityComponent* temp = GetComponent(server, ID, TempEntityComponent);
-    
 	temp->time += elapsedTime;
 	if(temp->time >= temp->targetTime)
 	{
@@ -947,16 +955,15 @@ STANDARD_ECS_JOB_SERVER(DeleteAllEntities)
 
 STANDARD_ECS_JOB_SERVER(DeleteDeletedEntities)
 {
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    if(IsSet(physic->flags, EntityFlag_deleted))
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    if(IsSet(def->flags, EntityFlag_deleted))
     {
         r32 maxDistance = 3.0f * CHUNK_DIM;
         r32 maxDistanceSq = Square(maxDistance);
-        SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, physic->P);
+        SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
         for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
         {
             PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
-            
             for(u32 messageIndex = 0; messageIndex < 5; ++messageIndex)
             {
                 QueueDeletedID(player, ID);

@@ -84,7 +84,7 @@ inline DebugFrame* GetViewingFrame(DebugCollationState* collation)
 
 internal void DrawFrameSlider(EditorLayout* layout, DebugCollationState* collation, Rect2 bounds)
 {
-    PushRect(layout->group, FlatTransform(), bounds, V4(0.0f, 0.0f, 0.0f, 0.5f));
+    PushRect(layout->group, FlatTransform(0, V4(0, 0, 0, 0.5f)), bounds);
     
     u32 frameCount = ArrayCount(collation->frames);
     r32 barWidth = GetDim(bounds).x / (r32) frameCount;
@@ -124,11 +124,11 @@ internal void DrawFrameSlider(EditorLayout* layout, DebugCollationState* collati
         
         if(highlight)
         {
-            PushRect(layout->group, FlatTransform(), regionRect, color);
+            PushRect(layout->group, FlatTransform(0, color), regionRect);
         }
         else
         {
-            PushRectOutline(layout->group, FlatTransform(), regionRect, color, 2.0f);
+            PushRectOutline(layout->group, FlatTransform(0, color), regionRect, 2.0f);
         }
         
         if(PointInRect(regionRect, layout->mouseP))
@@ -206,8 +206,8 @@ internal void DrawProfileBars(EditorLayout* layout, DebugCollationState* collati
             r32 thisMaxX = thisMinX + scale * (r32) (node->duration);
             
             Rect2 regionRect = RectMinMax(V2(thisMinX, laneY - laneHeight), V2(thisMaxX, laneY));
-            PushRectOutline(layout->group, FlatTransform(), regionRect, V4(0.0f, 0.0f, 0.0f, 1.0f), 2.0f);
-            PushRect(layout->group, FlatTransform(), regionRect, V4(color, 1.0f));
+            PushRectOutline(layout->group, FlatTransform(0, V4(0, 0, 0, 1)), regionRect, 2.0f);
+            PushRect(layout->group, FlatTransform(0, V4(color, 1)), regionRect);
             
             if(PointInRect(regionRect, layout->mouseP))
             {
@@ -279,8 +279,8 @@ internal void DrawFrameBars(EditorLayout* layout, DebugCollationState* collation
                         r32 thisMaxY = thisMinY + scale * (r32) (node->duration);
                         
                         Rect2 regionRect = RectMinMax(V2(atX, thisMinY), V2(atX + barWidth, thisMaxY));
-                        PushRectOutline(layout->group, FlatTransform(), regionRect, V4(0.0f, 0.0f, 0.0f, 1.0f), 2.0f);
-                        PushRect(layout->group, FlatTransform(), regionRect, V4(color, highDim));
+                        PushRectOutline(layout->group, FlatTransform(0, V4(0, 0, 0, 1)), regionRect, 2.0f);
+                        PushRect(layout->group, FlatTransform(0, V4(color, highDim)), regionRect);
                         
                         if(PointInRect(regionRect, layout->mouseP))
                         {
@@ -662,7 +662,7 @@ internal void DEBUGOverlay(EditorLayout* layout)
         {
             NextRaw(layout);
             Rect2 profilerBounds = EditorElementBounds(layout, debugState->profilerDim);
-            PushRect(layout->group, FlatTransform(), profilerBounds, V4(0, 0, 0, 0.7f));
+            PushRect(layout->group, FlatTransform(0, V4(0, 0, 0, 0.7f)), profilerBounds);
             switch(debugState->profilerType)
             {
                 case Profiler_Threads:

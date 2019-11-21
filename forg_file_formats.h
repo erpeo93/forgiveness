@@ -41,7 +41,7 @@ struct PAKGroupName
 };
 
 #define MAX_IMAGE_DIM 512
-#define PAK_BITMAP_VERSION 1011
+#define PAK_BITMAP_VERSION 1012
 struct PAKBitmap
 {
     u64 nameHash;

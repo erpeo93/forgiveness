@@ -170,11 +170,13 @@ internal void QueueGameAccessConfirm(PlayerComponent* player, u32 worldSeed, Ent
     QueueOrderedPacket(player);
 }
 
-internal u16 PrepareEntityUpdate(ServerState* server, PhysicComponent* physic, unsigned char* buff_)
+internal u16 PrepareEntityUpdate(ServerState* server, DefaultComponent* def, PhysicComponent* physic, ActionComponent* act, unsigned char* buff_)
 {
-    UniversePos P = physic->P;
+    UniversePos P = def->P;
+    Vec3 speed = physic ? physic->speed : V3(0, 0, 0);
+    u16 action = act ? act->action : 0;
     unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
-    Pack("LLLlllVVHHL", physic->definitionID.subtypeHashIndex, physic->definitionID.index, physic->seed, P.chunkX, P.chunkY, P.chunkZ, P.chunkOffset, physic->speed, physic->action, physic->status, physic->flags);
+    Pack("LLLlllVVHHL", def->definitionID.subtypeHashIndex, def->definitionID.index, def->seed, P.chunkX, P.chunkY, P.chunkZ, P.chunkOffset, speed, action, def->status, def->flags);
     u16 totalSize = ForgEndPacket_( buff_, buff );
     return totalSize;
 }
@@ -351,9 +353,12 @@ internal void QueueDebugEvent(PlayerComponent* player, DebugEvent* event)
 
 STANDARD_ECS_JOB_SERVER(SendEntityUpdate)
 {
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    ActionComponent* act = GetComponent(server, ID, ActionComponent);
+    
     unsigned char buff_[KiloBytes(2)];
-    u16 totalSize = PrepareEntityUpdate(server, physic, buff_);
+    u16 totalSize = PrepareEntityUpdate(server, def, physic, act, buff_);
     
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
@@ -362,15 +367,15 @@ STANDARD_ECS_JOB_SERVER(SendEntityUpdate)
     r32 maxDistance = 3.0f * CHUNK_DIM;
     r32 maxDistanceSq = Square(maxDistance);
     
-    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, physic->P);
+    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
     for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
     {
         PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
-        PhysicComponent* playerPhysic = GetComponent(server, playerID, PhysicComponent);
+        DefaultComponent* playerDef = GetComponent(server, playerID, DefaultComponent);
         
         //if(physic->P.chunkZ == playerPhysic->P.chunkZ)
         {
-            Vec3 distance = SubtractOnSameZChunk(physic->P, playerPhysic->P);
+            Vec3 distance = SubtractOnSameZChunk(def->P, playerDef->P);
             if(LengthSq(distance) < maxDistanceSq)
             {
                 QueueEntityHeader(player, ID);

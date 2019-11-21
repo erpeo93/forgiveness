@@ -30,6 +30,7 @@ struct ArchetypeLayout
             ArchetypeComponent hasGrassComponent;
             ArchetypeComponent hasPhysicComponent;
             ArchetypeComponent hasPlayerComponent;
+            ArchetypeComponent hasShadowComponent;
             ArchetypeComponent hasStandardImageComponent;
             ArchetypeComponent hasLayoutComponent;
             ArchetypeComponent hasEffectComponent;
@@ -50,6 +51,9 @@ struct ArchetypeLayout
             ArchetypeComponent hasFrameByFrameAnimationComponent;
             ArchetypeComponent hasBoltComponent;
             ArchetypeComponent hasMagicQuadComponent;
+            ArchetypeComponent hasMultipartAnimationComponent;
+            ArchetypeComponent hasDefaultComponent;
+            ArchetypeComponent hasActionComponent;
         };
     };
 };

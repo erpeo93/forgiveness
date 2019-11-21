@@ -15,6 +15,7 @@
 #include "forg_asset.h"
 #define Property(name) enum name
 #include "../properties/test.properties"
+#include "forg_noise.h"
 #include "forg_world_generation.h"
 #include "forg_game_effect.h"
 #include "forg_ecs.h"
@@ -57,6 +58,8 @@ struct BaseComponent
     EntityID serverID;
     EntityID draggingID;
     r32 timeSinceLastUpdate;
+	r32 totalLifeTime;
+    r32 deletedTime;
     
     u32 propertyCount;
     GameProperty properties[16];
@@ -89,6 +92,11 @@ struct PlantComponent
 struct GrassComponent
 {
     r32 windInfluence;
+    u8 windFrequencyStandard;
+    u8 windFrequencyOverlap;
+    Vec3 maxOffset;
+    u32 count;
+    Rect3 bounds;
 };
 
 #include "forg_archetypes.h"

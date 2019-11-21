@@ -62,6 +62,7 @@ enum EntityFlags
     EntityFlag_notInWorld = (1 << 0),
     EntityFlag_occluding = (1 << 1),
     EntityFlag_deleted = (1 << 2),
+    EntityFlag_locked = (1 << 3),
 };
 
 inline b32 IsSet(u32 flags, u32 flag)

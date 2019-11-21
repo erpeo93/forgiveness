@@ -42,22 +42,32 @@ internal void AddPossibleActions(PossibleActionList* list, PossibleActionDefinit
 }
 
 #ifdef FORG_SERVER
+INIT_COMPONENT_FUNCTION(InitDefaultComponent)
+{
+    DefaultComponent* def = (DefaultComponent*) componentPtr;
+    def->P = s->P;
+    def->flags = {};
+    def->seed = s->seed;
+    def->definitionID = common->definitionID;
+    def->status = status_frozen;
+}
+
 INIT_COMPONENT_FUNCTION(InitPhysicComponent)
 {
     PhysicComponent* physic = (PhysicComponent*) componentPtr;
     
-    physic->P = s->P;
     physic->bounds = StandardBounds(common->boundDim, common->boundOffset);
-    physic->definitionID = common->definitionID;
-    physic->seed = s->seed;
     physic->acc = s->startingAcceleration;
     physic->speed = s->startingSpeed;
-    
     physic->accelerationCoeff = s->accelerationCoeff;
     physic->drag = s->drag;
-    physic->flags = {};
-    physic->action = idle;
-    physic->status = status_frozen;
+}
+
+INIT_COMPONENT_FUNCTION(InitActionComponent)
+{
+    ActionComponent* action = (ActionComponent*) componentPtr;
+    action->action = idle;
+    action->time = 0;
 }
 
 internal void AddRandomEffects(EffectComponent* effects, EffectBinding* bindings, ArrayCounter bindingCount, GameProperty property)
@@ -160,7 +170,8 @@ INIT_COMPONENT_FUNCTION(InitSkillComponent)
 INIT_COMPONENT_FUNCTION(InitBrainComponent)
 {
     BrainComponent* brain = (BrainComponent*) componentPtr;
-    brain->type = Brain_test;
+    brain->type = Brain_Portal;
+    brain->ID = {};
 }
 
 INIT_COMPONENT_FUNCTION(InitTempEntityComponent)
@@ -180,6 +191,8 @@ INIT_COMPONENT_FUNCTION(InitBaseComponent)
     base->definitionID = common->definitionID;
     base->flags = {};
     base->timeSinceLastUpdate = 0;
+	base->totalLifeTime = 0;
+    base->deletedTime = 0;
 }
 
 internal void InitShadow(ShadowComponent* shadow, ClientEntityInitParams* params)
@@ -214,8 +227,6 @@ INIT_COMPONENT_FUNCTION(InitAnimationComponent)
     animation->flipOnYAxis = 0;
     animation->scale = 1.0f;
     animation->speed = 1.0f;
-    InitShadow(&animation->shadow, c);
-    
     animation->totalTime = 0;
     animation->time = 0;
     animation->oldTime = 0;
@@ -231,6 +242,12 @@ INIT_COMPONENT_FUNCTION(InitGrassComponent)
     GameModeWorld* worldMode = (GameModeWorld*) state;
     GrassComponent* dest = (GrassComponent*) componentPtr;
     dest->windInfluence = c->windInfluence;
+    dest->windFrequencyStandard = (u8) c->windFrequencyStandard;
+    dest->windFrequencyOverlap = (u8) c->windFrequencyOverlap;
+    dest->count = c->instanceCount;
+    dest->maxOffset = c->instanceMaxOffset;
+    dest->bounds = RectCenterDim(V3(0, 0, 0), c->grassBounds);
+    
 }
 
 INIT_COMPONENT_FUNCTION(InitPlantComponent)
@@ -248,8 +265,12 @@ INIT_COMPONENT_FUNCTION(InitStandardImageComponent)
     Assets* assets = worldMode->gameState->assets;
     StandardImageComponent* dest = (StandardImageComponent*) componentPtr;
     InitImageReference(assets, &dest, &c, entity);
-    
-    InitShadow(&dest->shadow, c);
+}
+
+INIT_COMPONENT_FUNCTION(InitShadowComponent)
+{
+    ShadowComponent* dest = (ShadowComponent*) componentPtr;
+    InitShadow(dest, c);
 }
 
 internal BitmapId GetImageFromReference(Assets* assets, ImageReference* reference, RandomSequence* seq);
@@ -283,16 +304,52 @@ INIT_COMPONENT_FUNCTION(InitMagicQuadComponent)
     dest->up *= 0.5f;
 }
 
+internal void InitFrameByFrameComponent_(FrameByFrameAnimationComponent* dest, r32 speed, u64 subtypeHash)
+{
+    dest->runningTime = 0;
+    dest->speed = speed;
+    dest->typeHash = subtypeHash;
+}
+
 INIT_COMPONENT_FUNCTION(InitFrameByFrameAnimationComponent)
 {
     GameModeWorld* worldMode = (GameModeWorld*) state;
     Assets* assets = worldMode->gameState->assets;
     FrameByFrameAnimationComponent* dest = (FrameByFrameAnimationComponent*) componentPtr;
     
-    dest->runningTime = 0;
-    dest->speed = c->frameByFrameSpeed;
-    dest->typeHash = c->frameByFrameImageType.subtypeHash;
-    InitShadow(&dest->shadow, c);
+    InitFrameByFrameComponent_(dest, c->frameByFrameSpeed, c->frameByFrameImageType.subtypeHash);
+}
+
+INIT_COMPONENT_FUNCTION(InitMultipartAnimationComponent)
+{
+    GameModeWorld* worldMode = (GameModeWorld*) state;
+    Assets* assets = worldMode->gameState->assets;
+    
+    MultipartAnimationComponent* dest = (MultipartAnimationComponent*) componentPtr;
+    dest->staticCount = 0;
+    dest->frameByFrameCount = 0;
+    for(u16 staticIndex = 0; staticIndex < c->multipartStaticCount; ++staticIndex)
+    {
+        if(dest->staticCount < ArrayCount(dest->staticParts))
+        {
+            MultipartStaticPiece* source = c->multipartStaticPieces + staticIndex;
+            ImageReference* destImage = dest->staticParts + dest->staticCount++;
+            InitImageReference_(assets, destImage, &source->properties);
+        }
+    }
+    
+    for(u16 frameByFrameIndex = 0; 
+        frameByFrameIndex < c->multipartFrameByFrameCount;
+        ++frameByFrameIndex)
+    {
+        if(dest->frameByFrameCount < ArrayCount(dest->frameByFrameParts))
+        {
+            FrameByFrameAnimationComponent* destFrame = dest->frameByFrameParts + dest->frameByFrameCount++;
+            
+            MultipartFrameByFramePiece* source = c->multipartFrameByFramePieces + frameByFrameIndex;
+            InitFrameByFrameComponent_(destFrame, source->speed, source->image.subtypeHash);
+        }
+    }
 }
 
 internal void InitLayout(Assets* assets, LayoutPiece* destPieces, u32* destPieceCount, u32 maxDestPieceCount, LayoutPieceProperties* pieces, u32 pieceCount, GameProperty property)
@@ -328,7 +385,6 @@ INIT_COMPONENT_FUNCTION(InitLayoutComponent)
     Assets* assets = worldMode->gameState->assets;
     
     LayoutComponent* dest = (LayoutComponent*) componentPtr;
-    InitShadow(&dest->shadow, c);
     dest->rootHash = StringHash(c->layoutRootName.name);
     dest->rootScale = V2(1, 1);
     dest->rootAngle = 0;
@@ -388,7 +444,7 @@ internal void FreeAnimationEffect(AnimationEffect* effect);
 INIT_COMPONENT_FUNCTION(InitAnimationEffectComponent)
 {
     AnimationEffectComponent* animation = (AnimationEffectComponent*) componentPtr;
-    animation->tint = V4(1, 0, 0, 1);
+    animation->params = DefaultAnimationParams();
     animation->lightIntensity = 2.0f;
     animation->lightColor = V3(1, 1, 1);
     for(u32 effectIndex = 0; effectIndex < animation->effectCount; ++effectIndex)

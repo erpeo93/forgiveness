@@ -69,6 +69,8 @@ enum MetaType
     MetaType_ParticlePhase,
     MetaType_AnimationEffectDefinition,
     MetaType_RenderTexture,
+    MetaType_MultipartStaticPiece,
+    MetaType_MultipartFrameByFramePiece,
 };
 
 enum FieldMetaFlags

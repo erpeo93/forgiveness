@@ -19,6 +19,7 @@
 #include "forg_ecs.h"
 #include "forg_entity_layout.h"
 #include "forg_asset.h"
+#include "forg_noise.h"
 #include "forg_world_generation.h"
 #include "forg_world.h"
 #include "forg_editor.h"
@@ -69,22 +70,28 @@ struct FileToSend
     };
 };
 
-struct PhysicComponent
+struct DefaultComponent
 {
     UniversePos P;
-    Rect3 bounds;
+	u32 flags;
+	u32 seed;
     EntityRef definitionID;
-    u32 seed;
+	u16 status;
+};
+
+struct PhysicComponent
+{
+	Rect3 bounds;
     Vec3 speed;
     Vec3 acc;
     r32 accelerationCoeff;
     r32 drag;
-    u32 flags;
-    
-    u16 action;
-    u16 status;
-    
-    r32 actionTime;
+};
+
+struct ActionComponent
+{
+	u16 action;
+    r32 time;
 };
 
 struct TempEntityComponent
@@ -172,6 +179,10 @@ struct AddEntityParams
     Vec3 acceleration;
     Vec3 speed;
     u32 playerIndex;
+    b32 spawnFollowingEntity;
+    b32 lock;
+    EntityRef attachedEntityType;
+    EntityID targetBrainID;
 };
 
 internal AddEntityParams DefaultAddEntityParams()
@@ -183,13 +194,9 @@ internal AddEntityParams DefaultAddEntityParams()
 struct NewEntity
 {
     UniversePos P;
-    AssetID definitionID;
     u32 seed;
-    u32 playerIndex;
-    
-    Vec3 acceleration;
-    Vec3 speed;
-    
+    AssetID definitionID;
+    AddEntityParams params;
     union
     {
         NewEntity* next;
@@ -237,6 +244,8 @@ struct ServerState
     
     NewEntity* firstFreeNewEntity;
     NewEntity* firstNewEntity;
+    
+    r32 timeFromlastStaticUpdate;
     
 #if FORGIVENESS_INTERNAL
     b32 captureFrame;

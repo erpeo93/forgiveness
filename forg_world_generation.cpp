@@ -1,15 +1,3 @@
-internal r32 BilateralNoise(r32 dx, r32 dy, r32 frequency, u32 seed)
-{
-    r32 result  = noise(dx * frequency, dy * frequency, 0.0f, seed);
-    return result;
-}
-
-inline r32 UnilateralNoise(r32 dx, r32 dy, r32 frequency, u32 seed)
-{
-    r32 result = BilateralToUnilateral(BilateralNoise(dx, dy, frequency, seed));
-    return result;
-}
-
 inline r32 Evaluate(r32 dx, r32 dy, NoiseParams params, u32 seed)
 {
     r32 frequency = params.frequency;
@@ -152,14 +140,6 @@ global_variable r32 maxHeight = 1000.0f;
 internal WorldTile NullTile(world_generator* generator)
 {
     WorldTile result = {};
-    result.elevation = minHeight;
-    
-#if 0    
-    result.asset = definition->asset;
-    result.property = definition->property;
-#endif
-    result.color = V4(1, 0, 0, 1);
-    
     return result;
 }
 
@@ -211,9 +191,9 @@ inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 ti
     WorldTile result = {};
     
     // NOTE(Leonardo): elevation
-    result.elevation = GetTileElevation(generator, tileNormX, tileNormY, tileNormZ, seq, seed);
+    r32 elevation = GetTileElevation(generator, tileNormX, tileNormY, tileNormZ, seq, seed);
     r32 temperatureNoise = Evaluate(tileNormX, tileNormY, generator->temperatureNoise, seed);
-    r32 temperatureDegrees = Select(&generator->temperatureSelect, temperatureNoise, temperatureNoise, result.elevation, seed, false);
+    r32 temperatureDegrees = Select(&generator->temperatureSelect, temperatureNoise, temperatureNoise, elevation, seed, false);
     
     ZSlice* slice = GetZSlice(generator, tileNormZ);
     
@@ -237,9 +217,23 @@ inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 ti
     if(IsValid(ID))
     {
         tile_definition* definition = GetData(assets, tile_definition, ID);
-        result.asset = definition->asset;
         result.property = definition->property;
-        result.color = definition->color;
+        result.underSeaLevelFluid = {};
+        if(elevation < 0)
+        {
+            result.underSeaLevelFluid = definition->underSeaLevelFluid;
+        }
+        
+#ifndef FORG_SERVER
+        result.asset = definition->asset;
+        for(u32 patchIndex = 0; patchIndex < ArrayCount(result.patches); ++patchIndex)
+        {
+            TilePatch* patch = result.patches + patchIndex;
+            patch->offsetTime = RandomRangeFloat(seq, 0, 10);
+            patch->colorTime = RandomRangeFloat(seq, 0, 10);
+            patch->scaleTime = RandomRangeFloat(seq, 0, 10);
+        }
+#endif
     }
     
     return result;
@@ -296,7 +290,7 @@ internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* gene
             Assert(Normalized(tileNormZ));
             
             r32 elevation = GetTileElevation(generator, tileNormX, tileNormY, tileNormZ, &seqTest, seed);
-            if(elevation != nullTile.elevation)
+            if(elevation != minHeight)
             {
                 buildTiles = true;
             }
@@ -452,10 +446,15 @@ internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos 
                             }
                         }
                         
-                        
                         if(valid)
                         {
-                            AddEntity(server, P, seq, spawn->type, DefaultAddEntityParams());
+                            AddEntityParams params = DefaultAddEntityParams();
+                            if(spawn->attachedBrainEntity)
+                            {
+                                params.spawnFollowingEntity = true;
+                                params.attachedEntityType = spawn->attachedBrainType;
+                            }
+                            AddEntity(server, P, seq, spawn->type, params);
                         }
                     }
                 }
@@ -466,6 +465,52 @@ internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos 
     }
 }
 
+
+internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
+{
+    Assert(IsValid(newEntity->definitionID));
+    EntityDefinition* definition = GetData(server->assets, EntityDefinition, newEntity->definitionID);
+    EntityID ID = {};
+    ServerEntityInitParams params = definition->server;
+    params.P = newEntity->P;
+    params.startingAcceleration = newEntity->params.acceleration;
+    params.startingSpeed = newEntity->params.speed;
+    definition->common.definitionID = EntityReference(newEntity->definitionID);
+    params.seed = newEntity->seed;
+    
+    u8 archetype = SafeTruncateToU8(ConvertEnumerator(EntityArchetype, definition->archetype));
+    AcquireArchetype(server, archetype, (&ID));
+    InitEntity(server, ID, &definition->common, &params, 0); 
+    if(newEntity->params.playerIndex > 0)
+    {
+        Assert(HasComponent(ID, PlayerComponent));
+        PlayerComponent* player = (PlayerComponent*) Get_(&server->PlayerComponent_, newEntity->params.playerIndex);
+        SetComponent(server, ID, PlayerComponent, player);
+        ResetQueue(player->queues + GuaranteedDelivery_None);
+        QueueGameAccessConfirm(player, server->worldSeed, ID, false);
+    }
+    
+    if(newEntity->params.spawnFollowingEntity)
+    {
+        DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+        def->flags = AddFlags(def->flags, EntityFlag_locked);
+        AddEntityParams attachedParams = DefaultAddEntityParams();
+        attachedParams.targetBrainID = ID;
+        AddEntity(server, newEntity->P, &server->entropy, newEntity->params.attachedEntityType, attachedParams);
+    }
+    
+    if(IsValidID(newEntity->params.targetBrainID))
+    {
+		DefaultComponent* targetDef = GetComponent(server, newEntity->params.targetBrainID, DefaultComponent);
+		Assert(IsSet(targetDef->flags, EntityFlag_locked));
+		targetDef->flags = ClearFlags(targetDef->flags, EntityFlag_locked);
+        BrainComponent* brain = GetComponent(server, newEntity->params.targetBrainID, BrainComponent);
+        if(brain)
+        {
+            brain->ID = ID;
+        }
+    }
+}
 
 internal void SpawnEntities(ServerState* server, r32 elapsedTime)
 {
@@ -496,29 +541,16 @@ internal void SpawnEntities(ServerState* server, r32 elapsedTime)
     
     Clear(&tempPool);
     
+    NewEntity* firstCurrent = server->firstNewEntity;
     for(NewEntity* newEntity = server->firstNewEntity; newEntity; newEntity = newEntity->next)
     {
-        Assert(IsValid(newEntity->definitionID));
-        EntityDefinition* definition = GetData(server->assets, EntityDefinition, newEntity->definitionID);
-        EntityID ID = {};
-        ServerEntityInitParams params = definition->server;
-        params.P = newEntity->P;
-        params.startingAcceleration = newEntity->acceleration;
-        params.startingSpeed = newEntity->speed;
-        definition->common.definitionID = EntityReference(newEntity->definitionID);
-        params.seed = newEntity->seed;
-        
-        u8 archetype = SafeTruncateToU8(ConvertEnumerator(EntityArchetype, definition->archetype));
-        AcquireArchetype(server, archetype, (&ID));
-        InitEntity(server, ID, &definition->common, &params, 0); 
-        if(newEntity->playerIndex > 0)
-        {
-            Assert(HasComponent(ID, PlayerComponent));
-            PlayerComponent* player = (PlayerComponent*) Get_(&server->PlayerComponent_, newEntity->playerIndex);
-            SetComponent(server, ID, PlayerComponent, player);
-            ResetQueue(player->queues + GuaranteedDelivery_None);
-            QueueGameAccessConfirm(player, server->worldSeed, ID, false);
-        }
+        GenerateEntity(server, newEntity);
+    }
+    
+	//NOTE(leonardo): "following" entities that could have been spawned in the above loop
+    for(NewEntity* newEntity = server->firstNewEntity; newEntity != firstCurrent; newEntity = newEntity->next)
+    {
+        GenerateEntity(server, newEntity);
     }
     
     FREELIST_FREE(server->firstNewEntity, NewEntity, server->firstFreeNewEntity);
@@ -586,7 +618,6 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
                 }
             }
         }
-        
         Clear(&tempPool);
     }
 }

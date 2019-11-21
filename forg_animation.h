@@ -70,13 +70,30 @@ introspection() struct AnimationEffectDefinition
     r32 slowDownCoeff;
 };
 
+struct EntityAnimationParams
+{
+    r32 modulationPercentage;
+    Vec4 tint;
+    r32 dissolveCoeff;
+    r32 speed;
+};
+
+inline EntityAnimationParams DefaultAnimationParams()
+{
+    EntityAnimationParams result = {};
+    result.tint = V4(1, 1, 1, 1);
+    result.speed = 1.0f;
+    
+    return result;
+}
+
 #define MAX_ACTIVE_EFFECTS 8
 struct AnimationEffectComponent
 {
-    Vec4 tint;
+    EntityAnimationParams params;
+    
     r32 lightIntensity;
     Vec3 lightColor;
-    r32 slowDownCoeff;
     
     u32 effectCount;
     AnimationEffect effects[MAX_ACTIVE_EFFECTS];
@@ -102,8 +119,6 @@ struct AnimationComponent
     r32 scale;
     
     r32 speed;
-    
-    ShadowComponent shadow;
 };
 
 struct AnimationPiece
@@ -126,6 +141,7 @@ struct AnimationParams
     r32 angle;
     Vec3 P;
     Vec4 tint;
+    r32 dissolveCoeff;
     Lights lights;
     r32 scale;
     b32 flipOnYAxis;

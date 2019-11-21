@@ -1,57 +1,35 @@
-#if 1
-#define maxQuadsPerBatch 2048
-#define maxIndexesPerBatch maxQuadsPerBatch * 6
-#else
-#define maxIndexesPerBatch = (U16_MAX - 1);
-#define maxQuadsPerBatch = maxIndexesPerBatch / 6;
-#endif
-
-struct ReservedVertexes
+inline u32 ReserveQuad(RenderGroup* group)
 {
-    TexturedQuadsCommand* entry;
-	u32 vertIndex;
-	u32 indexIndex;
-};
-
-inline ReservedVertexes ReserveQuads(RenderGroup* group, u32 quadCount, u32 sliceIndex)
-{
-    ReservedVertexes result = {};
+    u32 result = 0xffffffff;
     GameRenderCommands* commands = group->commands;
     
-    Assert((quadCount * 6) <= maxIndexesPerBatch);
-    u32 vertexCount = quadCount * 4;
-    u32 indexCount = quadCount * 6;
-    
-    Assert(sliceIndex < ArrayCount(commands->slices));
-    RenderZSlice* slice = commands->slices + sliceIndex;
-    if(slice->currentQuads)
+    if(!commands->currentSetup)
     {
-        u32 currentIndexCount = (slice->currentQuads->quadCount + quadCount) * 6;
-        if(currentIndexCount > maxIndexesPerBatch)
-        {
-            slice->currentQuads = 0;
-        }
-    }
-    
-    if(!slice->currentQuads)
-    {
-        u32 size = sizeof(TexturedQuadsCommand);
+        u32 size = sizeof(RenderSetup);
         if(commands->usedSize + size <= commands->maxBufferSize)
         {
-            if(commands->quadCount + maxQuadsPerBatch <= commands->maxQuadCount)
+            if(commands->quadCount + 1 <= commands->maxQuadCount)
             {
-                TexturedQuadsCommand* newQuads = (TexturedQuadsCommand*) (commands->pushMemory + commands->usedSize);
-                newQuads->setup = group->lastSetup;
-                newQuads->quadCount = 0;
-                newQuads->indexArrayOffset = (commands->quadCount * 6);
-                newQuads->vertexArrayOffset = (commands->quadCount * 4);
+                RenderSetup* newSetup = (RenderSetup*) (commands->pushMemory + commands->usedSize);
+                *newSetup = group->lastSetup;
+                newSetup->quadCount = 0;
+                newSetup->vertexArrayOffset = (commands->quadCount * 4);
+                newSetup->indexArrayOffset = (commands->quadCount * 6);
+                newSetup->next = 0;
                 
-                slice->currentQuads = newQuads;
-                newQuads->next = slice->firstQuads;
-                slice->firstQuads = newQuads;
+                if(!commands->lastSetup)
+                {
+                    Assert(!commands->firstSetup);
+                    commands->firstSetup = commands->lastSetup = newSetup;
+                }
+                else
+                {
+                    commands->lastSetup->next = newSetup;
+                    commands->lastSetup = newSetup;
+                }
                 
+                commands->currentSetup = newSetup;
                 commands->usedSize += size;
-                commands->quadCount += maxQuadsPerBatch;
             }
             else
             {
@@ -64,28 +42,25 @@ inline ReservedVertexes ReserveQuads(RenderGroup* group, u32 quadCount, u32 slic
         }
     }
     
-    TexturedQuadsCommand* quads = slice->currentQuads;
-    if(quads)
+    RenderSetup* setup = commands->currentSetup;
+    if(setup)
     {
-        result.entry = quads;
-        result.indexIndex = quads->indexArrayOffset + (quads->quadCount * 6);
-        result.vertIndex = quads->vertexArrayOffset + (quads->quadCount * 4);
+        result = setup->vertexArrayOffset + (setup->quadCount * 4);
+        u16* indeces = commands->indexArray + (commands->quadCount * 6);
+        u32 batchCount = setup->quadCount / maxQuadsPerBatch;
+        u32 vertexArrayOffset = setup->vertexArrayOffset + (batchCount * maxQuadsPerBatch * 4);
+        u16 VI = SafeTruncateToU16(result - vertexArrayOffset);
+        indeces[0] = VI + 0;
+        indeces[1] = VI + 1;
+        indeces[2] = VI + 3;
+        indeces[3] = VI + 1;
+        indeces[4] = VI + 2;
+        indeces[5] = VI + 3;
         
-        quads->quadCount += quadCount;
+        setup->quadCount += 1;
+        commands->quadCount += 1;
     }
     
-    return result;
-}
-
-internal u32 GetSliceIndex(RenderGroup* group, SliceType slice, Vec3 P)
-{
-    Assert(slice < ArrayCount(group->commands->slices));
-    return slice;
-}
-
-inline b32 IsUpright(SliceType slice)
-{
-    b32 result = (slice == Slice_Standard);
     return result;
 }
 
@@ -94,33 +69,31 @@ inline void Clear(RenderGroup* renderGroup, Vec4 color)
     renderGroup->commands->clearColor = color;
 }
 
-inline void PushVertex(TexturedVertex* vert, Vec4 P, Vec3 N, Vec2 UV, u32 C, Lights lights, r32 modulationPercentage, u16 textureIndex, r32 lightInfluence, r32 lightYInfluence, r32 windInfluence)
+inline void PushVertex(TexturedVertex* vert, u32 vertexIndex, Vec4 P, Vec2 UV, u32 C, Lights lights, r32 modulationPercentage, u16 textureIndex, r32 lightInfluence, r32 lightYInfluence, r32 windInfluence, u8 windFrequency, r32 dissolvePercentage)
 {
     vert->P = P;
-    vert->N = N;
     vert->UV = UV;
     vert->color = C;
     vert->lightStartingIndex = lights.startingIndex;
     vert->lightEndingIndex = lights.endingIndex;
-    vert->modulationPercentage = (u16) (modulationPercentage * (r32) 0xffff);
-    vert->lightInfluence = (u16) ((1.0f - lightInfluence) * (r32) 0xffff);
-    vert->lightYInfluence = (u16) ((1.0f - lightYInfluence) * (r32) 0xffff);
-    vert->windInfluence = (u16) (windInfluence * (r32) 0xffff);
+    vert->modulationPercentage = (u8) (modulationPercentage * (r32) 0xff);
+    vert->lightInfluence = (u8) ((1.0f - lightInfluence) * (r32) 0xff);
+    vert->lightYInfluence = (u8) ((1.0f - lightYInfluence) * (r32) 0xff);
+    vert->windInfluence = (u8) (windInfluence * (r32) 0xff);
+    vert->windFrequency = windFrequency;
+    vert->dissolvePercentage = (u8) (dissolvePercentage * (r32) 0xff);
     vert->textureIndex = textureIndex;
+    vert->seed = (u8) vertexIndex;
 }
 
-inline void PushMagicQuad(RenderGroup* group, SliceType slice, Vec4 P, Vec4 lateral, Vec4 up, u32 color, RenderTexture texture, Lights lights, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences)
+inline void PushMagicQuad(RenderGroup* group, Vec4 P, Vec4 lateral, Vec4 up, u32 color, RenderTexture texture, Lights lights, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences, u8 windFrequency, Vec4 dissolvePercentages, u8 seed)
 {
-    u32 sliceIndex = GetSliceIndex(group, slice, P.xyz);
-    ReservedVertexes vertexes = ReserveQuads(group, 1, sliceIndex);
-    if(vertexes.entry)
+    TIMED_FUNCTION();
+    u32 vertexIndex = ReserveQuad(group);
+    if(vertexIndex != 0xffffffff)
     {
         GameRenderCommands* commands = group->commands;
-        TexturedVertex* vert = commands->vertexArray + vertexes.vertIndex;
-        u16* indeces = commands->indexArray + vertexes.indexIndex;
-        u16 VI = SafeTruncateToU16(vertexes.vertIndex - vertexes.entry->vertexArrayOffset);
-        
-        Vec3 N = V3(0, 0, 1);
+        TexturedVertex* vert = commands->vertexArray + vertexIndex;
         u16 textureIndex = (u16) texture.index;
         Vec2 invUV = V2((r32) texture.width / MAX_IMAGE_DIM, (r32) texture.height / MAX_IMAGE_DIM);
         
@@ -136,74 +109,53 @@ inline void PushMagicQuad(RenderGroup* group, SliceType slice, Vec4 P, Vec4 late
         
         u32 C = color;
         
-        PushVertex(vert + 0, P0, N, UV0, C, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.x);
-        PushVertex(vert + 1, P1, N, UV1, C, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.y);
-        PushVertex(vert + 2, P2, N, UV2, C, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.z);
-        PushVertex(vert + 3, P3, N, UV3, C, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.w);
-        
-        indeces[0] = VI + 0;
-        indeces[1] = VI + 1;
-        indeces[2] = VI + 3;
-        indeces[3] = VI + 1;
-        indeces[4] = VI + 2;
-        indeces[5] = VI + 3;
+        PushVertex(vert + 0, seed + 0, P0, UV0, C, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.x, windFrequency, dissolvePercentages.x);
+        PushVertex(vert + 1, seed + 1, P1, UV1, C, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.y, windFrequency, dissolvePercentages.y);
+        PushVertex(vert + 2, seed + 2, P2, UV2, C, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.z, windFrequency, dissolvePercentages.z);
+        PushVertex(vert + 3, seed + 3, P3, UV3, C, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.w, windFrequency, dissolvePercentages.w);
     }
 }
 
 inline void PushQuad(RenderGroup* group, RenderTexture texture, Lights lights,
-                     ReservedVertexes* reservedVertexes, 
+                     u32 vertexIndex, 
                      Vec4 P0, Vec2 UV0, u32 C0,
                      Vec4 P1, Vec2 UV1, u32 C1,
                      Vec4 P2, Vec2 UV2, u32 C2,
-                     Vec4 P3, Vec2 UV3, u32 C3, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences)
+                     Vec4 P3, Vec2 UV3, u32 C3, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences, u8 windFrequency,Vec4 dissolvePercentages)
 {
-    if(reservedVertexes->entry)
+    if(vertexIndex != 0xffffffff)
     {
         GameRenderCommands* commands = group->commands;
-        TexturedVertex* vert = commands->vertexArray + reservedVertexes->vertIndex;
-        u16* indeces = commands->indexArray + reservedVertexes->indexIndex;
-        u16 VI = SafeTruncateToU16(reservedVertexes->vertIndex - reservedVertexes->entry->vertexArrayOffset);
-        reservedVertexes->vertIndex += 4;
-        reservedVertexes->indexIndex += 6;
+        TexturedVertex* vert = commands->vertexArray + vertexIndex;
         
-        Vec3 N = Normalize(Cross(P1.xyz - P0.xyz, P2.xyz - P0.xyz));
         u16 textureIndex = (u16) texture.index;
         Vec2 invUV = V2((r32) texture.width / MAX_IMAGE_DIM, (r32) texture.height / MAX_IMAGE_DIM);
-        
         
         UV0 = Hadamart(UV0, invUV);
         UV1 = Hadamart(UV1, invUV);
         UV2 = Hadamart(UV2, invUV);
         UV3 = Hadamart(UV3, invUV);
         
-        
-        PushVertex(vert + 0, P0, N, UV0, C0, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.x);
-        PushVertex(vert + 1, P1, N, UV1, C1, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.y);
-        PushVertex(vert + 2, P2, N, UV2, C2, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.z);
-        PushVertex(vert + 3, P3, N, UV3, C3, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.w);
-        
-        indeces[0] = VI + 0;
-        indeces[1] = VI + 1;
-        indeces[2] = VI + 3;
-        indeces[3] = VI + 1;
-        indeces[4] = VI + 2;
-        indeces[5] = VI + 3;
+        PushVertex(vert + 0, 0, P0, UV0, C0, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.x, windFrequency, dissolvePercentages.x);
+        PushVertex(vert + 1, 0, P1, UV1, C1, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.y, windFrequency, dissolvePercentages.y);
+        PushVertex(vert + 2, 0, P2, UV2, C2, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.z, windFrequency, dissolvePercentages.z);
+        PushVertex(vert + 3, 0, P3, UV3, C3, lights, modulationPercentage, textureIndex, lightInfluence, lightYInfluence, windInfluences.w, windFrequency, dissolvePercentages.w);
     }
 }
 
 inline void PushQuad(RenderGroup* group, RenderTexture texture, Lights lights,
-                     ReservedVertexes* reservedVertexes,
+                     u32 vertexIndex,
                      Vec4 P0, Vec2 UV0, Vec4 C0,
                      Vec4 P1, Vec2 UV1, Vec4 C1,
                      Vec4 P2, Vec2 UV2, Vec4 C2,
-                     Vec4 P3, Vec2 UV3, Vec4 C3, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences)
+                     Vec4 P3, Vec2 UV3, Vec4 C3, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences, u8 windFrequency, Vec4 dissolvePercentages)
 {
     PushQuad(group, texture, lights,
-             reservedVertexes,
+             vertexIndex,
              P0, UV0, RGBAPack8x4(C0 * 255.0f),
              P1, UV1, RGBAPack8x4(C1 * 255.0f),
              P2, UV2, RGBAPack8x4(C2 * 255.0f),
-             P3, UV3, RGBAPack8x4(C3 * 255.0f), modulationPercentage, lightInfluence, lightYInfluence, windInfluences);
+             P3, UV3, RGBAPack8x4(C3 * 255.0f), modulationPercentage, lightInfluence, lightYInfluence, windInfluences, windFrequency, dissolvePercentages);
 }
 
 inline void PushLineSegment(RenderGroup* group, RenderTexture texture, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, Lights lights = {0, 0})
@@ -219,9 +171,8 @@ inline void PushLineSegment(RenderGroup* group, RenderTexture texture, Vec4 colo
     
     u32 c = StoreColor(color);
     
-    u32 sliceIndex = GetSliceIndex(group, Slice_Standard, fromP);
-    ReservedVertexes vertexes = ReserveQuads(group, 1, sliceIndex);
-    PushQuad(group, texture, lights, &vertexes, P0, V2(0, 0), c, P1, V2(1, 0), c, P2, V2(1, 1), c, P3, V2(0, 1), c, 0, 0, 0, {});
+    u32 vertexIndex = ReserveQuad(group);
+    PushQuad(group, texture, lights, vertexIndex, P0, V2(0, 0), c, P1, V2(1, 0), c, P2, V2(1, 1), c, P3, V2(0, 1), c, 0, 0, 0, {}, 0, {});
 }
 
 inline void PushLine(RenderGroup* group, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, Lights lights = {0, 0})
@@ -229,13 +180,13 @@ inline void PushLine(RenderGroup* group, Vec4 color, Vec3 fromP, Vec3 toP, r32 t
     PushLineSegment(group, group->whiteTexture, color, fromP, toP, tickness, lights);
 }
 
-inline void PushRect4Colors(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 c1, Vec4 c2, Vec4 c3, Vec4 c4, Lights lights)
+inline void PushRect_(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Lights lights)
 {
     GameRenderCommands* commands = renderGroup->commands;
     Vec3 XAxis = V3(1, 0, 0);
     Vec3 YAxis = V3(0, 1, 0);
     
-    if(IsUpright(objectTransform.slice))
+    if(objectTransform.upright)
     {
         P += objectTransform.cameraOffset.x * renderGroup->gameCamera.X + objectTransform.cameraOffset.y * renderGroup->gameCamera.Y + objectTransform.cameraOffset.z * renderGroup->gameCamera.Z;  
         
@@ -260,44 +211,40 @@ inline void PushRect4Colors(RenderGroup* renderGroup, ObjectTransform objectTran
     Vec2 minUV = V2(0.0f, 0.0f);
     Vec2 maxUV = V2(1.0f, 1.0f);
     
-    u32 sliceIndex = GetSliceIndex(renderGroup, objectTransform.slice, P);
-    ReservedVertexes vertexes = ReserveQuads(renderGroup, 1, sliceIndex);
-    PushQuad(renderGroup, renderGroup->whiteTexture, lights, &vertexes,
-             V4(min.x, min.y, min.z, objectTransform.additionalZBias), V2(minUV.x, minUV.y), c1,
-             V4(max.x, min.y, min.z, objectTransform.additionalZBias), V2(maxUV.x, minUV.y), c2,
-             V4(max.x, max.y, max.z, objectTransform.additionalZBias), V2(maxUV.x, maxUV.y), c3,
-             V4(min.x, max.y, max.z, objectTransform.additionalZBias), V2(minUV.x, maxUV.y), c4, objectTransform.modulationPercentage, objectTransform.lightInfluence, objectTransform.lightYInfluence, objectTransform.windInfluences);
+    Vec4 C = objectTransform.tint;
+    
+    u32 vertexIndex = ReserveQuad(renderGroup);
+    PushQuad(renderGroup, renderGroup->whiteTexture, lights, vertexIndex,
+             V4(min.x, min.y, min.z, objectTransform.additionalZBias), V2(minUV.x, minUV.y), C,
+             V4(max.x, min.y, min.z, objectTransform.additionalZBias), V2(maxUV.x, minUV.y), C,
+             V4(max.x, max.y, max.z, objectTransform.additionalZBias), V2(maxUV.x, maxUV.y), C,
+             V4(min.x, max.y, max.z, objectTransform.additionalZBias), V2(minUV.x, maxUV.y), C, objectTransform.modulationPercentage, objectTransform.lightInfluence, objectTransform.lightYInfluence, objectTransform.windInfluences, objectTransform.windFrequency, objectTransform.dissolvePercentages);
 }
 
-inline void PushRect4Colors(RenderGroup* renderGroup, ObjectTransform objectTransform, Rect2 rect, Vec4 c0, Vec4 c1, Vec4 c2, Vec4 c3, Lights lights = {0, 0})
+inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim,Lights lights = {0, 0})
 {
-    PushRect4Colors(renderGroup, objectTransform, V3(GetCenter(rect), 0.0f), GetDim(rect), c0, c1, c2, c3, lights);
+    PushRect_(renderGroup, objectTransform, P, dim, lights);
 }
 
-inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim, Vec4 color, Lights lights = {0, 0})
+inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Rect2 rect, Lights lights = {0, 0})
 {
-    PushRect4Colors(renderGroup, objectTransform, P, dim, color, color, color, color, lights);
-}
-
-inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Rect2 rect, Vec4 color, Lights lights = {0, 0})
-{
-    PushRect(renderGroup, objectTransform, V3(GetCenter(rect), 0.0f), GetDim(rect), color, lights);
+    PushRect(renderGroup, objectTransform, V3(GetCenter(rect), 0.0f), GetDim(rect), lights);
 }
 
 
 inline void PushRectOutline(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, 
-                            Vec2 dim, Vec4 color, r32 thickness)
+                            Vec2 dim, r32 thickness)
 {
     Vec2 halfDim = 0.5f * dim;
-    PushRect(renderGroup, objectTransform, P + V3(0.0f, halfDim.y, 0.0f), V2(dim.x, thickness), color);
-    PushRect(renderGroup, objectTransform, P +V3(0.0f, -halfDim.y, 0.0f), V2(dim.x, thickness), color);
-    PushRect(renderGroup, objectTransform, P + V3(halfDim.x, 0.0f, 0.0f), V2(thickness, dim.y), color);
-    PushRect(renderGroup, objectTransform, P + V3(-halfDim.x, 0.0f, 0.0f), V2(thickness, dim.y), color);
+    PushRect(renderGroup, objectTransform, P + V3(0.0f, halfDim.y, 0.0f), V2(dim.x, thickness));
+    PushRect(renderGroup, objectTransform, P +V3(0.0f, -halfDim.y, 0.0f), V2(dim.x, thickness));
+    PushRect(renderGroup, objectTransform, P + V3(halfDim.x, 0.0f, 0.0f), V2(thickness, dim.y));
+    PushRect(renderGroup, objectTransform, P + V3(-halfDim.x, 0.0f, 0.0f), V2(thickness, dim.y));
 }
 
-inline void PushRectOutline(RenderGroup* renderGroup, ObjectTransform objectTransform, Rect2 rect, Vec4 color, r32 thickness, r32 z = 0.0f)
+inline void PushRectOutline(RenderGroup* renderGroup, ObjectTransform objectTransform, Rect2 rect, r32 thickness, r32 z = 0.0f)
 {
-    PushRectOutline(renderGroup, objectTransform, V3(GetCenter(rect), z), GetDim(rect), color, thickness);
+    PushRectOutline(renderGroup, objectTransform, V3(GetCenter(rect), z), GetDim(rect), thickness);
 }
 
 
@@ -358,6 +305,10 @@ inline BitmapDim GetBitmapDim(Bitmap* bitmap, Vec2 pivot, Vec3 P, Vec3 XAxis, Ve
 {
     BitmapDim result;
     
+	if(height == 0)
+	{
+		height = bitmap->nativeHeight;
+    }
     result.size =  Hadamart(V2(height * bitmap->widthOverHeight, height), scale);
     
     pivot = Hadamart(pivot, result.size);
@@ -369,13 +320,10 @@ inline BitmapDim GetBitmapDim(Bitmap* bitmap, Vec2 pivot, Vec3 P, Vec3 XAxis, Ve
     return result;
 }
 
-inline void PushTexture(RenderGroup* group, RenderTexture texture, SliceType slice, Vec3 P, Vec3 XAxis = V3(1, 0, 0), Vec3 YAxis = V3(0, 1, 0), Vec4 color = V4(1, 1, 1, 1), Lights lights = {}, r32 modulationPercentage = 0.0f, r32 lightInfluence = 0, r32 lightYInfluence = 0, r32 ZBias = 0.0f, Vec4 windInfluences = {})
+inline void PushTexture(RenderGroup* group, RenderTexture texture, Vec3 P, Vec3 XAxis = V3(1, 0, 0), Vec3 YAxis = V3(0, 1, 0), Vec4 color = V4(1, 1, 1, 1), Lights lights = {}, r32 modulationPercentage = 0.0f, r32 lightInfluence = 0, r32 lightYInfluence = 0, r32 ZBias = 0.0f, Vec4 windInfluences = {}, u8 windFrequency = 0, Vec4 dissolvePercentages = {})
 {
-    r32 oneTexelU = 1.0f / texture.width;
-    r32 oneTexelV = 1.0f / texture.height;
-    Vec2 minUV = V2(oneTexelU, oneTexelV);
-    Vec2 maxUV = V2(1.0f - oneTexelU, 1.0f - oneTexelV);
-    
+    Vec2 minUV = V2(0, 0);
+    Vec2 maxUV = V2(1.0f, 1.0f);
     u32 colorInt = RGBAPack8x4(color * 255.0f);
     
     Vec4 minXminY = V4(P, 0.0f + ZBias);
@@ -384,34 +332,39 @@ inline void PushTexture(RenderGroup* group, RenderTexture texture, SliceType sli
     Vec4 maxXmaxY = V4(P + XAxis + YAxis, ZBias);
     
     
-    u32 sliceIndex = GetSliceIndex(group, slice, P);
-    ReservedVertexes vertexes = ReserveQuads(group, 1, sliceIndex);
+    u32 vertexIndex = ReserveQuad(group);
     if((XAxis.x >= 0 && YAxis.y >= 0) ||
        (XAxis.x < 0 && YAxis.y < 0))
     {
-        PushQuad(group, texture, lights, &vertexes,
+        PushQuad(group, texture, lights, vertexIndex,
                  minXminY, V2(minUV.x, minUV.y), colorInt,
                  maxXminY, V2(maxUV.x, minUV.y), colorInt,
                  maxXmaxY, V2(maxUV.x, maxUV.y), colorInt,
-                 minXmaxY, V2(minUV.x, maxUV.y), colorInt, modulationPercentage, lightInfluence, lightYInfluence, windInfluences);
+                 minXmaxY, V2(minUV.x, maxUV.y), colorInt, modulationPercentage, lightInfluence, lightYInfluence, windInfluences, windFrequency, dissolvePercentages);
     }
     else
     {
-        PushQuad(group, texture, lights, &vertexes,
+        PushQuad(group, texture, lights, vertexIndex,
                  minXminY, V2(minUV.x, minUV.y), colorInt,
                  minXmaxY, V2(minUV.x, maxUV.y), colorInt,
                  maxXmaxY, V2(maxUV.x, maxUV.y), colorInt,
-                 maxXminY, V2(maxUV.x, minUV.y), colorInt, modulationPercentage, lightInfluence, lightYInfluence, windInfluences);
+                 maxXminY, V2(maxUV.x, minUV.y), colorInt, modulationPercentage, lightInfluence, lightYInfluence, windInfluences, windFrequency, dissolvePercentages);
     }
 }
 
-inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform transform, ColoredBitmap coloredBitmap,  Vec3 P, r32 height, Vec4 color, Lights lights, Vec2 pivot)
+inline Vec3 GetCameraOffset(RenderGroup* group, Vec3 P)
+{
+    Vec3 result = P.x * group->gameCamera.X + P.y * group->gameCamera.Y + P.z * group->gameCamera.Z;
+    return result;
+}
+
+inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform transform, ColoredBitmap coloredBitmap,  Vec3 P, r32 height, Lights lights, Vec2 pivot)
 {
     BitmapDim result = {};
     GameRenderCommands* commands = renderGroup->commands;
     
     Bitmap* bitmap = coloredBitmap.bitmap;
-    color = Hadamart(color, coloredBitmap.coloration);
+    Vec4 color = Hadamart(transform.tint, coloredBitmap.coloration);
     
     if(bitmap->width && bitmap->height)
     {
@@ -426,9 +379,9 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform transform
             transform.cameraOffset.x = -transform.cameraOffset.x;
         }
         
-        if(IsUpright(transform.slice))
+        if(transform.upright)
         {
-            P += transform.cameraOffset.x * renderGroup->gameCamera.X + transform.cameraOffset.y * renderGroup->gameCamera.Y + transform.cameraOffset.z * renderGroup->gameCamera.Z;  
+			P += GetCameraOffset(renderGroup, transform.cameraOffset);
             
             Vec3 XAxis0 = V3(XAxis.x, 0.0f, XAxis.y);
             Vec3 YAxis0 = V3(YAxis.x, 0.0f, YAxis.y);
@@ -438,6 +391,7 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform transform
             
             XAxis = XAxis1;
             YAxis = YAxis1;
+            
             //YAxis = Lerp(YAxis0, 0.5f, YAxis1);
             //YAxis.z = Lerp(YAxis0.z, 0.0f, YAxis1.z);
         }
@@ -446,22 +400,14 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform transform
             P += transform.cameraOffset;
         }
         
+        result = GetBitmapDim(bitmap, pivot, P, XAxis, YAxis, height, transform.scale);
         
-        if(height == 0)
-        {
-            height = bitmap->nativeHeight;
-        }
-        
-        BitmapDim dim = GetBitmapDim(bitmap, pivot, P, XAxis, YAxis, height, transform.scale);
-        result = dim;
-        
-        P = dim.P;
-        XAxis= XAxis * dim.size.x;
-        YAxis = YAxis * dim.size.y;
+        XAxis *= result.size.x;
+        YAxis *= result.size.y;
         
         if(!transform.dontRender)
         {
-            PushTexture(renderGroup, bitmap->textureHandle, transform.slice, P, XAxis, YAxis, color, lights, transform.modulationPercentage, transform.additionalZBias);
+            PushTexture(renderGroup, bitmap->textureHandle, result.P, XAxis, YAxis, color, lights, transform.modulationPercentage, transform.additionalZBias, transform.lightInfluence, transform.lightYInfluence, transform.windInfluences, transform.windFrequency, transform.dissolvePercentages);
         }
     }
     
@@ -476,7 +422,7 @@ inline BitmapDim GetBitmapDim(RenderGroup* renderGroup, ObjectTransform transfor
     if(bitmap.bitmap)
     {
         transform.dontRender = true;
-        result = PushBitmap_(renderGroup, transform, bitmap, P, height, V4(1, 1, 1, 1), {}, bitmap.pivot);
+        result = PushBitmap_(renderGroup, transform, bitmap, P, height, {}, bitmap.pivot);
     }
     else
     {
@@ -486,13 +432,13 @@ inline BitmapDim GetBitmapDim(RenderGroup* renderGroup, ObjectTransform transfor
     return result;
 }
 
-inline BitmapDim PushBitmap(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, r32 height = 0, Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
+inline BitmapDim PushBitmap(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, r32 height = 0, Lights lights = {0, 0})
 {
     BitmapDim result = {};
     ColoredBitmap bitmap = GetBitmap(renderGroup->assets, ID);
     if(bitmap.bitmap)
     {
-        result = PushBitmap_(renderGroup, transform, bitmap, P, height, color, lights, bitmap.pivot);
+        result = PushBitmap_(renderGroup, transform, bitmap, P, height, lights, bitmap.pivot);
     }
     else
     {
@@ -502,13 +448,13 @@ inline BitmapDim PushBitmap(RenderGroup* renderGroup, ObjectTransform transform,
     return result;
 }
 
-inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, Vec2 pivot, r32 height = 0,  Vec4 color = V4(1.0f,1.0f, 1.0f, 1.0f), Lights lights = {0, 0})
+inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, Vec2 pivot, r32 height = 0, Lights lights = {0, 0})
 {
     BitmapDim result = {};
     ColoredBitmap bitmap = GetBitmap(renderGroup->assets, ID);
     if(bitmap.bitmap)
     {
-        result = PushBitmap_(renderGroup, transform, bitmap, P, height, color, lights, pivot);
+        result = PushBitmap_(renderGroup, transform, bitmap, P, height, lights, pivot);
     }
     else
     {
@@ -518,6 +464,8 @@ inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform t
     return result;
 }
 
+
+#if 0
 inline void PushCube_(RenderGroup* group, Vec3 P, r32 height, r32 width, RenderTexture texture, Vec4 color, Lights lights)
 {
     r32 radius = 0.5f * width;
@@ -549,19 +497,20 @@ inline void PushCube_(RenderGroup* group, Vec3 P, r32 height, r32 width, RenderT
     Vec4 BGr = color;
     
     Vec4 wind = {};
+    Vec4 dissolve = {};
     
     u32 sliceIndex = GetSliceIndex(group, Slice_Flat, P);
-    ReservedVertexes vertexes = ReserveQuads(group, 6, sliceIndex);
-    PushQuad(group, texture, lights, &vertexes, P0, T0, TC, P1, T1, TC, P2, T2, TC, P3, T3, TC, 0, 0, 0, wind);
-    PushQuad(group, texture, lights, &vertexes, P7, T0, BC, P6, T1, BC, P5, T2, BC, P4, T3, BC, 0, 0, 0, wind);
+    u32 vertexIndex = ReserveQuads(group, 6, sliceIndex);
+    PushQuad(group, texture, lights, vertexIndex, P0, T0, TC, P1, T1, TC, P2, T2, TC, P3, T3, TC, 0, 0, 0, wind, 0, dissolve);
+    PushQuad(group, texture, lights, vertexIndex, P7, T0, BC, P6, T1, BC, P5, T2, BC, P4, T3, BC, 0, 0, 0, wind, 0, dissolve);
     
-    PushQuad(group, texture, lights, &vertexes, P4, T0, BGr, P5, T1, BGr, P1, T2, TGr, P0, T3, TGr, 0, 0, 0, wind);
+    PushQuad(group, texture, lights, &vertexes, P4, T0, BGr, P5, T1, BGr, P1, T2, TGr, P0, T3, TGr, 0, 0, 0, wind, 0, dissolve);
     
-    PushQuad(group, texture, lights, &vertexes, P2, T0, TGr, P6, T1, BGr, P7, T2, BGr, P3, T3, TGr, 0, 0, 0, wind);
+    PushQuad(group, texture, lights, &vertexes, P2, T0, TGr, P6, T1, BGr, P7, T2, BGr, P3, T3, TGr, 0, 0, 0, wind, 0, dissolve);
     
-    PushQuad(group, texture, lights, &vertexes, P1, T0, TGr, P5, T1, BGr, P6, T2, BGr, P2, T3, TGr, 0, 0, 0, wind);
+    PushQuad(group, texture, lights, &vertexes, P1, T0, TGr, P5, T1, BGr, P6, T2, BGr, P2, T3, TGr, 0, 0, 0, wind, 0, dissolve);
     
-    PushQuad(group, texture, lights, &vertexes, P7, T0, BGr, P4, T1, BGr, P0, T2, TGr, P3, T3, TGr, 0, 0, 0, wind);
+    PushQuad(group, texture, lights, &vertexes, P7, T0, BGr, P4, T1, BGr, P0, T2, TGr, P3, T3, TGr, 0, 0, 0, wind, 0, dissolve);
     
 }
 
@@ -584,12 +533,7 @@ inline void PushCube(RenderGroup* group, Vec3 P, r32 height, r32 width, Vec4 col
 {
     PushCube_(group, P, height, width, group->whiteTexture, color, lights);
 }
-
-inline Vec3 GetCameraOffset(RenderGroup* group, Vec3 P)
-{
-    Vec3 result = P.x * group->gameCamera.X + P.y * group->gameCamera.Y + P.z * group->gameCamera.Z;
-    return result;
-}
+#endif
 
 inline Vec2 GetScreenP(RenderGroup* group, Vec3 Point)
 {
@@ -685,12 +629,15 @@ internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont*
                     }
                     else
                     {
+                        ObjectTransform transform = FlatTransform(ZBias);
+                        transform.tint = V4(0, 0, 0, 1);
                         if(drawShadow)
                         {
-                            PushBitmap(group, FlatTransform(ZBias), ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight, V4( 0.0f, 0.0f, 0.0f, 1.0f ));
+                            PushBitmap(group, transform, ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight);
                         }
                         
-                        PushBitmap(group, FlatTransform(ZBias), ID, P, glyphHeight, color);
+                        transform.tint = color;
+                        PushBitmap(group, transform, ID, P, glyphHeight);
                     }
                 }
             }
@@ -759,12 +706,7 @@ internal void PushTextEnclosed(RenderGroup* group, FontId fontID, char* string, 
 inline void PushSetup_(RenderGroup* group, RenderSetup* setup)
 {
     group->lastSetup = *setup;
-    
-    for(u32 sliceIndex = 0; sliceIndex < ArrayCount(group->commands->slices); ++sliceIndex)
-    {
-        RenderZSlice* slice = group->commands->slices + sliceIndex;
-        slice->currentQuads = 0;
-    }
+    group->commands->currentSetup = 0;
 }
 
 inline RenderGroup BeginRenderGroup(Assets* assets, GameRenderCommands* commands)
@@ -898,7 +840,7 @@ inline Vec3 UnprojectAtZ(RenderGroup* group, CameraTransform* camera, Vec2 scree
     clipSpaceXY.x *= (2.0f / group->screenDim.x);
     clipSpaceXY.y *= (2.0f / group->screenDim.y);
     
-    Vec4 clip = V4( clipSpaceXY * clipW, clipZ, clipW);
+    Vec4 clip = V4(clipSpaceXY * clipW, clipZ, clipW);
     Vec3 world = (camera->proj.backward * clip).xyz;
     Vec3 result = world;
     

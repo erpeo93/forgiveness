@@ -1,4 +1,7 @@
 #pragma once
+#define FADE_IN_TIME 0.5f
+#define FADE_OUT_TIME 0.1f
+
 struct ImageReference
 {
     u64 typeHash;
@@ -7,7 +10,6 @@ struct ImageReference
 
 struct StandardImageComponent
 {
-    ShadowComponent shadow;
     ImageReference entity;
 };
 
@@ -25,9 +27,16 @@ struct FrameByFrameAnimationComponent
 {
     r32 runningTime;
     r32 speed;
-    
-    ShadowComponent shadow;
     u64 typeHash;
+};
+
+struct MultipartAnimationComponent
+{
+	u16 staticCount;
+    ImageReference staticParts[4];
+    
+	u16 frameByFrameCount;
+	FrameByFrameAnimationComponent frameByFrameParts[4];
 };
 
 struct LayoutPiece
@@ -41,7 +50,6 @@ struct LayoutPiece
 
 struct LayoutComponent
 {
-    ShadowComponent shadow;
     Vec2 rootScale;
     r32 rootAngle;
     u64 rootHash;

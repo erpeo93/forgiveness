@@ -1,6 +1,7 @@
 
 STANDARD_ECS_JOB_SERVER(UpdateBrain)
 {
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     BrainComponent* brain = GetComponent(server, ID, BrainComponent);
     switch(brain->type)
     {
@@ -9,27 +10,46 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
             
         } break;
         
-        case Brain_test:
-        {
-            EntityRef sword = EntityReference(server->assets, "default", "sword");
-            
-            ContainerComponent* container = GetComponent(server, ID, ContainerComponent);
-            if(container)
+		case Brain_Portal:
+		{
+            SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
+            if(IsValid(&playerQuery))
             {
-                for(u32 slotIndex = 0; slotIndex < ArrayCount(container->storedObjects); ++slotIndex)
+                EntityID playerID = GetCurrent(&playerQuery);
+                DefaultComponent* playerDef = GetComponent(server, playerID, DefaultComponent);
+                r32 maxDistanceSq = Square(2.0f);
+                
+                r32 distanceSq = LengthSq(SubtractOnSameZChunk(playerDef->P, def->P));
+                if(distanceSq < maxDistanceSq)
                 {
-                    InventorySlot* slot = container->storedObjects + slotIndex;
-                    if(IsValidID(slot->ID))
+                    if(!IsValidID(brain->ID))
                     {
-                        PhysicComponent* physic = GetComponent(server, slot->ID, PhysicComponent);
-                        if(AreEqual(physic->definitionID, sword))
-                        {
-                            slot->ID = {};
-                        }
+                        AddEntityParams params = DefaultAddEntityParams();
+                        params.targetBrainID = ID;
+                        EntityRef type = EntityReference(server->assets, "default", "wolf");
+                        def->flags = AddFlags(def->flags, EntityFlag_locked);
+                        AddEntity(server, def->P, &server->entropy, type, params);
+                    }
+				}
+                else
+                {
+                    if(IsValidID(brain->ID))
+                    {
+                        DeleteEntity(server, brain->ID);
+                        brain->ID = {};
                     }
                 }
             }
-        } break;
+            else
+            {
+                if(IsValidID(brain->ID))
+                {
+                    DeleteEntity(server, brain->ID);
+                    brain->ID = {};
+                }
+            }
+		} break;
+        
 #if 0        
         case campfire_brain:
         {

@@ -1,4 +1,5 @@
 #include "forg_render.h"
+#define MIPMAPPING 1
 #define GL_MAJOR_VERSION                  0x821B
 #define GL_MINOR_VERSION                  0x821C
 #define GL_NUM_EXTENSIONS                 0x821D
@@ -268,7 +269,7 @@ internal void OpenGLAllocateTexture(RenderTexture texture, void* data)
     
     glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
     
-#if 0
+#if MIPMAPPING
     for(MIPIterator mip = BeginMIPs(texture.width, texture.height, (u32*) data);
         IsValid(&mip);
         Advance(&mip))
@@ -292,13 +293,19 @@ inline b32 IsValidArray(GLuint index)
     glVertexAttribIPointer(array, 1, GL_UNSIGNED_SHORT, sizeof(structure),(void*) OffsetOf(structure, field));\
 }
 
+
+#define OPENGL_BIND_U8(array, structure, field) if(IsValidArray(array))\
+{\
+    glEnableVertexAttribArray(array);\
+    glVertexAttribIPointer(array, 1, GL_UNSIGNED_BYTE, sizeof(structure),(void*) OffsetOf(structure, field));\
+}
+
 internal void OpenGLUseProgramBegin(OpenGLProgramCommon* prog)
 {
     glUseProgram(prog->progHandle);
     GLuint UVArray = prog->vertUVID;
     GLuint CArray = prog->vertColorID;
     GLuint PArray = prog->vertPID;
-    GLuint NArray = prog->vertNID;
     
     if(IsValidArray(UVArray))
     {
@@ -319,19 +326,17 @@ internal void OpenGLUseProgramBegin(OpenGLProgramCommon* prog)
         glVertexAttribPointer(PArray, 4, GL_FLOAT, false, sizeof(TexturedVertex), (void*) OffsetOf(TexturedVertex, P));
     }
     
-    if(IsValidArray(NArray))
-    {
-        glEnableVertexAttribArray(NArray);
-        glVertexAttribPointer(NArray, 3, GL_FLOAT, false, sizeof(TexturedVertex), (void*) OffsetOf(TexturedVertex, N));
-    }
-    
     OPENGL_BIND_U16(prog->lightStartingIndexID, TexturedVertex, lightStartingIndex);
     OPENGL_BIND_U16(prog->lightEndingIndexID, TexturedVertex, lightEndingIndex);
-    OPENGL_BIND_U16(prog->modulationID, TexturedVertex, modulationPercentage);
-    OPENGL_BIND_U16(prog->lightInfluenceID, TexturedVertex, lightInfluence);
-    OPENGL_BIND_U16(prog->lightYInfluenceID, TexturedVertex, lightYInfluence);
     OPENGL_BIND_U16(prog->textureIndexID, TexturedVertex, textureIndex);
-    OPENGL_BIND_U16(prog->windInfluenceID, TexturedVertex, windInfluence);
+    
+    OPENGL_BIND_U8(prog->modulationID, TexturedVertex, modulationPercentage);
+    OPENGL_BIND_U8(prog->lightInfluenceID, TexturedVertex, lightInfluence);
+    OPENGL_BIND_U8(prog->lightYInfluenceID, TexturedVertex, lightYInfluence);
+    OPENGL_BIND_U8(prog->windInfluenceID, TexturedVertex, windInfluence);
+    OPENGL_BIND_U8(prog->windFrequencyID, TexturedVertex, windFrequency);
+    OPENGL_BIND_U8(prog->dissolvePercentageID, TexturedVertex, dissolvePercentage);
+    OPENGL_BIND_U8(prog->seedID, TexturedVertex, seed);
 }
 
 internal void OpenGLUseProgramBegin(ZBiasProgram* prog, RenderSetup* setup)
@@ -342,6 +347,7 @@ internal void OpenGLUseProgramBegin(ZBiasProgram* prog, RenderSetup* setup)
     glUniform1i(prog->textureSamplerID, 0);
     glUniform1i(prog->lightSource0ID, 1);
     glUniform1i(prog->lightSource1ID, 2);
+    glUniform1i(prog->noiseID, 3);
     
     glUniform3fv(prog->ambientLightColorID, 1, setup->ambientLightColor.E);
     glUniform1f(prog->timeID, setup->totalTimeElapsed);
@@ -370,6 +376,9 @@ internal void OpenGLUseProgramEnd(OpenGLProgramCommon* prog)
     DISABLE_VERTEX_ATTRIBUTE(prog->lightInfluenceID);
     DISABLE_VERTEX_ATTRIBUTE(prog->lightYInfluenceID);
     DISABLE_VERTEX_ATTRIBUTE(prog->windInfluenceID);
+    DISABLE_VERTEX_ATTRIBUTE(prog->windFrequencyID);
+    DISABLE_VERTEX_ATTRIBUTE(prog->dissolvePercentageID);
+    DISABLE_VERTEX_ATTRIBUTE(prog->seedID);
 }
 
 internal void OpenGLManageTextures(TextureOp* first)
@@ -434,7 +443,6 @@ internal GLuint OpenGLCreateProgram(char* defines, char* headerCode, char* verte
     common->progHandle = programID;
     common->vertUVID = glGetAttribLocation(programID, "vertUV");
     common->vertPID = glGetAttribLocation(programID, "vertP");
-    common->vertNID = glGetAttribLocation(programID, "vertN");
     common->vertColorID = glGetAttribLocation(programID, "vertColor");
     common->lightStartingIndexID = glGetAttribLocation(programID, "lightStartingIndex");
     common->lightEndingIndexID = glGetAttribLocation(programID, "lightEndingIndex");
@@ -443,6 +451,9 @@ internal GLuint OpenGLCreateProgram(char* defines, char* headerCode, char* verte
     common->lightInfluenceID = glGetAttribLocation(programID, "lightInfluence");
     common->lightYInfluenceID = glGetAttribLocation(programID, "lightYInfluence");
     common->windInfluenceID = glGetAttribLocation(programID, "windInfluence");
+    common->windFrequencyID = glGetAttribLocation(programID, "windFrequency");
+    common->dissolvePercentageID = glGetAttribLocation(programID, "dissolvePercentage");
+    common->seedID = glGetAttribLocation(programID, "seed");
     
     return programID;
 }
@@ -489,7 +500,6 @@ internal void OpenGLCompileZBiasProgram(ZBiasProgram* result)
     char* vertexCode = R"FOO(
         //vertex code
         in Vec4 vertP;
-        in Vec3 vertN;
         in Vec2 vertUV;
         in Vec4 vertColor;
 in int lightStartingIndex;
@@ -499,29 +509,34 @@ in int modulationPercentage;
 in int lightInfluence;
 in int lightYInfluence;
 in int windInfluence;
+in int windFrequency;
+in int dissolvePercentage;
+in int seed;
 
     uniform m4x4 transform;
     uniform r32 time;
     uniform Vec3 windDirection;
     uniform r32 windStrength;
          smooth out Vec2 fragUV;
+         smooth out Vec2 fragUVNormalized;
          smooth out Vec4 fragColor;
          smooth out Vec3 worldPos;
-         smooth out Vec3 worldNorm;
           flat out int fragLightStartingIndex;
           flat out int fragLightEndingIndex;
           flat out int fragTextureIndex;
            smooth out r32 modulationWithFocusColor;
            smooth out r32 lightInfluencePercentage;
            smooth out r32 lightYInfluencePercentage;
+           smooth out r32 fragDissolvePercentage;
            
     void main(void)
           {
     Vec4 inVertex = V4(vertP.xyz, 1.0f);
     
-    r32 windInfl = windStrength * (float(windInfluence) / 0xffff);
-    r32 windFrequency = 1.0f;
-     Vec3 wind = sin(time+(vertP.x + vertP.y + vertP.z) * windFrequency) * windDirection.xyz * windInfl;
+    r32 windInfl = (float(windInfluence) / 0xff);
+    r32 windSpeed = windStrength * float(windFrequency);
+    
+     Vec3 wind = sin((time + seed) * windSpeed) * windDirection.xyz * windInfl;
 inVertex.xyz += wind;
 
            r32 zBias = vertP.w;
@@ -535,15 +550,27 @@ inVertex.xyz += wind;
                                           gl_Position = vec4(zMinTransform.x, zMinTransform.y, modifiedZ, zMinTransform.w);
                                           
                                           fragUV = vertUV;
+                                          
+                                          fragUVNormalized = V2(0, 0);
+                                          if(vertUV.x > 0)
+                                          {
+                                          fragUVNormalized.x = 1.0f;
+}
+
+if(vertUV.y > 0)
+{
+fragUVNormalized.y = 1.0f;
+}
+
                                           fragColor = vertColor;
                                           worldPos = inVertex.xyz;
-                                          worldNorm = vertN;
                                             fragLightStartingIndex = lightStartingIndex;
                                             fragLightEndingIndex = lightEndingIndex;
                                            fragTextureIndex = textureIndex;
-                                           modulationWithFocusColor = float(modulationPercentage) / 0xffff;
-                                            lightInfluencePercentage = float(lightInfluence) / 0xffff;
-                                            lightYInfluencePercentage = float(lightYInfluence) / 0xffff;
+                                           modulationWithFocusColor = float(modulationPercentage) / 0xff;
+                                            lightInfluencePercentage = float(lightInfluence) / 0xff;
+                                            lightYInfluencePercentage = float(lightYInfluence) / 0xff;
+                                            fragDissolvePercentage = float(dissolvePercentage) / 0xff;
     }
     
    )FOO";
@@ -554,12 +581,13 @@ inVertex.xyz += wind;
     uniform sampler2DArray textureSampler;
     uniform sampler1D lightSource0;
     uniform sampler1D lightSource1;
+    uniform sampler2D noise;
     
 out Vec4 resultColor;
     smooth in Vec2 fragUV;
+    smooth in Vec2 fragUVNormalized;
     smooth in Vec4 fragColor;
     smooth in Vec3 worldPos;
-    smooth in Vec3 worldNorm;
     
     flat in int fragLightStartingIndex;
     flat in int fragLightEndingIndex;
@@ -568,17 +596,22 @@ out Vec4 resultColor;
      smooth in r32 modulationWithFocusColor;
      smooth in r32 lightInfluencePercentage;
            smooth in r32 lightYInfluencePercentage;
+           smooth in r32 fragDissolvePercentage;
            
     uniform Vec3 ambientLightColor;
     void main(void)
      {
      Vec3 arrayUV = V3(fragUV.x, fragUV.y, fragTextureIndex);
      Vec4 texSample = texture(textureSampler, arrayUV);
+     Vec4 noiseSample = texture(noise, fragUVNormalized);
+     
      #if shaderSimTexLoadSRGB
 texSample.rgb *= texSample.rgb;
      #endif
      
-resultColor = fragColor * texSample;
+     if(noiseSample.r > fragDissolvePercentage)
+     {
+     resultColor = fragColor * texSample;
      if(resultColor.a > 0)
      {
      Vec3 modulationLightColor = ambientLightColor;
@@ -623,6 +656,12 @@ else
 {
 discard;
 }
+}
+else
+{
+discard;
+}
+
      }
    )FOO";
     GLuint prog = OpenGLCreateProgram(defines, globalHeaderCode, vertexCode, fragmentCode, &result->common);
@@ -632,6 +671,7 @@ discard;
     result->textureSamplerID = glGetUniformLocation(prog, "textureSampler");
     result->lightSource0ID = glGetUniformLocation(prog, "lightSource0");
     result->lightSource1ID = glGetUniformLocation(prog, "lightSource1");
+    result->noiseID = glGetUniformLocation(prog, "noise");
     
     result->ambientLightColorID = glGetUniformLocation(prog, "ambientLightColor");
     result->windDirectionID = glGetUniformLocation(prog, "windDirection");
@@ -729,10 +769,10 @@ internal void OpenGLInit(OpenGLInfo info, b32 frameBufferSupportSRGB)
         glBindBuffer(GL_ARRAY_BUFFER, opengl.screenFillVertexBuffer);
         TexturedVertex vertices[] = 
         {
-            {{-1.0f, 1.0f, 0, 1.0f} , {}, {0.0f, 1.0f}, 0xffffffff},
-            {{-1.0f, -1.0f, 0, 1.0f} ,  {}, {0.0f, 0.0f}, 0xffffffff},
-            {{1.0f, 1.0f, 0, 1.0f} , {}, {1.0f, 1.0f}, 0xffffffff},
-            {{1.0f, -1.0f, 0, 1.0f} , {}, {1.0f, 0.0f}, 0xffffffff},
+            {{-1.0f, 1.0f, 0, 1.0f}, {0.0f, 1.0f}, 0xffffffff},
+            {{-1.0f, -1.0f, 0, 1.0f}, {0.0f, 0.0f}, 0xffffffff},
+            {{1.0f, 1.0f, 0, 1.0f}, {1.0f, 1.0f}, 0xffffffff},
+            {{1.0f, -1.0f, 0, 1.0f}, {1.0f, 0.0f}, 0xffffffff},
         };
         
         glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
@@ -749,7 +789,7 @@ internal void OpenGLInit(OpenGLInfo info, b32 frameBufferSupportSRGB)
     {
         glTexImage3D(GL_TEXTURE_2D_ARRAY, mip.level, opengl.defaultSpriteTextureFormat, mip.image.width, mip.image.height, opengl.maxTextureCount, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, 0);
     }
-#if 0
+#if MIPMAPPING
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
 #else
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -785,7 +825,6 @@ internal void FreeProgram(OpenGLProgramCommon* program)
     glDeleteProgram(program->progHandle);
 }
 
-
 internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
 {
     FreeFrameBuffer(&opengl.frameBuffer);
@@ -795,6 +834,7 @@ internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
     
     glDeleteTextures(1, &opengl.lightSource0);
     glDeleteTextures(1, &opengl.lightSource1);
+    glDeleteTextures(1, &opengl.noise);
     
     opengl.settings = *settings;
     
@@ -826,21 +866,27 @@ internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
     glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     
     glBindTexture(GL_TEXTURE_1D, 0);
+    
+    
+    glGenTextures(1, &opengl.noise);
+    glBindTexture(GL_TEXTURE_2D, opengl.noise);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, NOISE_WIDTH, NOISE_HEIGHT, 0, GL_RGBA, GL_FLOAT, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion, i32 windowWidth, i32 windowHeight)
 {
-    TIMED_FUNCTION();
-    
     glDepthMask(GL_TRUE);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glDepthFunc(GL_LEQUAL);
-    glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
     glEnable(GL_SCISSOR_TEST);
-    
     glEnable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     
@@ -862,7 +908,8 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     glBindBuffer(GL_ARRAY_BUFFER, opengl.vertexBuffer);
     glBufferData(GL_ARRAY_BUFFER, totalVertexCount * sizeof(TexturedVertex), commands->vertexArray, GL_STREAM_DRAW);
     
-    u32 totalIndexCount = commands->maxQuadCount * 6;
+    
+    u32 totalIndexCount = commands->quadCount * 6;
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, opengl.indexBuffer);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, totalIndexCount * sizeof(u16), commands->indexArray, GL_STREAM_DRAW);
     
@@ -872,49 +919,75 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     glTexSubImage1D(GL_TEXTURE_1D, 0, 0, MAX_LIGHTS, GL_RGBA, GL_FLOAT, commands->lightSource1);
     glBindTexture(GL_TEXTURE_1D, 0);
     
-    glBindBuffer(GL_ARRAY_BUFFER, opengl.vertexBuffer);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, opengl.indexBuffer);
+    if(!opengl.noiseTextureUploaded)
+    {
+        glBindTexture(GL_TEXTURE_2D, opengl.noise);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, NOISE_WIDTH, NOISE_HEIGHT, GL_RGBA, GL_FLOAT, commands->noiseTexture);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        opengl.noiseTextureUploaded = true;
+    }
     
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_1D, opengl.lightSource0);
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_1D, opengl.lightSource1);
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, opengl.noise);
     glActiveTexture(GL_TEXTURE0);
     
     
-    for(u32 sliceIndex = 0; sliceIndex < ArrayCount(commands->slices); ++sliceIndex)
+    
+    glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
+    for(RenderSetup* setup = commands->firstSetup; setup; setup = setup->next)
     {
-        RenderZSlice* slice = commands->slices + sliceIndex;
-        for(TexturedQuadsCommand* quads = slice->firstQuads; quads; quads = quads->next)
+#if 0        
+        if(transparent)
         {
-            RenderSetup* setup = &quads->setup;
-            Rect2i clipRect = setup->rect;
+            glDisable(GL_DEPTH_TEST);
+            SortQuads();
+        }
+        else
+#endif
+        
+        {
+            glDepthFunc(GL_LEQUAL);
+            glEnable(GL_DEPTH_TEST);
+        }
+        
+        Rect2i clipRect = setup->rect;    
+        glScissor(clipRect.minX, clipRect.minY, clipRect.maxX - clipRect.minX, clipRect.maxY - clipRect.minY);
+        
+        if(setup->renderTargetIndex > 0)
+        {
+            OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
+            glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, opengl.textureArray, 0, setup->renderTargetIndex);
+        }
+        
+        ZBiasProgram* program = &opengl.zBias;
+        OpenGLUseProgramBegin(program, setup);
+        Assert(setup->quadCount > 0);
+        u32 batchCount = (setup->quadCount / maxQuadsPerBatch) + 1;
+        u32 vertexOffset = setup->vertexArrayOffset;
+        u32 indexOffset = setup->indexArrayOffset;
+        u32 quadsRemaining = setup->quadCount;
+        for(u32 batchIndex = 0; batchIndex < batchCount; ++batchIndex)
+        {
+            u32 quadCount = Min(quadsRemaining, maxQuadsPerBatch);
+            glDrawElementsBaseVertex(GL_TRIANGLES, 6 * quadCount, GL_UNSIGNED_SHORT, (GLvoid*) (indexOffset * sizeof(u16)), vertexOffset);
             
-            glScissor(clipRect.minX, clipRect.minY, clipRect.maxX - clipRect.minX, clipRect.maxY - clipRect.minY);
-            
-            glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
-            if(setup->renderTargetIndex > 0)
-            {
-                OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
-                glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, opengl.textureArray, 0, setup->renderTargetIndex);
-            }
-            
-            
-            ZBiasProgram* program = &opengl.zBias;
-            OpenGLUseProgramBegin(program, setup);
-            OpenGLProgramCommon* common = &program->common;
-            
-            glDrawElementsBaseVertex(GL_TRIANGLES, 6 * quads->quadCount, GL_UNSIGNED_SHORT, (GLvoid*) (quads->indexArrayOffset * sizeof(u16)), quads->vertexArrayOffset);
-            
-            glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-            OpenGLUseProgramEnd(common);
-            
-            if(setup->renderTargetIndex > 0)
-            {
-                OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
-            }
+            vertexOffset += quadCount * 4;
+            indexOffset += quadCount * 6;
+            quadsRemaining -= quadCount;
+        }
+        
+        OpenGLUseProgramEnd(&program->common);
+        if(setup->renderTargetIndex > 0)
+        {
+            OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
         }
     }
+    
+    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
     
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     glViewport(0, 0, windowWidth, windowHeight);
@@ -922,11 +995,10 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     
     glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT);
-    
+    glDisable(GL_DEPTH_TEST);
     glViewport(drawRegion.minX, drawRegion.minY, GetWidth(drawRegion), GetHeight(drawRegion));
     glScissor(drawRegion.minX, drawRegion.minY, GetWidth(drawRegion), GetHeight(drawRegion));
     
-    glDisable(GL_DEPTH_TEST);
     glBindBuffer(GL_ARRAY_BUFFER, opengl.screenFillVertexBuffer);
     OpenGLUseProgramBegin(&opengl.finalStretch);
     glBindTexture(GL_TEXTURE_2D, opengl.frameBuffer.colorHandle);

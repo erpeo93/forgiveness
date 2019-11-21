@@ -7,25 +7,21 @@ internal b32 ShouldBeRendered(GameModeWorld* worldMode, BaseComponent* base)
         result = ((base->universeP.chunkZ == worldMode->player.universeP.chunkZ) &&
                   !(base->flags & EntityFlag_notInWorld) &&
                   !(base->flags & EntityFlag_occluding));
+        
+        r32 maxLengthSq = Square(1.5f * (r32) CHUNK_DIM);
+        if(result && LengthSq(SubtractOnSameZChunk(base->universeP, worldMode->player.universeP)) > maxLengthSq)
+        {
+            result = false;
+        }
     }
     return result;
 }
 
-internal Vec4 GetTint(GameModeWorld* worldMode, EntityID ID)
+internal EntityAnimationParams GetEntityAnimationParams(GameModeWorld* worldMode, EntityID ID)
 {
-    AnimationEffectComponent* animationEffects = GetComponent(worldMode, ID, AnimationEffectComponent);
-    Vec4 result = animationEffects ? animationEffects->tint : V4(1, 1, 1, 1);
-    
+    AnimationEffectComponent* animation = GetComponent(worldMode, ID, AnimationEffectComponent);
+    EntityAnimationParams result = animation ? animation->params : DefaultAnimationParams();
     return result;
-}
-
-internal void SlowDown(GameModeWorld* worldMode, EntityID ID, r32* timeToAdvance)
-{
-    AnimationEffectComponent* animationEffects = GetComponent(worldMode, ID, AnimationEffectComponent);
-    if(animationEffects)
-    {
-        *timeToAdvance *= (1.0f - animationEffects->slowDownCoeff);
-    }
 }
 
 internal void RenderShadow(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ShadowComponent* shadowComponent, r32 deepness, r32 width)
@@ -46,7 +42,8 @@ internal void RenderShadow(GameModeWorld* worldMode, RenderGroup* group, Vec3 P,
             
             ObjectTransform transform = FlatTransform(0.01f);
             transform.scale = Hadamart(shadowComponent->scale, V2(xScale, yScale));
-            PushBitmap(group, transform, shadowID, P + shadowComponent->offset, 0, shadowComponent->color, lights);
+            transform.tint = shadowComponent->color;
+            PushBitmap(group, transform, shadowID, P + shadowComponent->offset, 0, lights);
         }
         else
         {
@@ -73,17 +70,16 @@ internal GameProperty SearchForProperty(GameProperty* properties, u32 propertyCo
 
 RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
 {
-    SlowDown(worldMode, ID, &elapsedTime);
+    EntityAnimationParams animationParams = GetEntityAnimationParams(worldMode, ID);
+    elapsedTime *= animationParams.speed;
+    
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     if(ShouldBeRendered(worldMode, base))
     {
         r32 height = GetHeight(base->bounds);
-        r32 deepness = GetWidth(base->bounds);
-        r32 width = GetWidth(base->bounds);
         
         Vec3 P = GetRelativeP(worldMode, base);
         AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
-        RenderShadow(worldMode, group, P, &animation->shadow, deepness, width);
         
         if(Abs(base->velocity.x) > 0.1f)
         {
@@ -101,8 +97,9 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.flipOnYAxis = animation->flipOnYAxis;
         params.equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
         params.equipped = GetComponent(worldMode, ID, UsingMappingComponent);
-        params.tint = GetTint(worldMode, ID);
-        params.modulationPercentage = GetModulationPercentage(worldMode, ID); 
+        params.tint = animationParams.tint;
+        params.dissolveCoeff = animationParams.dissolveCoeff;
+        params.modulationPercentage = animationParams.modulationPercentage; 
         
         GameProperty action = SearchForProperty(base->properties, base->propertyCount, Property_action);
         if(FinishedSingleCycleAnimation(animation))
@@ -149,22 +146,29 @@ internal BitmapId GetCorrenspondingFrameByFrameImage(Assets* assets, u64 typeHas
     return result;
 }
 
+RENDERING_ECS_JOB_CLIENT(RenderShadow)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    ShadowComponent* shadow = GetComponent(worldMode, ID, ShadowComponent);
+    Vec3 P = GetRelativeP(worldMode, base);
+    r32 deepness = GetWidth(base->bounds);
+    r32 width = GetWidth(base->bounds);
+    
+    RenderShadow(worldMode, group, P, shadow, deepness, width);
+}
+
 RENDERING_ECS_JOB_CLIENT(RenderPlants)
 {
-    SlowDown(worldMode, ID, &elapsedTime);
+    EntityAnimationParams params = GetEntityAnimationParams(worldMode, ID);
+    elapsedTime *= params.speed;
+    
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     if(ShouldBeRendered(worldMode, base))
     {
         r32 height = GetHeight(base->bounds);
-        r32 deepness = GetWidth(base->bounds);
-        r32 width = GetWidth(base->bounds);
-        
         Vec3 P = GetRelativeP(worldMode, base);
         Lights lights = GetLights(worldMode, P);
         StandardImageComponent* image = GetComponent(worldMode, ID, StandardImageComponent);
-        RenderShadow(worldMode, group, P, &image->shadow, deepness, width);
-        
-        r32 modulationPercentage = GetModulationPercentage(worldMode, ID); 
         
         PlantComponent* plant = GetComponent(worldMode, ID, PlantComponent);
         
@@ -172,8 +176,12 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
         BitmapId BID = GetImageFromReference(group->assets, &image->entity, &seq);
         if(IsValid(BID))
         {  
-            Vec4 color = GetTint(worldMode, ID);
-            BitmapDim bitmapData = PushBitmap(group, UprightTransform(), BID, P, height, color, lights);
+            ObjectTransform transform = UprightTransform();
+            transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1);
+            transform.modulationPercentage = params.modulationPercentage;
+            transform.tint = params.tint;
+            
+            BitmapDim bitmapData = PushBitmap(group, transform, BID, P, height, lights);
             
             Bitmap* bitmap = GetBitmap(group->assets, BID).bitmap;
             PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, BID);
@@ -208,7 +216,10 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
                                 u32 C = 0xffffffff;
                                 
                                 Vec4 windInfluences = V4(0, 0, plant->windInfluence, plant->windInfluence);
-								PushMagicQuad(group, Slice_Standard, V4(pointP, 0), lateral, up, C, leafBitmap->textureHandle, lights, modulationPercentage, 0, 0, windInfluences);
+                                u8 windFrequency = 1;
+                                u8 seed = (u8) attachmentPointIndex;
+                                Vec4 dissolvePercentages = V4(0, 0, 0, 0);
+								PushMagicQuad(group, V4(pointP, 0), lateral, up, C, leafBitmap->textureHandle, lights, params.modulationPercentage, 0, 0, windInfluences, windFrequency, dissolvePercentages, seed);
 							}
 						}
 					}
@@ -218,39 +229,44 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
     }
 }
 
+internal void RenderStaticAnimation(GameModeWorld* worldMode, RenderGroup* group, EntityAnimationParams params, BaseComponent* base, ImageReference* image, r32 elapsedTime)
+{
+    r32 height = GetHeight(base->bounds);
+    Vec3 P = GetRelativeP(worldMode, base);
+    Lights lights = GetLights(worldMode, P);
+    
+    RandomSequence seq = Seed(base->seed);
+    BitmapId BID = GetImageFromReference(group->assets, image, &seq);
+    if(IsValid(BID))
+    {
+        ObjectTransform transform = UprightTransform();
+        transform.modulationPercentage = params.modulationPercentage; 
+        transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1); 
+        transform.tint = params.tint;
+        PushBitmap(group, transform, BID, P, height, lights);
+    }
+}
+
+
 RENDERING_ECS_JOB_CLIENT(RenderSpriteEntities)
 {
-    SlowDown(worldMode, ID, &elapsedTime);
+    EntityAnimationParams params = GetEntityAnimationParams(worldMode, ID);
+	elapsedTime *= params.speed;
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     
     if(ShouldBeRendered(worldMode, base))
     {
-        r32 height = GetHeight(base->bounds);
-        r32 deepness = GetWidth(base->bounds);
-        r32 width = GetWidth(base->bounds);
-        
-        Vec3 P = GetRelativeP(worldMode, base);
-        Lights lights = GetLights(worldMode, P);
         StandardImageComponent* image = GetComponent(worldMode, ID, StandardImageComponent);
-        RenderShadow(worldMode, group, P, &image->shadow, deepness, width);
-        
-        RandomSequence seq = Seed(base->seed);
-        BitmapId BID = GetImageFromReference(group->assets, &image->entity, &seq);
-        if(IsValid(BID))
-        {
-            ObjectTransform transform = UprightTransform();
-            transform.modulationPercentage = GetModulationPercentage(worldMode, ID); 
-            PushBitmap(group, UprightTransform(), BID, P, height, GetTint(worldMode, ID), lights);
-        }
+		RenderStaticAnimation(worldMode, group, params, base, &image->entity, elapsedTime);
     }
 }
 
 RENDERING_ECS_JOB_CLIENT(RenderGrass)
 {
-    
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     MagicQuadComponent* quad = GetComponent(worldMode, ID, MagicQuadComponent);
     GrassComponent* grass = GetComponent(worldMode, ID, GrassComponent);
+    
     if(ShouldBeRendered(worldMode, base))
     {
         if(IsValid(quad->bitmapID))
@@ -258,13 +274,28 @@ RENDERING_ECS_JOB_CLIENT(RenderGrass)
             Bitmap* bitmap = GetBitmap(group->assets, quad->bitmapID).bitmap;
             if(bitmap)
             {
-                Vec3 P = GetRelativeP(worldMode, base->universeP);
+                RandomSequence seq = Seed(base->seed);
+				Vec3 P = GetRelativeP(worldMode, base->universeP);
                 Lights lights = GetLights(worldMode, P);
-                
                 P -= quad->offset;
                 
+                BaseComponent* playerBase = GetComponent(worldMode, worldMode->player.clientID, BaseComponent);
+                
+                u8 windFrequency = (u8) grass->windFrequencyStandard;
+                if(RectOverlaps(Offset(grass->bounds, P), playerBase->bounds) 
+                   && LengthSq(playerBase->velocity) > 0.1f
+                   )
+                {
+                    windFrequency = (u8) grass->windFrequencyOverlap;
+                }
                 Vec4 windInfluences = V4(0, 0, grass->windInfluence, grass->windInfluence);
-                PushMagicQuad(group, Slice_Standard, V4(P, 0), quad->lateral, quad->up, quad->color, bitmap->textureHandle, lights, 0, 0, 0, windInfluences);
+                Vec4 dissolvePercentages = V4(0, 0, 0, 0);
+                
+				for(u32 grassIndex = 0; grassIndex < grass->count; ++grassIndex)
+				{
+					Vec3 grassP = P + Hadamart(RandomBilV3(&seq), grass->maxOffset);
+					PushMagicQuad(group, V4(grassP, 0), quad->lateral, quad->up, quad->color, bitmap->textureHandle, lights, 0, 0, 0, windInfluences, windFrequency, dissolvePercentages, (u8) grassIndex);
+				}
             }
             else
             {
@@ -274,35 +305,61 @@ RENDERING_ECS_JOB_CLIENT(RenderGrass)
     }
 }
 
-RENDERING_ECS_JOB_CLIENT(RenderFrameByFrameEntities)
+internal void RenderFrameByFrameAnimation(GameModeWorld* worldMode, RenderGroup* group, EntityAnimationParams params, BaseComponent* base, FrameByFrameAnimationComponent* animation, r32 elapsedTime)
 {
-    SlowDown(worldMode, ID, &elapsedTime);
-    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    elapsedTime *= params.speed;
+    r32 height = GetHeight(base->bounds);
     
-    if(ShouldBeRendered(worldMode, base))
+    Vec3 P = GetRelativeP(worldMode, base);
+    Lights lights = GetLights(worldMode, P);
+    animation->runningTime += elapsedTime * animation->speed;
+    
+    
+    
+    BitmapId BID = GetCorrenspondingFrameByFrameImage(group->assets, animation->typeHash, animation->runningTime);
+    if(IsValid(BID))
     {
-        r32 height = GetHeight(base->bounds);
-        r32 deepness = GetWidth(base->bounds);
-        r32 width = GetWidth(base->bounds);
-        
-        Vec3 P = GetRelativeP(worldMode, base);
-        Lights lights = GetLights(worldMode, P);
-        FrameByFrameAnimationComponent* animation = GetComponent(worldMode, ID, FrameByFrameAnimationComponent);
-        animation->runningTime += elapsedTime * animation->speed;
-        
-        
-        RenderShadow(worldMode, group, P, &animation->shadow, deepness, width);
-        
-        BitmapId BID = GetCorrenspondingFrameByFrameImage(group->assets, animation->typeHash, animation->runningTime);
-        if(IsValid(BID))
-        {
-            ObjectTransform transform = UprightTransform();
-            transform.modulationPercentage = GetModulationPercentage(worldMode, ID); 
-            PushBitmap(group, UprightTransform(), BID, P, height, GetTint(worldMode, ID), lights);
-        }
+        ObjectTransform transform = UprightTransform();
+        transform.modulationPercentage = params.modulationPercentage; 
+        transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1);
+        transform.tint = params.tint;
+        PushBitmap(group, transform, BID, P, height, lights);
     }
 }
 
+RENDERING_ECS_JOB_CLIENT(RenderFrameByFrameEntities)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    EntityAnimationParams params = GetEntityAnimationParams(worldMode, ID);
+    if(ShouldBeRendered(worldMode, base))
+    {
+        FrameByFrameAnimationComponent* animation = GetComponent(worldMode, ID, FrameByFrameAnimationComponent);
+		RenderFrameByFrameAnimation(worldMode, group, params, base, animation, elapsedTime);
+    }
+}
+
+RENDERING_ECS_JOB_CLIENT(RenderMultipartEntity)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    EntityAnimationParams params = GetEntityAnimationParams(worldMode, ID);
+    if(ShouldBeRendered(worldMode, base))
+    {
+        MultipartAnimationComponent* multipart = GetComponent(worldMode, ID, MultipartAnimationComponent);
+		for(u32 staticIndex = 0; staticIndex < multipart->staticCount; ++staticIndex)
+		{
+            ImageReference* staticImage = multipart->staticParts + staticIndex;
+            RenderStaticAnimation(worldMode, group, params, base, staticImage, elapsedTime);
+		}
+        
+        for(u32 frameByFrameIndex = 0;
+            frameByFrameIndex < multipart->frameByFrameCount; 
+            ++frameByFrameIndex)
+		{
+            FrameByFrameAnimationComponent* frameByFrame = multipart->frameByFrameParts + frameByFrameIndex;
+            RenderFrameByFrameAnimation(worldMode, group, params, base, frameByFrame, elapsedTime);
+		}
+    }
+}
 
 internal void RenderLayoutInRectCameraAligned(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, Vec3 rectP, Rect2 cameraRect, ObjectTransform transform, Vec4 color, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container);
 internal void RenderLayoutInRect(GameModeWorld* worldMode, RenderGroup* group, Rect2 rect, ObjectTransform transform, Vec4 color, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container);
@@ -312,21 +369,22 @@ internal void DrawObjectMapping(GameModeWorld* worldMode, RenderGroup* group, Ob
     {
         EntityID objectID = mapping->object.ID;
         BaseComponent* objectBase = GetComponent(worldMode, objectID, BaseComponent);
-        transform.modulationPercentage = GetModulationPercentage(worldMode, objectID);
+        EntityAnimationParams params = GetEntityAnimationParams(worldMode, objectID);
+        transform.modulationPercentage = params.modulationPercentage;
+        transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1);
         LayoutComponent* objectLayout = GetComponent(worldMode, objectID, LayoutComponent);
         
-        Vec4 color = GetTint(worldMode, objectID);
         if(objectBase && objectLayout)
         {
             LayoutContainer objectContainer = {};
             
-            if(IsUpright(transform.slice))
+            if(transform.upright)
             {
-                RenderLayoutInRectCameraAligned(worldMode, group, P, spaceDim.P, rect, transform, color, objectLayout, objectBase->seed, lights, &objectContainer);
+                RenderLayoutInRectCameraAligned(worldMode, group, P, spaceDim.P, rect, transform, params.tint, objectLayout, objectBase->seed, lights, &objectContainer);
             }
             else
             {
-                RenderLayoutInRect(worldMode, group, rect, transform, color, objectLayout, objectBase->seed, lights, &objectContainer);
+                RenderLayoutInRect(worldMode, group, rect, transform, params.tint, objectLayout, objectBase->seed, lights, &objectContainer);
             }
         }
     }
@@ -397,7 +455,7 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
             {
                 transform.additionalZBias += 0.01f * pieceIndex;
                 BitmapDim dim = GetBitmapDim(group, transform, BID, P, piece->height);
-                if(IsUpright(transform.slice))
+                if(transform.upright)
                 {
                     result = ProjectOnScreen(group, dim);
                 }
@@ -406,12 +464,13 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                     result = RectMinDim(dim.P.xy, dim.size);
                 }
                 
-                r32 alpha = 0.7f;         
+                r32 alpha = 1.0f;         
                 if(container->container)
                 {
                     ContainerMappingComponent* c = container->container;
                     if(piece->nameHash == emptySpaceHash)
                     {
+                        alpha = 0.7f;
                         ObjectMapping* mapping = FindCompatibleMapping(c->storedMappings, ArrayCount(c->storedMappings),container->storedObjectsDrawn, ArrayCount(container->storedObjectsDrawn),piece->inventorySlotType);
                         if(mapping)
                         {
@@ -430,6 +489,7 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                     
                     else if(piece->nameHash == usingSpaceHash)
                     {
+                        alpha = 0.7f;
                         ObjectMapping* mapping = FindCompatibleMapping(c->usingMappings, ArrayCount(c->usingMappings), container->usingObjectsDrawn, ArrayCount(container->usingObjectsDrawn),piece->inventorySlotType);
                         if(mapping)
                         {
@@ -445,7 +505,10 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                         result = InvertedInfinityRect2();
                     }
                 }
-                PushBitmap(group, transform, BID, P, piece->height, V4(1, 1, 1, alpha), lights);
+                
+                color.a *= alpha;
+                transform.tint = color;
+                PushBitmap(group, transform, BID, P, piece->height, lights);
                 
                 PAKBitmap* bitmap = GetBitmapInfo(group->assets, BID);
                 for(u32 attachmentIndex = 0; attachmentIndex < bitmap->attachmentPointCount; ++attachmentIndex)
@@ -526,7 +589,8 @@ internal void RenderLayoutInRectCameraAligned(GameModeWorld* worldMode, RenderGr
 
 RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
 {
-    SlowDown(worldMode, ID, &elapsedTime);
+    EntityAnimationParams params = GetEntityAnimationParams(worldMode, ID);
+    elapsedTime *= params.speed;
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     if(ShouldBeRendered(worldMode, base))
     {
@@ -537,12 +601,12 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
         Vec3 P = GetRelativeP(worldMode, base);
         Lights lights = GetLights(worldMode, P);
         LayoutComponent* layout = GetComponent(worldMode, ID, LayoutComponent);
-        RenderShadow(worldMode, group, P, &layout->shadow, deepness, width);
         
         ObjectTransform transform = UprightTransform();
         transform.angle = layout->rootAngle;
         transform.scale = layout->rootScale;
-        transform.modulationPercentage = GetModulationPercentage(worldMode, ID); 
+        transform.modulationPercentage = params.modulationPercentage; 
+        transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1); 
         
         ContainerMappingComponent* container = GetComponent(worldMode, ID, ContainerMappingComponent);
         LayoutContainer layoutContainer = {};
@@ -552,8 +616,7 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
             layoutContainer.drawMode = LayoutContainerDraw_Open;
         }
         
-        Vec4 color = GetTint(worldMode, ID);
-        RenderLayout(worldMode, group, P, transform, color, layout, base->seed, lights, &layoutContainer);
+        RenderLayout(worldMode, group, P, transform, params.tint, layout, base->seed, lights, &layoutContainer);
     }
 }
 
@@ -645,12 +708,12 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     AnimationEffectComponent* effects = GetComponent(worldMode, ID, AnimationEffectComponent);
+    InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
     
     Vec3 P = GetRelativeP(worldMode, base);
     
-    effects->tint = V4(1, 1, 1, 1);
+    effects->params = DefaultAnimationParams();
     effects->lightIntensity = 0;
-    effects->slowDownCoeff = 0.0f;
     
     for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
     {
@@ -744,10 +807,47 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
         }
     }
     
+    if(interaction && interaction->isOnFocus)
+    {
+        effects->params.modulationPercentage = 0.2f;
+    }
+    
     if(tintCount > 0)
     {
-        effects->tint = averageTint *= 1.0f / tintCount;
+        effects->params.tint = averageTint *= 1.0f / tintCount;
     }
+    
+    Vec3 fadeInOutColor = V3(1, 1, 1);
+    if(base)
+    {
+        if(base->deletedTime)
+        {
+            fadeInOutColor = (1.0f - Clamp01MapToRange(base->deletedTime, base->totalLifeTime, base->deletedTime + FADE_OUT_TIME)) * V3(1, 1, 1);
+        }
+        else
+        {
+            fadeInOutColor = V3(1, 1, 1) * Clamp01MapToRange(0, base->totalLifeTime, FADE_IN_TIME);
+        }
+    }
+    effects->params.tint = Hadamart(effects->params.tint, V4(fadeInOutColor, 1));
+    
+    
+    if(slowDownCount > 0)
+    {
+        effects->params.speed = averageSlowDown / slowDownCount;
+    }
+    
+    
+    
+    if(base->deletedTime)
+    {
+        effects->params.dissolveCoeff = Clamp01MapToRange(base->deletedTime, base->totalLifeTime, base->deletedTime + FADE_OUT_TIME);
+    }
+    else
+    {
+        effects->params.dissolveCoeff = 1.0f - Clamp01MapToRange(0, base->totalLifeTime, FADE_IN_TIME);
+    }
+    
     
     if(lightCount > 0)
     {
@@ -755,10 +855,6 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
         effects->lightColor = averageLightColor *= 1.0f / lightCount;
     }
     
-    if(slowDownCount > 0)
-    {
-        effects->slowDownCoeff = averageSlowDown / slowDownCount;
-    }
 }
 
 inline b32 ValidVector(Vec3 original, Vec3 pick)

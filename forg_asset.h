@@ -75,6 +75,12 @@ inline b32 AreEqual(GameProperty p1, GameProperty p2)
     return result;
 }
 
+inline b32 IsValid(GameProperty p)
+{
+    b32 result (p.property > 0);
+    return result;
+}
+
 struct RenderTexture
 {
     u32 index;
@@ -250,7 +256,7 @@ introspection() struct tile_definition
 {
     GameAssetType asset MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
     GameProperty property;
-    Vec4 color MetaDefault("V4(1, 1, 1, 1)");
+    GameProperty underSeaLevelFluid;
 };
 
 introspection() struct TileMapping
@@ -269,6 +275,21 @@ introspection() struct EntityRef
 {
     u32 subtypeHashIndex;
     u16 index;
+};
+
+introspection() struct TileAnimationEffect
+{
+    Vec3 maxOffset;
+    Vec4 color MetaDefault("V4(1, 1, 1, 1)");
+    Vec4 colorV;
+    r32 scale MetaDefault("1.0f");
+    r32 scaleV;
+    r32 sineSpeed;
+    u32 patchCount MetaDefault("1");
+    r32 tileZBias MetaDefault("0.01f");
+    r32 patchZBias MetaDefault("0.001f");
+    
+    GameAssetType asset MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
 };
 
 

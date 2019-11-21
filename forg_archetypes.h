@@ -2,7 +2,9 @@
 Archetype() struct AnimalArchetype
 {
 #ifdef FORG_SERVER
+    DefaultComponent default;
     PhysicComponent physic;
+    ActionComponent action;
     PlayerComponent* player;
     EquipmentComponent equipment;
     UsingComponent equipped;
@@ -22,6 +24,7 @@ Archetype() struct AnimalArchetype
 Archetype() struct RockArchetype
 {
 #ifdef FORG_SERVER
+    DefaultComponent default;
     PhysicComponent physic;
     InteractionComponent interaction;
 #else
@@ -34,6 +37,7 @@ Archetype() struct RockArchetype
 Archetype() struct PlantArchetype
 {
 #ifdef FORG_SERVER
+    DefaultComponent default;
     PhysicComponent physic;
     PlayerComponent* player;
     InteractionComponent interaction;
@@ -48,8 +52,7 @@ Archetype() struct PlantArchetype
 Archetype() struct GrassArchetype
 {
 #ifdef FORG_SERVER
-    PhysicComponent physic;
-    PlayerComponent* player;
+    DefaultComponent default;
 #else
     BaseComponent base;
     GrassComponent grass;
@@ -60,6 +63,7 @@ Archetype() struct GrassArchetype
 Archetype() struct ObjectArchetype
 {
 #ifdef FORG_SERVER
+    DefaultComponent default;
     PhysicComponent physic;
     PlayerComponent* player;
     EffectComponent effect;
@@ -74,11 +78,11 @@ Archetype() struct ObjectArchetype
 Archetype() struct ContainerArchetype
 {
 #ifdef FORG_SERVER
+    DefaultComponent default;
     PhysicComponent physic;
     EffectComponent effect;
     ContainerComponent container;
     InteractionComponent interaction;
-    BrainComponent brain;
 #else
     BaseComponent base;
     LayoutComponent layout;
@@ -90,6 +94,7 @@ Archetype() struct ContainerArchetype
 Archetype() struct PortalArchetype
 {
 #ifdef FORG_SERVER
+    DefaultComponent default;
     PhysicComponent physic;
     CollisionEffectsComponent collision;
 #else
@@ -101,6 +106,7 @@ Archetype() struct PortalArchetype
 Archetype() struct ProjectileArchetype
 {
 #ifdef FORG_SERVER
+    DefaultComponent default;
     PhysicComponent physic;
     TempEntityComponent temp;
     CollisionEffectsComponent collision;
@@ -113,6 +119,7 @@ Archetype() struct ProjectileArchetype
 Archetype() struct BoltArchetype
 {
 #ifdef FORG_SERVER
+    DefaultComponent default;
     PhysicComponent physic;
     TempEntityComponent temp;
     CollisionEffectsComponent collision;
@@ -121,6 +128,12 @@ Archetype() struct BoltArchetype
     BoltComponent bolt;
 #endif
 };
+
+
+
+
+
+
 
 Archetype() struct NullArchetype
 {
@@ -151,6 +164,7 @@ introspection() struct CommonEntityInitParams
 {
     EntityRef definitionID MetaUneditable();
     
+    b32 collides MetaDefault("true");
     Vec3 boundOffset;
     Vec3 boundDim MetaDefault("V3(1, 1, 1)");
     
@@ -227,6 +241,17 @@ introspection() struct LayoutPieceProperties
     Enumerator inventorySlotType MetaEnumerator("inventorySlotType");
 };
 
+introspection() struct MultipartFrameByFramePiece
+{
+    r32 speed MetaDefault("1.0f");
+    GameAssetType image MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
+};
+
+introspection() struct MultipartStaticPiece
+{
+    ImageProperties properties;
+};
+
 introspection() struct ClientEntityInitParams
 {
     EntityID ID MetaUneditable();
@@ -239,6 +264,12 @@ introspection() struct ClientEntityInitParams
     ImageProperties leafProperties;
     
     r32 windInfluence MetaDefault("0");
+    u32 windFrequencyStandard MetaDefault("1");
+    u32 windFrequencyOverlap MetaDefault("10");
+    
+    u32 instanceCount MetaDefault("1");
+    Vec3 instanceMaxOffset;
+    Vec3 grassBounds MetaDefault("V3(1, 1, 1)");
     
     AssetLabel name;
     
@@ -265,6 +296,12 @@ introspection() struct ClientEntityInitParams
     
     r32 frameByFrameSpeed MetaDefault("1.0f");
     GameAssetType frameByFrameImageType MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
+    
+	ArrayCounter multipartStaticCount MetaCounter(multipartStaticPieces);
+	MultipartStaticPiece* multipartStaticPieces;
+    
+    ArrayCounter multipartFrameByFrameCount MetaCounter(multipartFrameByFramePieces);
+	MultipartFrameByFramePiece* multipartFrameByFramePieces;
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

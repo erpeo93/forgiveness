@@ -330,8 +330,7 @@ internal void HandleOverlayObjectsInteraction(GameUIContext* UI, GameModeWorld* 
 internal void OverdrawLayout(GameModeWorld* worldMode, RenderGroup* group, EntityID ID, Rect2 rect, LayoutContainerDrawMode drawMode, r32 zBias = 2.0f)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    Vec4 color = GetTint(worldMode, ID);
-    
+    EntityAnimationParams params = GetEntityAnimationParams(worldMode, ID);
     LayoutComponent* layout = GetComponent(worldMode, ID, LayoutComponent);
     LayoutContainer container = {};
     container.container = GetComponent(worldMode, ID, ContainerMappingComponent);
@@ -340,8 +339,8 @@ internal void OverdrawLayout(GameModeWorld* worldMode, RenderGroup* group, Entit
     ObjectTransform transform = FlatTransform(zBias);
     transform.angle = layout->rootAngle;
     transform.scale = layout->rootScale;
-    transform.modulationPercentage = GetModulationPercentage(worldMode, ID); 
-    RenderLayoutInRect(worldMode, group, rect, transform, color, layout, base->seed, {}, &container);
+    transform.modulationPercentage = params.modulationPercentage; 
+    RenderLayoutInRect(worldMode, group, rect, transform, params.tint, layout, base->seed, {}, &container);
 }
 
 internal void OverdrawVisibleStuff(GameUIContext* UI, GameModeWorld* worldMode, RenderGroup* group, b32 onlyUsingSlots)
@@ -350,7 +349,7 @@ internal void OverdrawVisibleStuff(GameUIContext* UI, GameModeWorld* worldMode, 
     Vec2 dim = V2(100, 100);
     r32 margin = 20.0f;
     
-    ObjectTransform overdrawTransform = FlatTransform(2.0f);
+    ObjectTransform overdrawTransform = FlatTransform(2.0f, V4(0, 0, 0, 0.5f));
     
     UsingMappingComponent* usingMappings = GetComponent(worldMode, worldMode->player.clientID, UsingMappingComponent);
     if(usingMappings)
@@ -366,7 +365,7 @@ internal void OverdrawVisibleStuff(GameUIContext* UI, GameModeWorld* worldMode, 
             b32 hot = PointInRect(rect, worldMode->relativeMouseP);
             if(hot)
             {
-                PushRectOutline(group, overdrawTransform, rect, V4(0, 0, 0, 0.4f), 2.0f);
+                PushRectOutline(group, overdrawTransform, rect, 2.0f);
             }
             if(IsValidUsingMapping(UI, mapping, slotIndex))
             {
@@ -405,7 +404,7 @@ internal void OverdrawVisibleStuff(GameUIContext* UI, GameModeWorld* worldMode, 
                     b32 hot = PointInRect(rect, worldMode->relativeMouseP);
                     if(hot)
                     {
-                        PushRectOutline(group, overdrawTransform, rect, V4(0, 0, 0, 0.4f), 2.0f);
+                        PushRectOutline(group, overdrawTransform, rect, 2.0f);
                     }
                     
                     UI->equipmentOnScreen[slotIndex] = rect;
@@ -442,11 +441,11 @@ internal void OverdrawSkillSlots(GameUIContext* UI, GameModeWorld* worldMode, Re
             
             Rect2 skillRect = RectMinDim(P, skillDim);
             UI->skillRects[skillIndex] = skillRect;
-            PushRect(group, FlatTransform(2.0f), skillRect, color);
+            PushRect(group, FlatTransform(2.0f, color), skillRect);
             
             if(skillIndex == UI->selectedSkillIndex)
             {
-                PushRectOutline(group, FlatTransform(2.0f), skillRect, V4(0, 0, 0, 1), 2.0f);
+                PushRectOutline(group, FlatTransform(2.0f, V4(0, 0, 0, 1)), skillRect, 2.0f);
             }
             
             P.x += (margin + skillDim.x);
@@ -462,7 +461,7 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
     {
         case LockedInteraction_SkillOffset:
         {
-            PushRect(group, FlatTransform(0.01f), UI->commandParameters.targetOffset, V2(0.2f, 0.2f), V4(1, 0, 0, 1));
+            PushRect(group, FlatTransform(0.01f, V4(1, 0, 0, 1)), UI->commandParameters.targetOffset, V2(0.2f, 0.2f));
         } break;
     }
     

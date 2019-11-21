@@ -13,69 +13,52 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
         {
             AddEntityParams params = DefaultAddEntityParams();
             
-            PhysicComponent* targetPhysic = GetComponent(server, targetID, PhysicComponent);
-            PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-            
-            if(targetPhysic && physic)
-            {
-                Vec3 toTarget = SubtractOnSameZChunk(targetPhysic->P, physic->P);
-                params.acceleration = toTarget;
-                params.speed = 1.0f * Normalize(toTarget);
-                AddEntity(server, P, &server->entropy, effect->spawnType, params);
-            }
+            DefaultComponent* targetDef = GetComponent(server, targetID, DefaultComponent);
+            DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+            Vec3 toTarget = SubtractOnSameZChunk(targetDef->P, def->P);
+            params.acceleration = toTarget;
+            params.speed = 1.0f * Normalize(toTarget);
+            AddEntity(server, P, &server->entropy, effect->spawnType, params);
         } break;
         
         case spawnEntityTowardDirection:
         {
             AddEntityParams params = DefaultAddEntityParams();
             
-            PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-            Vec3 toTarget = SubtractOnSameZChunk(P, physic->P);
+            DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+            Vec3 toTarget = SubtractOnSameZChunk(P, def->P);
             params.acceleration = toTarget;
             params.speed = 1.0f * Normalize(toTarget);
-            AddEntity(server, physic->P, &server->entropy, effect->spawnType, params);
+            AddEntity(server, def->P, &server->entropy, effect->spawnType, params);
         } break;
         
         case moveOnZSlice:
         {
             EntityID destID = targetID;
-            if(HasComponent(destID, PhysicComponent))
+            DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+            if(++def->P.chunkZ == (i32) server->maxDeepness)
             {
-                PhysicComponent* physic = GetComponent(server, destID, PhysicComponent);
-                if(++physic->P.chunkZ == (i32) server->maxDeepness)
-                {
-                    physic->P.chunkZ = 0;
-                }
-            }
-            else
-            {
-                InvalidCodePath;
+                def->P.chunkZ = 0;
             }
         } break;
         
         case deleteTarget:
         {
-            if(HasComponent(targetID, PhysicComponent))
-            {
-                DeleteEntity(server, targetID);
-            }
+            DeleteEntity(server, targetID);
         } break;
         
         case deleteSelf:
         {
-            if(HasComponent(ID, PhysicComponent))
-            {
-                DeleteEntity(server, ID);
-            }
+            DeleteEntity(server, ID);
         } break;
     }
 }
 
 internal void DispatchEntityEffects(ServerState* server, EntityID ID, r32 elapsedTime)
 {
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     EffectComponent* effects = GetComponent(server, ID, EffectComponent);
-    if(physic && effects)
+    if(effects)
     {
         for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
         {
@@ -84,7 +67,7 @@ internal void DispatchEntityEffects(ServerState* server, EntityID ID, r32 elapse
             if(effects->timers[effectIndex] >= effect->timer)
             {
                 effects->timers[effectIndex] = 0;
-                DispatchGameEffect(server, ID, physic->P, effect, {});
+                DispatchGameEffect(server, ID, def->P, effect, {});
             }
         }
     }

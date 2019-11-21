@@ -482,7 +482,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         platformAPI.PushWork(server->slowQueue, WatchForFileChanges, hash);
         server->assets = InitAssets(server->slowQueue, server->tasks, ArrayCount(server->tasks), &server->gamePool, 0, MegaBytes(16));
         SetMetaAssets(server->assets);
-        BuildWorld(server, false);
+        BuildWorld(server, true);
     }
     
     
@@ -549,15 +549,27 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     EXECUTE_JOB(server, FillCollisionSpatialPartition, ArchetypeHas(PhysicComponent), elapsedTime);
     
     
-    EXECUTE_JOB(server, HandlePlayerCommands, ArchetypeHas(PlayerComponent), elapsedTime);
-    EXECUTE_JOB(server, DispatchEquipmentEffects, ArchetypeHas(PhysicComponent) && (ArchetypeHas(EquipmentComponent) || ArchetypeHas(UsingComponent)), elapsedTime);
-    EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime);
-    EXECUTE_JOB(server, UpdateBrain, ArchetypeHas(BrainComponent), elapsedTime);
-	EXECUTE_JOB(server, UpdateTempEntity, ArchetypeHas(TempEntityComponent), elapsedTime);
-    EXECUTE_JOB(server, HandleOpenedContainers, ArchetypeHas(ContainerComponent), elapsedTime);
-    EXECUTE_JOB(server, SendEntityUpdate, ArchetypeHas(PhysicComponent), elapsedTime);
-    EXECUTE_JOB(server, DeleteDeletedEntities, ArchetypeHas(PhysicComponent), elapsedTime);
+    EXECUTE_JOB(server, HandlePlayerCommands, ArchetypeHas(PlayerComponent), elapsedTime); //multithread!
+    EXECUTE_JOB(server, DispatchEquipmentEffects, (ArchetypeHas(EquipmentComponent) || ArchetypeHas(UsingComponent)), elapsedTime); //multithread?
     
+	//barrier
+    
+    EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime); //multithread simd!
+    EXECUTE_JOB(server, UpdateBrain, ArchetypeHas(BrainComponent), elapsedTime); //multithread?
+	EXECUTE_JOB(server, UpdateTempEntity, ArchetypeHas(TempEntityComponent), elapsedTime); //multithread
+    EXECUTE_JOB(server, HandleOpenedContainers, ArchetypeHas(ContainerComponent), elapsedTime); //multithread
+	EXECUTE_JOB(server, DeleteDeletedEntities, true, elapsedTime); //single thread
+    
+	//barrier
+    EXECUTE_JOB(server, SendEntityUpdate, ArchetypeHas(PhysicComponent), elapsedTime); //
+    
+    server->timeFromlastStaticUpdate += elapsedTime;
+    if(server->timeFromlastStaticUpdate >= 1.0f)
+    {
+        server->timeFromlastStaticUpdate = 0;
+        EXECUTE_JOB(server, SendEntityUpdate, !ArchetypeHas(PhysicComponent), elapsedTime);
+	}
+	
     Clear(&tempPool);
 }
 

@@ -61,15 +61,6 @@ inline void FinalizeLightGrid(GameModeWorld* worldMode, RenderGroup* group)
             
             chunk->lights.startingIndex = startingIndex;
             chunk->lights.endingIndex = endingIndex;
-            
-            for(u32 Y = 0; Y < CHUNK_DIM; ++Y)
-            {
-                for(u32 X = 0; X < CHUNK_DIM; ++X)
-                {
-                    WorldTile* tile = GetTile(worldMode, chunk, X, Y);
-                    tile->lights = chunk->lights;
-                }
-            }
             chunk = chunk->next;
         }
     }

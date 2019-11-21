@@ -1012,6 +1012,13 @@ inline Rect3 InvertedInfinityRect3()
     return result;
 }
 
+inline b32 RectOverlaps(Rect2 r1, Rect2 r2)
+{
+    Vec2 testP = GetCenter(r1);
+    Rect2 minkowski = AddRadius(r2, GetDim(r1));
+    b32 result = PointInRect(minkowski, testP);
+    return result;
+}
 
 
 //
@@ -1157,6 +1164,14 @@ inline b32 PointInRect(Rect3 rect, Vec3 p)
     {
         result = true;
     }
+    return result;
+}
+
+inline b32 RectOverlaps(Rect3 r1, Rect3 r2)
+{
+    Vec3 testP = GetCenter(r1);
+    Rect3 minkowski = AddRadius(r2, GetDim(r1));
+    b32 result = PointInRect(minkowski, testP);
     return result;
 }
 
@@ -1482,8 +1497,8 @@ inline m4x4_inv PerspectiveProjection( r32 aspectWidthOverHeight, r32 focalLengt
     r32 b = aspectWidthOverHeight;
     r32 c = focalLength;
     
-    r32 n = 0.05f; // NOTE(Leonardo): near clip plane
-    r32 f = 20000.0f; // NOTE(Leonardo): far clip plane
+    r32 n = 0.5f; // NOTE(Leonardo): near clip plane
+    r32 f = 60.0f; // NOTE(Leonardo): far clip plane
     
     r32 d = (n + f) / ( n - f);
     r32 e = (2 * f * n ) / (n - f);
@@ -1659,7 +1674,7 @@ inline Vec3 RayPlaneIntersection(Vec3 rayOrigin, Vec3 rayDirection, Vec3 planeOr
     return result;
 }
 
-inline Vec4 BGRAUnpack4x8( u32 value )
+inline Vec4 BGRAUnpack4x8(u32 value)
 {
     Vec4 result = { ( r32 ) ( ( value >> 16 ) & 0xff ),
         ( r32 ) ( ( value >> 8 ) & 0xff ),
@@ -1668,7 +1683,7 @@ inline Vec4 BGRAUnpack4x8( u32 value )
     return result;
 }
 
-inline u32 BGRAPack8x4( Vec4 value )
+inline u32 BGRAPack8x4(Vec4 value)
 {
     u32 result = ( ( u32 ) value.a << 24 | 
                   ( u32 ) value.r << 16 |

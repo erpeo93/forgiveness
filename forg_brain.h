@@ -3,4 +3,5 @@
 struct BrainComponent
 {
     u16 type;
+    EntityID ID;
 };

@@ -242,8 +242,7 @@ internal void InitEntity(GameModeWorld* worldMode, EntityID ID,
                          CommonEntityInitParams* common, 
                          ServerEntityInitParams* s, 
                          ClientEntityInitParams* c);
-internal void DeleteEntityClient(GameModeWorld* worldMode, EntityID clientID, EntityID serverID);
-
+internal void MarkForDeletion(GameModeWorld* worldMode, EntityID clientID);
 internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
     ClientPlayer* player = &worldMode->player;
@@ -360,6 +359,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 currentClientID = GetClientIDMapping(worldMode, currentServerID);
             } break;
             
+            
             case Type_entityBasics:
             {
                 AssetID definitionID;
@@ -419,9 +419,9 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         player->universeP = P;
                     }
                     
-                    if(IsSet(base->flags, EntityFlag_deleted))
+					if(IsSet(base->flags, EntityFlag_deleted))
                     {
-                        DeleteEntityClient(worldMode, currentClientID, currentServerID);
+                        MarkForDeletion(worldMode, currentClientID);
                     }
                 }
             } break;
@@ -434,12 +434,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 BaseComponent* base = GetComponent(worldMode, clientID, BaseComponent);
                 if(base)
                 {
-                    FreeArchetype(worldMode, clientID);
-                    RemoveClientIDMapping(worldMode, ID);
-                    if(AreEqual(ID, worldMode->gameUI.draggingIDServer))
-                    {
-                        worldMode->gameUI.draggingIDServer = {};
-                    }
+                    MarkForDeletion(worldMode, clientID);
                 }
             } break;
             

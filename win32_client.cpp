@@ -33,6 +33,8 @@ global_variable PlatformAPI platformAPI;
 #pragma comment( lib, "wsock32.lib" )
 #pragma comment (lib, "Ws2_32.lib")
 
+#include "forg_noise.h"
+
 struct Win32ScreenBuffer
 {
     u16 width;
@@ -1390,7 +1392,9 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             
             globalWindow = window;
             
-            int monitorRefreshRate = 60;
+            int monitorRefreshRate = 30;
+            
+#if 1     
             HDC refreshDC = GetDC( window );
             int win32RefreshRate = GetDeviceCaps( refreshDC, VREFRESH );
             ReleaseDC( window, refreshDC );
@@ -1398,6 +1402,8 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             {
                 monitorRefreshRate = win32RefreshRate;
             }
+#endif
+            
             r32 gameUpdateHz = ( r32 ) monitorRefreshRate;
             int expectedFramesPerUpdate = 1;
             targetSecPerFrame = ( r32 ) expectedFramesPerUpdate / monitorRefreshRate;
@@ -1523,13 +1529,26 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                     //Win32ToggleFullScreen( window );
                     ShowWindow( window, SW_SHOW );
                     
+                    PlatformMemoryBlock* noiseTextureBlock =Win32AllocateMemory(NOISE_WIDTH * NOISE_HEIGHT * sizeof(Vec4), 0);
+                    
+                    for(u32 y = 0; y < NOISE_HEIGHT; ++y)
+                    {
+                        for(u32 x = 0; x < NOISE_WIDTH; ++x)
+                        {
+                            r32 dx = (r32) x / (r32) NOISE_WIDTH;
+                            r32 dy = (r32) y / (r32) NOISE_HEIGHT;
+                            Vec4* dest = ((Vec4*) noiseTextureBlock->base) + (y * NOISE_WIDTH + x);
+                            r32 noise = UnilateralNoise(dx, dy, 20.0f, 0);
+                            *dest = V4(noise, noise, noise, noise);
+                        }
+                    }
                     
                     while(running)
                     {
                         BEGIN_BLOCK("setup renderer");
                         gameInput.timeToAdvance = targetSecPerFrame;
                         
-                        GameRenderCommands renderCommands =DefaultRenderCommands( pushBuffer, pushBufferSize, globalScreenBuffer.width, globalScreenBuffer.height, maxQuadCount,  vertexArray, indexArray, V4( 0, 0, 0, 1 ));
+                        GameRenderCommands renderCommands =DefaultRenderCommands( pushBuffer, pushBufferSize, globalScreenBuffer.width, globalScreenBuffer.height, maxQuadCount,  vertexArray, indexArray, V4( 0, 0, 0, 1 ), noiseTextureBlock->base);
                         Win32Dimension dimension = Win32GetWindowDimension( window );
                         Rect2i drawRegion = AspectRatioFit( renderCommands.settings.width, renderCommands.settings.height, dimension.width, dimension.height );
                         END_BLOCK();

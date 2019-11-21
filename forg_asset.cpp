@@ -181,7 +181,7 @@ inline GetAssetResult GetAssetRaw(Assets* assets, AssetID ID)
     GetAssetResult result = {};
     
     Assert(ID.type);
-    Assert(ID.type < AssetType_Count);
+    Assert(ID.type && ID.type < AssetType_Count);
     AssetArray* array = assets->assets + ID.type;
     
     AssetSubtypeArray* subtype = GetSubtype(array, ID.subtypeHashIndex);
@@ -520,7 +520,7 @@ inline void RefreshSpecialTexture(Assets* assets, SpecialTexture* texture)
 
 internal AssetSubtypeArray* GetAssetSubtypeArray(Assets* assets, u16 type, u32 subtype)
 {
-    Assert(type < AssetType_Count);
+    Assert(type && type < AssetType_Count);
     AssetArray* assetTypeArray = assets->assets + type;
     
     AssetSubtypeArray* result = 0;
@@ -534,7 +534,7 @@ internal AssetSubtypeArray* GetAssetSubtypeArray(Assets* assets, u16 type, u32 s
 internal u32 GetAssetSubtype(Assets* assets, u16 type, u64 hash)
 {
     u32 result = 0xffffffff;
-    if(type < AssetType_Count)
+    if(type > 0 && type < AssetType_Count)
     {
         AssetArray* array = assets->assets + type;
         u32 hashIndex = (hash & (ArrayCount(array->subtypes) - 1));
@@ -578,7 +578,7 @@ internal StringArray GetAssetSubtypeList(Assets* assets, MemoryPool* pool, u16 t
 {
     StringArray result = {};
     
-    Assert(type < AssetType_Count);
+    Assert(type && type < AssetType_Count);
     AssetArray* array = assets->assets + type;
     
     u32 counter = 0;
@@ -644,7 +644,7 @@ internal AssetSubtypeArray* GetAssetSubtype(Assets* assets, char* typeString, ch
 {
     u16 type = GetMetaAssetType(typeString);
     AssetSubtypeArray* result = 0;
-    if(type < AssetType_Count)
+    if(type && type < AssetType_Count)
     {
         AssetArray* assetTypeArray = assets->assets + type;
         u32 subtypeHashIndex = GetAssetSubtype(assets, type, subtypeString);
@@ -654,27 +654,21 @@ internal AssetSubtypeArray* GetAssetSubtype(Assets* assets, char* typeString, ch
     
 }
 
-internal AssetSubtypeArray* AllocateAssetSubtype(Assets* assets, PAKFileHeader* header)
-{
-    u16 type = GetMetaAssetType(header->type);
-    
-    AssetArray* array = assets->assets + type;
-    
-    u16 hashIndex = (StringHash(header->subtype) & (ArrayCount(array->subtypes) - 1));
-    AssetSubtypeArray* result = PushStruct(assets->pool, AssetSubtypeArray);
-    result->hash = StringHash(header->subtype);
-    result->next = array->subtypes[hashIndex];
-    array->subtypes[hashIndex] = result;
-    
-    return result;
-}
-
 internal AssetSubtypeArray* GetAssetSubtypeForFile(Assets* assets, PAKFileHeader* header)
 {
     AssetSubtypeArray* result = GetAssetSubtype(assets, header->type, header->subtype);
     if(!result)
     {
-        result = AllocateAssetSubtype(assets, header);
+        u16 type = GetMetaAssetType(header->type);
+        if(type > 0 && type < AssetType_Count)
+        {
+            AssetArray* array = assets->assets + type;
+            u16 hashIndex = (StringHash(header->subtype) & (ArrayCount(array->subtypes) - 1));
+            result = PushStruct(assets->pool, AssetSubtypeArray);
+            result->hash = StringHash(header->subtype);
+            result->next = array->subtypes[hashIndex];
+            array->subtypes[hashIndex] = result;
+        }
     }
     
     return result;
@@ -998,7 +992,7 @@ internal void LoadAssetFile(Assets* assets, AssetFile* file, AssetSubtypeArray* 
         dest->state = Asset_unloaded;
         
         u16 assetType = GetMetaAssetType(file->header.type);
-        Assert(assetType < AssetType_Count);
+        Assert(assetType && assetType < AssetType_Count);
         
         if((assetType == AssetType_Skeleton && assetIndex < file->header.standardAssetCount) ||
            (assetType == AssetType_Image && assetIndex >= file->header.standardAssetCount))
@@ -1260,7 +1254,6 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
     switch(type)
     {
         case AssetType_Font:
-        case AssetType_Model:
         case AssetType_Sound:
         {
             // NOTE(Leonardo): we can't possibly have edited these!
@@ -1830,26 +1823,33 @@ internal AssetID* GetAllAssets_(MemoryPool* tempPool, Assets* assets, u16 assetT
     
     AssetArray* array = assets->assets + assetType;
     AssetSubtypeArray* assetArray = GetSubtype(array, subtype);
-    u16 totalAssetCount = assetArray->standardAssetCount + assetArray->derivedAssetCount;
-    *count = totalAssetCount;
-    
-    result = PushArray(tempPool, AssetID, totalAssetCount);
-    for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
+    if(assetArray)
     {
-        AssetID* dest = result + assetIndex;
-        dest->type = assetType;
-        dest->subtypeHashIndex = subtype;
-        dest->index = assetIndex;
+        u16 totalAssetCount = assetArray->standardAssetCount + assetArray->derivedAssetCount;
+        *count = totalAssetCount;
+        
+        result = PushArray(tempPool, AssetID, totalAssetCount);
+        for(u16 assetIndex = 0; assetIndex < totalAssetCount; ++assetIndex)
+        {
+            AssetID* dest = result + assetIndex;
+            dest->type = assetType;
+            dest->subtypeHashIndex = subtype;
+            dest->index = assetIndex;
+        }
+        
     }
-    
     return result;
 }
 
 internal u16 GetAssetCount(Assets* assets, u16 type, u32 subtype)
 {
+    u16 result = 0;
     AssetArray* array = assets->assets + type;
     AssetSubtypeArray* assetArray = GetSubtype(array, subtype);
-    u16 result = assetArray->standardAssetCount + assetArray->derivedAssetCount;
+    if(assetArray)
+    {
+        result = assetArray->standardAssetCount + assetArray->derivedAssetCount;
+    }
     return result;
 }
 
