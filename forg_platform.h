@@ -15,6 +15,7 @@ struct TexturedVertex
     u8 windInfluence;
     u8 windFrequency;
     u8 dissolvePercentage;
+    u8 alphaThreesold;
     u8 seed;
 };
 
@@ -24,16 +25,25 @@ struct GameRenderSettings
     u32 height;
 };
 
-struct RenderZSlice
-{
-};
-
 #define NOISE_WIDTH 128
 #define NOISE_HEIGHT 128
 #define MAX_LIGHTS 1024
 
 #define maxIndexesPerBatch (U16_MAX - 1)
 #define maxQuadsPerBatch (maxIndexesPerBatch / 6)
+
+struct RenderBuffer
+{
+    u32 quadCount;
+    u32 maxQuadCount;
+    TexturedVertex* vertexArray;
+    u16* indexArray;
+    r32* sortKeyArray;
+    
+    struct RenderSetup* currentSetup;
+    RenderSetup* firstSetup;
+    RenderSetup* lastSetup;
+};
 
 struct GameRenderCommands
 {
@@ -45,14 +55,8 @@ struct GameRenderCommands
     
     Vec4 clearColor;
     
-    u32 quadCount;
-    u32 maxQuadCount;
-    TexturedVertex* vertexArray;
-    u16* indexArray;
-    
-    struct RenderSetup* currentSetup;
-    RenderSetup* firstSetup;
-    RenderSetup* lastSetup;
+    RenderBuffer opaque;
+    RenderBuffer transparent;
     
     u16 lightCount;
     Vec4 lightSource0[MAX_LIGHTS];
@@ -62,7 +66,31 @@ struct GameRenderCommands
 };
 
 
-inline GameRenderCommands DefaultRenderCommands(u8* pushBuffer, u32 pushBufferSize, u32 width, u32 height, u32 maxQuadCount,  TexturedVertex* vertexArray, u16* indexArray, Vec4 clearColor, void* noiseTexture)
+struct InitRenderBufferParams
+{
+    u32 maxQuadCount;
+    TexturedVertex* vertexes;
+    u16* indeces;
+    r32* sortKeys;
+};
+
+internal RenderBuffer InitRenderBuffer(InitRenderBufferParams params)
+{
+    RenderBuffer result = {};
+    
+    result.quadCount = 0;
+    result.maxQuadCount = params.maxQuadCount;
+    result.vertexArray = params.vertexes;
+    result.indexArray = params.indeces;
+    result.sortKeyArray = params.sortKeys;
+    result.currentSetup = 0;
+    result.firstSetup = 0;
+    result.lastSetup = 0;
+    
+    return result;
+}
+
+inline GameRenderCommands DefaultRenderCommands(u8* pushBuffer, u32 pushBufferSize, u32 width, u32 height, InitRenderBufferParams opaque, InitRenderBufferParams transparent, Vec4 clearColor, void* noiseTexture)
 {
     GameRenderCommands result = {};
     
@@ -75,17 +103,10 @@ inline GameRenderCommands DefaultRenderCommands(u8* pushBuffer, u32 pushBufferSi
     
     result.clearColor = clearColor;
     
-    result.quadCount = 0;
-    result.maxQuadCount = maxQuadCount;
-    result.vertexArray = vertexArray;
-    result.indexArray = indexArray;
-    
-    result.currentSetup = 0;
-    result.firstSetup = 0;
-    result.lastSetup = 0;
+    result.opaque = InitRenderBuffer(opaque);
+    result.transparent = InitRenderBuffer(transparent);
     
     result.lightCount = 0;
-    
     result.noiseTexture = noiseTexture;
     
     return result;

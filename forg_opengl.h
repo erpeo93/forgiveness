@@ -28,6 +28,7 @@ struct OpenGLProgramCommon
     GLuint windInfluenceID;
     GLuint windFrequencyID;
     GLuint dissolvePercentageID;
+    GLuint alphaThreesoldID;
     GLuint seedID;
 };
 

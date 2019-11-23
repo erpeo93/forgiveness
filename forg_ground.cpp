@@ -240,6 +240,7 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                                     transform.angle = RandomUni(&seq) * TAU32;
                                                     transform.scale = scale;
                                                     transform.tint = color;
+                                                    transform.transparent = true;
                                                     PushBitmap(group, transform, groundID, splatP, height * voxelSide);
                                                 }
                                             }
@@ -329,8 +330,8 @@ inline void UpdateAndRenderGround(GameModeWorld* worldMode, RenderGroup* group, 
                                         r32 finalDim = 0.5f * tileDim.y * scale;
                                         Vec4 lateral = finalDim * V4(1, 0, 0, 0);
                                         Vec4 up = finalDim * V4(0, 1, 0, 0);
-                                        
-                                        PushMagicQuad(group, V4(finalTileP, 0), lateral, up, finalColor, bitmap->textureHandle, lights, 0, 0, 1, {}, 0, {}, 0);
+                                        b32 transparent = false;
+                                        PushMagicQuad(group, transparent, V4(finalTileP, 0), lateral, up, finalColor, bitmap->textureHandle, lights, 0, 0, 1, {}, 0, {}, 0, 0);
                                         
                                         zBias += effect->patchZBias;
                                     }

@@ -228,7 +228,9 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectIn
             u8 windFrequency = 1;
             u8 seed = 0;
             Vec4 dissolvePercentages = V4(0, 0, 0, 0);
-            PushMagicQuad(group, V4(P, 0), lateral, up, C, *updater->texture, lights, 0, 0, 1, windInfluences, windFrequency, dissolvePercentages, seed);
+            r32 alphaThreesold = 0;
+            b32 transparent = true;
+            PushMagicQuad(group, transparent, V4(P, 0), lateral, up, C, *updater->texture, lights, 0, 0, 1, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, seed);
         }
     }
 }

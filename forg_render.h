@@ -30,6 +30,7 @@ struct RenderSetup
     r32 windStrength;
     
     u32 quadCount;
+    u32 quadStartingIndex;
     u32 vertexArrayOffset;
     u32 indexArrayOffset;
     
@@ -45,6 +46,7 @@ struct ObjectTransform
     r32 modulationPercentage;
     Vec4 dissolvePercentages;
     Vec4 tint;
+    b32 transparent;
     
     r32 lightInfluence;
     r32 lightYInfluence;

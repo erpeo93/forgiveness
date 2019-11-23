@@ -40,7 +40,7 @@ RENDERING_ECS_JOB_CLIENT(RenderBound)
     if(ShouldBeRendered(worldMode, base))
     {
         Rect3 entityBound = GetEntityBound(worldMode, base);
-        PushCubeOutline(group, entityBound, V4(1, 0, 0, 1), 0.05f);
+        PushCubeOutline(group, entityBound, V3(1, 0, 0), 0.05f);
     }
 }
 

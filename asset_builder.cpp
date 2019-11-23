@@ -664,9 +664,11 @@ internal LoadedBitmap LoadImage(MemoryPool* tempPool, char* path, char* filename
         
         u32 widthPad = 0;
         for(widthPad = 1; (u32) x > widthPad; widthPad *= 2);
+        widthPad = x;
         
         u32 heightPad = 0;
         for(heightPad = 1; (u32) y > heightPad; heightPad *= 2);
+        heightPad = y;
         
         r32 nativeHeightCoeff = (r32) y / (r32) heightPad;
         
@@ -1779,6 +1781,10 @@ internal void FillPAKProperty(PAKAsset* asset, Token property, Token value)
     {
         asset->bitmap.align[1] = (r32) StringToR32(value.text);
     }
+    else if(TokenEquals(property, IMAGE_PROPERTY_ALPHA_THREESOLD))
+    {
+        asset->bitmap.alphaThreesold = (r32) StringToR32(value.text);
+    }
     else if(TokenEquals(property, SKELETON_FLIPPED))
     {
         asset->skeleton.flippedByDefault = (b32) StringToB32(value.text);
@@ -2280,6 +2286,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                             {
                                 dest->bitmap.align[0] = 0.5f;
                                 dest->bitmap.align[1] = 0.5f;
+                                dest->bitmap.alphaThreesold = 0;
                                 
                                 FillPAKAssetBaseInfo(out, &tempPool, dest, info->name, &markupFiles);
                                 LoadedBitmap bitmap = LoadImage(&tempPool, source, info->name, &markupFiles);
@@ -2294,7 +2301,6 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                 dest->bitmap.dimension[0] = bitmap.width;
                                 dest->bitmap.dimension[1] = bitmap.height;
                                 dest->bitmap.nativeHeight = bitmap.nativeHeight;
-                                dest->bitmap.nativeHeightCoeff = bitmap.nativeHeightCoeff;
                                 
                                 fwrite(bitmap.attachmentPoints, bitmap.attachmentPointCount * sizeof(PAKAttachmentPoint), 1, out);
                                 fwrite(bitmap.groupNames, bitmap.groupNameCount * sizeof(PAKGroupName), 1, out);
@@ -2389,7 +2395,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                     derivedAsset->bitmap.dimension[0] = bitmap->width;
                                     derivedAsset->bitmap.dimension[1] = bitmap->height;
                                     derivedAsset->bitmap.nativeHeight = 0;
-                                    derivedAsset->bitmap.nativeHeightCoeff = 1;
+                                    derivedAsset->bitmap.alphaThreesold = 0;
                                     
                                     fwrite(bitmap->pixels, bitmap->width * bitmap->height * sizeof(u32), 1, out);
                                     free(bitmap->free);

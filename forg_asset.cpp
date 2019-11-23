@@ -789,7 +789,7 @@ internal void LoadBitmap(Assets* assets, AssetID ID, b32 immediate = false)
         bitmap->width = SafeTruncateToU16(info->dimension[0]);
         bitmap->height = SafeTruncateToU16(info->dimension[1]);
         bitmap->nativeHeight = info->nativeHeight;
-        bitmap->nativeHeightCoeff = info->nativeHeightCoeff;
+        bitmap->alphaThreesold = info->alphaThreesold;
         bitmap->widthOverHeight = (r32) bitmap->width / (r32) bitmap->height;
         
         bitmap->attachmentPoints = (PAKAttachmentPoint*) asset->data;
@@ -1153,6 +1153,12 @@ internal b32 WriteAssetMarkupDataToStream(Stream* stream, AssetType type, PAKAss
                 if(asset->bitmap.align[1] != 0.5f)
                 {
                     OutputToStream(stream, "%s=%f;", IMAGE_PROPERTY_ALIGN_Y, asset->bitmap.align[1]);
+                    nothingWrote = false;
+                }
+                
+                if(asset->bitmap.alphaThreesold != 0.0f)
+                {
+                    OutputToStream(stream, "%s=%f;", IMAGE_PROPERTY_ALPHA_THREESOLD, asset->bitmap.alphaThreesold);
                     nothingWrote = false;
                 }
             }

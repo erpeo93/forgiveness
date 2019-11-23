@@ -41,13 +41,13 @@ struct PAKGroupName
 };
 
 #define MAX_IMAGE_DIM 512
-#define PAK_BITMAP_VERSION 1012
+#define PAK_BITMAP_VERSION 1015
 struct PAKBitmap
 {
     u64 nameHash;
     u32 dimension[2];
     r32 align[2];
-    r32 nativeHeightCoeff;
+    r32 alphaThreesold;
     r32 nativeHeight;
     u32 attachmentPointCount;
     u32 groupNameCount;

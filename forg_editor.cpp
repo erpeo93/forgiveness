@@ -1545,6 +1545,7 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                     Nest(layout);
                     Edit_r32(layout, "alignX", info->bitmap.align + 0, false, ID, true);
                     Edit_r32(layout, "alignY", info->bitmap.align + 1, false, ID, true);
+                    Edit_r32(layout, "alphaThreesold", &info->bitmap.alphaThreesold, false, ID, true);
                     
                     NextRaw(layout);
                     LoadBitmap(assets, ID, true);

@@ -219,7 +219,10 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
                                 u8 windFrequency = 1;
                                 u8 seed = (u8) attachmentPointIndex;
                                 Vec4 dissolvePercentages = V4(0, 0, 0, 0);
-								PushMagicQuad(group, V4(pointP, 0), lateral, up, C, leafBitmap->textureHandle, lights, params.modulationPercentage, 0, 0, windInfluences, windFrequency, dissolvePercentages, seed);
+                                r32 alphaThreesold = 0;
+                                b32 transparent = false;
+                                
+								PushMagicQuad(group, transparent, V4(pointP, 0), lateral, up, C, leafBitmap->textureHandle, lights, params.modulationPercentage, 0, 0, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, seed);
 							}
 						}
 					}
@@ -290,11 +293,13 @@ RENDERING_ECS_JOB_CLIENT(RenderGrass)
                 }
                 Vec4 windInfluences = V4(0, 0, grass->windInfluence, grass->windInfluence);
                 Vec4 dissolvePercentages = V4(0, 0, 0, 0);
+                r32 alphaThreesold = 0.9f;
+                b32 transparent = false;
                 
 				for(u32 grassIndex = 0; grassIndex < grass->count; ++grassIndex)
 				{
 					Vec3 grassP = P + Hadamart(RandomBilV3(&seq), grass->maxOffset);
-					PushMagicQuad(group, V4(grassP, 0), quad->lateral, quad->up, quad->color, bitmap->textureHandle, lights, 0, 0, 0, windInfluences, windFrequency, dissolvePercentages, (u8) grassIndex);
+					PushMagicQuad(group, transparent, V4(grassP, 0), quad->lateral, quad->up, quad->color, bitmap->textureHandle, lights, 0, 0, 0, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, (u8) grassIndex);
 				}
             }
             else
@@ -970,7 +975,7 @@ RENDERING_ECS_JOB_CLIENT(UpdateAndRenderBolt)
             
             color.a = segmentAlpha;
             
-            PushLineSegment(group, group->whiteTexture, color, subStartP, subEndP, definition->thickness, lights);
+            PushLineSegment(group, group->whiteTexture, color.rgb, subStartP, subEndP, definition->thickness, lights);
             subStartP = subEndP;
         }
         

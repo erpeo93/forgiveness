@@ -336,6 +336,7 @@ internal void OpenGLUseProgramBegin(OpenGLProgramCommon* prog)
     OPENGL_BIND_U8(prog->windInfluenceID, TexturedVertex, windInfluence);
     OPENGL_BIND_U8(prog->windFrequencyID, TexturedVertex, windFrequency);
     OPENGL_BIND_U8(prog->dissolvePercentageID, TexturedVertex, dissolvePercentage);
+    OPENGL_BIND_U8(prog->alphaThreesoldID, TexturedVertex, alphaThreesold);
     OPENGL_BIND_U8(prog->seedID, TexturedVertex, seed);
 }
 
@@ -378,6 +379,7 @@ internal void OpenGLUseProgramEnd(OpenGLProgramCommon* prog)
     DISABLE_VERTEX_ATTRIBUTE(prog->windInfluenceID);
     DISABLE_VERTEX_ATTRIBUTE(prog->windFrequencyID);
     DISABLE_VERTEX_ATTRIBUTE(prog->dissolvePercentageID);
+    DISABLE_VERTEX_ATTRIBUTE(prog->alphaThreesoldID);
     DISABLE_VERTEX_ATTRIBUTE(prog->seedID);
 }
 
@@ -453,6 +455,7 @@ internal GLuint OpenGLCreateProgram(char* defines, char* headerCode, char* verte
     common->windInfluenceID = glGetAttribLocation(programID, "windInfluence");
     common->windFrequencyID = glGetAttribLocation(programID, "windFrequency");
     common->dissolvePercentageID = glGetAttribLocation(programID, "dissolvePercentage");
+    common->alphaThreesoldID = glGetAttribLocation(programID, "alphaThreesold");
     common->seedID = glGetAttribLocation(programID, "seed");
     
     return programID;
@@ -511,6 +514,7 @@ in int lightYInfluence;
 in int windInfluence;
 in int windFrequency;
 in int dissolvePercentage;
+in int alphaThreesold;
 in int seed;
 
     uniform m4x4 transform;
@@ -524,11 +528,12 @@ in int seed;
           flat out int fragLightStartingIndex;
           flat out int fragLightEndingIndex;
           flat out int fragTextureIndex;
-           smooth out r32 modulationWithFocusColor;
-           smooth out r32 lightInfluencePercentage;
-           smooth out r32 lightYInfluencePercentage;
-           smooth out r32 fragDissolvePercentage;
-           
+            flat out r32 modulationWithFocusColor;
+            flat out r32 lightInfluencePercentage;
+            flat out r32 lightYInfluencePercentage;
+            flat out r32 fragDissolvePercentage;
+            flat out r32 fragAlphaThreesold;
+            
     void main(void)
           {
     Vec4 inVertex = V4(vertP.xyz, 1.0f);
@@ -571,11 +576,14 @@ fragUVNormalized.y = 1.0f;
                                             lightInfluencePercentage = float(lightInfluence) / 0xff;
                                             lightYInfluencePercentage = float(lightYInfluence) / 0xff;
                                             fragDissolvePercentage = float(dissolvePercentage) / 0xff;
+                                            fragAlphaThreesold = float(alphaThreesold) / 0xff;
     }
     
    )FOO";
     
     char* fragmentCode;
+    
+#if 1    
     fragmentCode = R"FOO(
     //fragment code
     uniform sampler2DArray textureSampler;
@@ -593,26 +601,28 @@ out Vec4 resultColor;
     flat in int fragLightEndingIndex;
      flat in int fragTextureIndex;
      
-     smooth in r32 modulationWithFocusColor;
-     smooth in r32 lightInfluencePercentage;
-           smooth in r32 lightYInfluencePercentage;
-           smooth in r32 fragDissolvePercentage;
-           
+      flat in r32 modulationWithFocusColor;
+      flat in r32 lightInfluencePercentage;
+            flat in r32 lightYInfluencePercentage;
+            flat in r32 fragDissolvePercentage;
+            flat in r32 fragAlphaThreesold;
+            
     uniform Vec3 ambientLightColor;
     void main(void)
      {
      Vec3 arrayUV = V3(fragUV.x, fragUV.y, fragTextureIndex);
      Vec4 texSample = texture(textureSampler, arrayUV);
-     Vec4 noiseSample = texture(noise, fragUVNormalized);
+     
      
      #if shaderSimTexLoadSRGB
 texSample.rgb *= texSample.rgb;
      #endif
      
-     if(noiseSample.r > fragDissolvePercentage)
-     {
      resultColor = fragColor * texSample;
-     if(resultColor.a > 0)
+     if(resultColor.a > fragAlphaThreesold)
+     {
+     Vec4 noiseSample = texture(noise, fragUVNormalized);
+     if(noiseSample.r > fragDissolvePercentage)
      {
      Vec3 modulationLightColor = ambientLightColor;
      for(int index = fragLightStartingIndex; index < fragLightEndingIndex; ++index)
@@ -664,6 +674,39 @@ discard;
 
      }
    )FOO";
+#else
+    fragmentCode = R"FOO(
+    //fragment code
+    uniform sampler2DArray textureSampler;
+out Vec4 resultColor;
+    smooth in Vec2 fragUV;
+    smooth in Vec4 fragColor;
+    flat in int fragTextureIndex;
+    
+    void main(void)
+     {
+     Vec3 arrayUV = V3(fragUV.x, fragUV.y, fragTextureIndex);
+     Vec4 texSample = texture(textureSampler, arrayUV);
+     
+     #if shaderSimTexLoadSRGB
+texSample.rgb *= texSample.rgb;
+     #endif
+     
+     resultColor = fragColor * texSample;
+     if(resultColor.a > 0)
+     {
+#if shaderSimTexWriteSRGB
+     resultColor.rgb = sqrt(resultColor.rgb);
+     #endif
+}
+else
+{
+discard;
+}
+     }
+   )FOO";
+#endif
+    
     GLuint prog = OpenGLCreateProgram(defines, globalHeaderCode, vertexCode, fragmentCode, &result->common);
     result->GLSLTransformID = glGetUniformLocation(prog, "transform");
     result->timeID = glGetUniformLocation(prog, "time");
@@ -879,81 +922,109 @@ internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion, i32 windowWidth, i32 windowHeight)
+enum DrawRenderBufferFlags
 {
-    glDepthMask(GL_TRUE);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
-    glFrontFace(GL_CCW);
-    glEnable(GL_SCISSOR_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    DrawRenderBuffer_SortFrontToBack = (1 << 0),
+    DrawRenderBuffer_SortBackToFront = (1 << 1),
+    DrawRenderBuffer_Blend = (1 << 2),
+};
+
+internal void Swap(TexturedVertex* vertexes, u32 i1, u32 i2)
+{
+    TexturedVertex temp;
     
-    if(!AreEqual(&opengl.settings, &commands->settings))
+    TexturedVertex* dest = vertexes + (i1 * 4);
+    TexturedVertex* sources = vertexes + (i2 * 4);
+    
+    for(u32 index = 0; index < 4; ++index)
     {
-        OpenGLPrepareForRenderSettings(&commands->settings);
+        temp = dest[index];
+        dest[index] = sources[index];
+        sources[index] = temp;
+    }
+}
+
+internal void SortSmallestToGreatest(TexturedVertex* vertexes, r32* sortKeys, u32 count)
+{
+    for(u32 indexExt = 0; indexExt < count; ++indexExt)
+    {
+        u32 smallestIndex = indexExt;
+        r32 smallest = sortKeys[indexExt];
+        for(u32 indexInt = indexExt + 1; indexInt < count; ++indexInt)
+        {
+            r32 testKey = sortKeys[indexInt];
+            if(testKey < smallest)
+            {
+                smallest = testKey;
+                smallestIndex = indexInt;
+            }
+        }
+        Swap(vertexes, indexExt, smallestIndex);
+    }
+}
+
+internal void SortGreatestToSmallest(TexturedVertex* vertexes, r32* sortKeys, u32 count)
+{
+    for(u32 indexExt = 0; indexExt < count; ++indexExt)
+    {
+        u32 greatestIndex = indexExt;
+        r32 greatest = sortKeys[indexExt];
+        
+        for(u32 indexInt = indexExt + 1; indexInt < count; ++indexInt)
+        {
+            r32 testKey = sortKeys[indexInt];
+            if(testKey > greatest)
+            {
+                greatest = testKey;
+                greatestIndex = indexInt;
+            }
+        }
+        Swap(vertexes, indexExt, greatestIndex);
+    }
+}
+
+internal void SortRenderBuffer(RenderBuffer* buffer, u32 flags)
+{
+    for(RenderSetup* setup = buffer->firstSetup; setup; setup = setup->next)
+    {
+        TexturedVertex* startingVertex = buffer->vertexArray + setup->quadStartingIndex;
+        r32* sortKeys = buffer->sortKeyArray + setup->quadStartingIndex;
+        
+        if(flags & DrawRenderBuffer_SortBackToFront)
+        {
+            SortSmallestToGreatest(startingVertex, sortKeys, buffer->quadCount);
+        }
+        
+        if(flags & DrawRenderBuffer_SortFrontToBack)
+        {
+            SortGreatestToSmallest(startingVertex, sortKeys, buffer->quadCount);
+        }
+    }
+}
+
+
+internal void DrawRenderBuffer(RenderBuffer* buffer, u32 flags, u32 renderWidth, u32 renderHeight)
+{
+    if(flags & DrawRenderBuffer_Blend)
+    {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    }
+    else
+    {
+        glDisable(GL_BLEND);
     }
     
-    u32 renderWidth = commands->settings.width;
-    u32 renderHeight = commands->settings.height;
-    
-    OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
-    glScissor(0, 0, renderWidth, renderHeight);
-    glClearDepth(1.0f);
-    glClearColor(commands->clearColor.r, commands->clearColor.g, commands->clearColor.b, commands->clearColor.a);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
-    u32 totalVertexCount = commands->maxQuadCount * 4;
+    u32 totalVertexCount = buffer->quadCount * 4;
     glBindBuffer(GL_ARRAY_BUFFER, opengl.vertexBuffer);
-    glBufferData(GL_ARRAY_BUFFER, totalVertexCount * sizeof(TexturedVertex), commands->vertexArray, GL_STREAM_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, totalVertexCount * sizeof(TexturedVertex), buffer->vertexArray, GL_STREAM_DRAW);
     
-    
-    u32 totalIndexCount = commands->quadCount * 6;
+    u32 totalIndexCount = buffer->quadCount * 6;
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, opengl.indexBuffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, totalIndexCount * sizeof(u16), commands->indexArray, GL_STREAM_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, totalIndexCount * sizeof(u16), buffer->indexArray, GL_STREAM_DRAW);
     
-    glBindTexture(GL_TEXTURE_1D, opengl.lightSource0);
-    glTexSubImage1D(GL_TEXTURE_1D, 0, 0, MAX_LIGHTS, GL_RGBA, GL_FLOAT, commands->lightSource0);
-    glBindTexture(GL_TEXTURE_1D, opengl.lightSource1);
-    glTexSubImage1D(GL_TEXTURE_1D, 0, 0, MAX_LIGHTS, GL_RGBA, GL_FLOAT, commands->lightSource1);
-    glBindTexture(GL_TEXTURE_1D, 0);
-    
-    if(!opengl.noiseTextureUploaded)
+    for(RenderSetup* setup = buffer->firstSetup; setup; setup = setup->next)
     {
-        glBindTexture(GL_TEXTURE_2D, opengl.noise);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, NOISE_WIDTH, NOISE_HEIGHT, GL_RGBA, GL_FLOAT, commands->noiseTexture);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        opengl.noiseTextureUploaded = true;
-    }
-    
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_1D, opengl.lightSource0);
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_1D, opengl.lightSource1);
-    glActiveTexture(GL_TEXTURE3);
-    glBindTexture(GL_TEXTURE_2D, opengl.noise);
-    glActiveTexture(GL_TEXTURE0);
-    
-    
-    
-    glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
-    for(RenderSetup* setup = commands->firstSetup; setup; setup = setup->next)
-    {
-#if 0        
-        if(transparent)
-        {
-            glDisable(GL_DEPTH_TEST);
-            SortQuads();
-        }
-        else
-#endif
-        
-        {
-            glDepthFunc(GL_LEQUAL);
-            glEnable(GL_DEPTH_TEST);
-        }
-        
         Rect2i clipRect = setup->rect;    
         glScissor(clipRect.minX, clipRect.minY, clipRect.maxX - clipRect.minX, clipRect.maxY - clipRect.minY);
         
@@ -986,6 +1057,64 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
             OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
         }
     }
+}
+
+inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion, i32 windowWidth, i32 windowHeight)
+{
+    glDepthMask(GL_TRUE);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
+    glEnable(GL_SCISSOR_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glEnable(GL_DEPTH_TEST);
+    
+    if(!AreEqual(&opengl.settings, &commands->settings))
+    {
+        OpenGLPrepareForRenderSettings(&commands->settings);
+    }
+    
+    u32 renderWidth = commands->settings.width;
+    u32 renderHeight = commands->settings.height;
+    
+    OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
+    glScissor(0, 0, renderWidth, renderHeight);
+    glClearDepth(1.0f);
+    glClearColor(commands->clearColor.r, commands->clearColor.g, commands->clearColor.b, commands->clearColor.a);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    glBindTexture(GL_TEXTURE_1D, opengl.lightSource0);
+    glTexSubImage1D(GL_TEXTURE_1D, 0, 0, MAX_LIGHTS, GL_RGBA, GL_FLOAT, commands->lightSource0);
+    glBindTexture(GL_TEXTURE_1D, opengl.lightSource1);
+    glTexSubImage1D(GL_TEXTURE_1D, 0, 0, MAX_LIGHTS, GL_RGBA, GL_FLOAT, commands->lightSource1);
+    glBindTexture(GL_TEXTURE_1D, 0);
+    
+    if(!opengl.noiseTextureUploaded)
+    {
+        glBindTexture(GL_TEXTURE_2D, opengl.noise);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, NOISE_WIDTH, NOISE_HEIGHT, GL_RGBA, GL_FLOAT, commands->noiseTexture);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        opengl.noiseTextureUploaded = true;
+    }
+    
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_1D, opengl.lightSource0);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_1D, opengl.lightSource1);
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, opengl.noise);
+    glActiveTexture(GL_TEXTURE0);
+    
+    
+    
+    glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
+    
+    SortRenderBuffer(&commands->opaque, DrawRenderBuffer_SortFrontToBack);
+    SortRenderBuffer(&commands->transparent, DrawRenderBuffer_SortBackToFront);
+    
+    DrawRenderBuffer(&commands->opaque, 0, renderWidth, renderHeight);
+    DrawRenderBuffer(&commands->transparent, DrawRenderBuffer_Blend, renderWidth, renderHeight);
     
     glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
     

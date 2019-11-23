@@ -1326,6 +1326,25 @@ global_variable DebugTable globalDebugTable_;
 DebugTable* globalDebugTable = &globalDebugTable_;
 #endif
 
+internal InitRenderBufferParams AllocateQuads(u32 maxQuadCount)
+{
+    InitRenderBufferParams result = {};
+    result.maxQuadCount = maxQuadCount;
+    
+    u32 maxVertexCount = maxQuadCount * 4;
+    u32 maxIndexCount = maxQuadCount * 6;
+    
+    PlatformMemoryBlock* vertexBlock = Win32AllocateMemory( maxVertexCount * sizeof( TexturedVertex ), 0 );
+    result.vertexes = (TexturedVertex*) vertexBlock->base;
+    
+    PlatformMemoryBlock* indexBlock = Win32AllocateMemory( maxIndexCount * sizeof(u16), 0 );
+    result.indeces = (u16*) indexBlock->base;
+    
+    PlatformMemoryBlock* sortBlock = Win32AllocateMemory( maxQuadCount * sizeof(r32), 0 );
+    result.sortKeys = (r32*) sortBlock->base;
+    
+    return result;
+}
 
 int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR commandLine, int showCode)
 {
@@ -1513,16 +1532,9 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                     PlatformMemoryBlock* pushBufferBlock = Win32AllocateMemory(pushBufferSize, PlatformMemory_NotRestored);
                     u8* pushBuffer = pushBufferBlock->base;
                     
-                    u32 maxQuadCount = (1 << 16);
-                    u32 maxVertexCount = maxQuadCount * 4;
-                    u32 maxIndexCount = maxQuadCount * 6;
+                    InitRenderBufferParams opaque = AllocateQuads(1 << 16);
+                    InitRenderBufferParams transparent = AllocateQuads(1 << 12);
                     
-                    PlatformMemoryBlock* vertexBlock = Win32AllocateMemory( maxVertexCount * sizeof( TexturedVertex ), 0 );
-                    TexturedVertex* vertexArray = (TexturedVertex*) vertexBlock->base;
-                    
-                    PlatformMemoryBlock* indexBlock = Win32AllocateMemory( maxIndexCount * sizeof(u16), 0 );
-                    u16* indexArray = (u16*) indexBlock->base;
-                    Assert(indexArray);
                     
                     b32 xboxControllerPresent = true;
                     b32 executableNeedsToBeRealoaded = false;
@@ -1548,7 +1560,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         BEGIN_BLOCK("setup renderer");
                         gameInput.timeToAdvance = targetSecPerFrame;
                         
-                        GameRenderCommands renderCommands =DefaultRenderCommands( pushBuffer, pushBufferSize, globalScreenBuffer.width, globalScreenBuffer.height, maxQuadCount,  vertexArray, indexArray, V4( 0, 0, 0, 1 ), noiseTextureBlock->base);
+                        GameRenderCommands renderCommands =DefaultRenderCommands( pushBuffer, pushBufferSize, globalScreenBuffer.width, globalScreenBuffer.height, opaque, transparent, V4( 0, 0, 0, 1 ), noiseTextureBlock->base);
                         Win32Dimension dimension = Win32GetWindowDimension( window );
                         Rect2i drawRegion = AspectRatioFit( renderCommands.settings.width, renderCommands.settings.height, dimension.width, dimension.height );
                         END_BLOCK();
