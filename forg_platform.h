@@ -32,13 +32,20 @@ struct GameRenderSettings
 #define maxIndexesPerBatch (U16_MAX - 1)
 #define maxQuadsPerBatch (maxIndexesPerBatch / 6)
 
+struct SortEntry
+{
+    r32 sortKey;
+    u32 index;
+};
+
 struct RenderBuffer
 {
     u32 quadCount;
     u32 maxQuadCount;
     TexturedVertex* vertexArray;
-    u16* indexArray;
-    r32* sortKeyArray;
+    u32* indexArray;
+    SortEntry* sortKeyArray;
+    SortEntry* tempSortKeyArray;
     
     struct RenderSetup* currentSetup;
     RenderSetup* firstSetup;
@@ -70,8 +77,9 @@ struct InitRenderBufferParams
 {
     u32 maxQuadCount;
     TexturedVertex* vertexes;
-    u16* indeces;
-    r32* sortKeys;
+    u32* indeces;
+    SortEntry* sortKeys;
+    SortEntry* tempSortKeys;
 };
 
 internal RenderBuffer InitRenderBuffer(InitRenderBufferParams params)
@@ -83,6 +91,7 @@ internal RenderBuffer InitRenderBuffer(InitRenderBufferParams params)
     result.vertexArray = params.vertexes;
     result.indexArray = params.indeces;
     result.sortKeyArray = params.sortKeys;
+    result.tempSortKeyArray = params.tempSortKeys;
     result.currentSetup = 0;
     result.firstSetup = 0;
     result.lastSetup = 0;

@@ -797,15 +797,10 @@ internal void OpenGLInit(OpenGLInfo info, b32 frameBufferSupportSRGB)
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
         glDebugMessageCallbackARB(OpenGLDebugCallback, 0);
     }
-    
-    GLuint dummyVertexArray;
-    glGenVertexArrays(1, &dummyVertexArray);
-    glBindVertexArray(dummyVertexArray);
 #endif
     
     glGenBuffers(1, &opengl.vertexBuffer);
     glGenBuffers(1, &opengl.indexBuffer);
-    
     
     {
         glGenBuffers(1, &opengl.screenFillVertexBuffer);
@@ -929,79 +924,44 @@ enum DrawRenderBufferFlags
     DrawRenderBuffer_Blend = (1 << 2),
 };
 
-internal void Swap(TexturedVertex* vertexes, u32 i1, u32 i2)
-{
-    TexturedVertex temp;
-    
-    TexturedVertex* dest = vertexes + (i1 * 4);
-    TexturedVertex* sources = vertexes + (i2 * 4);
-    
-    for(u32 index = 0; index < 4; ++index)
-    {
-        temp = dest[index];
-        dest[index] = sources[index];
-        sources[index] = temp;
-    }
-}
-
-internal void SortSmallestToGreatest(TexturedVertex* vertexes, r32* sortKeys, u32 count)
-{
-    for(u32 indexExt = 0; indexExt < count; ++indexExt)
-    {
-        u32 smallestIndex = indexExt;
-        r32 smallest = sortKeys[indexExt];
-        for(u32 indexInt = indexExt + 1; indexInt < count; ++indexInt)
-        {
-            r32 testKey = sortKeys[indexInt];
-            if(testKey < smallest)
-            {
-                smallest = testKey;
-                smallestIndex = indexInt;
-            }
-        }
-        Swap(vertexes, indexExt, smallestIndex);
-    }
-}
-
-internal void SortGreatestToSmallest(TexturedVertex* vertexes, r32* sortKeys, u32 count)
-{
-    for(u32 indexExt = 0; indexExt < count; ++indexExt)
-    {
-        u32 greatestIndex = indexExt;
-        r32 greatest = sortKeys[indexExt];
-        
-        for(u32 indexInt = indexExt + 1; indexInt < count; ++indexInt)
-        {
-            r32 testKey = sortKeys[indexInt];
-            if(testKey > greatest)
-            {
-                greatest = testKey;
-                greatestIndex = indexInt;
-            }
-        }
-        Swap(vertexes, indexExt, greatestIndex);
-    }
-}
-
 internal void SortRenderBuffer(RenderBuffer* buffer, u32 flags)
 {
     for(RenderSetup* setup = buffer->firstSetup; setup; setup = setup->next)
     {
-        TexturedVertex* startingVertex = buffer->vertexArray + setup->quadStartingIndex;
-        r32* sortKeys = buffer->sortKeyArray + setup->quadStartingIndex;
+        SortEntry* sortKeys = buffer->sortKeyArray + setup->quadStartingIndex;
+        SortEntry* tempSortKeys = buffer->tempSortKeyArray + setup->quadStartingIndex;
         
         if(flags & DrawRenderBuffer_SortBackToFront)
         {
-            SortSmallestToGreatest(startingVertex, sortKeys, buffer->quadCount);
+            RadixSort(sortKeys, setup->quadCount, tempSortKeys);
         }
         
         if(flags & DrawRenderBuffer_SortFrontToBack)
         {
-            SortGreatestToSmallest(startingVertex, sortKeys, buffer->quadCount);
+            RadixSort(sortKeys, setup->quadCount, tempSortKeys);
         }
     }
 }
 
+internal void ComputeIndeces(RenderBuffer* buffer)
+{
+    for(RenderSetup* setup = buffer->firstSetup; setup; setup = setup->next)
+    {
+        for(u32 quadIndex = 0; quadIndex < setup->quadCount; ++quadIndex)
+        {
+            SortEntry* sortKey = buffer->sortKeyArray + (setup->quadStartingIndex + quadIndex);
+            u32* indeces = buffer->indexArray + ((setup->quadStartingIndex + quadIndex) * 6);
+            
+            u32 VI = sortKey->index * 4;
+            indeces[0] = VI + 0;
+            indeces[1] = VI + 1;
+            indeces[2] = VI + 3;
+            indeces[3] = VI + 1;
+            indeces[4] = VI + 2;
+            indeces[5] = VI + 3;
+        }
+    }
+}
 
 internal void DrawRenderBuffer(RenderBuffer* buffer, u32 flags, u32 renderWidth, u32 renderHeight)
 {
@@ -1021,7 +981,7 @@ internal void DrawRenderBuffer(RenderBuffer* buffer, u32 flags, u32 renderWidth,
     
     u32 totalIndexCount = buffer->quadCount * 6;
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, opengl.indexBuffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, totalIndexCount * sizeof(u16), buffer->indexArray, GL_STREAM_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, totalIndexCount * sizeof(u32), buffer->indexArray, GL_STREAM_DRAW);
     
     for(RenderSetup* setup = buffer->firstSetup; setup; setup = setup->next)
     {
@@ -1038,15 +998,13 @@ internal void DrawRenderBuffer(RenderBuffer* buffer, u32 flags, u32 renderWidth,
         OpenGLUseProgramBegin(program, setup);
         Assert(setup->quadCount > 0);
         u32 batchCount = (setup->quadCount / maxQuadsPerBatch) + 1;
-        u32 vertexOffset = setup->vertexArrayOffset;
         u32 indexOffset = setup->indexArrayOffset;
         u32 quadsRemaining = setup->quadCount;
         for(u32 batchIndex = 0; batchIndex < batchCount; ++batchIndex)
         {
             u32 quadCount = Min(quadsRemaining, maxQuadsPerBatch);
-            glDrawElementsBaseVertex(GL_TRIANGLES, 6 * quadCount, GL_UNSIGNED_SHORT, (GLvoid*) (indexOffset * sizeof(u16)), vertexOffset);
+            glDrawElements(GL_TRIANGLES, 6 * quadCount, GL_UNSIGNED_INT, (GLvoid*) (indexOffset * sizeof(u32)));
             
-            vertexOffset += quadCount * 4;
             indexOffset += quadCount * 6;
             quadsRemaining -= quadCount;
         }
@@ -1112,6 +1070,9 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     
     SortRenderBuffer(&commands->opaque, DrawRenderBuffer_SortFrontToBack);
     SortRenderBuffer(&commands->transparent, DrawRenderBuffer_SortBackToFront);
+    
+    ComputeIndeces(&commands->opaque);
+    ComputeIndeces(&commands->transparent);
     
     DrawRenderBuffer(&commands->opaque, 0, renderWidth, renderHeight);
     DrawRenderBuffer(&commands->transparent, DrawRenderBuffer_Blend, renderWidth, renderHeight);

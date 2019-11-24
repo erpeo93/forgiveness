@@ -1,17 +1,11 @@
-struct SortEntry
-{
-    r32 sortKey;
-    u32 index;
-};
-
-inline void Swap( SortEntry* e1, SortEntry* e2 )
+inline void Swap(SortEntry* e1, SortEntry* e2)
 {
     SortEntry temp = *e1;
     *e1 = *e2;
     *e2 = temp;
 }
 
-internal void MergeSort( SortEntry* first, u32 count, SortEntry* temp )
+internal void MergeSort(SortEntry* first, u32 count, SortEntry* temp)
 {
     Assert( count );
     if( count == 1 )
@@ -105,10 +99,10 @@ internal void BubbleSort( SortEntry* first, u32 count )
     }
 }
 
-inline u32 SortKeyToU32( r32 sortKey )
+inline u32 SortKeyToU32(r32 sortKey)
 {
     u32 result = *( u32* ) &sortKey;
-    if( result & 0x80000000 )
+    if(result & 0x80000000)
     {
         result = ~result;
     }
@@ -119,33 +113,33 @@ inline u32 SortKeyToU32( r32 sortKey )
     return result;
 }
 
-internal void RadixSort( SortEntry* first, u32 count, SortEntry* temp )
+internal void RadixSort(SortEntry* first, u32 count, SortEntry* temp)
 {
     SortEntry* source = first;
     SortEntry* dest = temp;
     
-    for( u32 byteIndex = 0; byteIndex < 32; byteIndex += 8 )
+    for(u32 byteIndex = 0; byteIndex < 32; byteIndex += 8)
     {
         u32 sortKeyOffset[256] = {};
-        for( u32 index = 0; index < count; ++index )
+        for(u32 index = 0; index < count; ++index)
         {
-            u32 radixValue = SortKeyToU32( first[index].sortKey );
-            u32 radixPiece = ( radixValue >> ( byteIndex ) ) & 0xff;
+            u32 radixValue = SortKeyToU32(first[index].sortKey);
+            u32 radixPiece = (radixValue >> (byteIndex)) & 0xff;
             ++sortKeyOffset[radixPiece];
         }
         
         u32 total = 0;
-        for( u32 sortKeyIndex = 0; sortKeyIndex < ArrayCount( sortKeyOffset ); ++sortKeyIndex )
+        for(u32 sortKeyIndex = 0; sortKeyIndex < ArrayCount(sortKeyOffset); ++sortKeyIndex)
         {
             u32 countPartial = sortKeyOffset[sortKeyIndex];
             sortKeyOffset[sortKeyIndex] = total;
             total += countPartial;
         }
         
-        Assert( total == count );
-        for( u32 index = 0; index < count; ++index )
+        Assert(total == count);
+        for(u32 index = 0; index < count; ++index)
         {
-            u32 radixValue = SortKeyToU32( source[index].sortKey );
+            u32 radixValue = SortKeyToU32(source[index].sortKey);
             u32 radixPiece = ( radixValue >> ( byteIndex ) ) & 0xff;
             dest[sortKeyOffset[radixPiece]++] = source[index];
         }
@@ -155,5 +149,4 @@ internal void RadixSort( SortEntry* first, u32 count, SortEntry* temp )
         source = swapTemp;
     }
 }
-
 

@@ -8,7 +8,7 @@ internal b32 ShouldBeRendered(GameModeWorld* worldMode, BaseComponent* base)
                   !(base->flags & EntityFlag_notInWorld) &&
                   !(base->flags & EntityFlag_occluding));
         
-        r32 maxLengthSq = Square(1.5f * (r32) CHUNK_DIM);
+        r32 maxLengthSq = Square(3 * (r32) CHUNK_DIM);
         if(result && LengthSq(SubtractOnSameZChunk(base->universeP, worldMode->player.universeP)) > maxLengthSq)
         {
             result = false;

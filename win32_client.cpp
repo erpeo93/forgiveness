@@ -241,6 +241,7 @@ global_variable Opengl opengl;
 
 #include "forg_image.h"
 #include "forg_image.cpp"
+#include "forg_sort.cpp"
 #include "forg_opengl.cpp"
 #include "forg_render_tier.cpp"
 
@@ -1337,11 +1338,14 @@ internal InitRenderBufferParams AllocateQuads(u32 maxQuadCount)
     PlatformMemoryBlock* vertexBlock = Win32AllocateMemory( maxVertexCount * sizeof( TexturedVertex ), 0 );
     result.vertexes = (TexturedVertex*) vertexBlock->base;
     
-    PlatformMemoryBlock* indexBlock = Win32AllocateMemory( maxIndexCount * sizeof(u16), 0 );
-    result.indeces = (u16*) indexBlock->base;
+    PlatformMemoryBlock* indexBlock = Win32AllocateMemory( maxIndexCount * sizeof(u32), 0 );
+    result.indeces = (u32*) indexBlock->base;
     
-    PlatformMemoryBlock* sortBlock = Win32AllocateMemory( maxQuadCount * sizeof(r32), 0 );
-    result.sortKeys = (r32*) sortBlock->base;
+    PlatformMemoryBlock* sortBlock = Win32AllocateMemory( maxQuadCount * sizeof(SortEntry), 0 );
+    result.sortKeys = (SortEntry*) sortBlock->base;
+    
+    PlatformMemoryBlock* tempSortBlock = Win32AllocateMemory(maxQuadCount * sizeof(SortEntry), 0 );
+    result.tempSortKeys = (SortEntry*) tempSortBlock->base;
     
     return result;
 }
@@ -1533,7 +1537,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                     u8* pushBuffer = pushBufferBlock->base;
                     
                     InitRenderBufferParams opaque = AllocateQuads(1 << 16);
-                    InitRenderBufferParams transparent = AllocateQuads(1 << 12);
+                    InitRenderBufferParams transparent = AllocateQuads(1 << 16);
                     
                     
                     b32 xboxControllerPresent = true;

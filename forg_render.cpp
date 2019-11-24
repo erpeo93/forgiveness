@@ -49,19 +49,10 @@ inline TexturedVertex* ReserveQuad(RenderGroup* group, b32 transparent, r32 sort
     {
         u32 vertexIndex = setup->vertexArrayOffset + (setup->quadCount * 4);
         result = buffer->vertexArray + vertexIndex;
-        u16* indeces = buffer->indexArray + (buffer->quadCount * 6);
-        u32 batchCount = setup->quadCount / maxQuadsPerBatch;
-        u32 vertexArrayOffset = setup->vertexArrayOffset + (batchCount * maxQuadsPerBatch * 4);
-        u16 VI = SafeTruncateToU16(vertexIndex - vertexArrayOffset);
-        indeces[0] = VI + 0;
-        indeces[1] = VI + 1;
-        indeces[2] = VI + 3;
-        indeces[3] = VI + 1;
-        indeces[4] = VI + 2;
-        indeces[5] = VI + 3;
         
-        r32* sortKeyPtr = buffer->sortKeyArray + buffer->quadCount;
-        *sortKeyPtr = sortKey;
+        SortEntry* sortKeyPtr = buffer->sortKeyArray + buffer->quadCount;
+        sortKeyPtr->sortKey = sortKey;
+        sortKeyPtr->index = buffer->quadCount;
         
         setup->quadCount += 1;
         buffer->quadCount += 1;
