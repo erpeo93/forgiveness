@@ -1789,6 +1789,22 @@ internal void FillPAKProperty(PAKAsset* asset, Token property, Token value)
     {
         asset->skeleton.flippedByDefault = (b32) StringToB32(value.text);
     }
+    else if(TokenEquals(property, SKELETON_FLIPPED_BONE1))
+    {
+        asset->skeleton.flippedBone1 = StringToUInt32(value.text);
+    }
+    else if(TokenEquals(property, SKELETON_FLIPPED_BONE1_OFFSET))
+    {
+        asset->skeleton.flippedBone1ZOffset = StringToR32(value.text);
+    }
+    else if(TokenEquals(property, SKELETON_FLIPPED_BONE2))
+    {
+        asset->skeleton.flippedBone2 = StringToUInt32(value.text);
+    }
+    else if(TokenEquals(property, SKELETON_FLIPPED_BONE2_OFFSET))
+    {
+        asset->skeleton.flippedBone2ZOffset = StringToR32(value.text);
+    }
     else
     {
         u64 propertyHash = StringHash(property.text, property.textLength);
@@ -2758,22 +2774,7 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
                             toSend->sendingOffset = 0;
                             
                             ++file->counter;
-                            if(!player->firstReloadedFileToSend)
-                            {
-                                player->firstReloadedFileToSend = toSend;
-                            }
-                            else
-                            {
-                                for(FileToSend* firstToSend = player->firstReloadedFileToSend;; firstToSend = firstToSend->next)
-                                {
-                                    if(!firstToSend->next)
-                                    {
-                                        firstToSend->next = toSend;
-                                        break;
-                                    }
-                                }
-                            }
-                            
+                            FREELIST_INSERT(toSend, player->firstReloadedFileToSend);
                             QueueFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
                         }
                     }

@@ -586,7 +586,11 @@ internal void DEBUGOverlay(EditorLayout* layout)
         collation->viewingFrameOrdinal = collation->mostRecentFrameOrdinal;
     }
     
+    r32 receivingBytesPerSecond = (clientNetwork->network->totalBytesReceived / clientNetwork->network->totalTimeElapsed) / 1000.0f;
+    
     Edit_b32(layout, "profiling", &debugState->profiling, 0, {});
+    NextRaw(layout);
+    Edit_r32(layout, "AVG receiving KBytes per sec", &receivingBytesPerSecond, false, {}, false, false);
     
     DebugFrame* mostRecentFrame = collation->frames + collation->viewingFrameOrdinal;
     NextRaw(layout);

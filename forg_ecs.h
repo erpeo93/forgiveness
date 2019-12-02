@@ -54,6 +54,7 @@ struct ArchetypeLayout
             ArchetypeComponent hasMultipartAnimationComponent;
             ArchetypeComponent hasDefaultComponent;
             ArchetypeComponent hasActionComponent;
+            ArchetypeComponent hasStaticComponent;
         };
     };
 };
@@ -175,6 +176,7 @@ inline b32 AreEqual(EntityID i1, EntityID i2)
 }
 
 
+
 #define STANDARD_ECS_JOB_SERVER(name) internal void name(ServerState* server, EntityID ID, r32 elapsedTime)
 #define STANDARD_ECS_JOB_CLIENT(name) internal void name(GameModeWorld* worldMode, EntityID ID, r32 elapsedTime)
 #define RENDERING_ECS_JOB_CLIENT(name) internal void name(GameModeWorld* worldMode, RenderGroup* group, EntityID ID, r32 elapsedTime)
@@ -195,6 +197,41 @@ for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)\
         }\
     }\
 }
+
+#if 0
+struct ExecuteJobWorkData
+{
+    job* job;
+    void* state;
+    IDRange;
+    elapsedTime;
+};
+
+PLATFORM_WORK_CALLBACK(ExecuteJobWork)
+{
+    ExecuteJobWorkData* data = params;
+    
+    for(first(data->range), Advance(); IsValid())
+    {
+        data->job(data->state, ID, data->elapsedTime);
+    }
+}
+
+
+#define EXECUTE_AND_COMPLETE_MULTITHREAD_JOB(state, job, query, elapsedTime)\
+for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)\
+{\
+    if(query)\
+    {\
+        GetCount(archetype);\
+        for(subdivisions)\
+        {\
+            PrepareWork();\
+            PushJob(ExecuteJobWork, work);\
+        }\
+    }\
+}
+#endif
 
 #define EXECUTE_RENDERING_JOB(state, group, job, query, elapsedTime)\
 for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)\

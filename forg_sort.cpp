@@ -113,7 +113,7 @@ inline u32 SortKeyToU32(r32 sortKey)
     return result;
 }
 
-internal void RadixSort(SortEntry* first, u32 count, SortEntry* temp)
+internal void RadixSort(SortEntry* first, u32 count, SortEntry* temp, b32 reverse = false)
 {
     SortEntry* source = first;
     SortEntry* dest = temp;
@@ -129,7 +129,18 @@ internal void RadixSort(SortEntry* first, u32 count, SortEntry* temp)
         }
         
         u32 total = 0;
-        for(u32 sortKeyIndex = 0; sortKeyIndex < ArrayCount(sortKeyOffset); ++sortKeyIndex)
+        i32 starting = 0;
+        i32 maximum = ArrayCount(sortKeyOffset);
+        i32 offset = 1;
+        
+        if(reverse)
+        {
+            starting = ArrayCount(sortKeyOffset) - 1;
+            maximum = -1;
+            offset = -1;
+        }
+        
+        for(i32 sortKeyIndex = starting; sortKeyIndex != maximum; sortKeyIndex += offset)
         {
             u32 countPartial = sortKeyOffset[sortKeyIndex];
             sortKeyOffset[sortKeyIndex] = total;

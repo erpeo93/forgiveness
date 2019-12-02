@@ -9,7 +9,6 @@ internal GameProperty GetProperty(u32 seed)
 {
     GameProperty result;
     result.property = Property_essence;
-    
     RandomSequence seq = Seed(seed);
     u32 choice = RandomChoice(&seq, earth + 1);
     result.value = SafeTruncateToU16(choice);
@@ -44,12 +43,19 @@ internal void AddPossibleActions(PossibleActionList* list, PossibleActionDefinit
 #ifdef FORG_SERVER
 INIT_COMPONENT_FUNCTION(InitDefaultComponent)
 {
+    ServerState* server = (ServerState*) state;
     DefaultComponent* def = (DefaultComponent*) componentPtr;
+    def->updateSent = false;
+    
+    def->basicPropertiesChanged = 0;
+    def->basicPropertiesChanged |= EntityBasics_Definition; 
+    def->basicPropertiesChanged |= EntityBasics_Position;
+    
     def->P = s->P;
     def->flags = {};
     def->seed = s->seed;
     def->definitionID = common->definitionID;
-    def->status = status_frozen;
+    def->status = U16Val(0);
 }
 
 INIT_COMPONENT_FUNCTION(InitPhysicComponent)
@@ -66,7 +72,7 @@ INIT_COMPONENT_FUNCTION(InitPhysicComponent)
 INIT_COMPONENT_FUNCTION(InitActionComponent)
 {
     ActionComponent* action = (ActionComponent*) componentPtr;
-    action->action = idle;
+    action->action = U16Val(idle);
     action->time = 0;
 }
 
@@ -134,7 +140,7 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
     {
         InventorySlot* slot = dest->storedObjects + index;
         slot->type = (index < s->storeCount) ? (u16) InventorySlot_Standard : (u16) InventorySlot_Special;
-        slot->ID = {};
+        SetBoundedID(slot, {});
     }
     
     u16 totalUsingCount = s->usingCount + s->specialUsingCount;
@@ -143,7 +149,7 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
     {
         InventorySlot* slot = dest->usingObjects + index;
         slot->type = index < s->usingCount ? (u16) InventorySlot_Standard : (u16) InventorySlot_Special;
-        slot->ID = {};
+        SetBoundedID(slot, {});
     }
     
 }
@@ -170,7 +176,10 @@ INIT_COMPONENT_FUNCTION(InitSkillComponent)
 INIT_COMPONENT_FUNCTION(InitBrainComponent)
 {
     BrainComponent* brain = (BrainComponent*) componentPtr;
-    brain->type = Brain_Portal;
+    
+    *brain = {};
+    
+    brain->type = PropertyToU16(brainType, s->brainType);
     brain->ID = {};
 }
 
@@ -180,19 +189,43 @@ INIT_COMPONENT_FUNCTION(InitTempEntityComponent)
 	temp->time = 0.0f;
 	temp->targetTime = 1.0f;
 }
+
+INIT_COMPONENT_FUNCTION(InitStaticComponent)
+{
+    ServerState* server = (ServerState*) state;
+    StaticComponent* staticComp = (StaticComponent*) componentPtr;
+    AddToPartitionResult addResult = AddToSpatialPartition(&server->gamePool, &server->staticPartition, s->P, {}, ID);
+    staticComp->block = addResult.block;
+}
+
 #else
 INIT_COMPONENT_FUNCTION(InitBaseComponent)
 {
     BaseComponent* base = (BaseComponent*) componentPtr;
-    base->seed = c->seed;
-    base->bounds = StandardBounds(common->boundDim, common->boundOffset);
-    base->nameHash = StringHash(c->name.name);
-    base->serverID = c->ID;
     base->definitionID = common->definitionID;
-    base->flags = {};
+    base->seed = c->seed;
+    base->nameHash = StringHash(c->name.name);
+    base->universeP = {};
+    base->velocity = {};
+    base->flags = 0;
+    base->bounds = StandardBounds(common->boundDim, common->boundOffset);
+    base->worldBounds = {};
+    base->projectedOnScreen = {};
+    base->serverID = c->ID;
+    base->draggingID = {};
     base->timeSinceLastUpdate = 0;
 	base->totalLifeTime = 0;
     base->deletedTime = 0;
+    
+    base->fadeInTime = c->fadeInTime;
+    base->fadeOutTime = c->fadeOutTime;
+    
+    base->propertyCount = 0;
+    
+    for(u32 propertyIndex = 0; propertyIndex < ArrayCount(base->properties); ++propertyIndex)
+    {
+        base->properties[propertyIndex] = {};
+    }
 }
 
 internal void InitShadow(ShadowComponent* shadow, ClientEntityInitParams* params)
@@ -222,14 +255,18 @@ internal void InitImageReference_(Assets* assets, ImageReference* dest,ImageProp
 INIT_COMPONENT_FUNCTION(InitAnimationComponent)
 {
     AnimationComponent* animation = (AnimationComponent*) componentPtr;
-    animation->skeletonHash =c->skeleton.subtypeHash;
-    animation->skinHash =c->skin.subtypeHash;
-    animation->flipOnYAxis = 0;
-    animation->scale = 1.0f;
-    animation->speed = 1.0f;
+    animation->currentAnimation = 0;
     animation->totalTime = 0;
     animation->time = 0;
     animation->oldTime = 0;
+    animation->backward = false;
+    animation->skinHash =c->skin.subtypeHash;
+    animation->skinProperties = {};
+    animation->skeletonHash =c->skeleton.subtypeHash;
+    animation->skeletonProperties = {};
+    animation->flipOnYAxis = 0;
+    animation->scale = 0;
+    animation->speed = 1.0f;
 }
 
 INIT_COMPONENT_FUNCTION(InitRockComponent)

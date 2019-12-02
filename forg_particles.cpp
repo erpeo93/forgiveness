@@ -237,6 +237,12 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectIn
 
 internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cache, ParticleEffectInstance* effect, r32 dt, Vec3 frameDisplacementInit, RenderGroup* group)
 {
+    for(any sound)
+    {
+        UpdateSoundMapping(effect->sounds + soundIndex);
+    }
+    
+    
     for(u32 phaseIndex = 0; phaseIndex < effect->phaseCount; ++phaseIndex)
     {
         ParticlePhase* phase = effect->phases + phaseIndex;

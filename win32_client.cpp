@@ -1564,7 +1564,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         BEGIN_BLOCK("setup renderer");
                         gameInput.timeToAdvance = targetSecPerFrame;
                         
-                        GameRenderCommands renderCommands =DefaultRenderCommands( pushBuffer, pushBufferSize, globalScreenBuffer.width, globalScreenBuffer.height, opaque, transparent, V4( 0, 0, 0, 1 ), noiseTextureBlock->base);
+                        GameRenderCommands renderCommands =DefaultRenderCommands( pushBuffer, pushBufferSize, globalScreenBuffer.width, globalScreenBuffer.height, opaque, transparent, V4(0, 0, 0, 1), noiseTextureBlock->base);
                         Win32Dimension dimension = Win32GetWindowDimension( window );
                         Rect2i drawRegion = AspectRatioFit( renderCommands.settings.width, renderCommands.settings.height, dimension.width, dimension.height );
                         END_BLOCK();

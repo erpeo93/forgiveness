@@ -245,26 +245,22 @@ internal RandomSequence GetChunkSeed(u32 chunkX, u32 chunkY, u32 worldSeed)
     return result;
 }
 
-internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* generator, WorldChunk* chunk, i32 chunkX, i32 chunkY, i32 chunkZ, u32 seed)
+internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* generator, WorldChunk* chunk, i16 chunkX, i16 chunkY, i16 chunkZ, u32 seed)
 {
     RandomSequence seq = GetChunkSeed(chunkX, chunkY, seed);
     RandomSequence seqTest = seq;
     
 #ifndef FORG_SERVER
-    chunk->initialized = true;
     chunk->worldX = chunkX;
     chunk->worldY = chunkY;
     chunk->worldZ = chunkZ;
 #endif
-    
     u32 maxTile = (WORLD_CHUNK_SPAN  + 2 * WORLD_CHUNK_APRON)* CHUNK_DIM;
     
-    i32 normalizedChunkX = chunkX + WORLD_CHUNK_APRON;
-    i32 normalizedChunkY = chunkY + WORLD_CHUNK_APRON;
+    i16 normalizedChunkX = chunkX + WORLD_CHUNK_APRON;
+    i16 normalizedChunkY = chunkY + WORLD_CHUNK_APRON;
     
-    chunk->tiles = 0;
     b32 buildTiles = false;
-    
     r32 chunkNormZ = 0;
     
     if(generator->maxDeepness > 1)
@@ -273,6 +269,18 @@ internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* gene
     }
     
     WorldTile nullTile = NullTile(generator);
+    if(chunk->tiles)
+    {
+        for(u8 tileY = 0; tileY < CHUNK_DIM && !buildTiles; ++tileY)
+        {
+            for(u8 tileX = 0; tileX < CHUNK_DIM && !buildTiles; ++tileX)
+            {
+                WorldTile* tile = chunk->tiles + (tileY * CHUNK_DIM) + tileX;
+                *tile = nullTile;
+            }
+        }
+    }
+    
     for(u8 tileY = 0; tileY < CHUNK_DIM && !buildTiles; ++tileY)
     {
         for(u8 tileX = 0; tileX < CHUNK_DIM && !buildTiles; ++tileX)
@@ -299,7 +307,11 @@ internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* gene
     
     if(buildTiles)
     {
-        chunk->tiles = PushArray(pool, WorldTile, CHUNK_DIM * CHUNK_DIM, NoClear());
+        if(!chunk->tiles)
+        {
+            chunk->tiles = PushArray(pool, WorldTile, CHUNK_DIM * CHUNK_DIM, NoClear());
+        }
+        
         for(u8 tileY = 0; tileY < CHUNK_DIM; ++tileY)
         {
             for(u8 tileX = 0; tileX < CHUNK_DIM; ++tileX)
@@ -325,7 +337,7 @@ internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* gene
 }
 
 #ifdef FORG_SERVER
-internal UniversePos BuildPFromSpawnerGrid(r32 cellDim, u32 cellX, u32 cellY, i32 chunkZ)
+internal UniversePos BuildPFromSpawnerGrid(r32 cellDim, u32 cellX, u32 cellY, i16 chunkZ)
 {
     UniversePos result = {};
     result.chunkZ = chunkZ;
@@ -369,6 +381,7 @@ internal void AddToPoission(PoissonP** positions, MemoryPool* pool, UniversePos 
 }
 
 internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, EntityRef type, AddEntityParams params);
+internal void SpawnPlayerGhost(ServerState* server, UniversePos P, AddEntityParams params);
 internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos referenceP, RandomSequence* seq)
 {
     if(spawner->optionCount)
@@ -483,8 +496,14 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
     InitEntity(server, ID, &definition->common, &params, 0); 
     if(newEntity->params.playerIndex > 0)
     {
+        Assert(HasComponent(ID, BrainComponent));
+        BrainComponent* brain = GetComponent(server, ID, BrainComponent);
+        brain->type = Brain_Player;
+        
         Assert(HasComponent(ID, PlayerComponent));
         PlayerComponent* player = (PlayerComponent*) Get_(&server->PlayerComponent_, newEntity->params.playerIndex);
+        player->ID = ID;
+        player->justEnteredWorld = true;
         SetComponent(server, ID, PlayerComponent, player);
         ResetQueue(player->queues + GuaranteedDelivery_None);
         QueueGameAccessConfirm(player, server->worldSeed, ID, false);
@@ -493,7 +512,7 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
     if(newEntity->params.spawnFollowingEntity)
     {
         DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-        def->flags = AddFlags(def->flags, EntityFlag_locked);
+        AddEntityFlags(def, EntityFlag_locked);
         AddEntityParams attachedParams = DefaultAddEntityParams();
         attachedParams.targetBrainID = ID;
         AddEntity(server, newEntity->P, &server->entropy, newEntity->params.attachedEntityType, attachedParams);
@@ -502,8 +521,8 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
     if(IsValidID(newEntity->params.targetBrainID))
     {
 		DefaultComponent* targetDef = GetComponent(server, newEntity->params.targetBrainID, DefaultComponent);
-		Assert(IsSet(targetDef->flags, EntityFlag_locked));
-		targetDef->flags = ClearFlags(targetDef->flags, EntityFlag_locked);
+		Assert(EntityHasFlags(targetDef, EntityFlag_locked));
+        ClearEntityFlags(targetDef, EntityFlag_locked);
         BrainComponent* brain = GetComponent(server, newEntity->params.targetBrainID, BrainComponent);
         if(brain)
         {
@@ -512,7 +531,7 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
     }
 }
 
-internal void SpawnEntities(ServerState* server, r32 elapsedTime)
+internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
 {
     MemoryPool tempPool = {};
     u16 spawnerCount;
@@ -532,7 +551,7 @@ internal void SpawnEntities(ServerState* server, r32 elapsedTime)
                 
                 u32 cellX = RandomChoice(&server->entropy, cellCount);
                 u32 cellY = RandomChoice(&server->entropy, cellCount);
-                i32 Z = 0;
+                i16 Z = 0;
                 UniversePos P = BuildPFromSpawnerGrid(cellDim, cellX, cellY, Z);
                 TriggerSpawner(server, spawner, P, &server->entropy);
             }
@@ -552,8 +571,66 @@ internal void SpawnEntities(ServerState* server, r32 elapsedTime)
     {
         GenerateEntity(server, newEntity);
     }
-    
     FREELIST_FREE(server->firstNewEntity, NewEntity, server->firstFreeNewEntity);
+    
+    
+    for(DeletedEntity* deleted = server->firstDeletedEntity; deleted; deleted = deleted->next)
+	{
+        EntityID ID = deleted->ID;
+		DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+		Assert(EntityHasFlags(def, EntityFlag_deleted));
+        SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
+        for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
+        {
+            PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
+            for(u32 messageIndex = 0; messageIndex < 5; ++messageIndex)
+            {
+                QueueDeletedID(player, ID);
+            }
+        }
+        
+        if(HasComponent(ID, StaticComponent))
+        {
+            StaticComponent* staticComponent = GetComponent(server, ID, StaticComponent);
+            Assert(staticComponent->chunk);
+            RemoveFromSpatialPartition(&server->staticPartition, staticComponent->chunk, staticComponent->block, ID);
+        }
+        
+        
+        if(HasComponent(ID, PlayerComponent))
+        {
+            PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
+            if(player)
+            {
+                switch(deleted->type)
+                {
+                    case DeleteEntity_None:
+                    {
+                        player->ID = {};
+                        AddEntityParams params = DefaultAddEntityParams();
+                        params.playerIndex = GetIndex_(&server->PlayerComponent_, player);
+                        QueueGameOverMessage(player);
+                        SpawnPlayerGhost(server, def->P, params);
+                    } break;
+                    
+                    case DeleteEntity_Ghost:
+                    {
+                        
+                    } break;
+                    
+                    case DeleteEntity_Won:
+                    {
+                        player->ID = {};
+                        QueueGameWonMessage(player);
+                    } break;
+                }
+            }
+        }
+		
+        FreeArchetype(server, ID);
+	}
+    
+    FREELIST_FREE(server->firstDeletedEntity, DeletedEntity, server->firstFreeDeletedEntity);
 }
 
 internal void BuildWorld(ServerState* server, b32 spawnEntities)
@@ -567,16 +644,16 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
         world_generator* generator = GetData(server->assets, world_generator, ID);
         server->nullTile = NullTile(generator);
         
-        server->maxDeepness = generator->maxDeepness;
+        server->maxDeepness = (i16) generator->maxDeepness;
         
         Clear(&server->chunkPool);
         server->chunks = PushArray(&server->chunkPool, WorldChunk, generator->maxDeepness * WORLD_CHUNK_SPAN * WORLD_CHUNK_SPAN);
         WorldChunk* chunk = server->chunks;
-        for(u32 chunkZ = 0; chunkZ < generator->maxDeepness; ++chunkZ)
+        for(i16 chunkZ = 0; chunkZ < (i16) generator->maxDeepness; ++chunkZ)
         {
-            for(u32 chunkY = 0; chunkY < WORLD_CHUNK_SPAN; ++chunkY)
+            for(i16 chunkY = 0; chunkY < WORLD_CHUNK_SPAN; ++chunkY)
             {
-                for(u32 chunkX = 0; chunkX < WORLD_CHUNK_SPAN; ++chunkX)
+                for(i16 chunkX = 0; chunkX < WORLD_CHUNK_SPAN; ++chunkX)
                 {
                     BuildChunk(server->assets, &server->chunkPool, generator,
                                chunk, chunkX, chunkY, chunkZ, server->worldSeed);
@@ -603,7 +680,7 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
             Spawner* spawner = GetData(server->assets, Spawner, sID);
             r32 cellDim = VOXEL_SIZE * spawner->cellDim;
             u32 cellCount = TruncateReal32ToU32(WORLD_SIDE / cellDim);
-            for(i32 chunkZ = 0; chunkZ < (i32) server->maxDeepness; ++chunkZ)
+            for(i16 chunkZ = 0; chunkZ < (i16) server->maxDeepness; ++chunkZ)
             {
                 for(u32 Y = 0; Y < cellCount; ++Y)
                 {

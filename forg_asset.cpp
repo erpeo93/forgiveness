@@ -1269,8 +1269,14 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
         {
             if(!derivedAsset)
             {
-                char* print = asset->paka.skeleton.flippedByDefault ? "true" : "false";
-                OutputToStream(&metaDataStream, "\"%s\":%s=%s;", asset->paka.sourceName, SKELETON_FLIPPED, print);
+                PAKSkeleton* skeleton = &asset->paka.skeleton;
+                char* print = skeleton->flippedByDefault ? "true" : "false";
+                OutputToStream(&metaDataStream, "\"%s\":%s=%s;%s=%d;%s=%f;%s=%d;%s=%f;", asset->paka.sourceName, 
+                               SKELETON_FLIPPED, print,
+                               SKELETON_FLIPPED_BONE1, skeleton->flippedBone1,
+                               SKELETON_FLIPPED_BONE1_OFFSET, skeleton->flippedBone1ZOffset,
+                               SKELETON_FLIPPED_BONE2, skeleton->flippedBone2,
+                               SKELETON_FLIPPED_BONE2_OFFSET, skeleton->flippedBone2ZOffset);
             }
         } break;
         
@@ -1603,7 +1609,7 @@ inline b32 MatchesProperties(Asset* asset, GameProperties* properties, b32* exac
 
 #ifndef ONLY_DATA_FILES
 #define QueryBitmaps(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Image, subtype, seq, properties, true)
-
+#define QuerySounds(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Sound, subtype, seq, properties)
 #define QuerySkeletons(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Skeleton, subtype, seq, properties)
 #define QueryFonts(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Font, GetAssetSubtype(assets, AssetType_Font, subtype), seq, properties)
 #define QueryModels(assets, subtype, seq, properties) QueryAssets_(assets, AssetType_Model, subtype, seq, properties)
@@ -1759,6 +1765,17 @@ inline void LoadAssetDataStructure(Assets* assets, Asset* asset, AssetID ID)
     Clear(&tempPool);
 }
 
+internal u16 GetAssetCount(Assets* assets, u16 type, u32 subtype)
+{
+    u16 result = 0;
+    AssetArray* array = assets->assets + type;
+    AssetSubtypeArray* assetArray = GetSubtype(array, subtype);
+    if(assetArray)
+    {
+        result = assetArray->standardAssetCount + assetArray->derivedAssetCount;
+    }
+    return result;
+}
 #ifndef ONLY_DATA_FILES
 #define PreloadAll(assets, type, subtype, immediate) PreloadAll_(assets, type, GetAssetSubtype(assets, type, subtype), immediate)
 internal void PreloadAll_(Assets* assets, u16 type, u32 subtype, b32 immediate)
@@ -1814,9 +1831,16 @@ internal AssetID* GetAllSkinBitmaps(MemoryPool* tempPool, Assets* assets, u32 sk
 #define GetAllSkinBitmaps(pool, assets, skin, properties, count) GetAllAssets_(pool, assets, SafeTruncateToU16(AssetType_Image), skin, properties, count)
 
 
+#define GROUND_BITMAPS "default"
 inline void PreloadAllGroundBitmaps(Assets* assets)
 {
-    PreloadAll(assets, AssetType_Image, "default", true);
+    PreloadAll(assets, AssetType_Image, GROUND_BITMAPS, true);
+}
+
+inline u16 CountGroundBitmaps(Assets* assets)
+{
+	u16 result = GetAssetCount(assets, AssetType_Image, GetAssetSubtype(assets, AssetType_Image, GROUND_BITMAPS));
+	return result;
 }
 #endif
 
@@ -1843,18 +1867,6 @@ internal AssetID* GetAllAssets_(MemoryPool* tempPool, Assets* assets, u16 assetT
             dest->index = assetIndex;
         }
         
-    }
-    return result;
-}
-
-internal u16 GetAssetCount(Assets* assets, u16 type, u32 subtype)
-{
-    u16 result = 0;
-    AssetArray* array = assets->assets + type;
-    AssetSubtypeArray* assetArray = GetSubtype(array, subtype);
-    if(assetArray)
-    {
-        result = assetArray->standardAssetCount + assetArray->derivedAssetCount;
     }
     return result;
 }
@@ -2161,7 +2173,7 @@ inline AssetID GetMatchingAnimationForSkeleton(Assets* assets, AssetID skeletonI
     return result;
 }
 
-internal AssetID QueryAnimations(Assets* assets, u64 skeletonHash, RandomSequence* seq, GameProperties* properties, b32* flipOnYAxis)
+internal AssetID QueryAnimations(Assets* assets, u64 skeletonHash, RandomSequence* seq, GameProperties* properties, b32* flipOnYAxis, PAKSkeleton** skeletonInfo)
 {
     u32 skeleton = GetAssetSubtype(assets, AssetType_Skeleton, skeletonHash);
     AssetID result = {};
@@ -2169,6 +2181,7 @@ internal AssetID QueryAnimations(Assets* assets, u64 skeletonHash, RandomSequenc
     
     if(IsValid(skeletonID))
     {
+        *skeletonInfo = GetSkeletonInfo(assets, skeletonID);
         result = GetMatchingAnimationForSkeleton(assets, skeletonID, seq, properties, flipOnYAxis);
     }
     

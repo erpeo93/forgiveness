@@ -170,15 +170,76 @@ internal void QueueGameAccessConfirm(PlayerComponent* player, u32 worldSeed, Ent
     QueueOrderedPacket(player);
 }
 
-internal u16 PrepareEntityUpdate(ServerState* server, DefaultComponent* def, PhysicComponent* physic, ActionComponent* act, unsigned char* buff_)
+internal void QueueGameOverMessage(PlayerComponent* player)
 {
-    UniversePos P = def->P;
-    Vec3 speed = physic ? physic->speed : V3(0, 0, 0);
-    u16 action = act ? act->action : 0;
-    unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
-    Pack("LLLlllVVHHL", def->definitionID.subtypeHashIndex, def->definitionID.index, def->seed, P.chunkX, P.chunkY, P.chunkZ, P.chunkOffset, speed, action, def->status, def->flags);
-    u16 totalSize = ForgEndPacket_( buff_, buff );
-    return totalSize;
+    StartPacket(player, GameOver);
+    QueueOrderedPacket(player);
+}
+
+internal void QueueGameWonMessage(PlayerComponent* player)
+{
+    StartPacket(player, GameWon);
+    QueueOrderedPacket(player);
+}
+
+internal u16 PrepareBasicsUpdate(ServerState* server, DefaultComponent* def, PhysicComponent* physic, ActionComponent* act, unsigned char* buff_)
+{
+    u16 result = 0;
+    if(def->basicPropertiesChanged != 0)
+    {
+        unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
+        Vec3 speed = physic ? physic->speed : V3(0, 0, 0);
+        
+        if(Abs(speed.x) < 0.01f)
+        {
+            speed.x = 0;
+        }
+        
+        if(Abs(speed.y) < 0.01f)
+        {
+            speed.y = 0;
+        }
+        
+        u16 action = act ? GetU16(act->action) : 0;
+        u16 sendingFlags = def->basicPropertiesChanged;
+        Pack("H", sendingFlags);
+        def->basicPropertiesChanged = 0;
+        
+        if(sendingFlags & (u16) EntityBasics_Definition)
+        {
+            Pack("LLL", def->definitionID.subtypeHashIndex, def->definitionID.index, def->seed);
+        }
+        
+        if(sendingFlags & (u16) EntityBasics_Position)
+        {
+            Pack("hhhV", def->P.chunkX, def->P.chunkY, def->P.chunkZ, def->P.chunkOffset);
+        }
+        
+        if(sendingFlags & (u16) EntityBasics_Velocity)
+        {
+            Pack("V", speed);
+            Assert(LengthSq(speed) < Square(1000.0f));
+        }
+        
+        if(sendingFlags & (u16) EntityBasics_Action)
+        {
+            Pack("H", action);
+        }
+        
+        if(sendingFlags & (u16) EntityBasics_Status)
+        {
+            Pack("H", def->status);
+        }
+        
+        if(sendingFlags & (u16) EntityBasics_Flags)
+        {
+            Pack("L", def->flags);
+        }
+        
+        result = ForgEndPacket_(buff_, buff);
+    }
+    
+    return result;
 }
 
 internal void QueueCompletedCommand(PlayerComponent* player, GameCommand* command)
@@ -220,48 +281,110 @@ internal void QueueDeletedID(PlayerComponent* player, EntityID ID)
 }
 
 
-internal void QueueEquipmentID(PlayerComponent* player, EntityID ID, u16 slotIndex, u16 slotType, EntityID equipmentID)
-{
-    StartPacket(player, EquipmentMapping);
-    Pack("HHL", slotIndex, slotType, equipmentID.archetype_archetypeIndex);
-    QueueStandardPacket(player, ID);
-}
-
-internal void QueueUsingID(PlayerComponent* player, EntityID ID, u16 slotIndex, u16 slotType, EntityID usingID)
-{
-    StartPacket(player, UsingMapping);
-    Pack("HHL", slotIndex, slotType, usingID.archetype_archetypeIndex);
-    QueueStandardPacket(player, ID);
-}
-
-internal void QueueContainerStoredID(PlayerComponent* player, EntityID ID, u16 slotIndex, u16 slotType, EntityID objectID)
-{
-    StartPacket(player, ContainerStoredMapping);
-    Pack("HHL", slotIndex, slotType, objectID.archetype_archetypeIndex);
-    QueueStandardPacket(player, ID);
-}
-
-internal void QueueContainerUsingID(PlayerComponent* player, EntityID ID, u16 slotIndex, u16 slotType, EntityID objectID)
-{
-    StartPacket(player, ContainerUsingMapping);
-    Pack("HHL", slotIndex, slotType, objectID.archetype_archetypeIndex);
-    QueueStandardPacket(player, ID);
-}
-
-internal void QueueOpenedByID(PlayerComponent* player, EntityID ID, EntityID openedBy)
-{
-    StartPacket(player, ContainerOpenedBy);
-    Pack("L", openedBy.archetype_archetypeIndex);
-    QueueStandardPacket(player, ID);
-}
 
 
-internal void QueueDraggingID(PlayerComponent* player, EntityID ID, EntityID dragging)
+
+internal u16 PrepareMappingsUpdate(ServerState* server, EquipmentComponent* equipment, UsingComponent* equipped, ContainerComponent* container, unsigned char* buff_)
 {
-    StartPacket(player, DraggingMapping);
-    Pack("L", dragging.archetype_archetypeIndex);
-    QueueStandardPacket(player, ID);
+    unsigned char* buff = ForgPackHeader(buff_, Type_Mappings);
+    unsigned char* countGoesHere = buff;
+    Pack("H", 0);
+    
+    u16 result = 0;
+    u16 count = 0;
+    if(equipment)
+    {
+        for(u16 slotIndex = 0; slotIndex < Count_equipmentSlot; ++slotIndex)
+        {
+            InventorySlot* slot = equipment->slots + slotIndex;
+            if(IsDirty(slot))
+            {
+                ++count;
+                Pack("CHHL", Mapping_Equipment, slotIndex, slot->type, GetBoundedID(slot).archetype_archetypeIndex);
+                ResetDirty(slot);
+            }
+        }
+    }
+    
+    if(equipped)
+    {
+        if(IsDirty(equipped->draggingID))
+        {
+            ++count;
+            Pack("CHHL", Mapping_Dragging, 0, 0, GetBoundedID(equipped->draggingID).archetype_archetypeIndex);
+            ResetDirty(&equipped->draggingID);
+        }
+        for(u16 slotIndex = 0; slotIndex < Count_usingSlot; ++slotIndex)
+        {
+            InventorySlot* slot = equipped->slots + slotIndex;
+            
+            if(IsDirty(slot))
+            {
+                ++count;
+                Pack("CHHL", Mapping_Using, slotIndex, slot->type, GetBoundedID(slot).archetype_archetypeIndex);
+                ResetDirty(slot);
+            }
+            
+            if(IsValidID(GetBoundedID(slot)))
+            {
+                Assert(!HasComponent(GetBoundedID(slot), ContainerComponent));
+            }
+        }
+    }
+    
+    if(container)
+    {
+        if(IsDirty(container->openedBy))
+        {
+            ++count;
+            Pack("CHHL", Mapping_OpenedBy, 0, 0, GetBoundedID(container->openedBy).archetype_archetypeIndex);
+            ResetDirty(&container->openedBy);
+        }
+        
+        for(u16 objectIndex = 0; objectIndex < ArrayCount(container->storedObjects); ++objectIndex)
+        {
+            InventorySlot* slot = container->storedObjects + objectIndex;
+            
+            if(IsDirty(slot))
+            {
+                ++count;
+                Pack("CHHL", Mapping_ContainerStored, objectIndex, slot->type, GetBoundedID(slot).archetype_archetypeIndex);
+                ResetDirty(slot);
+            }
+        }
+        
+        for(u16 objectIndex = 0; objectIndex < ArrayCount(container->usingObjects); ++objectIndex)
+        {
+            InventorySlot* slot = container->usingObjects + objectIndex;
+            if(IsDirty(slot))
+            {
+                ++count;
+                Pack("CHHL", Mapping_ContainerUsing, objectIndex, slot->type, GetBoundedID(slot).archetype_archetypeIndex);
+                ResetDirty(slot);
+            }
+        }
+    }
+    
+    if(count > 0)
+    {
+        pack(countGoesHere, "H", count);
+        result = ForgEndPacket_(buff_, buff);
+    }
+    
+    return result;
 }
+
+
+internal void QueueSeason(PlayerComponent* player, u16 season)
+{
+    StartPacket(player, Season);
+    Pack("H", season);
+    QueueOrderedPacket(player);
+}
+
+
+
+
 
 inline void QueueFileHeader(PlayerComponent* player, u32 index, u16 type, char* subtype, u32 uncompressedSize, u32 compressedSize)
 {
@@ -321,7 +444,7 @@ internal u32 QueueAllPossibleFileData(ServerState* server, PlayerComponent* play
             if(toSend->sendingOffset >= file->compressedSize)
             {
                 Assert(file->counter > 0);
-                file->counter = file->counter - 1;
+                --file->counter;
                 *toSendPtr = toSend->next;
                 FREELIST_DEALLOC(toSend, server->firstFreeToSendFile);
             }
@@ -351,81 +474,76 @@ internal void QueueDebugEvent(PlayerComponent* player, DebugEvent* event)
 }
 #endif
 
-STANDARD_ECS_JOB_SERVER(SendEntityUpdate)
+internal void SendEntityUpdate(ServerState* server, EntityID ID, b32 staticUpdate, b32 completeUpdate)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    ActionComponent* act = GetComponent(server, ID, ActionComponent);
-    
-    unsigned char buff_[KiloBytes(2)];
-    u16 totalSize = PrepareEntityUpdate(server, def, physic, act, buff_);
-    
-    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-    ContainerComponent* container = GetComponent(server, ID, ContainerComponent);
-    
-    r32 maxDistance = 3.0f * CHUNK_DIM;
-    r32 maxDistanceSq = Square(maxDistance);
-    
-    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
-    for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
+    if(!def->updateSent || staticUpdate)
     {
-        PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
-        DefaultComponent* playerDef = GetComponent(server, playerID, DefaultComponent);
-        
-        //if(physic->P.chunkZ == playerPhysic->P.chunkZ)
+        def->updateSent = true;
+        if(completeUpdate)
         {
-            Vec3 distance = SubtractOnSameZChunk(def->P, playerDef->P);
-            if(LengthSq(distance) < maxDistanceSq)
+            def->basicPropertiesChanged |= EntityBasics_Definition; 
+            def->basicPropertiesChanged |= EntityBasics_Position;
+            
+            if(!staticUpdate)
             {
-                QueueEntityHeader(player, ID);
-                
-                u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, totalSize, ID);
-                Assert(writeHere);
-                if(writeHere)
+                def->basicPropertiesChanged |= EntityBasics_Action; 
+                def->basicPropertiesChanged |= EntityBasics_Status; 
+            }
+        }
+        PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+        ActionComponent* act = GetComponent(server, ID, ActionComponent);
+        
+        unsigned char basicsBuffer_[KiloBytes(2)];
+        u16 basicsSize = PrepareBasicsUpdate(server, def, physic, act, basicsBuffer_);
+        
+        EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+        UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+        ContainerComponent* container = GetComponent(server, ID, ContainerComponent);
+        
+        unsigned char mappingsBuffer_[KiloBytes(2)];
+        u16 mappingsSize = PrepareMappingsUpdate(server, equipment, equipped, container, mappingsBuffer_);
+        
+        if(basicsSize > 0 || mappingsSize > 0)
+        {
+            SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
+            for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
+            {
+                PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
+                //if(physic->P.chunkZ == playerPhysic->P.chunkZ)
+                if(basicsSize > 0)
                 {
-                    Copy(totalSize, writeHere, buff_);
-                }
-                
-                if(equipment)
-                {
-                    for(u16 slotIndex = 0; slotIndex < Count_equipmentSlot; ++slotIndex)
+                    QueueEntityHeader(player, ID);
+                    u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, basicsSize, ID);
+                    if(writeHere)
                     {
-                        InventorySlot* slot = equipment->slots + slotIndex;
-                        QueueEquipmentID(player, ID, slotIndex, slot->type, slot->ID);
+                        Copy(basicsSize, writeHere, basicsBuffer_);
+                    }
+                    else
+                    {
+                        InvalidCodePath;
                     }
                 }
                 
-                if(equipped)
+                if(mappingsSize > 0)
                 {
-                    QueueDraggingID(player, ID, equipped->draggingID);
-                    for(u16 slotIndex = 0; slotIndex < Count_usingSlot; ++slotIndex)
+                    QueueEntityHeaderReliably(player, ID);
+                    u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_Ordered, ForgNetworkFlag_Ordered, mappingsSize, ID);
+                    if(writeHere)
                     {
-                        InventorySlot* slot = equipped->slots + slotIndex;
-                        QueueUsingID(player, ID, slotIndex, slot->type, slot->ID);
-                        if(IsValidID(slot->ID))
-                        {
-                            Assert(!HasComponent(slot->ID, ContainerComponent));
-                        }
+                        Copy(mappingsSize, writeHere, mappingsBuffer_);
                     }
-                }
-                
-                if(container)
-                {
-                    QueueOpenedByID(player, ID, container->openedBy);
-                    for(u16 objectIndex = 0; objectIndex < ArrayCount(container->storedObjects); ++objectIndex)
+                    else
                     {
-                        InventorySlot* slot = container->storedObjects + objectIndex;
-                        QueueContainerStoredID(player, ID, objectIndex, slot->type, slot->ID);
-                    }
-                    
-                    for(u16 objectIndex = 0; objectIndex < ArrayCount(container->usingObjects); ++objectIndex)
-                    {
-                        InventorySlot* slot = container->usingObjects + objectIndex;
-                        QueueContainerUsingID(player, ID, objectIndex, slot->type, slot->ID);
+                        InvalidCodePath;
                     }
                 }
             }
         }
     }
+}
+
+internal void SendStaticUpdate(ServerState* server, EntityID ID)
+{
+    SendEntityUpdate(server, ID, true, true);
 }

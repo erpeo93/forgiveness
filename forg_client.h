@@ -25,14 +25,12 @@
 #include "forg_render.h"
 #include "forg_animation.h"
 #include "forg_sound.h"
-#include "forg_AI.h"
 #include "forg_world.h"
 #include "forg_editor.h"
 #include "forg_network.h"
 #include "forg_network_client.h"
 #include "forg_particles.h"
 #include "forg_bolt.h"
-#include "forg_book.h"
 #include "forg_cutscene.h"
 #include "forg_skill.h"
 #include "forg_game_ui.h"
@@ -51,8 +49,8 @@ struct BaseComponent
     u64 nameHash;
     UniversePos universeP;
     Vec3 velocity;
-    Rect3 bounds;
     u32 flags;
+    Rect3 bounds;
     Rect3 worldBounds;
     Rect2 projectedOnScreen;
     EntityID serverID;
@@ -60,6 +58,9 @@ struct BaseComponent
     r32 timeSinceLastUpdate;
 	r32 totalLifeTime;
     r32 deletedTime;
+    
+    r32 fadeInTime;
+    r32 fadeOutTime;
     
     u32 propertyCount;
     GameProperty properties[16];
@@ -152,14 +153,23 @@ struct ServerClientIDMapping
     };
 };
 
+enum PlayingGameState
+{
+    PlayingGame_None,
+    PlayingGame_Over,
+    PlayingGame_Won,
+};
+
 struct GameModeWorld
 {
+    PlayingGameState state;
+    u16 season;
+    
     r32 defaultZoomCoeff;
     Vec3 ambientLightColor;
     Vec3 windDirection;
     r32 windStrength;
     r32 windTime;
-    
     
     struct GameState* gameState;
     
@@ -174,6 +184,8 @@ struct GameModeWorld
     
     WorldTile nullTile;
     WorldChunk* chunks[1024];
+    WorldChunk* firstFreeChunk;
+    
     ServerClientIDMapping* mappings[1024];
     ServerClientIDMapping* firstFreeMapping;
     
@@ -201,7 +213,6 @@ struct GameModeWorld
     Vec2 relativeMouseP;
     Vec2 deltaMouseP;
     
-    u32 chunkApron;
     b32 worldTileView;
     b32 worldChunkView;
     Vec3 editorCameraOffset;
@@ -213,16 +224,11 @@ struct GameModeWorld
     r32 debugCameraPitch;
     r32 debugCameraDolly;
     
-    r32 cameraOrbit;
-    r32 cameraPitch;
-    r32 cameraDolly;
     r32 cameraSpeed;
     Vec3 cameraWorldOffset;
     Vec3 destCameraWorldOffset;
     Vec2 cameraEntityOffset;
     Vec2 destCameraEntityOffset;
-    
-    SoundState* soundState;
     
     EditorUIContext editorUI;
     GameUIContext gameUI;
@@ -265,7 +271,7 @@ struct GameState
     
     TaskWithMemory tasks[6];
     
-    PlayingSound* music;
+    u32 musicPriority;
     SoundState soundState;
 };
 

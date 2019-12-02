@@ -3,9 +3,9 @@
 #define LOGIN_PORT 1313
 #define MTU KiloBytes(1) + 32
 #define CHUNK_SIZE KiloBytes(1)
+#define STATIC_UPDATE_TIME 2.0f
 
 #pragma pack(push, 1)
-
 enum ForgNetworkFlags
 {
     ForgNetworkFlag_Ordered = (1 << 1),
@@ -155,6 +155,8 @@ enum Packet_Type
     Type_login,
     Type_loginFileTransferBegin,
     Type_gameAccess,
+    Type_GameOver,
+    Type_GameWon,
     
     Type_Command,
     Type_InventoryCommand,
@@ -164,12 +166,10 @@ enum Packet_Type
     Type_entityHeader,
     Type_entityBasics,
     Type_deletedEntity,
-    Type_EquipmentMapping,
-    Type_UsingMapping,
-    Type_ContainerStoredMapping,
-    Type_ContainerUsingMapping,
-    Type_DraggingMapping,
-    Type_ContainerOpenedBy,
+	Type_Mappings,
+    
+    Type_Season,
+    
     
     Type_FileHeader,
     Type_FileChunk,
@@ -188,6 +188,26 @@ enum Packet_Type
     Type_debugEvent,
     Type_InputRecording,
 #endif
+};
+
+enum NetworkMappingType
+{
+    Mapping_Equipment,
+    Mapping_Using,
+    Mapping_ContainerStored,
+    Mapping_ContainerUsing,
+    Mapping_Dragging,
+    Mapping_OpenedBy,
+};
+
+enum EntityBasicsFlags
+{
+	EntityBasics_Definition = (1 << 0),
+	EntityBasics_Position = (1 << 1),
+	EntityBasics_Velocity = (1 << 2),
+	EntityBasics_Action = (1 << 3),
+	EntityBasics_Status = (1 << 4),
+	EntityBasics_Flags = (1 << 5),
 };
 
 struct LoginResponse

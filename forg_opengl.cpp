@@ -938,7 +938,7 @@ internal void SortRenderBuffer(RenderBuffer* buffer, u32 flags)
         
         if(flags & DrawRenderBuffer_SortFrontToBack)
         {
-            RadixSort(sortKeys, setup->quadCount, tempSortKeys);
+            RadixSort(sortKeys, setup->quadCount, tempSortKeys, true);
         }
     }
 }
@@ -1010,10 +1010,11 @@ internal void DrawRenderBuffer(RenderBuffer* buffer, u32 flags, u32 renderWidth,
         }
         
         OpenGLUseProgramEnd(&program->common);
-        if(setup->renderTargetIndex > 0)
-        {
-            OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
-        }
+
+		if(setup->renderTargetIndex > 0)
+		{
+			OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
+		}
     }
 }
 
@@ -1065,18 +1066,16 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     glActiveTexture(GL_TEXTURE0);
     
     
-    
     glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
-    
+
     SortRenderBuffer(&commands->opaque, DrawRenderBuffer_SortFrontToBack);
+	ComputeIndeces(&commands->opaque);
+	DrawRenderBuffer(&commands->opaque, 0, renderWidth, renderHeight);
+
     SortRenderBuffer(&commands->transparent, DrawRenderBuffer_SortBackToFront);
-    
-    ComputeIndeces(&commands->opaque);
     ComputeIndeces(&commands->transparent);
-    
-    DrawRenderBuffer(&commands->opaque, 0, renderWidth, renderHeight);
     DrawRenderBuffer(&commands->transparent, DrawRenderBuffer_Blend, renderWidth, renderHeight);
-    
+
     glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
     
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);

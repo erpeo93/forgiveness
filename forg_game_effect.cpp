@@ -1,5 +1,5 @@
 #ifdef FORG_SERVER
-internal void DeleteEntity(ServerState* server, EntityID ID);
+internal void DeleteEntity(ServerState* server, EntityID ID, DeleteEntityReasonType reason = DeleteEntity_None);
 internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect, EntityID targetID)
 {
     switch(effect->effectType.value)
@@ -35,10 +35,11 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
         case moveOnZSlice:
         {
             EntityID destID = targetID;
-            DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+            DefaultComponent* def = GetComponent(server, destID, DefaultComponent);
             if(++def->P.chunkZ == (i32) server->maxDeepness)
             {
-                def->P.chunkZ = 0;
+                --def->P.chunkZ;
+                DeleteEntity(server, destID, DeleteEntity_Won);
             }
         } break;
         
@@ -80,7 +81,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
     {
         for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->slots); ++equipmentIndex)
         {
-            EntityID equipID = equipment->slots[equipmentIndex].ID;
+            EntityID equipID = GetBoundedID(equipment->slots + equipmentIndex);
             if(IsValidID(equipID))
             {
                 DispatchEntityEffects(server, equipID, elapsedTime);
@@ -88,7 +89,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
                 ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
                 for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
                 {
-                    EntityID usingID = container->usingObjects[usingIndex].ID;
+                    EntityID usingID = GetBoundedID(container->usingObjects + usingIndex);
                     if(IsValidID(usingID))
                     {
                         DispatchEntityEffects(server, usingID, elapsedTime);
@@ -103,7 +104,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
     {
         for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->slots); ++equipmentIndex)
         {
-            EntityID usingID = equipped->slots[equipmentIndex].ID;
+            EntityID usingID = GetBoundedID(equipped->slots + equipmentIndex);
             if(IsValidID(usingID))
             {
                 DispatchEntityEffects(server, usingID, elapsedTime);

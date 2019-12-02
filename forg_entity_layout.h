@@ -1,9 +1,93 @@
 #pragma once
+struct BoundedEntityID
+{
+    EntityID ID;
+    b32 dirty;
+};
+
+inline void SetBoundedID(BoundedEntityID* bounded, EntityID ID)
+{
+    bounded->dirty = (!AreEqual(ID, bounded->ID));
+    bounded->ID = ID;
+}
+
+inline EntityID GetBoundedID(BoundedEntityID bounded)
+{
+    EntityID result = bounded.ID;
+    return result;
+}
+
+inline b32 IsValidID(BoundedEntityID ID)
+{
+    b32 result = IsValidID(ID.ID);
+    return result;
+}
+
+inline b32 AreEqual(BoundedEntityID i1, BoundedEntityID i2)
+{
+    b32 result = (i1.ID.archetype_archetypeIndex == i2.ID.archetype_archetypeIndex);
+    return result;
+}
+
+inline b32 AreEqual(BoundedEntityID i1, EntityID i2)
+{
+    b32 result = (i1.ID.archetype_archetypeIndex == i2.archetype_archetypeIndex);
+    return result;
+}
+
+inline b32 IsDirty(BoundedEntityID i)
+{
+    b32 result = i.dirty;
+    return result;
+}
+
+inline void ResetDirty(BoundedEntityID* i)
+{
+    i->dirty = false;
+}
+
+#ifdef FORG_SERVER
+struct InventorySlot
+{
+    u16 type;
+    BoundedEntityID ID_;
+};
+
+inline EntityID GetBoundedID(InventorySlot* slot)
+{
+    EntityID result = GetBoundedID(slot->ID_);
+    return result;
+}
+
+inline void SetBoundedID(InventorySlot* slot, EntityID ID)
+{
+    SetBoundedID(&slot->ID_, ID);
+}
+
+inline b32 AreEqual(InventorySlot* slot, EntityID ID)
+{
+    b32 result = AreEqual(slot->ID_, ID);
+    return result;
+}
+
+inline b32 IsDirty(InventorySlot* slot)
+{
+    b32 result = IsDirty(slot->ID_);
+    return result;
+}
+
+inline void ResetDirty(InventorySlot* slot)
+{
+    ResetDirty(&slot->ID_);
+}
+
+#else
 struct InventorySlot
 {
     u16 type;
     EntityID ID;
 };
+#endif
 
 struct EquipmentComponent
 {
@@ -12,7 +96,7 @@ struct EquipmentComponent
 
 struct UsingComponent
 {
-    EntityID draggingID;
+    BoundedEntityID draggingID;
     InventorySlot slots[Count_usingSlot];
 };
 
@@ -20,7 +104,7 @@ struct UsingComponent
 #define MAX_USING_OBJECT 8
 struct ContainerComponent
 {
-    EntityID openedBy;
+    BoundedEntityID openedBy;
     
     InventorySlot storedObjects[MAX_CONTAINER_OBJECT];
     InventorySlot usingObjects[MAX_USING_OBJECT];
@@ -82,3 +166,4 @@ inline u32 ClearFlags(u32 flags, u32 flag)
     u32 result = (flags & ~flag);
     return result;
 }
+

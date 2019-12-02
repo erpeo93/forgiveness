@@ -27,8 +27,6 @@
 #include "forg_random.h"
 #include "forg_physics.h"
 #include "forg_game_effect.h"
-#include "forg_skill.h"
-#include "forg_AI.h"
 #include "forg_network.h"
 #include "forg_meta.h"
 #include "forg_skill.h"
@@ -70,14 +68,129 @@ struct FileToSend
     };
 };
 
+
+struct U16
+{
+    u16 value;
+};
+
+struct U32
+{
+    u32 value;
+};
+
 struct DefaultComponent
 {
-    UniversePos P;
-	u32 flags;
-	u32 seed;
+    b32 updateSent;
+    u16 basicPropertiesChanged;
+    
     EntityRef definitionID;
-	u16 status;
+    u32 seed;
+    UniversePos P;
+    U32 flags;
+    U16 status;
 };
+
+struct StaticComponent
+{
+    SpatialPartitionChunk* chunk;
+    SpatialPartitionEntityBlock* block;
+};
+
+inline void AddChangedFlags(DefaultComponent* def, u16 flags)
+{
+    def->basicPropertiesChanged |= flags;
+    def->updateSent = false;
+}
+
+inline void SetU16(DefaultComponent* def, U16* value, u16 newValue, u16 flag)
+{
+    b32 setFlag = (value->value != newValue);
+    value->value = newValue;
+    
+    if(setFlag)
+    {
+        AddChangedFlags(def, flag);
+    }
+}
+
+inline u16 GetU16(U16 value)
+{
+    u16 result = value.value;
+    return result;
+}
+
+inline U16 U16Val(u16 value)
+{
+    U16 result = {};
+    result.value = value;
+    return result;
+}
+
+inline b32 operator == (U16 v1, U16 v2)
+{
+    b32 result = false;
+    if(v1.value == v2.value)
+    {
+        result = true;
+    }
+    return result;
+}
+
+inline void SetU32(DefaultComponent* def, U32* value, u32 newValue, u16 flag)
+{
+    b32 setFlag = (value->value != newValue);
+    value->value = newValue;
+    if(setFlag)
+    {
+        AddChangedFlags(def, flag);
+    }
+}
+
+inline u32 GetU32(U32 value)
+{
+    u32 result = value.value;
+    return result;
+}
+
+inline U32 U32Val(u32 value)
+{
+    U32 result = {};
+    result.value = value;
+    return result;
+}
+
+inline b32 operator == (U32 v1, U32 v2)
+{
+    b32 result = false;
+    if(v1.value == v2.value)
+    {
+        result = true;
+    }
+    return result;
+}
+
+inline void AddEntityFlags(DefaultComponent* def, u32 flags)
+{
+    u32 currentFlags = GetU32(def->flags);
+    u32 newFlags = AddFlags(currentFlags, flags);
+    SetU32(def, &def->flags, newFlags, EntityBasics_Flags);
+}
+
+inline b32 EntityHasFlags(DefaultComponent* def, u32 test)
+{
+    u32 flags = GetU32(def->flags);
+    b32 result = IsSet(flags, test);
+    return result;
+}
+
+inline void ClearEntityFlags(DefaultComponent* def, u32 flags)
+{
+    u32 currentFlags = GetU32(def->flags);
+    u32 newFlags = ClearFlags(currentFlags, flags);
+    SetU32(def, &def->flags, newFlags, EntityBasics_Flags);
+}
+
 
 struct PhysicComponent
 {
@@ -90,7 +203,7 @@ struct PhysicComponent
 
 struct ActionComponent
 {
-	u16 action;
+    U16 action;
     r32 time;
 };
 
@@ -115,6 +228,9 @@ struct FileHash
 
 struct PlayerComponent
 {
+    EntityID ID;
+    b32 justEnteredWorld;
+    
     b32 connectionClosed;
     u16 connectionSlot;
     
@@ -122,11 +238,9 @@ struct PlayerComponent
     ForgNetworkReceiver receiver;
     
     u16 expectingCommandIndex;
+    
     GameCommand requestCommand;
-    
-    b32 inventoryCommandValid;
     GameCommand inventoryCommand;
-    
     CommandParameters commandParameters;
     
     FileHash* firstFileHash;
@@ -204,9 +318,30 @@ struct NewEntity
     };
 };
 
+enum DeleteEntityReasonType
+{
+    DeleteEntity_None,
+    DeleteEntity_Ghost,
+    DeleteEntity_Won,
+};
+
+struct DeletedEntity
+{
+    EntityID ID;
+    DeleteEntityReasonType type;
+    union
+    {
+        DeletedEntity* next;
+        DeletedEntity* nextFree;
+    };
+};
+
 struct ServerState
 {
     u32 worldSeed;
+    
+    r32 seasonTime;
+    u16 season;
     
     TaskWithMemory tasks[6];
     PlatformWorkQueue* fastQueue;
@@ -216,7 +351,7 @@ struct ServerState
     ResizableArray PlayerComponent_;
     
     WorldTile nullTile;
-    u32 maxDeepness;
+    u16 maxDeepness;
     WorldChunk* chunks;
     MemoryPool chunkPool;
     
@@ -227,8 +362,9 @@ struct ServerState
     ReceiveNetworkPacketWork receivePacketWork;
     NetworkInterface clientInterface;
     
-    SpatialPartition collisionPartition;
+    SpatialPartition standardPartition;
     SpatialPartition playerPartition;
+    SpatialPartition staticPartition;
     
     RandomSequence entropy;
     
@@ -245,7 +381,11 @@ struct ServerState
     NewEntity* firstFreeNewEntity;
     NewEntity* firstNewEntity;
     
-    r32 timeFromlastStaticUpdate;
+    DeletedEntity* firstFreeDeletedEntity;
+    DeletedEntity* firstDeletedEntity;
+    
+    r32 staticUpdateTimer;
+    r32 equipmentEffectTimer;
     
 #if FORGIVENESS_INTERNAL
     b32 captureFrame;

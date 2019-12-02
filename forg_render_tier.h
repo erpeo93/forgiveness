@@ -1,6 +1,6 @@
 #pragma once
 #define MAX_TEXTURE_COUNT 256
-#define MAX_SPECIAL_TEXTURE_COUNT 128
+#define MAX_SPECIAL_TEXTURE_COUNT 64
 
 inline RenderTexture TextureHandle(u32 index, u16 width, u16 height)
 {

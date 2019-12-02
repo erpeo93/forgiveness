@@ -91,6 +91,9 @@ struct ParticleEffectInstance
     u32 phaseCount;
     ParticlePhase phases[MAX_PHASE_COUNT];
     
+    u32 soundCount;
+    SoundMapping sounds[MAX_SOUND_COUNT];
+    
     Vec3 P;
     Vec3 UpVector;
     r32 updaterAngle;
@@ -117,8 +120,10 @@ struct ParticleCache
 introspection() struct ParticleEffect
 {
     ParticleEmitter emitter;
-    
     r32 dAngleSineUpdaters;
     ArrayCounter phaseCount MetaCounter(phases);
     ParticlePhase* phases;
+    
+    ArrayCounter soundCountl MetaCounter(mappings);
+    SoundMapping* mappings;
 };

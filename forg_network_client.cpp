@@ -236,6 +236,8 @@ STANDARD_ECS_JOB_CLIENT(DeleteEntities)
     FreeArchetype(worldMode, ID);
 }
 
+internal void MusicTrigger(GameModeWorld* worldMode, char* musicType, u32 priority);
+internal void DeleteAllChunks(GameModeWorld* worldMode);
 internal void DispatchGameEffect(GameModeWorld* worldMode, EntityID ID);
 internal void CollateDebugEvent(DebugState* debugState, DebugCollationState* collation, DebugEvent* event);
 internal void InitEntity(GameModeWorld* worldMode, EntityID ID, 
@@ -252,7 +254,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
     u16 readSize = 0;
     u16 toReadSize = dataSize;
     
-    u32 lastReceived = 0;
     while(readSize < toReadSize)
     {
         unsigned char* oldPacketPtr = packetPtr;
@@ -263,14 +264,14 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
         {
             case Type_login:
             {
+				LoginResponse login;
+                Unpack("HLl", &login.port, &login.challenge, &login.editingEnabled);
+#if 0
 #if 0
                 char* server = "forgiveness.hopto.org";
 #else
                 char* server = "127.0.0.1";
 #endif
-                LoginResponse login;
-                
-                Unpack("HLl", &login.port, &login.challenge, &login.editingEnabled);
                 worldMode->editingEnabled = login.editingEnabled;
                 
                 platformAPI.net.CloseConnection(clientNetwork->network, 0);
@@ -278,8 +279,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 ResetReceiver(&clientNetwork->receiver);
                 clientNetwork->nextSendStandardApplicationData = {};
                 clientNetwork->nextSendOrderedApplicationData = {};
-                clientNetwork->serverChallenge = login.challenge;
-                
+#endif
+                clientNetwork->serverChallenge = login.challenge;   
                 Assets* assets = gameState->assets;
                 MemoryPool tempPool = {};
                 
@@ -302,7 +303,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         u64 dataHash = DataHash((char*) content, file->size);
                         EndTemporaryMemory(fileMemory);
                         SendFileHash(fileType, fileSubtypeHash, dataHash);
-                        
                     }
                 }
                 
@@ -328,6 +328,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 b32 deleteEntities = false;
                 Unpack("LLl", &worldMode->worldSeed, 
                        &player->serverID.archetype_archetypeIndex, &deleteEntities);
+                player->clientID = {};
                 
                 if(deleteEntities)
                 {
@@ -337,6 +338,21 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     }
                     EXECUTE_JOB(worldMode, DeleteEntities, true, 0);
                 }
+                
+                DeleteAllChunks(worldMode);
+                worldMode->state = PlayingGame_None;
+            } break;
+            
+            case Type_GameOver:
+            {
+                worldMode->state = PlayingGame_Over;
+            } break;
+            
+            case Type_GameWon:
+            {
+                worldMode->state = PlayingGame_Won;
+                player->serverID = {};
+                player->clientID = {};
             } break;
             
             case Type_CompletedCommand:
@@ -362,67 +378,145 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             
             case Type_entityBasics:
             {
-                AssetID definitionID;
+				AssetID definitionID;
                 definitionID.type = AssetType_EntityDefinition;
-                u32 seed;
-                UniversePos P;
-                Vec3 speed;
-                u16 action;
-                u16 status;
-                u32 flags;
+                u32 seed = 0;
+				UniversePos P = {};
+				Vec3 speed = {};
+                u16 action = 0;
+                u16 status = 0;
+                u32 flags = 0;
+				
+				u16 receivedFlags;
+				Unpack("H", &receivedFlags);
                 
-                Unpack("LLLlllVVHHL", &definitionID.subtypeHashIndex, &definitionID.index, &seed, &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset, &speed, &action, &status, &flags);
+				if(receivedFlags & (u16) EntityBasics_Definition)
+				{
+					Unpack("LLL", &definitionID.subtypeHashIndex, &definitionID.index, &seed);
+				}
                 
-                if(!IsValidID(currentClientID) && !IsSet(flags, EntityFlag_deleted))
-                {
-                    Assets* assets = gameState->assets;
-                    EntityDefinition* definition = GetData(assets, EntityDefinition, definitionID);
-                    if(definition)
-                    {
-                        currentClientID = {};
-                        AcquireArchetype(worldMode, GetArchetype(currentServerID), (&currentClientID));
-                        
-                        ClientEntityInitParams params = definition->client;
-                        params.ID = currentServerID;
-                        params.seed = seed;
-                        
-                        definition->common.definitionID = EntityReference(definitionID);
-                        InitEntity(worldMode, currentClientID, &definition->common, 0, &params);
-                        AddClientIDMapping(worldMode, currentServerID, currentClientID);
-                    }
-                }
+				if(receivedFlags & (u16) EntityBasics_Position)
+				{
+					Unpack("hhhV", &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset);
+				}
                 
-                if(AreEqual(currentServerID, player->serverID))
-                {
-                    player->clientID = currentClientID;
-                }
+				if(receivedFlags & (u16) EntityBasics_Velocity)
+				{
+					Unpack("V", &speed);
+                    Assert(LengthSq(speed) < Square(1000.0f));
+				}
+                
+				if(receivedFlags & (u16) EntityBasics_Action)
+				{
+					Unpack("H", &action);
+				}
+                
+				if(receivedFlags & (u16) EntityBasics_Status)
+				{
+					Unpack("H", &status);
+				}
+                
+				if(receivedFlags & (u16) EntityBasics_Flags)
+				{
+					Unpack("L", &flags);
+				}
+                
+                b32 justCreated = false;
+				if(receivedFlags & EntityBasics_Definition)
+				{
+					if(!IsValidID(currentClientID) && !IsSet(flags, EntityFlag_deleted))
+					{
+						Assets* assets = gameState->assets;
+						EntityDefinition* definition = GetData(assets, EntityDefinition, definitionID);
+						if(definition)
+						{
+							justCreated = true;
+							currentClientID = {};
+							AcquireArchetype(worldMode, GetArchetype(currentServerID), (&currentClientID));
+                            ClientEntityInitParams params = definition->client;
+							params.ID = currentServerID;
+							params.seed = seed;
+                            
+							definition->common.definitionID = EntityReference(definitionID);
+							InitEntity(worldMode, currentClientID, &definition->common, 0, &params);
+							AddClientIDMapping(worldMode, currentServerID, currentClientID);
+						}
+					}
+                    
+					if(AreEqual(currentServerID, player->serverID))
+					{
+						player->clientID = currentClientID;
+					}
+				}
                 
                 
                 BaseComponent* base = GetComponent(worldMode, currentClientID, BaseComponent);
                 if(base)
                 {
-                    r32 maxDistancePrediction = 2.5f;
-                    //Vec3 deltaP = Subtract(P, base->universeP);
-                    //r32 deltaLength = Length(deltaP);
-                    base->universeP = P;
-                    base->velocity = speed;
+					if(receivedFlags & EntityBasics_Velocity)
+					{
+						base->velocity = speed;
+					}
                     
-                    base->propertyCount = 2;
-                    base->properties[0] = GameProp(action, action);
-                    base->properties[1] = GameProp(status, status);
+					if(receivedFlags & EntityBasics_Position)
+                    {
+                        b32 coldSetPosition = false;
+						if(justCreated)
+						{
+                            coldSetPosition = true;
+                        }
+						else
+						{
+							Vec3 deltaClientServer = SubtractOnSameZChunk(P, base->universeP);
+                            r32 distance = Length(deltaClientServer);
+                            r32 minDistance = 0.3f;
+                            r32 maxDistance = 2.0f;
+                            if(distance > maxDistance)
+                            {
+                                coldSetPosition = true;
+                            }
+                            else
+                            {
+                                r32 lerp = Clamp01MapToRange(minDistance, distance, maxDistance);
+                                Vec3 maxSpeed = Normalize(deltaClientServer);
+                                base->velocity = Lerp(base->velocity, lerp, maxSpeed);
+                                
+                                Assert(LengthSq(base->velocity) < Square(1000.0f));
+                            }
+						}
+                        
+                        if(coldSetPosition)
+                        {
+                            base->totalLifeTime = 0;
+                            base->universeP = P;
+                            if(AreEqual(currentClientID, player->clientID))
+                            {
+                                player->universeP = P;
+                            }
+                        }
+                    }
                     
-                    base->flags = flags;
+					base->propertyCount = 2;
+					if(receivedFlags & EntityBasics_Action)
+					{
+						base->properties[0] = GameProp(action, action);
+					}
+                    
+					if(receivedFlags & EntityBasics_Status)
+					{
+						base->properties[1] = GameProp(status, status);
+					}
+                    
+					if(receivedFlags & EntityBasics_Flags)
+					{
+						base->flags = flags;
+						if(IsSet(base->flags, EntityFlag_deleted))
+						{
+							MarkForDeletion(worldMode, currentClientID);
+						}
+					}
+                    
                     base->timeSinceLastUpdate = 0;
-                    
-                    if(AreEqual(currentClientID, player->clientID))
-                    {
-                        player->universeP = P;
-                    }
-                    
-					if(IsSet(base->flags, EntityFlag_deleted))
-                    {
-                        MarkForDeletion(worldMode, currentClientID);
-                    }
                 }
             } break;
             
@@ -436,116 +530,139 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 {
                     MarkForDeletion(worldMode, clientID);
                 }
+                
+                MusicTrigger(worldMode, "forest", 1);
             } break;
             
-            case Type_EquipmentMapping:
-            {
-                u16 index;
-                u16 type;
-                EntityID ID;
-                Unpack("HHL", &index, &type, &ID.archetype_archetypeIndex);
+			case Type_Mappings:
+			{
+                u16 count;
+                Unpack("H", &count);
+				for(u16 mappingIndex = 0; mappingIndex < count; ++mappingIndex)
+				{
+					u8 mappingType;
+					u16 index;
+					u16 type;
+					EntityID ID;
+					Unpack("CHHL", &mappingType, &index, &type, &ID.archetype_archetypeIndex);
+					switch(mappingType)
+					{
+						case Mapping_Equipment:
+						{
+                            EquipmentMappingComponent* equipment = GetComponent(worldMode, currentClientID, EquipmentMappingComponent);
+                            
+                            if(equipment)
+                            {
+                                StoreObjectMapping(worldMode, equipment->mappings, ArrayCount(equipment->mappings), index, type, ID, StringHash(MetaTable_equipmentSlot[index]));
+                                
+                            }
+                            else
+                            {
+                                InvalidCodePath;
+                            }
+						} break;
+                        
+						case Mapping_Using:
+						{               UsingMappingComponent* equipped = GetComponent(worldMode, currentClientID, UsingMappingComponent);
+                            if(equipped)
+                            {
+                                StoreObjectMapping(worldMode, equipped->mappings, ArrayCount(equipped->mappings), index, type, ID, StringHash(MetaTable_usingSlot[index]));
+                            }
+                            else
+                            {
+                                InvalidCodePath;
+                            }
+                            
+						} break;
+                        
+						case Mapping_ContainerStored:
+						{
+                            ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
+                            
+                            if(container)
+                            {
+                                StoreObjectMapping(worldMode, container->storedMappings, ArrayCount(container->storedMappings), index, type, ID, 0);
+                            }
+                            else
+                            {
+                                InvalidCodePath;
+                            }
+						} break;
+                        
+						case Mapping_ContainerUsing:
+						{
+                            ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
+                            
+                            if(container)
+                            {
+                                StoreObjectMapping(worldMode, container->usingMappings, ArrayCount(container->usingMappings), index, type, ID, 0);
+                            }
+                            else
+                            {
+                                InvalidCodePath;
+                            }
+						} break;
+                        
+						case Mapping_Dragging:
+						{
+                            BaseComponent* base = GetComponent(worldMode, currentClientID, BaseComponent);
+                            if(base)
+                            {
+                                base->draggingID = ID;
+                            }
+                            else
+                            {
+                                InvalidCodePath;
+                            }
+						} break;
+                        
+						case Mapping_OpenedBy:
+						{
+                            ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
+                            
+                            if(container)
+                            {
+                                container->openedBy = ID;
+                                GameUIContext* UI = &worldMode->gameUI;
+                                b32 wasLooting = IsValidID(UI->lootingIDServer);
+                                
+                                if(AreEqual(currentServerID, UI->lootingIDServer))
+                                {
+                                    if(!IsValidID(ID))
+                                    {
+                                        UI->lootingIDServer = {};
+                                    }
+                                }
+                                else if(AreEqual(ID, worldMode->player.serverID))
+                                {
+                                    UI->lootingIDServer = currentServerID;
+                                }
+                                
+                                
+                                if(!IsValidID(UI->lootingIDServer))
+                                {
+                                    UI->lootingMode = false;
+                                }
+                                
+                                if(IsValidID(UI->lootingIDServer) && !wasLooting)
+                                {
+                                    UI->lootingMode = true;
+                                    UI->inventoryMode = false;
+                                }
+                            }
+                            else
+                            {
+                                InvalidCodePath;
+                            }
+						} break;
+					}
+				}
                 
-                EquipmentMappingComponent* equipment = GetComponent(worldMode, currentClientID, EquipmentMappingComponent);
-                
-                if(equipment)
-                {
-                    StoreObjectMapping(worldMode, equipment->mappings, ArrayCount(equipment->mappings), index, type, ID, StringHash(MetaTable_equipmentSlot[index]));
-                    
-                }
-            } break;
+			} break;
             
-            case Type_UsingMapping:
+            case Type_Season:
             {
-                u16 index;
-                u16 type;
-                EntityID ID;
-                Unpack("HHL", &index, &type, &ID.archetype_archetypeIndex);
-                
-                UsingMappingComponent* equipped = GetComponent(worldMode, currentClientID, UsingMappingComponent);
-                if(equipped)
-                {
-                    StoreObjectMapping(worldMode, equipped->mappings, ArrayCount(equipped->mappings), index, type, ID, StringHash(MetaTable_usingSlot[index]));
-                }
-            } break;
-            
-            case Type_ContainerStoredMapping:
-            {
-                u16 index;
-                u16 type;
-                EntityID ID;
-                Unpack("HHL", &index, &type, &ID.archetype_archetypeIndex);
-                
-                ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
-                
-                if(container)
-                {
-                    StoreObjectMapping(worldMode, container->storedMappings, ArrayCount(container->storedMappings), index, type, ID, 0);
-                }
-            } break;
-            
-            case Type_ContainerUsingMapping:
-            {
-                u16 index;
-                u16 type;
-                EntityID ID;
-                Unpack("HHL", &index, &type, &ID.archetype_archetypeIndex);
-                
-                ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
-                
-                if(container)
-                {
-                    StoreObjectMapping(worldMode, container->usingMappings, ArrayCount(container->usingMappings), index, type, ID, 0);
-                }
-            } break;
-            
-            case Type_DraggingMapping:
-            {
-                EntityID ID;
-                Unpack("L", &ID);
-                BaseComponent* base = GetComponent(worldMode, currentClientID, BaseComponent);
-                if(base)
-                {
-                    base->draggingID = ID;
-                }
-            } break;
-            
-            case Type_ContainerOpenedBy:
-            {
-                EntityID ID;
-                Unpack("L", &ID.archetype_archetypeIndex);
-                
-                ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
-                
-                if(container)
-                {
-                    container->openedBy = ID;
-                    GameUIContext* UI = &worldMode->gameUI;
-                    b32 wasLooting = IsValidID(UI->lootingIDServer);
-                    
-                    if(AreEqual(currentServerID, UI->lootingIDServer))
-                    {
-                        if(!IsValidID(ID))
-                        {
-                            UI->lootingIDServer = {};
-                        }
-                    }
-                    else if(AreEqual(ID, worldMode->player.serverID))
-                    {
-                        UI->lootingIDServer = currentServerID;
-                    }
-                    
-                    
-                    if(!IsValidID(UI->lootingIDServer))
-                    {
-                        UI->lootingMode = false;
-                    }
-                    
-                    if(IsValidID(UI->lootingIDServer) && !wasLooting)
-                    {
-                        UI->lootingMode = true;
-                        UI->inventoryMode = false;
-                    }
-                }
+                Unpack("H", &worldMode->season);
             } break;
             
             case Type_FileHeader:
@@ -678,7 +795,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
         }
         
         readSize += (u16) (packetPtr - oldPacketPtr);
-        lastReceived = header.packetType;
     }
 }
 

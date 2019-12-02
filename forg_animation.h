@@ -113,11 +113,9 @@ struct AnimationComponent
     u64 skeletonHash;
     GameProperties skeletonProperties;
     
-    b32 flippedByDefault;
     b32 flipOnYAxis;
     
     r32 scale;
-    
     r32 speed;
 };
 
@@ -131,8 +129,26 @@ struct AnimationPiece
     r32 angle;
     Vec2 scale;
     Vec4 color;
+    Vec2 mainAxis;
 };
 
+introspection() struct PieceReplacement
+{
+    GameAssetType imageType MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
+    
+    Vec3 offset;
+    r32 scale MetaDefault("1.0f");
+    b32 inheritPivot MetaDefault("true");
+    Vec2 pivot;
+};
+
+introspection() struct AnimationReplacement
+{
+    AssetLabel name;
+    
+    ArrayCounter pieceCount MetaCounter(pieces);
+    PieceReplacement* pieces;
+};
 
 #ifndef FORG_SERVER
 struct AnimationParams
@@ -150,5 +166,8 @@ struct AnimationParams
     UsingMappingComponent* equipped;
     r32 modulationPercentage;
     b32 fakeAnimation;
+    
+    u32 replacementCount;
+    AnimationReplacement* replacements;
 };
 #endif

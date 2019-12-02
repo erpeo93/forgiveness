@@ -34,23 +34,34 @@ internal void SpawnPlayer(ServerState* server, UniversePos P, AddEntityParams pa
     AddEntity(server, P, &server->entropy, type, params);
 }
 
+internal void SpawnPlayerGhost(ServerState* server, UniversePos P, AddEntityParams params)
+{
+    EntityRef type = EntityReference(server->assets, "default", "wolf");
+    AddEntity(server, P, &server->entropy, type, params);
+}
+
 internal void MakeIntangible(ServerState* server, EntityID ID)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    def->flags = AddFlags(def->flags, EntityFlag_notInWorld);
+    AddEntityFlags(def, EntityFlag_notInWorld);
 }
 
 internal void MakeTangible(ServerState* server, EntityID ID)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    def->flags = ClearFlags(def->flags, EntityFlag_notInWorld);
+    ClearEntityFlags(def, EntityFlag_notInWorld);
 }
 
-internal void DeleteEntity(ServerState* server, EntityID ID)
+internal void DeleteEntity(ServerState* server, EntityID ID, DeleteEntityReasonType type)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    Assert(!IsSet(def->flags, EntityFlag_locked));
-    def->flags = AddFlags(def->flags, EntityFlag_deleted);
+    Assert(!EntityHasFlags(def, EntityFlag_locked));
+    AddEntityFlags(def, EntityFlag_deleted);
+    DeletedEntity* deleted;
+    FREELIST_ALLOC(deleted, server->firstFreeDeletedEntity, PushStruct(&server->gamePool, DeletedEntity));
+    deleted->ID = ID;
+    deleted->type = type;
+    FREELIST_INSERT(deleted, server->firstDeletedEntity);
 }
 
 internal b32 Find(InventorySlot* slots, u32 slotCount, EntityID ID)
@@ -59,7 +70,7 @@ internal b32 Find(InventorySlot* slots, u32 slotCount, EntityID ID)
     for(u32 slotIndex = 0; slotIndex < slotCount; ++slotIndex)
     {
         InventorySlot* slot = slots + slotIndex;
-        if(AreEqual(slot->ID, ID))
+        if(AreEqual(slot, ID))
         {
             result = true;
             break;
@@ -87,7 +98,7 @@ internal b32 UsingEquipOptionApplicable(UsingEquipOption* option, InventorySlot*
             }
             
             Assert(slot < slotCount);
-            EntityID currentID = slots[slot].ID;
+            EntityID currentID = GetBoundedID(slots + slot);
             if(!AreEqual(currentID, targetID) && IsValidID(currentID))
             {
                 result = false;
@@ -110,7 +121,7 @@ internal void ApplyOption(UsingEquipOption* option, InventorySlot* slots, u32 sl
         }
         
         Assert(slot < slotCount);
-        slots[slot].ID = targetID;
+        SetBoundedID(slots + slot, targetID);
     }
 }
 
@@ -261,9 +272,9 @@ internal b32 RemoveFromContainer(ServerState* server, ContainerComponent* contai
                 break;
             }
             
-            if(AreEqual(slot->ID, ID))
+            if(AreEqual(slot, ID))
             {
-                slot->ID = {};
+                SetBoundedID(slot, {});
                 result = true;
                 break;
             }
@@ -280,9 +291,9 @@ internal b32 RemoveFromContainer(ServerState* server, ContainerComponent* contai
                     break;
                 }
                 
-                if(AreEqual(slot->ID, ID))
+                if(AreEqual(slot, ID))
                 {
-                    slot->ID = {};
+                    SetBoundedID(slot, {});
                     result = true;
                     break;
                 }
@@ -308,15 +319,15 @@ internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetI
         for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->slots); ++slotIndex)
         {
             InventorySlot* slot = equipment->slots + slotIndex;
-            if(AreEqual(slot->ID, targetID))
+            if(AreEqual(slot, targetID))
             {
                 result = true;
-                slot->ID = {};
+                SetBoundedID(slot, {});
                 break;
             }
             else
             {
-                if(RemoveFromContainer(server, GetComponent(server, slot->ID, ContainerComponent), targetID))
+                if(RemoveFromContainer(server, GetComponent(server, GetBoundedID(slot), ContainerComponent), targetID))
                 {
                     result= true;
                 }
@@ -329,21 +340,21 @@ internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetI
         UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
         if(equipped)
         {
-            if(AreEqual(targetID, equipped->draggingID))
+            if(AreEqual(equipped->draggingID, targetID))
             {
                 result = true;
-                equipped->draggingID = {};
+                SetBoundedID(&equipped->draggingID, {});
             }
             else
             {
                 for(u32 usingIndex = 0; usingIndex < ArrayCount(equipped->slots); ++usingIndex)
                 {
                     InventorySlot* slot = equipped->slots + usingIndex;
-                    Assert(!HasComponent(slot->ID, ContainerComponent));
-                    if(AreEqual(slot->ID, targetID))
+                    //Assert(!HasComponent(slot->ID, ContainerComponent));
+                    if(AreEqual(slot, targetID))
                     {
                         result = true;
-                        slot->ID = {};
+                        SetBoundedID(slot, {});
                         break;
                     }
                 }
@@ -390,10 +401,10 @@ internal b32 Store_(ServerState* server, InventorySlot* slots, u32 slotCount, u1
     
     InteractionComponent* interaction = GetComponent(server, ID, InteractionComponent);
     
-    if(!IsValidID(slot->ID) &&
+    if(!IsValidID(GetBoundedID(slot)) &&
        interaction && CompatibleSlot(interaction, slot))
     {
-        slot->ID = ID;
+        SetBoundedID(slot, ID);
         MakeIntangible(server, ID);
         result = true;
     }
@@ -447,6 +458,17 @@ internal b32 StoreInContainer(ServerState* server, EntityID containerID, EntityI
     return result;
 }
 
+internal void SignalCompletedCommand(ServerState* server, EntityID ID, GameCommand* command)
+{
+    BrainComponent* brain = GetComponent(server, ID, BrainComponent);
+    Assert(brain);
+	brain->commandCompleted = true;
+	if(brain->type == Brain_Player)
+	{
+		QueueCompletedCommand(server, ID, command);
+	}
+}
+
 internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* command, CommandParameters* parameters, r32 elapsedTime, b32 updateAction)
 {
     Assert(HasComponent(ID, PhysicComponent));
@@ -456,17 +478,17 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
     ActionComponent* action = GetComponent(server, ID, ActionComponent);
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     
-    u16 newAction = command->action;
+    U16 newAction = U16Val(command->action);
     if(updateAction)
     {
-        if(command->action == action->action)
+        if(newAction == action->action)
         {
             action->time += elapsedTime;
         }
         else
         {
             action->time = 0;
-            action->action = newAction;
+            SetU16(def, &action->action, GetU16(newAction), EntityBasics_Action);
         }
     }
     
@@ -521,7 +543,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                 {
                     if(action->time >= targetTime)
                     {
-                        if(!IsSet(targetDef->flags, EntityFlag_notInWorld) && 
+                        if(!EntityHasFlags(targetDef, EntityFlag_notInWorld) && 
                            targetDef->P.chunkZ == def->P.chunkZ)
                         {
                             if(!Use(server, ID, targetID))
@@ -534,7 +556,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                                     {
                                         for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->slots); ++equipIndex)
                                         {
-                                            EntityID equipID = equipment->slots[equipIndex].ID;
+                                            EntityID equipID = GetBoundedID(equipment->slots + equipIndex);
                                             if(IsValidID(equipID) && HasComponent(equipID, ContainerComponent))
                                             {
                                                 if(StoreInContainer(server, equipID, targetID))
@@ -548,7 +570,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                             }
                         }
                         resetAction = true;
-                        QueueCompletedCommand(server, ID, command);
+                        SignalCompletedCommand(server, ID, command);
                     }
                 }
                 else
@@ -575,10 +597,10 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                         if(!IsValidID(equipped->draggingID))
                         {
                             MakeIntangible(server, command->targetID);
-                            equipped->draggingID = command->targetID;
+                            SetBoundedID(&equipped->draggingID, command->targetID);
                         }
                         
-                        QueueCompletedCommand(server, ID, command);
+                        SignalCompletedCommand(server, ID, command);
                         resetAction = true;
                     }
                 }
@@ -605,7 +627,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                     if(action->time >= targetTime)
                     {
                         DeleteEntity(server, command->usingID);
-                        QueueCompletedCommand(server, ID, command);
+                        SignalCompletedCommand(server, ID, command);
                         resetAction = true;
                     }
                 }
@@ -648,8 +670,8 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                         {
                             if(!IsValidID(container->openedBy))
                             {
-                                container->openedBy = ID;
-                                QueueCompletedCommand(server, ID, command);
+                                SetBoundedID(&container->openedBy, ID);
+                                SignalCompletedCommand(server, ID, command);
                             }
                         }
                     }
@@ -723,7 +745,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
     if(resetAction)
     {
         action->time = 0;
-        action->action = idle;
+        SetU16(def, &action->action, idle, EntityBasics_Action);
     }
 }
 
@@ -735,39 +757,24 @@ STANDARD_ECS_JOB_SERVER(HandleOpenedContainers)
         InteractionComponent* interaction = GetComponent(server, ID, InteractionComponent);
         
         DefaultComponent* opened = GetComponent(server, ID, DefaultComponent);
-        DefaultComponent* opener = GetComponent(server, container->openedBy, DefaultComponent);
+        DefaultComponent* opener = GetComponent(server, GetBoundedID(container->openedBy), DefaultComponent);
         r32 distanceSq = LengthSq(SubtractOnSameZChunk(opened->P, opener->P));
         r32 targetTime;
         if(!ActionIsPossible(interaction, open, distanceSq, &targetTime))
         {
-            container->openedBy = {};
-        }
-    }
-}
-
-STANDARD_ECS_JOB_SERVER(HandlePlayerCommands)
-{
-    PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
-    if(player)
-    {
-        DispatchCommand(server, ID, &player->requestCommand, &player->commandParameters, elapsedTime, true);
-        if(player->inventoryCommandValid)
-        {
-            DispatchCommand(server, ID, &player->inventoryCommand, &player->commandParameters, elapsedTime, false);
-            player->inventoryCommandValid = false;
+            SetBoundedID(&container->openedBy, {});
         }
     }
 }
 
 STANDARD_ECS_JOB_SERVER(FillPlayerSpacePartition)
 {
-	DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
     if(player)
     {
         PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-        r32 maxDistance = 3.0f * CHUNK_DIM;
-        Rect3 bounds = AddRadius(physic->bounds, V3(maxDistance, maxDistance, maxDistance));
+        Rect3 bounds = AddRadius(physic->bounds, UPDATE_DISTANCE * V3(1, 1, 1));
         AddToSpatialPartition(server->frameByFramePool, &server->playerPartition, def->P, bounds, ID);
     }
 }
@@ -775,25 +782,23 @@ STANDARD_ECS_JOB_SERVER(FillPlayerSpacePartition)
 global_variable r32 g_maxDelta = 1.0f;
 STANDARD_ECS_JOB_SERVER(FillCollisionSpatialPartition)
 {
-	DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     
-    if(!IsSet(def->flags, EntityFlag_notInWorld))
+    if(!EntityHasFlags(def, EntityFlag_notInWorld))
     {
         Rect3 bounds = AddRadius(physic->bounds, V3(g_maxDelta, g_maxDelta, g_maxDelta));
-        AddToSpatialPartition(server->frameByFramePool, &server->collisionPartition, def->P, bounds, ID);
+        AddToSpatialPartition(server->frameByFramePool, &server->standardPartition, def->P, bounds, ID);
     }
 }
 
 internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, PhysicComponent* physic, EntityID ID, r32 elapsedTime)
 {
     UniversePos oldP = def->P;
-    
     Vec3 acceleration = Normalize(physic->acc) *physic->accelerationCoeff;
     Vec3 velocity = physic->speed;
     r32 dt = elapsedTime;
     acceleration.xy += physic->drag * velocity.xy;
-    
     Vec3 deltaP = 0.5f * acceleration * Square(dt) + velocity * dt;
     
     Assert(Abs(deltaP.x) <= g_maxDelta);
@@ -809,7 +814,7 @@ internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, P
         r32 tStop = tRemaining;
         
         Rect3 bounds = AddRadius(physic->bounds, deltaP);
-        SpatialPartitionQuery collisionQuery = QuerySpatialPartition(&server->collisionPartition, def->P, bounds);
+        SpatialPartitionQuery collisionQuery = QuerySpatialPartition(&server->standardPartition, def->P, bounds);
         
         EntityID collisionTriggerID = {};
         UniversePos collisionP = {};
@@ -864,19 +869,30 @@ internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, P
     {
         def->P = oldP;
     }
+    
+    def->updateSent = false;
+    if(LengthSq(SubtractOnSameZChunk(def->P, oldP)) > 0)
+    {
+        AddChangedFlags(def, EntityBasics_Position);
+    }
+    
+    if(physic->speed != velocity)
+    {
+        AddChangedFlags(def, EntityBasics_Velocity);
+    }
 }
 
-internal void UpdateObjectPosition(ServerState* server, EntityID* ID, UniversePos P)
+internal void UpdateObjectPosition(ServerState* server, BoundedEntityID* ID, UniversePos P)
 {
-    DefaultComponent* equipmentDef = GetComponent(server, *ID, DefaultComponent);
-    if(IsSet(equipmentDef->flags, EntityFlag_deleted))
+    DefaultComponent* equipmentDef = GetComponent(server, GetBoundedID(*ID), DefaultComponent);
+    if(EntityHasFlags(equipmentDef, EntityFlag_deleted))
     {
-        *ID = {};
+        SetBoundedID(ID, {});
     }
     else
     {
         equipmentDef->P = P;
-        equipmentDef->flags |= EntityFlag_notInWorld;
+        AddEntityFlags(equipmentDef, EntityFlag_notInWorld);
     }
 }
 internal void UpdateObjectPositions(ServerState* server, UniversePos P, InventorySlot* slots, u32 slotCount)
@@ -884,16 +900,16 @@ internal void UpdateObjectPositions(ServerState* server, UniversePos P, Inventor
     for(u16 slotIndex = 0; slotIndex < slotCount; ++slotIndex)
     {
         InventorySlot* slot = slots + slotIndex;
-        if(IsValidID(slot->ID))
+        if(IsValidID(GetBoundedID(slot)))
         {
-            UpdateObjectPosition(server, &slot->ID, P);
+            UpdateObjectPosition(server, &slot->ID_, P);
         }
     }
 }
 
 STANDARD_ECS_JOB_SERVER(UpdateEntity)
 {
-	DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     HandleEntityMovement(server, def, physic, ID, elapsedTime);
     
@@ -907,13 +923,14 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
         {
             UpdateObjectPosition(server, &equipped->draggingID, def->P);
         }
-		UpdateObjectPositions(server, def->P, equipped->slots, Count_usingSlot);
+        UpdateObjectPositions(server, def->P, equipped->slots, Count_usingSlot);
         for(u32 usingIndex = 0; usingIndex < Count_usingSlot; ++usingIndex)
         {
             InventorySlot* slot = equipped->slots + usingIndex;
-            if(IsValidID(slot->ID))
+            EntityID slotID = GetBoundedID(slot);
+            if(IsValidID(slotID))
             {
-                Assert(!HasComponent(slot->ID, ContainerComponent));
+                Assert(!HasComponent(slotID, ContainerComponent));
             }
         }
     }
@@ -925,9 +942,10 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
         for(u32 equipIndex = 0; equipIndex < Count_equipmentSlot; ++equipIndex)
         {
             InventorySlot* slot = equipment->slots + equipIndex;
-            if(IsValidID(slot->ID))
+            EntityID slotID = GetBoundedID(slot);
+            if(IsValidID(slotID))
             {
-                ContainerComponent* container = GetComponent(server, slot->ID, ContainerComponent);
+                ContainerComponent* container = GetComponent(server, slotID, ContainerComponent);
                 if(container)
                 {
                     UpdateObjectPositions(server, def->P, container->storedObjects, ArrayCount(container->storedObjects));
@@ -940,12 +958,12 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
 
 STANDARD_ECS_JOB_SERVER(UpdateTempEntity)
 {
-	TempEntityComponent* temp = GetComponent(server, ID, TempEntityComponent);
-	temp->time += elapsedTime;
-	if(temp->time >= temp->targetTime)
-	{
-		DeleteEntity(server, ID);
-	}
+    TempEntityComponent* temp = GetComponent(server, ID, TempEntityComponent);
+    temp->time += elapsedTime;
+    if(temp->time >= temp->targetTime)
+    {
+        DeleteEntity(server, ID);
+    }
 }
 
 STANDARD_ECS_JOB_SERVER(DeleteAllEntities)
@@ -953,23 +971,6 @@ STANDARD_ECS_JOB_SERVER(DeleteAllEntities)
     FreeArchetype(server, ID);
 }
 
-STANDARD_ECS_JOB_SERVER(DeleteDeletedEntities)
+internal void DeleteDeletedEntityList(ServerState* server)
 {
-    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    if(IsSet(def->flags, EntityFlag_deleted))
-    {
-        r32 maxDistance = 3.0f * CHUNK_DIM;
-        r32 maxDistanceSq = Square(maxDistance);
-        SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
-        for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
-        {
-            PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
-            for(u32 messageIndex = 0; messageIndex < 5; ++messageIndex)
-            {
-                QueueDeletedID(player, ID);
-            }
-        }
-        
-        FreeArchetype(server, ID);
-    }
 }

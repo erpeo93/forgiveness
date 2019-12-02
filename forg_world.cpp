@@ -34,22 +34,23 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, WorldChunk* chunk, u32 tileX
 }
 #endif
 
-inline r32 NormalizeCoordinate(r32 offset, r32 chunkSide, r32 oneOverChunkSide, i32* chunkIndex)
+inline r32 NormalizeCoordinate(r32 offset, i16* chunkIndex)
 {
-    i32 chunkOffset = Floor(offset * oneOverChunkSide);
+    r32 chunkSide = VOXEL_SIZE * (r32) CHUNK_DIM;
+    r32 oneOverChunkSide = 1.0f / chunkSide;
+    
+    i16 chunkOffset = TruncateToI16(Floor(offset * oneOverChunkSide));
     *chunkIndex += chunkOffset;
-    r32 result = offset - chunkOffset * chunkSide;
+    r32 computed = chunkOffset * chunkSide;
+    r32 result = offset - computed;
     return result;
 }
 
 inline UniversePos NormalizePosition(UniversePos pos)
 {
-    r32 chunkSide = VOXEL_SIZE * CHUNK_DIM;
-    r32 oneOverChunkSide = 1.0f / chunkSide;
-    
     UniversePos result = pos;
-    result.chunkOffset.x = NormalizeCoordinate(result.chunkOffset.x, chunkSide, oneOverChunkSide, &result.chunkX);
-    result.chunkOffset.y = NormalizeCoordinate(result.chunkOffset.y, chunkSide, oneOverChunkSide, &result.chunkY);
+    result.chunkOffset.x = NormalizeCoordinate(result.chunkOffset.x, &result.chunkX);
+    result.chunkOffset.y = NormalizeCoordinate(result.chunkOffset.y, &result.chunkY);
     
     return result;
 }
@@ -88,36 +89,6 @@ inline b32 ChunkOutsideWorld(i32 chunkX, i32 chunkY, i32 chunkZ)
 }
 
 #ifndef FORG_SERVER
-internal WorldChunk* GetChunk(WorldChunk** chunks, u32 chunkCount, i32 worldX, i32 worldY, i32 worldZ, MemoryPool* pool)
-{
-    WorldChunk* result = 0;
-    u32 chunkMask = chunkCount - 1;
-    i32 hashIndex = ( worldX + worldY + worldZ) & chunkMask;
-    WorldChunk** testChunkPtr = chunks + hashIndex;
-    while( *testChunkPtr )
-    {
-        WorldChunk* testChunk = *testChunkPtr;
-        if(testChunk->worldX == worldX && 
-           testChunk->worldY == worldY &&
-           testChunk->worldZ == worldZ)
-        {
-            result = testChunk;
-            break;
-        }
-        testChunkPtr = &testChunk->next;
-    }
-    
-    if( !result )
-    {
-        if(pool)
-        {
-            *testChunkPtr = PushStruct( pool, WorldChunk );
-            result = *testChunkPtr;
-        }
-    }
-    
-    return result;
-}
 #endif
 
 inline b32 PositionInsideWorld(UniversePos* pos)
@@ -129,7 +100,6 @@ inline b32 PositionInsideWorld(UniversePos* pos)
 inline Vec3 SubtractOnSameZChunk(UniversePos A, UniversePos B)
 {
     Vec3 result = V3(R32_MAX, R32_MAX, R32_MAX);
-    
     if(A.chunkZ == B.chunkZ)
     {
         result = A.chunkOffset - B.chunkOffset;
@@ -142,6 +112,44 @@ inline Vec3 SubtractOnSameZChunk(UniversePos A, UniversePos B)
 
 #ifdef FORG_SERVER
 #else
+internal WorldChunk* GetChunk(GameModeWorld* worldMode, i32 worldX, i32 worldY, i32 worldZ)
+{
+    WorldChunk* result = 0;
+    u32 chunkMask = ArrayCount(worldMode->chunks) - 1;
+    i32 hashIndex = (worldX + worldY + worldZ) & chunkMask;
+    WorldChunk* testChunk = worldMode->chunks[hashIndex];
+    while(testChunk)
+    {
+        if(testChunk->worldX == worldX && 
+           testChunk->worldY == worldY &&
+           testChunk->worldZ == worldZ)
+        {
+            result = testChunk;
+            break;
+        }
+        testChunk = testChunk->next;
+    }
+    
+    return result;
+}
+
+internal WorldChunk* GetOrAllocateChunk(GameModeWorld* worldMode, i32 worldX, i32 worldY, i32 worldZ, b32* allocated)
+{
+    WorldChunk* result = GetChunk(worldMode, worldX, worldY, worldZ);
+    if(!result)
+    {
+        u32 chunkMask = ArrayCount(worldMode->chunks) - 1;
+        i32 hashIndex = (worldX + worldY + worldZ) & chunkMask;
+        
+        FREELIST_ALLOC(result, worldMode->firstFreeChunk, PushStruct(worldMode->persistentPool, WorldChunk));
+        result->next = worldMode->chunks[hashIndex];
+        worldMode->chunks[hashIndex] = result;
+        *allocated = true;
+    }
+    
+    return result;
+}
+
 struct GetUniversePosQuery
 {
     WorldChunk* chunk;
@@ -163,15 +171,15 @@ GetUniversePosQuery TranslateRelativePos(GameModeWorld* worldMode, UniversePos b
     
     r32 oneOverVoxelSide = 1.0f / VOXEL_SIZE;
     
-    i32 chunkOffsetX = Floor(baseP.chunkOffset.x * oneOverChunkSide);
+    i16 chunkOffsetX = TruncateToI16(Floor(baseP.chunkOffset.x * oneOverChunkSide));
     baseP.chunkX += chunkOffsetX;
     baseP.chunkOffset.x -= chunkOffsetX * chunkSide;
     
-    i32 chunkOffsetY = Floor(baseP.chunkOffset.y * oneOverChunkSide);
+    i16 chunkOffsetY = TruncateToI16(Floor(baseP.chunkOffset.y * oneOverChunkSide));
     baseP.chunkY += chunkOffsetY;
     baseP.chunkOffset.y -= chunkOffsetY * chunkSide;
     
-    WorldChunk* chunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), baseP.chunkX, baseP.chunkY, baseP.chunkZ, 0);
+    WorldChunk* chunk = GetChunk(worldMode, baseP.chunkX, baseP.chunkY, baseP.chunkZ);
 	if(chunk)
     {
         result.tileX = TruncateReal32ToI32(baseP.chunkOffset.x * oneOverVoxelSide);
@@ -239,8 +247,8 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, WorldChunk* chunk, i32 tileX
     
     if(ChunkValid(chunkX, chunkY, chunkZ))
     {
-        WorldChunk* newChunk = GetChunk(worldMode->chunks, ArrayCount(worldMode->chunks), chunkX, chunkY, chunkZ,  worldMode->persistentPool);
-        Assert(newChunk->initialized);
+        WorldChunk* newChunk = GetChunk(worldMode, chunkX, chunkY, chunkZ);
+        Assert(newChunk);
         result = GetTile(worldMode, newChunk, (u32) tileX, (u32) tileY);
         
     }

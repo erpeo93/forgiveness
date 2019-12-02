@@ -76,6 +76,8 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     if(ShouldBeRendered(worldMode, base))
     {
+        EntityDefinition* definition = GetData(group->assets, EntityDefinition, EntityRefToAssetID(base->definitionID));
+        
         r32 height = GetHeight(base->bounds);
         
         Vec3 P = GetRelativeP(worldMode, base);
@@ -100,6 +102,9 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.tint = animationParams.tint;
         params.dissolveCoeff = animationParams.dissolveCoeff;
         params.modulationPercentage = animationParams.modulationPercentage; 
+        params.replacementCount = definition->client.replacementCount;
+        params.replacements = definition->client.animationReplacements;
+        
         
         GameProperty action = SearchForProperty(base->properties, base->propertyCount, Property_action);
         if(FinishedSingleCycleAnimation(animation))
@@ -109,7 +114,7 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         
         AddOptionalGamePropertyRaw(&animation->skeletonProperties, action);
         
-        if(action.value == idle)
+        if(action.value == idle || animation->scale == 0)
         {
             Rect2 animationDefaultDim = GetAnimationDim(worldMode, group, animation, &params);
             r32 defaultHeight = GetDim(animationDefaultDim).y;
@@ -292,6 +297,7 @@ RENDERING_ECS_JOB_CLIENT(RenderGrass)
                     windFrequency = (u8) grass->windFrequencyOverlap;
                 }
                 Vec4 windInfluences = V4(0, 0, grass->windInfluence, grass->windInfluence);
+                windInfluences = V4(0, 0, 0, 0);
                 Vec4 dissolvePercentages = V4(0, 0, 0, 0);
                 r32 alphaThreesold = 0.9f;
                 b32 transparent = false;
@@ -827,11 +833,11 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
     {
         if(base->deletedTime)
         {
-            fadeInOutColor = (1.0f - Clamp01MapToRange(base->deletedTime, base->totalLifeTime, base->deletedTime + FADE_OUT_TIME)) * V3(1, 1, 1);
+            fadeInOutColor = (1.0f - Clamp01MapToRange(base->deletedTime, base->totalLifeTime, base->deletedTime + base->fadeOutTime)) * V3(1, 1, 1);
         }
         else
         {
-            fadeInOutColor = V3(1, 1, 1) * Clamp01MapToRange(0, base->totalLifeTime, FADE_IN_TIME);
+            fadeInOutColor = V3(1, 1, 1) * Clamp01MapToRange(0, base->totalLifeTime, base->fadeInTime);
         }
     }
     effects->params.tint = Hadamart(effects->params.tint, V4(fadeInOutColor, 1));
@@ -846,11 +852,11 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
     
     if(base->deletedTime)
     {
-        effects->params.dissolveCoeff = Clamp01MapToRange(base->deletedTime, base->totalLifeTime, base->deletedTime + FADE_OUT_TIME);
+        effects->params.dissolveCoeff = Clamp01MapToRange(base->deletedTime, base->totalLifeTime, base->deletedTime + base->fadeOutTime);
     }
     else
     {
-        effects->params.dissolveCoeff = 1.0f - Clamp01MapToRange(0, base->totalLifeTime, FADE_IN_TIME);
+        effects->params.dissolveCoeff = 1.0f - Clamp01MapToRange(0, base->totalLifeTime, base->fadeInTime);
     }
     
     
@@ -858,6 +864,69 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
     {
         effects->lightIntensity = averageLightIntensity *= 1.0f / lightCount;
         effects->lightColor = averageLightColor *= 1.0f / lightCount;
+    }
+    
+}
+
+
+STANDARD_ECS_JOB_CLIENT(UpdateEntitySoundEffects)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    SoundEffectComponent* mappings = GetComponent(worldMode, ID, SoundEffectComponent);
+    InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
+    
+    for(u32 mappingIndex = 0; mappingIndex < effects->mappingCount; ++mappingIndex)
+    {
+        SoundEffect* effect = effects->effects + effectIndex;
+        if(effect->time >= 0)
+        {
+            effect->time -= elapsedTime;
+            if(effect->time <= 0)
+            {
+                FreeSoundMapping(effect);
+                *effect = effects->effects[--effects->effectCount];
+            }
+        }
+    }
+    
+    EntityDefinition* definition = GetData(worldMode->gameState->assets, EntityDefinition, EntityRefToAssetID(base->definitionID));
+    if(definition)
+    {
+        for(u32 soundIndex = 0; soundIndex < definition->client.soundEffectsCount; ++effectIndex)
+        {
+            SoundEffectDefinition* sound = definition->client.soundEffects + effectIndex;
+            
+            b32 matches = false;
+            for(u32 testIndex = 0; testIndex < effect->propertyCount; ++testIndex)
+            {
+                matches = false;
+                GameProperty* testProperty = effect->properties + testIndex;
+                for(u32 propertyIndex = 0; propertyIndex < base->propertyCount; ++propertyIndex)
+                {
+                    GameProperty* entityProperty = base->properties + propertyIndex;
+                    if(AreEqual(*entityProperty, *testProperty))
+                    {
+                        matches = true;
+                        break;
+                    }
+                }
+                
+                if(!matches)
+                {
+                    break;
+                }
+            }
+            
+            if(matches)
+            {
+                AddSoundEffectIfNotPresent(worldMode, P, effects, effect, SafeTruncateToU16(effectIndex));
+            }
+        }
+    }
+    
+    for(any active sound mapping)
+    {
+        UpdateSoundMapping();
     }
     
 }

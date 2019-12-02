@@ -220,6 +220,7 @@ internal AssetLabel Parse_AssetLabel(Tokenizer* tokenizer, AssetLabel defaultVal
     Assert(t.type == Token_String);
     t = Stringize(t);
     FormatString(result.name, sizeof(result.name), "%.*s", t.textLength, t.text);
+    result.hash = StringHash(result.name);
     return result;
 }
 
@@ -267,6 +268,30 @@ internal u16 Parse_u16(Tokenizer* tokenizer, u16 defaultVal)
 }
 
 internal void Dump_u16(Stream* output, FieldDefinition* field, u16 value, b32 isInArray)
+{
+    if(isInArray)
+    {
+        OutputToStream(output, "%d", value);
+    }
+    else
+    {
+        if(value != field->def.def_u16)
+        {
+            OutputToStream(output, "%s=%d;", field->name, value);
+        }
+    }
+}
+
+internal i16 Parse_i16(Tokenizer* tokenizer, i16 defaultVal)
+{
+    i16 result = defaultVal;
+    Token t = GetToken(tokenizer);
+    Assert(t.type == Token_Number);
+    result = (i16) StringToInt32(t.text);
+    return result;
+}
+
+internal void Dump_i16(Stream* output, FieldDefinition* field, i16 value, b32 isInArray)
 {
     if(isInArray)
     {
@@ -755,7 +780,8 @@ struct EditorLayout;
 internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArray, AssetID assetID);
 internal b32 Edit_i32(EditorLayout* layout, char* name, i32* number, b32 isInArray, AssetID assetID);
 internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArray, AssetID assetID);
-internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID, b32 clamp01 = false);
+internal b32 Edit_i16(EditorLayout* layout, char* name, i16* number, b32 isInArray, AssetID assetID);
+internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID, b32 clamp01 = false, b32 editable = true);
 internal b32 Edit_b32(EditorLayout* layout, char* name, b32* flag, b32 isInArray, AssetID assetID);
 internal b32 Edit_Color(EditorLayout* layout, char* name, Color* color, b32 isInArray, AssetID assetID);
 internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray, AssetID assetID, b32 clamp01 = false);
@@ -815,6 +841,7 @@ internal StructOperationResult type##Operation(EditorLayout* layout, FieldDefini
 
 
 STANDARD_OPERATION_FUNCTION(u16);
+STANDARD_OPERATION_FUNCTION(i16);
 STANDARD_OPERATION_FUNCTION(u32);
 STANDARD_OPERATION_FUNCTION(i32);
 STANDARD_OPERATION_FUNCTION(r32);
@@ -984,6 +1011,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
         switch(field->type)
         {
             DUMB_OPERATION(u16);
+            DUMB_OPERATION(i16);
             DUMB_OPERATION(u32);
             DUMB_OPERATION(i32);
             DUMB_OPERATION(r32);
@@ -1145,10 +1173,10 @@ internal void CopyDefaultValue(FieldDefinition* field, void* ptr)
         {
             DUMB_COPY_DEF(u8);
             DUMB_COPY_DEF(u16);
+            DUMB_COPY_DEF(i16);
             DUMB_COPY_DEF(u32);
             DUMB_COPY_DEF(u64);
             DUMB_COPY_DEF(i8);
-            DUMB_COPY_DEF(i16);
             DUMB_COPY_DEF(i32);
             DUMB_COPY_DEF(i64);
             DUMB_COPY_DEF(b32);

@@ -660,11 +660,11 @@ internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont*
                         transform.tint = V4(0, 0, 0, 1);
                         if(drawShadow)
                         {
-                            PushBitmap(group, transform, ID, P + V3( 2.0f, -2.0f, -0.001f ), glyphHeight);
+                            PushBitmap(group, transform, ID, P + V3(2.0f, -2.0f, +0.01f), glyphHeight);
                         }
                         
                         transform.tint = color;
-                        PushBitmap(group, transform, ID, P, glyphHeight);
+                        PushBitmap(group, transform, ID, P + V3(0, 0, 0.02f), glyphHeight);
                     }
                 }
             }
@@ -737,16 +737,25 @@ inline void PushSetup_(RenderGroup* group, RenderSetup* setup)
     group->commands->transparent.currentSetup = 0;
 }
 
+internal void SetMagicVectors()
+{
+    m4x4 cameraO = ZRotation(cameraOrbit) * XRotation(cameraPitch);
+    magicLateralVector = V4(GetColumn(cameraO, 0), 0);
+    magicUpVector = V4(GetColumn(cameraO, 1), 0);
+}
+
 inline RenderGroup BeginRenderGroup(Assets* assets, GameRenderCommands* commands)
 {
+    SetMagicVectors();
+    
     RenderGroup result = {};
     result.assets = assets;
     result.commands = commands;
     result.screenDim = V2i(commands->settings.width, commands->settings.height);
     
-    m4x4_inv I = { Identity(), Identity() };
+    m4x4_inv I = {Identity(), Identity()};
     
-    RenderSetup setup;
+    RenderSetup setup = {};
     setup.rect = { 0, 0, (i32)commands->settings.width, (i32)commands->settings.height };
     setup.proj = I.forward;
     setup.renderTargetIndex = 0;
@@ -914,7 +923,7 @@ inline void PushGameRenderSettings(RenderGroup* renderGroup, Vec3 ambientLightCo
     PushSetup_(renderGroup, &setup);
 }
 
-inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLength, Vec3 cameraX = V3(1, 0, 0), Vec3 cameraY = V3(0, 1, 0), Vec3 cameraZ = V3(0, 0, 1), Vec3 cameraP = V3(0, 0, 0), Vec2 screenCameraOffset = V2(0, 0), u32 renderTargetIndex = 0)
+inline void SetCameraBasics(RenderGroup* renderGroup, u32 flags, r32 focalLength, Vec3 cameraX = V3(1, 0, 0), Vec3 cameraY = V3(0, 1, 0), Vec3 cameraZ = V3(0, 0, 1), Vec3 cameraP = V3(0, 0, 0), Vec2 screenCameraOffset = V2(0, 0), u32 renderTargetIndex = 0)
 {
     b32 orthographic = flags & Camera_Orthographic;
     b32 isDebug = flags & Camera_Debug;
@@ -946,7 +955,6 @@ inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLen
     transform->proj.forward = proj.forward * cameraTransform.forward;
     transform->proj.backward = cameraTransform.backward * proj.backward;
     
-    
     if(!orthographic)
     {
         Vec4 test = transform->proj.forward * V4(1, 1, 0.0f, 1.0f);
@@ -956,18 +964,18 @@ inline void SetCameraTransform(RenderGroup* renderGroup, u32 flags, r32 focalLen
     }
     
     
-    RenderSetup setup;
+	RenderSetup setup = renderGroup->lastSetup;
     setup.renderTargetIndex = renderTargetIndex;
     setup.proj = transform->proj.forward;
-    
-    setup.rect = { 0, 0, (i32) width, (i32) height };
+    setup.rect = { 0, 0, (i32) width, (i32) height};
     setup.ambientLightColor = V3(1, 1, 1);
     PushSetup_(renderGroup, &setup);
 }
 
+
 inline void SetOrthographicTransform(RenderGroup* group, r32 width, r32 height, u32 textureIndex = 0)
 {
-    SetCameraTransform(group, Camera_Orthographic, 0.0f, V3(2.0f / width, 0.0f, 0.0f), V3(0.0f, 2.0f / width, 0.0f), V3( 0, 0, 1), V3(0, 0, 0), V2(0, 0), textureIndex);
+    SetCameraBasics(group, Camera_Orthographic, 0.0f, V3(2.0f / width, 0.0f, 0.0f), V3(0.0f, 2.0f / width, 0.0f), V3( 0, 0, 1), V3(0, 0, 0), V2(0, 0), textureIndex);
 }
 
 inline void SetOrthographicTransformScreenDim(RenderGroup* group)

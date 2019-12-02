@@ -71,6 +71,8 @@ enum MetaType
     MetaType_RenderTexture,
     MetaType_MultipartStaticPiece,
     MetaType_MultipartFrameByFramePiece,
+    MetaType_AnimationReplacement,
+    MetaType_PieceReplacement,
 };
 
 enum FieldMetaFlags

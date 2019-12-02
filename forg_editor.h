@@ -159,6 +159,7 @@ struct EditorUIContext
     Vec2 offset;
     
     b32 renderEntityBounds;
+    b32 renderChunkBounds;
     b32 showEditor;
     EditorTabs activeTab;
     

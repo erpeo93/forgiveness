@@ -626,6 +626,10 @@ internal b32 Edit_StringFreely(EditorLayout* layout, char* name, char* value, u3
 internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray, AssetID assetID)
 {
     b32 result = Edit_StringFreely(layout, name, label->name, sizeof(label->name), isInArray, assetID);
+    if(result)
+    {
+        label->hash = StringHash(label->name);
+    }
     return result;
 }
 
@@ -852,6 +856,78 @@ internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArr
     return result;
 }
 
+
+internal b32 Edit_i16(EditorLayout* layout, char* name, i16* number, b32 isInArray, AssetID assetID)
+{
+    b32 result = false;
+    
+    AUID ID = auID(number);
+    AUIDData* data = GetAUIDData(layout->context, ID);
+    
+    Vec4 color = StandardNumberColor();
+    
+    if(PointInRect(data->dim, layout->mouseP))
+    {
+        color = HotNumberColor();
+        SetNextHotAUID(layout->context, ID);
+    }
+    
+	if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
+    {
+		data->speed = 0;
+		data->increasing = true;
+        Copy(sizeof(i16), data->before, number);
+        SetInteractiveAUID(layout->context, ID);
+        *number = ++*number;
+    }
+    
+	if(HotAUIDAndPressed(layout->context, ID, mouseRight))
+    {
+		data->speed = 0;
+		data->increasing = false;
+        
+        Copy(sizeof(i16), data->before, number);
+        SetInteractiveAUID(layout->context, ID);
+        *number = --*number;
+    }
+    
+    
+    if(IsInteractiveAUID(layout->context, ID))
+    {
+        r32 real = (r32) *number + data->speed;
+		*number = (i16) RoundReal32ToI32(real);
+        
+		if(data->increasing)
+		{
+			data->speed += 0.02f;
+			if(UIReleased(layout->context, mouseLeft))
+			{
+                AddUndoRedoCopy(layout->context, sizeof(i16), data->before, number, sizeof(i16), number, assetID);
+				EndInteraction(layout->context);
+                result = true;
+			}
+		}
+        else
+        {
+            data->speed -= 0.02f;
+			if(UIReleased(layout->context, mouseRight))
+			{
+                AddUndoRedoCopy(layout->context, sizeof(i16), data->before, number, sizeof(i16), number, assetID);
+				EndInteraction(layout->context);
+                result = true;
+			}
+        }
+    }
+    
+    
+    ShowName(layout, name);
+    Rect2 elementRect = ShowStandard(layout, color, "%d", *number);
+    data->dim = elementRect;
+    
+    
+    return result;
+}
+
 internal b32 Edit_b32(EditorLayout* layout, char* name, b32* value, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
@@ -883,7 +959,7 @@ internal b32 Edit_b32(EditorLayout* layout, char* name, b32* value, b32 isInArra
 }
 
 
-internal b32 Edit_r32_(EditorLayout* layout, char* name, r32* number, AUID ID, b32 isInArray, AssetID assetID, b32 clamp01 = false)
+internal b32 Edit_r32_(EditorLayout* layout, char* name, r32* number, AUID ID, b32 isInArray, AssetID assetID, b32 clamp01 = false, b32 editable = true)
 {
     b32 result = false;
     EditorUIContext* context = layout->context;
@@ -897,21 +973,23 @@ internal b32 Edit_r32_(EditorLayout* layout, char* name, r32* number, AUID ID, b
         SetNextHotAUID(context, ID);
     }
     
-    if(HotAUIDAndPressed(context, ID, mouseLeft))
+    if(editable)
     {
-        Copy(sizeof(r32), data->before, number);
-		data->coldEdit = false;
-        SetInteractiveAUID(context, ID);
+        if(HotAUIDAndPressed(context, ID, mouseLeft))
+        {
+            Copy(sizeof(r32), data->before, number);
+            data->coldEdit = false;
+            SetInteractiveAUID(context, ID);
+        }
+        
+        if(HotAUIDAndPressed(context, ID, mouseRight))
+        {
+            Copy(sizeof(r32), data->before, number);
+            ZeroSize(sizeof(context->keyboardBuffer), context->keyboardBuffer);
+            data->coldEdit = true;
+            SetInteractiveAUID(context, ID);
+        }
     }
-    
-	if(HotAUIDAndPressed(context, ID, mouseRight))
-    {
-        Copy(sizeof(r32), data->before, number);
-        ZeroSize(sizeof(context->keyboardBuffer), context->keyboardBuffer);
-		data->coldEdit = true;
-        SetInteractiveAUID(context, ID);
-    }
-    
     
 	b32 coldEditValid = false;
     if(IsInteractiveAUID(context, ID))
@@ -1016,10 +1094,10 @@ internal b32 Edit_r32_(EditorLayout* layout, char* name, r32* number, AUID ID, b
     return result;
 }
 
-internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID, b32 clamp01)
+internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID, b32 clamp01, b32 editable)
 {
     AUID ID = auID(number);
-    b32 result = Edit_r32_(layout, name, number, ID, isInArray, assetID, clamp01);
+    b32 result = Edit_r32_(layout, name, number, ID, isInArray, assetID, clamp01, editable);
     
     return result;
 }
@@ -1705,7 +1783,13 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                 else
                 {
                     Nest(layout);
-                    Edit_b32(layout, "flipped", &info->skeleton.flippedByDefault, false, ID);
+                    PAKSkeleton* skeleton = &info->skeleton;
+                    Edit_b32(layout, SKELETON_FLIPPED, &skeleton->flippedByDefault, false, ID);
+                    NextRaw(layout);
+                    Edit_u32(layout, SKELETON_FLIPPED_BONE1, &skeleton->flippedBone1, false, ID);
+                    Edit_r32(layout, SKELETON_FLIPPED_BONE1_OFFSET, &skeleton->flippedBone1ZOffset, false, ID);
+                    Edit_u32(layout, SKELETON_FLIPPED_BONE2, &skeleton->flippedBone2, false, ID);
+                    Edit_r32(layout, SKELETON_FLIPPED_BONE2_OFFSET, &skeleton->flippedBone2ZOffset, false, ID);
                     Pop(layout);
                 }
             } break;
@@ -1879,7 +1963,7 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                             
                             Vec2 offset = P.xy - animationDimCorrect.min;
                             params.P.xy += offset;
-                            Rect2 dim = RenderAnimation_(worldMode, layout->group, ID, &component, &params);
+                            Rect2 dim = RenderAnimation_(worldMode, layout->group, 0, ID, &component, &params);
                             
                             PushRect(layout->group, FlatTransform(0, V4(0, 0, 0, 1)), dim);
                             
@@ -2137,7 +2221,6 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
                         {
                             for(WorldChunk* chunk = worldMode->chunks[chunkIndex]; chunk; chunk = chunk->next)
                             {
-                                chunk->initialized = false;
                                 FreeSpecialTexture(group->assets, &chunk->texture);
                             }
                         }
@@ -2164,14 +2247,13 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
                     
                     NextRaw(&layout);
                     Edit_b32(&layout, "entity bounds", &layout.context->renderEntityBounds, 0, {});
+                    Edit_b32(&layout, "chunk bounds", &layout.context->renderChunkBounds, 0, {});
                     NextRaw(&layout);
                     Edit_Vec3(&layout, "camera offset", &worldMode->editorCameraOffset, 0, {});
                     NextRaw(&layout);
                     Edit_b32(&layout, "tile view", &worldMode->worldTileView, 0, {});
                     NextRaw(&layout);
                     Edit_b32(&layout, "chunk view", &worldMode->worldChunkView, 0, {});
-                    NextRaw(&layout);
-                    Edit_u32(&layout, "chunk apron", &worldMode->chunkApron, 0, {});
                     NextRaw(&layout);
                     Edit_r32(&layout, "default zoom coeff", &worldMode->defaultZoomCoeff, 0, {});
                     Edit_Vec3(&layout, "ambient light color", &worldMode->ambientLightColor, 0, {});

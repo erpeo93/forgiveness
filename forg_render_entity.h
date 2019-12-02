@@ -1,7 +1,4 @@
 #pragma once
-#define FADE_IN_TIME 0.5f
-#define FADE_OUT_TIME 0.1f
-
 struct ImageReference
 {
     u64 typeHash;

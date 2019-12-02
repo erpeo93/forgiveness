@@ -19,6 +19,15 @@ internal void* Get_(ResizableArray* array, u32 index)
     return result;
 }
 
+inline u32 GetIndex_(ResizableArray* array, void* component)
+{
+    u8* raw = (u8*) component - (array->internalElementSize - array->elementSize);
+    u64 bytesDelta = raw - array->memory;
+    Assert(bytesDelta % array->internalElementSize == 0);
+    u32 result = SafeTruncateUInt64ToU32(bytesDelta / array->internalElementSize);
+    return result;
+}
+
 internal void Free_(ResizableArray* array, u32 index)
 {
     void* toFree = GetInternal_(array, index);

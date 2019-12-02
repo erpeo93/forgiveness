@@ -47,6 +47,12 @@ inline u16 SafeTruncateToU16(i32 value)
     return ( u16 ) value;
 }
 
+
+inline i16 TruncateToI16(i32 value)
+{
+    return (i16) value;
+}
+
 inline u8 SafeTruncateToU8( i32 value )
 {
     Assert( value <= 255 );
@@ -54,13 +60,13 @@ inline u8 SafeTruncateToU8( i32 value )
     return ( u8 ) value;
 }
 
-inline i32 TruncateReal32ToI32( r32 value )
+inline i32 TruncateReal32ToI32(r32 value)
 {
     i32 result = ( i32 ) value;
     return result;
 }
 
-inline u32 TruncateReal32ToU32( r32 value )
+inline u32 TruncateReal32ToU32(r32 value)
 {
     u32 result = ( u32 ) value;
     return result;
@@ -112,10 +118,10 @@ inline r32 Abs( r32 value )
     return result;
 }
 
-inline i32 Abs( i32 value )
+inline i32 Abs(i32 value)
 {
     i32 result = value;
-    if( value < 0 )
+    if(value < 0)
     {
         result = -value;
     }

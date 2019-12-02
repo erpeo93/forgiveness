@@ -25,180 +25,6 @@ internal void InitializeSoundState( SoundState* soundState, MemoryPool* pool )
     soundState->masterVolume = V2(1.0f, 1.0f);
 }
 
-
-#if 0
-inline r32 LabelsDelta(u32 referenceLabelCount, SoundLabel* referenceLabels, u32 myLabelCount, SoundLabel* myLabels)
-{
-    r32 result = 0;
-    
-    for(u32 referenceIndex = 0; referenceIndex < referenceLabelCount; ++referenceIndex)
-    {
-        SoundLabel reference = referenceLabels[referenceIndex];
-        
-        r32 delta = reference.value;
-        for(u32 actualIndex = 0; actualIndex < myLabelCount; ++actualIndex)
-        {
-            SoundLabel actual = myLabels[actualIndex];
-            
-            if(actual.hashID == reference.hashID)
-            {
-                delta = Abs(actual.value - reference.value);
-                break;
-            }
-        }
-        
-        result += delta;
-    }
-    return result;
-}
-
-#define MAX_SOUND_SEQUENCE_CONTAINER 16
-inline void PickSoundChild(SoundContainer* container, LabeledSound** output, u32* outputCount, u32 labelCount, SoundLabel* labels, RandomSequence* sequence)
-{
-    switch(container->type)
-	{
-		case SoundContainer_Random:
-		{
-            u32 totalChoiceCount = container->soundCount + container->containerCount;
-            if(totalChoiceCount > 0)
-            {
-                u32 index = RandomChoice(sequence, totalChoiceCount);
-                if(index < container->soundCount)
-                {
-                    u32 listIndex = 0;
-                    for(LabeledSound* sound = container->firstSound; sound; sound = sound->next)
-                    {
-                        if(listIndex++ == index)
-                        {
-                            if(*outputCount < MAX_SOUND_SEQUENCE_CONTAINER)
-                            {
-                                output[(*outputCount)++] = sound;
-                            }
-                            break;
-                        }
-                    }
-                }
-                else
-                {
-                    index -= container->soundCount;
-                    
-                    u32 childIndex = 0;
-                    for(SoundContainer* child = container->firstChildContainer; child; child = child->next)
-                    {
-                        if(childIndex++ == index)
-                        {
-                            PickSoundChild(child, output, outputCount, labelCount, labels, sequence);
-                            break;
-                        }
-                    }
-                }
-            }
-		} break;
-        
-		case SoundContainer_Labeled:
-		{
-			LabeledSound* bestSound = 0;
-            SoundContainer* bestContainer = 0;
-            r32 bestDelta = R32_MAX;
-            
-            for(LabeledSound* sound = container->firstSound; sound; sound = sound->next)
-            {
-                r32 delta = LabelsDelta(labelCount, labels, sound->labelCount, sound->labels);
-                if(delta < bestDelta)
-                {
-                    bestDelta = delta;
-                    bestContainer = 0;
-                    bestSound = sound;
-                }
-            }
-            
-            for(SoundContainer* child = container->firstChildContainer; child; child = child->next)
-            {
-                r32 delta = LabelsDelta(labelCount, labels, child->labelCount, child->labels);
-                if(delta < bestDelta)
-                {
-                    bestDelta = delta;
-                    bestContainer = child;
-                    bestSound = 0;
-                }
-            }
-            
-            
-            if(bestSound)
-            {
-                if(*outputCount < MAX_SOUND_SEQUENCE_CONTAINER)
-                {
-                    output[(*outputCount)++] = bestSound;
-                }
-            }
-            else if(bestContainer)
-            {
-                PickSoundChild(bestContainer, output, outputCount, labelCount, labels, sequence);
-            }
-		} break;
-        
-        case SoundContainer_Sequence:
-        {
-            for(LabeledSound* sound = container->firstSound; sound; sound = sound->next)
-            {
-                if(*outputCount < MAX_SOUND_SEQUENCE_CONTAINER)
-                {
-                    output[(*outputCount)++] = sound;
-                }
-            }
-            
-            for(SoundContainer* child = container->firstChildContainer; child; child = child->next)
-            {
-                PickSoundChild(child, output, outputCount, labelCount, labels, sequence);
-            }
-        } break;
-        
-		InvalidDefaultCase;
-	}
-}
-
-struct PickSoundResult
-{
-    u32 soundCount;
-    SoundId sounds[MAX_SOUND_SEQUENCE_CONTAINER];
-    r32 delays[MAX_SOUND_SEQUENCE_CONTAINER];
-    r32 decibelOffsets[MAX_SOUND_SEQUENCE_CONTAINER];
-    r32 pitches[MAX_SOUND_SEQUENCE_CONTAINER];
-    r32 toleranceDistance[MAX_SOUND_SEQUENCE_CONTAINER];
-    r32 distanceFalloffCoeff[MAX_SOUND_SEQUENCE_CONTAINER];
-};
-
-inline PickSoundResult PickSoundFromContainer(Assets* assets, SoundContainer* container, u32 labelCount, SoundLabel* labels, RandomSequence* sequence)
-{
-    PickSoundResult result = {};
-    
-    LabeledSound* sounds[MAX_SOUND_SEQUENCE_CONTAINER];
-    u32 soundCount = 0;
-    
-    PickSoundChild(container, sounds, &soundCount, labelCount, labels, sequence);
-    
-    result.soundCount = soundCount;
-    for(u32 soundIndex = 0; soundIndex < soundCount; ++soundIndex)
-    {
-        LabeledSound* sound = sounds[soundIndex];
-        result.sounds[soundIndex] = FindSoundByName(assets, sound->typeHash, sound->nameHash);
-        result.decibelOffsets[soundIndex] = sound->decibelOffset;
-        result.pitches[soundIndex] = sound->pitch;
-        result.delays[soundIndex] = sound->delay;
-        result.toleranceDistance[soundIndex] = sound->toleranceDistance;
-        result.distanceFalloffCoeff[soundIndex] = sound->distanceFalloffCoeff;
-    }
-    
-    return result;
-}
-
-inline PickSoundResult PickSoundFromEvent(Assets* assets, SoundContainer* event, u32 labelCount, SoundLabel* labels, RandomSequence* sequence)
-{
-    PickSoundResult result = PickSoundFromContainer(assets, event, labelCount, labels, sequence);
-    return result;
-}
-#endif
-
 internal PlayingSound* PlaySound(SoundState* soundState, Assets* assets, SoundId ID, r32 distanceFromPlayer, r32 decibelOffset = 0, r32 frequency = 1.0, r32 delay = 0.0f, r32 toleranceDistance = 1.0f,r32 distanceFalloffCoeff = 1.0f)
 {
     if(!soundState->firstFreeSound)
@@ -236,28 +62,6 @@ internal PlayingSound* PlaySound(SoundState* soundState, Assets* assets, SoundId
     soundState->firstPlayingSound = newSound;
     return newSound;
 }
-
-#if 0
-inline void PlaySoundEvent(SoundState* soundState, Assets* assets, SoundContainer* event, u32 labelCount, SoundLabel* labels, RandomSequence* sequence, r32 distanceFromPlayer)
-{
-    PickSoundResult pick = PickSoundFromEvent(assets, event, labelCount, labels, sequence);
-    
-    for(u32 pickIndex = 0; pickIndex < pick.soundCount; ++pickIndex)
-    {
-        SoundId toPlay = pick.sounds[pickIndex];
-        r32 decibelOffset = pick.decibelOffsets[pickIndex];
-        r32 pitch = pick.pitches[pickIndex];
-        r32 delay = pick.delays[pickIndex];
-        r32 toleranceDistance = pick.toleranceDistance[pickIndex];
-        r32 distanceFalloffCoeff = pick.distanceFalloffCoeff[pickIndex];
-        
-        if(IsValid(toPlay))
-        {
-            PlaySound(soundState, assets, toPlay, distanceFromPlayer, decibelOffset, pitch, delay, toleranceDistance, distanceFalloffCoeff);
-        }
-    }
-}
-#endif
 
 internal void ChangeVolume(SoundState* soundState, PlayingSound* sound, r32 fadeDuration, Vec2 targetVolume)
 {
@@ -451,23 +255,7 @@ internal void PlayMixedAudio(SoundState* soundState, r32 timeToAdvance, Platform
                     
                     if(ChunksToMix == ChunksRemainingInSound)
                     {
-#if 0
-                        if(IsValid(nextID))
-                        {
-                            PlayingSound->ID = nextID;                           
-                            PlayingSound->playingIndex -= (r32)LoadedSound->countSamples;
-                            if(PlayingSound->playingIndex < 0)
-                            {
-                                PlayingSound->playingIndex = 0.0f;
-                            }
-                        }
-                        else
-                        {
-                            SoundFinished = true;
-                        }
-#else
                         SoundFinished = true;
-#endif
                     }
                 }
                 else
@@ -484,6 +272,11 @@ internal void PlayMixedAudio(SoundState* soundState, r32 timeToAdvance, Platform
         
         if(SoundFinished)
         {
+            if(PlayingSound == soundState->music)
+            {
+                soundState->music = 0;
+            }
+            
             *PlayingSoundPtr = PlayingSound->next;
             PlayingSound->next = soundState->firstFreeSound;
             soundState->firstFreeSound = PlayingSound;

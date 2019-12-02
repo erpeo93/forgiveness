@@ -6,6 +6,9 @@
       -all bitmaps are assumed to be bottom up
       -all the coordinates passed to the render are in "world units"
 */
+global_variable r32 cameraPitch = 0.32f * PI32;
+global_variable r32 cameraDolly = 0.0f;
+global_variable r32 cameraOrbit = 0.0f;
 
 struct Lights
 {

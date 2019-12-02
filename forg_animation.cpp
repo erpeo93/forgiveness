@@ -236,35 +236,44 @@ internal void BlendFrames_(MemoryPool* tempPool, PAKAnimation* animationInfo, An
     }
 }
 
-internal Vec2 CalculateFinalBoneOffset_(Bone* frameBones, i32 countBones, Bone* bone, AnimationParams* params)
+internal void CalculateFinalBoneAngleAndOffset(Bone* frameBones, i32 countBones, Bone* bone, AnimationParams* params)
 {
-    Assert(bone->parentIndex < countBones);
-    Vec2 baseOffset = V2(0, 0);
+    bone->computedFinal = true;
     
+    Vec2 baseOffset = V2(0, 0);
     Vec2 XAxis;
     Vec2 YAxis;
     
-    Vec2 offsetFromParentScale = V2(1, 1);
-    if(bone->parentIndex >= 0)
+    Assert(bone->parentIndex < countBones);
+    if(bone->parentIndex != -1)
     {
         Bone* parent = frameBones + bone->parentIndex;
-        Assert(parent->id <= bone->id);
+        if(parent != bone)
+        {
+            if(!parent->computedFinal)
+            {
+                CalculateFinalBoneAngleAndOffset(frameBones, countBones, parent, params);
+            }
+        }
         
+        bone->finalZBias += parent->finalZBias;
+        bone->finalAngle += parent->finalAngle;
         baseOffset = parent->finalOriginOffset;
         XAxis = parent->mainAxis;
-        YAxis = Perp(XAxis);
     }
     else
     {
+        bone->finalZBias = 0;
+        bone->finalAngle += params->angle;
         r32 rad = DegToRad(params->angle);
         XAxis = V2(Cos(rad), Sin(rad));
-        YAxis = Perp(XAxis);
     }
+    YAxis = Perp(XAxis);
     
-    Vec2 parentOffset = Hadamart(bone->parentOffset, offsetFromParentScale) * params->scale;
-    Vec2 result = baseOffset + (parentOffset.x * XAxis + parentOffset.y * YAxis);
-    
-    return result;
+    r32 totalAngleRad = DegToRad(bone->finalAngle);
+    bone->mainAxis = V2(Cos(totalAngleRad), Sin(totalAngleRad)); 
+    Vec2 parentOffset = bone->parentOffset * params->scale;
+    bone->finalOriginOffset = baseOffset + (parentOffset.x * XAxis + parentOffset.y * YAxis);
 }
 
 internal u32 AdvanceAnimationState(PAKAnimation* info, AnimationComponent* animation, r32 elapsedTime, b32 fakeAnimation)
@@ -353,7 +362,7 @@ internal u32 AdvanceAnimationState(PAKAnimation* info, AnimationComponent* anima
     return result;
 }
 
-internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKAnimation* animationInfo, Animation* animation,
+internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKSkeleton* skeleton, PAKAnimation* animationInfo, Animation* animation,
                                             AnimationComponent* component, AnimationParams* params, u32 animTimeMod, u32* animationPieceCount, b32 render)
 {
     TIMED_FUNCTION();
@@ -379,30 +388,26 @@ internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKAnimation* 
     BlendedFrame blended = {};
     BlendFrames_(tempPool, animationInfo, animation, &blended, lowerFrameIndex, animTimeMod, upperFrameIndex);
     
+    if(params->flipOnYAxis)
+    {
+        Assert(skeleton->flippedBone1 < blended.boneCount);
+        Assert(skeleton->flippedBone2 < blended.boneCount);
+        
+        Bone* bone1 = blended.bones + skeleton->flippedBone1;
+        bone1->finalZBias += skeleton->flippedBone1ZOffset;
+        
+        Bone* bone2 = blended.bones + skeleton->flippedBone2;
+        bone2->finalZBias += skeleton->flippedBone2ZOffset;
+        
+        Bone temp = *bone1;
+        *bone1 = *bone2;
+        *bone2 = temp;
+    }
+    
     for(u32 boneIndex = 0; boneIndex < blended.boneCount; boneIndex++)
     {
         Bone* bone = blended.bones + boneIndex;
-        if(bone->parentIndex != -1)
-        {
-            Bone* parent = blended.bones + bone->parentIndex;
-            bone->finalAngle += parent->finalAngle;
-        }
-        else
-        {
-            bone->finalAngle += params->angle;
-        }
-        r32 totalAngleRad = DegToRad(bone->finalAngle);
-        bone->finalOriginOffset = CalculateFinalBoneOffset_(blended.bones, blended.boneCount, bone, params);
-        
-        Vec2 scale = V2(1.0f, 1.0f);
-#if 0        
-        if(boneAlt->valid)
-        {
-            scale = boneAlt->scale;
-        }
-#endif
-        
-        bone->mainAxis = Hadamart(scale, V2(Cos(totalAngleRad), Sin(totalAngleRad))); 
+        CalculateFinalBoneAngleAndOffset(blended.bones, blended.boneCount, bone, params);
     }
     
     *animationPieceCount = blended.assCount;
@@ -428,12 +433,13 @@ internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKAnimation* 
         Vec2 boneOffset = ass->boneOffset * params->scale;
         
         Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
-        dest->originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset);
+        dest->originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset + parentBone->finalZBias);
         dest->zBias = 0;
         
         dest->angle = parentBone->finalAngle + ass->angle;
         dest->scale = ass->scale;
         dest->color = ass->color;
+        dest->mainAxis = boneXAxis;
         
         zOffset += 0.01f;
     }
@@ -629,7 +635,7 @@ internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
     }
 }
 
-internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, AssetID animationID, AnimationComponent* component, AnimationParams* params, b32 render = true)
+internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, PAKSkeleton* skeletonInfo, AssetID animationID, AnimationComponent* component, AnimationParams* params, b32 render = true)
 {
     TIMED_FUNCTION();
     
@@ -666,7 +672,7 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
         }
         
         u32 pieceCount;
-        AnimationPiece* pieces = GetAnimationPieces(temp.pool, animationInfo, animation, component, params, animTimeMod, &pieceCount, render);
+        AnimationPiece* pieces = GetAnimationPieces(temp.pool, skeletonInfo, animationInfo, animation, component, params, animTimeMod, &pieceCount, render);
         
         ObjectTransform transform = params->transform;
         transform.flipOnYAxis = params->flipOnYAxis;
@@ -712,16 +718,59 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, As
                         AssetID BID = bitmaps[bitmapIndex];
                         Assert(IsValid(BID));
                         
-                        transform.angle = piece->angle;
                         Vec3 P = params->P;
                         
+                        transform.angle = piece->angle;
                         transform.cameraOffset = piece->originOffset;
                         transform.additionalZBias = piece->zBias;
                         transform.dissolvePercentages = params->dissolveCoeff * V4(1, 1, 1, 1);
                         transform.tint = Hadamart(piece->color, params->tint);
-                        
                         r32 height = bitmapInfo->nativeHeight * params->scale;
-                        BitmapDim dim = PushBitmapWithPivot(group, transform, BID, P, piece->pivot, height, lights);
+                        
+                        AssetID renderID = BID;
+                        b32 replacementFound = false;
+                        
+                        for(u32 replacementIndex = 0; replacementIndex < params->replacementCount; ++replacementIndex)
+                        {
+                            AnimationReplacement* replacement = params->replacements + replacementIndex;
+                            if(piece->nameHash == replacement->name.hash)
+                            {
+                                replacementFound = true;
+                                for(ArrayCounter repIndex = 0; repIndex < replacement->pieceCount; ++repIndex)
+                                {
+                                    PieceReplacement* rep = replacement->pieces + repIndex;
+                                    
+                                    u32 subtype = GetAssetSubtype(group->assets, AssetType_Image, rep->imageType.subtypeHash);
+                                    BitmapId subst = QueryBitmaps(group->assets, subtype, 0, 0);
+                                    if(IsValid(subst))
+                                    {
+                                        ObjectTransform repTransform = transform;
+                                        
+                                        renderID = subst;
+                                        PAKBitmap* substitutionImage = GetBitmapInfo(group->assets, renderID);
+                                        height = substitutionImage->nativeHeight * rep->scale * params->scale;
+                                        
+                                        repTransform.cameraOffset.xy += rep->offset.x * piece->mainAxis;
+                                        repTransform.cameraOffset.xy += rep->offset.y * Perp(piece->mainAxis);
+                                        repTransform.cameraOffset.z += rep->offset.z;
+                                        
+                                        Vec2 pivot = rep->inheritPivot ? piece->pivot : rep->pivot;
+                                        BitmapDim dim = PushBitmapWithPivot(group, repTransform, renderID, P, pivot, height, lights);
+                                        //result = Union(result, RectMinDim(dim.P.xy, dim.size));
+                                    }
+                                }
+                                
+                                break;
+                            }
+                        }
+                        
+                        ObjectTransform singleTransform = transform;
+                        if(replacementFound)
+                        {
+                            singleTransform.dontRender = true;
+                        }
+                        
+                        BitmapDim dim = PushBitmapWithPivot(group, singleTransform, BID, P, piece->pivot, height, lights);
                         result = Union(result, RectMinDim(dim.P.xy, dim.size));
                         
                         ObjectTransform equipmentTransform = transform;
@@ -764,7 +813,9 @@ internal Rect2 RenderAnimation(GameModeWorld* worldMode, RenderGroup* group, Ani
     RandomSequence seq = {};
     
     b32 flippedByDefault = false;
-    AssetID animationID = QueryAnimations(group->assets, component->skeletonHash, &seq, &component->skeletonProperties, &flippedByDefault);
+    
+    PAKSkeleton* skeletonInfo;
+    AssetID animationID = QueryAnimations(group->assets, component->skeletonHash, &seq, &component->skeletonProperties, &flippedByDefault, &skeletonInfo);
     
     if(render && flippedByDefault)
     {
@@ -773,7 +824,7 @@ internal Rect2 RenderAnimation(GameModeWorld* worldMode, RenderGroup* group, Ani
     
     if(IsValid(animationID))
     {
-        result = RenderAnimation_(worldMode, group, animationID, component, params, render);
+        result = RenderAnimation_(worldMode, group, skeletonInfo, animationID, component, params, render);
     }
     
     return result;
@@ -787,6 +838,6 @@ internal Rect2 GetAnimationDim(GameModeWorld* worldMode, RenderGroup* group, Ani
 
 internal Rect2 GetAnimationDim(GameModeWorld* worldMode, RenderGroup* group, AssetID ID, AnimationComponent* component, AnimationParams* params)
 {
-    Rect2 result = RenderAnimation_(worldMode, group, ID, component, params, false);
+    Rect2 result = RenderAnimation_(worldMode, group, 0, ID, component, params, false);
     return result;
 }

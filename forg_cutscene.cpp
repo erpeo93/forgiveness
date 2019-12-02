@@ -218,7 +218,7 @@ internal b32 UpdateAndRenderCutscene( GameState* gameState, GameModeScene* scene
     if( !result )
     {
         m4x4 I = Identity();
-        SetCameraTransform( group, false, 0.6f );
+        SetCameraBasics(group, false, 0.6f);
         
         RenderCutSceneAtTime( group->assets, 0, scene, scene->t + CUTSCENE_WARMUP_TIME );
         b32 ended = RenderCutSceneAtTime( group->assets, group, scene, scene->t );

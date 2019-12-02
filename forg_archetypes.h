@@ -10,6 +10,7 @@ Archetype() struct AnimalArchetype
     UsingComponent equipped;
     InteractionComponent interaction;
     SkillComponent skills;
+    BrainComponent brain;
 #else
     BaseComponent base;
     AnimationComponent animation;
@@ -53,6 +54,7 @@ Archetype() struct GrassArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
+    StaticComponent staticUpdate;
 #else
     BaseComponent base;
     GrassComponent grass;
@@ -218,6 +220,8 @@ introspection() struct ServerEntityInitParams
     
     ArrayCounter collisionEffectsCount MetaCounter(collisionEffects);
     GameEffect* collisionEffects;
+    
+    Enumerator brainType MetaEnumerator("brainType");
 };
 
 introspection() struct ImageProperty
@@ -302,6 +306,12 @@ introspection() struct ClientEntityInitParams
     
     ArrayCounter multipartFrameByFrameCount MetaCounter(multipartFrameByFramePieces);
 	MultipartFrameByFramePiece* multipartFrameByFramePieces;
+    
+    ArrayCounter replacementCount MetaCounter(animationReplacements);
+    AnimationReplacement* animationReplacements;
+    
+    r32 fadeInTime MetaDefault("1.0f");
+    r32 fadeOutTime MetaDefault("1.0f");
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

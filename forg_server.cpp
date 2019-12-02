@@ -120,8 +120,8 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
                             toSend->sendingOffset = 0;
                             
                             ++file->counter;
-                            QueueFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
                             FREELIST_INSERT(toSend, player->firstLoginFileToSend);
+                            QueueFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
                         }
                     }
                 }
@@ -142,11 +142,18 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
         {
             GameAccessRequest clientReq;
             unpack(packetPtr, "L", &clientReq.challenge); 
+            
             if(challenge == clientReq.challenge)
             {
+				if(IsValidID(player->ID))
+				{
+					DeleteEntity(server, player->ID, DeleteEntity_Ghost);
+					player->ID = {};
+				}
+                
                 UniversePos P = {};
                 P.chunkZ = 0;
-                P.chunkX = 1;
+                P.chunkX = 2;
                 P.chunkY = 1;
                 AddEntityParams params = DefaultAddEntityParams();
                 params.playerIndex = playerIndex;
@@ -181,12 +188,11 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
         case Type_InventoryCommand:
         {
             GameCommand* command = &player->inventoryCommand;
+            Assert(command->action == none);
             unpack(packetPtr, "HLLHLH", &command->action, &command->targetID, 
                    &command->containerID, 
                    &command->targetObjectIndex, &command->targetContainerID, &command->optionIndex);
             
-            Assert(!player->inventoryCommandValid);
-            player->inventoryCommandValid = true;
         } break;
         
         case Type_CommandParameters:
@@ -285,6 +291,7 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
                 for(FileToSend* login = player->firstLoginFileToSend; login; login = login->next)
                 {
                     GameFile* file = server->files + login->serverFileIndex;
+                    Assert(file->counter > 0);
                     --file->counter;
                     FREELIST_DEALLOC(login, server->firstFreeToSendFile);
                 }
@@ -293,6 +300,7 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
                 for(FileToSend* reload = player->firstReloadedFileToSend; reload; reload = reload->next)
                 {
                     GameFile* file = server->files + reload->serverFileIndex;
+                    Assert(file->counter > 0);
                     --file->counter;
                     FREELIST_DEALLOC(reload, server->firstFreeToSendFile);
                 }
@@ -392,8 +400,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 #if FORGIVENESS_INTERNAL
     globalDebugTable = memory->debugTable;
 #endif
-    TIMED_FUNCTION();
-    
     MemoryPool tempPool = {};
     if(!memory->server)
     {
@@ -482,6 +488,8 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         platformAPI.PushWork(server->slowQueue, WatchForFileChanges, hash);
         server->assets = InitAssets(server->slowQueue, server->tasks, ArrayCount(server->tasks), &server->gamePool, 0, MegaBytes(16));
         SetMetaAssets(server->assets);
+        
+        InitSpatialPartition(&server->gamePool, &server->staticPartition);
         BuildWorld(server, true);
     }
     
@@ -489,7 +497,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     
     
     
-    
+    BEGIN_BLOCK("file reload");
     PlatformFileGroup reloadedFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, RELOAD_PATH);
     for(PlatformFileInfo* info = reloadedFiles.firstFileInfo; info; info = info->next)
     {
@@ -510,12 +518,12 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         }
     }
     platformAPI.GetAllFilesEnd(&reloadedSendFiles);
+    END_BLOCK();
     
     
     
     
-    
-    
+    BEGIN_BLOCK("accept connections");
     // TODO(Leonardo): change the API of the network library to return a networkConnection*!
     u16 newConnections[16] = {};
     u16 accepted = platformAPI.net.Accept(&server->clientInterface, newConnections, ArrayCount(newConnections));
@@ -529,7 +537,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         ResetReceiver(&player->receiver);
         player->connectionSlot = connectionSlot;
     }
-    
+    END_BLOCK();
     
     
     
@@ -540,37 +548,105 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     
     server->frameByFramePool = &tempPool;
     
-    SpawnEntities(server, elapsedTime);
-    HandlePlayersNetwork(server, elapsedTime);
     
+    server->seasonTime += elapsedTime;
+    if(server->seasonTime >= 5.0f)
+    {
+        server->seasonTime = 0;
+        if(++server->season == Count_Season)
+        {
+            server->season = 0;
+        }
+        
+        for(CompIterator iter = FirstComponent(server, PlayerComponent); 
+            IsValid(iter); iter = Next(iter))
+        {
+            PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
+            if(player->connectionSlot && IsValidID(player->ID))
+            {
+                QueueSeason(player, server->season);
+            }
+        }
+    }
+    
+    
+    BEGIN_BLOCK("spatial partitions");
     InitSpatialPartition(server->frameByFramePool, &server->playerPartition);
     EXECUTE_JOB(server, FillPlayerSpacePartition, ArchetypeHas(PlayerComponent) && ArchetypeHas(PhysicComponent), elapsedTime);
-    InitSpatialPartition(server->frameByFramePool, &server->collisionPartition);
+    InitSpatialPartition(server->frameByFramePool, &server->standardPartition);
     EXECUTE_JOB(server, FillCollisionSpatialPartition, ArchetypeHas(PhysicComponent), elapsedTime);
+    END_BLOCK();
     
+    BEGIN_BLOCK("spawn and delete entities");
+    SpawnAndDeleteEntities(server, elapsedTime);
+    END_BLOCK();
     
-    EXECUTE_JOB(server, HandlePlayerCommands, ArchetypeHas(PlayerComponent), elapsedTime); //multithread!
-    EXECUTE_JOB(server, DispatchEquipmentEffects, (ArchetypeHas(EquipmentComponent) || ArchetypeHas(UsingComponent)), elapsedTime); //multithread?
+    BEGIN_BLOCK("handle players stuff");
+    HandlePlayersNetwork(server, elapsedTime);
+	END_BLOCK();
     
-	//barrier
+    BEGIN_BLOCK("equipment effects");
+    server->equipmentEffectTimer += elapsedTime;
+	if(server->equipmentEffectTimer >= 0.5f)
+	{
+        EXECUTE_JOB(server, DispatchEquipmentEffects, (ArchetypeHas(EquipmentComponent) || ArchetypeHas(UsingComponent)), server->equipmentEffectTimer);
+        server->equipmentEffectTimer = 0;
+    }
+    END_BLOCK();
     
-    EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime); //multithread simd!
-    EXECUTE_JOB(server, UpdateBrain, ArchetypeHas(BrainComponent), elapsedTime); //multithread?
-	EXECUTE_JOB(server, UpdateTempEntity, ArchetypeHas(TempEntityComponent), elapsedTime); //multithread
-    EXECUTE_JOB(server, HandleOpenedContainers, ArchetypeHas(ContainerComponent), elapsedTime); //multithread
-	EXECUTE_JOB(server, DeleteDeletedEntities, true, elapsedTime); //single thread
+    BEGIN_BLOCK("update entities");
+    EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime);
+    EXECUTE_JOB(server, UpdateBrain, ArchetypeHas(BrainComponent), elapsedTime);
+	EXECUTE_JOB(server, UpdateTempEntity, ArchetypeHas(TempEntityComponent), elapsedTime);
+    EXECUTE_JOB(server, HandleOpenedContainers, ArchetypeHas(ContainerComponent), elapsedTime);
+    END_BLOCK();
     
-	//barrier
-    EXECUTE_JOB(server, SendEntityUpdate, ArchetypeHas(PhysicComponent), elapsedTime); //
-    
-    server->timeFromlastStaticUpdate += elapsedTime;
-    if(server->timeFromlastStaticUpdate >= 1.0f)
+    BEGIN_BLOCK("send updates");
+    b32 staticUpdate = false;
+    server->staticUpdateTimer += elapsedTime;
+    if(server->staticUpdateTimer >= 0.9f * STATIC_UPDATE_TIME)
     {
-        server->timeFromlastStaticUpdate = 0;
-        EXECUTE_JOB(server, SendEntityUpdate, !ArchetypeHas(PhysicComponent), elapsedTime);
-	}
-	
+        server->staticUpdateTimer = 0;
+        staticUpdate = true;
+    }
+    
+    for(CompIterator iter = FirstComponent(server, PlayerComponent); 
+        IsValid(iter); iter = Next(iter))
+    {
+        PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
+        if(player->connectionSlot && IsValidID(player->ID))
+        {
+            DefaultComponent* playerDefault = GetComponent(server, player->ID, DefaultComponent);
+            PhysicComponent* playerPhysic = GetComponent(server, player->ID, PhysicComponent);
+            
+            Rect3 updateBounds = AddRadius(playerPhysic->bounds, UPDATE_DISTANCE * V3(1, 1, 1));
+            SpatialPartitionQuery updateQuery = QuerySpatialPartition(&server->standardPartition, playerDefault->P, updateBounds);
+            
+            b32 sendStaticUpdate = staticUpdate;
+            if(player->justEnteredWorld)
+            {
+                sendStaticUpdate = true;
+                player->justEnteredWorld = false;
+            }
+            
+            b32 completeUpdate = (sendStaticUpdate);
+            for(EntityID ID = GetCurrent(&updateQuery); IsValid(&updateQuery); ID = Advance(&updateQuery))
+            {
+                SendEntityUpdate(server, ID, false, completeUpdate);
+            }
+            
+            if(sendStaticUpdate)
+            {
+                SpatialPartitionQuery staticUpdateQuery = QuerySpatialPartition(&server->staticPartition, playerDefault->P, updateBounds);
+                for(EntityID ID = GetCurrent(&staticUpdateQuery); IsValid(&staticUpdateQuery); ID = Advance(&staticUpdateQuery))
+                {
+                    SendStaticUpdate(server, ID);
+                }
+            }
+        }
+    }
     Clear(&tempPool);
+    END_BLOCK();
 }
 
 

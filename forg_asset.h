@@ -13,6 +13,10 @@
 #define MARKUP_FILE_NAME "markup"
 
 #define SKELETON_FLIPPED "flipped"
+#define SKELETON_FLIPPED_BONE1 "flippedBone1"
+#define SKELETON_FLIPPED_BONE2 "flippedBone2"
+#define SKELETON_FLIPPED_BONE1_OFFSET "flippedBone1Offset"
+#define SKELETON_FLIPPED_BONE2_OFFSET "flippedBone2Offset"
 #define ANIMATION_PROPERTY_PING_PONG "pingPongLooping"
 #define ANIMATION_PROPERTY_SINGLE_CYCLE "singleCycle"
 #define ANIMATION_PROPERTY_LOOPING_BASELINE "loopingBaseline"
@@ -127,9 +131,11 @@ struct Bone
     i32 parentIndex;
     r32 parentAngle;
     
+    b32 computedFinal;
     r32 finalAngle;
     Vec2 parentOffset;
     Vec2 finalOriginOffset;
+    r32 finalZBias;
     
     // NOTE(leonardo): if spin is -1, it means that we have to lerp the angle in the opposite way, means going clockwise instead of counter-clockwise
     i32 spin;
@@ -230,6 +236,7 @@ introspection() struct GameAssetType
 struct AssetLabel
 {
     char name[16];
+    u64 hash;
 };
 
 introspection() struct GroundColorationArrayTest
