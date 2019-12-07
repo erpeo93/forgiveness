@@ -1,18 +1,3 @@
-internal void DeleteAllChunks(GameModeWorld* worldMode)
-{
-    for(u32 chunkIndex = 0; chunkIndex < ArrayCount(worldMode->chunks); ++chunkIndex)
-    {
-        WorldChunk** chunkPtr = &worldMode->chunks[chunkIndex];
-        while(*chunkPtr)
-        {
-            WorldChunk* chunk = *chunkPtr;
-            FreeSpecialTexture(worldMode->gameState->assets, &chunk->texture);
-            *chunkPtr = chunk->next;
-            FREELIST_DEALLOC(chunk, worldMode->firstFreeChunk);
-        }
-    }
-}
-
 internal void UpdateGround(GameModeWorld* worldMode, RenderGroup* group, UniversePos origin)
 {
     u32 worldSeed = worldMode->worldSeed;
@@ -33,6 +18,7 @@ internal void UpdateGround(GameModeWorld* worldMode, RenderGroup* group, Univers
             i16 deltaChunkY = (i16) Abs(chunk->worldY - originChunkY);
             if(!IsValidSpecial(&chunk->texture) && 
                (chunk->worldZ != originChunkZ || 
+                chunk->worldSeed != worldMode->worldSeed ||
                 deltaChunkX > (chunkApron + 3) || 
                 deltaChunkY > (chunkApron + 3))
                )
@@ -67,8 +53,6 @@ internal void UpdateGround(GameModeWorld* worldMode, RenderGroup* group, Univers
                     if(IsValid(ID))
                     {
                         world_generator* generator = GetData(group->assets, world_generator, ID);
-                        worldMode->nullTile = NullTile(generator);
-                        
                         BuildChunk(group->assets, worldMode->persistentPool, generator, 
                                    chunk, X, Y, originChunkZ, worldSeed);
                     }
@@ -143,7 +127,7 @@ internal void UpdateGround(GameModeWorld* worldMode, RenderGroup* group, Univers
                                             LockAssetForCurrentFrame(group->assets, groundID);
                                             
                                             Vec3 splatP = V3(tileCenter, 0);
-                                            r32 height = voxelSide;
+                                            r32 height = 2.0f * voxelSide;
                                             Vec2 scale = V2(RandomRangeFloat(&seq, 1.0f, 2.5f), RandomRangeFloat(&seq, 1.0f, 2.5f));
                                             Vec4 color = V4(1, 1, 1, 1);
                                             color.r += RandomBil(&seq) * 0.1f;
@@ -155,8 +139,7 @@ internal void UpdateGround(GameModeWorld* worldMode, RenderGroup* group, Univers
                                             transform.angle = RandomUni(&seq) * TAU32;
                                             transform.scale = scale;
                                             transform.tint = color;
-                                            transform.transparent = true;
-                                            PushBitmap(group, transform, groundID, splatP, height * voxelSide);
+                                            PushBitmap(group, transform, groundID, splatP, height);
                                         }
                                     }
                                 }
@@ -205,10 +188,13 @@ inline void RenderGroundAndPlaySounds(GameModeWorld* worldMode, RenderGroup* gro
     r32 chunkSide = CHUNK_DIM * VOXEL_SIZE;
     r32 voxelSide = VOXEL_SIZE;
     
-    for(i16 chunkY = originChunkY - chunkApron; (chunkY <= originChunkY + chunkApron); chunkY++)
+    for(i16 chunkY = originChunkY - chunkApron; 
+        chunkY <= (originChunkY + chunkApron); 
+        chunkY++)
     {
         for(i16 chunkX = originChunkX - chunkApron; 
-            (chunkX <= originChunkX + chunkApron); chunkX++)
+            chunkX <= (originChunkX + chunkApron); 
+            chunkX++)
         {
             if(ChunkValid(chunkX, chunkY, originChunkZ))
             {	
@@ -224,7 +210,8 @@ inline void RenderGroundAndPlaySounds(GameModeWorld* worldMode, RenderGroup* gro
                     P.chunkZ = worldMode->player.universeP.chunkZ;
                     P.chunkOffset = 0.5f * V3(CHUNK_SIDE, CHUNK_SIDE, 0);
                     Lights lights =  GetLights(worldMode, GetRelativeP(worldMode, P));
-                    PushTexture(group, chunk->texture.textureHandle, chunkLowLeftCornerOffset, V3(chunkSide, 0, 0), V3(0, chunkSide, 0), V4(1, 1, 1, 1), lights, 0, 0, 1, 0);
+                    b32 flat = true;
+                    PushTexture(group, chunk->texture.textureHandle, chunkLowLeftCornerOffset, flat, V3(chunkSide, 0, 0), V3(0, chunkSide, 0), V4(1, 1, 1, 1), lights, 0, 0, 1, 0);
                     
                     RefreshSpecialTexture(group->assets, &chunk->texture);
                     if(worldMode->editorUI.renderChunkBounds)
@@ -236,21 +223,20 @@ inline void RenderGroundAndPlaySounds(GameModeWorld* worldMode, RenderGroup* gro
         }
     }
     
-    for(u8 tileY = 0; tileY < CHUNK_DIM; ++tileY)
+    for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
     {
-        for(u8 tileX = 0; tileX < CHUNK_DIM; ++tileX)
+        for(i32 X = originChunkX - chunkApron; X <= originChunkX + chunkApron; X++)
         {
-            for(i32 Y = originChunkY - chunkApron; Y <= originChunkY + chunkApron; Y++)
+            if(ChunkValid(X, Y, originChunkZ))
             {
-                for(i32 X = originChunkX - chunkApron; X <= originChunkX + chunkApron; X++)
+                WorldChunk* chunk = GetChunk(worldMode, X, Y, originChunkZ);
+                Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - origin.chunkOffset;
+                Vec3 chunkBaseCenterOffset = chunkLowLeftCornerOffset + 0.5f * V3(chunkSide, chunkSide, 0);
+                for(u8 tileY = 0; tileY < CHUNK_DIM; ++tileY)
                 {
-                    if(ChunkValid(X, Y, originChunkZ))
+                    for(u8 tileX = 0; tileX < CHUNK_DIM; ++tileX)
                     {
-                        WorldChunk* chunk = GetChunk(worldMode, X, Y, originChunkZ);
-                        Vec3 chunkLowLeftCornerOffset = V3(V2i(chunk->worldX - originChunkX, chunk->worldY - originChunkY), 0.0f) * chunkSide - origin.chunkOffset;
-                        Vec3 chunkBaseCenterOffset = chunkLowLeftCornerOffset + 0.5f * V3(chunkSide, chunkSide, 0);
                         WorldTile* tile = GetTile(worldMode, chunk, tileX, tileY);
-                        
                         
                         Vec3 tileMin = -0.5f * V3(chunkSide, chunkSide, 0) + V3(tileX * voxelSide, tileY * voxelSide, 0);
                         Vec2 tileDim = V2(voxelSide, voxelSide);
@@ -267,47 +253,52 @@ inline void RenderGroundAndPlaySounds(GameModeWorld* worldMode, RenderGroup* gro
                             {
                                 TileAnimationEffect* effect = GetData(group->assets, TileAnimationEffect, ID);
                                 Assert(effect);
-                                AssetID splashID = QueryBitmaps(group->assets, GetAssetSubtype(group->assets, effect->asset.type, effect->asset.subtypeHash), 0, 0);
-                                Bitmap* bitmap = GetBitmap(group->assets, splashID).bitmap;
-                                if(bitmap)
+                                
+                                AssetID splashID = QueryBitmaps(group->assets, GetAssetSubtype(group->assets, effect->asset.type, effect->asset.subtypeHash), 0, &properties);
+                                if(IsValid(splashID))
                                 {
-                                    Vec3 maxOffset = effect->maxOffset;
-                                    Vec4 colorRef = effect->color;
-                                    Vec4 colorV = effect->colorV;
-                                    r32 scaleRef = effect->scale;
-                                    r32 scaleV = effect->scaleV;
-                                    r32 speed = effect->sineSpeed;
-                                    u32 patchCount = effect->patchCount;
-                                    r32 baseZBias = (effect->tileZBias * (tileY * CHUNK_DIM + tileX));
-                                    r32 zBias = effect->patchZBias;
-                                    r32 advanceTime = speed * timeToAdvance;
-                                    
-                                    for(u32 patchIndex = 0; patchIndex < patchCount; ++patchIndex)
+                                    Bitmap* bitmap = GetBitmap(group->assets, splashID).bitmap;
+                                    if(bitmap)
                                     {
-                                        TilePatch* patch = tile->patches + patchIndex;
-                                        patch->offsetTime += advanceTime;
-                                        patch->colorTime += advanceTime;
-                                        patch->scaleTime += advanceTime;
+                                        Vec3 maxOffset = effect->maxOffset;
+                                        Vec4 colorRef = effect->color;
+                                        Vec4 colorV = effect->colorV;
+                                        r32 scaleRef = effect->scale;
+                                        r32 scaleV = effect->scaleV;
+                                        r32 speed = effect->sineSpeed;
+                                        u32 patchCount = effect->patchCount;
+                                        r32 baseZBias = (effect->tileZBias * (tileY * CHUNK_DIM + tileX));
+                                        r32 zBias = effect->patchZBias;
+                                        r32 advanceTime = speed * timeToAdvance;
+                                        Vec2 invUV = GetInvUV(bitmap->width, bitmap->height);
                                         
-                                        Vec3 offset = Sin(patch->offsetTime) * maxOffset;
-                                        Vec4 color = colorRef + Sin(patch->colorTime) * colorV;
-                                        color = Clamp01(color);
-                                        r32 scale = scaleRef + Sin(patch->scaleTime) * scaleV;
-                                        
-                                        Vec3 finalTileP = chunkBaseCenterOffset + V3(tileCenter, baseZBias + zBias) + offset;
-                                        u32 finalColor = RGBAPack8x4(color * 255.0f);
-                                        r32 finalDim = 0.5f * tileDim.y * scale;
-                                        Vec4 lateral = finalDim * V4(1, 0, 0, 0);
-                                        Vec4 up = finalDim * V4(0, 1, 0, 0);
-                                        b32 transparent = false;
-                                        PushMagicQuad(group, transparent, V4(finalTileP, 0), lateral, up, finalColor, bitmap->textureHandle, lights, 0, 0, 1, {}, 0, {}, 0, 0);
-                                        
-                                        zBias += effect->patchZBias;
+                                        for(u32 patchIndex = 0; patchIndex < patchCount; ++patchIndex)
+                                        {
+                                            TilePatch* patch = tile->patches + patchIndex;
+                                            patch->offsetTime += advanceTime;
+                                            patch->colorTime += advanceTime;
+                                            patch->scaleTime += advanceTime;
+                                            
+                                            Vec3 offset = Sin(patch->offsetTime) * maxOffset;
+                                            Vec4 color = colorRef + Sin(patch->colorTime) * colorV;
+                                            color = Clamp01(color);
+                                            r32 scale = scaleRef + Sin(patch->scaleTime) * scaleV;
+                                            
+                                            Vec3 finalTileP = chunkBaseCenterOffset + V3(tileCenter, baseZBias + zBias) + offset;
+                                            u32 finalColor = RGBAPack8x4(color * 255.0f);
+                                            r32 finalDim = 0.5f * tileDim.y * scale;
+                                            Vec4 lateral = finalDim * V4(1, 0, 0, 0);
+                                            Vec4 up = finalDim * V4(0, 1, 0, 0);
+                                            b32 flat = true;
+                                            PushMagicQuad(group, V4(finalTileP, 0), flat, lateral, up, invUV, finalColor, bitmap->textureHandle, lights, 0, 0, 1, {}, 0, {}, 0, 0);
+                                            
+                                            zBias += effect->patchZBias;
+                                        }
                                     }
-                                }
-                                else
-                                {
-                                    LoadBitmap(group->assets, splashID);
+                                    else
+                                    {
+                                        LoadBitmap(group->assets, splashID);
+                                    }
                                 }
                             }
                         }
@@ -317,15 +308,33 @@ inline void RenderGroundAndPlaySounds(GameModeWorld* worldMode, RenderGroup* gro
         }
     }
     
-    
-    for(any chunk)
+    for(i16 chunkY = originChunkY - chunkApron; 
+        chunkY <= (originChunkY + chunkApron); 
+        chunkY++)
     {
-        for(any tile)
+        for(i16 chunkX = originChunkX - chunkApron; 
+            chunkX <= (originChunkX + chunkApron); 
+            chunkX++)
         {
-            for(any sound mapping)
-            {
-                UpdateSoundMapping();
+            if(ChunkValid(chunkX, chunkY, originChunkZ))
+            {	
+                WorldChunk* chunk = GetChunk(worldMode, chunkX, chunkY, originChunkZ);
+                
+                for(u8 tileY = 0; tileY < CHUNK_DIM; ++tileY)
+                {
+                    for(u8 tileX = 0; tileX < CHUNK_DIM; ++tileX)
+                    {
+                        WorldTile* tile = GetTile(worldMode, chunk, tileX, tileY);
+                        for(u32 soundIndex = 0; soundIndex < tile->soundCount; ++soundIndex)
+                        {
+                            UpdateSoundMapping(worldMode, tile->sounds + soundIndex, timeToAdvance);
+                        }
+                    }
+                }
+                
             }
         }
     }
+    
+    ResetQuads(group);
 }

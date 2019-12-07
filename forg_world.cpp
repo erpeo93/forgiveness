@@ -21,14 +21,8 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, WorldChunk* chunk, u32 tileX
     Assert(tileY < CHUNK_DIM);
     Assert(tileX < CHUNK_DIM);
     WorldTile* result = 0;
-    if(chunk->tiles)
-    {
-        result = chunk->tiles + (tileY * CHUNK_DIM) + tileX;
-    }
-    else
-    {
-        result = &worldMode->nullTile;
-    }
+    Assert(chunk->tiles);
+    result = chunk->tiles + (tileY * CHUNK_DIM) + tileX;
     
     return result;
 }
@@ -122,7 +116,8 @@ internal WorldChunk* GetChunk(GameModeWorld* worldMode, i32 worldX, i32 worldY, 
     {
         if(testChunk->worldX == worldX && 
            testChunk->worldY == worldY &&
-           testChunk->worldZ == worldZ)
+           testChunk->worldZ == worldZ &&
+           testChunk->worldSeed == worldMode->worldSeed)
         {
             result = testChunk;
             break;

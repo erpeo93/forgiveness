@@ -13,6 +13,8 @@ struct StandardImageComponent
 struct MagicQuadComponent
 {
     u32 color;
+    Vec2 invUV;
+    r32 alphaThreesold;
     ImageReference entity;
     AssetID bitmapID;
     Vec4 lateral;
@@ -25,6 +27,9 @@ struct FrameByFrameAnimationComponent
     r32 runningTime;
     r32 speed;
     u64 typeHash;
+    
+    b32 overridesPivot;
+    Vec2 pivot;
 };
 
 struct MultipartAnimationComponent

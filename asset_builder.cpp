@@ -2,6 +2,7 @@
 #include "stb_image.h"
 
 #define PLAYER_VIEW_WIDTH_IN_WORLD_METERS 6.0f
+#define DEFAULT_WIDTH 1920
 
 #define USE_FONTS_FROM_WINDOWS 1
 #if USE_FONTS_FROM_WINDOWS 
@@ -662,61 +663,12 @@ internal LoadedBitmap LoadImage(MemoryPool* tempPool, char* path, char* filename
             }
         }
         
-        u32 widthPad = 0;
-        for(widthPad = 1; (u32) x > widthPad; widthPad *= 2);
-        widthPad = x;
-        
-        u32 heightPad = 0;
-        for(heightPad = 1; (u32) y > heightPad; heightPad *= 2);
-        heightPad = y;
-        
-        r32 nativeHeightCoeff = (r32) y / (r32) heightPad;
-        
-        u32* pad = (u32*) malloc(widthPad * heightPad * n);
-        memset(pad, 0, widthPad * heightPad * n);
-        
-        u32* sourceCopy = (u32*) data;
-        for(u32 h = 0; h < (u32) y; ++h)
-        {
-            for(u32 w = 0; w < (u32) x; ++w)
-            {
-                pad[h * widthPad + w] = *sourceCopy++;
-            }
-        }
-        
-        r32 xDownsampleFactor = (r32) widthPad / MAX_IMAGE_DIM;
-        r32 yDownsampleFactor = (r32) heightPad / MAX_IMAGE_DIM;
-        r32 downsampleFactor = Max(xDownsampleFactor, yDownsampleFactor);
-        downsampleFactor = Max(downsampleFactor, 1.0f);
-        
-        int xFinal = RoundReal32ToI32((r32) widthPad / downsampleFactor);
-        int yFinal = RoundReal32ToI32((r32) heightPad / downsampleFactor);
-        
-        Assert(xFinal <= MAX_IMAGE_DIM);
-        Assert(yFinal <= MAX_IMAGE_DIM);
-        
-        result.pixels = (u8*) malloc(xFinal * yFinal * n);
-        
-        ImageU32 sourceImage = {};
-        sourceImage.pixels = (u32*) pad;
-        sourceImage.width = widthPad;
-        sourceImage.height = heightPad;
-        
-        ImageU32 destImage = {};
-        destImage.pixels = (u32*) result.pixels;
-        destImage.width = xFinal;
-        destImage.height = yFinal;
-        
-        Resize(sourceImage, destImage);
-        
-        stbi_image_free(data);
-        result.width = SafeTruncateToU16(xFinal);
-        result.height = SafeTruncateToU16(yFinal);
-        result.widthOverHeight = (r32 ) x / (r32 ) y;
-        result.nativeHeight = heightPad * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f);
-        result.nativeHeightCoeff = nativeHeightCoeff;
-        result.downsampleFactor = downsampleFactor;
+        result.pixels = data;
         result.free = result.pixels;
+        
+        result.width = SafeTruncateToU16(x);
+        result.height = SafeTruncateToU16(y);
+        result.widthOverHeight = (r32 ) x / (r32 ) y;
     }
     else
     {
@@ -1163,10 +1115,80 @@ char* AdvanceToLastSlash( char* name )
 }
 
 
-internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
+internal void ParseSoundTrigger(PAKAnimationSoundTrigger* trigger, Tokenizer* tokenizer)
+{
+    if(RequireToken(tokenizer, Token_OpenBraces))
+    {
+        AdvanceToNextToken(tokenizer, Token_EqualSign);
+        trigger->property = Parse_GameProperty(tokenizer, {});
+        AdvanceToNextToken(tokenizer, Token_EqualSign);
+        trigger->timeline = Parse_u32(tokenizer, 0);
+    }
+}
+
+#define MAX_SOUND_TRIGGERS 16
+internal void FillSoundTriggers(LoadedAnimation* animation, MemoryPool* tempPool, PlatformFileGroup* markupFiles)
+{
+    char name[64];
+    FormatString(name, sizeof(name), "animations_%s", animation->name);
+    u32 runningTriggerIndex = 0;
+    animation->triggerCount = MAX_GROUP_NAMES;
+    u32 triggersTotalSize = sizeof(PAKAnimationSoundTrigger) * MAX_SOUND_TRIGGERS;
+    animation->triggers = (PAKAnimationSoundTrigger*) malloc(triggersTotalSize);
+    memset(animation->triggers, 0, triggersTotalSize);
+    
+    for(PlatformFileInfo* info = markupFiles->firstFileInfo; info; info = info->next)
+    {
+        if(RelevantFile(info, markupFiles, false))
+        {
+            u8* fileContent = ReadEntireFile(tempPool, markupFiles, info);
+            Tokenizer tokenizer = {};
+            tokenizer.at = (char*) fileContent;
+            Token t = AdvanceToToken(&tokenizer, name);
+            
+            if(t.type != Token_EndOfFile)
+            {
+                if(RequireToken(&tokenizer, Token_Colon))
+                {
+                    while(true)
+                    {
+                        Token p = GetToken(&tokenizer);
+                        
+                        if(p.type == Token_Comma)
+                        {
+                        }
+                        else if(p.type == Token_EndOfFile)
+                        {
+                            break;
+                        }
+                        else if(p.type == Token_SemiColon)
+                        {
+                        }
+                        else
+                        {
+                            Token propertyName = p;
+                            if(TokenEquals(propertyName, ANIMATION_SOUND_TRIGGER))
+                            {
+                                if(RequireToken(&tokenizer, Token_EqualSign))
+                                {
+                                    if(runningTriggerIndex < MAX_SOUND_TRIGGERS)
+                                    {
+                                        PAKAnimationSoundTrigger* trigger = animation->triggers + runningTriggerIndex++;
+                                        ParseSoundTrigger(trigger, &tokenizer);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal LoadedAnimation LoadAnimation(MemoryPool* tempPool, char* fileContent, u16 animationIndex, PlatformFileGroup* markupFiles)
 {
     LoadedAnimation result = {};
-    
     
     u32 maxFrameCount = 64;
     TempFrame* frames = (TempFrame*) malloc(maxFrameCount * sizeof(TempFrame));
@@ -1248,6 +1270,10 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
                     GetXMLValuef(&currentTag, "pivot_y", &pivot.y );
                     tempSprite->pivot = pivot;
                     tempSprite->placeHolder = (pieceName != pieceNameReal);
+                    
+                    i32 height;
+                    GetXMLValuei(&currentTag, "height", &height);
+                    tempSprite->height = height * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / DEFAULT_WIDTH);
                 }
                 else if(StrEqual(currentTag.title, "animation"))
                 {
@@ -1524,7 +1550,7 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
                     }
                     
                     
-                    ass->boneOffset = V2(x, y )  * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / 1920.0f );
+                    ass->boneOffset = V2(x, y )  * (PLAYER_VIEW_WIDTH_IN_WORLD_METERS / DEFAULT_WIDTH);
                     ass->additionalZOffset = 0;
                     ass->angle = angle;
                     ass->scale = V2(scaleX, scaleY );
@@ -1582,6 +1608,7 @@ internal LoadedAnimation LoadAnimation(char* fileContent, u16 animationIndex)
     free(frames);
     Assert(result.durationMS);
     
+    FillSoundTriggers(&result, tempPool, markupFiles);
     return result;
 }
 
@@ -2316,13 +2343,12 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                 
                                 dest->bitmap.dimension[0] = bitmap.width;
                                 dest->bitmap.dimension[1] = bitmap.height;
-                                dest->bitmap.nativeHeight = bitmap.nativeHeight;
                                 
                                 fwrite(bitmap.attachmentPoints, bitmap.attachmentPointCount * sizeof(PAKAttachmentPoint), 1, out);
                                 fwrite(bitmap.groupNames, bitmap.groupNameCount * sizeof(PAKGroupName), 1, out);
                                 fwrite(bitmap.pixels, bitmap.width * bitmap.height * sizeof(u32 ), 1, out);
                                 
-                                free(bitmap.free);
+                                stbi_image_free(bitmap.free);
                                 free(bitmap.attachmentPoints);
                                 free(bitmap.groupNames);
                             }
@@ -2410,7 +2436,6 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                     derivedAsset->bitmap.align[1] = bitmap->pivot.y;
                                     derivedAsset->bitmap.dimension[0] = bitmap->width;
                                     derivedAsset->bitmap.dimension[1] = bitmap->height;
-                                    derivedAsset->bitmap.nativeHeight = 0;
                                     derivedAsset->bitmap.alphaThreesold = 0;
                                     
                                     fwrite(bitmap->pixels, bitmap->width * bitmap->height * sizeof(u32), 1, out);
@@ -2435,7 +2460,7 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                             for(u16 animationIndex = 0; animationIndex < animationCount; ++animationIndex)
                             {
                                 PAKAsset* derivedAsset = pakAssets + runningDerivedAssetIndex++;
-                                LoadedAnimation animation = LoadAnimation((char*) fileContent, animationIndex);
+                                LoadedAnimation animation = LoadAnimation(&tempPool, (char*) fileContent, animationIndex, &markupFiles);
                                 
                                 char trimmedFilename[128];
                                 TrimToFirstCharacter(trimmedFilename, sizeof(trimmedFilename), info->name, '.');
@@ -2461,17 +2486,18 @@ internal void WritePak(TimestampHash* hash, char* basePath, char* sourceDir, cha
                                 derivedAsset->animation.frameCount = animation.frameCount;
                                 derivedAsset->animation.boneCount = countTotalBones;
                                 derivedAsset->animation.assCount = countTotalAss;
+                                derivedAsset->animation.triggerCount = animation.triggerCount;
                                 
                                 
                                 fwrite(animation.spriteInfos, sizeof(SpriteInfo) * animation.spriteInfoCount, 1, out);
                                 fwrite(animation.frames, sizeof(FrameData) * animation.frameCount, 1, out);
                                 fwrite(animation.bones, countTotalBones * sizeof(Bone), 1, out);
                                 fwrite(animation.ass, countTotalAss * sizeof(PieceAss), 1, out);
-                                
+                                fwrite(animation.triggers, animation.triggerCount * sizeof(PAKAnimationSoundTrigger), 1, out);
                                 free(animation.spriteInfos);
                                 free(animation.frames);
                                 free(animation.bones);
-                                free(animation.ass);
+                                free(animation.triggers);
                             }
                         } break;
                         
@@ -2616,7 +2642,6 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             u32 currentFileCount = 0;
             u32 currentMarkupFileCount = 0;
             
-            
             for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
             {
                 if(RelevantFile(info, &fileGroup, true))
@@ -2693,7 +2718,6 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
     }
 }
 
-
 inline void ReadCompressFile(ServerState* server, GameFile* file, u32 uncompressedSize, u8* uncompressedContent)
 {
     Clear(&file->pool);
@@ -2702,8 +2726,12 @@ inline void ReadCompressFile(ServerState* server, GameFile* file, u32 uncompress
     file->content = PushSize(&file->pool, file->compressedSize);
     u32 cmp_status = compress(file->content, (mz_ulong*) &file->compressedSize, (const unsigned char*) uncompressedContent, file->uncompressedSize);
     Assert(cmp_status == Z_OK);
+    
+    u32 pakVersion = *(u32*) uncompressedContent;
     PAKFileHeader* header = (PAKFileHeader*) uncompressedContent;
     file->type = GetMetaAssetType(header->type);
+    
+    file->valid = IsValidPAKVersion(pakVersion) && IsValidPAKAssetVersion(header);
     
     Assert(StrLen(header->subtype) <= ArrayCount(file->subtype));
     FormatString(file->subtype, sizeof(file->subtype), "%s", header->subtype);

@@ -182,66 +182,6 @@ internal void QueueGameWonMessage(PlayerComponent* player)
     QueueOrderedPacket(player);
 }
 
-internal u16 PrepareBasicsUpdate(ServerState* server, DefaultComponent* def, PhysicComponent* physic, ActionComponent* act, unsigned char* buff_)
-{
-    u16 result = 0;
-    if(def->basicPropertiesChanged != 0)
-    {
-        unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
-        Vec3 speed = physic ? physic->speed : V3(0, 0, 0);
-        
-        if(Abs(speed.x) < 0.01f)
-        {
-            speed.x = 0;
-        }
-        
-        if(Abs(speed.y) < 0.01f)
-        {
-            speed.y = 0;
-        }
-        
-        u16 action = act ? GetU16(act->action) : 0;
-        u16 sendingFlags = def->basicPropertiesChanged;
-        Pack("H", sendingFlags);
-        def->basicPropertiesChanged = 0;
-        
-        if(sendingFlags & (u16) EntityBasics_Definition)
-        {
-            Pack("LLL", def->definitionID.subtypeHashIndex, def->definitionID.index, def->seed);
-        }
-        
-        if(sendingFlags & (u16) EntityBasics_Position)
-        {
-            Pack("hhhV", def->P.chunkX, def->P.chunkY, def->P.chunkZ, def->P.chunkOffset);
-        }
-        
-        if(sendingFlags & (u16) EntityBasics_Velocity)
-        {
-            Pack("V", speed);
-            Assert(LengthSq(speed) < Square(1000.0f));
-        }
-        
-        if(sendingFlags & (u16) EntityBasics_Action)
-        {
-            Pack("H", action);
-        }
-        
-        if(sendingFlags & (u16) EntityBasics_Status)
-        {
-            Pack("H", def->status);
-        }
-        
-        if(sendingFlags & (u16) EntityBasics_Flags)
-        {
-            Pack("L", def->flags);
-        }
-        
-        result = ForgEndPacket_(buff_, buff);
-    }
-    
-    return result;
-}
-
 internal void QueueCompletedCommand(PlayerComponent* player, GameCommand* command)
 {
     StartPacket(player, CompletedCommand);
@@ -280,12 +220,101 @@ internal void QueueDeletedID(PlayerComponent* player, EntityID ID)
     QueueStandardPacket(player);
 }
 
+#define PackFlag(flags, string, ...) if(sendingFlags & SafeTruncateToU16(flags)){Pack(string, ##__VA_ARGS__);}
 
-
-
-
-internal u16 PrepareMappingsUpdate(ServerState* server, EquipmentComponent* equipment, UsingComponent* equipped, ContainerComponent* container, unsigned char* buff_)
+internal u16 PrepareBasicsUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
 {
+    u16 result = 0;
+    
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    ActionComponent* act = GetComponent(server, ID, ActionComponent);
+    
+    if(completeUpdate)
+    {
+        def->basicPropertiesChanged |= EntityBasics_Definition; 
+        def->basicPropertiesChanged |= EntityBasics_Position;
+        
+        if(!staticUpdate)
+        {
+            def->basicPropertiesChanged |= EntityBasics_Action; 
+            def->basicPropertiesChanged |= EntityBasics_Status; 
+        }
+    }
+    
+    if(def->basicPropertiesChanged != 0)
+    {
+        unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
+        Vec3 speed = physic ? physic->speed : V3(0, 0, 0);
+        
+        if(Abs(speed.x) < 0.01f)
+        {
+            speed.x = 0;
+        }
+        
+        if(Abs(speed.y) < 0.01f)
+        {
+            speed.y = 0;
+        }
+        
+        u16 action = act ? GetU16(act->action) : 0;
+        u16 sendingFlags = def->basicPropertiesChanged;
+        Pack("H", sendingFlags);
+        def->basicPropertiesChanged = 0;
+        
+        PackFlag(EntityBasics_Definition,"LLL", def->definitionID.subtypeHashIndex, def->definitionID.index, def->seed);
+        PackFlag(EntityBasics_Position, "hhhV", def->P.chunkX, def->P.chunkY, def->P.chunkZ, def->P.chunkOffset);
+        PackFlag(EntityBasics_Velocity, "V", speed);
+        PackFlag(EntityBasics_Action, "H", action);
+        PackFlag(EntityBasics_Status, "H", def->status);
+        PackFlag(EntityBasics_Flags, "L", def->flags);
+        
+        result = ForgEndPacket_(buff_, buff);
+    }
+    
+    return result;
+}
+
+
+internal u16 PrepareHealthUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
+{
+    u16 result = 0;
+    
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    AliveComponent* alive = GetComponent(server, ID, AliveComponent);
+    if(alive)
+    {
+        if(completeUpdate)
+        {
+            def->healthPropertiesChanged = 0xffff;
+        }
+        
+        if(def->healthPropertiesChanged != 0)
+        {
+            unsigned char* buff = ForgPackHeader(buff_, Type_Health);
+            
+            u16 sendingFlags = def->healthPropertiesChanged;
+            Pack("H", sendingFlags);
+            def->healthPropertiesChanged = 0;
+            
+            PackFlag(HealthFlag_Physical, "L", alive->physicalHealth);
+            PackFlag(HealthFlag_MaxPhysical, "L", alive->maxPhysicalHealth);
+            PackFlag(HealthFlag_Mental, "L", alive->mentalHealth);
+            PackFlag(HealthFlag_MaxMental, "L", alive->maxMentalHealth);
+            
+            result = ForgEndPacket_(buff_, buff);
+        }
+    }
+    
+    return result;
+}
+
+internal u16 PrepareMappingsUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
+{
+    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+    ContainerComponent* container = GetComponent(server, ID, ContainerComponent);
+    
     unsigned char* buff = ForgPackHeader(buff_, Type_Mappings);
     unsigned char* countGoesHere = buff;
     Pack("H", 0);
@@ -373,16 +402,6 @@ internal u16 PrepareMappingsUpdate(ServerState* server, EquipmentComponent* equi
     
     return result;
 }
-
-
-internal void QueueSeason(PlayerComponent* player, u16 season)
-{
-    StartPacket(player, Season);
-    Pack("H", season);
-    QueueOrderedPacket(player);
-}
-
-
 
 
 
@@ -477,65 +496,80 @@ internal void QueueDebugEvent(PlayerComponent* player, DebugEvent* event)
 internal void SendEntityUpdate(ServerState* server, EntityID ID, b32 staticUpdate, b32 completeUpdate)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    if(!def->updateSent || staticUpdate)
+    if(IsSet(GetU32(def->flags), EntityFlag_deleted))
     {
-        def->updateSent = true;
-        if(completeUpdate)
+        SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
+        for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
         {
-            def->basicPropertiesChanged |= EntityBasics_Definition; 
-            def->basicPropertiesChanged |= EntityBasics_Position;
-            
-            if(!staticUpdate)
+            PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
+            for(u32 messageIndex = 0; messageIndex < 5; ++messageIndex)
             {
-                def->basicPropertiesChanged |= EntityBasics_Action; 
-                def->basicPropertiesChanged |= EntityBasics_Status; 
+                QueueDeletedID(player, ID);
             }
         }
-        PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-        ActionComponent* act = GetComponent(server, ID, ActionComponent);
-        
-        unsigned char basicsBuffer_[KiloBytes(2)];
-        u16 basicsSize = PrepareBasicsUpdate(server, def, physic, act, basicsBuffer_);
-        
-        EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-        UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-        ContainerComponent* container = GetComponent(server, ID, ContainerComponent);
-        
-        unsigned char mappingsBuffer_[KiloBytes(2)];
-        u16 mappingsSize = PrepareMappingsUpdate(server, equipment, equipped, container, mappingsBuffer_);
-        
-        if(basicsSize > 0 || mappingsSize > 0)
+    }
+    else
+    {
+        if(!def->updateSent || staticUpdate)
         {
-            SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
-            for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
+            def->updateSent = true;
+            
+            unsigned char basicsBuffer_[KiloBytes(2)];
+            u16 basicsSize = PrepareBasicsUpdate(server, ID, completeUpdate, staticUpdate, basicsBuffer_);
+            
+            unsigned char healthBuffer_[KiloBytes(2)];
+            u16 healthSize = PrepareHealthUpdate(server, ID, completeUpdate, staticUpdate, healthBuffer_);
+            
+            unsigned char mappingsBuffer_[KiloBytes(2)];
+            u16 mappingsSize = PrepareMappingsUpdate(server, ID, completeUpdate, staticUpdate, mappingsBuffer_);
+            
+            if(basicsSize > 0 || mappingsSize > 0 || healthSize > 0)
             {
-                PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
-                //if(physic->P.chunkZ == playerPhysic->P.chunkZ)
-                if(basicsSize > 0)
+                SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
+                for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
                 {
-                    QueueEntityHeader(player, ID);
-                    u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, basicsSize, ID);
-                    if(writeHere)
+                    PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
+                    //if(physic->P.chunkZ == playerPhysic->P.chunkZ)
+                    if(basicsSize > 0)
                     {
-                        Copy(basicsSize, writeHere, basicsBuffer_);
+                        QueueEntityHeader(player, ID);
+                        u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, basicsSize, ID);
+                        if(writeHere)
+                        {
+                            Copy(basicsSize, writeHere, basicsBuffer_);
+                        }
+                        else
+                        {
+                            InvalidCodePath;
+                        }
                     }
-                    else
+                    
+                    if(healthSize > 0)
                     {
-                        InvalidCodePath;
+                        QueueEntityHeader(player, ID);
+                        u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, healthSize, ID);
+                        if(writeHere)
+                        {
+                            Copy(healthSize, writeHere, healthBuffer_);
+                        }
+                        else
+                        {
+                            InvalidCodePath;
+                        }
                     }
-                }
-                
-                if(mappingsSize > 0)
-                {
-                    QueueEntityHeaderReliably(player, ID);
-                    u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_Ordered, ForgNetworkFlag_Ordered, mappingsSize, ID);
-                    if(writeHere)
+                    
+                    if(mappingsSize > 0)
                     {
-                        Copy(mappingsSize, writeHere, mappingsBuffer_);
-                    }
-                    else
-                    {
-                        InvalidCodePath;
+                        QueueEntityHeaderReliably(player, ID);
+                        u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_Ordered, ForgNetworkFlag_Ordered, mappingsSize, ID);
+                        if(writeHere)
+                        {
+                            Copy(mappingsSize, writeHere, mappingsBuffer_);
+                        }
+                        else
+                        {
+                            InvalidCodePath;
+                        }
                     }
                 }
             }
@@ -546,4 +580,11 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, b32 staticUpdat
 internal void SendStaticUpdate(ServerState* server, EntityID ID)
 {
     SendEntityUpdate(server, ID, true, true);
+}
+
+internal void QueueSeason(PlayerComponent* player, u16 season)
+{
+    StartPacket(player, Season);
+    Pack("H", season);
+    QueueOrderedPacket(player);
 }

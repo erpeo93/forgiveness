@@ -434,6 +434,7 @@ internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKSkeleton* s
         
         Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
         dest->originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset + parentBone->finalZBias);
+        dest->height = sprite->height;
         dest->zBias = 0;
         
         dest->angle = parentBone->finalAngle + ass->angle;
@@ -635,7 +636,47 @@ internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
     }
 }
 
-internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, PAKSkeleton* skeletonInfo, AssetID animationID, AnimationComponent* component, AnimationParams* params, b32 render = true)
+internal void TriggerAnimationSoundEvents(GameModeWorld* worldMode, Assets* assets, PAKAnimation* animation, AssetID animationID, EntityID ID, u32 oldTime, u32 newTime, b32 backward)
+{
+    for(u32 triggerIndex = 0; triggerIndex < animation->triggerCount; ++triggerIndex)
+    {
+        PAKAnimationSoundTrigger* trigger = GetAnimationSoundTrigger(assets, animationID, triggerIndex);
+        
+        if(IsValid(trigger->property))
+        {
+            if(oldTime > newTime)
+            {
+                if(backward)
+                {
+                    if(trigger->timeline <= oldTime && trigger->timeline > newTime)
+                    {
+                        SoundEventTrigger(worldMode, ID, trigger->property);
+                    }
+                }
+                else
+                {
+                    if(trigger->timeline < oldTime || trigger->timeline >= newTime)
+                    {
+                        SoundEventTrigger(worldMode, ID, trigger->property);
+                    }
+                }
+            }
+            else
+            {
+                if(trigger->timeline >= oldTime && trigger->timeline < newTime)
+                {
+                    SoundEventTrigger(worldMode, ID, trigger->property);
+                }
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+
+internal Rect2 RenderAnimationAndTriggerSounds_(GameModeWorld* worldMode, RenderGroup* group, PAKSkeleton* skeletonInfo, AssetID animationID, AnimationComponent* component, AnimationParams* params, b32 render = true)
 {
     TIMED_FUNCTION();
     
@@ -668,7 +709,12 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, PA
         u32 animTimeMod = 0;
         if(render)
         {
+            u32 oldTimeMod = RoundReal32ToU32(component->oldTime * 1000.0f) % animationInfo->durationMS;
             animTimeMod = AdvanceAnimationState(animationInfo, component, params->elapsedTime, params->fakeAnimation);
+            if(IsValidID(params->ID))
+            {
+                TriggerAnimationSoundEvents(worldMode, group->assets, animationInfo, animationID, params->ID, oldTimeMod, animTimeMod, component->backward);
+            }
         }
         
         u32 pieceCount;
@@ -725,7 +771,7 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, PA
                         transform.additionalZBias = piece->zBias;
                         transform.dissolvePercentages = params->dissolveCoeff * V4(1, 1, 1, 1);
                         transform.tint = Hadamart(piece->color, params->tint);
-                        r32 height = bitmapInfo->nativeHeight * params->scale;
+                        r32 height = piece->height * params->scale;
                         
                         AssetID renderID = BID;
                         b32 replacementFound = false;
@@ -748,7 +794,9 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, PA
                                         
                                         renderID = subst;
                                         PAKBitmap* substitutionImage = GetBitmapInfo(group->assets, renderID);
-                                        height = substitutionImage->nativeHeight * rep->scale * params->scale;
+                                        
+                                        r32 nativeHeight = rep->inheritHeight ? piece->height : rep->height;
+                                        height = nativeHeight * rep->scale * params->scale;
                                         
                                         repTransform.cameraOffset.xy += rep->offset.x * piece->mainAxis;
                                         repTransform.cameraOffset.xy += rep->offset.y * Perp(piece->mainAxis);
@@ -807,7 +855,7 @@ internal Rect2 RenderAnimation_(GameModeWorld* worldMode, RenderGroup* group, PA
     return result;
 }
 
-internal Rect2 RenderAnimation(GameModeWorld* worldMode, RenderGroup* group, AnimationComponent* component, AnimationParams* params, b32 render = true)
+internal Rect2 RenderAnimationAndTriggerSounds(GameModeWorld* worldMode, RenderGroup* group, AnimationComponent* component, AnimationParams* params, b32 render = true)
 {
     Rect2 result = InvertedInfinityRect2();
     RandomSequence seq = {};
@@ -824,7 +872,7 @@ internal Rect2 RenderAnimation(GameModeWorld* worldMode, RenderGroup* group, Ani
     
     if(IsValid(animationID))
     {
-        result = RenderAnimation_(worldMode, group, skeletonInfo, animationID, component, params, render);
+        result = RenderAnimationAndTriggerSounds_(worldMode, group, skeletonInfo, animationID, component, params, render);
     }
     
     return result;
@@ -832,12 +880,12 @@ internal Rect2 RenderAnimation(GameModeWorld* worldMode, RenderGroup* group, Ani
 
 internal Rect2 GetAnimationDim(GameModeWorld* worldMode, RenderGroup* group, AnimationComponent* component, AnimationParams* params)
 {
-    Rect2 result = RenderAnimation(worldMode, group, component, params, false);
+    Rect2 result = RenderAnimationAndTriggerSounds(worldMode, group, component, params, false);
     return result;
 }
 
 internal Rect2 GetAnimationDim(GameModeWorld* worldMode, RenderGroup* group, AssetID ID, AnimationComponent* component, AnimationParams* params)
 {
-    Rect2 result = RenderAnimation_(worldMode, group, 0, ID, component, params, false);
+    Rect2 result = RenderAnimationAndTriggerSounds_(worldMode, group, 0, ID, component, params, false);
     return result;
 }

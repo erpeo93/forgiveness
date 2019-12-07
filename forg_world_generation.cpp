@@ -137,12 +137,6 @@ inline GameProperty SelectFromBiomePyramid(BiomePyramid* pyramid, r32 precipitat
 global_variable r32 minHeight = -100.0f;
 global_variable r32 maxHeight = 1000.0f;
 
-internal WorldTile NullTile(world_generator* generator)
-{
-    WorldTile result = {};
-    return result;
-}
-
 internal r32 GetTileElevation(world_generator* generator, r32 tileNormX, r32 tileNormY, r32 tileNormZ, RandomSequence* seq, u32 seed)
 {
     r32 landscape = Evaluate(tileNormX, tileNormY, generator->landscapeNoise, seed);
@@ -186,6 +180,7 @@ internal ZSlice* GetZSlice(world_generator* generator, r32 tileNormZ)
     return result;
 }
 
+internal SoundMapping InitSoundMapping(SoundMappingDefinition* mapping, RandomSequence* seq);
 inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 tileNormX, r32 tileNormY, r32 tileNormZ, RandomSequence* seq, u32 seed)
 {
     WorldTile result = {};
@@ -222,6 +217,7 @@ inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 ti
         if(elevation < 0)
         {
             result.underSeaLevelFluid = definition->underSeaLevelFluid;
+			//result.underSeaLevelFluid = GameProp(fluid, ocean);
         }
         
 #ifndef FORG_SERVER
@@ -233,9 +229,38 @@ inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 ti
             patch->colorTime = RandomRangeFloat(seq, 0, 10);
             patch->scaleTime = RandomRangeFloat(seq, 0, 10);
         }
+        
+        
+        for(ArrayCounter soundIndex = 0; soundIndex < definition->soundCount; ++soundIndex)
+        {
+            if(result.soundCount < ArrayCount(result.sounds))
+            {
+                result.sounds[result.soundCount++] = InitSoundMapping(definition->sounds + soundIndex, seq);
+            }
+        }
+        
+        if(elevation < 0)
+        {
+            for(ArrayCounter soundIndex = 0; soundIndex < definition->underwaterSoundCount; ++soundIndex)
+            {
+                if(result.soundCount < ArrayCount(result.sounds))
+                {
+                    result.sounds[result.soundCount++] = InitSoundMapping(definition->underwaterSounds + soundIndex, seq);
+                }
+            }
+            
+        }
 #endif
     }
     
+    return result;
+}
+
+
+internal WorldTile NullTile(Assets* assets, world_generator* generator)
+{
+    RandomSequence seq = {};
+    WorldTile result = GenerateTile(assets, generator, 0, 0, 0, &seq, 0);
     return result;
 }
 
@@ -254,6 +279,7 @@ internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* gene
     chunk->worldX = chunkX;
     chunk->worldY = chunkY;
     chunk->worldZ = chunkZ;
+    chunk->worldSeed = seed;
 #endif
     u32 maxTile = (WORLD_CHUNK_SPAN  + 2 * WORLD_CHUNK_APRON)* CHUNK_DIM;
     
@@ -268,7 +294,7 @@ internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* gene
         chunkNormZ = (r32) chunkZ / (r32) (generator->maxDeepness - 1);
     }
     
-    WorldTile nullTile = NullTile(generator);
+    WorldTile nullTile = NullTile(assets, generator);
     if(chunk->tiles)
     {
         for(u8 tileY = 0; tileY < CHUNK_DIM && !buildTiles; ++tileY)
@@ -305,7 +331,9 @@ internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* gene
         }
     }
     
+#ifdef FORG_SERVER
     if(buildTiles)
+#endif
     {
         if(!chunk->tiles)
         {
@@ -494,19 +522,29 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
     u8 archetype = SafeTruncateToU8(ConvertEnumerator(EntityArchetype, definition->archetype));
     AcquireArchetype(server, archetype, (&ID));
     InitEntity(server, ID, &definition->common, &params, 0); 
+    
     if(newEntity->params.playerIndex > 0)
     {
-        Assert(HasComponent(ID, BrainComponent));
-        BrainComponent* brain = GetComponent(server, ID, BrainComponent);
-        brain->type = Brain_Player;
-        
         Assert(HasComponent(ID, PlayerComponent));
         PlayerComponent* player = (PlayerComponent*) Get_(&server->PlayerComponent_, newEntity->params.playerIndex);
-        player->ID = ID;
         player->justEnteredWorld = true;
+        player->ID = ID;
         SetComponent(server, ID, PlayerComponent, player);
-        ResetQueue(player->queues + GuaranteedDelivery_None);
-        QueueGameAccessConfirm(player, server->worldSeed, ID, false);
+        
+        if(HasComponent(ID, BrainComponent))
+        {
+            BrainComponent* brain = GetComponent(server, ID, BrainComponent);
+            if(newEntity->params.ghost)
+            {
+                brain->type = Brain_invalid;
+            }
+            else
+            {
+                brain->type = Brain_Player;
+                ResetQueue(player->queues + GuaranteedDelivery_None);
+                QueueGameAccessConfirm(player, server->worldSeed, ID, false);
+            }
+        }
     }
     
     if(newEntity->params.spawnFollowingEntity)
@@ -578,6 +616,9 @@ internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
 	{
         EntityID ID = deleted->ID;
 		DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+        
+        
+#if 0        
 		Assert(EntityHasFlags(def, EntityFlag_deleted));
         SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
         for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
@@ -588,6 +629,7 @@ internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
                 QueueDeletedID(player, ID);
             }
         }
+#endif
         
         if(HasComponent(ID, StaticComponent))
         {
@@ -607,7 +649,7 @@ internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
                     case DeleteEntity_None:
                     {
                         player->ID = {};
-                        AddEntityParams params = DefaultAddEntityParams();
+                        AddEntityParams params = GhostEntityParams();
                         params.playerIndex = GetIndex_(&server->PlayerComponent_, player);
                         QueueGameOverMessage(player);
                         SpawnPlayerGhost(server, def->P, params);
@@ -621,7 +663,10 @@ internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
                     case DeleteEntity_Won:
                     {
                         player->ID = {};
+                        AddEntityParams params = GhostEntityParams();
+                        params.playerIndex = GetIndex_(&server->PlayerComponent_, player);
                         QueueGameWonMessage(player);
+                        SpawnPlayerGhost(server, def->P, params);
                     } break;
                 }
             }
@@ -642,7 +687,7 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
     if(IsValid(ID))
     {
         world_generator* generator = GetData(server->assets, world_generator, ID);
-        server->nullTile = NullTile(generator);
+        server->nullTile = NullTile(server->assets, generator);
         
         server->maxDeepness = (i16) generator->maxDeepness;
         

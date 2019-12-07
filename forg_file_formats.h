@@ -40,15 +40,13 @@ struct PAKGroupName
     char name[32];
 };
 
-#define MAX_IMAGE_DIM 512
-#define PAK_BITMAP_VERSION 1015
+#define PAK_BITMAP_VERSION 1017
 struct PAKBitmap
 {
     u64 nameHash;
     u32 dimension[2];
     r32 align[2];
     r32 alphaThreesold;
-    r32 nativeHeight;
     u32 attachmentPointCount;
     u32 groupNameCount;
     // NOTE( Leonardo ): data is:
@@ -96,7 +94,13 @@ struct PAKSound
     */
 };
 
-#define PAK_ANIMATION_VERSION 10
+struct PAKAnimationSoundTrigger
+{
+    u32 timeline;
+    PAKProperty property;
+};
+
+#define PAK_ANIMATION_VERSION 14
 struct PAKAnimation
 {
     u32 spriteCount;
@@ -110,6 +114,7 @@ struct PAKAnimation
     u16 loopingBaselineMS;
     b32 pingPongLooping;
     b32 singleCycle;
+    u32 triggerCount;
     // NOTE( Leonardo ): data is:
     /*
     SpriteInfo sprites[spriteCount]

@@ -20,6 +20,8 @@
 #include "forg_game_effect.h"
 #include "forg_ecs.h"
 #include "forg_entity_layout.h"
+typedef u32 U32;
+#include "forg_entity.h"
 #include "forg_meta.h"
 #include "forg_render_tier.h"
 #include "forg_render.h"
@@ -86,6 +88,8 @@ internal r32 GetDeepness(Rect3 bounds)
 
 struct PlantComponent
 {
+    ImageReference trunk;
+    ImageReference branch;
     ImageReference leaf;
     r32 windInfluence;
 };
@@ -163,6 +167,8 @@ enum PlayingGameState
 struct GameModeWorld
 {
     PlayingGameState state;
+    r32 stateTime;
+    
     u16 season;
     
     r32 defaultZoomCoeff;
@@ -182,7 +188,6 @@ struct GameModeWorld
     MemoryPool* persistentPool;
     MemoryPool* temporaryPool;
     
-    WorldTile nullTile;
     WorldChunk* chunks[1024];
     WorldChunk* firstFreeChunk;
     
@@ -234,13 +239,11 @@ struct GameModeWorld
     GameUIContext gameUI;
 };
 
-enum GameMode
+inline void SetState(GameModeWorld* worldMode, PlayingGameState state)
 {
-    GameMode_Launcher,
-    GameMode_TitleScreen,
-    GameMode_Cutscene,
-    GameMode_Playing,
-};
+    worldMode->state = state;
+    worldMode->stateTime = 0;
+}
 
 struct GameState
 {
@@ -252,11 +255,10 @@ struct GameState
     MemoryPool visualEffectsPool;
     MemoryPool assetsPool;
     
-    GameMode mode;
     union
     {
-        GameModeScene* cutscene;
-        GameModeTitleScreen* titleScreen;
+        //GameModeScene* cutscene;
+        //GameModeTitleScreen* titleScreen;
         GameModeWorld* world;
     };
     
@@ -276,4 +278,4 @@ struct GameState
 };
 
 internal void PlayGame(GameState* gameState, PlatformInput* input);
-internal void SetGameMode(GameState* gameState, GameMode mode);
+//internal void SetGameMode(GameState* gameState, GameMode mode);

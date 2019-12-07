@@ -105,7 +105,7 @@ internal GameCommand ComputeFinalCommand(GameUIContext* UI, GameModeWorld* world
             }
             
             r32 targetTime;
-            if(!ActionIsPossible(interaction, action, distanceSq, &targetTime, usingValid, usingRef))
+            if(!ActionIsPossibleAtDistance(interaction, action, distanceSq, &targetTime, usingValid, usingRef))
             {
                 GameCommand command = {};
                 command.action = move;
@@ -531,27 +531,27 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group)
         
         case PlayingGame_Over:
         {
-            PushRect(group, FlatTransform(10.0f, V4(0, 0, 0, 0.5f)), RectCenterDim(V2(0, 0), group->screenDim));
-            
+            r32 alpha = Lerp(0, Clamp01MapToRange(0, worldMode->stateTime, 1.0f), 0.7f);
+            PushRect(group, FlatTransform(0, V4(0, 0, 0, alpha)), V3(0, 0, -1), group->screenDim);
             FontId fontID = QueryFonts(group->assets, "game", 0, 0);
             if(IsValid(fontID))
             {
                 Vec3 tooltipP = V3(0, 0, 0);
                 Vec4 color = V4(1, 0, 0, 1);
-                PushText(group, fontID, "game over! press a button to restart", tooltipP, 0.7f, color, false, true, 10.0f);
+                PushText(group, fontID, "game over! press a button to restart", tooltipP, 0.7f, color, false, true, 0);
             }
         } break;
         
         case PlayingGame_Won:
         {
-            PushRect(group, FlatTransform(10.0f, V4(0, 0, 0, 0.5f)), RectCenterDim(V2(0, 0), group->screenDim));
-            
+            r32 alpha = Lerp(0, Clamp01MapToRange(0, worldMode->stateTime, 1.0f), 0.7f);
+            PushRect(group, FlatTransform(0, V4(0, 0, 0, alpha)), V3(0, 0, -1), group->screenDim);
             FontId fontID = QueryFonts(group->assets, "game", 0, 0);
             if(IsValid(fontID))
             {
                 Vec3 tooltipP = V3(0, 0, 0);
                 Vec4 color = V4(1, 0, 0, 1);
-                PushText(group, fontID, "you win! press a button to restart", tooltipP, 0.7f, color, false, true, 10.0f);
+                PushText(group, fontID, "you win! press a button to restart", tooltipP, 0.7f, color, false, true, 0);
             }
         } break;
     }
@@ -912,14 +912,20 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                     {
                         CommandParameters* parameters = &UI->commandParameters;
                         BaseComponent* targetBase = GetComponent(worldMode, lockedIDClient, BaseComponent);
-                        Vec3 toTarget = SubtractOnSameZChunk(targetBase->universeP, player->universeP);
-                        parameters->acceleration += Normalize(toTarget);
-                        
-                        InteractionComponent* lockedInteraction = GetComponent(worldMode, lockedIDClient, InteractionComponent);
-                        
-                        lockedInteraction->isOnFocus = true;
-                        
-                        if(Released(&input->mouseLeft))
+                        if(targetBase)
+                        {
+                            Vec3 toTarget = SubtractOnSameZChunk(targetBase->universeP, player->universeP);
+                            parameters->acceleration += Normalize(toTarget);
+                            
+                            InteractionComponent* lockedInteraction = GetComponent(worldMode, lockedIDClient, InteractionComponent);
+                            lockedInteraction->isOnFocus = true;
+                            
+                            if(Released(&input->mouseLeft))
+                            {
+                                UI->lockedInteractionType = LockedInteraction_None;
+                            }
+                        }
+                        else
                         {
                             UI->lockedInteractionType = LockedInteraction_None;
                         }
@@ -1060,7 +1066,7 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                                         r32 distanceSq = LengthSq(SubtractOnSameZChunk(hotBase->universeP, player->universeP));
                                         
                                         r32 targetTime;
-                                        if(ActionIsPossible(interaction, drag, distanceSq, &targetTime))
+                                        if(ActionIsPossibleAtDistance(interaction, drag, distanceSq, &targetTime))
                                         {
                                             GameCommand command = {};
                                             command.action = drag;

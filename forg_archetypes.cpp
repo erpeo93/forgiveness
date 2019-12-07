@@ -51,11 +51,15 @@ INIT_COMPONENT_FUNCTION(InitDefaultComponent)
     def->basicPropertiesChanged |= EntityBasics_Definition; 
     def->basicPropertiesChanged |= EntityBasics_Position;
     
+    def->healthPropertiesChanged = 0xffff;
+    
     def->P = s->P;
-    def->flags = {};
+    def->flags = InitU32(basicPropertiesChanged, EntityBasics_Flags, 0);
     def->seed = s->seed;
     def->definitionID = common->definitionID;
-    def->status = U16Val(0);
+    def->status = InitU16(basicPropertiesChanged, EntityBasics_Status, 0);
+    
+    
 }
 
 INIT_COMPONENT_FUNCTION(InitPhysicComponent)
@@ -72,7 +76,7 @@ INIT_COMPONENT_FUNCTION(InitPhysicComponent)
 INIT_COMPONENT_FUNCTION(InitActionComponent)
 {
     ActionComponent* action = (ActionComponent*) componentPtr;
-    action->action = U16Val(idle);
+    action->action = InitU16(basicPropertiesChanged, EntityBasics_Action, 0);
     action->time = 0;
 }
 
@@ -116,7 +120,6 @@ INIT_COMPONENT_FUNCTION(InitCollisionEffectsComponent)
 
 INIT_COMPONENT_FUNCTION(InitPlayerComponent)
 {
-    
 }
 
 INIT_COMPONENT_FUNCTION(InitEquipmentComponent)
@@ -185,9 +188,9 @@ INIT_COMPONENT_FUNCTION(InitBrainComponent)
 
 INIT_COMPONENT_FUNCTION(InitTempEntityComponent)
 {
-	TempEntityComponent* temp = (TempEntityComponent*) componentPtr;
-	temp->time = 0.0f;
-	temp->targetTime = 1.0f;
+    TempEntityComponent* temp = (TempEntityComponent*) componentPtr;
+    temp->time = 0.0f;
+    temp->targetTime = 1.0f;
 }
 
 INIT_COMPONENT_FUNCTION(InitStaticComponent)
@@ -196,6 +199,19 @@ INIT_COMPONENT_FUNCTION(InitStaticComponent)
     StaticComponent* staticComp = (StaticComponent*) componentPtr;
     AddToPartitionResult addResult = AddToSpatialPartition(&server->gamePool, &server->staticPartition, s->P, {}, ID);
     staticComp->block = addResult.block;
+}
+
+INIT_COMPONENT_FUNCTION(InitAliveComponent)
+{
+    AliveComponent* alive = (AliveComponent*) componentPtr;
+    
+    u32 maxPhysical = 100;
+    u32 maxMental = 100;
+    alive->maxPhysicalHealth = InitU32(healthPropertiesChanged, HealthFlag_MaxPhysical, maxPhysical);
+    alive->physicalHealth = InitU32(healthPropertiesChanged, HealthFlag_Physical, maxPhysical);
+    
+    alive->maxMentalHealth = InitU32(healthPropertiesChanged, HealthFlag_MaxMental, maxMental);
+    alive->mentalHealth = InitU32(healthPropertiesChanged, HealthFlag_Mental, maxMental);
 }
 
 #else
@@ -214,7 +230,7 @@ INIT_COMPONENT_FUNCTION(InitBaseComponent)
     base->serverID = c->ID;
     base->draggingID = {};
     base->timeSinceLastUpdate = 0;
-	base->totalLifeTime = 0;
+    base->totalLifeTime = 0;
     base->deletedTime = 0;
     
     base->fadeInTime = c->fadeInTime;
@@ -267,6 +283,7 @@ INIT_COMPONENT_FUNCTION(InitAnimationComponent)
     animation->flipOnYAxis = 0;
     animation->scale = 0;
     animation->speed = 1.0f;
+    animation->defaultScaleComputed = false;
 }
 
 INIT_COMPONENT_FUNCTION(InitRockComponent)
@@ -292,6 +309,8 @@ INIT_COMPONENT_FUNCTION(InitPlantComponent)
     GameModeWorld* worldMode = (GameModeWorld*) state;
     Assets* assets = worldMode->gameState->assets;
     PlantComponent* dest = (PlantComponent*) componentPtr;
+    InitImageReference(assets, &dest, &c, trunk);
+    InitImageReference(assets, &dest, &c, branch);
     InitImageReference(assets, &dest, &c, leaf);
     dest->windInfluence = c->windInfluence;
 }
@@ -331,21 +350,27 @@ INIT_COMPONENT_FUNCTION(InitMagicQuadComponent)
     dest->lateral = width * magicLateralVector;
     dest->up = height * magicUpVector;
     dest->offset = {};
+    dest->alphaThreesold = 0;
+    dest->invUV = {};
     if(IsValid(dest->bitmapID))
     {
         PAKBitmap* bitmap = GetBitmapInfo(assets, dest->bitmapID);
         dest->offset = (bitmap->align[0] - 0.5f) * dest->lateral.xyz + (bitmap->align[1] - 0.5f) * dest->up.xyz;
+        dest->alphaThreesold = bitmap->alphaThreesold;
+        dest->invUV = GetInvUV(bitmap->dimension[0], bitmap->dimension[1]);
     }
     
     dest->lateral *= 0.5f;
     dest->up *= 0.5f;
 }
 
-internal void InitFrameByFrameComponent_(FrameByFrameAnimationComponent* dest, r32 speed, u64 subtypeHash)
+internal void InitFrameByFrameComponent_(FrameByFrameAnimationComponent* dest, r32 speed, u64 subtypeHash, b32 overridesPivot, Vec2 pivot)
 {
     dest->runningTime = 0;
     dest->speed = speed;
     dest->typeHash = subtypeHash;
+    dest->overridesPivot = overridesPivot;
+    dest->pivot = pivot;
 }
 
 INIT_COMPONENT_FUNCTION(InitFrameByFrameAnimationComponent)
@@ -354,7 +379,7 @@ INIT_COMPONENT_FUNCTION(InitFrameByFrameAnimationComponent)
     Assets* assets = worldMode->gameState->assets;
     FrameByFrameAnimationComponent* dest = (FrameByFrameAnimationComponent*) componentPtr;
     
-    InitFrameByFrameComponent_(dest, c->frameByFrameSpeed, c->frameByFrameImageType.subtypeHash);
+    InitFrameByFrameComponent_(dest, c->frameByFrameSpeed, c->frameByFrameImageType.subtypeHash, c->frameByFrameOverridesPivot, c->frameByFramePivot);
 }
 
 INIT_COMPONENT_FUNCTION(InitMultipartAnimationComponent)
@@ -384,7 +409,7 @@ INIT_COMPONENT_FUNCTION(InitMultipartAnimationComponent)
             FrameByFrameAnimationComponent* destFrame = dest->frameByFrameParts + dest->frameByFrameCount++;
             
             MultipartFrameByFramePiece* source = c->multipartFrameByFramePieces + frameByFrameIndex;
-            InitFrameByFrameComponent_(destFrame, source->speed, source->image.subtypeHash);
+            InitFrameByFrameComponent_(destFrame, source->speed, source->image.subtypeHash, 0, {});
         }
     }
 }
@@ -492,6 +517,14 @@ INIT_COMPONENT_FUNCTION(InitAnimationEffectComponent)
     animation->effectCount = 0;
 }
 
+INIT_COMPONENT_FUNCTION(InitSoundEffectComponent)
+{
+    SoundEffectComponent* sounds = (SoundEffectComponent*) componentPtr;
+    sounds->soundCount = 0;
+}
+
+
+
 INIT_COMPONENT_FUNCTION(InitBoltComponent)
 {
     GameModeWorld* worldMode = (GameModeWorld*) state;
@@ -503,6 +536,18 @@ INIT_COMPONENT_FUNCTION(InitBoltComponent)
     bolt->animationSeq = Seed(bolt->seed);
     bolt->highOffset = V3(0, 0, 4);
 }
+
+INIT_COMPONENT_FUNCTION(InitAliveComponent)
+{
+    AliveComponent* alive = (AliveComponent*) componentPtr;
+    
+    alive->physicalHealth = 0;
+    alive->maxPhysicalHealth = 0;
+    
+    alive->mentalHealth = 0;
+    alive->maxMentalHealth = 0;
+}
+
 #endif
 INIT_COMPONENT_FUNCTION(InitInteractionComponent)
 {

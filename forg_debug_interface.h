@@ -2,10 +2,9 @@
 #define GAME_FRAME_END(name) void name()
 typedef GAME_FRAME_END(game_frame_end);
 
-#if FORGIVENESS_INTERNAL
 #define SERVER_FRAME_END(name) void name(PlatformServerMemory* memory)
 typedef SERVER_FRAME_END(server_frame_end);
-#endif
+
 #if FORGIVENESS_INTERNAL
 enum DebugType
 {

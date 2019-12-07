@@ -49,7 +49,6 @@ struct ObjectTransform
     r32 modulationPercentage;
     Vec4 dissolvePercentages;
     Vec4 tint;
-    b32 transparent;
     
     r32 lightInfluence;
     r32 lightYInfluence;

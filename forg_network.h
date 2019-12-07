@@ -3,7 +3,7 @@
 #define LOGIN_PORT 1313
 #define MTU KiloBytes(1) + 32
 #define CHUNK_SIZE KiloBytes(1)
-#define STATIC_UPDATE_TIME 2.0f
+#define STATIC_UPDATE_TIME 4.0f
 
 #pragma pack(push, 1)
 enum ForgNetworkFlags
@@ -165,9 +165,10 @@ enum Packet_Type
     
     Type_entityHeader,
     Type_entityBasics,
+    Type_Health,
     Type_deletedEntity,
 	Type_Mappings,
-    
+	
     Type_Season,
     
     
@@ -208,6 +209,14 @@ enum EntityBasicsFlags
 	EntityBasics_Action = (1 << 3),
 	EntityBasics_Status = (1 << 4),
 	EntityBasics_Flags = (1 << 5),
+};
+
+enum HealthFlags
+{
+    HealthFlag_Physical = (1 << 0),
+    HealthFlag_MaxPhysical = (1 << 1),
+    HealthFlag_Mental = (1 << 2),
+    HealthFlag_MaxMental = (1 << 3),
 };
 
 struct LoginResponse

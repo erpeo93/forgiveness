@@ -34,8 +34,9 @@ internal void RenderShadow(GameModeWorld* worldMode, RenderGroup* group, Vec3 P,
         Bitmap* shadow = GetBitmap(group->assets, shadowID).bitmap;
         if(shadow)
         {
-            r32 nativeDeepness = shadow->nativeHeight;
-            r32 nativeWidth = shadow->nativeHeight * shadow->widthOverHeight;
+            r32 height = shadowComponent->height;
+            r32 nativeDeepness = height;
+            r32 nativeWidth = height * shadow->widthOverHeight;
             
             r32 yScale = deepness / nativeDeepness;
             r32 xScale = width / nativeWidth;
@@ -104,7 +105,7 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.modulationPercentage = animationParams.modulationPercentage; 
         params.replacementCount = definition->client.replacementCount;
         params.replacements = definition->client.animationReplacements;
-        
+        params.ID = ID;
         
         GameProperty action = SearchForProperty(base->properties, base->propertyCount, Property_action);
         if(FinishedSingleCycleAnimation(animation))
@@ -114,15 +115,24 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         
         AddOptionalGamePropertyRaw(&animation->skeletonProperties, action);
         
-        if(action.value == idle || animation->scale == 0)
+        if(!animation->defaultScaleComputed || action.value == idle)
         {
             Rect2 animationDefaultDim = GetAnimationDim(worldMode, group, animation, &params);
-            r32 defaultHeight = GetDim(animationDefaultDim).y;
-            animation->scale = height / defaultHeight;
+            if(HasArea(animationDefaultDim))
+            {
+                r32 defaultHeight = GetDim(animationDefaultDim).y;
+                animation->scale = height / defaultHeight;
+            }
+            
+            if(action.value == idle)
+            {
+                animation->defaultScaleComputed = true;
+            }
+            
         }
         
         params.scale = animation->scale;
-        RenderAnimation(worldMode, group, animation, &params);
+        RenderAnimationAndTriggerSounds(worldMode, group, animation, &params);
     }
 }
 
@@ -164,6 +174,9 @@ RENDERING_ECS_JOB_CLIENT(RenderShadow)
 
 RENDERING_ECS_JOB_CLIENT(RenderPlants)
 {
+    u64 branchHash = StringHash("branch");
+    u64 leafHash = StringHash("leaf");
+    
     EntityAnimationParams params = GetEntityAnimationParams(worldMode, ID);
     elapsedTime *= params.speed;
     
@@ -178,57 +191,112 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
         PlantComponent* plant = GetComponent(worldMode, ID, PlantComponent);
         
         RandomSequence seq = Seed(base->seed);
-        BitmapId BID = GetImageFromReference(group->assets, &image->entity, &seq);
-        if(IsValid(BID))
+        BitmapId trunkID = GetImageFromReference(group->assets, &plant->trunk, &seq);
+        if(IsValid(trunkID))
         {  
             ObjectTransform transform = UprightTransform();
             transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1);
             transform.modulationPercentage = params.modulationPercentage;
             transform.tint = params.tint;
             
-            BitmapDim bitmapData = PushBitmap(group, transform, BID, P, height, lights);
+            BitmapDim bitmapData = PushBitmap(group, transform, trunkID, P, height, lights);
             
-            Bitmap* bitmap = GetBitmap(group->assets, BID).bitmap;
-            PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, BID);
+            Bitmap* bitmap = GetBitmap(group->assets, trunkID).bitmap;
+            PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, trunkID);
             if(bitmap)
             {
-                u64 leafHash = StringHash("leaf");
                 BitmapId leafID = GetImageFromReference(group->assets, &plant->leaf, &seq);
-				if(IsValid(leafID))
-				{
-					Bitmap* leafBitmap = GetBitmap(group->assets, leafID).bitmap;
-					if(leafBitmap)
-					{
-                        PAKBitmap* leafInfo = GetBitmapInfo(group->assets, leafID);
-                        Vec2 leafPivot = V2(leafInfo->align[0], leafInfo->align[1]);
-						for(u32 attachmentPointIndex = 0;
-                            attachmentPointIndex < bitmapInfo->attachmentPointCount; ++attachmentPointIndex)
-						{
-							PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
-							if(StringHash(point->name) == leafHash)
-							{
-								Vec3 pointP = GetAlignP(bitmapData, point->alignment);
+                for(u32 branchPointIndex = 0;
+                    branchPointIndex < bitmapInfo->attachmentPointCount; ++branchPointIndex)
+                {
+                    PAKAttachmentPoint* branch = bitmap->attachmentPoints + branchPointIndex;
+                    if(StringHash(branch->name) == branchHash)
+                    {
+                        BitmapId branchID = GetImageFromReference(group->assets, &plant->branch, &seq);
+                        if(IsValid(branchID))
+                        {
+                            Bitmap* branchBitmap = GetBitmap(group->assets, branchID).bitmap;
+                            if(branchBitmap)
+                            {
+                                PAKBitmap* branchInfo = GetBitmapInfo(group->assets, branchID);
+                                Vec2 branchPivot = V2(branchInfo->align[0], branchInfo->align[1]);
+                                Vec2 branchInvUV = GetInvUV(branchBitmap->width, branchBitmap->height);
+								Vec3 branchP = GetAlignP(bitmapData, branch->alignment);
                                 
-								r32 angleRad = DegToRad(point->angle);
+								r32 angleRad = DegToRad(branch->angle);
 								Vec3 XAxis = V3(Cos(angleRad), Sin(angleRad), 0.0f);
 								Vec3 YAxis  = V3(Perp(XAxis.xy), 0.0f);
                                 
-								Vec4 lateral = 0.5f * point->scale.x * (XAxis.x * magicLateralVector + XAxis.y * magicUpVector);
-								Vec4 up = 0.5f * point->scale.y * (YAxis.x * magicLateralVector + YAxis.y * magicUpVector);
+								Vec4 bLateral =branch->scale.x * (XAxis.x * magicLateralVector + XAxis.y * magicUpVector);
+								Vec4 bUp = branch->scale.y * (YAxis.x * magicLateralVector + YAxis.y * magicUpVector);
                                 
-								Vec3 offset = (leafPivot.x - 0.5f) * lateral.xyz + (leafPivot.y - 0.5f) * up.xyz;
-								pointP -= offset;
+								Vec3 pivotOffset = branchPivot.x * bLateral.xyz + branchPivot.y * bUp.xyz; 
+								branchP -= pivotOffset;
+                                branchP += (0.5f * bLateral.xyz + 0.5f * bUp.xyz);
+                                
                                 u32 C = 0xffffffff;
-                                
-                                Vec4 windInfluences = V4(0, 0, plant->windInfluence, plant->windInfluence);
+                                Vec4 windInfluences = V4(0, 0, 0, 0);
                                 u8 windFrequency = 1;
-                                u8 seed = (u8) attachmentPointIndex;
-                                Vec4 dissolvePercentages = V4(0, 0, 0, 0);
+                                u8 seed = (u8) branchPointIndex;
+                                Vec4 dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1);
                                 r32 alphaThreesold = 0;
-                                b32 transparent = false;
+                                b32 flat = false;
                                 
-								PushMagicQuad(group, transparent, V4(pointP, 0), lateral, up, C, leafBitmap->textureHandle, lights, params.modulationPercentage, 0, 0, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, seed);
+                                PushMagicQuad(group, V4(branchP, 0), flat, 0.5f * bLateral, 0.5f * bUp, branchInvUV, C, branchBitmap->textureHandle, lights, params.modulationPercentage, 0, 0, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, seed);
+                                
+                                Vec3 branchMin = branchP - 0.5f * bLateral.xyz - 0.5f * bUp.xyz;
+                                
+                                if(IsValid(leafID))
+                                {
+                                    Bitmap* leafBitmap = GetBitmap(group->assets, leafID).bitmap;
+                                    if(leafBitmap)
+                                    {
+                                        PAKBitmap* leafInfo = GetBitmapInfo(group->assets, leafID);
+                                        Vec2 leafPivot = V2(leafInfo->align[0], leafInfo->align[1]);
+                                        Vec2 leafInvUV = GetInvUV(leafBitmap->width, leafBitmap->height);
+                                        for(u32 leafPointIndex = 0;
+                                            leafPointIndex < branchInfo->attachmentPointCount; ++leafPointIndex)
+                                        {
+                                            PAKAttachmentPoint* leaf = branchBitmap->attachmentPoints + leafPointIndex;
+                                            if(StringHash(leaf->name) == leafHash)
+                                            {
+                                                Vec3 leafP = branchMin + leaf->alignment.x * bLateral.xyz + leaf->alignment.y * bUp.xyz;
+                                                
+                                                angleRad = DegToRad(leaf->angle);
+                                                XAxis = V3(Cos(angleRad), Sin(angleRad), 0.0f);
+                                                YAxis  = V3(Perp(XAxis.xy), 0.0f);
+                                                
+                                                Vec4 lateral =leaf->scale.x * (XAxis.x * magicLateralVector + XAxis.y * magicUpVector);
+                                                Vec4 up =leaf->scale.y * (YAxis.x * magicLateralVector + YAxis.y * magicUpVector);
+                                                
+                                                
+                                                pivotOffset = leafPivot.x * lateral.xyz + leafPivot.y * up.xyz; 
+                                                leafP -= pivotOffset;
+                                                leafP += (0.5f * lateral.xyz + 0.5f * up.xyz);
+                                                
+                                                C = 0xffffffff;
+                                                
+                                                windInfluences = V4(0, 0, plant->windInfluence, plant->windInfluence);
+                                                windFrequency = 1;
+                                                seed = (u8) leafPointIndex;
+                                                dissolvePercentages = V4(0, 0, 0, 0);
+                                                alphaThreesold = 0;
+                                                flat = false;
+                                                
+                                                PushMagicQuad(group, V4(leafP, 0), flat, 0.5f * lateral, 0.5f * up, leafInvUV, C, leafBitmap->textureHandle, lights, params.modulationPercentage, 0, 0, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, seed);
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        LoadBitmap(group->assets, leafID);
+                                    }
+                                }
 							}
+                            else
+                            {
+                                LoadBitmap(group->assets, branchID);
+                            }
 						}
 					}
 				}
@@ -299,13 +367,12 @@ RENDERING_ECS_JOB_CLIENT(RenderGrass)
                 Vec4 windInfluences = V4(0, 0, grass->windInfluence, grass->windInfluence);
                 windInfluences = V4(0, 0, 0, 0);
                 Vec4 dissolvePercentages = V4(0, 0, 0, 0);
-                r32 alphaThreesold = 0.9f;
-                b32 transparent = false;
-                
+                r32 alphaThreesold = quad->alphaThreesold;
+                b32 flat = false;
 				for(u32 grassIndex = 0; grassIndex < grass->count; ++grassIndex)
 				{
 					Vec3 grassP = P + Hadamart(RandomBilV3(&seq), grass->maxOffset);
-					PushMagicQuad(group, transparent, V4(grassP, 0), quad->lateral, quad->up, quad->color, bitmap->textureHandle, lights, 0, 0, 0, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, (u8) grassIndex);
+					PushMagicQuad(group, V4(grassP, 0), flat, quad->lateral, quad->up, quad->invUV, quad->color, bitmap->textureHandle, lights, 0, 0, 0, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, (u8) grassIndex);
 				}
             }
             else
@@ -323,9 +390,15 @@ internal void RenderFrameByFrameAnimation(GameModeWorld* worldMode, RenderGroup*
     
     Vec3 P = GetRelativeP(worldMode, base);
     Lights lights = GetLights(worldMode, P);
-    animation->runningTime += elapsedTime * animation->speed;
     
+    r32 stepTime = elapsedTime * animation->speed;
+    animation->runningTime += stepTime;
     
+    for(u32 advanceIndex = 0; advanceIndex < 5; ++advanceIndex)
+    {
+        BitmapId nextID = GetCorrenspondingFrameByFrameImage(group->assets, animation->typeHash, animation->runningTime + advanceIndex * stepTime);
+        LoadBitmap(group->assets, nextID);
+    }
     
     BitmapId BID = GetCorrenspondingFrameByFrameImage(group->assets, animation->typeHash, animation->runningTime);
     if(IsValid(BID))
@@ -334,7 +407,15 @@ internal void RenderFrameByFrameAnimation(GameModeWorld* worldMode, RenderGroup*
         transform.modulationPercentage = params.modulationPercentage; 
         transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1);
         transform.tint = params.tint;
-        PushBitmap(group, transform, BID, P, height, lights);
+        
+        if(animation->overridesPivot)
+        {
+            PushBitmapWithPivot(group, transform, BID, P, animation->pivot, height, lights);
+        }
+        else
+        {
+            PushBitmap(group, transform, BID, P, height, lights);
+        }
     }
 }
 
@@ -864,69 +945,6 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
     {
         effects->lightIntensity = averageLightIntensity *= 1.0f / lightCount;
         effects->lightColor = averageLightColor *= 1.0f / lightCount;
-    }
-    
-}
-
-
-STANDARD_ECS_JOB_CLIENT(UpdateEntitySoundEffects)
-{
-    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    SoundEffectComponent* mappings = GetComponent(worldMode, ID, SoundEffectComponent);
-    InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
-    
-    for(u32 mappingIndex = 0; mappingIndex < effects->mappingCount; ++mappingIndex)
-    {
-        SoundEffect* effect = effects->effects + effectIndex;
-        if(effect->time >= 0)
-        {
-            effect->time -= elapsedTime;
-            if(effect->time <= 0)
-            {
-                FreeSoundMapping(effect);
-                *effect = effects->effects[--effects->effectCount];
-            }
-        }
-    }
-    
-    EntityDefinition* definition = GetData(worldMode->gameState->assets, EntityDefinition, EntityRefToAssetID(base->definitionID));
-    if(definition)
-    {
-        for(u32 soundIndex = 0; soundIndex < definition->client.soundEffectsCount; ++effectIndex)
-        {
-            SoundEffectDefinition* sound = definition->client.soundEffects + effectIndex;
-            
-            b32 matches = false;
-            for(u32 testIndex = 0; testIndex < effect->propertyCount; ++testIndex)
-            {
-                matches = false;
-                GameProperty* testProperty = effect->properties + testIndex;
-                for(u32 propertyIndex = 0; propertyIndex < base->propertyCount; ++propertyIndex)
-                {
-                    GameProperty* entityProperty = base->properties + propertyIndex;
-                    if(AreEqual(*entityProperty, *testProperty))
-                    {
-                        matches = true;
-                        break;
-                    }
-                }
-                
-                if(!matches)
-                {
-                    break;
-                }
-            }
-            
-            if(matches)
-            {
-                AddSoundEffectIfNotPresent(worldMode, P, effects, effect, SafeTruncateToU16(effectIndex));
-            }
-        }
-    }
-    
-    for(any active sound mapping)
-    {
-        UpdateSoundMapping();
     }
     
 }

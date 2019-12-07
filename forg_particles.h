@@ -25,6 +25,7 @@ introspection() struct ParticleUpdater
 {
     AssetID bitmapID MetaUneditable();
     RenderTexture* texture MetaUneditable();
+    Vec2 textureInvUV MetaUneditable();
     
     GameAssetType asset MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
     
@@ -77,6 +78,7 @@ introspection() struct ParticlePhase
 };
 
 #define MAX_PHASE_COUNT 8
+#define MAX_SOUND_COUNT 4
 struct ParticleEffectInstance
 {
     b32 active;
@@ -124,6 +126,6 @@ introspection() struct ParticleEffect
     ArrayCounter phaseCount MetaCounter(phases);
     ParticlePhase* phases;
     
-    ArrayCounter soundCountl MetaCounter(mappings);
-    SoundMapping* mappings;
+    ArrayCounter soundCount MetaCounter(sounds);
+    SoundMappingDefinition* sounds;
 };

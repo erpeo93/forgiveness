@@ -26,6 +26,7 @@
 #define IMAGE_PROPERTY_ALPHA_THREESOLD "alphaThreesold"
 #define IMAGE_ATTACHMENT_POINT "attachmentPoint"
 #define IMAGE_GROUP_NAME "groupName"
+#define ANIMATION_SOUND_TRIGGER "soundTrigger"
 
 
 #define INVALID_PROPERTY_VALUE 0xffff
@@ -100,7 +101,6 @@ struct Bitmap
     u16 height;
     
     r32 alphaThreesold;
-    r32 nativeHeight;
     r32 widthOverHeight;
     
     PAKAttachmentPoint* attachmentPoints;
@@ -159,6 +159,7 @@ struct SpriteInfo
 {
     Vec2 pivot;
     u64 nameHash;
+    r32 height;
     char name[32];
     b32 placeHolder;
 };
@@ -181,6 +182,8 @@ struct Animation
     FrameData* frames;
     Bone* bones;
     PieceAss* ass;
+    
+    PAKAnimationSoundTrigger* soundTriggers;
 };
 
 struct Skeleton
@@ -260,11 +263,18 @@ introspection() struct ground_coloration
     GameProperty* properties;
 };
 
+struct SoundMappingDefinition;
 introspection() struct tile_definition
 {
     GameAssetType asset MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
     GameProperty property;
     GameProperty underSeaLevelFluid;
+    
+    ArrayCounter soundCount MetaCounter(sounds);
+    SoundMappingDefinition* sounds;
+    
+    ArrayCounter underwaterSoundCount MetaCounter(underwaterSounds);
+    SoundMappingDefinition* underwaterSounds;
 };
 
 introspection() struct TileMapping

@@ -20,7 +20,7 @@ struct ArchetypeLayout
     u32 totalSize;
     union
     {
-        ArchetypeComponent hasComponents[256];
+        ArchetypeComponent hasComponents[1024];
         struct
         {
             ArchetypeComponent hasBaseComponent;
@@ -55,6 +55,8 @@ struct ArchetypeLayout
             ArchetypeComponent hasDefaultComponent;
             ArchetypeComponent hasActionComponent;
             ArchetypeComponent hasStaticComponent;
+            ArchetypeComponent hasSoundEffectComponent;
+            ArchetypeComponent hasAliveComponent;
         };
     };
 };

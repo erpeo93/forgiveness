@@ -229,17 +229,18 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectIn
             u8 seed = 0;
             Vec4 dissolvePercentages = V4(0, 0, 0, 0);
             r32 alphaThreesold = 0;
-            b32 transparent = true;
-            PushMagicQuad(group, transparent, V4(P, 0), lateral, up, C, *updater->texture, lights, 0, 0, 1, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, seed);
+            b32 flat = false;
+            Vec2 invUV = updater->textureInvUV;
+            PushMagicQuad(group, V4(P, 0), flat, lateral, up, invUV, C, *updater->texture, lights, 0, 0, 1, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, seed);
         }
     }
 }
 
 internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cache, ParticleEffectInstance* effect, r32 dt, Vec3 frameDisplacementInit, RenderGroup* group)
 {
-    for(any sound)
+    for(u32 soundIndex = 0; soundIndex < effect->soundCount; ++soundIndex)
     {
-        UpdateSoundMapping(effect->sounds + soundIndex);
+        UpdateSoundMapping(worldMode, effect->sounds + soundIndex, dt);
     }
     
     
@@ -256,6 +257,7 @@ internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cac
             {
                 LockAssetForCurrentFrame(group->assets, updater->bitmapID);
                 updater->texture = &bitmap->textureHandle;
+                updater->textureInvUV = GetInvUV(bitmap->width, bitmap->height);
             }
             else
             {
@@ -337,6 +339,15 @@ inline ParticleEffectInstance* GetNewParticleEffect(ParticleCache* cache, Partic
             *phase = definition->phases[phaseIndex];
         }
     }
+    
+    for(u32 soundIndex = 0; soundIndex < definition->soundCount; ++soundIndex)
+    {
+        if(result->soundCount < ArrayCount(result->sounds))
+        {
+            result->sounds[result->soundCount++] = InitSoundMapping(definition->sounds + soundIndex, &cache->particleEntropy);
+        }
+    }
+    
     Assert(result->particle4xCount == 0);
     Assert(!result->firstParticle);
     

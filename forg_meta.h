@@ -73,6 +73,8 @@ enum MetaType
     MetaType_MultipartFrameByFramePiece,
     MetaType_AnimationReplacement,
     MetaType_PieceReplacement,
+    MetaType_SoundMappingDefinition,
+    MetaType_SoundEffectDefinition,
 };
 
 enum FieldMetaFlags

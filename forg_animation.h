@@ -14,6 +14,7 @@ struct AssAlteration
 
 struct ShadowComponent
 {
+    r32 height;
     Vec3 offset;
     Vec2 scale;
     Vec4 color;
@@ -47,7 +48,6 @@ struct AnimationEffect
         
         r32 slowDownCoeff;
     };
-    
 };
 
 introspection() struct AnimationEffectDefinition
@@ -115,6 +115,7 @@ struct AnimationComponent
     
     b32 flipOnYAxis;
     
+    b32 defaultScaleComputed;
     r32 scale;
     r32 speed;
 };
@@ -125,6 +126,7 @@ struct AnimationPiece
     u64 nameHash;
     b32 placeHolder;
     Vec3 originOffset;
+    r32 height;
     r32 zBias;
     r32 angle;
     Vec2 scale;
@@ -140,6 +142,9 @@ introspection() struct PieceReplacement
     r32 scale MetaDefault("1.0f");
     b32 inheritPivot MetaDefault("true");
     Vec2 pivot;
+    
+    b32 inheritHeight MetaDefault("true");
+    r32 height;
 };
 
 introspection() struct AnimationReplacement
@@ -169,5 +174,7 @@ struct AnimationParams
     
     u32 replacementCount;
     AnimationReplacement* replacements;
+    
+    EntityID ID;
 };
 #endif

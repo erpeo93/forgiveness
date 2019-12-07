@@ -1,10 +1,10 @@
 #pragma once
-#define WORLD_CHUNK_APRON 2
+#define WORLD_CHUNK_APRON 1
 #define VOXEL_SIZE 2.0f
 #define CHUNK_DIM 8
 #define CHUNK_SIDE CHUNK_DIM * VOXEL_SIZE
 #define UPDATE_DISTANCE (WORLD_CHUNK_APRON + 1) * CHUNK_SIDE
-#define WORLD_CHUNK_SPAN 8
+#define WORLD_CHUNK_SPAN 16
 #define WORLD_SIDE WORLD_CHUNK_SPAN * CHUNK_SIDE
 
 introspection() struct UniversePos
@@ -23,11 +23,13 @@ struct TilePatch
 };
 
 #define MAX_TILE_PATCHES 8
+#define MAX_TILE_SOUNDS 4
 struct WorldTile
 {
 #ifndef FORG_SERVER
     TilePatch patches[MAX_TILE_PATCHES];
-    SoundMapping sounds[];
+    u32 soundCount;
+    SoundMapping sounds[MAX_TILE_SOUNDS];
     GameAssetType asset;
 #endif
     
@@ -58,6 +60,8 @@ struct WorldChunk
     i16 worldX;
     i16 worldY;
     i16 worldZ;
+    
+    u32 worldSeed;
     union
     {
         WorldChunk* next;

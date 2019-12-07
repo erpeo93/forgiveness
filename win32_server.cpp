@@ -385,16 +385,8 @@ int main( int argc, char* argv[] )
     
     ServerFunctions functions = LoadServerCode( DLLFullName, tempDLLFullName, lockFullName );
     
-    u32 universeIndex = 0;
-    
     b32 editor = false;
     printf("server starting\n");
-    if(argc > 1)
-    {
-        printf("editor mode!\n");
-        editor = true;
-    }
-    
     if(Win32InitNetwork())
     {
         clock_t start = clock();

@@ -8,10 +8,7 @@ struct LoadedBitmap
     
     Vec2 pivot;
     
-    r32 nativeHeightCoeff;
-    r32 nativeHeight;
     r32 widthOverHeight;
-    r32 downsampleFactor;
     
     u32 attachmentPointCount;
     PAKAttachmentPoint* attachmentPoints;
@@ -77,6 +74,9 @@ struct LoadedAnimation
     struct PieceAss* ass;
     
     char name[64];
+    
+    u32 triggerCount;
+    PAKAnimationSoundTrigger* triggers;
 };
 
 struct LoadedSkeleton

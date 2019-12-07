@@ -1354,6 +1354,20 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
 {
     SetUnhandledExceptionFilter((LPTOP_LEVEL_EXCEPTION_FILTER) CreateMiniDump);
     
+#if FORGIVENESS_INTERNAL
+#if 0
+    Win32KillProcessByName("win32_server.exe");
+    DEBUGWin32ExecuteCommand("../server", "../build/win32_server.exe", "");
+#endif
+#else
+#if 1
+    Win32KillProcessByName("win32_server.exe");
+    DEBUGWin32ExecuteCommand("server", "server/win32_server.exe", "");
+#endif
+#endif
+    
+    
+    
     globalMemorySentinel.next = &globalMemorySentinel;
     globalMemorySentinel.prev = &globalMemorySentinel;
     
@@ -1542,7 +1556,10 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                     
                     b32 xboxControllerPresent = true;
                     b32 executableNeedsToBeRealoaded = false;
-                    //Win32ToggleFullScreen( window );
+                    
+#ifndef FORGIVENESS_INTERNAL
+                    Win32ToggleFullScreen( window );
+#endif
                     ShowWindow( window, SW_SHOW );
                     
                     PlatformMemoryBlock* noiseTextureBlock =Win32AllocateMemory(NOISE_WIDTH * NOISE_HEIGHT * sizeof(Vec4), 0);
@@ -1575,13 +1592,6 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         ScreenToClient( window, &mousePos);
                         
                         SlideInput();
-                        
-                        gameInput.serverEXE = commandLine;
-                        
-                        if(StrLen(gameInput.serverEXE) == 0)
-                        {
-                            gameInput.serverEXE = "build/win32_server.exe";
-                        }
                         
                         gameInput.mouseWheelOffset = 0;
                         r32 mouseX = ( r32 ) mousePos.x;

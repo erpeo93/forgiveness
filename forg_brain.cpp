@@ -1,3 +1,28 @@
+internal void Idle(BrainComponent* brain)
+{
+    brain->currentCommand = {};
+    brain->currentCommand.action = idle;
+    brain->commandParameters.acceleration = V3(0, 0, 0);
+}
+
+internal void Move(BrainComponent* brain, Vec3 direction)
+{
+    brain->currentCommand = {};
+    brain->currentCommand.action = move;
+    brain->commandParameters.acceleration = direction;
+}
+
+
+internal void Attack(BrainComponent* brain, EntityID targetID)
+{
+    brain->currentCommand = {};
+    brain->currentCommand.action = attack;
+    brain->currentCommand.targetID = targetID;
+    brain->commandParameters = {};
+}
+
+
+
 STANDARD_ECS_JOB_SERVER(UpdateBrain)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
@@ -36,9 +61,9 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
 		case Brain_Portal:
 		{
             SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
-            if(IsValid(&playerQuery))
+            EntityID playerID = GetCurrent(&playerQuery);
+            if(IsValidID(playerID))
             {
-                EntityID playerID = GetCurrent(&playerQuery);
                 DefaultComponent* playerDef = GetComponent(server, playerID, DefaultComponent);
                 r32 maxDistanceSq = Square(2.0f);
                 
@@ -71,7 +96,41 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                     brain->ID = {};
                 }
             }
-		} break;
+        } break;
+        
+        case Brain_AttackPlayersDumb:
+        {
+            SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
+            EntityID playerID = GetCurrent(&playerQuery);
+            if(IsValidID(playerID))
+            {
+                DefaultComponent* playerDef = GetComponent(server, playerID, DefaultComponent);
+                InteractionComponent* playerInteraction = GetComponent(server, playerID, InteractionComponent);
+                
+                Vec3 toPlayer = SubtractOnSameZChunk(playerDef->P, def->P);
+                r32 distanceSq = LengthSq(toPlayer);
+                r32 targetTime;
+                if(ActionIsPossibleAtDistance(playerInteraction, attack, distanceSq, &targetTime))
+                {
+                    Attack(brain, playerID);
+                }
+                else
+                {
+                    if(ActionIsPossible(playerInteraction, attack))
+                    {
+                        Move(brain, toPlayer);
+                    }
+                    else
+                    {
+                        Idle(brain);
+                    }
+                }
+            }
+            else
+            {
+                Idle(brain);
+            }
+        } break;
         
 #if 0        
         case campfire_brain:
@@ -86,6 +145,6 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
     }
     
     
-	DispatchCommand(server, ID, &brain->currentCommand, &brain->commandParameters, elapsedTime, true);
+    DispatchCommand(server, ID, &brain->currentCommand, &brain->commandParameters, elapsedTime, true);
     DispatchCommand(server, ID, &brain->inventoryCommand, &brain->commandParameters, elapsedTime, false);
 }

@@ -14,10 +14,26 @@
 #include "forg_simd.h"
 #include "forg_file_formats.h"
 
+
+struct U16
+{
+    u16 value;
+    i16 flagOffset;
+    u16 flag;
+};
+
+struct U32
+{
+    u32 value;
+    i16 flagOffset;
+    u16 flag;
+};
+
 #define Property(name) enum name
 #include "../properties/test.properties"
 #include "forg_ecs.h"
 #include "forg_entity_layout.h"
+#include "forg_entity.h"
 #include "forg_asset.h"
 #include "forg_noise.h"
 #include "forg_world_generation.h"
@@ -33,6 +49,7 @@
 #include "forg_brain.h"
 
 
+#include "forg_sound.h"
 #include "forg_game_ui.h"
 #include "forg_particles.h"
 #include "forg_animation.h"
@@ -48,6 +65,7 @@ struct GameFile
     
     u64 dataHash;
     
+    b32 valid;
     u16 type;
     char subtype[32];
     
@@ -68,21 +86,11 @@ struct FileToSend
     };
 };
 
-
-struct U16
-{
-    u16 value;
-};
-
-struct U32
-{
-    u32 value;
-};
-
 struct DefaultComponent
 {
     b32 updateSent;
     u16 basicPropertiesChanged;
+    u16 healthPropertiesChanged;
     
     EntityRef definitionID;
     u32 seed;
@@ -97,33 +105,32 @@ struct StaticComponent
     SpatialPartitionEntityBlock* block;
 };
 
-inline void AddChangedFlags(DefaultComponent* def, u16 flags)
+inline void AddChangedFlags(DefaultComponent* def, u16* flags, u16 flag)
 {
-    def->basicPropertiesChanged |= flags;
     def->updateSent = false;
+    *flags = *flags | flag;
 }
 
-inline void SetU16(DefaultComponent* def, U16* value, u16 newValue, u16 flag)
+inline void AddChangedFlags(DefaultComponent* def, u16 flagOffset, u16 flag)
 {
-    b32 setFlag = (value->value != newValue);
-    value->value = newValue;
-    
-    if(setFlag)
+    Assert(flagOffset);
+    Assert(OffsetOf(DefaultComponent, updateSent) == 0);
+    u16* flags = (u16*) ((u8*) def + flagOffset);
+    AddChangedFlags(def, flags, flag);
+}
+
+inline void SetU16(DefaultComponent* def, U16* value, u16 newValue)
+{
+    if(value->value != newValue)
     {
-        AddChangedFlags(def, flag);
+        value->value = newValue;
+        AddChangedFlags(def, value->flagOffset, value->flag);
     }
 }
 
 inline u16 GetU16(U16 value)
 {
     u16 result = value.value;
-    return result;
-}
-
-inline U16 U16Val(u16 value)
-{
-    U16 result = {};
-    result.value = value;
     return result;
 }
 
@@ -137,26 +144,50 @@ inline b32 operator == (U16 v1, U16 v2)
     return result;
 }
 
-inline void SetU32(DefaultComponent* def, U32* value, u32 newValue, u16 flag)
+inline b32 operator == (U16 v1, u16 v2)
 {
-    b32 setFlag = (value->value != newValue);
-    value->value = newValue;
-    if(setFlag)
+    b32 result = false;
+    if(v1.value == v2)
     {
-        AddChangedFlags(def, flag);
+        result = true;
+    }
+    return result;
+}
+
+inline b32 operator == (u16 v1, U16 v2)
+{
+    b32 result = false;
+    if(v1 == v2.value)
+    {
+        result = true;
+    }
+    return result;
+}
+
+
+#define InitU32(flags, flag, value) InitU32_((i16) OffsetOf(DefaultComponent, flags), flag, value) 
+inline U32 InitU32_(i16 flagOffset, u16 flag, u32 value)
+{
+    U32 result = {};
+    result.value = value;
+    result.flagOffset = flagOffset;
+    result.flag = flag;
+    
+    return result;
+}
+
+inline void SetU32(DefaultComponent* def, U32* value, u32 newValue)
+{
+    if(value->value != newValue)
+    {
+        value->value = newValue;
+        AddChangedFlags(def, value->flagOffset, value->flag);
     }
 }
 
 inline u32 GetU32(U32 value)
 {
     u32 result = value.value;
-    return result;
-}
-
-inline U32 U32Val(u32 value)
-{
-    U32 result = {};
-    result.value = value;
     return result;
 }
 
@@ -170,11 +201,22 @@ inline b32 operator == (U32 v1, U32 v2)
     return result;
 }
 
+#define InitU16(flags, flag, value) InitU16_((i16) OffsetOf(DefaultComponent, flags), flag, value) 
+inline U16 InitU16_(i16 flagOffset, u16 flag, u16 value)
+{
+    U16 result = {};
+    result.value = value;
+    result.flagOffset = flagOffset;
+    result.flag = flag;
+    
+    return result;
+}
+
 inline void AddEntityFlags(DefaultComponent* def, u32 flags)
 {
     u32 currentFlags = GetU32(def->flags);
     u32 newFlags = AddFlags(currentFlags, flags);
-    SetU32(def, &def->flags, newFlags, EntityBasics_Flags);
+    SetU32(def, &def->flags, newFlags);
 }
 
 inline b32 EntityHasFlags(DefaultComponent* def, u32 test)
@@ -188,7 +230,7 @@ inline void ClearEntityFlags(DefaultComponent* def, u32 flags)
 {
     u32 currentFlags = GetU32(def->flags);
     u32 newFlags = ClearFlags(currentFlags, flags);
-    SetU32(def, &def->flags, newFlags, EntityBasics_Flags);
+    SetU32(def, &def->flags, newFlags);
 }
 
 
@@ -293,16 +335,24 @@ struct AddEntityParams
     Vec3 acceleration;
     Vec3 speed;
     u32 playerIndex;
-    b32 spawnFollowingEntity;
-    b32 lock;
     EntityRef attachedEntityType;
     EntityID targetBrainID;
+    b32 spawnFollowingEntity;
+    b32 lock;
+    b32 ghost;
 };
 
 internal AddEntityParams DefaultAddEntityParams()
 {
     AddEntityParams result = {};
     return result;
+}
+
+internal AddEntityParams GhostEntityParams()
+{
+    AddEntityParams params = DefaultAddEntityParams();
+    params.ghost = true;
+    return params;
 }
 
 struct NewEntity
@@ -340,6 +390,7 @@ struct ServerState
 {
     u32 worldSeed;
     
+	b32 gamePaused;
     r32 seasonTime;
     u16 season;
     

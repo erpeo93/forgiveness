@@ -274,7 +274,10 @@ internal void OpenGLAllocateTexture(RenderTexture texture, void* data)
         IsValid(&mip);
         Advance(&mip))
     {
-        glTexSubImage3D(GL_TEXTURE_2D_ARRAY, mip.level, 0, 0, textureHandle, mip.image.width, mip.image.height, 1, GL_BGRA_EXT, GL_UNSIGNED_BYTE, mip.image.pixels);
+        if(mip.image.width <= MAX_IMAGE_DIM && mip.image.height <= MAX_IMAGE_DIM)
+        {
+            glTexSubImage3D(GL_TEXTURE_2D_ARRAY, mip.level, 0, 0, textureHandle, mip.image.width, mip.image.height, 1, GL_BGRA_EXT, GL_UNSIGNED_BYTE, mip.image.pixels);
+        }
     }
 #else
     glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, textureHandle, texture.width, texture.height, 1, GL_BGRA_EXT, GL_UNSIGNED_BYTE, data);
@@ -1010,7 +1013,7 @@ internal void DrawRenderBuffer(RenderBuffer* buffer, u32 flags, u32 renderWidth,
         }
         
         OpenGLUseProgramEnd(&program->common);
-
+        
 		if(setup->renderTargetIndex > 0)
 		{
 			OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
@@ -1067,15 +1070,15 @@ inline void OpenGLRenderCommands(GameRenderCommands* commands, Rect2i drawRegion
     
     
     glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
-
+    
     SortRenderBuffer(&commands->opaque, DrawRenderBuffer_SortFrontToBack);
 	ComputeIndeces(&commands->opaque);
 	DrawRenderBuffer(&commands->opaque, 0, renderWidth, renderHeight);
-
+    
     SortRenderBuffer(&commands->transparent, DrawRenderBuffer_SortBackToFront);
     ComputeIndeces(&commands->transparent);
     DrawRenderBuffer(&commands->transparent, DrawRenderBuffer_Blend, renderWidth, renderHeight);
-
+    
     glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
     
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);

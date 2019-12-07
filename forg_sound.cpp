@@ -124,12 +124,6 @@ internal void PlayMixedAudio(SoundState* soundState, r32 timeToAdvance, Platform
                 Sound*LoadedSound = GetSound(assets, PlayingSound->ID);
                 if(LoadedSound)
                 {
-                    
-#if 0                    
-                    SoundId nextID = GetNextSoundInChain( assets, PlayingSound->ID );
-                    PrefetchSound(assets, nextID);
-#endif
-                    
                     Vec2 Volume = PlayingSound->currentVolume;
                     Vec2 dVolume = SecondsPerSample*PlayingSound->dVolume;
                     Vec2 dVolumeChunk = 4.0f*dVolume;
@@ -313,4 +307,186 @@ internal void PlayMixedAudio(SoundState* soundState, r32 timeToAdvance, Platform
     }
     
     EndTemporaryMemory(MixerMemory);
+}
+
+
+internal PlayingSound* SoundTrigger(GameModeWorld* worldMode, SoundTrig* trigger)
+{
+    PlayingSound* result = 0;
+    
+    GameState* gameState = worldMode->gameState;
+    SoundState* soundState = &gameState->soundState;
+    u32 subtype = GetAssetSubtype(gameState->assets, AssetType_Sound, trigger->subtypeHash);
+    SoundId sound = QuerySounds(gameState->assets, subtype, &worldMode->entropy, &trigger->properties);
+    if(IsValid(sound))
+    {
+        result = PlaySound(soundState, gameState->assets, sound, 0);
+    }
+    
+    return result;
+}
+
+internal void MusicTrigger(GameModeWorld* worldMode, char* musicType, u32 priority)
+{
+    GameState* gameState = worldMode->gameState;
+    SoundState* soundState = &gameState->soundState;
+    
+    if(priority > gameState->musicPriority || !soundState->music)
+    {
+        gameState->musicPriority = priority;
+        if(soundState->music)
+        {
+            ChangeVolume(soundState, soundState->music, 1.0f, V2(0.0f, 0.0f));
+            soundState->music = 0;
+        }
+        
+        SoundTrig trig = {};
+        trig.subtypeHash = StringHash(musicType);
+        AddGameProperty(&trig.properties, season, worldMode->season);
+        soundState->music = SoundTrigger(worldMode, &trig);
+    }
+}
+
+internal SoundMapping InitSoundMapping(SoundMappingDefinition* mapping, RandomSequence* seq)
+{
+    SoundMapping result = {};
+    result.count = 0;
+    result.maxCount = mapping->maxRepeatCount;
+    result.time = 0;
+    result.targetTime = mapping->targetTime;
+    
+    if(seq)
+    {
+        result.time = RandomUni(seq) * result.targetTime;
+    }
+    
+    result.trig.subtypeHash = mapping->asset.subtypeHash;
+    
+    for(u32 propertyIndex = 0; propertyIndex < mapping->propertyCount; ++propertyIndex)
+    {
+        AddGamePropertyRaw(&result.trig.properties, mapping->properties[propertyIndex]);
+    }
+    return result;
+}
+
+internal void UpdateSoundMapping(GameModeWorld* worldMode, SoundMapping* mapping, r32 elapsedTime)
+{
+    if(!mapping->maxCount || mapping->count < mapping->maxCount)
+    {
+        mapping->time += elapsedTime;
+        if(mapping->time >= mapping->targetTime)
+        {
+            SoundTrigger(worldMode, &mapping->trig);
+            mapping->time = 0;
+            ++mapping->count;
+        }
+    }
+}
+
+internal void AddSoundEffectIfNotPresent(SoundEffectComponent* sounds, SoundEffectDefinition* sound, u32 index)
+{
+    b32 found = false;
+    for(u32 soundIndex = 0; soundIndex < sounds->soundCount; ++soundIndex)
+    {
+        SoundEffect* effect = sounds->sounds + soundIndex;
+        if(effect->ID == index)
+        {
+            found = true;
+            break;
+        }
+    }
+    
+    if(!found && sounds->soundCount < ArrayCount(sounds->sounds))
+    {
+        SoundEffect* dest = sounds->sounds + sounds->soundCount++;
+        dest->ID = index;
+        dest->time = sound->time;
+        dest->sound = InitSoundMapping(&sound->sound, 0);
+    }
+}
+
+internal void AddSoundIfMatches(SoundEffectComponent* mappings, BaseComponent* base, SoundEffectDefinition* sound, u32 index, b32 defaultMatches)
+{
+    b32 matches = defaultMatches;
+    for(u32 testIndex = 0; testIndex < sound->propertyCount; ++testIndex)
+    {
+        matches = false;
+        GameProperty* testProperty = sound->properties + testIndex;
+        for(u32 propertyIndex = 0; propertyIndex < base->propertyCount; ++propertyIndex)
+        {
+            GameProperty* entityProperty = base->properties + propertyIndex;
+            if(AreEqual(*entityProperty, *testProperty))
+            {
+                matches = true;
+                break;
+            }
+        }
+        
+        if(!matches)
+        {
+            break;
+        }
+    }
+    
+    if(matches)
+    {
+        AddSoundEffectIfNotPresent(mappings, sound, index);
+    }
+}
+
+internal void SoundEventTrigger(GameModeWorld* worldMode, EntityID ID, GameProperty trigger)
+{
+    if(HasComponent(ID, SoundEffectComponent))
+    {
+        BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+        SoundEffectComponent* mappings = GetComponent(worldMode, ID, SoundEffectComponent);
+        
+        EntityDefinition* definition = GetData(worldMode->gameState->assets, EntityDefinition, EntityRefToAssetID(base->definitionID));
+        if(definition)
+        {
+            for(ArrayCounter soundIndex = 0; soundIndex < definition->client.soundEffectsCount; ++soundIndex)
+            {
+                SoundEffectDefinition* sound = definition->client.soundEffects + soundIndex;
+                if(AreEqual(sound->triggerType, trigger))
+                {
+                    AddSoundIfMatches(mappings, base, sound, soundIndex, true);
+                }
+            }
+        }
+    }
+}
+
+STANDARD_ECS_JOB_CLIENT(UpdateEntitySoundEffects)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    SoundEffectComponent* mappings = GetComponent(worldMode, ID, SoundEffectComponent);
+    
+    EntityDefinition* definition = GetData(worldMode->gameState->assets, EntityDefinition, EntityRefToAssetID(base->definitionID));
+    if(definition)
+    {
+        for(ArrayCounter soundIndex = 0; soundIndex < definition->client.soundEffectsCount; ++soundIndex)
+        {
+            SoundEffectDefinition* sound = definition->client.soundEffects + soundIndex;
+            
+            if(!IsValid(sound->triggerType))
+            {
+                AddSoundIfMatches(mappings, base, sound, soundIndex, false);
+            }
+        }
+    }
+    
+    for(u32 soundIndex = 0; soundIndex < mappings->soundCount; ++soundIndex)
+    {
+        SoundEffect* sound = mappings->sounds + soundIndex;
+        UpdateSoundMapping(worldMode, &sound->sound, elapsedTime);
+        
+        if(sound->time >= 0)
+        {
+            sound->time -= elapsedTime;
+            if(sound->time <= 0)
+            {
+                *sound = mappings->sounds[--mappings->soundCount];
+            }
+        }
+    }
 }

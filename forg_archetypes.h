@@ -11,6 +11,7 @@ Archetype() struct AnimalArchetype
     InteractionComponent interaction;
     SkillComponent skills;
     BrainComponent brain;
+    AliveComponent alive;
 #else
     BaseComponent base;
     AnimationComponent animation;
@@ -19,6 +20,8 @@ Archetype() struct AnimalArchetype
     InteractionComponent interaction;
     SkillMappingComponent skillMappings;
     AnimationEffectComponent animationEffects;
+    SoundEffectComponent soundEffects;
+    AliveComponent alive;
 #endif
 };
 
@@ -128,6 +131,17 @@ Archetype() struct BoltArchetype
 #else
     BaseComponent base;
     BoltComponent bolt;
+#endif
+};
+
+Archetype() struct PlaceholderArchetype
+{
+#ifdef FORG_SERVER
+    DefaultComponent default;
+    PhysicComponent physic;
+    PlayerComponent* player;
+#else
+    BaseComponent base;
 #endif
 };
 
@@ -265,6 +279,8 @@ introspection() struct ClientEntityInitParams
     GameAssetType skin MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
     
     ImageProperties entityProperties;
+    ImageProperties trunkProperties;
+    ImageProperties branchProperties;
     ImageProperties leafProperties;
     
     r32 windInfluence MetaDefault("0");
@@ -300,6 +316,8 @@ introspection() struct ClientEntityInitParams
     
     r32 frameByFrameSpeed MetaDefault("1.0f");
     GameAssetType frameByFrameImageType MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
+    b32 frameByFrameOverridesPivot;
+    Vec2 frameByFramePivot;
     
 	ArrayCounter multipartStaticCount MetaCounter(multipartStaticPieces);
 	MultipartStaticPiece* multipartStaticPieces;
@@ -312,6 +330,9 @@ introspection() struct ClientEntityInitParams
     
     r32 fadeInTime MetaDefault("1.0f");
     r32 fadeOutTime MetaDefault("1.0f");
+    
+    ArrayCounter soundEffectsCount MetaCounter(soundEffects);
+    SoundEffectDefinition* soundEffects;
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

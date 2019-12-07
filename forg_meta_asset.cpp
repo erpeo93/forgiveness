@@ -1289,9 +1289,10 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                 {
                     FieldDefinition* field = definition->fields + fieldIndex;
                     b32 pointer = (field->flags & MetaFlag_Pointer);
+                    b32 editable = !(field->flags & MetaFlag_Uneditable);
                     
                     // NOTE(Leonardo): we can't dump nor edit counters!
-                    if(field->type != MetaType_ArrayCounter)
+                    if(field->type != MetaType_ArrayCounter && editable)
                     {
                         void* originalfieldPtr = (void*) ((u8*) dataPtr + field->offset);
                         void* fieldPtr = originalfieldPtr;

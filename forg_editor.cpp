@@ -44,7 +44,6 @@ internal void AddUndoRedoAdd(EditorUIContext* context, ArrayCounter* counter, vo
 {
     UndoRedoRecord* record = FreeAndGetUndoRedoRecord(context);
     
-    
 	if(IsValid(ID))
 	{
         WritebackAssetToFileSystem(context->assets, ID, WRITEBACK_PATH, true);
@@ -469,6 +468,8 @@ internal Rect2 ShowLabel(EditorLayout* layout, char* name, Vec4 color = DefaultE
 
 internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID, StringArray options, char* outputBuffer, u32 outputLength, AssetID assetID)
 {
+    EditorUIContext* context = layout->context;
+    
     b32 result = false;
     b32 showOptions = false;
     
@@ -484,6 +485,7 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID,
         
         if(HotAUIDAndPressed(layout->context, ID, mouseLeft))
         {
+            ZeroSize(sizeof(context->keyboardBuffer), context->keyboardBuffer);
             u32 size = StrLen(string) + 1;
             Assert(size < sizeof(data->before));
             Copy(size, data->before, string);
@@ -493,6 +495,22 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID,
         if(IsInteractiveAUID(layout->context, ID))
         {
             color = V4(0, 1, 0, 1);
+            
+            u32 appendHere = StrLen(context->keyboardBuffer);
+            if(appendHere && Pressed(&context->input->backButton))
+            {
+                context->keyboardBuffer[--appendHere] = 0;
+            }   
+            for(u8 c = 0; c < 0xff; ++c)
+            {
+                if(context->input->isDown[c] && !context->input->wasDown[c])
+                {
+                    if(appendHere < sizeof(layout->context->keyboardBuffer))
+                    {
+                        context->keyboardBuffer[appendHere++] = c;
+                    }
+                }
+            }
             
             i32 optionIndex = (i32) data->optionIndex;
             if(UIPressed(layout->context, actionUp))
@@ -505,16 +523,41 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID,
                 ++optionIndex;
             }
             
-            optionIndex = Wrap(0, optionIndex, (i32) options.count); 
-            Assert(optionIndex >= 0);
+            u32 validOptionCount = 0;
+            for(u32 testOptionIndex = 0; testOptionIndex < options.count; ++testOptionIndex)
+            {
+                char* test = options.strings[testOptionIndex];
+                if(ContainsSubString(test, context->keyboardBuffer))
+                {
+                    ++validOptionCount;
+                }
+            }
             
+            optionIndex = Wrap(0, optionIndex, (i32) validOptionCount); 
+            Assert(optionIndex >= 0);
             data->optionIndex = (u32) optionIndex;
             
+            char* option = 0;
+            u32 runningValidOptionIndex = 0;
+            for(u32 testOptionIndex = 0; testOptionIndex < options.count; ++testOptionIndex)
+            {
+                char* test = options.strings[testOptionIndex];
+                if(ContainsSubString(test, context->keyboardBuffer))
+                {
+                    ++validOptionCount;
+                    if(runningValidOptionIndex++ == data->optionIndex)
+                    {
+                        option = test;
+                        break;
+                    }
+                }
+            }
+            
             showOptions = true;
-            if(UIPressed(layout->context, confirmButton))
+            if(option && UIPressed(layout->context, confirmButton))
             {
                 EndInteraction(layout->context);
-                FormatString(outputBuffer, outputLength, "%s", options.strings[data->optionIndex]);
+                FormatString(outputBuffer, outputLength, "%s", option);
                 result = true;
             }
         }
@@ -526,11 +569,16 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, AUID ID,
         EditorLayout optionLayout = *layout;
         SetRawP(&optionLayout, layout->lastP.x);
         
+        u32 validOptionIndex = 0;
         for(u32 optionIndex = 0; optionIndex < options.count; ++optionIndex)
         {
-            NextRaw(&optionLayout);
-            Vec4 optionColor = (data->optionIndex == optionIndex) ? V4(0, 0, 1, 1) : DefaultEditorStringColor();
-            ShowString(&optionLayout, 0, options.strings[optionIndex], EditorText_OnTop | EditorText_StartingSpace | EditorText_DarkBackground, optionColor);
+            char* option = options.strings[optionIndex];
+            if(ContainsSubString(option, context->keyboardBuffer))
+            {
+                NextRaw(&optionLayout);
+                Vec4 optionColor = (data->optionIndex == validOptionIndex++) ? V4(0, 0, 1, 1) : DefaultEditorStringColor();
+                ShowString(&optionLayout, 0, option, EditorText_OnTop | EditorText_StartingSpace | EditorText_DarkBackground, optionColor);
+            }
         }
     }
     
@@ -1628,117 +1676,118 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                     NextRaw(layout);
                     LoadBitmap(assets, ID, true);
                     Bitmap* bitmap = GetBitmap(assets, ID).bitmap;
-                    Assert(bitmap);
-                    
-                    AUID attachAUID = auID(info, "attachmentPoints");
-                    if(EditorCollapsible(layout, "attachment points", attachAUID))
+                    if(bitmap)
                     {
-                        b32 addDisabled = true;
-                        for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
+                        AUID attachAUID = auID(info, "attachmentPoints");
+                        if(EditorCollapsible(layout, "attachment points", attachAUID))
                         {
-                            PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
-                            if(point->name[0] && !StrEqual(point->name, "null"))
-                            {
-                            }
-                            else
-                            {
-                                addDisabled = false;
-                            }
-                        }
-                        
-                        
-                        AUID addID = auID(info, "add");
-                        if(EditorButton(layout, V2(0.25f, -0.1f), "add", addID, addDisabled))
-                        {
+                            b32 addDisabled = true;
                             for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
                             {
                                 PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
-                                if(!point->name[0] || StrEqual(point->name, "null"))
+                                if(point->name[0] && !StrEqual(point->name, "null"))
                                 {
-                                    FormatString(point->name, sizeof(point->name), "default");
-                                    point->alignment = V2(0.5f, 0.5f);
-                                    point->scale = V2(1, 1);
-                                    break;
+                                }
+                                else
+                                {
+                                    addDisabled = false;
                                 }
                             }
-                        }
-                        
-                        for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
-                        {
-                            PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
                             
-                            if(point->name[0] && !StrEqual(point->name, "null"))
+                            
+                            AUID addID = auID(info, "add");
+                            if(EditorButton(layout, V2(0.25f, -0.1f), "add", addID, addDisabled))
                             {
-                                NextRaw(layout);
-                                Edit_StringFreely(layout, "name", point->name, sizeof(point->name), auID(point->name, "name"), false, ID);
-                                Edit_Vec2(layout, "alignment", &point->alignment, false, ID, true);
-                                Edit_Vec2(layout, "scale", &point->scale, false, ID, false);
-                                Edit_r32(layout, "angle", &point->angle, false, ID, false);
-                                Edit_r32(layout, "zOffset", &point->zOffset, false, ID, false);
-                                
-                                AUID pointID = auID(point);
-                                EditorCheckbox(layout, "show", pointID);
-                                
-                                AUID deleteID = auID(point, "delete");
-                                if(EditorButton(layout, V2(0.25f, -0.1f), "delete", deleteID, false))
+                                for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
                                 {
-                                    FormatString(point->name, sizeof(point->name), "null");
+                                    PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
+                                    if(!point->name[0] || StrEqual(point->name, "null"))
+                                    {
+                                        FormatString(point->name, sizeof(point->name), "default");
+                                        point->alignment = V2(0.5f, 0.5f);
+                                        point->scale = V2(1, 1);
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
+                            {
+                                PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
+                                
+                                if(point->name[0] && !StrEqual(point->name, "null"))
+                                {
+                                    NextRaw(layout);
+                                    Edit_StringFreely(layout, "name", point->name, sizeof(point->name), auID(point->name, "name"), false, ID);
+                                    Edit_Vec2(layout, "alignment", &point->alignment, false, ID, true);
+                                    Edit_Vec2(layout, "scale", &point->scale, false, ID, false);
+                                    Edit_r32(layout, "angle", &point->angle, false, ID, false);
+                                    Edit_r32(layout, "zOffset", &point->zOffset, false, ID, false);
+                                    
+                                    AUID pointID = auID(point);
+                                    EditorCheckbox(layout, "show", pointID);
+                                    
+                                    AUID deleteID = auID(point, "delete");
+                                    if(EditorButton(layout, V2(0.25f, -0.1f), "delete", deleteID, false))
+                                    {
+                                        FormatString(point->name, sizeof(point->name), "null");
+                                    }
                                 }
                             }
                         }
-                    }
-                    
-                    NextRaw(layout);
-                    AUID groupAUID = auID(info, "groupNames");
-                    if(EditorCollapsible(layout, "group names", groupAUID))
-                    {
-                        b32 addDisabled = true;
-                        for(u32 groupNameIndex = 0; groupNameIndex < info->bitmap.groupNameCount; ++groupNameIndex)
-                        {
-                            PAKGroupName* group = bitmap->groupNames + groupNameIndex;
-                            if(group->name[0] && !StrEqual(group->name, "null"))
-                            {
-                            }
-                            else
-                            {
-                                addDisabled = false;
-                            }
-                        }
                         
-                        
-                        AUID addID = auID(info, "add group");
-                        if(EditorButton(layout, V2(0.25f, -0.1f), "add", addID, addDisabled))
+                        NextRaw(layout);
+                        AUID groupAUID = auID(info, "groupNames");
+                        if(EditorCollapsible(layout, "group names", groupAUID))
                         {
+                            b32 addDisabled = true;
                             for(u32 groupNameIndex = 0; groupNameIndex < info->bitmap.groupNameCount; ++groupNameIndex)
                             {
                                 PAKGroupName* group = bitmap->groupNames + groupNameIndex;
-                                if(!group->name[0] || StrEqual(group->name, "null"))
+                                if(group->name[0] && !StrEqual(group->name, "null"))
                                 {
-                                    FormatString(group->name, sizeof(group->name), "default");
-                                    break;
+                                }
+                                else
+                                {
+                                    addDisabled = false;
                                 }
                             }
-                        }
-                        
-                        for(u32 groupNameIndex = 0; groupNameIndex < info->bitmap.groupNameCount; ++groupNameIndex)
-                        {
-                            PAKGroupName* group = bitmap->groupNames + groupNameIndex;
                             
-                            if(group->name[0] && !StrEqual(group->name, "null"))
+                            
+                            AUID addID = auID(info, "add group");
+                            if(EditorButton(layout, V2(0.25f, -0.1f), "add", addID, addDisabled))
                             {
-                                NextRaw(layout);
-                                Edit_StringFreely(layout, "name", group->name, sizeof(group->name), auID(group->name, "name"), false, ID);
-                                
-                                AUID deleteID = auID(group, "delete");
-                                if(EditorButton(layout, V2(0.25f, -0.1f), "delete", deleteID, false))
+                                for(u32 groupNameIndex = 0; groupNameIndex < info->bitmap.groupNameCount; ++groupNameIndex)
                                 {
-                                    FormatString(group->name, sizeof(group->name), "null");
+                                    PAKGroupName* group = bitmap->groupNames + groupNameIndex;
+                                    if(!group->name[0] || StrEqual(group->name, "null"))
+                                    {
+                                        FormatString(group->name, sizeof(group->name), "default");
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            for(u32 groupNameIndex = 0; groupNameIndex < info->bitmap.groupNameCount; ++groupNameIndex)
+                            {
+                                PAKGroupName* group = bitmap->groupNames + groupNameIndex;
+                                
+                                if(group->name[0] && !StrEqual(group->name, "null"))
+                                {
+                                    NextRaw(layout);
+                                    Edit_StringFreely(layout, "name", group->name, sizeof(group->name), auID(group->name, "name"), false, ID);
+                                    
+                                    AUID deleteID = auID(group, "delete");
+                                    if(EditorButton(layout, V2(0.25f, -0.1f), "delete", deleteID, false))
+                                    {
+                                        FormatString(group->name, sizeof(group->name), "null");
+                                    }
                                 }
                             }
                         }
                     }
-                    
                     Pop(layout);
+                    
                 }
             } break;
             
@@ -1774,10 +1823,66 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
             {
                 if(get.derived)
                 {
+                    LoadAnimation(assets, ID, true);
+                    Animation* animation = GetAnimation(assets, ID);
+                    
                     Nest(layout);
                     Edit_b32(layout, "pingPongLooping", &info->animation.pingPongLooping, false, ID);
                     Edit_b32(layout, "singleCycle", &info->animation.singleCycle, false, ID);
                     Edit_u16(layout, "loopingBaselineMS", &info->animation.loopingBaselineMS, false, ID);
+                    NextRaw(layout);
+                    
+                    AUID soundAUID = auID(info, "sound triggers");
+                    if(EditorCollapsible(layout, "sound triggers", soundAUID))
+                    {
+                        b32 addDisabled = true;
+                        for(u32 triggerIndex = 0; triggerIndex < info->animation.triggerCount; ++triggerIndex)
+                        {
+                            PAKAnimationSoundTrigger* trigger = animation->soundTriggers + triggerIndex;
+                            if(IsValid(trigger->property))
+                            {
+                            }
+                            else
+                            {
+                                addDisabled = false;
+                            }
+                        }
+                        
+                        
+                        AUID addID = auID(info, "add");
+                        if(EditorButton(layout, V2(0.25f, -0.1f), "add", addID, addDisabled))
+                        {
+                            for(u32 triggerIndex = 0; triggerIndex < info->animation.triggerCount; ++triggerIndex)
+                            {
+                                PAKAnimationSoundTrigger* trigger = animation->soundTriggers + triggerIndex;
+                                if(!IsValid(trigger->property))
+                                {
+                                    trigger->property = GameProp(soundTriggerType, 0);
+                                    trigger->timeline = 0;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        for(u32 triggerIndex = 0; triggerIndex < info->animation.triggerCount; ++triggerIndex)
+                        {
+                            PAKAnimationSoundTrigger* trigger = animation->soundTriggers + triggerIndex;
+                            
+                            if(IsValid(trigger->property))
+                            {
+                                NextRaw(layout);
+                                
+                                Edit_GameProperty(layout, "type", &trigger->property, false, ID);
+                                Edit_u32(layout, "timeline", &trigger->timeline, false, ID);
+                                
+                                AUID deleteID = auID(trigger, "delete");
+                                if(EditorButton(layout, V2(0.25f, -0.1f), "delete", deleteID, false))
+                                {
+                                    trigger->property = {};
+                                }
+                            }
+                        }
+                    }
                     Pop(layout);
                 }
                 else
@@ -1868,22 +1973,23 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                 
                 LoadBitmap(assets, ID, true);
                 Bitmap* bitmap = GetBitmap(assets, ID).bitmap;
-                Assert(bitmap);
-                
-                for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
+                if(bitmap)
                 {
-                    PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
-                    AUID pointID = auID(point);
-                    AUIDData* pointData = GetAUIDData(layout->context, pointID);
-                    
-                    if(pointData->active)
+                    for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
                     {
-                        Vec2 attachmentP = point->alignment;
-                        Vec2 pointP = P.xy + Hadamart(attachmentP, dim.size);
-                        Rect2 pointRect = RectCenterDim(pointP, layout->fontScale * V2(8, 8));
-                        RandomSequence seq = Seed(attachmentPointIndex);
-                        Vec4 color = V4(RandomUniV3(&seq), 1.0f);
-                        PushRect(layout->group, FlatTransform(0.3f, color), pointRect);
+                        PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
+                        AUID pointID = auID(point);
+                        AUIDData* pointData = GetAUIDData(layout->context, pointID);
+                        
+                        if(pointData->active)
+                        {
+                            Vec2 attachmentP = point->alignment;
+                            Vec2 pointP = P.xy + Hadamart(attachmentP, dim.size);
+                            Rect2 pointRect = RectCenterDim(pointP, layout->fontScale * V2(8, 8));
+                            RandomSequence seq = Seed(attachmentPointIndex);
+                            Vec4 color = V4(RandomUniV3(&seq), 1.0f);
+                            PushRect(layout->group, FlatTransform(0.3f, color), pointRect);
+                        }
                     }
                 }
                 
@@ -1937,39 +2043,37 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                     NextRaw(layout);
                     r32 height = data->height;
                     r32 backgroundScale = 1.1f;
-                    if(get.derived)
+                    Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, 0);
+                    
+                    AnimationComponent component = {};
+                    component.time = data->time;
+                    component.skinHash = data->skin.subtypeHash;
+                    
+                    if(component.skinHash)
                     {
-                        Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, 0);
+                        AnimationParams params = {};
+                        params.P = P;
+                        params.scale = minPixelHeight;
+                        params.transform = FlatTransform();
+                        params.tint = V4(1, 1, 1, 1);
+                        params.ID = {};
                         
-                        AnimationComponent component = {};
-                        component.time = data->time;
-                        component.skinHash = data->skin.subtypeHash;
+                        Rect2 animationDim = GetAnimationDim(worldMode, layout->group, ID, &component, &params);
                         
-                        if(component.skinHash)
-                        {
-                            AnimationParams params = {};
-                            params.P = P;
-                            params.scale = minPixelHeight;
-                            params.transform = FlatTransform();
-                            params.tint = V4(1, 1, 1, 1);
-                            
-                            Rect2 animationDim = GetAnimationDim(worldMode, layout->group, ID, &component, &params);
-                            
-                            r32 coeff = height / GetDim(animationDim).y;
-                            params.scale *= coeff;
-                            
-                            Rect2 animationDimCorrect = GetAnimationDim(worldMode, layout->group, ID, &component, &params);
-                            
-                            
-                            Vec2 offset = P.xy - animationDimCorrect.min;
-                            params.P.xy += offset;
-                            Rect2 dim = RenderAnimation_(worldMode, layout->group, 0, ID, &component, &params);
-                            
-                            PushRect(layout->group, FlatTransform(0, V4(0, 0, 0, 1)), dim);
-                            
-                            Vec2 resizableP = dim.min;
-                            EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
-                        }
+                        r32 coeff = height / GetDim(animationDim).y;
+                        params.scale *= coeff;
+                        
+                        Rect2 animationDimCorrect = GetAnimationDim(worldMode, layout->group, ID, &component, &params);
+                        
+                        
+                        Vec2 offset = P.xy - animationDimCorrect.min;
+                        params.P.xy += offset;
+                        Rect2 dim = RenderAnimationAndTriggerSounds_(worldMode, layout->group, 0, ID, &component, &params);
+                        
+                        PushRect(layout->group, FlatTransform(0, V4(0, 0, 0, 1)), dim);
+                        
+                        Vec2 resizableP = dim.min;
+                        EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
                     }
                     
                     VerticalAdvance(layout, height * backgroundScale);
@@ -2078,6 +2182,7 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
 {
     EditorUIContext* context = &worldMode->editorUI;
     Vec2 mouseP = worldMode->relativeMouseP;
+    
     if(Pressed(&context->input->editorButton))
     {
         context->showEditor = !context->showEditor;

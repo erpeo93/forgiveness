@@ -236,10 +236,14 @@ STANDARD_ECS_JOB_CLIENT(DeleteEntities)
     FreeArchetype(worldMode, ID);
 }
 
+
+#define UnpackFlags(flag, string, ...) if(receivedFlags & SafeTruncateToU16(flag)){Unpack(string, ##__VA_ARGS__);}
+
 internal void MusicTrigger(GameModeWorld* worldMode, char* musicType, u32 priority);
-internal void DeleteAllChunks(GameModeWorld* worldMode);
 internal void DispatchGameEffect(GameModeWorld* worldMode, EntityID ID);
+#if FORGIVENESS_INTERNAL
 internal void CollateDebugEvent(DebugState* debugState, DebugCollationState* collation, DebugEvent* event);
+#endif
 internal void InitEntity(GameModeWorld* worldMode, EntityID ID, 
                          CommonEntityInitParams* common, 
                          ServerEntityInitParams* s, 
@@ -266,14 +270,13 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             {
 				LoginResponse login;
                 Unpack("HLl", &login.port, &login.challenge, &login.editingEnabled);
+                worldMode->editingEnabled = login.editingEnabled;
 #if 0
 #if 0
                 char* server = "forgiveness.hopto.org";
 #else
                 char* server = "127.0.0.1";
 #endif
-                worldMode->editingEnabled = login.editingEnabled;
-                
                 platformAPI.net.CloseConnection(clientNetwork->network, 0);
                 platformAPI.net.OpenConnection(clientNetwork->network, server, login.port);
                 ResetReceiver(&clientNetwork->receiver);
@@ -294,6 +297,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         
                         u16 fileType = GetMetaAssetType(fileHeader->type);
                         u64 fileSubtypeHash = StringHash(fileHeader->subtype);
+                        
+                        AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, &file->header);
                         
                         TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
                         
@@ -339,20 +344,17 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     EXECUTE_JOB(worldMode, DeleteEntities, true, 0);
                 }
                 
-                DeleteAllChunks(worldMode);
-                worldMode->state = PlayingGame_None;
+                SetState(worldMode, PlayingGame_None);
             } break;
             
             case Type_GameOver:
             {
-                worldMode->state = PlayingGame_Over;
+                SetState(worldMode, PlayingGame_Over);
             } break;
             
             case Type_GameWon:
             {
-                worldMode->state = PlayingGame_Won;
-                player->serverID = {};
-                player->clientID = {};
+                SetState(worldMode, PlayingGame_Won);
             } break;
             
             case Type_CompletedCommand:
@@ -517,7 +519,59 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 					}
                     
                     base->timeSinceLastUpdate = 0;
+                    //base->deletedTime = 0;
+                    
+                    
+                    
+#if 0                    
+                    if(???)
+                    {
+                        SoundEventTrigger(worldMode, ID, SoundTrigger_LoosingHealth);
+                    }
+#endif
+                    
                 }
+            } break;
+            
+            case Type_Health:
+            {
+                u16 receivedFlags;
+				Unpack("H", &receivedFlags);
+                
+                u32 physicalHealth = 0;
+                u32 maxPhysicalHealth = 0;
+                u32 mentalHealth = 0;
+                u32 maxMentalHealth = 0;
+                
+                UnpackFlags(HealthFlag_Physical, "L", &physicalHealth);
+                UnpackFlags(HealthFlag_MaxPhysical, "L", &maxPhysicalHealth);
+                UnpackFlags(HealthFlag_Mental, "L", &mentalHealth);
+                UnpackFlags(HealthFlag_MaxMental, "L", &maxMentalHealth);
+                
+                AliveComponent* alive = GetComponent(worldMode, currentClientID, AliveComponent);
+                if(alive)
+                {
+                    if(receivedFlags & HealthFlag_Physical)
+                    {
+                        alive->physicalHealth = physicalHealth;
+                    }
+                    
+                    if(receivedFlags & HealthFlag_MaxPhysical)
+                    {
+                        alive->maxPhysicalHealth = maxPhysicalHealth;
+                    }
+                    
+                    if(receivedFlags & HealthFlag_Mental)
+                    {
+                        alive->mentalHealth = mentalHealth;
+                    }
+                    
+                    if(receivedFlags & HealthFlag_MaxMental)
+                    {
+                        alive->maxMentalHealth = maxMentalHealth;
+                    }
+                }
+                
             } break;
             
             case Type_deletedEntity:

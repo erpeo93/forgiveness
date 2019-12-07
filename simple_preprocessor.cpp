@@ -686,6 +686,7 @@ int main(int argc, char** argv)
         "forg_skill.h",
         "forg_animation.h",
         "forg_particles.h",
+        "forg_sound.h",
     };
     
     

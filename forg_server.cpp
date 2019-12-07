@@ -39,7 +39,11 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
             char* password = "1234";
             if(true)
             {
+#if FORGIVENESS_INTERNAL
+                b32 editingEnabled = true;
+#else
                 b32 editingEnabled = false;
+#endif
                 QueueLoginResponse(player, LOGIN_PORT, challenge, editingEnabled);
             }
             else
@@ -62,7 +66,7 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
                 for(u32 fileIndex = 0; fileIndex < server->fileCount; ++fileIndex)
                 {
                     GameFile* file = server->files + fileIndex;
-                    if(file->type != 0xffff)
+                    if(file->valid)
                     {
                         Assert(file->dataHash);
                         
@@ -92,7 +96,7 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
                 for(u32 fileIndex = 0; fileIndex < server->fileCount; ++fileIndex)
                 {
                     GameFile* file = server->files + fileIndex;
-                    if(file->type != 0xffff)
+                    if(file->valid)
                     {
                         Assert(file->dataHash);
                         
@@ -251,15 +255,13 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
             SpawnPlayer(server, P, params);
         } break;
         
-#if 0        
         case Type_PauseToggle:
         {
-            if(server->editor)
+            if(true)
             {
                 server->gamePaused = !server->gamePaused;
             }
         } break;
-#endif
         
 #if FORGIVENESS_INTERNAL
         case Type_CaptureFrame:
@@ -393,7 +395,6 @@ internal void HandlePlayersNetwork(ServerState* server, r32 elapsedTime)
 
 extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 {
-    
     r32 elapsedTime = memory->elapsedTime;
     platformAPI = memory->api;
     ServerState* server = memory->server;
@@ -428,9 +429,9 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         }
         platformAPI.GetAllFilesEnd(&timestampFiles);
         
-        b32 editorMode = true;
         BuildAssets(hash, ASSETS_RAW_PATH, ASSETS_PATH);
         
+#if FORGIVENESS_INTERNAL
         PlatformFileGroup pakFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, ASSETS_PATH);
         
         server->fileCount = pakFiles.fileCount;
@@ -446,10 +447,10 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
             ReadCompressFile(server, file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
             platformAPI.CloseFile(&handle);        
-            
             EndTemporaryMemory(fileMemory);
         }
         platformAPI.GetAllFilesEnd(&pakFiles);
+#endif
         
         
         server->fastQueue = memory->fastQueue;
@@ -487,6 +488,8 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         
         platformAPI.PushWork(server->slowQueue, WatchForFileChanges, hash);
         server->assets = InitAssets(server->slowQueue, server->tasks, ArrayCount(server->tasks), &server->gamePool, 0, MegaBytes(16));
+        
+        
         SetMetaAssets(server->assets);
         
         InitSpatialPartition(&server->gamePool, &server->staticPartition);
@@ -549,7 +552,34 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     server->frameByFramePool = &tempPool;
     
     
-    server->seasonTime += elapsedTime;
+    BEGIN_BLOCK("handle players stuff");
+    HandlePlayersNetwork(server, elapsedTime);
+	END_BLOCK();
+    
+    if(server->gamePaused)
+	{
+		elapsedTime = 0;
+	}
+
+    BEGIN_BLOCK("spatial partitions");
+    InitSpatialPartition(server->frameByFramePool, &server->playerPartition);
+    EXECUTE_JOB(server, FillPlayerSpacePartition, ArchetypeHas(PlayerComponent) && ArchetypeHas(PhysicComponent), elapsedTime);
+    InitSpatialPartition(server->frameByFramePool, &server->standardPartition);
+    EXECUTE_JOB(server, FillCollisionSpatialPartition, ArchetypeHas(PhysicComponent), elapsedTime);
+    END_BLOCK();
+    
+    BEGIN_BLOCK("equipment effects");
+    server->equipmentEffectTimer += elapsedTime;
+	if(server->equipmentEffectTimer >= 0.5f)
+	{
+        EXECUTE_JOB(server, DispatchEquipmentEffects, (ArchetypeHas(EquipmentComponent) || ArchetypeHas(UsingComponent)), server->equipmentEffectTimer);
+        server->equipmentEffectTimer = 0;
+    }
+    END_BLOCK();
+    
+    BEGIN_BLOCK("update entities");
+
+	server->seasonTime += elapsedTime;
     if(server->seasonTime >= 5.0f)
     {
         server->seasonTime = 0;
@@ -568,33 +598,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             }
         }
     }
-    
-    
-    BEGIN_BLOCK("spatial partitions");
-    InitSpatialPartition(server->frameByFramePool, &server->playerPartition);
-    EXECUTE_JOB(server, FillPlayerSpacePartition, ArchetypeHas(PlayerComponent) && ArchetypeHas(PhysicComponent), elapsedTime);
-    InitSpatialPartition(server->frameByFramePool, &server->standardPartition);
-    EXECUTE_JOB(server, FillCollisionSpatialPartition, ArchetypeHas(PhysicComponent), elapsedTime);
-    END_BLOCK();
-    
-    BEGIN_BLOCK("spawn and delete entities");
-    SpawnAndDeleteEntities(server, elapsedTime);
-    END_BLOCK();
-    
-    BEGIN_BLOCK("handle players stuff");
-    HandlePlayersNetwork(server, elapsedTime);
-	END_BLOCK();
-    
-    BEGIN_BLOCK("equipment effects");
-    server->equipmentEffectTimer += elapsedTime;
-	if(server->equipmentEffectTimer >= 0.5f)
-	{
-        EXECUTE_JOB(server, DispatchEquipmentEffects, (ArchetypeHas(EquipmentComponent) || ArchetypeHas(UsingComponent)), server->equipmentEffectTimer);
-        server->equipmentEffectTimer = 0;
-    }
-    END_BLOCK();
-    
-    BEGIN_BLOCK("update entities");
     EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime);
     EXECUTE_JOB(server, UpdateBrain, ArchetypeHas(BrainComponent), elapsedTime);
 	EXECUTE_JOB(server, UpdateTempEntity, ArchetypeHas(TempEntityComponent), elapsedTime);
@@ -647,6 +650,11 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     }
     Clear(&tempPool);
     END_BLOCK();
+    
+    BEGIN_BLOCK("spawn and delete entities");
+    SpawnAndDeleteEntities(server, elapsedTime);
+    END_BLOCK();
+    
 }
 
 
@@ -683,8 +691,7 @@ extern "C" SERVER_FRAME_END(ServerFrameEnd)
     server->captureFrame = false;
 }
 #else
-extern "C" SERVER_FRAME_END( ServerFrameEnd )
+extern "C" SERVER_FRAME_END(ServerFrameEnd)
 {
-    return 0;
 }
 #endif

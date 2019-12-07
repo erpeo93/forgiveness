@@ -1,4 +1,38 @@
 #ifdef FORG_SERVER
+internal void DamageEntityPhysically(ServerState* server, EntityID ID, u32 damage)
+{
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    AliveComponent* alive = GetComponent(server, ID, AliveComponent);
+    
+    if(alive)
+    {
+        u32 newHealth = 0;
+        if(GetU32(alive->physicalHealth) > damage)
+        {
+            newHealth = GetU32(alive->physicalHealth) - damage;
+        }
+        
+        SetU32(def, &alive->physicalHealth, newHealth);
+    }
+}
+
+internal void DamageEntityMentally(ServerState* server, EntityID ID, u32 damage)
+{
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    AliveComponent* alive = GetComponent(server, ID, AliveComponent);
+    
+    if(alive)
+    {
+        u32 newHealth = 0;
+        if(GetU32(alive->mentalHealth) > damage)
+        {
+            newHealth = GetU32(alive->mentalHealth) - damage;
+        }
+        
+        SetU32(def, &alive->mentalHealth, newHealth);
+    }
+}
+
 internal void DeleteEntity(ServerState* server, EntityID ID, DeleteEntityReasonType reason = DeleteEntity_None);
 internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect, EntityID targetID)
 {
@@ -39,7 +73,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
             if(++def->P.chunkZ == (i32) server->maxDeepness)
             {
                 --def->P.chunkZ;
-                DeleteEntity(server, destID, DeleteEntity_Won);
+                DeleteEntity(server, destID, DeleteEntity_None);
             }
         } break;
         
@@ -51,6 +85,16 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
         case deleteSelf:
         {
             DeleteEntity(server, ID);
+        } break;
+        
+        case damagePhysically:
+        {
+            DamageEntityPhysically(server, targetID, 1);
+        } break;
+        
+        case damageMentally:
+        {
+            DamageEntityMentally(server, targetID, 1);
         } break;
     }
 }

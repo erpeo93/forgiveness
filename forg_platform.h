@@ -149,8 +149,6 @@ struct PlatformButton
 
 struct PlatformInput
 {
-    char* serverEXE;
-    
     struct NetworkInterface* network;
     r32 timeToAdvance;
     

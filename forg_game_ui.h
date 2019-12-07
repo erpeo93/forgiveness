@@ -57,9 +57,9 @@ struct InteractionComponent
 
 
 inline b32 AreEqual(EntityRef r1, EntityRef r2);
-internal b32 ActionIsPossible(InteractionComponent* interaction, u16 action, r32 distanceSq, r32* targetTime, b32 usingValid = false, EntityRef usingType = {})
+internal PossibleAction* ActionIsPossible(InteractionComponent* interaction, u16 action, u32 usingValid = false, EntityRef usingType = {})
 {
-    b32 result = false;
+    PossibleAction* result = 0;
     if(interaction)
     {
         if(usingValid)
@@ -70,11 +70,7 @@ internal b32 ActionIsPossible(InteractionComponent* interaction, u16 action, r32
                 PossibleAction* possibleAction = list->actions + actionIndex;
                 if(possibleAction->action == action && AreEqual(usingType, possibleAction->requiredUsingType))
                 {
-                    if(distanceSq <= possibleAction->distanceSq)
-                    {
-                        result = true;
-                        *targetTime = possibleAction->time;
-                    }
+                    result = possibleAction;
                     break;
                 }
             }
@@ -87,15 +83,23 @@ internal b32 ActionIsPossible(InteractionComponent* interaction, u16 action, r32
                 PossibleAction* possibleAction = list->actions + actionIndex;
                 if(possibleAction->action == action)
                 {
-                    if(distanceSq <= possibleAction->distanceSq)
-                    {
-                        result = true;
-                        *targetTime = possibleAction->time;
-                    }
+                    result = possibleAction;
                     break;
                 }
             }
         }
+    }
+    
+    return result;
+}
+internal b32 ActionIsPossibleAtDistance(InteractionComponent* interaction, u16 action, r32 distanceSq, r32* targetTime, b32 usingValid = false, EntityRef usingType = {})
+{
+    b32 result = false;
+    PossibleAction* possible = ActionIsPossible(interaction, action, usingValid, usingType);
+    if(possible && distanceSq <= possible->distanceSq)
+    {
+        result = true;
+        *targetTime = possible->time;
     }
     return result;
 }

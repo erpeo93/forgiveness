@@ -96,7 +96,7 @@ inline i32 Ceil( r32 value )
 }
 
 //TODO(leonardo):irinsics on this!!
-inline u32 CountLastSignificantBitSet( u32 value )
+inline u32 CountLastSignificantBitSet(u32 value)
 {
     u32 result = 0;
     u32 counter = 0;
@@ -108,7 +108,7 @@ inline u32 CountLastSignificantBitSet( u32 value )
 }
 
 //TODO(leonardo):irinsics!
-inline r32 Abs( r32 value )
+inline r32 Abs(r32 value)
 {
     r32 result = value;
     if( value < 0 )

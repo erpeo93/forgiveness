@@ -140,30 +140,3 @@ struct ContainerMappingComponent
     ObjectMapping storedMappings[MAX_CONTAINER_OBJECT];
     ObjectMapping usingMappings[MAX_USING_OBJECT];
 };
-
-enum EntityFlags
-{
-    EntityFlag_notInWorld = (1 << 0),
-    EntityFlag_occluding = (1 << 1),
-    EntityFlag_deleted = (1 << 2),
-    EntityFlag_locked = (1 << 3),
-};
-
-inline b32 IsSet(u32 flags, u32 flag)
-{
-    b32 result = ((flags & flag) == flag);
-    return result;
-}
-
-inline u32 AddFlags(u32 flags, u32 flag)
-{
-    u32 result = (flags | flag);
-    return result;
-}
-
-inline u32 ClearFlags(u32 flags, u32 flag)
-{
-    u32 result = (flags & ~flag);
-    return result;
-}
-

@@ -640,11 +640,17 @@ internal char* GetAssetSubtypeName(Assets* assets, u16 type, u64 subtypeHash)
     return result;
 }
 
+internal b32 IsValidAssetType(u16 type)
+{
+    b32 result = (type > 0 && type < AssetType_Count);
+    return result;
+}
+
 internal AssetSubtypeArray* GetAssetSubtype(Assets* assets, char* typeString, char* subtypeString)
 {
     u16 type = GetMetaAssetType(typeString);
     AssetSubtypeArray* result = 0;
-    if(type && type < AssetType_Count)
+    if(IsValidAssetType(type))
     {
         AssetArray* assetTypeArray = assets->assets + type;
         u32 subtypeHashIndex = GetAssetSubtype(assets, type, subtypeString);
@@ -660,7 +666,7 @@ internal AssetSubtypeArray* GetAssetSubtypeForFile(Assets* assets, PAKFileHeader
     if(!result)
     {
         u16 type = GetMetaAssetType(header->type);
-        if(type > 0 && type < AssetType_Count)
+        if(IsValidAssetType(type))
         {
             AssetArray* array = assets->assets + type;
             u16 hashIndex = (StringHash(header->subtype) & (ArrayCount(array->subtypes) - 1));
@@ -788,15 +794,14 @@ internal void LoadBitmap(Assets* assets, AssetID ID, b32 immediate = false)
         
         bitmap->width = SafeTruncateToU16(info->dimension[0]);
         bitmap->height = SafeTruncateToU16(info->dimension[1]);
-        bitmap->nativeHeight = info->nativeHeight;
         bitmap->alphaThreesold = info->alphaThreesold;
         bitmap->widthOverHeight = (r32) bitmap->width / (r32) bitmap->height;
-        
         bitmap->attachmentPoints = (PAKAttachmentPoint*) asset->data;
         bitmap->groupNames = (PAKGroupName*) AdvanceVoidPtrBytes(asset->data, attachmentSize);
         bitmap->pixels = AdvanceVoidPtrBytes(asset->data, attachmentSize + groupSize);
         
         u32 textureHandle = AcquireTextureHandle(assets);
+        
         asset->textureHandle = TextureHandle(textureHandle, bitmap->width, bitmap->height);
         bitmap->textureHandle = asset->textureHandle;
         
@@ -858,9 +863,9 @@ void LoadSound(Assets* assets, AssetID ID)
     }
 }
 
-void LoadAnimation(Assets* assets, AssetID ID)
+void LoadAnimation(Assets* assets, AssetID ID, b32 immediate = false)
 {
-    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID);
+    AssetBoilerplate boilerplate = BeginAssetBoilerplate(assets, ID, immediate);
     if(boilerplate.valid)
     {
         Asset* asset = boilerplate.asset;
@@ -870,8 +875,9 @@ void LoadAnimation(Assets* assets, AssetID ID)
         u32 countAss = info->assCount;
         u32 frameCount = info->frameCount;
         u32 spriteCount = info->spriteCount;
+        u32 triggerCount = info->triggerCount;
         
-        u32 size =spriteCount * sizeof(SpriteInfo) + frameCount * sizeof(FrameData) + countAss * sizeof(PieceAss) + countBones * sizeof(Bone);
+        u32 size =spriteCount * sizeof(SpriteInfo) + frameCount * sizeof(FrameData) + countAss * sizeof(PieceAss) + countBones * sizeof(Bone) + triggerCount * sizeof(PAKAnimationSoundTrigger);
         
         asset->data = AcquireAssetMemory(assets, size, asset);
         u8* base = (u8*) asset->data;
@@ -885,6 +891,8 @@ void LoadAnimation(Assets* assets, AssetID ID)
         animation->frames = (FrameData*) (base + spriteCount * sizeof(SpriteInfo));
         animation->bones = (Bone*) (base + frameCount * sizeof(FrameData) + spriteCount * sizeof(SpriteInfo));
         animation->ass = (PieceAss*) (base + frameCount * sizeof(FrameData) + spriteCount * sizeof(SpriteInfo) + countBones * sizeof(Bone));
+        
+        animation->soundTriggers = (PAKAnimationSoundTrigger*) (base + frameCount * sizeof(FrameData) + spriteCount * sizeof(SpriteInfo) + countBones * sizeof(Bone) + countAss * sizeof(PieceAss));
         
         EndAssetBoilerplate(assets, boilerplate, size);
     }
@@ -1003,6 +1011,24 @@ internal void LoadAssetFile(Assets* assets, AssetFile* file, AssetSubtypeArray* 
     EndTemporaryMemory(assetMemory);
 }
 
+
+internal b32 IsValidPAKVersion(u32 version)
+{
+    b32 result = (version == PAK_VERSION);
+    return result;
+}
+
+internal b32 IsValidPAKAssetVersion(PAKFileHeader* header)
+{
+    b32 result = false;
+    if(IsValidAssetType(GetMetaAssetType(header->type)))
+    {
+        u32 expectedAssetVersion = MetaGetCurrentVersion(header->type);
+        result = (header->assetVersion == expectedAssetVersion);
+    }
+    return result;
+}
+
 internal void InitFileAssetHeader(AssetFile* file)
 {
     b32 valid = true;
@@ -1011,7 +1037,7 @@ internal void InitFileAssetHeader(AssetFile* file)
     u32 pakVersion;
     platformAPI.ReadFromFile(&file->handle, 0, sizeof(u32), &pakVersion);
     
-    if(pakVersion == PAK_VERSION)
+    if(IsValidPAKVersion(pakVersion))
     {
         platformAPI.ReadFromFile(&file->handle, 0, sizeof(file->header), &file->header);
         if(!PlatformNoFileErrors(&file->handle))
@@ -1026,8 +1052,7 @@ internal void InitFileAssetHeader(AssetFile* file)
             platformAPI.FileError(&file->handle, "magic number not valid");
         }
         
-        u32 expectedAssetVersion = MetaGetCurrentVersion(file->header.type);
-        if(header->assetVersion != expectedAssetVersion)
+        if(!IsValidPAKAssetVersion(header))
         {
             valid = false;
         }
@@ -1231,7 +1256,30 @@ internal void DumpGroupNameToStream(Stream* stream, PAKGroupName* group)
     }
 }
 
+internal void DumpSoundTriggerToStream(Stream* stream, PAKAnimationSoundTrigger* trigger)
+{
+    if(IsValid(trigger->property))
+    {
+        char f1[64];
+        FormatString(f1, sizeof(f1), "property");
+        FieldDefinition field1 = {};
+        field1.name = f1;
+        
+        char f2[64];
+        FormatString(f2, sizeof(f2), "timeline");
+        FieldDefinition field2 = {};
+        field2.def.def_u32 = U32_MAX;
+        field2.name = f2;
+        
+        OutputToStream(stream, "%s={", ANIMATION_SOUND_TRIGGER);
+        Dump_GameProperty(stream, &field1, trigger->property, false);
+        Dump_u32(stream, &field2, trigger->timeline, false);
+        OutputToStream(stream, "};");
+    }
+}
+
 inline ColoredBitmap GetBitmap(Assets* assets, AssetID ID);
+inline Animation* GetAnimation(Assets* assets, AssetID ID);
 internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* basePath, b32 editorMode)
 {
     u16 type = ID.type;
@@ -1267,7 +1315,34 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
         
         case AssetType_Skeleton:
         {
-            if(!derivedAsset)
+            if(derivedAsset)
+            {
+                Animation* animation = GetAnimation(assets, ID);
+                Assert(animation);
+                
+                StreamState beforeAttachmentPoints = SaveStreamState(&metaDataStream);
+                if(!writtenName)
+                {
+                    OutputToStream(&metaDataStream, "\"%s\":", asset->paka.sourceName);
+                }
+                
+                b32 somethingWritten = false;
+                for(u32 triggerIndex = 0; triggerIndex < asset->paka.animation.triggerCount; ++triggerIndex)
+                {
+                    PAKAnimationSoundTrigger* trigger = animation->soundTriggers + triggerIndex;
+                    if(IsValid(trigger->property))
+                    {
+                        somethingWritten = true;
+                        DumpSoundTriggerToStream(&metaDataStream, trigger);
+                    }
+                }
+                
+                if(!somethingWritten)
+                {
+                    RestoreStreamState(&metaDataStream, beforeAttachmentPoints);
+                }
+            }
+            else
             {
                 PAKSkeleton* skeleton = &asset->paka.skeleton;
                 char* print = skeleton->flippedByDefault ? "true" : "false";
@@ -1278,6 +1353,7 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
                                SKELETON_FLIPPED_BONE2, skeleton->flippedBone2,
                                SKELETON_FLIPPED_BONE2_OFFSET, skeleton->flippedBone2ZOffset);
             }
+            
         } break;
         
         case AssetType_Image:
@@ -1534,6 +1610,7 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
             else
             {
                 // TODO(Leonardo): delete the file!
+                file->valid = false;
             }
         }
         else
@@ -2001,6 +2078,18 @@ inline Animation* GetAnimation(Assets* assets, AssetID ID)
     
     GetGameAssetResult get = GetGameAsset(assets, ID);
     Animation* result = get.asset ? &get.asset->animation : 0;
+    
+    return result;
+}
+
+internal PAKAnimationSoundTrigger* GetAnimationSoundTrigger(Assets* assets, AssetID ID, u32 triggerIndex)
+{
+    PAKAnimationSoundTrigger* result = 0;
+    Animation* animation = GetAnimation(assets, ID);
+    if(animation)
+    {
+        result = animation->soundTriggers + triggerIndex;
+    }
     
     return result;
 }

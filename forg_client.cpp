@@ -17,8 +17,7 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_network_client.cpp"
 #include "forg_editor.cpp"
 #include "forg_particles.cpp"
-#include "forg_bolt.cpp"
-#include "forg_cutscene.cpp"
+//#include "forg_cutscene.cpp"
 #include "forg_ground.cpp"
 #include "forg_archetypes.cpp"
 #include "forg_meta.cpp"
@@ -30,6 +29,7 @@ internal Rect3 GetEntityBound(GameModeWorld* worldMode, BaseComponent* base)
     Rect3 result = Offset(base->bounds, GetRelativeP(worldMode, base));
     return result;
 }
+
 #include "forg_render_entity.cpp"
 #include "forg_game_ui.cpp"
 
@@ -39,12 +39,65 @@ RENDERING_ECS_JOB_CLIENT(RenderBound)
     if(ShouldBeRendered(worldMode, base))
     {
         Rect3 entityBound = GetEntityBound(worldMode, base);
-        PushCubeOutline(group, entityBound, V3(1, 0, 0), 0.05f);
+        PushCubeOutline(group, entityBound, V3(1, 0, 0), 0.02f);
+        
+        Vec3 entityOrigin = GetRelativeP(worldMode, base);
+        PushRect(group, FlatTransform(0.1f, V4(0, 1, 0, 1)), entityOrigin, V2(0.05f, 0.05f));
+    }
+}
+
+RENDERING_ECS_JOB_CLIENT(RenderEntityHUD)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    AliveComponent* alive = GetComponent(worldMode, ID, AliveComponent);
+    
+    if(ShouldBeRendered(worldMode, base))
+    {;
+        Vec2 screenP = base->projectedOnScreen.min;
+        
+        r32 originYOffset = 8;
+        r32 barSeparation = 10.0f;
+        r32 barHeight = 8.0f;
+        r32 barWidth = 90.0f;
+        
+        Vec2 maxPhysicalPCenter = screenP - V2(0, originYOffset + 0.5f * barHeight);
+        PushRect(group, FlatTransform(0, V4(0, 0, 0, 1)), V3(maxPhysicalPCenter, 0), V2(barWidth, barHeight));
+        
+        Vec2 physicalMin = maxPhysicalPCenter - V2(0.5f * barWidth, 0.5f * barHeight);
+        
+        r32 physicalRatio = (r32) alive->physicalHealth / (r32)alive->maxPhysicalHealth;
+        r32 physicalWidth = physicalRatio * barWidth;
+        
+        PushRect(group, FlatTransform(0, V4(1, 0, 0, 1)), RectMinDim(physicalMin, V2(physicalWidth, barHeight)));
+        
+        
+        
+        Vec2 maxMentalPCenter = maxPhysicalPCenter - V2(0, barSeparation + 0.5f * barHeight);
+        PushRect(group, FlatTransform(0, V4(0, 0, 0, 1)), V3(maxMentalPCenter, 0), V2(barWidth, barHeight));
+        
+        Vec2 mentalMin = maxMentalPCenter - V2(0.5f * barWidth, 0.5f * barHeight);
+        r32 mentalRatio = (r32) alive->mentalHealth / (r32)alive->maxMentalHealth;
+        r32 mentalWidth = mentalRatio * barWidth;
+        
+        PushRect(group, FlatTransform(0, V4(0, 0, 1, 1)), RectMinDim(mentalMin, V2(mentalWidth, barHeight)));
+        
+        
     }
 }
 
 internal void DeleteEntityClient(GameModeWorld* worldMode, EntityID clientID, EntityID serverID)
 {
+    if(HasComponent(clientID, AnimationEffectComponent))
+    {
+        AnimationEffectComponent* animation = GetComponent(worldMode, clientID, AnimationEffectComponent);
+        for(u32 effectIndex = 0; effectIndex < animation->effectCount; ++effectIndex)
+        {
+            AnimationEffect* effect = animation->effects + effectIndex;
+            FreeAnimationEffect(effect);
+        }
+        animation->effectCount = 0;
+    }
+    
     FreeArchetype(worldMode, clientID);
     RemoveClientIDMapping(worldMode, serverID);
     
@@ -81,7 +134,7 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntity)
 	base->timeSinceLastUpdate += elapsedTime;
 	base->totalLifeTime += elapsedTime;
     
-    if(base->timeSinceLastUpdate >= STATIC_UPDATE_TIME)
+    if(base->timeSinceLastUpdate >= 2.0f * STATIC_UPDATE_TIME)
     {
 		MarkForDeletion(worldMode, ID);
     }
@@ -109,15 +162,13 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntity)
 
 internal void PlayGame(GameState* gameState, PlatformInput* input)
 {
-    SetGameMode(gameState, GameMode_Playing);
-    
     Clear(&gameState->persistentPool);
     Clear(&gameState->visualEffectsPool);
     
     GameModeWorld* result = PushStruct(&gameState->modePool, GameModeWorld);
     
     result->gameState = gameState;
-#if 0
+#if FORGIVENESS_MULTIPLAYER
     char* loginServer = "forgiveness.hopto.org";
 #else
     char* loginServer = "127.0.0.1";
@@ -182,74 +233,12 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->windStrength = 1.0f;
 }
 
-struct SoundTrig
-{
-    u64 subtypeHash;
-    GameProperties properties;
-};
-
-struct SoundMapping
-{
-    r32 time;
-    r32 targetTime;
-    
-    SoundTrig trig;
-};
-
-internal PlayingSound* SoundTrigger(GameModeWorld* worldMode, SoundTrig* trigger)
-{
-    PlayingSound* result = 0;
-    
-    GameState* gameState = worldMode->gameState;
-    SoundState* soundState = &gameState->soundState;
-    u32 subtype = GetAssetSubtype(gameState->assets, AssetType_Sound, trigger->subtypeHash);
-    SoundId sound = QuerySounds(gameState->assets, subtype, &worldMode->entropy, &trigger->properties);
-    if(IsValid(sound))
-    {
-        result = PlaySound(soundState, gameState->assets, sound, 0);
-    }
-    
-    return result;
-}
-
-internal void MusicTrigger(GameModeWorld* worldMode, char* musicType, u32 priority)
-{
-    GameState* gameState = worldMode->gameState;
-    SoundState* soundState = &gameState->soundState;
-    
-    if(priority > gameState->musicPriority || !soundState->music)
-    {
-        gameState->musicPriority = priority;
-        if(soundState->music)
-        {
-            ChangeVolume(soundState, soundState->music, 1.0f, V2(0.0f, 0.0f));
-            soundState->music = 0;
-        }
-        
-        SoundTrig trig = {};
-        trig.subtypeHash = StringHash(musicType);
-        AddGameProperty(&trig.properties, season, worldMode->season);
-        soundState->music = SoundTrigger(worldMode, &trig);
-    }
-}
-
-internal void UpdateSoundMapping(SoundMapping* mapping)
-{
-    mapping->time += elapsedTime;
-    if(mapping->time >= mapping->targetTime)
-    {
-        Trigger(mapping->trigger);
-        mapping->time = 0;
-    }
-}
-
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
     b32 result = false;
     
     ClientPlayer* myPlayer = &worldMode->player;
     ReceiveNetworkPackets(gameState, worldMode);
-    
     
     worldMode->originalTimeToAdvance = input->timeToAdvance;
     if(Pressed(&input->pauseButton))
@@ -263,6 +252,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     }
     
     worldMode->windTime += input->timeToAdvance * worldMode->windStrength;
+    worldMode->stateTime += input->timeToAdvance;
     
 #if FORGIVENESS_INTERNAL
     if(Pressed(&input->debugButton1))
@@ -383,7 +373,11 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     BEGIN_BLOCK("editor and UI overlay");
     SetOrthographicTransformScreenDim(group);
     RenderUIOverlay(worldMode, group);
-    RenderEditorOverlay(worldMode, group, input);
+    EXECUTE_RENDERING_JOB(worldMode, group, RenderEntityHUD, ArchetypeHas(AliveComponent), input->timeToAdvance);
+    if(worldMode->editingEnabled)
+    {
+        RenderEditorOverlay(worldMode, group, input);
+    }
     END_BLOCK();
     
     myPlayer->oldUniverseP = myPlayer->universeP;
@@ -401,15 +395,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     return result;
 }
 
-
-internal b32 UpdateAndRenderLauncherScreen(GameState* gameState, RenderGroup* group, PlatformInput* input)
-{
-#if 0
-    platformAPI.DEBUGKillProcessByName("win32_server.exe");
-    platformAPI.DEBUGExecuteSystemCommand("server", input->serverEXE, "");
-#endif
-    return 0;
-}
 
 #if FORGIVENESS_INTERNAL
 PlatformClientMemory* debugGlobalMemory;
@@ -477,41 +462,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     
     b32 rerun = false;
     input->allowedToQuit = true;
-    
-    do
-    {
-        switch(gameState->mode)
-        {
-            case GameMode_Launcher:
-            {
-                rerun = UpdateAndRenderLauncherScreen(gameState, &group, input);
-            } break;
-            
-            case GameMode_TitleScreen:
-            {
-                rerun = UpdateAndRenderTitleScreen(gameState, gameState->titleScreen, &group, input);
-            } break;
-            
-            case GameMode_Cutscene:
-            {
-                rerun = UpdateAndRenderCutscene(gameState, gameState->cutscene, &group, input);
-            } break;
-            
-            case GameMode_Playing:
-            {
-                rerun = UpdateAndRenderGame(gameState, gameState->world, &group, input);
-                if(input->allowedToQuit && input->altDown && Pressed(&input->exitButton))
-                {
-                    platformAPI.net.CloseConnection(input->network, 0);
-                    SetGameMode(gameState, GameMode_Launcher);
-                }
-            } break;
-            
-            InvalidDefaultCase;
-        }
-        
-    }
-    while(rerun);
+    UpdateAndRenderGame(gameState, gameState->world, &group, input);
     
     FlushAllQueuedPackets(timeToAdvance);
     
@@ -521,6 +472,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     CheckPool(&gameState->framePool);
 }
 
+#if 0
 internal void SetGameMode(GameState* gameState, GameMode mode)
 {
     b32 completeTask = false;
@@ -540,6 +492,7 @@ internal void SetGameMode(GameState* gameState, GameMode mode)
     Clear(&gameState->modePool);
     gameState->mode = mode;
 }
+#endif
 
 //void GameGetSoundOutput(PlatformMemory* memory, PlatformInput* input, PlatformSoundBuffer* soundBuffer)
 extern "C" GAME_GET_SOUND_OUTPUT(GameGetSoundOutput)
