@@ -57,6 +57,7 @@ struct ArchetypeLayout
             ArchetypeComponent hasStaticComponent;
             ArchetypeComponent hasSoundEffectComponent;
             ArchetypeComponent hasAliveComponent;
+            ArchetypeComponent hasMiscComponent;
         };
     };
 };

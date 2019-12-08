@@ -166,6 +166,7 @@ enum Packet_Type
     Type_entityHeader,
     Type_entityBasics,
     Type_Health,
+    Type_Misc,
     Type_deletedEntity,
 	Type_Mappings,
 	
@@ -201,6 +202,14 @@ enum NetworkMappingType
     Mapping_OpenedBy,
 };
 
+enum NetworkProperties
+{
+    Network_Action,
+    Network_Status,
+    
+    Network_Count
+};
+
 enum EntityBasicsFlags
 {
 	EntityBasics_Definition = (1 << 0),
@@ -217,6 +226,12 @@ enum HealthFlags
     HealthFlag_MaxPhysical = (1 << 1),
     HealthFlag_Mental = (1 << 2),
     HealthFlag_MaxMental = (1 << 3),
+};
+
+enum MiscFlags
+{
+    MiscFlag_AttackDistance = (1 << 0),
+    MiscFlag_AttackContinueCoeff = (1 << 1),
 };
 
 struct LoginResponse

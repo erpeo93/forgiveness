@@ -220,7 +220,16 @@ internal void QueueDeletedID(PlayerComponent* player, EntityID ID)
     QueueStandardPacket(player);
 }
 
-#define PackFlag(flags, string, ...) if(sendingFlags & SafeTruncateToU16(flags)){Pack(string, ##__VA_ARGS__);}
+#define PackIfFlag(flags, string, ...) if(sendingFlags & SafeTruncateToU16(flags)){Pack(string, ##__VA_ARGS__);}
+
+#define PackU16(def, V) \
+{u16* flags = (u16*) ((u8*) def + V.flagOffset); if(*flags & V.flag){Pack("H", V.value);}}
+
+#define PackU32(def, V) \
+{u16* flags = (u16*) ((u8*) def + V.flagOffset); if(*flags & V.flag){Pack("L", V.value);}}
+
+#define PackR32(def, V) \
+{u16* flags = (u16*) ((u8*) def + V.flagOffset); if(*flags & V.flag){Pack("d", V.value);}}
 
 internal u16 PrepareBasicsUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
 {
@@ -260,16 +269,16 @@ internal u16 PrepareBasicsUpdate(ServerState* server, EntityID ID, b32 completeU
         u16 action = act ? GetU16(act->action) : 0;
         u16 sendingFlags = def->basicPropertiesChanged;
         Pack("H", sendingFlags);
-        def->basicPropertiesChanged = 0;
-        
-        PackFlag(EntityBasics_Definition,"LLL", def->definitionID.subtypeHashIndex, def->definitionID.index, def->seed);
-        PackFlag(EntityBasics_Position, "hhhV", def->P.chunkX, def->P.chunkY, def->P.chunkZ, def->P.chunkOffset);
-        PackFlag(EntityBasics_Velocity, "V", speed);
-        PackFlag(EntityBasics_Action, "H", action);
-        PackFlag(EntityBasics_Status, "H", def->status);
-        PackFlag(EntityBasics_Flags, "L", def->flags);
+        PackIfFlag(EntityBasics_Definition,"LLL", def->definitionID.subtypeHashIndex, def->definitionID.index, def->seed);
+        PackIfFlag(EntityBasics_Position, "hhhV", def->P.chunkX, def->P.chunkY, def->P.chunkZ, def->P.chunkOffset);
+        PackIfFlag(EntityBasics_Velocity, "V", speed);
+        PackIfFlag(EntityBasics_Action, "H", action);
+        PackU16(def, def->status);
+        PackU32(def, def->flags);
         
         result = ForgEndPacket_(buff_, buff);
+        
+        def->basicPropertiesChanged = 0;
     }
     
     return result;
@@ -295,14 +304,47 @@ internal u16 PrepareHealthUpdate(ServerState* server, EntityID ID, b32 completeU
             
             u16 sendingFlags = def->healthPropertiesChanged;
             Pack("H", sendingFlags);
-            def->healthPropertiesChanged = 0;
             
-            PackFlag(HealthFlag_Physical, "L", alive->physicalHealth);
-            PackFlag(HealthFlag_MaxPhysical, "L", alive->maxPhysicalHealth);
-            PackFlag(HealthFlag_Mental, "L", alive->mentalHealth);
-            PackFlag(HealthFlag_MaxMental, "L", alive->maxMentalHealth);
+            PackU32(def, alive->physicalHealth);
+            PackU32(def, alive->maxPhysicalHealth);
+            PackU32(def, alive->mentalHealth);
+            PackU32(def, alive->maxMentalHealth);
             
             result = ForgEndPacket_(buff_, buff);
+            
+            def->healthPropertiesChanged = 0;
+        }
+    }
+    
+    return result;
+}
+
+internal u16 PrepareMiscUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
+{
+    u16 result = 0;
+    
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+    if(misc)
+    {
+        if(completeUpdate)
+        {
+            def->miscPropertiesChanged = 0xffff;
+        }
+        
+        if(def->miscPropertiesChanged != 0)
+        {
+            unsigned char* buff = ForgPackHeader(buff_, Type_Misc);
+            
+            u16 sendingFlags = def->miscPropertiesChanged;
+            Pack("H", sendingFlags);
+            
+            PackR32(def, misc->attackDistance);
+            PackR32(def, misc->attackContinueCoeff);
+            
+            result = ForgEndPacket_(buff_, buff);
+            
+            def->miscPropertiesChanged = 0;
         }
     }
     
@@ -520,10 +562,13 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, b32 staticUpdat
             unsigned char healthBuffer_[KiloBytes(2)];
             u16 healthSize = PrepareHealthUpdate(server, ID, completeUpdate, staticUpdate, healthBuffer_);
             
+            unsigned char miscBuffer_[KiloBytes(2)];
+            u16 miscSize = PrepareMiscUpdate(server, ID, completeUpdate, staticUpdate, miscBuffer_);
+            
             unsigned char mappingsBuffer_[KiloBytes(2)];
             u16 mappingsSize = PrepareMappingsUpdate(server, ID, completeUpdate, staticUpdate, mappingsBuffer_);
             
-            if(basicsSize > 0 || mappingsSize > 0 || healthSize > 0)
+            if(basicsSize > 0 || mappingsSize > 0 || healthSize > 0 || miscSize > 0)
             {
                 SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
                 for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
@@ -551,6 +596,20 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, b32 staticUpdat
                         if(writeHere)
                         {
                             Copy(healthSize, writeHere, healthBuffer_);
+                        }
+                        else
+                        {
+                            InvalidCodePath;
+                        }
+                    }
+                    
+                    if(miscSize > 0)
+                    {
+                        QueueEntityHeader(player, ID);
+                        u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, miscSize, ID);
+                        if(writeHere)
+                        {
+                            Copy(miscSize, writeHere, miscBuffer_);
                         }
                         else
                         {

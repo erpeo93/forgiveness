@@ -498,15 +498,14 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         }
                     }
                     
-					base->propertyCount = 2;
 					if(receivedFlags & EntityBasics_Action)
 					{
-						base->properties[0] = GameProp(action, action);
+						base->properties[Network_Action] = GameProp(action, action);
 					}
                     
 					if(receivedFlags & EntityBasics_Status)
 					{
-						base->properties[1] = GameProp(status, status);
+						base->properties[Network_Status] = GameProp(status, status);
 					}
                     
 					if(receivedFlags & EntityBasics_Flags)
@@ -569,6 +568,33 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     if(receivedFlags & HealthFlag_MaxMental)
                     {
                         alive->maxMentalHealth = maxMentalHealth;
+                    }
+                }
+                
+            } break;
+            
+            case Type_Misc:
+            {
+                u16 receivedFlags;
+				Unpack("H", &receivedFlags);
+                
+                r32 attackDistance = 0;
+                r32 attackContinueCoeff = 0;
+                
+                UnpackFlags(MiscFlag_AttackDistance, "d", &attackDistance);
+                UnpackFlags(MiscFlag_AttackContinueCoeff, "d", &attackContinueCoeff);
+                
+                MiscComponent* misc = GetComponent(worldMode, currentClientID, MiscComponent);
+                if(misc)
+                {
+                    if(receivedFlags & MiscFlag_AttackDistance)
+                    {
+                        misc->attackDistance = attackDistance;
+                    }
+                    
+                    if(receivedFlags & MiscFlag_AttackContinueCoeff)
+                    {
+                        misc->attackContinueCoeff = attackContinueCoeff;
                     }
                 }
                 

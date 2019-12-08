@@ -27,6 +27,8 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     BrainComponent* brain = GetComponent(server, ID, BrainComponent);
+    MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+    
     switch(brain->type)
     {
         case Brain_invalid:
@@ -110,7 +112,9 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                 Vec3 toPlayer = SubtractOnSameZChunk(playerDef->P, def->P);
                 r32 distanceSq = LengthSq(toPlayer);
                 r32 targetTime;
-                if(ActionIsPossibleAtDistance(playerInteraction, attack, distanceSq, &targetTime))
+                
+                u16 oldAction = brain->currentCommand.action;
+                if(ActionIsPossibleAtDistance(playerInteraction, attack, oldAction, distanceSq, &targetTime, misc))
                 {
                     Attack(brain, playerID);
                 }
@@ -144,7 +148,9 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
         
     }
     
-    
-    DispatchCommand(server, ID, &brain->currentCommand, &brain->commandParameters, elapsedTime, true);
-    DispatchCommand(server, ID, &brain->inventoryCommand, &brain->commandParameters, elapsedTime, false);
+    if(HasComponent(ID, ActionComponent))
+    {
+        DispatchCommand(server, ID, &brain->currentCommand, &brain->commandParameters, elapsedTime, true);
+        DispatchCommand(server, ID, &brain->inventoryCommand, &brain->commandParameters, elapsedTime, false);
+    }
 }

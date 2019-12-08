@@ -8,6 +8,12 @@ struct AliveComponent
     U32 maxMentalHealth;
 };
 
+struct MiscComponent
+{
+    R32 attackDistance;
+    R32 attackContinueCoeff;
+};
+
 enum EntityFlags
 {
     EntityFlag_notInWorld = (1 << 0),

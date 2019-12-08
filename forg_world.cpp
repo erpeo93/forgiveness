@@ -16,7 +16,7 @@ inline WorldTile* GetTile(ServerState* server, WorldChunk* chunk, u32 tileX, u32
 }
 #else
 
-inline WorldTile* GetTile(GameModeWorld* worldMode, WorldChunk* chunk, u32 tileX, u32 tileY)
+inline WorldTile* GetTile(WorldChunk* chunk, u32 tileX, u32 tileY)
 {
     Assert(tileY < CHUNK_DIM);
     Assert(tileX < CHUNK_DIM);
@@ -105,6 +105,11 @@ inline Vec3 SubtractOnSameZChunk(UniversePos A, UniversePos B)
 }
 
 #ifdef FORG_SERVER
+internal WorldChunk* GetChunk(ServerState* server, i32 worldX, i32 worldY, i32 worldZ)
+{
+    WorldChunk* result = server->chunks + (worldZ * (Squarei(WORLD_CHUNK_SPAN)) + worldY * (WORLD_CHUNK_SPAN) + worldX);
+    return result;
+}
 #else
 internal WorldChunk* GetChunk(GameModeWorld* worldMode, i32 worldX, i32 worldY, i32 worldZ)
 {
@@ -197,7 +202,7 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, UniversePos baseP, Vec2 P)
     GetUniversePosQuery query = TranslateRelativePos(worldMode, baseP, P);
     if(query.chunk)
     {
-        result = GetTile(worldMode, query.chunk, query.tileX, query.tileY);
+        result = GetTile(query.chunk, query.tileX, query.tileY);
     }
     return result;
 }
@@ -244,7 +249,7 @@ inline WorldTile* GetTile(GameModeWorld* worldMode, WorldChunk* chunk, i32 tileX
     {
         WorldChunk* newChunk = GetChunk(worldMode, chunkX, chunkY, chunkZ);
         Assert(newChunk);
-        result = GetTile(worldMode, newChunk, (u32) tileX, (u32) tileY);
+        result = GetTile(newChunk, (u32) tileX, (u32) tileY);
         
     }
     return result;

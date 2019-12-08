@@ -32,7 +32,19 @@ internal void AddPossibleActions(PossibleActionList* list, PossibleActionDefinit
                 PossibleAction* dest = list->actions + list->actionCount++;
                 
                 dest->action = action;
-                dest->distanceSq = Square(source->distance);
+                
+                if(source->special.value != Special_Invalid)
+                {
+                    dest->distance.type = ActionDistance_Special;
+                    dest->distance.propertyIndex = source->special.value;
+                }
+                else
+                {
+                    dest->distance.type = ActionDistance_Standard;
+                    dest->distance.startDistance = source->distance;
+                    dest->distance.continueCoeff = source->continueDistanceCoeff;
+                }
+                
                 dest->time = source->time;
                 dest->requiredUsingType = source->requiredUsingType;
             }
@@ -52,6 +64,8 @@ INIT_COMPONENT_FUNCTION(InitDefaultComponent)
     def->basicPropertiesChanged |= EntityBasics_Position;
     
     def->healthPropertiesChanged = 0xffff;
+    
+    def->miscPropertiesChanged = 0xffff;
     
     def->P = s->P;
     def->flags = InitU32(basicPropertiesChanged, EntityBasics_Flags, 0);
@@ -214,6 +228,12 @@ INIT_COMPONENT_FUNCTION(InitAliveComponent)
     alive->mentalHealth = InitU32(healthPropertiesChanged, HealthFlag_Mental, maxMental);
 }
 
+INIT_COMPONENT_FUNCTION(InitMiscComponent)
+{
+    MiscComponent* misc = (MiscComponent*) componentPtr;
+    misc->attackDistance = InitR32(miscPropertiesChanged, MiscFlag_AttackDistance, 1.0f);
+    misc->attackContinueCoeff = InitR32(miscPropertiesChanged, MiscFlag_AttackContinueCoeff, 4.0f);
+}
 #else
 INIT_COMPONENT_FUNCTION(InitBaseComponent)
 {
@@ -235,8 +255,6 @@ INIT_COMPONENT_FUNCTION(InitBaseComponent)
     
     base->fadeInTime = c->fadeInTime;
     base->fadeOutTime = c->fadeOutTime;
-    
-    base->propertyCount = 0;
     
     for(u32 propertyIndex = 0; propertyIndex < ArrayCount(base->properties); ++propertyIndex)
     {
@@ -548,6 +566,12 @@ INIT_COMPONENT_FUNCTION(InitAliveComponent)
     alive->maxMentalHealth = 0;
 }
 
+INIT_COMPONENT_FUNCTION(InitMiscComponent)
+{
+    MiscComponent* misc = (MiscComponent*) componentPtr;
+    misc->attackDistance = 0;
+    misc->attackContinueCoeff = 0;
+}
 #endif
 INIT_COMPONENT_FUNCTION(InitInteractionComponent)
 {

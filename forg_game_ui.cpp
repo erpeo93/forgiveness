@@ -66,6 +66,7 @@ internal void HandleMouseInteraction(GameUIContext* UI, GameModeWorld* worldMode
 internal GameCommand ComputeFinalCommand(GameUIContext* UI, GameModeWorld* worldMode, ClientPlayer* myPlayer)
 {
     BaseComponent* player = GetComponent(worldMode, myPlayer->clientID, BaseComponent);
+    MiscComponent* misc = GetComponent(worldMode, myPlayer->clientID, MiscComponent);
     
     GameCommand result = UI->standardCommand;
     
@@ -104,8 +105,9 @@ internal GameCommand ComputeFinalCommand(GameUIContext* UI, GameModeWorld* world
                 usingRef = usingBase->definitionID;
             }
             
+            u16 currentAction = player->properties[Network_Action].value;
             r32 targetTime;
-            if(!ActionIsPossibleAtDistance(interaction, action, distanceSq, &targetTime, usingValid, usingRef))
+            if(!ActionIsPossibleAtDistance(interaction, action, currentAction, distanceSq, &targetTime, misc, usingValid, usingRef))
             {
                 GameCommand command = {};
                 command.action = move;
@@ -1065,8 +1067,9 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                                         BaseComponent* hotBase = GetComponent(worldMode, hotIDClient, BaseComponent);
                                         r32 distanceSq = LengthSq(SubtractOnSameZChunk(hotBase->universeP, player->universeP));
                                         
+                                        MiscComponent* misc = GetComponent(worldMode, myPlayer->clientID, MiscComponent);
                                         r32 targetTime;
-                                        if(ActionIsPossibleAtDistance(interaction, drag, distanceSq, &targetTime))
+                                        if(ActionIsPossibleAtDistance(interaction, drag, 0, distanceSq, &targetTime, misc))
                                         {
                                             GameCommand command = {};
                                             command.action = drag;

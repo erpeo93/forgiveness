@@ -408,6 +408,36 @@ internal void AddToPoission(PoissonP** positions, MemoryPool* pool, UniversePos 
     *positions = newP;
 }
 
+internal b32 SatisfiesClusterRequirements(ServerState* server, UniversePos P)
+{
+    b32 result = (PositionInsideWorld(&P));
+    return result;
+}
+
+
+internal b32 SatisfiesEntityRequirements(ServerState* server, UniversePos P)
+{
+    b32 result = false;
+    if(PositionInsideWorld(&P))
+    {
+        result = true;
+        
+        WorldChunk* chunk = GetChunk(server, P.chunkX, P.chunkY, P.chunkZ);
+        
+        r32 oneOverVoxelSide = 1.0f / VOXEL_SIZE;
+        u32 tileX = TruncateReal32ToI32(P.chunkOffset.x * oneOverVoxelSide);
+        u32 tileY = TruncateReal32ToI32(P.chunkOffset.y * oneOverVoxelSide);
+        
+        WorldTile* tile = GetTile(server, chunk, tileX, tileY);
+        
+        if(IsValid(tile->underSeaLevelFluid))
+        {
+            result = false;
+        }
+    }
+    return result;
+}
+
 internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, EntityRef type, AddEntityParams params);
 internal void SpawnPlayerGhost(ServerState* server, UniversePos P, AddEntityParams params);
 internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos referenceP, RandomSequence* seq)
@@ -457,10 +487,13 @@ internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos 
                     P = referenceP;
                     P.chunkOffset += Hadamart(maxClusterOffset, RandomBilV3(seq));
                     P = NormalizePosition(P);
-                    if(Valid(clusters, P, spawn->minClusterDistance))
+                    if(SatisfiesClusterRequirements(server, P))
                     {
-                        valid = true;
-                        AddToPoission(&clusters, &tempPool, P);
+                        if(Valid(clusters, P, spawn->minClusterDistance))
+                        {
+                            valid = true;
+                            AddToPoission(&clusters, &tempPool, P);
+                        }
                     }
                 }
                 
@@ -480,10 +513,13 @@ internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos 
                             P.chunkOffset += Hadamart(maxOffset, RandomBilV3(seq));
                             P = NormalizePosition(P);
                             
-                            if(Valid(entities, P, spawn->minEntityDistance))
+                            if(SatisfiesEntityRequirements(server, P))
                             {
-                                AddToPoission(&entities, &tempPool, P);
-                                valid = true;
+                                if(Valid(entities, P, spawn->minEntityDistance))
+                                {
+                                    AddToPoission(&entities, &tempPool, P);
+                                    valid = true;
+                                }
                             }
                         }
                         
@@ -495,6 +531,7 @@ internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos 
                                 params.spawnFollowingEntity = true;
                                 params.attachedEntityType = spawn->attachedBrainType;
                             }
+                            
                             AddEntity(server, P, seq, spawn->type, params);
                         }
                     }
@@ -694,7 +731,7 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
         Clear(&server->chunkPool);
         server->chunks = PushArray(&server->chunkPool, WorldChunk, generator->maxDeepness * WORLD_CHUNK_SPAN * WORLD_CHUNK_SPAN);
         WorldChunk* chunk = server->chunks;
-        for(i16 chunkZ = 0; chunkZ < (i16) generator->maxDeepness; ++chunkZ)
+        for(i16 chunkZ = 0; chunkZ < server->maxDeepness; ++chunkZ)
         {
             for(i16 chunkY = 0; chunkY < WORLD_CHUNK_SPAN; ++chunkY)
             {

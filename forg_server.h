@@ -22,12 +22,89 @@ struct U16
     u16 flag;
 };
 
+inline b32 operator == (U16 v1, U16 v2)
+{
+    b32 result = false;
+    if(v1.value == v2.value)
+    {
+        result = true;
+    }
+    return result;
+}
+
+inline b32 operator == (U16 v1, u16 v2)
+{
+    b32 result = false;
+    if(v1.value == v2)
+    {
+        result = true;
+    }
+    return result;
+}
+
+inline b32 operator == (u16 v1, U16 v2)
+{
+    b32 result = false;
+    if(v1 == v2.value)
+    {
+        result = true;
+    }
+    return result;
+}
+
 struct U32
 {
     u32 value;
     i16 flagOffset;
     u16 flag;
 };
+
+inline b32 operator == (U32 v1, U32 v2)
+{
+    b32 result = false;
+    if(v1.value == v2.value)
+    {
+        result = true;
+    }
+    return result;
+}
+
+struct R32
+{
+    r32 value;
+    i16 flagOffset;
+    u16 flag;
+};
+
+inline r32 GetR32(R32 value)
+{
+    r32 result = value.value;
+    return result;
+}
+
+inline b32 operator == (R32 v1, R32 v2)
+{
+    b32 result = (v1.value == v2.value);
+    return result;
+}
+
+inline b32 operator == (R32 v1, r32 v2)
+{
+    b32 result = (v1.value == v2);
+    return result;
+}
+
+inline b32 operator == (r32 v1, R32 v2)
+{
+    b32 result = (v1 == v2.value);
+    return result;
+}
+
+inline r32 operator *(R32 v1, R32 v2)
+{
+    r32 result = v1.value * v2.value;
+    return result;
+}
 
 #define Property(name) enum name
 #include "../properties/test.properties"
@@ -91,6 +168,7 @@ struct DefaultComponent
     b32 updateSent;
     u16 basicPropertiesChanged;
     u16 healthPropertiesChanged;
+    u16 miscPropertiesChanged;
     
     EntityRef definitionID;
     u32 seed;
@@ -119,6 +197,8 @@ inline void AddChangedFlags(DefaultComponent* def, u16 flagOffset, u16 flag)
     AddChangedFlags(def, flags, flag);
 }
 
+
+
 inline void SetU16(DefaultComponent* def, U16* value, u16 newValue)
 {
     if(value->value != newValue)
@@ -134,47 +214,17 @@ inline u16 GetU16(U16 value)
     return result;
 }
 
-inline b32 operator == (U16 v1, U16 v2)
+#define InitU16(flags, flag, value) InitU16_((i16) OffsetOf(DefaultComponent, flags), flag, value) 
+inline U16 InitU16_(i16 flagOffset, u16 flag, u16 value)
 {
-    b32 result = false;
-    if(v1.value == v2.value)
-    {
-        result = true;
-    }
-    return result;
-}
-
-inline b32 operator == (U16 v1, u16 v2)
-{
-    b32 result = false;
-    if(v1.value == v2)
-    {
-        result = true;
-    }
-    return result;
-}
-
-inline b32 operator == (u16 v1, U16 v2)
-{
-    b32 result = false;
-    if(v1 == v2.value)
-    {
-        result = true;
-    }
-    return result;
-}
-
-
-#define InitU32(flags, flag, value) InitU32_((i16) OffsetOf(DefaultComponent, flags), flag, value) 
-inline U32 InitU32_(i16 flagOffset, u16 flag, u32 value)
-{
-    U32 result = {};
+    U16 result = {};
     result.value = value;
     result.flagOffset = flagOffset;
     result.flag = flag;
     
     return result;
 }
+
 
 inline void SetU32(DefaultComponent* def, U32* value, u32 newValue)
 {
@@ -191,20 +241,33 @@ inline u32 GetU32(U32 value)
     return result;
 }
 
-inline b32 operator == (U32 v1, U32 v2)
+#define InitU32(flags, flag, value) InitU32_((i16) OffsetOf(DefaultComponent, flags), flag, value) 
+inline U32 InitU32_(i16 flagOffset, u16 flag, u32 value)
 {
-    b32 result = false;
-    if(v1.value == v2.value)
-    {
-        result = true;
-    }
+    U32 result = {};
+    result.value = value;
+    result.flagOffset = flagOffset;
+    result.flag = flag;
+    
     return result;
 }
 
-#define InitU16(flags, flag, value) InitU16_((i16) OffsetOf(DefaultComponent, flags), flag, value) 
-inline U16 InitU16_(i16 flagOffset, u16 flag, u16 value)
+
+
+
+inline void SetR32(DefaultComponent* def, R32* value, r32 newValue)
 {
-    U16 result = {};
+    if(value->value != newValue)
+    {
+        value->value = newValue;
+        AddChangedFlags(def, value->flagOffset, value->flag);
+    }
+}
+
+#define InitR32(flags, flag, value) InitR32_((i16) OffsetOf(DefaultComponent, flags), flag, value) 
+inline R32 InitR32_(i16 flagOffset, u16 flag, r32 value)
+{
+    R32 result = {};
     result.value = value;
     result.flagOffset = flagOffset;
     result.flag = flag;

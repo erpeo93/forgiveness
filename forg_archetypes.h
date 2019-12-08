@@ -12,6 +12,7 @@ Archetype() struct AnimalArchetype
     SkillComponent skills;
     BrainComponent brain;
     AliveComponent alive;
+    MiscComponent misc;
 #else
     BaseComponent base;
     AnimationComponent animation;
@@ -22,6 +23,7 @@ Archetype() struct AnimalArchetype
     AnimationEffectComponent animationEffects;
     SoundEffectComponent soundEffects;
     AliveComponent alive;
+    MiscComponent misc;
 #endif
 };
 
@@ -172,6 +174,8 @@ introspection() struct PossibleActionDefinition
 {
     Enumerator action MetaEnumerator("action");
     r32 distance MetaDefault("1.0f");
+    r32 continueDistanceCoeff MetaDefault("1.0f");
+    GameProperty special MetaDefault("{Property_specialPropertyType, Special_Invalid}") MetaFixed(property);
     r32 time;
     EntityRef requiredUsingType;
 };

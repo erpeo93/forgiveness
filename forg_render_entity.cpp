@@ -107,7 +107,7 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.replacements = definition->client.animationReplacements;
         params.ID = ID;
         
-        GameProperty action = SearchForProperty(base->properties, base->propertyCount, Property_action);
+        GameProperty action =  SearchForProperty(base->properties, ArrayCount(base->properties), Property_action);
         if(FinishedSingleCycleAnimation(animation))
         {
             params.fakeAnimation = true;
@@ -833,7 +833,7 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
             {
                 matches = false;
                 GameProperty* testProperty = effect->properties + testIndex;
-                for(u32 propertyIndex = 0; propertyIndex < base->propertyCount; ++propertyIndex)
+                for(u32 propertyIndex = 0; propertyIndex < ArrayCount(base->properties); ++propertyIndex)
                 {
                     GameProperty* entityProperty = base->properties + propertyIndex;
                     if(AreEqual(*entityProperty, *testProperty))

@@ -1,8 +1,29 @@
 #pragma once
+
+enum ActionDistanceType
+{
+    ActionDistance_Standard,
+    ActionDistance_Special,
+};
+
+struct PossibleActionDistance
+{
+    u16 type;
+    union
+    {
+        struct
+        {
+            r32 startDistance;
+            r32 continueCoeff;
+        };
+        
+        u16 propertyIndex;
+    };
+};
 struct PossibleAction
 {
     u16 action;
-    r32 distanceSq;
+    PossibleActionDistance distance;
     r32 time;
     EntityRef requiredUsingType;
 };
@@ -55,7 +76,6 @@ struct InteractionComponent
     u16 inventorySlotType;
 };
 
-
 inline b32 AreEqual(EntityRef r1, EntityRef r2);
 internal PossibleAction* ActionIsPossible(InteractionComponent* interaction, u16 action, u32 usingValid = false, EntityRef usingType = {})
 {
@@ -92,14 +112,65 @@ internal PossibleAction* ActionIsPossible(InteractionComponent* interaction, u16
     
     return result;
 }
-internal b32 ActionIsPossibleAtDistance(InteractionComponent* interaction, u16 action, r32 distanceSq, r32* targetTime, b32 usingValid = false, EntityRef usingType = {})
+
+inline r32 GetMaxDistanceSq(PossibleAction* action, b32 continuing, MiscComponent* misc)
+{
+    r32 result = 0;
+    
+    PossibleActionDistance* distance = &action->distance;
+    switch(distance->type)
+    {
+        case ActionDistance_Standard:
+        {
+            if(continuing)
+            {
+                result = distance->startDistance * distance->continueCoeff;
+            }
+            else
+            {
+                result = distance->startDistance;
+            }
+        } break;
+        
+        case ActionDistance_Special:
+        {
+            if(misc)
+            {
+                switch(distance->propertyIndex)
+                {
+                    case Special_AttackDistance:
+                    {
+                        if(continuing)
+                        {
+                            result = misc->attackDistance * misc->attackContinueCoeff;
+                        }
+                        else
+                        {
+                            result = GetR32(misc->attackDistance);
+                        }
+                    } break;
+                }
+            }
+        } break;
+    }
+    
+    result = Square(result);
+    return result;
+}
+
+internal b32 ActionIsPossibleAtDistance(InteractionComponent* interaction, u16 action, u16 oldAction, r32 distanceSq, r32* targetTime,MiscComponent* misc, b32 usingValid = false, EntityRef usingType = {})
 {
     b32 result = false;
     PossibleAction* possible = ActionIsPossible(interaction, action, usingValid, usingType);
-    if(possible && distanceSq <= possible->distanceSq)
+    if(possible)
     {
-        result = true;
-        *targetTime = possible->time;
+        b32 continuing = (action == oldAction);
+        r32 maxDistanceSq = GetMaxDistanceSq(possible, continuing, misc);
+        if(distanceSq <= maxDistanceSq)
+        {
+            result = true;
+            *targetTime = possible->time;
+        }
     }
     return result;
 }

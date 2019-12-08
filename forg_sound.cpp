@@ -412,7 +412,7 @@ internal void AddSoundIfMatches(SoundEffectComponent* mappings, BaseComponent* b
     {
         matches = false;
         GameProperty* testProperty = sound->properties + testIndex;
-        for(u32 propertyIndex = 0; propertyIndex < base->propertyCount; ++propertyIndex)
+        for(u32 propertyIndex = 0; propertyIndex < ArrayCount(base->properties); ++propertyIndex)
         {
             GameProperty* entityProperty = base->properties + propertyIndex;
             if(AreEqual(*entityProperty, *testProperty))

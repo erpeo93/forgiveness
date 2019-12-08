@@ -21,6 +21,8 @@
 #include "forg_ecs.h"
 #include "forg_entity_layout.h"
 typedef u32 U32;
+typedef r32 R32;
+#define GetR32(value) value
 #include "forg_entity.h"
 #include "forg_meta.h"
 #include "forg_render_tier.h"
@@ -64,8 +66,7 @@ struct BaseComponent
     r32 fadeInTime;
     r32 fadeOutTime;
     
-    u32 propertyCount;
-    GameProperty properties[16];
+    GameProperty properties[Network_Count];
 };
 
 internal r32 GetHeight(Rect3 bounds)
