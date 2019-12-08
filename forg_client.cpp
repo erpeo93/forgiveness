@@ -57,29 +57,27 @@ RENDERING_ECS_JOB_CLIENT(RenderEntityHUD)
         
         r32 originYOffset = 8;
         r32 barSeparation = 10.0f;
-        r32 barHeight = 8.0f;
-        r32 barWidth = 90.0f;
+        Vec2 barDim = V2(90.0f, 8.0f);
         
-        Vec2 maxPhysicalPCenter = screenP - V2(0, originYOffset + 0.5f * barHeight);
-        PushRect(group, FlatTransform(0, V4(0, 0, 0, 1)), V3(maxPhysicalPCenter, 0), V2(barWidth, barHeight));
+        Vec4 baseC = V4(0, 0, 0, 1);
+        Vec4 hC = V4(1, 0, 0, 1);
+        Vec4 mC = V4(0, 0, 1, 1);
         
-        Vec2 physicalMin = maxPhysicalPCenter - V2(0.5f * barWidth, 0.5f * barHeight);
+        Vec2 hMin = screenP - V2(0, originYOffset + 0.5f * barDim.y);
+        r32 hRatio = (r32) alive->physicalHealth / (r32)alive->maxPhysicalHealth;
+        r32 hWidth = hRatio * barDim.x;
         
-        r32 physicalRatio = (r32) alive->physicalHealth / (r32)alive->maxPhysicalHealth;
-        r32 physicalWidth = physicalRatio * barWidth;
-        
-        PushRect(group, FlatTransform(0, V4(1, 0, 0, 1)), RectMinDim(physicalMin, V2(physicalWidth, barHeight)));
+        PushRect(group, FlatTransform(0, baseC), RectMinDim(hMin, barDim));
+        PushRect(group, FlatTransform(0, hC), RectMinDim(hMin, V2(hWidth, barDim.y)));
         
         
         
-        Vec2 maxMentalPCenter = maxPhysicalPCenter - V2(0, barSeparation + 0.5f * barHeight);
-        PushRect(group, FlatTransform(0, V4(0, 0, 0, 1)), V3(maxMentalPCenter, 0), V2(barWidth, barHeight));
+        Vec2 mMin = hMin - V2(0, barSeparation + 0.5f * barDim.y);
+        r32 mRatio = (r32) alive->mentalHealth / (r32)alive->maxMentalHealth;
+        r32 mWidth = mRatio * barDim.x;
         
-        Vec2 mentalMin = maxMentalPCenter - V2(0.5f * barWidth, 0.5f * barHeight);
-        r32 mentalRatio = (r32) alive->mentalHealth / (r32)alive->maxMentalHealth;
-        r32 mentalWidth = mentalRatio * barWidth;
-        
-        PushRect(group, FlatTransform(0, V4(0, 0, 1, 1)), RectMinDim(mentalMin, V2(mentalWidth, barHeight)));
+        PushRect(group, FlatTransform(0, baseC), RectMinDim(mMin, barDim));
+        PushRect(group, FlatTransform(0, mC), RectMinDim(mMin, V2(mWidth, barDim.y)));
         
         
     }
