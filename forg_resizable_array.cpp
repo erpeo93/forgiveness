@@ -9,10 +9,17 @@ internal void* GetInternal_(ResizableArray* array, u32 index)
     return result;
 }
 
+internal b32 Deleted_(ResizableArray* array, u32 index)
+{
+    void* element = GetInternal_(array, index);
+    b32 result = (*(u32*) element != 0);
+    return result;
+}
+
 internal void* Get_(ResizableArray* array, u32 index)
 {
     void* result = GetInternal_(array, index);
-    if(result)
+    if(result && !Deleted_(array, index))
     {
         result = AdvanceVoidPtrBytes(result, array->internalElementSize - array->elementSize);
     }
@@ -33,13 +40,6 @@ internal void Free_(ResizableArray* array, u32 index)
     void* toFree = GetInternal_(array, index);
     *(u32*) toFree = array->firstFree;
     array->firstFree = index;
-}
-
-internal b32 Deleted_(ResizableArray* array, u32 index)
-{
-    void* element = GetInternal_(array, index);
-    b32 result = (*(u32*) element != 0);
-    return result;
 }
 
 internal void* Acquire_(ResizableArray* array, u32* index, u32 max)

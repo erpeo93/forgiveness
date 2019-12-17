@@ -82,9 +82,9 @@ inline Vec3 GetCameraOffset(RenderGroup* group, Vec3 P)
     return result;
 }
 
-inline void PushVertex(TexturedVertex* vert, u32 vertexIndex, Vec4 P, Vec2 UV, u32 C, Lights lights, r32 modulationPercentage, u16 textureIndex, r32 lightInfluence, r32 lightYInfluence, r32 windInfluence, u8 windFrequency, r32 dissolvePercentage, r32 alphaThreesold)
+inline void PushVertex(TexturedVertex* vert, u32 vertexIndex, Vec3 P, Vec2 UV, u32 C, Lights lights, r32 modulationPercentage, u16 textureIndex, r32 lightInfluence, r32 lightYInfluence, r32 windInfluence, u8 windFrequency, r32 dissolvePercentage, r32 alphaThreesold)
 {
-    vert->P = P;
+    vert->P = V4(P, 0);
     vert->UV = UV;
     vert->color = C;
     vert->lightStartingIndex = lights.startingIndex;
@@ -100,11 +100,11 @@ inline void PushVertex(TexturedVertex* vert, u32 vertexIndex, Vec4 P, Vec2 UV, u
     vert->seed = (u8) vertexIndex;
 }
 
-inline void PushMagicQuad(RenderGroup* group, Vec4 P, b32 flat, Vec4 lateral, Vec4 up, Vec2 invUV, u32 color, RenderTexture texture, Lights lights, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences, u8 windFrequency, Vec4 dissolvePercentages, r32 alphaThreesold, u8 seed)
+inline void PushMagicQuad(RenderGroup* group, Vec3 P, b32 flat, Vec3 lateral, Vec3 up, Vec2 invUV, u32 color, RenderTexture texture, Lights lights, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences, u8 windFrequency, Vec4 dissolvePercentages, r32 alphaThreesold, u8 seed)
 {
     TIMED_FUNCTION();
     
-    r32 sortKey = ComputeSortKey(group, P.xyz, flat);
+    r32 sortKey = ComputeSortKey(group, P, flat);
     
     b32 transparent = (alphaThreesold == 0.0f);
     TexturedVertex* vert = ReserveQuad(group, transparent, sortKey);
@@ -118,10 +118,10 @@ inline void PushMagicQuad(RenderGroup* group, Vec4 P, b32 flat, Vec4 lateral, Ve
         Vec2 UV2 = Hadamart(V2(1, 1), invUV);
         Vec2 UV3 = Hadamart(V2(0, 1), invUV);
         
-        Vec4 P0 = P - lateral - up;
-        Vec4 P1 = P + lateral - up;
-        Vec4 P2 = P + lateral + up;
-        Vec4 P3 = P - lateral + up;
+        Vec3 P0 = P - lateral - up;
+        Vec3 P1 = P + lateral - up;
+        Vec3 P2 = P + lateral + up;
+        Vec3 P3 = P - lateral + up;
         
         u32 C = color;
         
@@ -145,10 +145,10 @@ inline void PushMagicQuad(RenderGroup* group, Vec4 P, b32 flat, Vec4 lateral, Ve
 
 inline void PushQuad(RenderGroup* group, RenderTexture texture, Lights lights,
                      TexturedVertex* vert,
-                     Vec4 P0, Vec2 UV0, u32 C0,
-                     Vec4 P1, Vec2 UV1, u32 C1,
-                     Vec4 P2, Vec2 UV2, u32 C2,
-                     Vec4 P3, Vec2 UV3, u32 C3, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences, u8 windFrequency,Vec4 dissolvePercentages, r32 alphaThreesold)
+                     Vec3 P0, Vec2 UV0, u32 C0,
+                     Vec3 P1, Vec2 UV1, u32 C1,
+                     Vec3 P2, Vec2 UV2, u32 C2,
+                     Vec3 P3, Vec2 UV3, u32 C3, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences, u8 windFrequency,Vec4 dissolvePercentages, r32 alphaThreesold)
 {
     Vec2 invUV = GetInvUV(texture.width, texture.height);
     UV0 = Hadamart(UV0, invUV);
@@ -171,10 +171,10 @@ inline void PushQuad(RenderGroup* group, RenderTexture texture, Lights lights,
 
 inline void PushQuad(RenderGroup* group, RenderTexture texture, Lights lights,
                      TexturedVertex* vert,
-                     Vec4 P0, Vec2 UV0, Vec4 C0,
-                     Vec4 P1, Vec2 UV1, Vec4 C1,
-                     Vec4 P2, Vec2 UV2, Vec4 C2,
-                     Vec4 P3, Vec2 UV3, Vec4 C3, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences, u8 windFrequency, Vec4 dissolvePercentages, r32 alphaThreesold)
+                     Vec3 P0, Vec2 UV0, Vec4 C0,
+                     Vec3 P1, Vec2 UV1, Vec4 C1,
+                     Vec3 P2, Vec2 UV2, Vec4 C2,
+                     Vec3 P3, Vec2 UV3, Vec4 C3, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences, u8 windFrequency, Vec4 dissolvePercentages, r32 alphaThreesold)
 {
     PushQuad(group, texture, lights,
              vert,
@@ -184,27 +184,41 @@ inline void PushQuad(RenderGroup* group, RenderTexture texture, Lights lights,
              P3, UV3, RGBAPack8x4(C3 * 255.0f), modulationPercentage, lightInfluence, lightYInfluence, windInfluences, windFrequency, dissolvePercentages, alphaThreesold);
 }
 
-inline void PushLineSegment(RenderGroup* group, RenderTexture texture, Vec3 color, Vec3 fromP, Vec3 toP, r32 tickness, Lights lights = {0, 0})
+inline void PushTextureSegment(RenderGroup* group, RenderTexture texture, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, r32 alphaThreesold, Lights lights = {0, 0})
 {
     Vec3 line = toP - fromP;
     Vec3 perp = Cross(group->gameCamera.Z, line);
     Vec3 normPerp = tickness * Normalize(perp);
     
-    Vec4 P0 = V4(fromP - normPerp, 0);
-    Vec4 P1 = V4(toP - normPerp, 0);
-    Vec4 P2 = V4(toP + normPerp, 0);
-    Vec4 P3 = V4(fromP + normPerp, 0);
+    Vec3 P0 = fromP - normPerp;
+    Vec3 P1 = toP - normPerp;
+    Vec3 P2 = toP + normPerp;
+    Vec3 P3 = fromP + normPerp;
     
-    u32 c = StoreColor(V4(color, 1.0f));
+    u32 c = StoreColor(color);
     
+    b32 tranparent = (alphaThreesold == 0.0f || color.a != 1.0f);
     r32 sortKey = ComputeSortKey(group, fromP, true);
-    TexturedVertex* vert = ReserveQuad(group, false, sortKey);
+    TexturedVertex* vert = ReserveQuad(group, tranparent, sortKey);
     PushQuad(group, texture, lights, vert, P0, V2(0, 0), c, P1, V2(1, 0), c, P2, V2(1, 1), c, P3, V2(0, 1), c, 0, 0, 0, {}, 0, {}, 0);
 }
 
-inline void PushLine(RenderGroup* group, Vec3 color, Vec3 fromP, Vec3 toP, r32 tickness, Lights lights = {0, 0})
+internal void PushTextureSegment(RenderGroup* group, BitmapId ID, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, Lights lights)
 {
-    PushLineSegment(group, group->whiteTexture, color, fromP, toP, tickness, lights);
+    Bitmap* bitmap = GetBitmap(group->assets, ID).bitmap;
+    if(bitmap)
+    {
+        PushTextureSegment(group, bitmap->textureHandle, color, fromP, toP, tickness, bitmap->alphaThreesold, lights);
+    }
+    else
+    {
+        LoadBitmap(group->assets, ID);
+    }
+}
+
+inline void PushDebugLine(RenderGroup* group, Vec3 color, Vec3 fromP, Vec3 toP, r32 tickness, Lights lights = {0, 0})
+{
+    PushTextureSegment(group, group->whiteTexture, V4(color, 1.0f), fromP, toP, tickness, 1.0f, lights);
 }
 
 inline void PushRect_(RenderGroup* group, ObjectTransform transform, Vec3 P, Vec2 dim, Lights lights)
@@ -244,10 +258,10 @@ inline void PushRect_(RenderGroup* group, ObjectTransform transform, Vec3 P, Vec
     r32 sortKey = ComputeSortKey(group, P, flat);
     TexturedVertex* vert = ReserveQuad(group, transparent, sortKey);
     PushQuad(group, group->whiteTexture, lights, vert,
-             V4(min.x, min.y, min.z, transform.additionalZBias), V2(minUV.x, minUV.y), C,
-             V4(max.x, min.y, min.z, transform.additionalZBias), V2(maxUV.x, minUV.y), C,
-             V4(max.x, max.y, max.z, transform.additionalZBias), V2(maxUV.x, maxUV.y), C,
-             V4(min.x, max.y, max.z, transform.additionalZBias), V2(minUV.x, maxUV.y), C, transform.modulationPercentage, transform.lightInfluence, transform.lightYInfluence, transform.windInfluences, transform.windFrequency, transform.dissolvePercentages, 0);
+             V3(min.x, min.y, min.z), V2(minUV.x, minUV.y), C,
+             V3(max.x, min.y, min.z), V2(maxUV.x, minUV.y), C,
+             V3(max.x, max.y, max.z), V2(maxUV.x, maxUV.y), C,
+             V3(min.x, max.y, max.z), V2(minUV.x, maxUV.y), C, transform.modulationPercentage, transform.lightInfluence, transform.lightYInfluence, transform.windInfluences, transform.windFrequency, transform.dissolvePercentages, 0);
 }
 
 inline void PushRect(RenderGroup* renderGroup, ObjectTransform objectTransform, Vec3 P, Vec2 dim,Lights lights = {0, 0})
@@ -277,10 +291,8 @@ inline void PushRectOutline(RenderGroup* renderGroup, ObjectTransform objectTran
 }
 
 
-inline void PushCubeOutline(RenderGroup* group, Rect3 R, Vec3 color, r32 tickness)
+inline void PushDebugCubeOutline(RenderGroup* group, Rect3 R, Vec3 color, r32 tickness)
 {
-    RenderTexture texture = group->whiteTexture;
-    
     r32 NX = R.min.x;
     r32 NY = R.min.y;
     r32 NZ = R.min.z;
@@ -297,22 +309,21 @@ inline void PushCubeOutline(RenderGroup* group, Rect3 R, Vec3 color, r32 ticknes
     Vec3 P6 = { PX, PY, NZ };
     Vec3 P7 = { NX, PY, NZ };
     
+    PushDebugLine(group, color, P0, P1, tickness);
+    PushDebugLine(group, color, P0, P3, tickness);
+    PushDebugLine(group, color, P0, P4, tickness);
     
-    PushLineSegment(group, texture, color, P0, P1, tickness);
-    PushLineSegment(group, texture, color, P0, P3, tickness);
-    PushLineSegment(group, texture, color, P0, P4, tickness);
+    PushDebugLine(group, color, P2, P3, tickness);
+    PushDebugLine(group, color, P2, P6, tickness);
+    PushDebugLine(group, color, P2, P1, tickness);
     
-    PushLineSegment(group, texture, color, P2, P3, tickness);
-    PushLineSegment(group, texture, color, P2, P6, tickness);
-    PushLineSegment(group, texture, color, P2, P1, tickness);
+    PushDebugLine(group, color, P5, P6, tickness);
+    PushDebugLine(group, color, P5, P4, tickness);
+    PushDebugLine(group, color, P5, P1, tickness);
     
-    PushLineSegment(group, texture, color, P5, P6, tickness);
-    PushLineSegment(group, texture, color, P5, P4, tickness);
-    PushLineSegment(group, texture, color, P5, P1, tickness);
-    
-    PushLineSegment(group, texture, color, P7, P3, tickness);
-    PushLineSegment(group, texture, color, P7, P4, tickness);
-    PushLineSegment(group, texture, color, P7, P6, tickness);
+    PushDebugLine(group, color, P7, P3, tickness);
+    PushDebugLine(group, color, P7, P4, tickness);
+    PushDebugLine(group, color, P7, P6, tickness);
 }
 
 struct BitmapDim
@@ -345,17 +356,17 @@ inline BitmapDim GetBitmapDim(Bitmap* bitmap, Vec2 pivot, Vec3 P, Vec3 XAxis, Ve
     return result;
 }
 
-inline void PushTexture_(RenderGroup* group, RenderTexture texture, Vec3 P, b32 flat, Vec3 XAxis, Vec3 YAxis, Vec4 color, Lights lights, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, r32 ZBias, Vec4 windInfluences, u8 windFrequency, Vec4 dissolvePercentages, r32 alphaThreesold, b32 transparent)
+inline void PushTexture_(RenderGroup* group, RenderTexture texture, Vec3 P, b32 flat, Vec3 XAxis, Vec3 YAxis, Vec4 color, Lights lights, r32 modulationPercentage, r32 lightInfluence, r32 lightYInfluence, Vec4 windInfluences, u8 windFrequency, Vec4 dissolvePercentages, r32 alphaThreesold, b32 transparent)
 {
     Vec2 minUV = V2(0, 0);
     Vec2 maxUV = V2(1, 1);
     
     u32 colorInt = RGBAPack8x4(color * 255.0f);
     
-    Vec4 minXminY = V4(P, 0.0f + ZBias);
-    Vec4 maxXminY = V4(P + XAxis, 0.0f + ZBias);
-    Vec4 minXmaxY = V4(P + YAxis, ZBias);
-    Vec4 maxXmaxY = V4(P + XAxis + YAxis, ZBias);
+    Vec3 minXminY = P;
+    Vec3 maxXminY = P + XAxis;
+    Vec3 minXmaxY = P + YAxis;
+    Vec3 maxXmaxY = P + XAxis + YAxis;
     
     r32 sortKey = ComputeSortKey(group, P, flat);
     TexturedVertex* vert = ReserveQuad(group, transparent, sortKey);
@@ -378,17 +389,17 @@ inline void PushTexture_(RenderGroup* group, RenderTexture texture, Vec3 P, b32 
     }
 }
 
-inline void PushTexture(RenderGroup* group, RenderTexture texture, Vec3 P, b32 flat, Vec3 XAxis = V3(1, 0, 0), Vec3 YAxis = V3(0, 1, 0), Vec4 color = V4(1, 1, 1, 1), Lights lights = {}, r32 modulationPercentage = 0.0f, r32 lightInfluence = 0, r32 lightYInfluence = 0, r32 ZBias = 0.0f, Vec4 windInfluences = {}, u8 windFrequency = 0, Vec4 dissolvePercentages = {}, r32 alphaThreesold = 0)
+inline void PushTexture(RenderGroup* group, RenderTexture texture, Vec3 P, b32 flat, Vec3 XAxis = V3(1, 0, 0), Vec3 YAxis = V3(0, 1, 0), Vec4 color = V4(1, 1, 1, 1), Lights lights = {}, r32 modulationPercentage = 0.0f, r32 lightInfluence = 0, r32 lightYInfluence = 0, Vec4 windInfluences = {}, u8 windFrequency = 0, Vec4 dissolvePercentages = {}, r32 alphaThreesold = 0)
 {
     b32 transparent = (color.a != 1.0f);
-    PushTexture_(group, texture, P, flat, XAxis, YAxis, color, lights, modulationPercentage, lightInfluence, lightYInfluence, ZBias, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, transparent);
+    PushTexture_(group, texture, P, flat, XAxis, YAxis, color, lights, modulationPercentage, lightInfluence, lightYInfluence, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, transparent);
 }
 
 
-inline void PushTransparentTexture(RenderGroup* group, RenderTexture texture, Vec3 P, b32 flat, Vec3 XAxis = V3(1, 0, 0), Vec3 YAxis = V3(0, 1, 0), Vec4 color = V4(1, 1, 1, 1), Lights lights = {}, r32 modulationPercentage = 0.0f, r32 lightInfluence = 0, r32 lightYInfluence = 0, r32 ZBias = 0.0f, Vec4 windInfluences = {}, u8 windFrequency = 0, Vec4 dissolvePercentages = {}, r32 alphaThreesold = 0)
+inline void PushTransparentTexture(RenderGroup* group, RenderTexture texture, Vec3 P, b32 flat, Vec3 XAxis = V3(1, 0, 0), Vec3 YAxis = V3(0, 1, 0), Vec4 color = V4(1, 1, 1, 1), Lights lights = {}, r32 modulationPercentage = 0.0f, r32 lightInfluence = 0, r32 lightYInfluence = 0, Vec4 windInfluences = {}, u8 windFrequency = 0, Vec4 dissolvePercentages = {}, r32 alphaThreesold = 0)
 {
     b32 transparent = true;
-    PushTexture_(group, texture, P, flat, XAxis, YAxis, color, lights, modulationPercentage, lightInfluence, lightYInfluence, ZBias, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, transparent);
+    PushTexture_(group, texture, P, flat, XAxis, YAxis, color, lights, modulationPercentage, lightInfluence, lightYInfluence, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, transparent);
 }
 
 inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform transform, ColoredBitmap coloredBitmap,  Vec3 P, r32 height, Lights lights, Vec2 pivot)
@@ -440,16 +451,16 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform transform
         YAxis *= result.size.y;
         
         b32 flat = !transform.upright;
-        b32 tranparent = (alphaThreesold == 0.0f);
+        b32 tranparent = (alphaThreesold == 0.0f || color.a != 1.0f);
         if(!transform.dontRender)
         {
             if(tranparent)
             {
-                PushTransparentTexture(renderGroup, bitmap->textureHandle, result.P, flat, XAxis, YAxis, color, lights, transform.modulationPercentage, transform.additionalZBias, transform.lightInfluence, transform.lightYInfluence, transform.windInfluences, transform.windFrequency, transform.dissolvePercentages, alphaThreesold);
+                PushTransparentTexture(renderGroup, bitmap->textureHandle, result.P, flat, XAxis, YAxis, color, lights, transform.modulationPercentage, transform.lightInfluence, transform.lightYInfluence, transform.windInfluences, transform.windFrequency, transform.dissolvePercentages, alphaThreesold);
             }
             else
             {
-                PushTexture(renderGroup, bitmap->textureHandle, result.P, flat, XAxis, YAxis, color, lights, transform.modulationPercentage, transform.additionalZBias, transform.lightInfluence, transform.lightYInfluence, transform.windInfluences, transform.windFrequency, transform.dissolvePercentages, alphaThreesold);
+                PushTexture(renderGroup, bitmap->textureHandle, result.P, flat, XAxis, YAxis, color, lights, transform.modulationPercentage, transform.lightInfluence, transform.lightYInfluence, transform.windInfluences, transform.windFrequency, transform.dissolvePercentages, alphaThreesold);
             }
         }
     }
@@ -637,7 +648,7 @@ enum TextOperation
     TextOp_getSize,
 };
 
-internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont* info, char* string, Vec3 P, r32 fontScale, TextOperation op, Vec4 color, b32 startingSpace, b32 drawShadow, r32 ZBias)
+internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont* info, char* string, Vec3 P, r32 fontScale, TextOperation op, Vec4 color, b32 startingSpace, b32 drawShadow)
 {
     Rect2 result = InvertedInfinityRect2();
     if(font && info)
@@ -671,7 +682,7 @@ internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont*
                     }
                     else
                     {
-                        ObjectTransform transform = FlatTransform(ZBias);
+                        ObjectTransform transform = FlatTransform();
                         transform.tint = V4(0, 0, 0, 1);
                         if(drawShadow)
                         {
@@ -693,13 +704,13 @@ internal Rect2 PushText_(RenderGroup* group, FontId fontID, Font* font, PAKFont*
 }
 
 
-internal void PushText(RenderGroup* group, FontId fontID, char* string, Vec3 P,r32 fontScale = 1.0f, Vec4 color = V4(1, 1, 1, 1), b32 startingSpace = false, b32 drawShadow = true, r32 ZBias = 0.0f)
+internal void PushText(RenderGroup* group, FontId fontID, char* string, Vec3 P,r32 fontScale = 1.0f, Vec4 color = V4(1, 1, 1, 1), b32 startingSpace = false, b32 drawShadow = true)
 {
     Font* font = GetFont(group->assets, fontID);
     if(font)
     {
         PAKFont* info = GetFontInfo(group->assets, fontID);
-        PushText_(group, fontID, font, info, string, P, fontScale, TextOp_draw, color, startingSpace, drawShadow, ZBias);
+        PushText_(group, fontID, font, info, string, P, fontScale, TextOp_draw, color, startingSpace, drawShadow);
     }
     else
     {
@@ -716,7 +727,7 @@ internal Rect2 GetTextDim(RenderGroup* group, FontId fontID, char* string, Vec3 
     {
         PAKFont* info = GetFontInfo(group->assets, fontID);
         
-        result = PushText_(group, fontID, font, info, string, P, fontScale, TextOp_getSize, V4(1, 1, 1, 1), startingSpace, false, 0.0f);
+        result = PushText_(group, fontID, font, info, string, P, fontScale, TextOp_getSize, V4(1, 1, 1, 1), startingSpace, false);
     }
     else
     {
@@ -760,8 +771,8 @@ inline void PushSetup_(RenderGroup* group, RenderSetup* setup)
 internal void SetMagicVectors()
 {
     m4x4 cameraO = ZRotation(cameraOrbit) * XRotation(cameraPitch);
-    magicLateralVector = V4(GetColumn(cameraO, 0), 0);
-    magicUpVector = V4(GetColumn(cameraO, 1), 0);
+    magicLateralVector = GetColumn(cameraO, 0);
+    magicUpVector = GetColumn(cameraO, 1);
 }
 
 inline RenderGroup BeginRenderGroup(Assets* assets, GameRenderCommands* commands)
@@ -930,6 +941,14 @@ inline void PushClipRect(RenderGroup* renderGroup, Rect2 rect, r32 z = 0)
 {
     Rect2i clipRect = GetClipRect_(renderGroup, V3(GetCenter(rect), z), GetDim(rect));
     PushClipRect_(renderGroup, clipRect);
+}
+
+inline void FixedOrderedRendering(RenderGroup* group)
+{
+    RenderSetup setup = group->lastSetup;
+    setup.disableSorting = true;
+    setup.disableDepthTesting = true;
+    PushSetup_(group, &setup);
 }
 
 inline void PushGameRenderSettings(RenderGroup* renderGroup, Vec3 ambientLightColor, r32 totalTimeElapsed, Vec3 windDirection, r32 windStrength)

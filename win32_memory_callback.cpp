@@ -10,9 +10,9 @@ inline void Win32FreeMemoryBlock(Win32MemoryBlock* block)
 }
 
 //PlatformMemoryBlock* name( memory_index size, u64 flags )
-PLATFORM_ALLOCATE_MEMORY( Win32AllocateMemory )
+PLATFORM_ALLOCATE_MEMORY(Win32AllocateMemory)
 {
-    Assert( sizeof( Win32MemoryBlock ) == 64 );
+    Assert( sizeof( Win32MemoryBlock ) == 64);
     
     unm pageSize = 4096;
     unm totalSize = size + sizeof( Win32MemoryBlock );

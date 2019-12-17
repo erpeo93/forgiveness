@@ -21,6 +21,7 @@
 #include "asset_builder.cpp"
 #include "forg_world_generation.cpp"
 #include "forg_game_effect.cpp"
+#include "forg_crafting.cpp"
 #include "forg_world_server.cpp"
 #include "forg_brain.cpp"
 internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, PlayerComponent* player,  unsigned char* packetPtr, u16 dataSize)
@@ -157,8 +158,8 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
                 
                 UniversePos P = {};
                 P.chunkZ = 0;
-                P.chunkX = 2;
-                P.chunkY = 1;
+                P.chunkX = 4;
+                P.chunkY = 4;
                 AddEntityParams params = DefaultAddEntityParams();
                 params.playerIndex = playerIndex;
                 SpawnPlayer(server, P, params);
@@ -199,10 +200,25 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
             
         } break;
         
+        
         case Type_CommandParameters:
         {
             CommandParameters* parameters = &player->commandParameters;
             unpack(packetPtr, "VV", &parameters->acceleration, &parameters->targetOffset);
+        } break;
+        
+        case Type_selectRecipeEssence:
+        {
+            u16 index;
+            u16 essence;
+            unpack(packetPtr, "HH", &index, &essence);
+            
+            ActionComponent* action = GetComponent(server, player->ID, ActionComponent);
+            if(action)
+            {
+                action->selectedCrafingEssences[index] = essence;
+            }
+            
         } break;
         
         case Type_FileHeader:
@@ -493,7 +509,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         SetMetaAssets(server->assets);
         
         InitSpatialPartition(&server->gamePool, &server->staticPartition);
-        BuildWorld(server, true);
+        BuildWorld(server, false);
     }
     
     
@@ -560,7 +576,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 	{
 		elapsedTime = 0;
 	}
-
+    
     BEGIN_BLOCK("spatial partitions");
     InitSpatialPartition(server->frameByFramePool, &server->playerPartition);
     EXECUTE_JOB(server, FillPlayerSpacePartition, ArchetypeHas(PlayerComponent) && ArchetypeHas(PhysicComponent), elapsedTime);
@@ -577,27 +593,8 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     }
     END_BLOCK();
     
+    UpdateWorldBasics(server, elapsedTime);
     BEGIN_BLOCK("update entities");
-
-	server->seasonTime += elapsedTime;
-    if(server->seasonTime >= 5.0f)
-    {
-        server->seasonTime = 0;
-        if(++server->season == Count_Season)
-        {
-            server->season = 0;
-        }
-        
-        for(CompIterator iter = FirstComponent(server, PlayerComponent); 
-            IsValid(iter); iter = Next(iter))
-        {
-            PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
-            if(player->connectionSlot && IsValidID(player->ID))
-            {
-                QueueSeason(player, server->season);
-            }
-        }
-    }
     EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime);
     EXECUTE_JOB(server, UpdateBrain, ArchetypeHas(BrainComponent), elapsedTime);
 	EXECUTE_JOB(server, UpdateTempEntity, ArchetypeHas(TempEntityComponent), elapsedTime);
@@ -636,6 +633,76 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             for(EntityID ID = GetCurrent(&updateQuery); IsValid(&updateQuery); ID = Advance(&updateQuery))
             {
                 SendEntityUpdate(server, ID, false, completeUpdate);
+                
+                
+                if(HasComponent(ID, UsingComponent))
+                {
+                    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+                    for(u32 slotIndex = 0; slotIndex < ArrayCount(equipped->slots); ++slotIndex)
+                    {
+                        EntityID slotID = GetBoundedID(equipped->slots + slotIndex);
+                        if(IsValidID(slotID))
+                        {
+                            SendEntityUpdate(server, slotID, false, completeUpdate);
+                            
+                            if(HasComponent(slotID, ContainerComponent))
+                            {
+                                ContainerComponent* container = GetComponent(server, slotID, ContainerComponent);
+                                for(u32 storeIndex = 0; storeIndex < ArrayCount(container->storedObjects); ++storeIndex)
+                                {
+                                    EntityID subID = GetBoundedID(container->storedObjects + storeIndex);
+                                    if(IsValidID(subID))
+                                    {
+                                        SendEntityUpdate(server, subID, false, false);
+                                    }
+                                }
+                                
+                                for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
+                                {
+                                    EntityID subID = GetBoundedID(container->usingObjects + usingIndex);
+                                    if(IsValidID(subID))
+                                    {
+                                        SendEntityUpdate(server, subID, false, false);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if(HasComponent(ID, EquipmentComponent))
+                {
+                    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+                    for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->slots); ++slotIndex)
+                    {
+                        EntityID slotID = GetBoundedID(equipment->slots + slotIndex);
+                        if(IsValidID(slotID))
+                        {
+                            SendEntityUpdate(server, slotID, false, completeUpdate);
+                            if(HasComponent(slotID, ContainerComponent))
+                            {
+                                ContainerComponent* container = GetComponent(server, slotID, ContainerComponent);
+                                for(u32 storeIndex = 0; storeIndex < ArrayCount(container->storedObjects); ++storeIndex)
+                                {
+                                    EntityID subID = GetBoundedID(container->storedObjects + storeIndex);
+                                    if(IsValidID(subID))
+                                    {
+                                        SendEntityUpdate(server, subID, false, false);
+                                    }
+                                }
+                                
+                                for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
+                                {
+                                    EntityID subID = GetBoundedID(container->usingObjects + usingIndex);
+                                    if(IsValidID(subID))
+                                    {
+                                        SendEntityUpdate(server, subID, false, false);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             
             if(sendStaticUpdate)

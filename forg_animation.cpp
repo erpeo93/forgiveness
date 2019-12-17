@@ -435,7 +435,6 @@ internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKSkeleton* s
         Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
         dest->originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset + parentBone->finalZBias);
         dest->height = sprite->height;
-        dest->zBias = 0;
         
         dest->angle = parentBone->finalAngle + ass->angle;
         dest->scale = ass->scale;
@@ -557,9 +556,12 @@ internal b32 IsValidMapping(GameUIContext* UI, ObjectMapping* mapping, u16 slotI
 }
 
 internal EntityAnimationParams GetEntityAnimationParams(GameModeWorld* worldMode, EntityID ID);
-internal Rect2 RenderLayout(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, Vec4 color, LayoutComponent* layout, u32 seed, Lights lights, struct LayoutContainer* container);
-internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, u64 hash, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights, b32 equipmentMappings)
+internal Rect2 RenderLayout(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, struct LayoutContainer* container, r32 elapsedTime);
+internal Rect2 RenderLayoutSpecificPiece(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container, r32 elapsedTime, u64 pieceHash);
+
+internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, u64 hash, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights, b32 equipmentMappings, r32 elapsedTime, u64 multipartHash = 0)
 {
+    b32 multipart = (multipartHash > 0);
     Assert(hash);
     for(u16 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
     {
@@ -571,7 +573,11 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                 Vec3 pieceP = P + GetCameraOffset(group, transform.cameraOffset);
                 r32 ignored;
                 mapping->distanceFromMouseSq = LengthSq(ProjectOnScreen(group, pieceP, &ignored) - worldMode->relativeMouseP);
-                alreadyRendered[mappingIndex] = true;
+                
+                if(!multipart)
+                {
+                    alreadyRendered[mappingIndex] = true;
+                }
                 
                 if(IsValidMapping(&worldMode->gameUI, mapping, mappingIndex, equipmentMappings))
                 {
@@ -587,15 +593,28 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                         finalTransform.scale = Hadamart(finalTransform.scale, equipmentLayout->rootScale);
                         
                         EntityAnimationParams params = GetEntityAnimationParams(worldMode, equipmentID);
+                        finalTransform.modulationPercentage = params.modulationPercentage;
                         
+#if 0                        
                         if(equipmentInteraction && equipmentInteraction->isOnFocus)
                         {
-                            finalTransform.modulationPercentage = params.modulationPercentage;
                         }
+#endif
                         
+                        finalTransform.tint = params.tint;
                         LayoutContainer container = {};
+                        container.drawMode = LayoutContainerDraw_Equipped;
                         //container.container = GetComponent(worldMode, equipmentID, ContainerMappingComponent);
-                        equipmentBase->projectedOnScreen = RenderLayout(worldMode, group, P, finalTransform, params.tint, equipmentLayout, equipmentBase->seed, lights, &container);
+                        
+                        
+                        if(multipart)
+                        {
+                            equipmentBase->projectedOnScreen = Union(equipmentBase->projectedOnScreen, RenderLayoutSpecificPiece(worldMode, group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights, &container, elapsedTime, multipartHash));
+                        }
+                        else
+                        {
+                            equipmentBase->projectedOnScreen = RenderLayout(worldMode, group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights, &container, elapsedTime);
+                        }
                     }
                 }
                 
@@ -606,7 +625,7 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
 }
 
 internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
-                                   PAKBitmap* bitmapInfo, BitmapId BID, BitmapDim dim, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights, b32 equipmentMappings)
+                                   PAKBitmap* bitmapInfo, BitmapId BID, BitmapDim dim, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights, b32 equipmentMappings, r32 elapsedTime)
 {
     for(u32 attachmentPointIndex = 0; attachmentPointIndex < bitmapInfo->attachmentPointCount; ++attachmentPointIndex)
     {
@@ -617,12 +636,24 @@ internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
             if(pointHash)
             {
                 Vec3 P = GetAlignP(dim, point->alignment);
-                
                 ObjectTransform attachmentTransform = transform;
                 attachmentTransform.angle += point->angle;
                 attachmentTransform.scale = Hadamart(attachmentTransform.scale, point->scale);
-                attachmentTransform.additionalZBias = point->zOffset;
-                RenderAttachmentPoint(worldMode, group, P, pointHash, attachmentTransform, mappings, mappingCount, alreadyRendered, lights, equipmentMappings);
+                attachmentTransform.cameraOffset.z += point->zOffset;
+                
+                u64 baseHash = pointHash;
+                u64 multipartHash = 0;
+                
+                
+                u32 pound = FindFirstInString(point->name, '#');
+                if(pound != 0xffffffff)
+                {
+                    baseHash = StringHash(point->name, pound);
+                    multipartHash = StringHash(point->name + pound + 1);
+                    Assert(multipartHash);
+                }
+                
+                RenderAttachmentPoint(worldMode, group, P, baseHash, attachmentTransform, mappings, mappingCount, alreadyRendered, lights, equipmentMappings, elapsedTime, multipartHash);
             }
             else
             {
@@ -736,7 +767,6 @@ internal Rect2 RenderAnimationAndTriggerSounds_(GameModeWorld* worldMode, Render
                     ObjectTransform equippedTransform = transform;
                     equippedTransform.angle = piece->angle;
                     equippedTransform.scale = piece->scale;
-                    equippedTransform.additionalZBias = piece->zBias;
                     
                     Vec3 offset = GetCameraOffset(group, piece->originOffset);
                     if(transform.flipOnYAxis)
@@ -745,7 +775,7 @@ internal Rect2 RenderAnimationAndTriggerSounds_(GameModeWorld* worldMode, Render
                     }
                     Vec3 P = params->P + offset;
                     
-                    RenderAttachmentPoint(worldMode, group, P, piece->nameHash, equippedTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights, false);
+                    RenderAttachmentPoint(worldMode, group, P, piece->nameHash, equippedTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights, false, params->elapsedTime);
                 }
             }
         }
@@ -768,7 +798,6 @@ internal Rect2 RenderAnimationAndTriggerSounds_(GameModeWorld* worldMode, Render
                         
                         transform.angle = piece->angle;
                         transform.cameraOffset = piece->originOffset;
-                        transform.additionalZBias = piece->zBias;
                         transform.dissolvePercentages = params->dissolveCoeff * V4(1, 1, 1, 1);
                         transform.tint = Hadamart(piece->color, params->tint);
                         r32 height = piece->height * params->scale;
@@ -828,13 +857,13 @@ internal Rect2 RenderAnimationAndTriggerSounds_(GameModeWorld* worldMode, Render
                             if(params->equipment)
                             {
                                 RenderObjectMappings(worldMode, group,
-                                                     bitmapInfo, BID, dim, equipmentTransform, params->equipment->mappings, ArrayCount(params->equipment->mappings), equipmentRendered, lights, true);
+                                                     bitmapInfo, BID, dim, equipmentTransform, params->equipment->mappings, ArrayCount(params->equipment->mappings), equipmentRendered, lights, true, params->elapsedTime);
                             }
                             
                             if(params->equipped)
                             {
                                 RenderObjectMappings(worldMode, group,
-                                                     bitmapInfo, BID, dim, equipmentTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights, false);
+                                                     bitmapInfo, BID, dim, equipmentTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights, false, params->elapsedTime);
                             }
                         }
                         

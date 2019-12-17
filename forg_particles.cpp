@@ -219,8 +219,8 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectIn
             Vec3 XAxis = V3(Cos(angleRad), Sin(angleRad), 0.0f);
             Vec3 YAxis  = V3(Perp(XAxis.xy), 0.0f);
             
-            Vec4 lateral = 0.5f * scaleX * (XAxis.x * magicLateralVector + XAxis.y * magicUpVector);
-            Vec4 up = 0.5f * scaleY * (YAxis.x * magicLateralVector + YAxis.y * magicUpVector);
+            Vec3 lateral = 0.5f * scaleX * (XAxis.x * magicLateralVector + XAxis.y * magicUpVector);
+            Vec3 up = 0.5f * scaleY * (YAxis.x * magicLateralVector + YAxis.y * magicUpVector);
             
             u32 C = RGBAPack8x4(color * 255.0f);
             
@@ -231,7 +231,7 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectIn
             r32 alphaThreesold = 0;
             b32 flat = false;
             Vec2 invUV = updater->textureInvUV;
-            PushMagicQuad(group, V4(P, 0), flat, lateral, up, invUV, C, *updater->texture, lights, 0, 0, 1, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, seed);
+            PushMagicQuad(group, P, flat, lateral, up, invUV, C, *updater->texture, lights, 0, 0, 1, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, seed);
         }
     }
 }

@@ -161,16 +161,20 @@ enum Packet_Type
     Type_Command,
     Type_InventoryCommand,
     Type_CommandParameters,
+    Type_selectRecipeEssence,
     Type_CompletedCommand,
     
     Type_entityHeader,
     Type_entityBasics,
     Type_Health,
     Type_Misc,
+    Type_Mappings,
+	Type_Essence,
+    
     Type_deletedEntity,
-	Type_Mappings,
 	
     Type_Season,
+    Type_DayTime,
     
     
     Type_FileHeader,

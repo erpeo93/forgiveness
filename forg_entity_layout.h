@@ -7,7 +7,8 @@ struct BoundedEntityID
 
 inline void SetBoundedID(BoundedEntityID* bounded, EntityID ID)
 {
-    bounded->dirty = (!AreEqual(ID, bounded->ID));
+    //bounded->dirty = (!AreEqual(ID, bounded->ID));
+    bounded->dirty = true;
     bounded->ID = ID;
 }
 
@@ -46,10 +47,15 @@ inline void ResetDirty(BoundedEntityID* i)
     i->dirty = false;
 }
 
+enum InventorySlotFlags
+{
+    InventorySlot_Locked = (1 << 16),
+};
+
 #ifdef FORG_SERVER
 struct InventorySlot
 {
-    u16 type;
+    u32 flags_type;
     BoundedEntityID ID_;
 };
 
@@ -84,7 +90,7 @@ inline void ResetDirty(InventorySlot* slot)
 #else
 struct InventorySlot
 {
-    u16 type;
+    u32 flags_type;
     EntityID ID;
 };
 #endif
@@ -112,12 +118,16 @@ struct ContainerComponent
 
 struct ObjectMapping
 {
-    b32 hot;
     r32 distanceFromMouseSq;
     Rect2 projOnScreen;
     u64 slotHash;
     u64 pieceHash;
     InventorySlot object;
+    
+    b32 hot;
+    r32 zoomCoeff;
+    r32 zoomSpeed;
+    r32 maxZoomCoeff;
 };
 
 struct EquipmentMappingComponent
@@ -134,9 +144,17 @@ struct ContainerMappingComponent
 {
     EntityID openedBy;
     r32 zoomCoeff;
+    b32 displayInStandardMode;
     Vec2 desiredOpenedDim;
     Vec2 desiredUsingDim;
     
     ObjectMapping storedMappings[MAX_CONTAINER_OBJECT];
     ObjectMapping usingMappings[MAX_USING_OBJECT];
+};
+
+#define MAX_RECIPE_ESSENCES 1
+struct RecipeEssenceComponent
+{
+    Rect2 projectedOnScreen[MAX_RECIPE_ESSENCES];
+    u16 essences[MAX_RECIPE_ESSENCES];
 };

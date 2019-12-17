@@ -7,7 +7,6 @@ struct BrainComponent
     CommandParameters commandParameters;
     b32 commandCompleted;
     
-    
     u16 type;
     EntityID ID;
 };

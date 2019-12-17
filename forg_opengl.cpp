@@ -931,17 +931,20 @@ internal void SortRenderBuffer(RenderBuffer* buffer, u32 flags)
 {
     for(RenderSetup* setup = buffer->firstSetup; setup; setup = setup->next)
     {
-        SortEntry* sortKeys = buffer->sortKeyArray + setup->quadStartingIndex;
-        SortEntry* tempSortKeys = buffer->tempSortKeyArray + setup->quadStartingIndex;
-        
-        if(flags & DrawRenderBuffer_SortBackToFront)
+        if(!setup->disableSorting)
         {
-            RadixSort(sortKeys, setup->quadCount, tempSortKeys);
-        }
-        
-        if(flags & DrawRenderBuffer_SortFrontToBack)
-        {
-            RadixSort(sortKeys, setup->quadCount, tempSortKeys, true);
+            SortEntry* sortKeys = buffer->sortKeyArray + setup->quadStartingIndex;
+            SortEntry* tempSortKeys = buffer->tempSortKeyArray + setup->quadStartingIndex;
+            
+            if(flags & DrawRenderBuffer_SortBackToFront)
+            {
+                RadixSort(sortKeys, setup->quadCount, tempSortKeys);
+            }
+            
+            if(flags & DrawRenderBuffer_SortFrontToBack)
+            {
+                RadixSort(sortKeys, setup->quadCount, tempSortKeys, true);
+            }
         }
     }
 }
@@ -991,6 +994,12 @@ internal void DrawRenderBuffer(RenderBuffer* buffer, u32 flags, u32 renderWidth,
         Rect2i clipRect = setup->rect;    
         glScissor(clipRect.minX, clipRect.minY, clipRect.maxX - clipRect.minX, clipRect.maxY - clipRect.minY);
         
+        
+        if(setup->disableDepthTesting)
+        {
+            glDisable(GL_DEPTH_TEST);
+        }
+        
         if(setup->renderTargetIndex > 0)
         {
             OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
@@ -1018,6 +1027,12 @@ internal void DrawRenderBuffer(RenderBuffer* buffer, u32 flags, u32 renderWidth,
 		{
 			OpenGLBindFramebuffer(&opengl.frameBuffer, renderWidth, renderHeight);
 		}
+        
+        if(setup->disableDepthTesting)
+        {
+            glEnable(GL_DEPTH_TEST);
+        }
+        
     }
 }
 

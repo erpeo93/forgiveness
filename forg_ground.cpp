@@ -211,12 +211,12 @@ inline void RenderGroundAndPlaySounds(GameModeWorld* worldMode, RenderGroup* gro
                     P.chunkOffset = 0.5f * V3(CHUNK_SIDE, CHUNK_SIDE, 0);
                     Lights lights =  GetLights(worldMode, GetRelativeP(worldMode, P));
                     b32 flat = true;
-                    PushTexture(group, chunk->texture.textureHandle, chunkLowLeftCornerOffset, flat, V3(chunkSide, 0, 0), V3(0, chunkSide, 0), V4(1, 1, 1, 1), lights, 0, 0, 1, 0);
+                    PushTexture(group, chunk->texture.textureHandle, chunkLowLeftCornerOffset, flat, V3(chunkSide, 0, 0), V3(0, chunkSide, 0), V4(1, 1, 1, 1), lights, 0, 0, 1);
                     
                     RefreshSpecialTexture(group->assets, &chunk->texture);
                     if(worldMode->editorUI.renderChunkBounds)
                     {
-                        PushRectOutline(group, FlatTransform(0.1f), RectMinDim(chunkLowLeftCornerOffset.xy, V2(CHUNK_SIDE, CHUNK_SIDE)), 0.1f);
+                        PushRectOutline(group, FlatTransform(), RectMinDim(chunkLowLeftCornerOffset.xy, V2(CHUNK_SIDE, CHUNK_SIDE)), 0.1f);
                     }
                 }
             }
@@ -287,10 +287,10 @@ inline void RenderGroundAndPlaySounds(GameModeWorld* worldMode, RenderGroup* gro
                                             Vec3 finalTileP = chunkBaseCenterOffset + V3(tileCenter, baseZBias + zBias) + offset;
                                             u32 finalColor = RGBAPack8x4(color * 255.0f);
                                             r32 finalDim = 0.5f * tileDim.y * scale;
-                                            Vec4 lateral = finalDim * V4(1, 0, 0, 0);
-                                            Vec4 up = finalDim * V4(0, 1, 0, 0);
+                                            Vec3 lateral = finalDim * V3(1, 0, 0);
+                                            Vec3 up = finalDim * V3(0, 1, 0);
                                             b32 flat = true;
-                                            PushMagicQuad(group, V4(finalTileP, 0), flat, lateral, up, invUV, finalColor, bitmap->textureHandle, lights, 0, 0, 1, {}, 0, {}, 0, 0);
+                                            PushMagicQuad(group, finalTileP, flat, lateral, up, invUV, finalColor, bitmap->textureHandle, lights, 0, 0, 1, {}, 0, {}, 0, 0);
                                             
                                             zBias += effect->patchZBias;
                                         }

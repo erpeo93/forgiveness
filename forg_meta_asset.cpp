@@ -471,6 +471,7 @@ internal EntityRef Parse_EntityRef(Tokenizer* tokenizer, EntityRef defaultVal)
         index.textLength = t.textLength - kind.textLength - 1;
         
         result.subtypeHashIndex = GetAssetSubtype(meta_assets, AssetType_EntityDefinition, kind);
+        Assert(result.subtypeHashIndex);
         result.index = GetAssetIndex(meta_assets, AssetType_EntityDefinition, result.subtypeHashIndex, index);
     }
     

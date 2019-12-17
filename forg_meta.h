@@ -75,6 +75,7 @@ enum MetaType
     MetaType_PieceReplacement,
     MetaType_SoundMappingDefinition,
     MetaType_SoundEffectDefinition,
+    MetaType_InventorySlots,
 };
 
 enum FieldMetaFlags

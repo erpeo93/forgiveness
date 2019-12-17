@@ -37,12 +37,14 @@ struct RenderSetup
     u32 vertexArrayOffset;
     u32 indexArrayOffset;
     
+    b32 disableSorting;
+    b32 disableDepthTesting;
+    
     RenderSetup* next;
 };
 
 struct ObjectTransform
 {
-	r32 additionalZBias;
     Vec3 cameraOffset;
     Vec2 scale;
     
@@ -73,8 +75,8 @@ struct CameraTransform
     m4x4_inv proj;
 };
 
-global_variable Vec4 magicLateralVector;
-global_variable Vec4 magicUpVector;
+global_variable Vec3 magicLateralVector;
+global_variable Vec3 magicUpVector;
 
 struct RenderGroup
 {
@@ -92,26 +94,25 @@ struct RenderGroup
 };
 
 
-inline ObjectTransform RenderTransform(r32 additionalZBias = 0)
+inline ObjectTransform RenderTransform()
 {
     ObjectTransform result = {};
-    result.additionalZBias = additionalZBias;
     result.scale = V2(1, 1);
     result.tint = V4(1, 1, 1, 1);
     
     return result;
 }
 
-inline ObjectTransform FlatTransform(r32 additionalZBias = 0, Vec4 color = V4(1, 1, 1, 1))
+inline ObjectTransform FlatTransform(Vec4 color = V4(1, 1, 1, 1))
 {
-    ObjectTransform result = RenderTransform(additionalZBias);
+    ObjectTransform result = RenderTransform();
     result.tint = color;
     return result;
 }
 
-inline ObjectTransform UprightTransform(r32 additionalZBias = 0)
+inline ObjectTransform BillboardTransform()
 {
-    ObjectTransform result = RenderTransform(additionalZBias);
+    ObjectTransform result = RenderTransform();
     result.upright = true;
     return result;
 }

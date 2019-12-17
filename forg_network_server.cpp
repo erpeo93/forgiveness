@@ -220,6 +220,13 @@ internal void QueueDeletedID(PlayerComponent* player, EntityID ID)
     QueueStandardPacket(player);
 }
 
+internal void QueueEssenceUpdate(PlayerComponent* player, u16 essence, u16 quantity)
+{
+    StartPacket(player, Essence);
+    Pack("HH", essence, quantity);
+    QueueOrderedPacket(player);
+}
+
 #define PackIfFlag(flags, string, ...) if(sendingFlags & SafeTruncateToU16(flags)){Pack(string, ##__VA_ARGS__);}
 
 #define PackU16(def, V) \
@@ -270,6 +277,26 @@ internal u16 PrepareBasicsUpdate(ServerState* server, EntityID ID, b32 completeU
         u16 sendingFlags = def->basicPropertiesChanged;
         Pack("H", sendingFlags);
         PackIfFlag(EntityBasics_Definition,"LLL", def->definitionID.subtypeHashIndex, def->definitionID.index, def->seed);
+        
+        if(def->basicPropertiesChanged & EntityBasics_Definition)
+        {
+            unsigned char* essenceCount = buff;
+            Pack("H", 0);
+            
+            
+            u16 essenceC = 0;
+            for(u16 essenceIndex = 0; essenceIndex < ArrayCount(def->essences); ++essenceIndex)
+            {
+                if(def->essences[essenceIndex])
+                {
+                    ++essenceC;
+                    Pack("HH", essenceIndex, def->essences[essenceIndex]);
+                }
+            }
+            
+            pack(essenceCount, "H", essenceC);
+        }
+        
         PackIfFlag(EntityBasics_Position, "hhhV", def->P.chunkX, def->P.chunkY, def->P.chunkZ, def->P.chunkOffset);
         PackIfFlag(EntityBasics_Velocity, "V", speed);
         PackIfFlag(EntityBasics_Action, "H", action);
@@ -351,6 +378,41 @@ internal u16 PrepareMiscUpdate(ServerState* server, EntityID ID, b32 completeUpd
     return result;
 }
 
+internal unsigned char* PrepareContainerUpdate(unsigned char* buff, ContainerComponent* container, u16* count)
+{
+    if(IsDirty(container->openedBy))
+    {
+        ++(*count);
+        Pack("CHHL", Mapping_OpenedBy, 0, 0, GetBoundedID(container->openedBy).archetype_archetypeIndex);
+        ResetDirty(&container->openedBy);
+    }
+    
+    for(u16 objectIndex = 0; objectIndex < ArrayCount(container->storedObjects); ++objectIndex)
+    {
+        InventorySlot* slot = container->storedObjects + objectIndex;
+        
+        if(IsDirty(slot))
+        {
+            ++(*count);
+            Pack("CHLL", Mapping_ContainerStored, objectIndex, slot->flags_type, GetBoundedID(slot).archetype_archetypeIndex);
+            ResetDirty(slot);
+        }
+    }
+    
+    for(u16 objectIndex = 0; objectIndex < ArrayCount(container->usingObjects); ++objectIndex)
+    {
+        InventorySlot* slot = container->usingObjects + objectIndex;
+        if(IsDirty(slot))
+        {
+            ++(*count);
+            Pack("CHLL", Mapping_ContainerUsing, objectIndex, slot->flags_type, GetBoundedID(slot).archetype_archetypeIndex);
+            ResetDirty(slot);
+        }
+    }
+    
+    return buff;
+}
+
 internal u16 PrepareMappingsUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
 {
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
@@ -365,13 +427,13 @@ internal u16 PrepareMappingsUpdate(ServerState* server, EntityID ID, b32 complet
     u16 count = 0;
     if(equipment)
     {
-        for(u16 slotIndex = 0; slotIndex < Count_equipmentSlot; ++slotIndex)
+        for(u16 slotIndex = 0; slotIndex < ArrayCount(equipment->slots); ++slotIndex)
         {
             InventorySlot* slot = equipment->slots + slotIndex;
             if(IsDirty(slot))
             {
                 ++count;
-                Pack("CHHL", Mapping_Equipment, slotIndex, slot->type, GetBoundedID(slot).archetype_archetypeIndex);
+                Pack("CHLL", Mapping_Equipment, slotIndex, slot->flags_type, GetBoundedID(slot).archetype_archetypeIndex);
                 ResetDirty(slot);
             }
         }
@@ -385,55 +447,21 @@ internal u16 PrepareMappingsUpdate(ServerState* server, EntityID ID, b32 complet
             Pack("CHHL", Mapping_Dragging, 0, 0, GetBoundedID(equipped->draggingID).archetype_archetypeIndex);
             ResetDirty(&equipped->draggingID);
         }
-        for(u16 slotIndex = 0; slotIndex < Count_usingSlot; ++slotIndex)
+        for(u16 slotIndex = 0; slotIndex < ArrayCount(equipped->slots); ++slotIndex)
         {
             InventorySlot* slot = equipped->slots + slotIndex;
-            
             if(IsDirty(slot))
             {
                 ++count;
-                Pack("CHHL", Mapping_Using, slotIndex, slot->type, GetBoundedID(slot).archetype_archetypeIndex);
+                Pack("CHLL", Mapping_Using, slotIndex, slot->flags_type, GetBoundedID(slot).archetype_archetypeIndex);
                 ResetDirty(slot);
-            }
-            
-            if(IsValidID(GetBoundedID(slot)))
-            {
-                Assert(!HasComponent(GetBoundedID(slot), ContainerComponent));
             }
         }
     }
     
     if(container)
     {
-        if(IsDirty(container->openedBy))
-        {
-            ++count;
-            Pack("CHHL", Mapping_OpenedBy, 0, 0, GetBoundedID(container->openedBy).archetype_archetypeIndex);
-            ResetDirty(&container->openedBy);
-        }
-        
-        for(u16 objectIndex = 0; objectIndex < ArrayCount(container->storedObjects); ++objectIndex)
-        {
-            InventorySlot* slot = container->storedObjects + objectIndex;
-            
-            if(IsDirty(slot))
-            {
-                ++count;
-                Pack("CHHL", Mapping_ContainerStored, objectIndex, slot->type, GetBoundedID(slot).archetype_archetypeIndex);
-                ResetDirty(slot);
-            }
-        }
-        
-        for(u16 objectIndex = 0; objectIndex < ArrayCount(container->usingObjects); ++objectIndex)
-        {
-            InventorySlot* slot = container->usingObjects + objectIndex;
-            if(IsDirty(slot))
-            {
-                ++count;
-                Pack("CHHL", Mapping_ContainerUsing, objectIndex, slot->type, GetBoundedID(slot).archetype_archetypeIndex);
-                ResetDirty(slot);
-            }
-        }
+        buff = PrepareContainerUpdate(buff, container, &count);
     }
     
     if(count > 0)
@@ -556,6 +584,7 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, b32 staticUpdat
         {
             def->updateSent = true;
             
+            
             unsigned char basicsBuffer_[KiloBytes(2)];
             u16 basicsSize = PrepareBasicsUpdate(server, ID, completeUpdate, staticUpdate, basicsBuffer_);
             
@@ -645,5 +674,12 @@ internal void QueueSeason(PlayerComponent* player, u16 season)
 {
     StartPacket(player, Season);
     Pack("H", season);
+    QueueOrderedPacket(player);
+}
+
+internal void QueueDayTime(PlayerComponent* player, u16 dayTime)
+{
+    StartPacket(player, DayTime);
+    Pack("H", dayTime);
     QueueOrderedPacket(player);
 }

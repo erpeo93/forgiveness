@@ -683,7 +683,6 @@ int main(int argc, char** argv)
         "forg_asset.h",
         "forg_ecs.h",
         "forg_archetypes.h",
-        "forg_skill.h",
         "forg_animation.h",
         "forg_particles.h",
         "forg_sound.h",

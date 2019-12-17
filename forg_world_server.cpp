@@ -28,6 +28,28 @@ internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq,
     AddEntity_(server, P, definitionID, seed, params);
 }
 
+internal void AddEntity(ServerState* server, UniversePos P, u32 seed, EntityRef type, AddEntityParams params = DefaultAddEntityParams())
+{
+    AssetID definitionID;
+    definitionID.type = AssetType_EntityDefinition;
+    definitionID.subtypeHashIndex = type.subtypeHashIndex;
+    definitionID.index = type.index;
+    
+    AddEntity_(server, P, definitionID, seed, params);
+}
+
+internal EntityRef GetEntityType(ServerState* server, EntityID ID)
+{
+    EntityRef result = {};
+    if(IsValidID(ID))
+    {
+        DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+        result = def->definitionID;
+    }
+    
+    return result;
+}
+
 internal void SpawnPlayer(ServerState* server, UniversePos P, AddEntityParams params)
 {
     EntityRef type = EntityReference(server->assets, "default", "human");
@@ -50,6 +72,7 @@ internal void MakeTangible(ServerState* server, EntityID ID)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     ClearEntityFlags(def, EntityFlag_notInWorld);
+    AddChangedFlags(def, &def->basicPropertiesChanged, EntityBasics_Position);
 }
 
 internal void DeleteEntity(ServerState* server, EntityID ID, DeleteEntityReasonType type)
@@ -259,6 +282,12 @@ internal b32 EquipOptionIndex(ServerState* server, EntityID ID, EntityID targetI
     return result;
 }
 
+internal void EmptySlot(ServerState* server, InventorySlot* slot)
+{
+    MakeTangible(server, GetBoundedID(slot));
+    SetBoundedID(slot, {});
+}
+
 internal b32 RemoveFromContainer(ServerState* server, ContainerComponent* container, EntityID ID)
 {
     b32 result = false;
@@ -267,14 +296,14 @@ internal b32 RemoveFromContainer(ServerState* server, ContainerComponent* contai
         for(u32 objectIndex = 0; objectIndex < ArrayCount(container->storedObjects); ++objectIndex)
         {
             InventorySlot* slot = container->storedObjects + objectIndex;
-            if(slot->type == InventorySlot_Invalid)
+            if(slot->flags_type == InventorySlot_Invalid)
             {
                 break;
             }
             
-            if(AreEqual(slot, ID))
+            if(AreEqual(slot, ID) && !(slot->flags_type & InventorySlot_Locked))
             {
-                SetBoundedID(slot, {});
+                EmptySlot(server, slot);
                 result = true;
                 break;
             }
@@ -286,14 +315,14 @@ internal b32 RemoveFromContainer(ServerState* server, ContainerComponent* contai
             {
                 InventorySlot* slot = container->usingObjects + objectIndex;
                 
-                if(slot->type == InventorySlot_Invalid)
+                if(slot->flags_type == InventorySlot_Invalid)
                 {
                     break;
                 }
                 
-                if(AreEqual(slot, ID))
+                if(AreEqual(slot, ID) && !(slot->flags_type & InventorySlot_Locked))
                 {
-                    SetBoundedID(slot, {});
+                    EmptySlot(server, slot);
                     result = true;
                     break;
                 }
@@ -302,17 +331,63 @@ internal b32 RemoveFromContainer(ServerState* server, ContainerComponent* contai
         }
     }
     
-    if(result)
+    return result;
+}
+
+
+internal b32 ContainerHasType(ServerState* server, ContainerComponent* container, EntityRef type, EntityID* outputID)
+{
+    b32 result = false;
+    if(container)
     {
-        MakeTangible(server, ID);
+        for(u32 objectIndex = 0; objectIndex < ArrayCount(container->storedObjects); ++objectIndex)
+        {
+            InventorySlot* slot = container->storedObjects + objectIndex;
+            if(slot->flags_type == InventorySlot_Invalid)
+            {
+                break;
+            }
+            
+            EntityID slotID = GetBoundedID(slot);
+            EntityRef slotType = GetEntityType(server, slotID);
+            if(AreEqual(slotType, type) && !(slot->flags_type & InventorySlot_Locked))
+            {
+                result = true;
+                *outputID = slotID;
+                break;
+            }
+        }
+        
+        if(!result)
+        {
+            for(u32 objectIndex = 0; objectIndex < ArrayCount(container->usingObjects); ++objectIndex)
+            {
+                InventorySlot* slot = container->usingObjects + objectIndex;
+                if(slot->flags_type == InventorySlot_Invalid)
+                {
+                    break;
+                }
+                
+                
+                EntityID slotID = GetBoundedID(slot);
+                EntityRef slotType = GetEntityType(server, slotID);
+                if(AreEqual(slotType, type) && !(slot->flags_type & InventorySlot_Locked))
+                {
+                    result = true;
+                    *outputID = slotID;
+                    break;
+                }
+            }
+            
+        }
     }
+    
     return result;
 }
 
 internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetID)
 {
     b32 result = false;
-    
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
     if(equipment)
     {
@@ -330,6 +405,7 @@ internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetI
                 if(RemoveFromContainer(server, GetComponent(server, GetBoundedID(slot), ContainerComponent), targetID))
                 {
                     result= true;
+                    break;
                 }
             }
         }
@@ -350,12 +426,19 @@ internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetI
                 for(u32 usingIndex = 0; usingIndex < ArrayCount(equipped->slots); ++usingIndex)
                 {
                     InventorySlot* slot = equipped->slots + usingIndex;
-                    //Assert(!HasComponent(slot->ID, ContainerComponent));
                     if(AreEqual(slot, targetID))
                     {
                         result = true;
                         SetBoundedID(slot, {});
                         break;
+                    }
+                    else
+                    {
+                        if(RemoveFromContainer(server, GetComponent(server, GetBoundedID(slot), ContainerComponent), targetID))
+                        {
+                            result= true;
+                            break;
+                        }
                     }
                 }
             }
@@ -369,6 +452,76 @@ internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetI
     
     return result;
 }
+
+internal b32 EntityHasType(ServerState* server, EntityID ID, EntityRef type, EntityID* outputID)
+{
+    b32 result = false;
+    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    if(equipment)
+    {
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->slots); ++slotIndex)
+        {
+            InventorySlot* slot = equipment->slots + slotIndex;
+            EntityID slotID = GetBoundedID(slot);
+            EntityRef slotType = GetEntityType(server, slotID);
+            if(AreEqual(slotType, type))
+            {
+                result = true;
+                *outputID = slotID;
+                break;
+            }
+            else
+            {
+                if(ContainerHasType(server, GetComponent(server, GetBoundedID(slot), ContainerComponent), type, outputID))
+                {
+                    result= true;
+                    break;
+                }
+            }
+        }
+    }
+    
+    if(!result)
+    {
+        UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+        if(equipped)
+        {
+            
+            EntityRef draggingType = GetEntityType(server, equipped->draggingID.ID);
+            if(AreEqual(draggingType, type))
+            {
+                result = true;
+                *outputID = equipped->draggingID.ID;
+            }
+            else
+            {
+                for(u32 usingIndex = 0; usingIndex < ArrayCount(equipped->slots); ++usingIndex)
+                {
+                    InventorySlot* slot = equipped->slots + usingIndex;
+                    EntityID slotID = GetBoundedID(slot);
+                    EntityRef slotType = GetEntityType(server, slotID);
+                    if(AreEqual(slotType, type))
+                    {
+                        result = true;
+                        *outputID = slotID;
+                        break;
+                    }
+                    else
+                    {
+                        if(ContainerHasType(server, GetComponent(server, GetBoundedID(slot), ContainerComponent), type, outputID))
+                        {
+                            result= true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    return result;
+}
+
 
 internal b32 RemoveAccordingToCommand(ServerState* server, EntityID ID, GameCommand* command)
 {
@@ -469,17 +622,63 @@ internal void SignalCompletedCommand(ServerState* server, EntityID ID, GameComma
 	}
 }
 
+internal void EssenceDelta(ServerState* server, EntityID ID, u16 essence, i16 delta)
+{
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    
+    i16 newEssenceCount = (i16) def->essences[essence] + delta;
+    Assert(newEssenceCount >= 0);
+    def->essences[essence] = (u16) newEssenceCount;
+    if(HasComponent(ID, PlayerComponent))
+    {
+        PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
+        if(player)
+        {
+            QueueEssenceUpdate(player, essence, def->essences[essence]);
+        }
+    }
+}
+
+internal void AbsorbEssences(ServerState* server, EntityID ID, EntityID targetID)
+{
+    DefaultComponent* source = GetComponent(server, targetID, DefaultComponent);
+    for(u16 essenceIndex = 0; essenceIndex < ArrayCount(source->essences); ++essenceIndex)
+    {
+        u16 toAdd = source->essences[essenceIndex];
+        if(toAdd)
+        {
+            EssenceDelta(server, ID, essenceIndex, (i16) toAdd);
+        }
+    }
+}
+
 internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* command, CommandParameters* parameters, r32 elapsedTime, b32 updateAction)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     ActionComponent* action = GetComponent(server, ID, ActionComponent);
     MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    UsingComponent* equippedComponent = GetComponent(server, ID, UsingComponent);
+    
+    EntityRef equipped[Count_usingSlot];
+    u32 equippedCount = 0;
+    
+    if(equippedComponent)
+    {
+        equippedCount = ArrayCount(equippedComponent->slots);
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(equippedComponent->slots); ++slotIndex)
+        {
+            EntityID slotID = GetBoundedID(equippedComponent->slots + slotIndex);
+            equipped[slotIndex] = GetEntityType(server, slotID);
+        }
+    }
+    
+    
     
     EntityID targetID = command->targetID;
     DefaultComponent* targetDef = GetComponent(server, command->targetID, DefaultComponent);
     InteractionComponent* interaction = GetComponent(server, command->targetID, InteractionComponent);
-    DefaultComponent* usingDef = GetComponent(server, command->usingID, DefaultComponent);
     
     r32 distanceSq = R32_MAX;
     if(targetDef)
@@ -505,11 +704,13 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                 physic->acc = V3(0, 0, 0);
             }
         }
+        
+        newAction = GetU16(action->action);
     }
     
     b32 resetAction = false;
     b32 resetActionTime = false;
-    switch(GetU16(action->action))
+    switch(newAction)
     {
         case none:
         case idle:
@@ -524,7 +725,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         case attack:
         {
             r32 targetTime;
-            if(ActionIsPossibleAtDistance(interaction, attack, oldAction, distanceSq, &targetTime, misc))
+            if(ActionIsPossibleAtDistance(interaction, attack, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
             {
                 if(action->time >= targetTime)
                 {
@@ -540,17 +741,25 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         
         case cast:
         {
-            SkillComponent* skills = GetComponent(server, ID, SkillComponent);
-            if(skills)
+            if(equippedComponent)
             {
-                if(command->skillIndex < ArrayCount(skills->activeSkills))
+                if(command->skillIndex == skill_1 ||
+                   command->skillIndex == skill_2 ||
+                   command->skillIndex == skill_3 ||
+                   command->skillIndex == skill_4)
                 {
-                    Skill* active = skills->activeSkills + command->skillIndex;
-                    if(action->time >= active->targetTime)
+                    EntityID skillID = GetBoundedID(equippedComponent->slots + command->skillIndex);
+                    if(IsValidID(skillID))
                     {
-                        resetActionTime = true;
-                        UniversePos targetP = Offset(def->P, parameters->targetOffset);
-                        DispatchGameEffect(server, ID, targetP, &active->effect, command->targetID);
+                        u16* essences = def->essences;
+                        SkillDefComponent* active = GetComponent(server, skillID, SkillDefComponent);
+                        
+                        u16 level = active->level;
+                        // TODO(Leonardo): 
+                        //SumEssences();
+                        
+                        //UniversePos targetP = Offset(def->P, parameters->targetOffset);
+                        DispatchEntityEffects(server, skillID, elapsedTime, essences);
                     }
                 }
                 else
@@ -569,7 +778,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             if(IsValidID(targetID))
             {
                 r32 targetTime;
-                if(ActionIsPossibleAtDistance(interaction, drag, oldAction, distanceSq, &targetTime, misc))
+                if(ActionIsPossibleAtDistance(interaction, pick, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
                 {
                     if(action->time >= targetTime)
                     {
@@ -580,8 +789,6 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                             {
                                 if(!Equip(server, ID, targetID))
                                 {
-                                    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-                                    
                                     if(equipment)
                                     {
                                         for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->slots); ++equipIndex)
@@ -608,23 +815,21 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                     resetAction = true;
                 }
             }
-            
         } break;
         
         case drag:
         {
-            UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
             if(equipped)
             {
                 r32 targetTime;
-                if(ActionIsPossibleAtDistance(interaction, drag, oldAction, distanceSq, &targetTime, misc))
+                if(ActionIsPossibleAtDistance(interaction, drag, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
                 {
                     if(action->time >= targetTime)
                     {
-                        if(!IsValidID(equipped->draggingID))
+                        if(!IsValidID(equippedComponent->draggingID))
                         {
                             MakeIntangible(server, command->targetID);
-                            SetBoundedID(&equipped->draggingID, command->targetID);
+                            SetBoundedID(&equippedComponent->draggingID, command->targetID);
                         }
                         
                         SignalCompletedCommand(server, ID, command);
@@ -642,8 +847,9 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         {
             if(IsValidID(command->usingID))
             {
+                DefaultComponent* usingDef = GetComponent(server, command->usingID, DefaultComponent);
                 r32 targetTime;
-                if(ActionIsPossibleAtDistance(interaction, setOnFire, oldAction, distanceSq, &targetTime, misc, true, usingDef->definitionID))
+                if(ActionIsPossibleAtDistance(interaction, setOnFire, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount, usingDef->definitionID))
                 {
                     if(action->time >= targetTime)
                     {
@@ -659,22 +865,20 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             }
         } break;
         
-        
         case open:
         {
             r32 targetTime;
-            if(ActionIsPossibleAtDistance(interaction, open, oldAction, distanceSq, &targetTime, misc))
+            if(ActionIsPossibleAtDistance(interaction, open, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
             {
                 if(action->time >= targetTime)
                 {
                     b32 canOpen = true;
-                    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
                     if(equipment && Find(equipment->slots, ArrayCount(equipment->slots), targetID))
                     {
                         canOpen = false;
                     }
-                    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-                    if(equipped && Find(equipped->slots, ArrayCount(equipped->slots), targetID))
+                    
+                    if(equipped && Find(equippedComponent->slots, ArrayCount(equippedComponent->slots), targetID))
                     {
                         canOpen = false;
                     }
@@ -737,22 +941,135 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         
         case useInventory:
         {
-            if(IsValidID(targetID))
+            if(RemoveAccordingToCommand(server, ID, command))
             {
-                if(RemoveAccordingToCommand(server, ID, command))
+                if(AreEqual(command->targetContainerID, ID))
                 {
-                    if(AreEqual(command->targetContainerID, ID))
+                    UseOptionIndex(server, ID, targetID, command->optionIndex);
+                }
+                else
+                {
+                    StoreInUsingSlots(server, command->targetContainerID, targetID, command->targetObjectIndex);
+                }
+            }
+        } break;
+        
+        case absorb:
+        {
+            if(RemoveAccordingToCommand(server, ID, command))
+            {
+                AbsorbEssences(server, ID, command->targetID);
+                DeleteEntity(server, targetID);
+            }
+        } break;
+        
+        case craft:
+        {
+            if(targetDef)
+            {
+                if(AreEqual(targetDef->definitionID, EntityReference(server->assets, "default", "recipe")))
+                {
+                    EntityRef type = GetCraftingType(server->assets, targetDef->seed);
+                    u32 craftSeed = targetDef->seed;
+                    
+                    
+                    EntityRef components[8];
+                    EntityID componentIDs[8];
+                    u16 componentCount = GetCraftingComponents(server->assets, type, craftSeed, components, ArrayCount(components));
+                    
+                    b32 hasAllComponents = true;
+                    for(u16 componentIndex = 0; componentIndex < componentCount; ++componentIndex)
                     {
-                        UseOptionIndex(server, ID, targetID, command->optionIndex);
+                        if(EntityHasType(server, ID, components[componentIndex], componentIDs + componentIndex))
+                        {
+                            
+                        }
+                        else
+                        {
+                            hasAllComponents = false;
+                            break;
+                        }
                     }
-                    else
+                    
+                    b32 hasAllEssences = true;
+                    u16 essenceCount = 1;
+                    for(u16 essenceIndex = 0; essenceIndex < essenceCount; ++essenceIndex)
                     {
-                        StoreInUsingSlots(server, command->targetContainerID, targetID, command->targetObjectIndex);
+                        u16 selected = action->selectedCrafingEssences[essenceIndex];
+                        if(selected >= ArrayCount(def->essences) || def->essences[selected] == 0)
+                        {
+                            hasAllEssences = false;
+                            break;
+                        }
+                    }
+                    
+                    
+                    if(hasAllComponents && hasAllEssences)
+                    {
+                        if(RemoveAccordingToCommand(server, ID, command))
+                        {
+                            DeleteEntity(server, command->targetID);
+                            
+                            AddEntityParams params = DefaultAddEntityParams();
+                            
+                            
+                            for(u16 essenceIndex = 0; essenceIndex < essenceCount; ++essenceIndex)
+                            {
+                                u16 selected = action->selectedCrafingEssences[essenceIndex];
+                                ++params.essences[selected];
+                                EssenceDelta(server, ID, selected, (i16) -1);
+                                
+                                action->selectedCrafingEssences[essenceIndex] = 0;
+                            }
+                            
+                            for(u16 slotIndex = 0; slotIndex < ArrayCount(action->selectedCrafingEssences); ++slotIndex)
+                            {
+                                action->selectedCrafingEssences[slotIndex] = 0;
+                            }
+                            
+                            AddEntity(server, def->P, craftSeed, type, params);
+                            
+                            for(u16 componentIndex = 0; componentIndex < componentCount; ++componentIndex)
+                            {
+                                if(RemoveFromEntity(server, ID, componentIDs[componentIndex]))
+                                {
+                                    DeleteEntity(server, componentIDs[componentIndex]);
+                                }
+                                else
+                                {
+                                    InvalidCodePath;
+                                }
+                            }
+                        }
                     }
                 }
             }
         } break;
         
+        case level_up:
+        {
+            if(HasComponent(ID, PlayerComponent))
+            {
+                PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
+                if(equipped && player && player->skillPoints > 0)
+                {
+                    for(u32 slotIndex = 0; slotIndex < ArrayCount(equippedComponent->slots); ++slotIndex)
+                    {
+                        InventorySlot* slot = equippedComponent->slots + slotIndex;
+                        if(AreEqual(GetBoundedID(slot), command->targetID))
+                        {
+                            SkillDefComponent* skill = GetComponent(server, command->targetID, SkillDefComponent);
+                            ++skill->level;
+                            --player->skillPoints;
+                            
+                            slot->flags_type |= InventorySlot_Locked;
+                            SetBoundedID(slot, command->targetID);
+                            break;
+                        }
+                    }
+                }
+            }
+        } break;
         InvalidDefaultCase;
     }
     
@@ -781,7 +1098,7 @@ STANDARD_ECS_JOB_SERVER(HandleOpenedContainers)
         r32 targetTime;
         
         MiscComponent* misc = 0;
-        if(!ActionIsPossibleAtDistance(interaction, open, open, distanceSq, &targetTime, misc))
+        if(!ActionIsPossibleAtDistance(interaction, open, open, distanceSq, &targetTime, misc, 0, 0))
         {
             SetBoundedID(&container->openedBy, {});
         }
@@ -811,6 +1128,83 @@ STANDARD_ECS_JOB_SERVER(FillCollisionSpatialPartition)
         Rect3 bounds = AddRadius(physic->bounds, V3(g_maxDelta, g_maxDelta, g_maxDelta));
         AddToSpatialPartition(server->frameByFramePool, &server->standardPartition, def->P, bounds, ID);
     }
+}
+
+internal b32 ShouldCollide(u16 b1, u16 b2)
+{
+    b32 result = false;
+    
+    if(b2 < b1)
+    {
+        u16 temp = b1;
+        b1 = b2;
+        b2 = temp;
+    }
+    
+    switch(b1)
+    {
+        case bound_invalid:
+        {
+            
+        } break;
+        
+        case bound_creature:
+        {
+            result = (b2 == bound_environment);
+        } break;
+        
+        case bound_environment:
+        {
+            
+        } break;
+        
+        case bound_object:
+        {
+            
+        } break;
+        
+        InvalidDefaultCase;
+    }
+    
+    return result;
+}
+
+internal b32 ShouldOverlap(u16 b1, u16 b2)
+{
+    b32 result = false;
+    
+    if(b2 < b1)
+    {
+        u16 temp = b1;
+        b1 = b2;
+        b2 = temp;
+    }
+    
+    switch(b1)
+    {
+        case bound_invalid:
+        {
+            
+        } break;
+        
+        case bound_creature:
+        {
+        } break;
+        
+        case bound_environment:
+        {
+            
+        } break;
+        
+        case bound_object:
+        {
+            
+        } break;
+        
+        InvalidDefaultCase;
+    }
+    
+    return result;
 }
 
 internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, PhysicComponent* physic, EntityID ID, r32 elapsedTime)
@@ -848,10 +1242,8 @@ internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, P
             {
                 Vec3 testP = SubtractOnSameZChunk(testDef->P, def->P);
                 
-                b32 overlappingEntity = HasComponent(testID, OverlappingEffectsComponent);
-                
-                b32 shouldCollide = overlappingEntity ? false : true;
-                b32 shouldOverlap = overlappingEntity ? true : false;
+                b32 shouldCollide = ShouldCollide(physic->boundType, testPhysic->boundType);
+                b32 shouldOverlap = ShouldOverlap(physic->boundType, testPhysic->boundType);
                 
                 r32 oldT = tStop;
                 if(HandleVolumeCollision(physic->bounds, deltaP, testP, testPhysic->bounds, &tStop, &wallNormalMin, shouldCollide))
@@ -888,7 +1280,20 @@ internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, P
     def->P = NormalizePosition(def->P);
     if(!PositionInsideWorld(&def->P))
     {
+        physic->speed = {};
         def->P = oldP;
+        AddChangedFlags(def, &def->basicPropertiesChanged, EntityBasics_Position);
+    }
+    
+    if(!EntityHasFlags(def, EntityFlag_canGoIntoWater))
+    {
+        WorldTile* tile = GetTile(server, def->P);
+        if(IsValid(tile->underSeaLevelFluid))
+        {
+            physic->speed = {};
+            def->P = oldP;
+            AddChangedFlags(def, &def->basicPropertiesChanged, EntityBasics_Position);
+        }
     }
     
     def->updateSent = false;
@@ -935,8 +1340,6 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
     HandleEntityMovement(server, def, physic, ID, elapsedTime);
     
     
-    
-    
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
     if(equipped)
     {
@@ -944,14 +1347,19 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
         {
             UpdateObjectPosition(server, &equipped->draggingID, def->P);
         }
-        UpdateObjectPositions(server, def->P, equipped->slots, Count_usingSlot);
-        for(u32 usingIndex = 0; usingIndex < Count_usingSlot; ++usingIndex)
+        UpdateObjectPositions(server, def->P, equipped->slots, ArrayCount(equipped->slots));
+        for(u32 usingIndex = 0; usingIndex < ArrayCount(equipped->slots); ++usingIndex)
         {
             InventorySlot* slot = equipped->slots + usingIndex;
             EntityID slotID = GetBoundedID(slot);
             if(IsValidID(slotID))
             {
-                Assert(!HasComponent(slotID, ContainerComponent));
+                ContainerComponent* container = GetComponent(server, slotID, ContainerComponent);
+                if(container)
+                {
+                    UpdateObjectPositions(server, def->P, container->storedObjects, ArrayCount(container->storedObjects));
+                    UpdateObjectPositions(server, def->P, container->usingObjects, ArrayCount(container->usingObjects));
+                }
             }
         }
     }
@@ -959,8 +1367,8 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
     if(equipment)
     {
-        UpdateObjectPositions(server, def->P, equipment->slots, Count_equipmentSlot);
-        for(u32 equipIndex = 0; equipIndex < Count_equipmentSlot; ++equipIndex)
+        UpdateObjectPositions(server, def->P, equipment->slots, ArrayCount(equipment->slots));
+        for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->slots); ++equipIndex)
         {
             InventorySlot* slot = equipment->slots + equipIndex;
             EntityID slotID = GetBoundedID(slot);
@@ -1001,6 +1409,47 @@ STANDARD_ECS_JOB_SERVER(DeleteAllEntities)
     FreeArchetype(server, ID);
 }
 
-internal void DeleteDeletedEntityList(ServerState* server)
+internal void UpdateWorldBasics(ServerState* server, r32 elapsedTime)
 {
+    
+	server->seasonTime += elapsedTime;
+    if(server->seasonTime >= 5.0f)
+    {
+        server->seasonTime = 0;
+        if(++server->season == Count_Season)
+        {
+            server->season = 0;
+        }
+        
+        for(CompIterator iter = FirstComponent(server, PlayerComponent); 
+            IsValid(iter); iter = Next(iter))
+        {
+            PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
+            if(player->connectionSlot && IsValidID(player->ID))
+            {
+                QueueSeason(player, server->season);
+            }
+        }
+    }
+    
+    
+    server->dayTimeTime += elapsedTime;
+    if(server->dayTimeTime >= 5.0f)
+    {
+        server->dayTimeTime = 0;
+        if(++server->dayTime == Count_DayTime)
+        {
+            server->dayTime = 0;
+        }
+        
+        for(CompIterator iter = FirstComponent(server, PlayerComponent); 
+            IsValid(iter); iter = Next(iter))
+        {
+            PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
+            if(player->connectionSlot && IsValidID(player->ID))
+            {
+                QueueDayTime(player, server->dayTime);
+            }
+        }
+    }
 }

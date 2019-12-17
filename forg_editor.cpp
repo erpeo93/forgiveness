@@ -236,9 +236,9 @@ internal Rect2 EditorTextDraw(EditorLayout* layout, Vec4 color, u32 flags, char*
         Vec2 padding = RectPadding(layout->fontScale);
         textDim = AddRadius(textDim, padding);
         
-        ObjectTransform transform = FlatTransform(z);
+        ObjectTransform transform = FlatTransform();
         transform.tint = V4(0.02f, 0.02f, 0.02f, 1.0f);
-        PushRect(layout->group, FlatTransform(z), textDim);
+        PushRect(layout->group, FlatTransform(), textDim);
     }
     
     PushText(layout->group, layout->fontID, text, P, layout->fontScale, color, startingSpace);
@@ -257,7 +257,7 @@ inline Rect2 TextOp(EditorLayout* layout, char* string, Vec2 p, TextOperation op
     {
         result = PushText_(layout->group, layout->fontID, layout->font, layout->fontInfo, 
                            string, V3(p.x, p.y, 0), layout->fontScale, 
-                           op, color, false, true, 0.0f);
+                           op, color, false, true);
     }
     
     return result;
@@ -1597,7 +1597,7 @@ internal void EditorResize(EditorLayout* layout, Vec2 P, AUID ID, r32* dim)
         }
     }
     
-    ObjectTransform transform = FlatTransform(0.2f);
+    ObjectTransform transform = FlatTransform();
     transform.tint = resizeColor;
     PushRect(layout->group, transform, resizableRect);
 }
@@ -1631,7 +1631,7 @@ internal void EditorResize(EditorLayout* layout, Vec2 P, AUID ID, Vec2* dim)
         }
     }
     
-    PushRect(layout->group, FlatTransform(0.2f, resizeColor), resizableRect);
+    PushRect(layout->group, FlatTransform(resizeColor), resizableRect);
 }
 
 internal b32 EditorCollapsible(EditorLayout* layout, char* string)
@@ -1963,12 +1963,12 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                 r32 backgroundScale = 1.1f;
                 
                 Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, 0);
-                BitmapDim dim = PushBitmapWithPivot(layout->group, FlatTransform(0.1f), ID, P, V2(0, 0), height);
+                BitmapDim dim = PushBitmapWithPivot(layout->group, FlatTransform(), ID, P, V2(0, 0), height);
                 
                 Vec2 pivot = V2(info->bitmap.align[0], info->bitmap.align[1]);
                 Vec2 pivotP = P.xy + Hadamart(pivot, dim.size);
                 Rect2 pivotRect = RectCenterDim(pivotP, layout->fontScale * V2(8, 8));
-                PushRect(layout->group, FlatTransform(0.2f, V4(1, 0, 0, 1)), pivotRect);
+                PushRect(layout->group, FlatTransform(V4(1, 0, 0, 1)), pivotRect);
                 
                 
                 LoadBitmap(assets, ID, true);
@@ -1988,13 +1988,13 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                             Rect2 pointRect = RectCenterDim(pointP, layout->fontScale * V2(8, 8));
                             RandomSequence seq = Seed(attachmentPointIndex);
                             Vec4 color = V4(RandomUniV3(&seq), 1.0f);
-                            PushRect(layout->group, FlatTransform(0.3f, color), pointRect);
+                            PushRect(layout->group, FlatTransform(color), pointRect);
                         }
                     }
                 }
                 
                 Rect2 rect = Scale(RectMinDim(P.xy, dim.size), backgroundScale);
-                PushRect(layout->group, FlatTransform(0, V4(0, 0, 0, 1)), rect);
+                PushRect(layout->group, FlatTransform(V4(0, 0, 0, 1)), rect);
                 
                 Vec2 resizableP = V2(rect.max.x, rect.min.y);
                 EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
@@ -2070,7 +2070,7 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                         params.P.xy += offset;
                         Rect2 dim = RenderAnimationAndTriggerSounds_(worldMode, layout->group, 0, ID, &component, &params);
                         
-                        PushRect(layout->group, FlatTransform(0, V4(0, 0, 0, 1)), dim);
+                        PushRect(layout->group, FlatTransform(V4(0, 0, 0, 1)), dim);
                         
                         Vec2 resizableP = dim.min;
                         EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
@@ -2374,7 +2374,7 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
             tooltipP.x = Max(tooltipP.x, -0.5f * group->screenDim.x);
             
             tooltipDim = Offset(tooltipDim, tooltipP.xy);
-            PushRect(group, FlatTransform(0, V4(0, 0, 0, 1)), tooltipDim);
+            PushRect(group, FlatTransform(V4(0, 0, 0, 1)), tooltipDim);
             PushText(group, fontID, layout.tooltip, tooltipP, tooltipScale);
             
             

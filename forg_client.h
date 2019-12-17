@@ -23,6 +23,7 @@
 typedef u32 U32;
 typedef r32 R32;
 #define GetR32(value) value
+#include "forg_skill.h"
 #include "forg_entity.h"
 #include "forg_meta.h"
 #include "forg_render_tier.h"
@@ -36,7 +37,6 @@ typedef r32 R32;
 #include "forg_particles.h"
 #include "forg_bolt.h"
 #include "forg_cutscene.h"
-#include "forg_skill.h"
 #include "forg_game_ui.h"
 #include "forg_render_entity.h"
 
@@ -50,7 +50,6 @@ struct BaseComponent
 {
     EntityRef definitionID;
     u32 seed;
-    u64 nameHash;
     UniversePos universeP;
     Vec3 velocity;
     u32 flags;
@@ -67,6 +66,8 @@ struct BaseComponent
     r32 fadeOutTime;
     
     GameProperty properties[Network_Count];
+    
+    u16 essences[Count_essence];
 };
 
 internal r32 GetHeight(Rect3 bounds)
@@ -92,7 +93,13 @@ struct PlantComponent
     ImageReference trunk;
     ImageReference branch;
     ImageReference leaf;
+    ImageReference flower;
+    ImageReference fruit;
     r32 windInfluence;
+    
+    r32 leafDensity;
+    r32 flowerDensity;
+    r32 fruitDensity;
 };
 
 struct GrassComponent
@@ -171,6 +178,7 @@ struct GameModeWorld
     r32 stateTime;
     
     u16 season;
+    u16 dayTime;
     
     r32 defaultZoomCoeff;
     Vec3 ambientLightColor;

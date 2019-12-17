@@ -1468,8 +1468,8 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             winSoundBuffer.delaySamples = (i32) (0.6f * (winSoundBuffer.samplesPerSecond / targetSecPerFrame * 1000.0f));
             
             u32 maxOverrun = 8 * 2 * sizeof( i16 );
-            soundSamples = ( i16* ) VirtualAlloc( 0, winSoundBuffer.totalBufferSize + maxOverrun,
-                                                 MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
+            soundSamples = ( i16*) VirtualAlloc(0, winSoundBuffer.totalBufferSize + maxOverrun,
+                                                MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
             
             Win32InitDSound( window, winSoundBuffer.samplesPerSecond, winSoundBuffer.totalBufferSize );
             Win32ClearSoundBuffer( &winSoundBuffer );
@@ -1487,7 +1487,6 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             
             gameMemory.api.CompleteQueueWork = Win32CompleteQueueWork;
             gameMemory.api.PushWork = Win32PushWork;
-            
             
             gameMemory.api.GetAllSubdirectories = Win32GetAllSubdirectories;
             gameMemory.api.CloseFile = Win32CloseFile;
@@ -1608,13 +1607,25 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                         gameInput.ctrlDown = ( GetKeyState( VK_CONTROL ) & ( 1 << 15 ) );
                         
                         
+                        u8 numberMaiuscChars[] = {'!', '@', '#', '$', '%', '^', '&', '*', '(', ')'};
+                        u8 numberIndex = 0;
                         for(u8 charIndex = '0'; charIndex <= '9'; ++charIndex)
                         {
                             if(GetAsyncKeyState(charIndex) & 0x8000)
                             {
-                                gameInput.isDown[charIndex] = true;
+                                if(gameInput.shiftDown)
+                                {
+                                    gameInput.isDown[numberMaiuscChars[numberIndex]] = true;
+                                }
+                                else
+                                {
+                                    gameInput.isDown[charIndex] = true;
+                                }
                             }
+                            
+                            ++numberIndex;
                         }
+                        
                         
                         u8 deltaLetters = 'a' - 'A';
                         for(u8 charIndex = 'A'; charIndex <= 'Z'; ++charIndex)

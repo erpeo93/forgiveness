@@ -34,14 +34,23 @@ internal void DamageEntityMentally(ServerState* server, EntityID ID, u32 damage)
 }
 
 internal void DeleteEntity(ServerState* server, EntityID ID, DeleteEntityReasonType reason = DeleteEntity_None);
-internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect, EntityID targetID)
+internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect, EntityID targetID, u16* essences)
 {
     switch(effect->effectType.value)
     {
         case spawnEntity:
         {
-            AddEntity(server, P, &server->entropy, effect->spawnType, DefaultAddEntityParams());
+            //AddEntity(server, P, &server->entropy, effect->spawnType, DefaultAddEntityParams());
         } break;
+        
+        
+#if 0        
+        case spawnEssence:
+        {
+            RollUntilYouGetTheCorrectOne();
+            Spawn();
+        } break;
+#endif
         
         case spawnEntityTowardTarget:
         {
@@ -63,7 +72,9 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
             Vec3 toTarget = SubtractOnSameZChunk(P, def->P);
             params.acceleration = toTarget;
             params.speed = 1.0f * Normalize(toTarget);
-            AddEntity(server, def->P, &server->entropy, effect->spawnType, params);
+            
+            UniversePos spawnP = def->P;
+            AddEntity(server, spawnP, &server->entropy, effect->spawnType, params);
         } break;
         
         case moveOnZSlice:
@@ -89,20 +100,32 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
         
         case damagePhysically:
         {
-            DamageEntityPhysically(server, targetID, 1);
+            u32 damage = 1;
+            DamageEntityPhysically(server, targetID, damage);
         } break;
         
         case damageMentally:
         {
-            DamageEntityMentally(server, targetID, 1);
+            u32 damage = 1;
+            DamageEntityMentally(server, targetID, damage);
+        } break;
+        
+        case addSkillPoint:
+        {
+            if(HasComponent(targetID, PlayerComponent))
+            {
+                PlayerComponent* player = GetComponent(server, targetID, PlayerComponent);
+                ++player->skillPoints;
+            }
         } break;
     }
 }
 
-internal void DispatchEntityEffects(ServerState* server, EntityID ID, r32 elapsedTime)
+internal void DispatchEntityEffects(ServerState* server, EntityID ID, r32 elapsedTime, u16* essences)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     EffectComponent* effects = GetComponent(server, ID, EffectComponent);
+    
     if(effects)
     {
         for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
@@ -112,7 +135,12 @@ internal void DispatchEntityEffects(ServerState* server, EntityID ID, r32 elapse
             if(effects->timers[effectIndex] >= effect->timer)
             {
                 effects->timers[effectIndex] = 0;
-                DispatchGameEffect(server, ID, def->P, effect, {});
+                DispatchGameEffect(server, ID, def->P, effect, {}, essences);
+                
+                if(effect->timer == 0.0f)
+                {
+                    effect->effectType.value = invalid_game_effect;
+                }
             }
         }
     }
@@ -120,6 +148,8 @@ internal void DispatchEntityEffects(ServerState* server, EntityID ID, r32 elapse
 
 STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
 {
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    u16* essences = def->essences;
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
     if(equipment)
     {
@@ -128,7 +158,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
             EntityID equipID = GetBoundedID(equipment->slots + equipmentIndex);
             if(IsValidID(equipID))
             {
-                DispatchEntityEffects(server, equipID, elapsedTime);
+                DispatchEntityEffects(server, equipID, elapsedTime, essences);
                 
                 ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
                 for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
@@ -136,7 +166,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
                     EntityID usingID = GetBoundedID(container->usingObjects + usingIndex);
                     if(IsValidID(usingID))
                     {
-                        DispatchEntityEffects(server, usingID, elapsedTime);
+                        DispatchEntityEffects(server, usingID, elapsedTime, essences);
                     }
                 }
             }
@@ -151,7 +181,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
             EntityID usingID = GetBoundedID(equipped->slots + equipmentIndex);
             if(IsValidID(usingID))
             {
-                DispatchEntityEffects(server, usingID, elapsedTime);
+                DispatchEntityEffects(server, usingID, elapsedTime, essences);
             }
         }
     }
@@ -160,12 +190,15 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
 internal void DispatchCollisitonEffects(ServerState* server, UniversePos P, EntityID actor, EntityID trigger)
 {
     CollisionEffectsComponent* effects = GetComponent(server, trigger, CollisionEffectsComponent);
+    DefaultComponent* def = GetComponent(server, trigger, DefaultComponent);
+    
     if(effects)
     {
+        u16* essences = def->essences;
         for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
         {
             GameEffect* effect = effects->effects + effectIndex;
-            DispatchGameEffect(server, trigger, P, effect, actor);
+            DispatchGameEffect(server, trigger, P, effect, actor, essences);
         }
     }
 }
@@ -173,12 +206,15 @@ internal void DispatchCollisitonEffects(ServerState* server, UniversePos P, Enti
 internal void DispatchOverlappingEffects(ServerState* server, UniversePos P, EntityID actor, EntityID overlap)
 {
     OverlappingEffectsComponent* effects = GetComponent(server, overlap, OverlappingEffectsComponent);
+    DefaultComponent* def = GetComponent(server, overlap, DefaultComponent);
+    
     if(effects)
     {
+        u16* essences = def->essences;
         for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
         {
             GameEffect* effect = effects->effects + effectIndex;
-            DispatchGameEffect(server, overlap, P, effect, actor);
+            DispatchGameEffect(server, overlap, P, effect, actor, essences);
         }
     }
 }
@@ -186,6 +222,6 @@ internal void DispatchOverlappingEffects(ServerState* server, UniversePos P, Ent
 #endif
 internal b32 CompatibleSlot(InteractionComponent* interaction, InventorySlot* slot)
 {
-    b32 result = (interaction->inventorySlotType == slot->type);
+    b32 result = (interaction->inventorySlotType == slot->flags_type || slot->flags_type == InventorySlot_Generic);
     return result;
 }

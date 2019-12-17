@@ -29,8 +29,8 @@ internal void ResetGameCamera(GameModeWorld* worldMode, RenderGroup* group)
     Vec2 finalXYOffset = worldMode->cameraWorldOffset.xy;
     
     m4x4 cameraO = ZRotation(cameraOrbit) * XRotation(cameraPitch);
-    magicLateralVector = V4(GetColumn(cameraO, 0), 0);
-    magicUpVector = V4(GetColumn(cameraO, 1), 0);
+    magicLateralVector = GetColumn(cameraO, 0);
+    magicUpVector = GetColumn(cameraO, 1);
     
     Vec3 cameraOffsetFinal = cameraO * V3(worldMode->cameraEntityOffset, worldMode->cameraWorldOffset.z + cameraDolly) + V3(finalXYOffset, 0);
     

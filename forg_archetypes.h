@@ -9,7 +9,6 @@ Archetype() struct AnimalArchetype
     EquipmentComponent equipment;
     UsingComponent equipped;
     InteractionComponent interaction;
-    SkillComponent skills;
     BrainComponent brain;
     AliveComponent alive;
     MiscComponent misc;
@@ -19,7 +18,6 @@ Archetype() struct AnimalArchetype
     EquipmentMappingComponent equipment;
     UsingMappingComponent equipped;
     InteractionComponent interaction;
-    SkillMappingComponent skillMappings;
     AnimationEffectComponent animationEffects;
     SoundEffectComponent soundEffects;
     AliveComponent alive;
@@ -37,6 +35,7 @@ Archetype() struct RockArchetype
     BaseComponent base;
     StandardImageComponent image;
     InteractionComponent interaction;
+    AnimationEffectComponent animationEffects;
 #endif
 };
 
@@ -52,6 +51,7 @@ Archetype() struct PlantArchetype
     PlantComponent plant;
     StandardImageComponent image;
     InteractionComponent interaction;
+    AnimationEffectComponent animationEffects;
 #endif
 };
 
@@ -67,22 +67,39 @@ Archetype() struct GrassArchetype
 #endif
 };
 
-Archetype() struct ObjectArchetype
+Archetype() struct RuneArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
     PhysicComponent physic;
-    PlayerComponent* player;
+    SkillDefComponent skill;
     EffectComponent effect;
+    ContainerComponent container;
     InteractionComponent interaction;
 #else
     BaseComponent base;
     LayoutComponent layout;
     InteractionComponent interaction;
+    AnimationEffectComponent animationEffects;
+    ContainerMappingComponent container;
 #endif
 };
 
-Archetype() struct ContainerArchetype
+Archetype() struct EssenceArchetype
+{
+#ifdef FORG_SERVER
+    DefaultComponent default;
+    PhysicComponent physic;
+    InteractionComponent interaction;
+#else
+    BaseComponent base;
+    LayoutComponent layout;
+    InteractionComponent interaction;
+    AnimationEffectComponent animationEffects;
+#endif
+};
+
+Archetype() struct ObjectArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
@@ -95,6 +112,8 @@ Archetype() struct ContainerArchetype
     LayoutComponent layout;
     ContainerMappingComponent container;
     InteractionComponent interaction;
+    AnimationEffectComponent animationEffects;
+    RecipeEssenceComponent recipeEssences;
 #endif
 };
 
@@ -107,6 +126,7 @@ Archetype() struct PortalArchetype
 #else
     BaseComponent base;
     FrameByFrameAnimationComponent animation;
+    AnimationEffectComponent animationEffects;
 #endif
 };
 
@@ -119,20 +139,8 @@ Archetype() struct ProjectileArchetype
     CollisionEffectsComponent collision;
 #else
     BaseComponent base;
-    StandardImageComponent image;
-#endif
-};
-
-Archetype() struct BoltArchetype
-{
-#ifdef FORG_SERVER
-    DefaultComponent default;
-    PhysicComponent physic;
-    TempEntityComponent temp;
-    CollisionEffectsComponent collision;
-#else
-    BaseComponent base;
-    BoltComponent bolt;
+    SegmentImageComponent image;
+    AnimationEffectComponent animationEffects;
 #endif
 };
 
@@ -160,6 +168,7 @@ Archetype() struct NullArchetype
 
 introspection() struct UseLayout
 {
+    GameProperty slotType MetaDefault("{Property_inventorySlotType, InventorySlot_Invalid}") MetaFixed(property);
     ArrayCounter slotCount MetaCounter("slots");
     Enumerator* slots MetaEnumerator("usingSlot");
 };
@@ -178,13 +187,24 @@ introspection() struct PossibleActionDefinition
     GameProperty special MetaDefault("{Property_specialPropertyType, Special_Invalid}") MetaFixed(property);
     r32 time;
     EntityRef requiredUsingType;
+    EntityRef requiredEquippedType;
 };
 
 introspection() struct CommonEntityInitParams
 {
     EntityRef definitionID MetaUneditable();
+    u16* essences MetaUneditable();
     
-    b32 collides MetaDefault("true");
+    b32 craftable;
+    
+    u16 componentCount;
+    
+    ArrayCounter possibleComponentCount MetaCounter(possibleComponents);
+    EntityRef* possibleComponents;
+    
+    u16 essenceCount MetaDefault("1");
+    
+    GameProperty boundType MetaDefault("{Property_boundType, bound_invalid}") MetaFixed(property);
     Vec3 boundOffset;
     Vec3 boundDim MetaDefault("V3(1, 1, 1)");
     
@@ -204,8 +224,6 @@ introspection() struct CommonEntityInitParams
     PossibleActionDefinition* draggingActions;
     
     
-    
-    
     ArrayCounter usingConfigurationCount MetaCounter("usingConfigurations");
     UseLayout* usingConfigurations;
     
@@ -213,6 +231,12 @@ introspection() struct CommonEntityInitParams
     EquipLayout* equipConfigurations;
     
     Enumerator inventorySlotType MetaEnumerator("inventorySlotType");
+};
+
+introspection() struct InventorySlots
+{
+    GameProperty type MetaDefault("{Property_inventorySlotType, InventorySlot_Standard}") MetaFixed(property);
+    u16 count;
 };
 
 introspection() struct ServerEntityInitParams
@@ -223,23 +247,26 @@ introspection() struct ServerEntityInitParams
     Vec3 startingAcceleration MetaUneditable();
     Vec3 startingSpeed MetaUneditable();
     
-    
     r32 accelerationCoeff MetaDefault("27.0f");
     r32 drag MetaDefault("-7.8f");
     
     ArrayCounter bindingCount MetaCounter(bindings);
     EffectBinding* bindings;
     
-    u16 storeCount;
-    u16 specialStoreCount;
     
-    u16 usingCount;
-    u16 specialUsingCount;
+    ArrayCounter storeSlotCounter MetaCounter(storeSlots);
+    InventorySlots* storeSlots;
+    
+    ArrayCounter usingSlotCounter MetaCounter(usingSlots);
+    InventorySlots* usingSlots;
+    
     
     ArrayCounter collisionEffectsCount MetaCounter(collisionEffects);
     GameEffect* collisionEffects;
     
     Enumerator brainType MetaEnumerator("brainType");
+    
+    b32 canGoIntoWater;
 };
 
 introspection() struct ImageProperty
@@ -286,6 +313,8 @@ introspection() struct ClientEntityInitParams
     ImageProperties trunkProperties;
     ImageProperties branchProperties;
     ImageProperties leafProperties;
+    ImageProperties flowerProperties;
+    ImageProperties fruitProperties;
     
     r32 windInfluence MetaDefault("0");
     u32 windFrequencyStandard MetaDefault("1");
@@ -297,6 +326,9 @@ introspection() struct ClientEntityInitParams
     
     AssetLabel name;
     
+    r32 slotZoomSpeed MetaDefault("1.0f");
+    r32 maxSlotZoom MetaDefault("1.0f");
+    
     AssetLabel layoutRootName;
     ArrayCounter pieceCount MetaCounter(layoutPieces);
     LayoutPieceProperties* layoutPieces;
@@ -307,11 +339,15 @@ introspection() struct ClientEntityInitParams
     ArrayCounter usingPieceCount MetaCounter(usingLayoutPieces);
     LayoutPieceProperties* usingLayoutPieces;
     
+    ArrayCounter equippedPieceCount MetaCounter(equippedLayoutPieces);
+    LayoutPieceProperties* equippedLayoutPieces;
+    
     Vec3 shadowOffset;
     Vec2 shadowScale MetaDefault("V2(1, 1)");
     Vec4 shadowColor MetaDefault("V4(1, 1, 1, 0.5f)");
     
     r32 lootingZoomCoeff MetaDefault("3.0f");
+    b32 displayInStandardMode;
     Vec2 desiredOpenedDim MetaDefault("V2(400, 400)");
     Vec2 desiredUsingDim MetaDefault("V2(200, 200)");
     

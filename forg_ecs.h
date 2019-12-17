@@ -58,6 +58,9 @@ struct ArchetypeLayout
             ArchetypeComponent hasSoundEffectComponent;
             ArchetypeComponent hasAliveComponent;
             ArchetypeComponent hasMiscComponent;
+            ArchetypeComponent hasSegmentImageComponent;
+            ArchetypeComponent hasSkillDefComponent;
+            ArchetypeComponent hasRecipeEssenceComponent;
         };
     };
 };

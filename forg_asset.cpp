@@ -2278,6 +2278,7 @@ internal AssetID QueryAnimations(Assets* assets, u64 skeletonHash, RandomSequenc
 }
 #endif
 
+
 inline b32 AreEqual(EntityRef r1, EntityRef r2)
 {
     b32 result = (r1.subtypeHashIndex == r2.subtypeHashIndex &&
@@ -2295,12 +2296,26 @@ internal AssetID EntityRefToAssetID(EntityRef ref)
     return result;
 }
 
+inline b32 IsValid(EntityRef ref)
+{
+    b32 result = (ref.subtypeHashIndex != 0 && ref.subtypeHashIndex != 0xffffffff);
+    return result;
+}
+
 inline EntityRef EntityReference(AssetID definitionID)
 {
     EntityRef result;
     result.subtypeHashIndex = definitionID.subtypeHashIndex;
     result.index = definitionID.index;
     return result;
+}
+
+internal EntityDefinition* GetEntityTypeDefinition(Assets* assets, EntityRef type)
+{
+    AssetID definitionID = EntityRefToAssetID(type);
+    EntityDefinition* definition = GetData(assets, EntityDefinition, definitionID);
+    Assert(definition);
+    return definition;
 }
 
 internal EntityRef EntityReference(Assets* assets, char* kind, char* type)

@@ -422,14 +422,7 @@ internal b32 SatisfiesEntityRequirements(ServerState* server, UniversePos P)
     {
         result = true;
         
-        WorldChunk* chunk = GetChunk(server, P.chunkX, P.chunkY, P.chunkZ);
-        
-        r32 oneOverVoxelSide = 1.0f / VOXEL_SIZE;
-        u32 tileX = TruncateReal32ToI32(P.chunkOffset.x * oneOverVoxelSide);
-        u32 tileY = TruncateReal32ToI32(P.chunkOffset.y * oneOverVoxelSide);
-        
-        WorldTile* tile = GetTile(server, chunk, tileX, tileY);
-        
+        WorldTile* tile = GetTile(server, P);
         if(IsValid(tile->underSeaLevelFluid))
         {
             result = false;
@@ -555,6 +548,7 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
     params.startingSpeed = newEntity->params.speed;
     definition->common.definitionID = EntityReference(newEntity->definitionID);
     params.seed = newEntity->seed;
+    definition->common.essences = newEntity->params.essences;
     
     u8 archetype = SafeTruncateToU8(ConvertEnumerator(EntityArchetype, definition->archetype));
     AcquireArchetype(server, archetype, (&ID));
@@ -565,6 +559,7 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
         Assert(HasComponent(ID, PlayerComponent));
         PlayerComponent* player = (PlayerComponent*) Get_(&server->PlayerComponent_, newEntity->params.playerIndex);
         player->justEnteredWorld = true;
+        player->skillPoints = 0;
         player->ID = ID;
         SetComponent(server, ID, PlayerComponent, player);
         
@@ -654,27 +649,16 @@ internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
         EntityID ID = deleted->ID;
 		DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
         
-        
-#if 0        
-		Assert(EntityHasFlags(def, EntityFlag_deleted));
-        SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
-        for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
-        {
-            PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
-            for(u32 messageIndex = 0; messageIndex < 5; ++messageIndex)
-            {
-                QueueDeletedID(player, ID);
-            }
-        }
-#endif
-        
         if(HasComponent(ID, StaticComponent))
         {
             StaticComponent* staticComponent = GetComponent(server, ID, StaticComponent);
             Assert(staticComponent->chunk);
             RemoveFromSpatialPartition(&server->staticPartition, staticComponent->chunk, staticComponent->block, ID);
         }
-        
+        else
+        {
+            Assert(HasComponent(ID, PhysicComponent));
+        }
         
         if(HasComponent(ID, PlayerComponent))
         {

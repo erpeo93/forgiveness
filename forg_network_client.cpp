@@ -107,6 +107,13 @@ internal void SendCommandParameters(CommandParameters parameters)
     CloseAndSendStandardPacket();
 }
 
+internal void SendSelectRecipeEssence(u16 slot, u16 essence)
+{
+    StartPacket(selectRecipeEssence);
+    Pack("HH", slot, essence);
+    CloseAndSendOrderedPacket();
+}
+
 inline void SendMovePlayerRequest(Vec3 offset)
 {
     StartPacket(MovePlayerInOtherRegion);
@@ -149,6 +156,14 @@ internal void SendRecreateWorldRequrest(b32 createEntities, UniversePos P)
     Pack("llllV", createEntities, P.chunkX, P.chunkY, P.chunkZ, P.chunkOffset);
     CloseAndSendGuaranteedPacket();
 }
+
+internal void SendRecipeEssenceSlot(u16 slot, u16 essence)
+{
+    StartPacket(selectRecipeEssence);
+    Pack("HH", slot, essence);
+    CloseAndSendGuaranteedPacket();
+}
+
 
 internal u32 ServerClientIDMappingHashIndex(GameModeWorld* worldMode, EntityID ID)
 {
@@ -203,19 +218,27 @@ internal void AddClientIDMapping(GameModeWorld* worldMode, EntityID serverID, En
     FREELIST_INSERT(mapping, worldMode->mappings[hashIndex]);
 }
 
-internal void StoreObjectMapping(GameModeWorld* worldMode, ObjectMapping* mappings, u32 mappingCount, u16 index, u16 type, EntityID ID, u64 stringHash)
+internal void StoreObjectMapping(GameModeWorld* worldMode, ObjectMapping* mappings, u32 mappingCount, u16 index, u32 flags_type, EntityID ID, u64 stringHash)
 {
     Assert(index < mappingCount);
     
     ObjectMapping* mapping = mappings + index;
-    mapping->object.type = type;
+    mapping->object.flags_type = flags_type;
     mapping->object.ID = ID;
     mapping->slotHash = stringHash;
+    mapping->pieceHash = 0;
+    mapping->zoomCoeff = 1.0;
+    mapping->zoomSpeed = 1.0f;
+    mapping->maxZoomCoeff = 1.0f;
     
     if(IsValidID(ID))
     {
         BaseComponent* objectBase = GetComponent(worldMode, ID, BaseComponent);
-        mapping->pieceHash = objectBase->nameHash;
+        EntityDefinition* definition = GetEntityTypeDefinition(worldMode->gameState->assets, objectBase->definitionID);
+        
+        mapping->pieceHash = StringHash(definition->client.name.name);
+        mapping->zoomSpeed = definition->client.slotZoomSpeed;
+        mapping->maxZoomCoeff = definition->client.maxSlotZoom;
     }
 }
 
@@ -382,6 +405,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             {
 				AssetID definitionID;
                 definitionID.type = AssetType_EntityDefinition;
+                u16 essences[Count_essence] = {};
                 u32 seed = 0;
 				UniversePos P = {};
 				Vec3 speed = {};
@@ -395,6 +419,18 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 				if(receivedFlags & (u16) EntityBasics_Definition)
 				{
 					Unpack("LLL", &definitionID.subtypeHashIndex, &definitionID.index, &seed);
+                    
+                    u16 essenceCount;
+                    Unpack("H", &essenceCount);
+                    
+                    for(u16 essenceIndex = 0; essenceIndex < essenceCount; ++essenceIndex)
+                    {
+                        u16 essence;
+                        u16 quantity;
+                        
+                        Unpack("HH", &essence, &quantity);
+                        essences[essence] = quantity;
+                    }
 				}
                 
 				if(receivedFlags & (u16) EntityBasics_Position)
@@ -428,11 +464,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 				{
 					if(!IsValidID(currentClientID) && !IsSet(flags, EntityFlag_deleted))
 					{
+                        justCreated = true;
 						Assets* assets = gameState->assets;
 						EntityDefinition* definition = GetData(assets, EntityDefinition, definitionID);
 						if(definition)
 						{
-							justCreated = true;
 							currentClientID = {};
 							AcquireArchetype(worldMode, GetArchetype(currentServerID), (&currentClientID));
                             ClientEntityInitParams params = definition->client;
@@ -440,6 +476,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 							params.seed = seed;
                             
 							definition->common.definitionID = EntityReference(definitionID);
+                            definition->common.essences = essences;
 							InitEntity(worldMode, currentClientID, &definition->common, 0, &params);
 							AddClientIDMapping(worldMode, currentServerID, currentClientID);
 						}
@@ -489,7 +526,10 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         
                         if(coldSetPosition)
                         {
-                            base->totalLifeTime = 0;
+                            if(!(base->flags & EntityFlag_notInWorld))
+                            {
+                                base->totalLifeTime = 0;
+                            }
                             base->universeP = P;
                             if(AreEqual(currentClientID, player->clientID))
                             {
@@ -600,6 +640,24 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
             } break;
             
+            case Type_Essence:
+            {
+                u16 essence;
+                u16 quantity;
+                
+                Unpack("HH", &essence, &quantity);
+                
+                BaseComponent* base = GetComponent(worldMode, worldMode->player.clientID, BaseComponent);
+                if(base)
+                {
+                    base->essences[essence] = quantity;
+                }
+                else
+                {
+                    InvalidCodePath;
+                }
+            } break;
+            
             case Type_deletedEntity:
             {
                 EntityID ID;
@@ -622,9 +680,9 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 				{
 					u8 mappingType;
 					u16 index;
-					u16 type;
+                    u32 flags_type;
 					EntityID ID;
-					Unpack("CHHL", &mappingType, &index, &type, &ID.archetype_archetypeIndex);
+					Unpack("CHLL", &mappingType, &index, &flags_type, &ID);
 					switch(mappingType)
 					{
 						case Mapping_Equipment:
@@ -633,7 +691,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                             
                             if(equipment)
                             {
-                                StoreObjectMapping(worldMode, equipment->mappings, ArrayCount(equipment->mappings), index, type, ID, StringHash(MetaTable_equipmentSlot[index]));
+                                StoreObjectMapping(worldMode, equipment->mappings, ArrayCount(equipment->mappings), index, flags_type, ID, StringHash(MetaTable_equipmentSlot[index]));
                                 
                             }
                             else
@@ -646,7 +704,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 						{               UsingMappingComponent* equipped = GetComponent(worldMode, currentClientID, UsingMappingComponent);
                             if(equipped)
                             {
-                                StoreObjectMapping(worldMode, equipped->mappings, ArrayCount(equipped->mappings), index, type, ID, StringHash(MetaTable_usingSlot[index]));
+                                StoreObjectMapping(worldMode, equipped->mappings, ArrayCount(equipped->mappings), index, flags_type, ID, StringHash(MetaTable_usingSlot[index]));
                             }
                             else
                             {
@@ -661,7 +719,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                             
                             if(container)
                             {
-                                StoreObjectMapping(worldMode, container->storedMappings, ArrayCount(container->storedMappings), index, type, ID, 0);
+                                StoreObjectMapping(worldMode, container->storedMappings, ArrayCount(container->storedMappings), index, flags_type, ID, 0);
                             }
                             else
                             {
@@ -675,7 +733,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                             
                             if(container)
                             {
-                                StoreObjectMapping(worldMode, container->usingMappings, ArrayCount(container->usingMappings), index, type, ID, 0);
+                                StoreObjectMapping(worldMode, container->usingMappings, ArrayCount(container->usingMappings), index, flags_type, ID, 0);
                             }
                             else
                             {
@@ -744,6 +802,18 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             {
                 Unpack("H", &worldMode->season);
             } break;
+            
+            case Type_DayTime:
+            {
+                Unpack("H", &worldMode->dayTime);
+            } break;
+            
+#if 0            
+            case Type_Weather:
+            {
+                
+            } break;
+#endif
             
             case Type_FileHeader:
             {

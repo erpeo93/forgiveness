@@ -26,6 +26,7 @@ struct PossibleAction
     PossibleActionDistance distance;
     r32 time;
     EntityRef requiredUsingType;
+    EntityRef requiredEquippedType;
 };
 
 struct PossibleActionList
@@ -42,7 +43,7 @@ enum InteractionType
     Interaction_Equipped,
     Interaction_Dragging,
     Interaction_MoveContainerOnScreen,
-    Interaction_SkillSelection,
+    Interaction_SelectRecipeEssence,
     
     Interaction_Count
 };
@@ -55,6 +56,12 @@ enum InteractionListType
     InteractionList_Equipped,
     InteractionList_Dragging,
     InteractionList_Count,
+};
+
+enum UsingEquipOptionType
+{
+    UsingEquip_SlotIndex,
+    UsingEquip_SlotType,
 };
 
 struct UsingEquipOption
@@ -76,13 +83,14 @@ struct InteractionComponent
     u16 inventorySlotType;
 };
 
+inline b32 IsValid(EntityRef ref);
 inline b32 AreEqual(EntityRef r1, EntityRef r2);
-internal PossibleAction* ActionIsPossible(InteractionComponent* interaction, u16 action, u32 usingValid = false, EntityRef usingType = {})
+internal PossibleAction* ActionIsPossible(InteractionComponent* interaction, u16 action, EntityRef* equipped, u32 equippedCount, EntityRef usingType = {})
 {
     PossibleAction* result = 0;
     if(interaction)
     {
-        if(usingValid)
+        if(IsValid(usingType))
         {
             PossibleActionList* list = interaction->actions + InteractionList_Dragging;
             for(u32 actionIndex = 0; actionIndex < list->actionCount; ++actionIndex)
@@ -101,7 +109,27 @@ internal PossibleAction* ActionIsPossible(InteractionComponent* interaction, u16
             for(u32 actionIndex = 0; actionIndex < list->actionCount; ++actionIndex)
             {
                 PossibleAction* possibleAction = list->actions + actionIndex;
+                b32 valid = false;
                 if(possibleAction->action == action)
+                {
+                    if(IsValid(possibleAction->requiredEquippedType))
+                    {
+                        for(u32 equippedIndex = 0; equippedIndex < equippedCount; ++equippedIndex)
+                        {
+                            if(AreEqual(equipped[equippedIndex], possibleAction->requiredEquippedType))
+                            {
+                                valid = true;
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        valid = true;
+                    }
+                }
+                
+                if(valid)
                 {
                     result = possibleAction;
                     break;
@@ -158,10 +186,10 @@ inline r32 GetMaxDistanceSq(PossibleAction* action, b32 continuing, MiscComponen
     return result;
 }
 
-internal b32 ActionIsPossibleAtDistance(InteractionComponent* interaction, u16 action, u16 oldAction, r32 distanceSq, r32* targetTime,MiscComponent* misc, b32 usingValid = false, EntityRef usingType = {})
+internal b32 ActionIsPossibleAtDistance(InteractionComponent* interaction, u16 action, u16 oldAction, r32 distanceSq, r32* targetTime,MiscComponent* misc, EntityRef* equipped, u32 equippedCount, EntityRef usingType = {})
 {
     b32 result = false;
-    PossibleAction* possible = ActionIsPossible(interaction, action, usingValid, usingType);
+    PossibleAction* possible = ActionIsPossible(interaction, action, equipped, equippedCount, usingType);
     if(possible)
     {
         b32 continuing = (action == oldAction);
@@ -182,7 +210,7 @@ struct EntityHotInteraction
     u16 actions[8];
     
     u16 objectIndex;
-    InventorySlot* slot;
+    ObjectMapping* mapping;
     EntityID containerIDServer;
     EntityID entityIDServer;
     EntityID usingIDServer;
@@ -209,8 +237,6 @@ enum LockedInteractionType
 
 struct GameUIContext
 {
-    b32 initialized;
-    
     char tooltip[128];
     b32 multipleActions;
     
@@ -230,8 +256,7 @@ struct GameUIContext
     
     EntityID predictionContainerID;
     EntityID predictionObjectID;
-    r32 predictionTime;
-    r32 ignoreDraggingMappingTimer;
+    b32 predictionValid;
     
     i32 currentHotIndex;
     i32 currentActionIndex;
@@ -246,8 +271,6 @@ struct GameUIContext
     
     
     u32 selectedSkillIndex;
-    u32 hotSkillIndex;
-    Rect2 skillRects[MAX_ACTIVE_SKILLS];
     
     GameCommand standardCommand;
     
@@ -257,4 +280,5 @@ struct GameUIContext
     
     
     CommandParameters commandParameters;
+    
 };

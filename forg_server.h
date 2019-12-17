@@ -175,6 +175,8 @@ struct DefaultComponent
     UniversePos P;
     U32 flags;
     U16 status;
+    
+    u16 essences[Count_essence];
 };
 
 struct StaticComponent
@@ -196,7 +198,6 @@ inline void AddChangedFlags(DefaultComponent* def, u16 flagOffset, u16 flag)
     u16* flags = (u16*) ((u8*) def + flagOffset);
     AddChangedFlags(def, flags, flag);
 }
-
 
 
 inline void SetU16(DefaultComponent* def, U16* value, u16 newValue)
@@ -299,6 +300,7 @@ inline void ClearEntityFlags(DefaultComponent* def, u32 flags)
 
 struct PhysicComponent
 {
+    u16 boundType;
 	Rect3 bounds;
     Vec3 speed;
     Vec3 acc;
@@ -308,6 +310,7 @@ struct PhysicComponent
 
 struct ActionComponent
 {
+    u16 selectedCrafingEssences[MAX_RECIPE_ESSENCES];
     U16 action;
     r32 time;
 };
@@ -335,6 +338,8 @@ struct PlayerComponent
 {
     EntityID ID;
     b32 justEnteredWorld;
+    
+    u32 skillPoints;
     
     b32 connectionClosed;
     u16 connectionSlot;
@@ -393,8 +398,10 @@ struct TimestampHash
     SavedTypeSubtypeCountHash* countHashSlots[128];
 };
 
+
 struct AddEntityParams
 {
+    u16 essences[Count_essence];
     Vec3 acceleration;
     Vec3 speed;
     u32 playerIndex;
@@ -454,8 +461,13 @@ struct ServerState
     u32 worldSeed;
     
 	b32 gamePaused;
+    
+    
     r32 seasonTime;
     u16 season;
+    
+    r32 dayTimeTime;
+    u16 dayTime;
     
     TaskWithMemory tasks[6];
     PlatformWorkQueue* fastQueue;

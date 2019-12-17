@@ -15,7 +15,6 @@ inline WorldTile* GetTile(ServerState* server, WorldChunk* chunk, u32 tileX, u32
     return result;
 }
 #else
-
 inline WorldTile* GetTile(WorldChunk* chunk, u32 tileX, u32 tileY)
 {
     Assert(tileY < CHUNK_DIM);
@@ -37,6 +36,13 @@ inline r32 NormalizeCoordinate(r32 offset, i16* chunkIndex)
     *chunkIndex += chunkOffset;
     r32 computed = chunkOffset * chunkSide;
     r32 result = offset - computed;
+    
+    
+#if FORGIVENESS_INTERNAL
+    u32 testTile = TruncateReal32ToU32(result / VOXEL_SIZE);
+    Assert(testTile < CHUNK_DIM);
+#endif
+    
     return result;
 }
 
@@ -108,6 +114,17 @@ inline Vec3 SubtractOnSameZChunk(UniversePos A, UniversePos B)
 internal WorldChunk* GetChunk(ServerState* server, i32 worldX, i32 worldY, i32 worldZ)
 {
     WorldChunk* result = server->chunks + (worldZ * (Squarei(WORLD_CHUNK_SPAN)) + worldY * (WORLD_CHUNK_SPAN) + worldX);
+    return result;
+}
+
+internal WorldTile* GetTile(ServerState* server, UniversePos P)
+{
+    WorldChunk* chunk = GetChunk(server, P.chunkX, P.chunkY, P.chunkZ);
+    r32 oneOverVoxelSide = 1.0f / VOXEL_SIZE;
+    u32 tileX = TruncateReal32ToI32(P.chunkOffset.x * oneOverVoxelSide);
+    u32 tileY = TruncateReal32ToI32(P.chunkOffset.y * oneOverVoxelSide);
+    
+    WorldTile* result = GetTile(server, chunk, tileX, tileY);
     return result;
 }
 #else

@@ -1,4 +1,4 @@
-#define PushStruct( alloc, type, ... ) ( type* ) PushSize_( alloc, sizeof( type ), ##__VA_ARGS__ ) 
+#define PushStruct(alloc, type, ...) ( type* ) PushSize_( alloc, sizeof( type ), ##__VA_ARGS__ ) 
 #define PushArray( alloc, type, count, ... ) ( type* ) PushSize_( alloc, count * sizeof( type ), ##__VA_ARGS__ )
 #define PushSize( alloc, size, ... ) ( u8* ) PushSize_( alloc, size, ##__VA_ARGS__ )
 #define PushCopy(alloc, size, source, ... ) Copy(size, PushSize_( alloc, size, ##__VA_ARGS__ ), source)
@@ -70,7 +70,7 @@ inline memory_index GetEffectiveSize( MemoryPool* pool, memory_index size, PushP
     return totalSize;
 }
 
-internal void* PushSize_( MemoryPool* pool, memory_index size, PushParams params = DefaultPushParams() )
+internal void* PushSize_(MemoryPool* pool, memory_index size, PushParams params = DefaultPushParams())
 {
     void* result = 0;
     
@@ -78,21 +78,20 @@ internal void* PushSize_( MemoryPool* pool, memory_index size, PushParams params
     //pool->allocationFlags |= PlatformMemory_UnderflowCheck;
     
     unm totalSize = 0;
-    if( pool->currentBlock )
+    if( pool->currentBlock)
     {
-        totalSize = GetEffectiveSize( pool, size, params );
+        totalSize = GetEffectiveSize(pool, size, params);
     }
     
-    if( !pool->currentBlock || ( pool->currentBlock->used + totalSize ) > pool->currentBlock->size )
+    if(!pool->currentBlock || (pool->currentBlock->used + totalSize) > pool->currentBlock->size)
     {
         totalSize = size;
-        if( pool->allocationFlags & ( PlatformMemory_OverflowCheck | PlatformMemory_UnderflowCheck ) )
+        if( pool->allocationFlags & (PlatformMemory_OverflowCheck | PlatformMemory_UnderflowCheck))
         {
             pool->minimumBlockSize = 0;
-            size = AlignPow2( size, params.align );
-            
+            size = AlignPow2(size, params.align);
         }
-        else if( !pool->minimumBlockSize )
+        else if(!pool->minimumBlockSize)
         {
             pool->minimumBlockSize = MegaBytes( 1 );
         }

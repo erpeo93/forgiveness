@@ -10,6 +10,11 @@ struct StandardImageComponent
     ImageReference entity;
 };
 
+struct SegmentImageComponent
+{
+    ImageReference entity;
+};
+
 struct MagicQuadComponent
 {
     u32 color;
@@ -17,8 +22,8 @@ struct MagicQuadComponent
     r32 alphaThreesold;
     ImageReference entity;
     AssetID bitmapID;
-    Vec4 lateral;
-    Vec4 up;
+    Vec3 lateral;
+    Vec3 up;
     Vec3 offset;
 };
 
@@ -64,6 +69,9 @@ struct LayoutComponent
     
     u32 usingPieceCount;
     LayoutPiece usingPieces[8];
+    
+    u32 equippedPieceCount;
+    LayoutPiece equippedPieces[8];
 };
 
 enum LayoutContainerDrawMode
@@ -71,7 +79,7 @@ enum LayoutContainerDrawMode
     LayoutContainerDraw_Standard,
     LayoutContainerDraw_Open,
     LayoutContainerDraw_Using,
-    
+    LayoutContainerDraw_Equipped
 };
 struct LayoutContainer
 {
@@ -79,4 +87,5 @@ struct LayoutContainer
     b32 storedObjectsDrawn[MAX_CONTAINER_OBJECT];
     b32 usingObjectsDrawn[MAX_USING_OBJECT];
     ContainerMappingComponent* container;
+    RecipeEssenceComponent* recipeEssences;
 };

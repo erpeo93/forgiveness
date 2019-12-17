@@ -23,10 +23,24 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_meta.cpp"
 #include "forg_sort.cpp"
 #include "forg_game_effect.cpp"
+#include "forg_crafting.cpp"
 
 internal Rect3 GetEntityBound(GameModeWorld* worldMode, BaseComponent* base)
 {
     Rect3 result = Offset(base->bounds, GetRelativeP(worldMode, base));
+    return result;
+}
+
+internal EntityRef GetEntityType(GameModeWorld* worldMode, EntityID serverID)
+{
+    EntityRef result = {};
+    if(IsValidID(serverID))
+    {
+        EntityID clientID = GetClientIDMapping(worldMode, serverID);
+        BaseComponent* def = GetComponent(worldMode, clientID, BaseComponent);
+        result = def->definitionID;
+    }
+    
     return result;
 }
 
@@ -39,10 +53,10 @@ RENDERING_ECS_JOB_CLIENT(RenderBound)
     if(ShouldBeRendered(worldMode, base))
     {
         Rect3 entityBound = GetEntityBound(worldMode, base);
-        PushCubeOutline(group, entityBound, V3(1, 0, 0), 0.02f);
+        PushDebugCubeOutline(group, entityBound, V3(1, 0, 0), 0.02f);
         
         Vec3 entityOrigin = GetRelativeP(worldMode, base);
-        PushRect(group, FlatTransform(0.1f, V4(0, 1, 0, 1)), entityOrigin, V2(0.05f, 0.05f));
+        PushRect(group, FlatTransform(V4(0, 1, 0, 1)), entityOrigin, V2(0.05f, 0.05f));
     }
 }
 
@@ -67,8 +81,8 @@ RENDERING_ECS_JOB_CLIENT(RenderEntityHUD)
         r32 hRatio = (r32) alive->physicalHealth / (r32)alive->maxPhysicalHealth;
         r32 hWidth = hRatio * barDim.x;
         
-        PushRect(group, FlatTransform(0, baseC), RectMinDim(hMin, barDim));
-        PushRect(group, FlatTransform(0, hC), RectMinDim(hMin, V2(hWidth, barDim.y)));
+        PushRect(group, FlatTransform(baseC), RectMinDim(hMin, barDim));
+        PushRect(group, FlatTransform(hC), RectMinDim(hMin, V2(hWidth, barDim.y)));
         
         
         
@@ -76,8 +90,8 @@ RENDERING_ECS_JOB_CLIENT(RenderEntityHUD)
         r32 mRatio = (r32) alive->mentalHealth / (r32)alive->maxMentalHealth;
         r32 mWidth = mRatio * barDim.x;
         
-        PushRect(group, FlatTransform(0, baseC), RectMinDim(mMin, barDim));
-        PushRect(group, FlatTransform(0, mC), RectMinDim(mMin, V2(mWidth, barDim.y)));
+        PushRect(group, FlatTransform(baseC), RectMinDim(mMin, barDim));
+        PushRect(group, FlatTransform(mC), RectMinDim(mMin, V2(mWidth, barDim.y)));
         
         
     }
@@ -132,7 +146,7 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntity)
 	base->timeSinceLastUpdate += elapsedTime;
 	base->totalLifeTime += elapsedTime;
     
-    if(base->timeSinceLastUpdate >= 2.0f * STATIC_UPDATE_TIME)
+    if(base->timeSinceLastUpdate >= 20000.0f * STATIC_UPDATE_TIME)
     {
 		MarkForDeletion(worldMode, ID);
     }
@@ -231,6 +245,22 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->windStrength = 1.0f;
 }
 
+internal void UpdateAmbientParameters(GameModeWorld* worldMode)
+{
+    switch(worldMode->dayTime)
+    {
+        case DayTime_Day:
+        {
+            worldMode->ambientLightColor = V3(1, 1, 1);
+        } break;
+        
+        case DayTime_Night:
+        {
+            worldMode->ambientLightColor = V3(0, 0, 0.2f);
+        } break;
+    }
+}
+
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
     b32 result = false;
@@ -303,6 +333,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     UpdateGameCamera(worldMode, input);
     ResetGameCamera(worldMode, group);
     
+    
+    UpdateAmbientParameters(worldMode);
+    
     BEGIN_BLOCK("setup rendering");
     ResetLightGrid(worldMode);
     Vec3 unprojectedWorldMouseP = UnprojectAtZ(group, &group->gameCamera, screenMouseP, 0);
@@ -324,6 +357,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         EXECUTE_RENDERING_JOB(worldMode, group, RenderGrass, ArchetypeHas(GrassComponent) && ArchetypeHas(BaseComponent) && ArchetypeHas(MagicQuadComponent), input->timeToAdvance);
         
         EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
+        
+        EXECUTE_RENDERING_JOB(worldMode, group, RenderSegmentEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(SegmentImageComponent), input->timeToAdvance);
         
         EXECUTE_RENDERING_JOB(worldMode, group, RenderCharacterAnimation, ArchetypeHas(BaseComponent) && ArchetypeHas(AnimationComponent), input->timeToAdvance);
         
@@ -370,7 +405,8 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     
     BEGIN_BLOCK("editor and UI overlay");
     SetOrthographicTransformScreenDim(group);
-    RenderUIOverlay(worldMode, group);
+    //FixedOrderedRendering(group);
+    RenderUIOverlay(worldMode, group, input->timeToAdvance);
     EXECUTE_RENDERING_JOB(worldMode, group, RenderEntityHUD, ArchetypeHas(AliveComponent), input->timeToAdvance);
     if(worldMode->editingEnabled)
     {

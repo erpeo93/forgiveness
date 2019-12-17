@@ -127,7 +127,6 @@ struct AnimationPiece
     b32 placeHolder;
     Vec3 originOffset;
     r32 height;
-    r32 zBias;
     r32 angle;
     Vec2 scale;
     Vec4 color;

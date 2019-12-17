@@ -28,6 +28,7 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     BrainComponent* brain = GetComponent(server, ID, BrainComponent);
     MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+    UsingComponent* equippedComponent = GetComponent(server, ID, UsingComponent);
     
     switch(brain->type)
     {
@@ -113,14 +114,28 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                 r32 distanceSq = LengthSq(toPlayer);
                 r32 targetTime;
                 
+                EntityRef equipped[Count_usingSlot];
+                u32 equippedCount = 0;
+                
+                if(equippedComponent)
+                {
+                    equippedCount = ArrayCount(equippedComponent->slots);
+                    for(u32 slotIndex = 0; slotIndex < ArrayCount(equippedComponent->slots); ++slotIndex)
+                    {
+                        EntityID slotID = GetBoundedID(equippedComponent->slots + slotIndex);
+                        equipped[slotIndex] = GetEntityType(server, slotID);
+                    }
+                }
+                
+                
                 u16 oldAction = brain->currentCommand.action;
-                if(ActionIsPossibleAtDistance(playerInteraction, attack, oldAction, distanceSq, &targetTime, misc))
+                if(ActionIsPossibleAtDistance(playerInteraction, attack, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
                 {
                     Attack(brain, playerID);
                 }
                 else
                 {
-                    if(ActionIsPossible(playerInteraction, attack))
+                    if(ActionIsPossible(playerInteraction, attack, equipped, equippedCount))
                     {
                         Move(brain, toPlayer);
                     }
@@ -150,6 +165,7 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
     
     if(HasComponent(ID, ActionComponent))
     {
+        ActionComponent* action = GetComponent(server, ID, ActionComponent);
         DispatchCommand(server, ID, &brain->currentCommand, &brain->commandParameters, elapsedTime, true);
         DispatchCommand(server, ID, &brain->inventoryCommand, &brain->commandParameters, elapsedTime, false);
     }

@@ -5,17 +5,6 @@ internal Rect3 StandardBounds(Vec3 dim, Vec3 offset)
     return result;
 }
 
-internal GameProperty GetProperty(u32 seed)
-{
-    GameProperty result;
-    result.property = Property_essence;
-    RandomSequence seq = Seed(seed);
-    u32 choice = RandomChoice(&seq, earth + 1);
-    result.value = SafeTruncateToU16(choice);
-    
-    return result;
-}
-
 #define PropertyToU16(property, enum) ExistMetaPropertyValue(Property_##property, Tokenize((enum).value))
 internal u16 ExistMetaPropertyValue(u16 propertyType, Token value);;
 internal void AddPossibleActions(PossibleActionList* list, PossibleActionDefinition* actions, u32 actionCount)
@@ -47,12 +36,14 @@ internal void AddPossibleActions(PossibleActionList* list, PossibleActionDefinit
                 
                 dest->time = source->time;
                 dest->requiredUsingType = source->requiredUsingType;
+                dest->requiredEquippedType = source->requiredEquippedType;
             }
         }
     }
 }
 
 #ifdef FORG_SERVER
+internal u16 GetRandomEssence(RandomSequence* seq);
 INIT_COMPONENT_FUNCTION(InitDefaultComponent)
 {
     ServerState* server = (ServerState*) state;
@@ -73,13 +64,35 @@ INIT_COMPONENT_FUNCTION(InitDefaultComponent)
     def->definitionID = common->definitionID;
     def->status = InitU16(basicPropertiesChanged, EntityBasics_Status, 0);
     
+    b32 addedSomething = false;
+    for(u16 essenceIndex = 0; essenceIndex < Count_essence; ++essenceIndex)
+    {
+        if(common->essences[essenceIndex] > 0)
+        {
+            addedSomething = true;
+        }
+        def->essences[essenceIndex] = common->essences[essenceIndex];
+    }
     
+    if(!addedSomething)
+    {
+        RandomSequence seq = Seed(def->seed);
+        u16 essence = GetRandomEssence(&seq);
+        ++def->essences[essence];
+    }
+    
+    
+    if(s->canGoIntoWater)
+    {
+        AddEntityFlags(def, EntityFlag_canGoIntoWater);
+    }
 }
 
 INIT_COMPONENT_FUNCTION(InitPhysicComponent)
 {
     PhysicComponent* physic = (PhysicComponent*) componentPtr;
     
+    physic->boundType = common->boundType.value;
     physic->bounds = StandardBounds(common->boundDim, common->boundOffset);
     physic->acc = s->startingAcceleration;
     physic->speed = s->startingSpeed;
@@ -94,19 +107,28 @@ INIT_COMPONENT_FUNCTION(InitActionComponent)
     action->time = 0;
 }
 
-internal void AddRandomEffects(EffectComponent* effects, EffectBinding* bindings, ArrayCounter bindingCount, GameProperty property)
+internal void AddRandomEffects(EffectComponent* effects, EffectBinding* bindings, ArrayCounter bindingCount, u16* essences)
 {
-    for(ArrayCounter bindingIndex = 0; bindingIndex < bindingCount; ++bindingIndex)
+    for(u16 essenceIndex = 0; essenceIndex < Count_essence; ++essenceIndex)
     {
-        EffectBinding* binding = bindings + bindingIndex;
-        if(AreEqual(binding->property, property))
+        u16 essenceQuantity = essences[essenceIndex];
+        if(essenceQuantity > 0)
         {
-            if(effects->effectCount < ArrayCount(effects->effects))
+            Assert(essenceQuantity == 1);
+            GameProperty property = GameProp(essence, essences[essenceIndex]);
+            for(ArrayCounter bindingIndex = 0; bindingIndex < bindingCount; ++bindingIndex)
             {
-                GameEffect* dest = effects->effects + effects->effectCount++;
-                *dest = binding->effect;
+                EffectBinding* binding = bindings + bindingIndex;
+                if(AreEqual(binding->property, property))
+                {
+                    if(effects->effectCount < ArrayCount(effects->effects))
+                    {
+                        GameEffect* dest = effects->effects + effects->effectCount++;
+                        *dest = binding->effect;
+                    }
+                    break;
+                }
             }
-            break;
         }
     }
 }
@@ -115,8 +137,9 @@ INIT_COMPONENT_FUNCTION(InitEffectComponent)
 {
     ServerState* server = (ServerState*) state;
     EffectComponent* effect = (EffectComponent*) componentPtr;
-    GameProperty property = GetProperty(s->seed);
-    AddRandomEffects(effect, s->bindings, s->bindingCount, property);
+    
+    u16* essences = common->essences;
+    AddRandomEffects(effect, s->bindings, s->bindingCount, essences);
 }
 
 INIT_COMPONENT_FUNCTION(InitCollisionEffectsComponent)
@@ -151,43 +174,47 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
     ServerState* server = (ServerState*) state;
     ContainerComponent* dest = (ContainerComponent*) componentPtr;
     
-    u16 totalStoreCount = s->storeCount + s->specialStoreCount;
-    Assert(totalStoreCount <= ArrayCount(dest->storedObjects));
-    for(u16 index = 0; index < totalStoreCount; ++index)
+    u16 runningCount = 0;
+    for(ArrayCounter slotBatchIndex = 0; slotBatchIndex < s->storeSlotCounter; ++slotBatchIndex)
     {
-        InventorySlot* slot = dest->storedObjects + index;
-        slot->type = (index < s->storeCount) ? (u16) InventorySlot_Standard : (u16) InventorySlot_Special;
-        SetBoundedID(slot, {});
+        InventorySlots* slots = s->storeSlots + slotBatchIndex;
+        for(u16 index = 0; index < slots->count; ++index)
+        {
+            if(runningCount < ArrayCount(dest->storedObjects))
+            {
+                InventorySlot* slot = dest->storedObjects + runningCount++;
+                slot->flags_type = slots->type.value; 
+                SetBoundedID(slot, {});
+            }
+        }
     }
     
-    u16 totalUsingCount = s->usingCount + s->specialUsingCount;
-    Assert(totalUsingCount <= ArrayCount(dest->usingObjects));
-    for(u16 index = 0; index < totalUsingCount; ++index)
+    runningCount = 0;
+    for(ArrayCounter slotBatchIndex = 0; slotBatchIndex < s->usingSlotCounter; ++slotBatchIndex)
     {
-        InventorySlot* slot = dest->usingObjects + index;
-        slot->type = index < s->usingCount ? (u16) InventorySlot_Standard : (u16) InventorySlot_Special;
-        SetBoundedID(slot, {});
+        InventorySlots* slots = s->usingSlots + slotBatchIndex;
+        for(u16 index = 0; index < slots->count; ++index)
+        {
+            if(runningCount < ArrayCount(dest->usingObjects))
+            {
+                InventorySlot* slot = dest->usingObjects + runningCount++;
+                slot->flags_type = slots->type.value; 
+                SetBoundedID(slot, {});
+            }
+        }
     }
-    
 }
 
 INIT_COMPONENT_FUNCTION(InitSkillComponent)
 {
-    ServerState* server = (ServerState*) state;
-    
-    SkillComponent* skills = (SkillComponent*) componentPtr;
-    
-    for(u32 skillIndex = 0; skillIndex < ArrayCount(skills->activeSkills); ++skillIndex)
-    {
-        RandomSequence seq = Seed(skillIndex);
-        AssetID assetID = QueryDataFiles(server->assets, SkillDefinition, "default", &seq, 0);
-        
-        SkillDefinition* skillDefinition = GetData(server->assets, SkillDefinition, assetID);
-        Skill* dest = skills->activeSkills + skillIndex;
-        dest->targetTime = skillDefinition->targetTime;
-        dest->effect = skillDefinition->effect;
-    }
-    
+}
+
+INIT_COMPONENT_FUNCTION(InitSkillDefComponent)
+{
+    SkillDefComponent* skill = (SkillDefComponent*) componentPtr;
+    skill->targetTime = 1.0f;
+    skill->targetSkill = false;
+    skill->level = 0;
 }
 
 INIT_COMPONENT_FUNCTION(InitBrainComponent)
@@ -234,13 +261,13 @@ INIT_COMPONENT_FUNCTION(InitMiscComponent)
     misc->attackDistance = InitR32(miscPropertiesChanged, MiscFlag_AttackDistance, 1.0f);
     misc->attackContinueCoeff = InitR32(miscPropertiesChanged, MiscFlag_AttackContinueCoeff, 4.0f);
 }
+
 #else
 INIT_COMPONENT_FUNCTION(InitBaseComponent)
 {
     BaseComponent* base = (BaseComponent*) componentPtr;
     base->definitionID = common->definitionID;
     base->seed = c->seed;
-    base->nameHash = StringHash(c->name.name);
     base->universeP = {};
     base->velocity = {};
     base->flags = 0;
@@ -330,10 +357,23 @@ INIT_COMPONENT_FUNCTION(InitPlantComponent)
     InitImageReference(assets, &dest, &c, trunk);
     InitImageReference(assets, &dest, &c, branch);
     InitImageReference(assets, &dest, &c, leaf);
+    InitImageReference(assets, &dest, &c, flower);
+    InitImageReference(assets, &dest, &c, fruit);
     dest->windInfluence = c->windInfluence;
+    dest->leafDensity = 1.0f;
+    dest->flowerDensity = 1.0f;
+    dest->fruitDensity = 1.0f;
 }
 
 INIT_COMPONENT_FUNCTION(InitStandardImageComponent)
+{
+    GameModeWorld* worldMode = (GameModeWorld*) state;
+    Assets* assets = worldMode->gameState->assets;
+    StandardImageComponent* dest = (StandardImageComponent*) componentPtr;
+    InitImageReference(assets, &dest, &c, entity);
+}
+
+INIT_COMPONENT_FUNCTION(InitSegmentImageComponent)
 {
     GameModeWorld* worldMode = (GameModeWorld*) state;
     Assets* assets = worldMode->gameState->assets;
@@ -373,7 +413,7 @@ INIT_COMPONENT_FUNCTION(InitMagicQuadComponent)
     if(IsValid(dest->bitmapID))
     {
         PAKBitmap* bitmap = GetBitmapInfo(assets, dest->bitmapID);
-        dest->offset = (bitmap->align[0] - 0.5f) * dest->lateral.xyz + (bitmap->align[1] - 0.5f) * dest->up.xyz;
+        dest->offset = (bitmap->align[0] - 0.5f) * dest->lateral + (bitmap->align[1] - 0.5f) * dest->up;
         dest->alphaThreesold = bitmap->alphaThreesold;
         dest->invUV = GetInvUV(bitmap->dimension[0], bitmap->dimension[1]);
     }
@@ -432,7 +472,7 @@ INIT_COMPONENT_FUNCTION(InitMultipartAnimationComponent)
     }
 }
 
-internal void InitLayout(Assets* assets, LayoutPiece* destPieces, u32* destPieceCount, u32 maxDestPieceCount, LayoutPieceProperties* pieces, u32 pieceCount, GameProperty property)
+internal void InitLayout(Assets* assets, LayoutPiece* destPieces, u32* destPieceCount, u32 maxDestPieceCount, LayoutPieceProperties* pieces, u32 pieceCount, u16* essences)
 {
     *destPieceCount = 0;
     for(u32 pieceIndex = 0; pieceIndex < pieceCount; ++pieceIndex)
@@ -452,10 +492,22 @@ internal void InitLayout(Assets* assets, LayoutPiece* destPieces, u32* destPiece
         }
     }
     
-    for(u32 pieceIndex = 0; pieceIndex < *destPieceCount; ++pieceIndex)
+    if(essences)
     {
-        LayoutPiece* destPiece = destPieces + pieceIndex;
-        AddGameProperty_(&destPiece->image.properties, property, GameProperty_Optional);
+        for(u32 pieceIndex = 0; pieceIndex < *destPieceCount; ++pieceIndex)
+        {
+            LayoutPiece* destPiece = destPieces + pieceIndex;
+            for(u16 essenceIndex = 0; essenceIndex < Count_essence; ++essenceIndex)
+            {
+                u16 essenceQuantity = essences[essenceIndex];
+                if(essenceQuantity > 0)
+                {
+                    Assert(essenceQuantity == 1);
+                    GameProperty property = GameProp(essence, essenceIndex);
+                    AddGameProperty_(&destPiece->image.properties, property, GameProperty_Optional);
+                }
+            }
+        }
     }
 }
 
@@ -468,11 +520,14 @@ INIT_COMPONENT_FUNCTION(InitLayoutComponent)
     dest->rootHash = StringHash(c->layoutRootName.name);
     dest->rootScale = V2(1, 1);
     dest->rootAngle = 0;
-    GameProperty property = GetProperty(c->seed);
     
-    InitLayout(assets, dest->pieces, &dest->pieceCount, ArrayCount(dest->pieces), c->layoutPieces, c->pieceCount, property);
-    InitLayout(assets, dest->openPieces, &dest->openPieceCount, ArrayCount(dest->openPieces), c->openLayoutPieces, c->openPieceCount, property);
-    InitLayout(assets, dest->usingPieces, &dest->usingPieceCount, ArrayCount(dest->usingPieces), c->usingLayoutPieces, c->usingPieceCount, property);
+    u16* essences = common->essences;
+    
+    InitLayout(assets, dest->pieces, &dest->pieceCount, ArrayCount(dest->pieces), c->layoutPieces, c->pieceCount, essences);
+    InitLayout(assets, dest->openPieces, &dest->openPieceCount, ArrayCount(dest->openPieces), c->openLayoutPieces, c->openPieceCount, essences);
+    InitLayout(assets, dest->usingPieces, &dest->usingPieceCount, ArrayCount(dest->usingPieces), c->usingLayoutPieces, c->usingPieceCount, essences);
+    
+    InitLayout(assets, dest->equippedPieces, &dest->equippedPieceCount, ArrayCount(dest->equippedPieces), c->equippedLayoutPieces, c->equippedPieceCount, essences);
 }
 
 INIT_COMPONENT_FUNCTION(InitEquipmentMappingComponent)
@@ -494,30 +549,13 @@ INIT_COMPONENT_FUNCTION(InitContainerMappingComponent)
 {
     ContainerMappingComponent* dest = (ContainerMappingComponent*) componentPtr;
     dest->zoomCoeff = c->lootingZoomCoeff;
+    dest->displayInStandardMode = c->displayInStandardMode;
     dest->desiredOpenedDim = c->desiredOpenedDim;
     dest->desiredUsingDim = c->desiredUsingDim;
 }
 
 INIT_COMPONENT_FUNCTION(InitSkillMappingComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
-    Assets* assets = worldMode->gameState->assets;
-    
-    SkillMappingComponent* skills = (SkillMappingComponent*) componentPtr;
-    
-    for(u32 skillIndex = 0; skillIndex < ArrayCount(skills->mappings); ++skillIndex)
-    {
-        RandomSequence seq = Seed(skillIndex);
-        AssetID assetID = QueryDataFiles(assets, SkillDefinition, "default", &seq, 0);
-        
-        SkillDefinition* skillDefinition = GetData(assets, SkillDefinition, assetID);
-        
-        SkillMapping* mapping = skills->mappings + skillIndex;
-        FormatString(mapping->name, sizeof(mapping->name), "%s", skillDefinition->name.name);
-        mapping->targetSkill = skillDefinition->targetSkill;
-        mapping->color = skillDefinition->color;
-    }
-    
 }
 
 internal void FreeAnimationEffect(AnimationEffect* effect);
@@ -572,6 +610,28 @@ INIT_COMPONENT_FUNCTION(InitMiscComponent)
     misc->attackDistance = 0;
     misc->attackContinueCoeff = 0;
 }
+
+INIT_COMPONENT_FUNCTION(InitSkillComponent)
+{
+}
+
+INIT_COMPONENT_FUNCTION(InitSkillDefComponent)
+{
+    SkillDefComponent* skill = (SkillDefComponent*) componentPtr;
+    skill->targetTime = 1.0f;
+    skill->targetSkill = false;
+}
+
+INIT_COMPONENT_FUNCTION(InitRecipeEssenceComponent)
+{
+    RecipeEssenceComponent* essences = (RecipeEssenceComponent*) componentPtr;
+    for(u32 essenceIndex = 0; essenceIndex < ArrayCount(essences->essences); ++essenceIndex)
+    {
+        essences->projectedOnScreen[essenceIndex] = InvertedInfinityRect2();
+        essences->essences[essenceIndex] = 0;
+    }
+}
+
 #endif
 INIT_COMPONENT_FUNCTION(InitInteractionComponent)
 {
