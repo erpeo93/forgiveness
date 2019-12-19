@@ -82,6 +82,7 @@ Archetype() struct RuneArchetype
     InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
     ContainerMappingComponent container;
+    SkillDefComponent skill;
 #endif
 };
 
@@ -231,6 +232,8 @@ introspection() struct CommonEntityInitParams
     EquipLayout* equipConfigurations;
     
     Enumerator inventorySlotType MetaEnumerator("inventorySlotType");
+    
+    b32 targetSkill;
 };
 
 introspection() struct InventorySlots
@@ -267,6 +270,8 @@ introspection() struct ServerEntityInitParams
     Enumerator brainType MetaEnumerator("brainType");
     
     b32 canGoIntoWater;
+    
+    u32 defaultEssenceCount;
 };
 
 introspection() struct ImageProperty
@@ -312,6 +317,8 @@ introspection() struct ClientEntityInitParams
     ImageProperties entityProperties;
     ImageProperties trunkProperties;
     ImageProperties branchProperties;
+    
+    b32 hasVariant;
     ImageProperties leafProperties;
     ImageProperties flowerProperties;
     ImageProperties fruitProperties;

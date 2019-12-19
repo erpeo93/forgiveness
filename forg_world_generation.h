@@ -108,6 +108,10 @@ introspection() struct SpawnerEntity
     
     b32 attachedBrainEntity;
     EntityRef attachedBrainType;
+    
+    GameProperty repulsionTile MetaDefault("{Property_tileType, tile_invalid}") MetaFixed(property);
+    GameProperty repulsionFluid MetaDefault("{Property_fluid, fluid_invalid}") MetaFixed(property);
+    u32 repulsionRadious;
 };
 
 introspection() struct SpawnerOption

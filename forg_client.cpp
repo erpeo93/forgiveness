@@ -67,7 +67,7 @@ RENDERING_ECS_JOB_CLIENT(RenderEntityHUD)
     
     if(ShouldBeRendered(worldMode, base))
     {;
-        Vec2 screenP = base->projectedOnScreen.min;
+        Vec2 screenP = base->projectedOnScreen.min + 0.5f * V2(GetDim(base->projectedOnScreen).x, 0);
         
         r32 originYOffset = 8;
         r32 barSeparation = 10.0f;
@@ -77,7 +77,7 @@ RENDERING_ECS_JOB_CLIENT(RenderEntityHUD)
         Vec4 hC = V4(1, 0, 0, 1);
         Vec4 mC = V4(0, 0, 1, 1);
         
-        Vec2 hMin = screenP - V2(0, originYOffset + 0.5f * barDim.y);
+        Vec2 hMin = screenP - V2(0.5f * barDim.x, originYOffset + 0.5f * barDim.y);
         r32 hRatio = (r32) alive->physicalHealth / (r32)alive->maxPhysicalHealth;
         r32 hWidth = hRatio * barDim.x;
         
@@ -364,7 +364,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         
         EXECUTE_RENDERING_JOB(worldMode, group, RenderFrameByFrameEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(FrameByFrameAnimationComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
         
-        EXECUTE_RENDERING_JOB(worldMode, group, RenderPlants, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
+        EXECUTE_RENDERING_JOB(worldMode, group, RenderPlant, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
         
         EXECUTE_RENDERING_JOB(worldMode, group, RenderLayoutEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(LayoutComponent), input->timeToAdvance);
         

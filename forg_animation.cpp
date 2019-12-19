@@ -565,7 +565,7 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
     Assert(hash);
     for(u16 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
     {
-        if(!alreadyRendered[mappingIndex])
+        if(!alreadyRendered[mappingIndex] || multipart)
         {
             ObjectMapping* mapping = mappings + mappingIndex;
             if(hash == mapping->slotHash || hash == mapping->pieceHash)
@@ -573,11 +573,6 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                 Vec3 pieceP = P + GetCameraOffset(group, transform.cameraOffset);
                 r32 ignored;
                 mapping->distanceFromMouseSq = LengthSq(ProjectOnScreen(group, pieceP, &ignored) - worldMode->relativeMouseP);
-                
-                if(!multipart)
-                {
-                    alreadyRendered[mappingIndex] = true;
-                }
                 
                 if(IsValidMapping(&worldMode->gameUI, mapping, mappingIndex, equipmentMappings))
                 {
@@ -606,6 +601,10 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                         container.drawMode = LayoutContainerDraw_Equipped;
                         //container.container = GetComponent(worldMode, equipmentID, ContainerMappingComponent);
                         
+                        if(!alreadyRendered[mappingIndex])
+                        {
+                            equipmentBase->projectedOnScreen = InvertedInfinityRect2();
+                        }
                         
                         if(multipart)
                         {
@@ -617,6 +616,8 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                         }
                     }
                 }
+                
+                alreadyRendered[mappingIndex] = true;
                 
                 break;
             }
@@ -643,7 +644,6 @@ internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
                 
                 u64 baseHash = pointHash;
                 u64 multipartHash = 0;
-                
                 
                 u32 pound = FindFirstInString(point->name, '#');
                 if(pound != 0xffffffff)

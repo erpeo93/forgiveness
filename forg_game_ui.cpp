@@ -237,7 +237,7 @@ internal void AddContainerObjectsInteractions(GameUIContext* UI, GameModeWorld* 
 	for(u16 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
 	{
         ObjectMapping* mapping = mappings + mappingIndex;
-        Rect2 projRect = Scale(mapping->projOnScreen, mapping->zoomCoeff);
+        Rect2 projRect = mapping->projOnScreen;
         
         EntityID ID = mapping->object.ID;
         if(IsValidInventoryMapping(UI, mapping))

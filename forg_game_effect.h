@@ -2,6 +2,7 @@
 introspection() struct GameEffect
 {
     r32 timer MetaDefault("1");
+    GameProperty action MetaDefault("{Property_action, none}") MetaFixed(property);
     GameProperty effectType MetaDefault("{Property_gameEffect}") MetaFixed(property);
     EntityRef spawnType;
 };

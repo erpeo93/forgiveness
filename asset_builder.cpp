@@ -1812,6 +1812,10 @@ internal void FillPAKProperty(PAKAsset* asset, Token property, Token value)
     {
         asset->bitmap.alphaThreesold = (r32) StringToR32(value.text);
     }
+    else if(TokenEquals(property, IMAGE_PROPERTY_FLIPPED_BY_DEFAULT))
+    {
+        asset->bitmap.flippedByDefault = (b32) StringToB32(value.text);
+    }
     else if(TokenEquals(property, SKELETON_FLIPPED))
     {
         asset->skeleton.flippedByDefault = (b32) StringToB32(value.text);

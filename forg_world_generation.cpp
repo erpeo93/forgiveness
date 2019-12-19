@@ -415,18 +415,31 @@ internal b32 SatisfiesClusterRequirements(ServerState* server, UniversePos P)
 }
 
 
-internal b32 SatisfiesEntityRequirements(ServerState* server, UniversePos P)
+internal b32 SatisfiesEntityRequirements(ServerState* server, UniversePos P, SpawnerEntity* spawner)
 {
     b32 result = false;
     if(PositionInsideWorld(&P))
     {
         result = true;
         
-        WorldTile* tile = GetTile(server, P);
-        if(IsValid(tile->underSeaLevelFluid))
+        i32 radious = (i32) spawner->repulsionRadious;
+        for(i32 Y = -radious; Y <= radious; ++Y)
         {
-            result = false;
+            for(i32 X = -radious; X <= radious; ++X)
+            {
+                Vec3 offset = VOXEL_SIZE * V3(V2i(X, Y), 0);
+                UniversePos tileP = P;
+                tileP.chunkOffset += offset;
+                tileP = NormalizePosition(tileP);
+                WorldTile* tile = GetTile(server, tileP);
+                if(AreEqual(tile->property, spawner->repulsionTile) || AreEqual(tile->underSeaLevelFluid, spawner->repulsionFluid))
+                {
+                    result = false;
+                    break;
+                }
+            }
         }
+        
     }
     return result;
 }
@@ -506,7 +519,7 @@ internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos 
                             P.chunkOffset += Hadamart(maxOffset, RandomBilV3(seq));
                             P = NormalizePosition(P);
                             
-                            if(SatisfiesEntityRequirements(server, P))
+                            if(SatisfiesEntityRequirements(server, P, spawn))
                             {
                                 if(Valid(entities, P, spawn->minEntityDistance))
                                 {

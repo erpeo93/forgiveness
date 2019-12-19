@@ -40,13 +40,14 @@ struct PAKGroupName
     char name[32];
 };
 
-#define PAK_BITMAP_VERSION 1017
+#define PAK_BITMAP_VERSION 1018
 struct PAKBitmap
 {
     u64 nameHash;
     u32 dimension[2];
     r32 align[2];
     r32 alphaThreesold;
+    b32 flippedByDefault;
     u32 attachmentPointCount;
     u32 groupNameCount;
     // NOTE( Leonardo ): data is:

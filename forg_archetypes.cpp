@@ -64,6 +64,11 @@ INIT_COMPONENT_FUNCTION(InitDefaultComponent)
     def->definitionID = common->definitionID;
     def->status = InitU16(basicPropertiesChanged, EntityBasics_Status, 0);
     
+    if(s->canGoIntoWater)
+    {
+        AddEntityFlags(def, EntityFlag_canGoIntoWater);
+    }
+    
     b32 addedSomething = false;
     for(u16 essenceIndex = 0; essenceIndex < Count_essence; ++essenceIndex)
     {
@@ -77,14 +82,11 @@ INIT_COMPONENT_FUNCTION(InitDefaultComponent)
     if(!addedSomething)
     {
         RandomSequence seq = Seed(def->seed);
-        u16 essence = GetRandomEssence(&seq);
-        ++def->essences[essence];
-    }
-    
-    
-    if(s->canGoIntoWater)
-    {
-        AddEntityFlags(def, EntityFlag_canGoIntoWater);
+        for(u32 essenceIndex = 0; essenceIndex < s->defaultEssenceCount; ++essenceIndex)
+        {
+            u16 essence = GetRandomEssence(&seq);
+            ++def->essences[essence];
+        }
     }
 }
 
@@ -212,8 +214,7 @@ INIT_COMPONENT_FUNCTION(InitSkillComponent)
 INIT_COMPONENT_FUNCTION(InitSkillDefComponent)
 {
     SkillDefComponent* skill = (SkillDefComponent*) componentPtr;
-    skill->targetTime = 1.0f;
-    skill->targetSkill = false;
+    skill->targetSkill = common->targetSkill;
     skill->level = 0;
 }
 
@@ -356,6 +357,8 @@ INIT_COMPONENT_FUNCTION(InitPlantComponent)
     PlantComponent* dest = (PlantComponent*) componentPtr;
     InitImageReference(assets, &dest, &c, trunk);
     InitImageReference(assets, &dest, &c, branch);
+    
+    dest->hasVariant = c->hasVariant;
     InitImageReference(assets, &dest, &c, leaf);
     InitImageReference(assets, &dest, &c, flower);
     InitImageReference(assets, &dest, &c, fruit);
@@ -618,8 +621,8 @@ INIT_COMPONENT_FUNCTION(InitSkillComponent)
 INIT_COMPONENT_FUNCTION(InitSkillDefComponent)
 {
     SkillDefComponent* skill = (SkillDefComponent*) componentPtr;
-    skill->targetTime = 1.0f;
-    skill->targetSkill = false;
+    skill->targetSkill = common->targetSkill;
+    skill->level = 0;
 }
 
 INIT_COMPONENT_FUNCTION(InitRecipeEssenceComponent)

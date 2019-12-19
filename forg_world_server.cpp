@@ -688,6 +688,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
     
     u16 oldAction = GetU16(action->action);
     u16 newAction = command->action;
+    
     if(updateAction)
     {
         if(newAction == action->action)
@@ -698,7 +699,6 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         {
             action->time = 0;
             SetU16(def, &action->action, newAction);
-            
             if(physic)
             {
                 physic->acc = V3(0, 0, 0);
@@ -710,10 +710,14 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
     
     b32 resetAction = false;
     b32 resetActionTime = false;
+    
     switch(newAction)
     {
         case none:
         case idle:
+        {
+        } break;
+        
         case move:
         {
             if(physic)
@@ -743,10 +747,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         {
             if(equippedComponent)
             {
-                if(command->skillIndex == skill_1 ||
-                   command->skillIndex == skill_2 ||
-                   command->skillIndex == skill_3 ||
-                   command->skillIndex == skill_4)
+                if(SkillSlot(command->skillIndex))
                 {
                     EntityID skillID = GetBoundedID(equippedComponent->slots + command->skillIndex);
                     if(IsValidID(skillID))
@@ -756,10 +757,10 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                         
                         u16 level = active->level;
                         // TODO(Leonardo): 
-                        //SumEssences();
+                        //SumGemEssencesBasedOnLevel?();
                         
-                        //UniversePos targetP = Offset(def->P, parameters->targetOffset);
-                        DispatchEntityEffects(server, skillID, elapsedTime, essences);
+                        UniversePos targetP = Offset(def->P, parameters->targetOffset);
+                        DispatchEntityEffects(server, targetP, cast, skillID, elapsedTime, essences);
                     }
                 }
                 else

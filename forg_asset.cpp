@@ -1186,6 +1186,12 @@ internal b32 WriteAssetMarkupDataToStream(Stream* stream, AssetType type, PAKAss
                     OutputToStream(stream, "%s=%f;", IMAGE_PROPERTY_ALPHA_THREESOLD, asset->bitmap.alphaThreesold);
                     nothingWrote = false;
                 }
+                
+                if(asset->bitmap.flippedByDefault)
+                {
+                    OutputToStream(stream, "%s=true;", IMAGE_PROPERTY_FLIPPED_BY_DEFAULT);
+                    nothingWrote = false;
+                }
             }
         } break;
         

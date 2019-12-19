@@ -150,6 +150,15 @@ internal BitmapId GetImageFromReference(Assets* assets, ImageReference* referenc
     return result;
 }
 
+internal BitmapId GetImageFromReferenceVariantIndex(Assets* assets, ImageReference* reference, RandomSequence* seq, u16 index)
+{
+    GameProperties properties = reference->properties;
+    AddGameProperty(&properties, variant, index);
+    
+    BitmapId result = GetImageFromSubtype(assets, reference->typeHash, &properties, seq);
+    return result;
+}
+
 internal BitmapId GetCorrenspondingFrameByFrameImage(Assets* assets, u64 typeHash, r32 time)
 {
     u32 imageType = GetAssetSubtype(assets, AssetType_Image, typeHash);
@@ -185,7 +194,7 @@ internal r32 GetDissolveCoeff(r32 density, u32 index)
     return result;
 }
 
-RENDERING_ECS_JOB_CLIENT(RenderPlants)
+RENDERING_ECS_JOB_CLIENT(RenderPlant)
 {
     u64 branchHash = StringHash("branch");
     u64 leafHash = StringHash("leaf");
@@ -196,6 +205,10 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
     elapsedTime *= params.speed;
     
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    
+    Vec3 cameraZ = group->gameCamera.Z;
+    r32 zOffset = 0.001f;
+    
     if(ShouldBeRendered(worldMode, base))
     {
         r32 height = GetHeight(base->bounds);
@@ -220,9 +233,25 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
             PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, trunkID);
             if(bitmap)
             {
-                BitmapId leafID = GetImageFromReference(group->assets, &plant->leaf, &seq);
-                BitmapId flowerID = GetImageFromReference(group->assets, &plant->flower, &seq);
-                BitmapId fruitID = GetImageFromReference(group->assets, &plant->fruit, &seq);
+                BitmapId leafIDs[8];
+                BitmapId flowerIDs[8];
+                BitmapId fruitIDs[8];
+                
+                if(plant->hasVariant)
+                {
+                    for(u16 variantIndex = 0; variantIndex < ArrayCount(leafIDs); ++variantIndex)
+                    {
+                        leafIDs[0] = GetImageFromReferenceVariantIndex(group->assets, &plant->leaf, &seq, variantIndex);
+                        flowerIDs[0] = GetImageFromReferenceVariantIndex(group->assets, &plant->flower, &seq, variantIndex);
+                        fruitIDs[0] = GetImageFromReferenceVariantIndex(group->assets, &plant->fruit, &seq, variantIndex);
+                    }
+                }
+                else
+                {
+                    leafIDs[0] = GetImageFromReference(group->assets, &plant->leaf, &seq);
+                    flowerIDs[0] = GetImageFromReference(group->assets, &plant->flower, &seq);
+                    fruitIDs[0] = GetImageFromReference(group->assets, &plant->fruit, &seq);
+                }
                 
                 u32 leafRunningIndex = 0;
                 u32 flowerRunningIndex = 0;
@@ -232,9 +261,30 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
                     branchPointIndex < bitmapInfo->attachmentPointCount; ++branchPointIndex)
                 {
                     PAKAttachmentPoint* branch = bitmap->attachmentPoints + branchPointIndex;
-                    if(StringHash(branch->name) == branchHash)
+                    
+                    u64 bHash = StringHash(branch->name);
+                    u16 branchIndex = 0;
+                    
+                    u32 branchPound = FindFirstInString(branch->name, '#');
+                    if(branchPound != 0xffffffff)
                     {
-                        BitmapId branchID = GetImageFromReference(group->assets, &plant->branch, &seq);
+                        bHash = StringHash(branch->name, branchPound);
+                        branchIndex = SafeTruncateToU16(StringToUInt32(branch->name + branchPound + 1));
+                    }
+                    
+                    if(bHash == branchHash)
+                    {
+                        BitmapId branchID;
+                        if(plant->hasVariant)
+                        {
+                            branchID = GetImageFromReferenceVariantIndex(group->assets, &plant->branch, &seq, branchIndex);
+                        }
+                        else
+                        {
+                            branchID = GetImageFromReference(group->assets, &plant->branch, &seq);
+                        }
+                        
+                        
                         if(IsValid(branchID))
                         {
                             Bitmap* branchBitmap = GetBitmap(group->assets, branchID).bitmap;
@@ -245,16 +295,25 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
                                 Vec2 branchInvUV = GetInvUV(branchBitmap->width, branchBitmap->height);
 								Vec3 branchP = GetAlignP(bitmapData, branch->alignment);
                                 
-								r32 angleRad = DegToRad(branch->angle);
+                                r32 angleRad = DegToRad(branch->angle);
 								Vec3 XAxis = V3(Cos(angleRad), Sin(angleRad), 0.0f);
 								Vec3 YAxis  = V3(Perp(XAxis.xy), 0.0f);
                                 
-								Vec3 bLateral =branch->scale.x * (XAxis.x * magicLateralVector + XAxis.y * magicUpVector);
-								Vec3 bUp = branch->scale.y * (YAxis.x * magicLateralVector + YAxis.y * magicUpVector);
+                                Vec2 branchScale = branch->scale;
+                                if(branchInfo->flippedByDefault)
+                                {
+                                    branchScale.x = -branchScale.x;
+                                }
+                                
+								Vec3 bLateral =branchScale.x * (XAxis.x * magicLateralVector + XAxis.y * magicUpVector);
+								Vec3 bUp = branchScale.y * (YAxis.x * magicLateralVector + YAxis.y * magicUpVector);
                                 
 								Vec3 pivotOffset = branchPivot.x * bLateral + branchPivot.y * bUp; 
 								branchP -= pivotOffset;
                                 branchP += (0.5f * bLateral + 0.5f * bUp);
+                                
+                                branchP += zOffset * cameraZ;
+                                zOffset += 0.001f;
                                 
                                 u32 C = 0xffffffff;
                                 Vec4 windInfluences = V4(0, 0, 0, 0);
@@ -274,21 +333,31 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
                                     PAKAttachmentPoint* leaf = branchBitmap->attachmentPoints + leafPointIndex;
                                     
                                     BitmapId LFF = {};
-                                    
                                     r32 dissolveCoeff = 0;
-                                    if(StringHash(leaf->name) == leafHash)
+                                    
+                                    u64 baseHash = StringHash(leaf->name);
+                                    u16 variantIndex = 0;
+                                    
+                                    u32 pound = FindFirstInString(leaf->name, '#');
+                                    if(pound != 0xffffffff)
                                     {
-                                        LFF = leafID;
+                                        baseHash = StringHash(leaf->name, pound);
+                                        variantIndex = SafeTruncateToU16(StringToUInt32(leaf->name + pound + 1));
+                                    }
+                                    
+                                    if(baseHash == leafHash)
+                                    {
+                                        LFF = leafIDs[variantIndex];
                                         dissolveCoeff = GetDissolveCoeff(plant->leafDensity, leafRunningIndex++);
                                     }
-                                    else if(StringHash(leaf->name) == flowerHash)
+                                    else if(baseHash == flowerHash)
                                     {
-                                        LFF = flowerID;
+                                        LFF = flowerIDs[variantIndex];
                                         dissolveCoeff = GetDissolveCoeff(plant->flowerDensity, flowerRunningIndex++);
                                     }
-                                    else if(StringHash(leaf->name) == fruitHash)
+                                    else if(baseHash == fruitHash)
                                     {
-                                        LFF = fruitID;
+                                        LFF = fruitIDs[variantIndex];
                                         dissolveCoeff = GetDissolveCoeff(plant->fruitDensity, fruitRunningIndex++);
                                     }
                                     
@@ -315,6 +384,9 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
                                             leafP -= pivotOffset;
                                             leafP += (0.5f * lateral + 0.5f * up);
                                             
+                                            leafP += zOffset * cameraZ;
+                                            zOffset += 0.001f;
+                                            
                                             C = 0xffffffff;
                                             
                                             windInfluences = V4(0, 0, plant->windInfluence, plant->windInfluence);
@@ -333,10 +405,10 @@ RENDERING_ECS_JOB_CLIENT(RenderPlants)
                                     }
                                 }
                             }
-                        }
-                        else
-                        {
-                            LoadBitmap(group->assets, branchID);
+                            else
+                            {
+                                LoadBitmap(group->assets, branchID);
+                            }
                         }
                     }
                 }
@@ -733,7 +805,7 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                             mapping->zoomCoeff = Clamp(1.0f, mapping->zoomCoeff, mapping->maxZoomCoeff);
                             Rect2 objectRect = Scale(result, mapping->zoomCoeff);
                             
-                            mapping->projOnScreen = result;
+                            mapping->projOnScreen = Scale(result, mapping->zoomCoeff);
                             ObjectTransform inventoryTransform = transform;
                             
                             DrawObjectMapping(worldMode, group, mapping, inventoryTransform, P, dim, objectRect, lights, elapsedTime);

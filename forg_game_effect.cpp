@@ -34,15 +34,14 @@ internal void DamageEntityMentally(ServerState* server, EntityID ID, u32 damage)
 }
 
 internal void DeleteEntity(ServerState* server, EntityID ID, DeleteEntityReasonType reason = DeleteEntity_None);
-internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P, GameEffect* effect, EntityID targetID, u16* essences)
+internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos targetP, GameEffect* effect, EntityID targetID, u16* essences)
 {
     switch(effect->effectType.value)
     {
         case spawnEntity:
         {
-            //AddEntity(server, P, &server->entropy, effect->spawnType, DefaultAddEntityParams());
+            AddEntity(server, targetP, &server->entropy, effect->spawnType, DefaultAddEntityParams());
         } break;
-        
         
 #if 0        
         case spawnEssence:
@@ -61,7 +60,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
             Vec3 toTarget = SubtractOnSameZChunk(targetDef->P, def->P);
             params.acceleration = toTarget;
             params.speed = 1.0f * Normalize(toTarget);
-            AddEntity(server, P, &server->entropy, effect->spawnType, params);
+            AddEntity(server, targetP, &server->entropy, effect->spawnType, params);
         } break;
         
         case spawnEntityTowardDirection:
@@ -69,7 +68,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
             AddEntityParams params = DefaultAddEntityParams();
             
             DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-            Vec3 toTarget = SubtractOnSameZChunk(P, def->P);
+            Vec3 toTarget = SubtractOnSameZChunk(targetP, def->P);
             params.acceleration = toTarget;
             params.speed = 1.0f * Normalize(toTarget);
             
@@ -121,9 +120,8 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos P
     }
 }
 
-internal void DispatchEntityEffects(ServerState* server, EntityID ID, r32 elapsedTime, u16* essences)
+internal void DispatchEntityEffects(ServerState* server, UniversePos P, u16 action, EntityID ID, r32 elapsedTime, u16* essences)
 {
-    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     EffectComponent* effects = GetComponent(server, ID, EffectComponent);
     
     if(effects)
@@ -131,15 +129,18 @@ internal void DispatchEntityEffects(ServerState* server, EntityID ID, r32 elapse
         for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
         {
             GameEffect* effect = effects->effects + effectIndex;
-            effects->timers[effectIndex] += elapsedTime;
-            if(effects->timers[effectIndex] >= effect->timer)
+            if(effect->action.value == action)
             {
-                effects->timers[effectIndex] = 0;
-                DispatchGameEffect(server, ID, def->P, effect, {}, essences);
-                
-                if(effect->timer == 0.0f)
+                effects->timers[effectIndex] += elapsedTime;
+                if(effects->timers[effectIndex] >= effect->timer)
                 {
-                    effect->effectType.value = invalid_game_effect;
+                    effects->timers[effectIndex] = 0;
+                    DispatchGameEffect(server, ID, P, effect, {}, essences);
+                    
+                    if(effect->timer == 0.0f)
+                    {
+                        effect->effectType.value = invalid_game_effect;
+                    }
                 }
             }
         }
@@ -151,6 +152,9 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     u16* essences = def->essences;
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+    
+    u16 action = none;
+    
     if(equipment)
     {
         for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->slots); ++equipmentIndex)
@@ -158,7 +162,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
             EntityID equipID = GetBoundedID(equipment->slots + equipmentIndex);
             if(IsValidID(equipID))
             {
-                DispatchEntityEffects(server, equipID, elapsedTime, essences);
+                DispatchEntityEffects(server, def->P, action, equipID, elapsedTime, essences);
                 
                 ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
                 for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
@@ -166,7 +170,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
                     EntityID usingID = GetBoundedID(container->usingObjects + usingIndex);
                     if(IsValidID(usingID))
                     {
-                        DispatchEntityEffects(server, usingID, elapsedTime, essences);
+                        DispatchEntityEffects(server, def->P, action, usingID, elapsedTime, essences);
                     }
                 }
             }
@@ -176,12 +180,15 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
     if(equipped)
     {
-        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->slots); ++equipmentIndex)
+        for(u16 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->slots); ++equipmentIndex)
         {
-            EntityID usingID = GetBoundedID(equipped->slots + equipmentIndex);
-            if(IsValidID(usingID))
+            if(!SkillSlot(equipmentIndex))
             {
-                DispatchEntityEffects(server, usingID, elapsedTime, essences);
+                EntityID usingID = GetBoundedID(equipped->slots + equipmentIndex);
+                if(IsValidID(usingID))
+                {
+                    DispatchEntityEffects(server, def->P, action, usingID, elapsedTime, essences);
+                }
             }
         }
     }

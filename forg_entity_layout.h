@@ -158,3 +158,12 @@ struct RecipeEssenceComponent
     Rect2 projectedOnScreen[MAX_RECIPE_ESSENCES];
     u16 essences[MAX_RECIPE_ESSENCES];
 };
+
+inline b32 SkillSlot(u16 slot)
+{
+    b32 result = (slot == skill_1 ||
+                  slot == skill_2 ||
+                  slot == skill_3 ||
+                  slot == skill_4);
+    return result;
+}

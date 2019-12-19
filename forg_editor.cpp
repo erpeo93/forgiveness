@@ -1672,6 +1672,7 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                     Edit_r32(layout, "alignX", info->bitmap.align + 0, false, ID, true);
                     Edit_r32(layout, "alignY", info->bitmap.align + 1, false, ID, true);
                     Edit_r32(layout, "alphaThreesold", &info->bitmap.alphaThreesold, false, ID, true);
+                    Edit_b32(layout, "flipped by default", &info->bitmap.flippedByDefault, false, ID);
                     
                     NextRaw(layout);
                     LoadBitmap(assets, ID, true);
@@ -1956,18 +1957,20 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                 AUID auid = auID(info, "image");
                 AUIDData* data = GetAUIDData(layout->context, auid);
                 
-                r32 minPixelHeight = 20;
+                r32 minPixelHeight = 80;
                 data->height = Max(data->height, minPixelHeight);
                 
                 r32 height = data->height;
                 r32 backgroundScale = 1.1f;
                 
-                Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, 0);
+                Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, -1);
                 BitmapDim dim = PushBitmapWithPivot(layout->group, FlatTransform(), ID, P, V2(0, 0), height);
+                
+                r32 rectDim = 0.08f * height;
                 
                 Vec2 pivot = V2(info->bitmap.align[0], info->bitmap.align[1]);
                 Vec2 pivotP = P.xy + Hadamart(pivot, dim.size);
-                Rect2 pivotRect = RectCenterDim(pivotP, layout->fontScale * V2(8, 8));
+                Rect2 pivotRect = RectCenterDim(pivotP, layout->fontScale * V2(rectDim, rectDim));
                 PushRect(layout->group, FlatTransform(V4(1, 0, 0, 1)), pivotRect);
                 
                 
@@ -1985,7 +1988,7 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                         {
                             Vec2 attachmentP = point->alignment;
                             Vec2 pointP = P.xy + Hadamart(attachmentP, dim.size);
-                            Rect2 pointRect = RectCenterDim(pointP, layout->fontScale * V2(8, 8));
+                            Rect2 pointRect = RectCenterDim(pointP, layout->fontScale * V2(rectDim, rectDim));
                             RandomSequence seq = Seed(attachmentPointIndex);
                             Vec4 color = V4(RandomUniV3(&seq), 1.0f);
                             PushRect(layout->group, FlatTransform(color), pointRect);
@@ -1994,7 +1997,7 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                 }
                 
                 Rect2 rect = Scale(RectMinDim(P.xy, dim.size), backgroundScale);
-                PushRect(layout->group, FlatTransform(V4(0, 0, 0, 1)), rect);
+                PushRectOutline(layout->group, FlatTransform(V4(0, 0, 0, 1)), rect, 2.0f);
                 
                 Vec2 resizableP = V2(rect.max.x, rect.min.y);
                 EditorResize(layout, resizableP, auID(info, "resize"), &data->height);

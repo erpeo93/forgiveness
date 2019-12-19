@@ -92,14 +92,18 @@ struct PlantComponent
 {
     ImageReference trunk;
     ImageReference branch;
+    
+    
+    b32 hasVariant;
     ImageReference leaf;
     ImageReference flower;
     ImageReference fruit;
-    r32 windInfluence;
     
     r32 leafDensity;
     r32 flowerDensity;
     r32 fruitDensity;
+    
+    r32 windInfluence;
 };
 
 struct GrassComponent

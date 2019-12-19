@@ -24,6 +24,7 @@
 #define IMAGE_PROPERTY_ALIGN_X "alignX"
 #define IMAGE_PROPERTY_ALIGN_Y "alignY"
 #define IMAGE_PROPERTY_ALPHA_THREESOLD "alphaThreesold"
+#define IMAGE_PROPERTY_FLIPPED_BY_DEFAULT "flippedByDefault"
 #define IMAGE_ATTACHMENT_POINT "attachmentPoint"
 #define IMAGE_GROUP_NAME "groupName"
 #define ANIMATION_SOUND_TRIGGER "soundTrigger"
