@@ -15,8 +15,8 @@ Archetype() struct AnimalArchetype
 #else
     BaseComponent base;
     AnimationComponent animation;
-    EquipmentMappingComponent equipment;
-    UsingMappingComponent equipped;
+    EquipmentComponent equipment;
+    UsingComponent equipped;
     InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
     SoundEffectComponent soundEffects;
@@ -33,7 +33,7 @@ Archetype() struct RockArchetype
     InteractionComponent interaction;
 #else
     BaseComponent base;
-    StandardImageComponent image;
+    RockComponent rock;
     InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
 #endif
@@ -49,7 +49,6 @@ Archetype() struct PlantArchetype
 #else
     BaseComponent base;
     PlantComponent plant;
-    StandardImageComponent image;
     InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
 #endif
@@ -81,7 +80,7 @@ Archetype() struct RuneArchetype
     LayoutComponent layout;
     InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
-    ContainerMappingComponent container;
+    ContainerComponent container;
     SkillDefComponent skill;
 #endif
 };
@@ -108,13 +107,15 @@ Archetype() struct ObjectArchetype
     EffectComponent effect;
     ContainerComponent container;
     InteractionComponent interaction;
+    MiscComponent misc;
 #else
     BaseComponent base;
     LayoutComponent layout;
-    ContainerMappingComponent container;
+    ContainerComponent container;
     InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
     RecipeEssenceComponent recipeEssences;
+    MiscComponent misc;
 #endif
 };
 
@@ -191,6 +192,13 @@ introspection() struct PossibleActionDefinition
     EntityRef requiredEquippedType;
 };
 
+introspection() struct CraftingComponent
+{
+    ArrayCounter optionCount MetaCounter(options);
+    EntityRef* options;
+    b32 deleteAfterCrafting MetaDefault("true");
+};
+
 introspection() struct CommonEntityInitParams
 {
     EntityRef definitionID MetaUneditable();
@@ -198,10 +206,8 @@ introspection() struct CommonEntityInitParams
     
     b32 craftable;
     
-    u16 componentCount;
-    
-    ArrayCounter possibleComponentCount MetaCounter(possibleComponents);
-    EntityRef* possibleComponents;
+    ArrayCounter componentCount MetaCounter(components);
+    CraftingComponent* components;
     
     u16 essenceCount MetaDefault("1");
     
@@ -234,6 +240,7 @@ introspection() struct CommonEntityInitParams
     Enumerator inventorySlotType MetaEnumerator("inventorySlotType");
     
     b32 targetSkill;
+    r32 cooldown;
 };
 
 introspection() struct InventorySlots
@@ -268,8 +275,11 @@ introspection() struct ServerEntityInitParams
     GameEffect* collisionEffects;
     
     Enumerator brainType MetaEnumerator("brainType");
+    BrainParams brainParams;
     
     b32 canGoIntoWater;
+    b32 fearsLight;
+    r32 lightRadious;
     
     u32 defaultEssenceCount;
 };
@@ -315,13 +325,33 @@ introspection() struct ClientEntityInitParams
     GameAssetType skin MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
     
     ImageProperties entityProperties;
+    
+    
+    b32 hasBranchVariant;
+    Color branchColor MetaDefault("V4(1, 1, 1, 1)");
+    Vec4 branchColorV;
     ImageProperties trunkProperties;
     ImageProperties branchProperties;
     
-    b32 hasVariant;
+    b32 hasLeafVariant;
+    Color leafColor MetaDefault("V4(1, 1, 1, 1)");
+    Vec4 leafColorV;
     ImageProperties leafProperties;
+    
+    b32 hasFlowerVariant;
+    Color flowerColor MetaDefault("V4(1, 1, 1, 1)");
+    Vec4 flowerColorV;
     ImageProperties flowerProperties;
+    
+    b32 hasFruitVariant;
+    Color fruitColor MetaDefault("V4(1, 1, 1, 1)");
+    Vec4 fruitColorV;
     ImageProperties fruitProperties;
+    
+    ImageProperties rockProperties;
+    ImageProperties mineralProperties;
+    Color rockColor MetaDefault("V4(1, 1, 1, 1)");
+    Vec4 rockColorV;
     
     r32 windInfluence MetaDefault("0");
     u32 windFrequencyStandard MetaDefault("1");
@@ -380,6 +410,8 @@ introspection() struct ClientEntityInitParams
     
     ArrayCounter soundEffectsCount MetaCounter(soundEffects);
     SoundEffectDefinition* soundEffects;
+    
+    Vec3 spawnProjectileOffset;
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

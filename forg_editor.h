@@ -154,6 +154,7 @@ struct EditorUIContext
     struct PlayingSound* playingSound;
     
     UniversePos playerP;
+    Vec3 spawnOffset;
     
     r32 fontScale;
     Vec2 offset;

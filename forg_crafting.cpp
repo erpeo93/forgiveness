@@ -19,22 +19,26 @@ internal EntityRef GetCraftingType(Assets* assets, u32 recipeSeed)
 }
 
 // TODO(Leonardo): consider rarity!
-internal u16 GetCraftingComponents(Assets* assets, EntityRef type, u32 seed, EntityRef* components, u16 maxComponentCount)
+internal u16 GetCraftingComponents(Assets* assets, EntityRef type, u32 seed, EntityRef* components, b32* deleteComponents, u16 maxComponentCount)
 {
     EntityDefinition* definition = GetEntityTypeDefinition(assets, type);
     Assert(definition->common.craftable);
     
     u16 result = 0;
-    if(definition->common.possibleComponentCount > 0)
+    if(definition->common.componentCount > 0)
     {
         RandomSequence seq = Seed(seed);
-        result = definition->common.componentCount;
-        Assert(result <= maxComponentCount);
-        
         for(u16 componentIndex = 0; componentIndex < result; ++componentIndex)
         {
-            u16 choice = SafeTruncateToU16(RandomChoice(&seq, definition->common.possibleComponentCount));
-            components[componentIndex] = definition->common.possibleComponents[choice];
+            CraftingComponent* component = definition->common.components + componentIndex;
+            if(component->optionCount > 0)
+            {
+                Assert(result < maxComponentCount);
+                u16 index = ++result;
+                u32 choice = RandomChoice(&seq, component->optionCount);
+                components[index] = component->options[choice];
+                deleteComponents[index] = component->deleteAfterCrafting;
+            }
         }
         
     }

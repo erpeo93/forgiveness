@@ -43,17 +43,9 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             AddEntity(server, targetP, &server->entropy, effect->spawnType, DefaultAddEntityParams());
         } break;
         
-#if 0        
-        case spawnEssence:
+        case spawnProjectileTowardTarget:
         {
-            RollUntilYouGetTheCorrectOne();
-            Spawn();
-        } break;
-#endif
-        
-        case spawnEntityTowardTarget:
-        {
-            AddEntityParams params = DefaultAddEntityParams();
+            AddEntityParams params = SpawnEntityParams(ID);
             
             DefaultComponent* targetDef = GetComponent(server, targetID, DefaultComponent);
             DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
@@ -63,9 +55,9 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             AddEntity(server, targetP, &server->entropy, effect->spawnType, params);
         } break;
         
-        case spawnEntityTowardDirection:
+        case spawnProjectileTowardDirection:
         {
-            AddEntityParams params = DefaultAddEntityParams();
+            AddEntityParams params = SpawnEntityParams(ID);
             
             DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
             Vec3 toTarget = SubtractOnSameZChunk(targetP, def->P);
@@ -80,10 +72,13 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
         {
             EntityID destID = targetID;
             DefaultComponent* def = GetComponent(server, destID, DefaultComponent);
-            if(++def->P.chunkZ == (i32) server->maxDeepness)
+            if((def->P.chunkZ + 1) == (i32) server->maxDeepness)
             {
-                --def->P.chunkZ;
                 DeleteEntity(server, destID, DeleteEntity_None);
+            }
+            else
+            {
+                def->P = FindPlayerStartingP(server, (def->P.chunkZ + 1));
             }
         } break;
         

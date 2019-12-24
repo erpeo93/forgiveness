@@ -22,8 +22,6 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_archetypes.cpp"
 #include "forg_meta.cpp"
 #include "forg_sort.cpp"
-#include "forg_game_effect.cpp"
-#include "forg_crafting.cpp"
 
 internal Rect3 GetEntityBound(GameModeWorld* worldMode, BaseComponent* base)
 {
@@ -31,19 +29,9 @@ internal Rect3 GetEntityBound(GameModeWorld* worldMode, BaseComponent* base)
     return result;
 }
 
-internal EntityRef GetEntityType(GameModeWorld* worldMode, EntityID serverID)
-{
-    EntityRef result = {};
-    if(IsValidID(serverID))
-    {
-        EntityID clientID = GetClientIDMapping(worldMode, serverID);
-        BaseComponent* def = GetComponent(worldMode, clientID, BaseComponent);
-        result = def->definitionID;
-    }
-    
-    return result;
-}
-
+#include "forg_entity_layout.cpp"
+#include "forg_game_effect.cpp"
+#include "forg_crafting.cpp"
 #include "forg_render_entity.cpp"
 #include "forg_game_ui.cpp"
 
@@ -60,6 +48,7 @@ RENDERING_ECS_JOB_CLIENT(RenderBound)
     }
 }
 
+#if 0
 RENDERING_ECS_JOB_CLIENT(RenderEntityHUD)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
@@ -85,7 +74,6 @@ RENDERING_ECS_JOB_CLIENT(RenderEntityHUD)
         PushRect(group, FlatTransform(hC), RectMinDim(hMin, V2(hWidth, barDim.y)));
         
         
-        
         Vec2 mMin = hMin - V2(0, barSeparation + 0.5f * barDim.y);
         r32 mRatio = (r32) alive->mentalHealth / (r32)alive->maxMentalHealth;
         r32 mWidth = mRatio * barDim.x;
@@ -96,6 +84,7 @@ RENDERING_ECS_JOB_CLIENT(RenderEntityHUD)
         
     }
 }
+#endif
 
 internal void DeleteEntityClient(GameModeWorld* worldMode, EntityID clientID, EntityID serverID)
 {
@@ -131,12 +120,12 @@ internal void MarkForDeletion(GameModeWorld* worldMode, EntityID clientID)
 
 STANDARD_ECS_JOB_CLIENT(PushEntityLight)
 {
-    AnimationEffectComponent* animation = GetComponent(worldMode, ID, AnimationEffectComponent);
-    if(animation->lightIntensity)
+    MiscComponent* misc = GetComponent(worldMode, ID, MiscComponent);
+    if(misc->lightRadious)
     {
         BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
         Vec3 P = GetRelativeP(worldMode, base);
-        AddLight(worldMode, P, animation->lightColor, animation->lightIntensity);
+        AddLight(worldMode, P, V3(1, 1, 1), misc->lightRadious);
     }
 }
 STANDARD_ECS_JOB_CLIENT(UpdateEntity)
@@ -245,20 +234,39 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->windStrength = 1.0f;
 }
 
-internal void UpdateAmbientParameters(GameModeWorld* worldMode)
+internal Vec3 GetAmbientColor(u16 dayTime)
 {
-    switch(worldMode->dayTime)
+    Vec3 result = {};
+    switch(dayTime)
     {
         case DayTime_Day:
         {
-            worldMode->ambientLightColor = V3(1, 1, 1);
+            result = V3(1, 1, 1);
         } break;
         
         case DayTime_Night:
         {
-            worldMode->ambientLightColor = V3(0, 0, 0.2f);
+            result = V3(0, 0, 0.2f);
         } break;
+        
+        InvalidDefaultCase;
     }
+    
+    return result;
+}
+
+internal void UpdateAmbientParameters(GameModeWorld* worldMode, r32 elapsedTime)
+{
+    worldMode->dayTimeTime += elapsedTime;
+    
+    Vec3 oldColor = GetAmbientColor(worldMode->previousDayTime);
+    Vec3 color = GetAmbientColor(worldMode->dayTime);
+    
+    r32 fullColorTime = 2.0f;
+    
+    r32 lerp = Clamp01MapToRange(0.0f, worldMode->dayTimeTime, fullColorTime);
+    
+    worldMode->ambientLightColor = Lerp(oldColor, lerp, color);
 }
 
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
@@ -334,7 +342,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     ResetGameCamera(worldMode, group);
     
     
-    UpdateAmbientParameters(worldMode);
+    UpdateAmbientParameters(worldMode, input->timeToAdvance);
     
     BEGIN_BLOCK("setup rendering");
     ResetLightGrid(worldMode);
@@ -343,7 +351,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     
     HandleUIInteraction(worldMode, group, myPlayer, input);
     PushGameRenderSettings(group, worldMode->ambientLightColor, worldMode->windTime, worldMode->windDirection, 1.0f);
-    EXECUTE_JOB(worldMode, PushEntityLight, ArchetypeHas(AnimationEffectComponent), input->timeToAdvance);
+    EXECUTE_JOB(worldMode, PushEntityLight, ArchetypeHas(MiscComponent), input->timeToAdvance);
     FinalizeLightGrid(worldMode, group);
     END_BLOCK();
     
@@ -356,7 +364,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         
         EXECUTE_RENDERING_JOB(worldMode, group, RenderGrass, ArchetypeHas(GrassComponent) && ArchetypeHas(BaseComponent) && ArchetypeHas(MagicQuadComponent), input->timeToAdvance);
         
-        EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
+        EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent), input->timeToAdvance);
         
         EXECUTE_RENDERING_JOB(worldMode, group, RenderSegmentEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(SegmentImageComponent), input->timeToAdvance);
         
@@ -364,7 +372,9 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         
         EXECUTE_RENDERING_JOB(worldMode, group, RenderFrameByFrameEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(FrameByFrameAnimationComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
         
-        EXECUTE_RENDERING_JOB(worldMode, group, RenderPlant, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
+        EXECUTE_RENDERING_JOB(worldMode, group, RenderPlant, ArchetypeHas(BaseComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
+        
+        EXECUTE_RENDERING_JOB(worldMode, group, RenderRock, ArchetypeHas(BaseComponent) && ArchetypeHas(RockComponent), input->timeToAdvance);
         
         EXECUTE_RENDERING_JOB(worldMode, group, RenderLayoutEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(LayoutComponent), input->timeToAdvance);
         
@@ -407,7 +417,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     SetOrthographicTransformScreenDim(group);
     //FixedOrderedRendering(group);
     RenderUIOverlay(worldMode, group, input->timeToAdvance);
-    EXECUTE_RENDERING_JOB(worldMode, group, RenderEntityHUD, ArchetypeHas(AliveComponent), input->timeToAdvance);
+    //EXECUTE_RENDERING_JOB(worldMode, group, RenderEntityHUD, ArchetypeHas(AliveComponent), input->timeToAdvance);
     if(worldMode->editingEnabled)
     {
         RenderEditorOverlay(worldMode, group, input);

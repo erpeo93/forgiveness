@@ -86,6 +86,6 @@ struct LayoutContainer
     LayoutContainerDrawMode drawMode;
     b32 storedObjectsDrawn[MAX_CONTAINER_OBJECT];
     b32 usingObjectsDrawn[MAX_USING_OBJECT];
-    ContainerMappingComponent* container;
+    ContainerComponent* container;
     RecipeEssenceComponent* recipeEssences;
 };

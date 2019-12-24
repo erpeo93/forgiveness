@@ -148,7 +148,11 @@ internal r32 GetTileElevation(world_generator* generator, r32 tileNormX, r32 til
     }
     else
     {
+#if 0
         result = Select(&generator->landscapeSelect, tileNormX, tileNormY, landscape, seed);
+#else
+        result = landscape;
+#endif
         // NOTE(Leonardo): modify elevation to match out island shapes
         r32 normalizedElevation = Clamp01MapToRange(minHeight, result, maxHeight);
         r32 distanceFromCenter = Length(V2(tileNormX, tileNormY) - V2(0.5f, 0.5f));
@@ -184,14 +188,13 @@ internal SoundMapping InitSoundMapping(SoundMappingDefinition* mapping, RandomSe
 inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 tileNormX, r32 tileNormY, r32 tileNormZ, RandomSequence* seq, u32 seed)
 {
     WorldTile result = {};
-    
+#if 0
     // NOTE(Leonardo): elevation
     r32 elevation = GetTileElevation(generator, tileNormX, tileNormY, tileNormZ, seq, seed);
     r32 temperatureNoise = Evaluate(tileNormX, tileNormY, generator->temperatureNoise, seed);
     r32 temperatureDegrees = Select(&generator->temperatureSelect, temperatureNoise, temperatureNoise, elevation, seed, false);
     
     ZSlice* slice = GetZSlice(generator, tileNormZ);
-    
     r32 annualMMPrecipitation = 0;
     r32 darkness = 0;
     
@@ -206,52 +209,73 @@ inline WorldTile GenerateTile(Assets* assets, world_generator* generator, r32 ti
     
     GameProperty property = SelectFromBiomePyramid(&generator->biomePyramid, annualMMPrecipitation, darkness, temperatureDegrees, seed);
     
-    GameProperties properties = {};
-    properties.properties[0] = property;
-    AssetID ID = QueryDataFiles(assets, tile_definition, "default", seq, &properties);
-    if(IsValid(ID))
+#else
+    GameProperty property = {};
+    r32 elevation = GetTileElevation(generator, tileNormX, tileNormY, tileNormZ, seq, seed);
+    if(generator->biomeConfigurationCount > 0)
     {
-        tile_definition* definition = GetData(assets, tile_definition, ID);
-        result.property = definition->property;
-        result.underSeaLevelFluid = {};
-        if(elevation < 0)
-        {
-            result.underSeaLevelFluid = definition->underSeaLevelFluid;
-			//result.underSeaLevelFluid = GameProp(fluid, ocean);
-        }
+        RandomSequence configurationSeed = Seed(seed);
+        BiomeConfiguration* configuration = generator->biomeConfigurations + RandomChoice(&configurationSeed, generator->biomeConfigurationCount);
         
-#ifndef FORG_SERVER
-        result.asset = definition->asset;
-        for(u32 patchIndex = 0; patchIndex < ArrayCount(result.patches); ++patchIndex)
+        r32 minDelta = R32_MAX;
+        for(ArrayCounter bandIndex = 0; bandIndex < configuration->biomeBandCount; ++bandIndex)
         {
-            TilePatch* patch = result.patches + patchIndex;
-            patch->offsetTime = RandomRangeFloat(seq, 0, 10);
-            patch->colorTime = RandomRangeFloat(seq, 0, 10);
-            patch->scaleTime = RandomRangeFloat(seq, 0, 10);
-        }
-        
-        
-        for(ArrayCounter soundIndex = 0; soundIndex < definition->soundCount; ++soundIndex)
-        {
-            if(result.soundCount < ArrayCount(result.sounds))
+            BiomeBand* band = configuration->biomeBands + bandIndex;
+            r32 delta = Abs(band->referenceHeight - elevation);
+            if(delta < minDelta)
             {
-                result.sounds[result.soundCount++] = InitSoundMapping(definition->sounds + soundIndex, seq);
+                minDelta = delta;
+                property = band->tile;
             }
         }
         
-        if(elevation < 0)
+        GameProperties properties = {};
+        properties.properties[0] = property;
+        AssetID ID = QueryDataFiles(assets, tile_definition, "default", seq, &properties);
+        if(IsValid(ID))
         {
-            for(ArrayCounter soundIndex = 0; soundIndex < definition->underwaterSoundCount; ++soundIndex)
+            tile_definition* definition = GetData(assets, tile_definition, ID);
+            result.property = definition->property;
+            result.underSeaLevelFluid = {};
+            if(elevation < 0)
+            {
+                result.underSeaLevelFluid = configuration->underSeaLevelFluid;
+            }
+            
+#ifndef FORG_SERVER
+            result.asset = definition->asset;
+            for(u32 patchIndex = 0; patchIndex < ArrayCount(result.patches); ++patchIndex)
+            {
+                TilePatch* patch = result.patches + patchIndex;
+                patch->offsetTime = RandomRangeFloat(seq, 0, 10);
+                patch->colorTime = RandomRangeFloat(seq, 0, 10);
+                patch->scaleTime = RandomRangeFloat(seq, 0, 10);
+            }
+            
+            
+            for(ArrayCounter soundIndex = 0; soundIndex < definition->soundCount; ++soundIndex)
             {
                 if(result.soundCount < ArrayCount(result.sounds))
                 {
-                    result.sounds[result.soundCount++] = InitSoundMapping(definition->underwaterSounds + soundIndex, seq);
+                    result.sounds[result.soundCount++] = InitSoundMapping(definition->sounds + soundIndex, seq);
                 }
             }
             
-        }
+            if(elevation < 0)
+            {
+                for(ArrayCounter soundIndex = 0; soundIndex < configuration->underwaterSoundCount; ++soundIndex)
+                {
+                    if(result.soundCount < ArrayCount(result.sounds))
+                    {
+                        result.sounds[result.soundCount++] = InitSoundMapping(configuration->underwaterSounds + soundIndex, seq);
+                    }
+                }
+                
+            }
 #endif
+        }
     }
+#endif
     
     return result;
 }
@@ -264,16 +288,17 @@ internal WorldTile NullTile(Assets* assets, world_generator* generator)
     return result;
 }
 
-internal RandomSequence GetChunkSeed(u32 chunkX, u32 chunkY, u32 worldSeed)
+internal RandomSequence GetChunkSeed(u32 chunkX, u32 chunkY, u32 chunkZ, u32 worldSeed)
 {
-    RandomSequence result = Seed(chunkX * chunkY * worldSeed);
+    RandomSequence result = Seed(chunkX * chunkY * chunkZ * worldSeed);
     return result;
 }
 
 internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* generator, WorldChunk* chunk, i16 chunkX, i16 chunkY, i16 chunkZ, u32 seed)
 {
-    RandomSequence seq = GetChunkSeed(chunkX, chunkY, seed);
+    RandomSequence seq = GetChunkSeed(chunkX, chunkY, chunkZ, seed);
     RandomSequence seqTest = seq;
+    u32 sliceSeed = seed + chunkZ;
     
 #ifndef FORG_SERVER
     chunk->worldX = chunkX;
@@ -323,7 +348,7 @@ internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* gene
             Assert(Normalized(tileNormY));
             Assert(Normalized(tileNormZ));
             
-            r32 elevation = GetTileElevation(generator, tileNormX, tileNormY, tileNormZ, &seqTest, seed);
+            r32 elevation = GetTileElevation(generator, tileNormX, tileNormY, tileNormZ, &seqTest, sliceSeed);
             if(elevation != minHeight)
             {
                 buildTiles = true;
@@ -358,7 +383,7 @@ internal void BuildChunk(Assets* assets, MemoryPool* pool, world_generator* gene
                 
                 WorldTile* tile = chunk->tiles + (tileY * CHUNK_DIM) + tileX;
                 
-                *tile = GenerateTile(assets, generator, tileNormX, tileNormY, tileNormZ, &seq, seed);
+                *tile = GenerateTile(assets, generator, tileNormX, tileNormY, tileNormZ, &seq, sliceSeed);
             }
         }
     }
@@ -422,24 +447,56 @@ internal b32 SatisfiesEntityRequirements(ServerState* server, UniversePos P, Spa
     {
         result = true;
         
-        i32 radious = (i32) spawner->repulsionRadious;
-        for(i32 Y = -radious; Y <= radious; ++Y)
+        if(spawner->requiredTile.value != tile_invalid || spawner->requiredFluid.value != fluid_invalid)
         {
-            for(i32 X = -radious; X <= radious; ++X)
+            result = false;
+            i32 radious = (i32) spawner->requiredRadious;
+            for(i32 Y = -radious; Y <= radious; ++Y)
             {
-                Vec3 offset = VOXEL_SIZE * V3(V2i(X, Y), 0);
-                UniversePos tileP = P;
-                tileP.chunkOffset += offset;
-                tileP = NormalizePosition(tileP);
-                WorldTile* tile = GetTile(server, tileP);
-                if(AreEqual(tile->property, spawner->repulsionTile) || AreEqual(tile->underSeaLevelFluid, spawner->repulsionFluid))
+                for(i32 X = -radious; X <= radious; ++X)
                 {
-                    result = false;
-                    break;
+                    Vec3 offset = VOXEL_SIZE * V3(V2i(X, Y), 0);
+                    UniversePos tileP = Offset(P, offset);
+                    if(PositionInsideWorld(&tileP))
+                    {
+                        WorldTile* tile = GetTile(server, tileP);
+                        if(AreEqual(tile->property, spawner->requiredTile) || AreEqual(tile->underSeaLevelFluid, spawner->requiredFluid))
+                        {
+                            result = true;
+                            break;
+                        }
+                    }
                 }
             }
         }
         
+        if(result)
+        {
+            i32 radious = (i32) spawner->repulsionRadious;
+            for(i32 Y = -radious; Y <= radious; ++Y)
+            {
+                for(i32 X = -radious; X <= radious; ++X)
+                {
+                    Vec3 offset = VOXEL_SIZE * V3(V2i(X, Y), 0);
+                    UniversePos tileP = Offset(P, offset);
+                    if(PositionInsideWorld(&tileP))
+                    {
+                        WorldTile* tile = GetTile(server, tileP);
+                        if(AreEqual(tile->property, spawner->repulsionTile) || AreEqual(tile->underSeaLevelFluid, spawner->repulsionFluid))
+                        {
+                            result = false;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        result = false;
+                        break;
+                    }
+                }
+            }
+            
+        }
     }
     return result;
 }
@@ -573,6 +630,7 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
         PlayerComponent* player = (PlayerComponent*) Get_(&server->PlayerComponent_, newEntity->params.playerIndex);
         player->justEnteredWorld = true;
         player->skillPoints = 0;
+        player->timeSinceLastZombieSpawned = 0;
         player->ID = ID;
         SetComponent(server, ID, PlayerComponent, player);
         
@@ -587,9 +645,20 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
             {
                 brain->type = Brain_Player;
                 ResetQueue(player->queues + GuaranteedDelivery_None);
-                QueueGameAccessConfirm(player, server->worldSeed, ID, false);
             }
+            
         }
+        
+        QueueGameAccessConfirm(player, server->worldSeed, ID, false, newEntity->params.ghost);
+        
+        ZLayer* layer = server->layers + newEntity->P.chunkZ;
+        QueueDayTime(player, layer->dayTimePhase);
+    }
+    
+    if(newEntity->params.ghost)
+    {
+        DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+        AddEntityFlags(def, EntityFlag_ghost);
     }
     
     if(newEntity->params.spawnFollowingEntity)
@@ -611,6 +680,19 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
         {
             brain->ID = ID;
         }
+    }
+    
+    if(IsValidID(newEntity->params.spawnerID))
+    {
+		DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+        def->spawnerID = newEntity->params.spawnerID;
+        def->basicPropertiesChanged |= EntityBasics_Spawner;
+    }
+    
+    EntityRef portal = EntityReference(server->assets, "default", "portal");
+    if(AreEqual(EntityReference(newEntity->definitionID), portal))
+    {
+        server->portalPositions[newEntity->P.chunkZ] = newEntity->P;
     }
 }
 
@@ -723,9 +805,17 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
         world_generator* generator = GetData(server->assets, world_generator, ID);
         server->nullTile = NullTile(server->assets, generator);
         
-        server->maxDeepness = (i16) generator->maxDeepness;
-        
         Clear(&server->chunkPool);
+        server->maxDeepness = (i16) generator->maxDeepness;
+        server->layers = PushArray(&server->chunkPool, ZLayer, generator->maxDeepness);
+        
+        for(i16 chunkZ = 0; chunkZ < server->maxDeepness; ++chunkZ)
+        {
+            ZLayer* layer = server->layers + chunkZ;
+            layer->dayTimePhase = SafeTruncateToU16(RandomChoice(&generatorSeq, Count_DayTime));
+            layer->dayTimeTime = RandomUni(&generatorSeq) * DAYPHASE_DURATION;
+        }
+        
         server->chunks = PushArray(&server->chunkPool, WorldChunk, generator->maxDeepness * WORLD_CHUNK_SPAN * WORLD_CHUNK_SPAN);
         WorldChunk* chunk = server->chunks;
         for(i16 chunkZ = 0; chunkZ < server->maxDeepness; ++chunkZ)
@@ -776,5 +866,42 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
         }
         Clear(&tempPool);
     }
+}
+
+internal UniversePos FindWalkablePStartingFrom(ServerState* server, UniversePos P, u32 stepCount)
+{
+    UniversePos result = P;
+    u32 destStep = stepCount;
+    Vec3 directions[4] = 
+    {
+        V3(VOXEL_SIZE, 0, 0),
+        V3(-VOXEL_SIZE, 0, 0),
+        V3(0, VOXEL_SIZE, 0),
+        V3(0, -VOXEL_SIZE, 0)
+    };
+    
+    for(u32 stepIndex = 0; stepIndex < destStep; ++stepIndex)
+    {
+        Vec3 direction = directions[RandomChoice(&server->entropy, ArrayCount(directions))];
+        UniversePos newP = Offset(result, direction);
+        if(PositionInsideWorld(&newP))
+        {
+            WorldTile* tile = GetTile(server, newP);
+            if(!IsValid(tile->underSeaLevelFluid))
+            {
+                result = newP;
+            }
+        }
+    }
+    
+    return result;
+}
+
+internal UniversePos FindPlayerStartingP(ServerState* server, u16 chunkZ)
+{
+    Assert(chunkZ < ArrayCount(server->portalPositions));
+    UniversePos P = server->portalPositions[chunkZ];
+    UniversePos result = FindWalkablePStartingFrom(server, P, 4);
+    return result;
 }
 #endif

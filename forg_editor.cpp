@@ -1912,7 +1912,7 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                 AUID auid = auID(info, "entityDefSpawn");
                 if(StandardEditorButton(layout, "spawn", auid))
                 {
-                    SendSpawnRequest(layout->context->playerP, ID);
+                    SendSpawnRequest(Offset(layout->context->playerP, layout->context->spawnOffset), ID);
                 }
             }
             default:
@@ -2367,6 +2367,7 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
                     Edit_Vec3(&layout, "ambient light color", &worldMode->ambientLightColor, 0, {});
                     Edit_Vec3(&layout, "wind direction", &worldMode->windDirection, 0, {});
                     Edit_r32(&layout, "wind strength", &worldMode->windStrength, 0, {});
+                    Edit_Vec3(&layout, "spawn offset", &layout.context->spawnOffset, 0, {});
                 } break;
             }
             

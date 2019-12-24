@@ -92,7 +92,22 @@ struct InventorySlot
 {
     u32 flags_type;
     EntityID ID;
+    
+    r32 distanceFromMouseSq;
+    Rect2 projOnScreen;
+    u64 slotHash;
+    u64 pieceHash;
+    b32 hot;
+    r32 zoomCoeff;
+    r32 zoomSpeed;
+    r32 maxZoomCoeff;
 };
+
+inline EntityID GetBoundedID(InventorySlot* slot)
+{
+    EntityID result = slot->ID;
+    return result;
+}
 #endif
 
 struct EquipmentComponent
@@ -110,46 +125,21 @@ struct UsingComponent
 #define MAX_USING_OBJECT 8
 struct ContainerComponent
 {
+#if FORG_SERVER
     BoundedEntityID openedBy;
+#else
+    EntityID openedBy;
+#endif
     
     InventorySlot storedObjects[MAX_CONTAINER_OBJECT];
     InventorySlot usingObjects[MAX_USING_OBJECT];
-};
-
-struct ObjectMapping
-{
-    r32 distanceFromMouseSq;
-    Rect2 projOnScreen;
-    u64 slotHash;
-    u64 pieceHash;
-    InventorySlot object;
     
-    b32 hot;
-    r32 zoomCoeff;
-    r32 zoomSpeed;
-    r32 maxZoomCoeff;
-};
-
-struct EquipmentMappingComponent
-{
-    ObjectMapping mappings[Count_equipmentSlot];
-};
-
-struct UsingMappingComponent
-{
-    ObjectMapping mappings[Count_usingSlot];
-};
-
-struct ContainerMappingComponent
-{
-    EntityID openedBy;
+#ifndef FORG_SERVER
     r32 zoomCoeff;
     b32 displayInStandardMode;
     Vec2 desiredOpenedDim;
     Vec2 desiredUsingDim;
-    
-    ObjectMapping storedMappings[MAX_CONTAINER_OBJECT];
-    ObjectMapping usingMappings[MAX_USING_OBJECT];
+#endif
 };
 
 #define MAX_RECIPE_ESSENCES 1

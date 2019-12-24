@@ -2786,30 +2786,23 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
         
         if(sendToPlayers)
         {
-            for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)
+            for(CompIterator iter = FirstComponent(server, PlayerComponent); 
+                IsValid(iter); iter = Next(iter))
             {
-                if(HasComponent_(archetypeIndex, PlayerComponent))
+                PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
+                if(player->connectionSlot)
                 {
-                    for(ArchIterator iter = First(server, archetypeIndex); 
-                        IsValid(iter); 
-                        iter = Next(iter))
-                    {
-                        PlayerComponent* player = GetComponent(server, iter.ID, PlayerComponent);
-                        if(player && player->connectionSlot)
-                        {
-                            FileToSend* toSend;
-                            FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
-                            
-                            toSend->acked = false;
-                            toSend->playerIndex = player->runningFileIndex++;
-                            toSend->serverFileIndex = fileIndex;
-                            toSend->sendingOffset = 0;
-                            
-                            ++file->counter;
-                            FREELIST_INSERT(toSend, player->firstReloadedFileToSend);
-                            QueueFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
-                        }
-                    }
+                    FileToSend* toSend;
+                    FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
+                    
+                    toSend->acked = false;
+                    toSend->playerIndex = player->runningFileIndex++;
+                    toSend->serverFileIndex = fileIndex;
+                    toSend->sendingOffset = 0;
+                    
+                    ++file->counter;
+                    FREELIST_INSERT(toSend, player->firstReloadedFileToSend);
+                    QueueFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
                 }
             }
         }

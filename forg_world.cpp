@@ -97,6 +97,12 @@ inline b32 PositionInsideWorld(UniversePos* pos)
     return result;
 }
 
+inline b32 PositionIsValid(UniversePos* pos)
+{
+    b32 result = (ChunkValid(pos->chunkX, pos->chunkY, pos->chunkZ));
+    return result;
+}
+
 inline Vec3 SubtractOnSameZChunk(UniversePos A, UniversePos B)
 {
     Vec3 result = V3(R32_MAX, R32_MAX, R32_MAX);

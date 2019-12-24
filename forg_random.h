@@ -678,3 +678,9 @@ inline u8 RandomBucket( RandomSequence* seq, BucketDistribution* distr )
     u8 result = distr->buckets[bucketIndex];
     return result;
 }
+
+internal Color RandomizeColor(Color in, Color v, RandomSequence* seq)
+{
+    Color result = in + Hadamart(RandomBilV4(seq), v);
+    return result;
+}

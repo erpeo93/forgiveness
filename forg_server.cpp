@@ -13,8 +13,6 @@
 #include "forg_network_server.cpp"
 #define ONLY_DATA_FILES
 #include "forg_asset.cpp"
-
-
 #include "forg_archetypes.cpp"
 #include "forg_meta.cpp"
 #include "miniz.c"
@@ -22,8 +20,10 @@
 #include "forg_world_generation.cpp"
 #include "forg_game_effect.cpp"
 #include "forg_crafting.cpp"
+#include "forg_entity_layout.cpp"
 #include "forg_world_server.cpp"
 #include "forg_brain.cpp"
+
 internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, PlayerComponent* player,  unsigned char* packetPtr, u16 dataSize)
 {
     u32 challenge = 1111;
@@ -156,10 +156,7 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
 					player->ID = {};
 				}
                 
-                UniversePos P = {};
-                P.chunkZ = 0;
-                P.chunkX = 4;
-                P.chunkY = 4;
+                UniversePos P = FindPlayerStartingP(server, 0);
                 AddEntityParams params = DefaultAddEntityParams();
                 params.playerIndex = playerIndex;
                 SpawnPlayer(server, P, params);
@@ -265,7 +262,7 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
             unpack(packetPtr, "llllV", &createEntities, &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset);
             EXECUTE_JOB(server, DeleteAllEntities, (1 == 1), 0);
             BuildWorld(server, createEntities);
-            QueueGameAccessConfirm(player, server->worldSeed, {}, true);
+            QueueGameAccessConfirm(player, server->worldSeed, {}, true, false);
             AddEntityParams params = DefaultAddEntityParams();
             params.playerIndex = playerIndex;
             SpawnPlayer(server, P, params);
@@ -509,7 +506,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         SetMetaAssets(server->assets);
         
         InitSpatialPartition(&server->gamePool, &server->staticPartition);
-        BuildWorld(server, false);
+        BuildWorld(server, true);
     }
     
     
@@ -596,10 +593,26 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     UpdateWorldBasics(server, elapsedTime);
     BEGIN_BLOCK("update entities");
     EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime);
-    EXECUTE_JOB(server, UpdateBrain, ArchetypeHas(BrainComponent), elapsedTime);
+    
+    EXECUTE_JOB(server, DamageEntityFearingLight, ArchetypeHas(AliveComponent), elapsedTime);
+    EXECUTE_JOB(server, DealLightDamage, ArchetypeHas(MiscComponent), elapsedTime);
+    
+    
+    server->updateBrains = false;
+    r32 targetBrainTimer = 0.05f;
+    server->brainTimer += elapsedTime;
+    if(server->brainTimer >= targetBrainTimer)
+    {
+        server->updateBrains = true;
+        server->brainTimer = 0;
+    }
+    
+    EXECUTE_JOB(server, UpdateBrain, ArchetypeHas(BrainComponent), targetBrainTimer);
+    EXECUTE_JOB(server, ExecuteCommand, ArchetypeHas(BrainComponent) && ArchetypeHas(ActionComponent), elapsedTime);
 	EXECUTE_JOB(server, UpdateTempEntity, ArchetypeHas(TempEntityComponent), elapsedTime);
     EXECUTE_JOB(server, HandleOpenedContainers, ArchetypeHas(ContainerComponent), elapsedTime);
     END_BLOCK();
+    
     
     BEGIN_BLOCK("send updates");
     b32 staticUpdate = false;

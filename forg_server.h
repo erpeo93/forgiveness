@@ -175,7 +175,7 @@ struct DefaultComponent
     UniversePos P;
     U32 flags;
     U16 status;
-    
+    EntityID spawnerID;
     u16 essences[Count_essence];
 };
 
@@ -340,6 +340,7 @@ struct PlayerComponent
     b32 justEnteredWorld;
     
     u32 skillPoints;
+    r32 timeSinceLastZombieSpawned;
     
     b32 connectionClosed;
     u16 connectionSlot;
@@ -410,6 +411,7 @@ struct AddEntityParams
     b32 spawnFollowingEntity;
     b32 lock;
     b32 ghost;
+    EntityID spawnerID;
 };
 
 internal AddEntityParams DefaultAddEntityParams()
@@ -422,6 +424,13 @@ internal AddEntityParams GhostEntityParams()
 {
     AddEntityParams params = DefaultAddEntityParams();
     params.ghost = true;
+    return params;
+}
+
+internal AddEntityParams SpawnEntityParams(EntityID spawnerID)
+{
+    AddEntityParams params = DefaultAddEntityParams();
+    params.spawnerID = spawnerID;
     return params;
 }
 
@@ -456,18 +465,16 @@ struct DeletedEntity
     };
 };
 
+struct ZLayer
+{
+    r32 dayTimeTime;
+    u16 dayTimePhase;
+};
+
 struct ServerState
 {
     u32 worldSeed;
-    
 	b32 gamePaused;
-    
-    
-    r32 seasonTime;
-    u16 season;
-    
-    r32 dayTimeTime;
-    u16 dayTime;
     
     TaskWithMemory tasks[6];
     PlatformWorkQueue* fastQueue;
@@ -478,6 +485,7 @@ struct ServerState
     
     WorldTile nullTile;
     u16 maxDeepness;
+    ZLayer* layers;
     WorldChunk* chunks;
     MemoryPool chunkPool;
     
@@ -512,10 +520,14 @@ struct ServerState
     
     r32 staticUpdateTimer;
     r32 equipmentEffectTimer;
+    r32 brainTimer;
+    b32 updateBrains;
     
 #if FORGIVENESS_INTERNAL
     b32 captureFrame;
 #endif
+    
+    UniversePos portalPositions[64];
 };
 
 #define SERVER_SIMULATE_WORLDS(name) void name(PlatformServerMemory* memory, r32 secondElapsed)

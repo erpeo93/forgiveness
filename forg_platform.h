@@ -418,7 +418,7 @@ struct PlatformFileGroup
 struct PlatformSubdirNames
 {
     u32 count;
-    char names[32][1024];
+    char names[128][128];
 };
 
 #define PLATFORM_GET_ALL_FILE_BEGIN(name) PlatformFileGroup name(u32 fileTypes, char* path)

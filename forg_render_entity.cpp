@@ -99,8 +99,8 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.scale = 1;
         params.transform = BillboardTransform();
         params.flipOnYAxis = animation->flipOnYAxis;
-        params.equipment = GetComponent(worldMode, ID, EquipmentMappingComponent);
-        params.equipped = GetComponent(worldMode, ID, UsingMappingComponent);
+        params.equipment = GetComponent(worldMode, ID, EquipmentComponent);
+        params.equipped = GetComponent(worldMode, ID, UsingComponent);
         params.tint = animationParams.tint;
         params.dissolveCoeff = animationParams.dissolveCoeff;
         params.modulationPercentage = animationParams.modulationPercentage; 
@@ -194,6 +194,129 @@ internal r32 GetDissolveCoeff(r32 density, u32 index)
     return result;
 }
 
+RENDERING_ECS_JOB_CLIENT(RenderRock)
+{
+    u64 mineralHash = StringHash("mineral");
+    EntityAnimationParams params = GetEntityAnimationParams(worldMode, ID);
+    elapsedTime *= params.speed;
+    
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    
+    Vec3 cameraZ = group->gameCamera.Z;
+    r32 zOffset = 0.001f;
+    
+    if(ShouldBeRendered(worldMode, base))
+    {
+        r32 height = GetHeight(base->bounds);
+        Vec3 P = GetRelativeP(worldMode, base);
+        Lights lights = GetLights(worldMode, P);
+        
+        RockComponent* rock = GetComponent(worldMode, ID, RockComponent);
+        
+        RandomSequence seq = Seed(base->seed);
+        BitmapId rockID = GetImageFromReference(group->assets, &rock->rock, &seq);
+        if(IsValid(rockID))
+        {  
+            ObjectTransform transform = BillboardTransform();
+            transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1);
+            transform.modulationPercentage = params.modulationPercentage;
+            transform.tint = Hadamart(params.tint, rock->color);
+            
+            BitmapDim bitmapData = PushBitmap(group, transform, rockID, P, height, lights);
+            Bitmap* bitmap = GetBitmap(group->assets, rockID).bitmap;
+            PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, rockID);
+            
+            u16 possibleEssences[Count_essence];
+            u16 essenceCount = 0;
+            
+            for(u16 essenceIndex = 0; essenceIndex < ArrayCount(base->essences); ++essenceIndex)
+            {
+                if(base->essences[essenceIndex] > 0)
+                {
+                    possibleEssences[essenceCount++] = essenceIndex;
+                }
+            }
+            
+            if(bitmap && essenceCount)
+            {
+                u16 mineralRunningIndex = 0;
+                for(u32 mineralPointIndex = 0;
+                    mineralPointIndex < bitmapInfo->attachmentPointCount; ++mineralPointIndex)
+                {
+                    PAKAttachmentPoint* mineral = bitmap->attachmentPoints + mineralPointIndex;
+                    
+                    u64 mHash = StringHash(mineral->name);
+                    
+                    u32 mineralPound = FindFirstInString(mineral->name, '#');
+                    if(mineralPound != 0xffffffff)
+                    {
+                        mHash = StringHash(mineral->name, mineralPound);
+                        
+                    }
+                    
+                    if(mHash == mineralHash)
+                    {
+                        u16 essence = possibleEssences[RandomChoice(&seq, essenceCount)];
+                        AddGameProperty(&rock->mineral.properties, essence, essence);
+                        BitmapId mineralID = GetImageFromReference(group->assets, &rock->mineral, &seq);
+                        
+                        
+                        if(IsValid(mineralID))
+                        {
+                            ColoredBitmap b = GetBitmap(group->assets, mineralID);
+                            Bitmap* mineralBitmap = b.bitmap;
+                            if(mineralBitmap)
+                            {
+                                PAKBitmap* mineralInfo = GetBitmapInfo(group->assets, mineralID);
+                                Vec2 mineralPivot = V2(mineralInfo->align[0], mineralInfo->align[1]);
+                                Vec2 mineralInvUV = GetInvUV(mineralBitmap->width, mineralBitmap->height);
+                                Vec3 mineralP = GetAlignP(bitmapData, mineral->alignment);
+                                
+                                r32 angleRad = DegToRad(mineral->angle);
+                                Vec3 XAxis = V3(Cos(angleRad), Sin(angleRad), 0.0f);
+                                Vec3 YAxis  = V3(Perp(XAxis.xy), 0.0f);
+                                
+                                Vec2 mineralScale = mineral->scale;
+                                if(mineralInfo->flippedByDefault)
+                                {
+                                    mineralScale.x = -mineralScale.x;
+                                }
+                                
+                                Vec3 mLateral =mineralScale.x * (XAxis.x * magicLateralVector + XAxis.y * magicUpVector);
+                                Vec3 mUp = mineralScale.y * (YAxis.x * magicLateralVector + YAxis.y * magicUpVector);
+                                
+                                Vec3 pivotOffset = mineralPivot.x * mLateral + mineralPivot.y * mUp; 
+                                mineralP -= pivotOffset;
+                                mineralP += (0.5f * mLateral + 0.5f * mUp);
+                                
+                                mineralP += zOffset * cameraZ;
+                                zOffset += 0.001f;
+                                
+                                Vec4 windInfluences = V4(0, 0, 0, 0);
+                                u8 windFrequency = 1;
+                                u8 seed = (u8) mineralPointIndex;
+                                r32 dissolveCoeff = GetDissolveCoeff(rock->mineralDensity, mineralRunningIndex++);
+                                dissolveCoeff = Max(dissolveCoeff, params.dissolveCoeff);
+                                Vec4 dissolvePercentages = dissolveCoeff * V4(1, 1, 1, 1);
+                                r32 alphaThreesold = 0;
+                                b32 flat = false;
+                                
+                                u32 mineralC = StoreColor(b.coloration);
+                                
+                                PushMagicQuad(group, mineralP, flat, 0.5f * mLateral, 0.5f * mUp, mineralInvUV, mineralC, mineralBitmap->textureHandle, lights, params.modulationPercentage, 0, 0, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, seed);
+                            }
+                            else
+                            {
+                                LoadBitmap(group->assets, mineralID);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 RENDERING_ECS_JOB_CLIENT(RenderPlant)
 {
     u64 branchHash = StringHash("branch");
@@ -214,9 +337,13 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
         r32 height = GetHeight(base->bounds);
         Vec3 P = GetRelativeP(worldMode, base);
         Lights lights = GetLights(worldMode, P);
-        StandardImageComponent* image = GetComponent(worldMode, ID, StandardImageComponent);
         
         PlantComponent* plant = GetComponent(worldMode, ID, PlantComponent);
+        
+        u32 branchC = StoreColor(plant->branchColor);
+        u32 leafC = StoreColor(plant->leafColor);
+        u32 flowerC = StoreColor(plant->flowerColor);
+        u32 fruitC = StoreColor(plant->fruitColor);
         
         RandomSequence seq = Seed(base->seed);
         BitmapId trunkID = GetImageFromReference(group->assets, &plant->trunk, &seq);
@@ -225,7 +352,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
             ObjectTransform transform = BillboardTransform();
             transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1);
             transform.modulationPercentage = params.modulationPercentage;
-            transform.tint = params.tint;
+            transform.tint = Hadamart(params.tint, plant->branchColor);
             
             BitmapDim bitmapData = PushBitmap(group, transform, trunkID, P, height, lights);
             
@@ -237,19 +364,42 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
                 BitmapId flowerIDs[8];
                 BitmapId fruitIDs[8];
                 
-                if(plant->hasVariant)
+                if(plant->hasLeafVariant)
                 {
                     for(u16 variantIndex = 0; variantIndex < ArrayCount(leafIDs); ++variantIndex)
                     {
-                        leafIDs[0] = GetImageFromReferenceVariantIndex(group->assets, &plant->leaf, &seq, variantIndex);
-                        flowerIDs[0] = GetImageFromReferenceVariantIndex(group->assets, &plant->flower, &seq, variantIndex);
-                        fruitIDs[0] = GetImageFromReferenceVariantIndex(group->assets, &plant->fruit, &seq, variantIndex);
+                        leafIDs[variantIndex] = GetImageFromReferenceVariantIndex(group->assets, &plant->leaf, &seq, variantIndex);
                     }
                 }
                 else
                 {
                     leafIDs[0] = GetImageFromReference(group->assets, &plant->leaf, &seq);
+                }
+                
+                
+                
+                if(plant->hasFlowerVariant)
+                {
+                    for(u16 variantIndex = 0; variantIndex < ArrayCount(leafIDs); ++variantIndex)
+                    {
+                        flowerIDs[variantIndex] = GetImageFromReferenceVariantIndex(group->assets, &plant->flower, &seq, variantIndex);
+                    }
+                }
+                else
+                {
                     flowerIDs[0] = GetImageFromReference(group->assets, &plant->flower, &seq);
+                }
+                
+                
+                if(plant->hasFruitVariant)
+                {
+                    for(u16 variantIndex = 0; variantIndex < ArrayCount(leafIDs); ++variantIndex)
+                    {
+                        fruitIDs[variantIndex] = GetImageFromReferenceVariantIndex(group->assets, &plant->fruit, &seq, variantIndex);
+                    }
+                }
+                else
+                {
                     fruitIDs[0] = GetImageFromReference(group->assets, &plant->fruit, &seq);
                 }
                 
@@ -275,7 +425,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
                     if(bHash == branchHash)
                     {
                         BitmapId branchID;
-                        if(plant->hasVariant)
+                        if(plant->hasBranchVariant)
                         {
                             branchID = GetImageFromReferenceVariantIndex(group->assets, &plant->branch, &seq, branchIndex);
                         }
@@ -315,7 +465,6 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
                                 branchP += zOffset * cameraZ;
                                 zOffset += 0.001f;
                                 
-                                u32 C = 0xffffffff;
                                 Vec4 windInfluences = V4(0, 0, 0, 0);
                                 u8 windFrequency = 1;
                                 u8 seed = (u8) branchPointIndex;
@@ -323,7 +472,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
                                 r32 alphaThreesold = 0;
                                 b32 flat = false;
                                 
-                                PushMagicQuad(group, branchP, flat, 0.5f * bLateral, 0.5f * bUp, branchInvUV, C, branchBitmap->textureHandle, lights, params.modulationPercentage, 0, 0, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, seed);
+                                PushMagicQuad(group, branchP, flat, 0.5f * bLateral, 0.5f * bUp, branchInvUV, branchC, branchBitmap->textureHandle, lights, params.modulationPercentage, 0, 0, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, seed);
                                 
                                 Vec3 branchMin = branchP - 0.5f * bLateral - 0.5f * bUp;
                                 
@@ -337,6 +486,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
                                     
                                     u64 baseHash = StringHash(leaf->name);
                                     u16 variantIndex = 0;
+                                    u32 C = 0;
                                     
                                     u32 pound = FindFirstInString(leaf->name, '#');
                                     if(pound != 0xffffffff)
@@ -348,19 +498,23 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
                                     if(baseHash == leafHash)
                                     {
                                         LFF = leafIDs[variantIndex];
+                                        C = leafC;
                                         dissolveCoeff = GetDissolveCoeff(plant->leafDensity, leafRunningIndex++);
                                     }
                                     else if(baseHash == flowerHash)
                                     {
                                         LFF = flowerIDs[variantIndex];
+                                        C = flowerC;
                                         dissolveCoeff = GetDissolveCoeff(plant->flowerDensity, flowerRunningIndex++);
                                     }
                                     else if(baseHash == fruitHash)
                                     {
                                         LFF = fruitIDs[variantIndex];
+                                        C = fruitC;
                                         dissolveCoeff = GetDissolveCoeff(plant->fruitDensity, fruitRunningIndex++);
                                     }
                                     
+                                    dissolveCoeff = Max(dissolveCoeff, params.dissolveCoeff);
                                     if(IsValid(LFF))
                                     {
                                         Bitmap* LFFBitmap = GetBitmap(group->assets, LFF).bitmap;
@@ -386,8 +540,6 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
                                             
                                             leafP += zOffset * cameraZ;
                                             zOffset += 0.001f;
-                                            
-                                            C = 0xffffffff;
                                             
                                             windInfluences = V4(0, 0, plant->windInfluence, plant->windInfluence);
                                             windFrequency = 1;
@@ -605,32 +757,39 @@ RENDERING_ECS_JOB_CLIENT(RenderMultipartEntity)
 internal void RenderLayoutInRectCameraAligned(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, Vec3 rectP, Rect2 cameraRect, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container, r32 elapsedTime);
 internal void RenderLayoutInRect(GameModeWorld* worldMode, RenderGroup* group, Rect2 rect, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container, r32 elapsedTime, r32 zOffset = 0.0f);
 internal void OverdrawEssence(GameModeWorld* worldMode, RenderGroup* group, ObjectTransform transform, u16 essence, Rect2 rect, Vec4 color);
-internal void DrawObjectMapping(GameModeWorld* worldMode, RenderGroup* group, ObjectMapping* mapping, ObjectTransform transform, Vec3 P, BitmapDim spaceDim, Rect2 rect, Lights lights, r32 elapsedTime)
+
+
+internal void RenderObjectInRect(GameModeWorld* worldMode, RenderGroup* group, EntityID objectID, ObjectTransform transform, Vec3 P, Vec3 spaceP, Rect2 rect, Lights lights, r32 elapsedTime)
 {
-    if(IsValidInventoryMapping(&worldMode->gameUI, mapping))
+    BaseComponent* objectBase = GetComponent(worldMode, objectID, BaseComponent);
+    EntityAnimationParams params = GetEntityAnimationParams(worldMode, objectID);
+    transform.modulationPercentage = params.modulationPercentage;
+    transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1);
+    LayoutComponent* objectLayout = GetComponent(worldMode, objectID, LayoutComponent);
+    
+    if(objectBase && objectLayout)
     {
-        EntityID objectID = mapping->object.ID;
-        BaseComponent* objectBase = GetComponent(worldMode, objectID, BaseComponent);
-        EntityAnimationParams params = GetEntityAnimationParams(worldMode, objectID);
-        transform.modulationPercentage = params.modulationPercentage;
-        transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1);
-        LayoutComponent* objectLayout = GetComponent(worldMode, objectID, LayoutComponent);
+        LayoutContainer objectContainer = {};
+        objectContainer.container = GetComponent(worldMode, objectID, ContainerComponent);
+        objectContainer.recipeEssences = GetComponent(worldMode, objectID, RecipeEssenceComponent);
         
-        if(objectBase && objectLayout)
+        if(transform.upright)
         {
-            LayoutContainer objectContainer = {};
-            objectContainer.container = GetComponent(worldMode, objectID, ContainerMappingComponent);
-            objectContainer.recipeEssences = GetComponent(worldMode, objectID, RecipeEssenceComponent);
-            
-            if(transform.upright)
-            {
-                RenderLayoutInRectCameraAligned(worldMode, group, P, spaceDim.P, rect, transform, objectLayout, objectBase->seed, lights, &objectContainer, elapsedTime);
-            }
-            else
-            {
-                RenderLayoutInRect(worldMode, group, rect, transform, objectLayout, objectBase->seed, lights, &objectContainer, elapsedTime);
-            }
+            RenderLayoutInRectCameraAligned(worldMode, group, P, spaceP, rect, transform, objectLayout, objectBase->seed, lights, &objectContainer, elapsedTime);
         }
+        else
+        {
+            RenderLayoutInRect(worldMode, group, rect, transform, objectLayout, objectBase->seed, lights, &objectContainer, elapsedTime);
+        }
+    }
+}
+
+internal void DrawObjectSlot(GameModeWorld* worldMode, RenderGroup* group, InventorySlot* slot, ObjectTransform transform, Vec3 P, BitmapDim spaceDim, Rect2 rect, Lights lights, r32 elapsedTime)
+{
+    if(IsValidInventorySlot(&worldMode->gameUI, slot))
+    {
+        EntityID objectID = GetBoundedID(slot);
+        RenderObjectInRect(worldMode, group, objectID, transform, P, spaceDim.P, rect, lights, elapsedTime);
     }
 }
 
@@ -646,9 +805,7 @@ internal void DrawRecipe(GameModeWorld* worldMode, RenderGroup* group, u32 recip
         for(u32 slotIndex = 0; slotIndex < ArrayCount(essences->essences); ++slotIndex)
         {
             essences->projectedOnScreen[slotIndex] = essenceRect;
-            
             u16 essence = essences->essences[slotIndex];
-            
             BaseComponent* playerBase = GetComponent(worldMode, worldMode->player.clientID, BaseComponent);
             
             Vec4 color = V4(1, 1, 1, 1);
@@ -665,14 +822,58 @@ internal void DrawRecipe(GameModeWorld* worldMode, RenderGroup* group, u32 recip
         }
     }
     
+    EntityRef type = GetCraftingType(group->assets, recipeSeed);
+    u32 craftSeed = recipeSeed;
+    
+    EntityRef components[8];
+    b32 deleteAfterCrafting[8];
+    u16 componentCount = GetCraftingComponents(group->assets, type, craftSeed, components, deleteAfterCrafting, ArrayCount(components));
+    
+    Vec2 startingCompP = rect.min + 0.5f * V2(GetDim(rect).x, 0);
+    Rect2 componentRect = RectMinDim(startingCompP, 0.5f * GetDim(rect));
+    for(u16 componentIndex = 0; componentIndex < componentCount; ++componentIndex)
+    {
+        EntityID ID;
+        if(EntityHasType(worldMode, worldMode->player.clientID, components[componentIndex], &ID))
+        {
+            transform.tint = V4(1, 1, 1, 1);
+            RenderObjectInRect(worldMode, group, ID, transform, P, spaceDim.P, componentRect, lights, 0);
+        }
+        else
+        {
+            transform.tint.a *= 0.4f;
+            
+            u32 componentSeed = 0;
+            LayoutComponent layout = {};
+            EntityDefinition* definition = GetEntityTypeDefinition(group->assets, components[componentIndex]);
+            
+            CommonEntityInitParams common = definition->common;
+            common.definitionID = type;
+            common.essences = 0;
+            ClientEntityInitParams entityParams = definition->client;
+            entityParams.seed = componentSeed;
+            
+            InitLayoutComponent(worldMode, &layout, {}, &common, 0, &entityParams);
+            LayoutContainer componentContainer = {};
+            
+            if(transform.upright)
+            {
+                RenderLayoutInRectCameraAligned(worldMode, group, P, spaceDim.P, componentRect, transform, &layout, componentSeed, lights, &componentContainer, 0);
+            }
+            else
+            {
+                RenderLayoutInRect(worldMode, group, componentRect, transform, &layout, componentSeed, lights, &componentContainer, 0, 0);
+            }
+        }
+    }
+    
+    
     Vec2 recipeDim = 0.5f * GetDim(rect);
     Vec2 recipeMin = V2(rect.min.x, rect.min.y + recipeDim.y);
     Rect2 recipeRect = RectMinDim(recipeMin, recipeDim);
     
     LayoutComponent layout = {};
-    EntityRef type = GetCraftingType(group->assets, recipeSeed);
     EntityDefinition* definition = GetEntityTypeDefinition(group->assets, type);
-    
     
     CommonEntityInitParams common = definition->common;
     common.definitionID = type;
@@ -695,23 +896,22 @@ internal void DrawRecipe(GameModeWorld* worldMode, RenderGroup* group, u32 recip
 
 
 
-internal ObjectMapping* FindCompatibleMapping(ObjectMapping* mappings, u32 mappingCount, b32* alreadyDrawn, u32 alreadyDrawnCount, u16 inventorySlotType)
+internal InventorySlot* FindCompatibleSlot(InventorySlot* slots, u32 slotCount, b32* alreadyDrawn, u32 alreadyDrawnCount, u16 inventorySlotType)
 {
-    Assert(mappingCount == alreadyDrawnCount);
+    Assert(slotCount == alreadyDrawnCount);
     
-    ObjectMapping* result = 0;
-    for(u32 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
+    InventorySlot* result = 0;
+    for(u32 slotIndex = 0; slotIndex < slotCount; ++slotIndex)
     {
-        ObjectMapping* mapping = mappings + mappingIndex;
-        InventorySlot* slot = &mapping->object;
+        InventorySlot* slot = slots + slotIndex;
         
         u16 slotType = SafeTruncateToU16(slot->flags_type & 0xffff);
         if(slotType == inventorySlotType)
         {
-            if(!alreadyDrawn[mappingIndex])
+            if(!alreadyDrawn[slotIndex])
             {
-                alreadyDrawn[mappingIndex] = true;
-                result = mapping;
+                alreadyDrawn[slotIndex] = true;
+                result = slot;
                 break;
             }
         }
@@ -785,30 +985,30 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                 PushBitmap(group, transform, BID, P, piece->height, lights);
                 if(container->container)
                 {
-                    ContainerMappingComponent* c = container->container;
+                    ContainerComponent* c = container->container;
                     if(piece->nameHash == emptySpaceHash)
                     {
-                        ObjectMapping* mapping = FindCompatibleMapping(c->storedMappings, ArrayCount(c->storedMappings),container->storedObjectsDrawn, ArrayCount(container->storedObjectsDrawn),piece->inventorySlotType);
-                        if(mapping)
+                        InventorySlot* slot = FindCompatibleSlot(c->storedObjects, ArrayCount(c->storedObjects),container->storedObjectsDrawn, ArrayCount(container->storedObjectsDrawn),piece->inventorySlotType);
+                        if(slot)
                         {
                             r32 zoomSpeed = 0.0f;
-                            if(mapping->hot)
+                            if(slot->hot)
                             {
-                                mapping->hot = false;
-                                zoomSpeed = (mapping->maxZoomCoeff - mapping->zoomCoeff);
+                                slot->hot = false;
+                                zoomSpeed = (slot->maxZoomCoeff - slot->zoomCoeff);
                             }
                             else
                             {
-                                zoomSpeed = -(mapping->zoomCoeff - 1.0f);
+                                zoomSpeed = -(slot->zoomCoeff - 1.0f);
                             }
-                            mapping->zoomCoeff += elapsedTime * zoomSpeed;
-                            mapping->zoomCoeff = Clamp(1.0f, mapping->zoomCoeff, mapping->maxZoomCoeff);
-                            Rect2 objectRect = Scale(result, mapping->zoomCoeff);
+                            slot->zoomCoeff += elapsedTime * zoomSpeed;
+                            slot->zoomCoeff = Clamp(1.0f, slot->zoomCoeff, slot->maxZoomCoeff);
+                            Rect2 objectRect = Scale(result, slot->zoomCoeff);
                             
-                            mapping->projOnScreen = Scale(result, mapping->zoomCoeff);
+                            slot->projOnScreen = Scale(result, slot->zoomCoeff);
                             ObjectTransform inventoryTransform = transform;
                             
-                            DrawObjectMapping(worldMode, group, mapping, inventoryTransform, P, dim, objectRect, lights, elapsedTime);
+                            DrawObjectSlot(worldMode, group, slot, inventoryTransform, P, dim, objectRect, lights, elapsedTime);
                         }
                         
                         result = InvertedInfinityRect2();
@@ -816,27 +1016,27 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                     
                     else if(piece->nameHash == usingSpaceHash)
                     {
-                        ObjectMapping* mapping = FindCompatibleMapping(c->usingMappings, ArrayCount(c->usingMappings), container->usingObjectsDrawn, ArrayCount(container->usingObjectsDrawn),piece->inventorySlotType);
-                        if(mapping)
+                        InventorySlot* slot = FindCompatibleSlot(c->usingObjects, ArrayCount(c->usingObjects), container->usingObjectsDrawn, ArrayCount(container->usingObjectsDrawn),piece->inventorySlotType);
+                        if(slot)
                         {
                             r32 zoomSpeed = 0.0f;
-                            if(mapping->hot)
+                            if(slot->hot)
                             {
-                                mapping->hot = false;
-                                zoomSpeed = (mapping->maxZoomCoeff - mapping->zoomCoeff);
+                                slot->hot = false;
+                                zoomSpeed = (slot->maxZoomCoeff - slot->zoomCoeff);
                             }
                             else
                             {
-                                zoomSpeed = -(mapping->zoomCoeff - 1.0f);
+                                zoomSpeed = -(slot->zoomCoeff - 1.0f);
                             }
-                            mapping->zoomCoeff += elapsedTime * zoomSpeed * mapping->zoomSpeed;
-                            mapping->zoomCoeff = Clamp(1.0f, mapping->zoomCoeff, mapping->maxZoomCoeff);
-                            Rect2 objectRect = Scale(result, mapping->zoomCoeff);
+                            slot->zoomCoeff += elapsedTime * zoomSpeed * slot->zoomSpeed;
+                            slot->zoomCoeff = Clamp(1.0f, slot->zoomCoeff, slot->maxZoomCoeff);
+                            Rect2 objectRect = Scale(result, slot->zoomCoeff);
                             
-                            mapping->projOnScreen = result;
+                            slot->projOnScreen = result;
                             ObjectTransform inventoryTransform = transform;
                             
-                            DrawObjectMapping(worldMode, group, mapping, inventoryTransform, P, dim, objectRect, lights, elapsedTime);
+                            DrawObjectSlot(worldMode, group, slot, inventoryTransform, P, dim, objectRect, lights, elapsedTime);
                         }
                         result = InvertedInfinityRect2();
                     }
@@ -956,7 +1156,7 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
         transform.modulationPercentage = params.modulationPercentage; 
         transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1); 
         
-        ContainerMappingComponent* container = GetComponent(worldMode, ID, ContainerMappingComponent);
+        ContainerComponent* container = GetComponent(worldMode, ID, ContainerComponent);
         LayoutContainer layoutContainer = {};
         if(container && AreEqual(container->openedBy, worldMode->player.serverID))
         {
@@ -1201,6 +1401,15 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
     {
         effects->lightIntensity = averageLightIntensity *= 1.0f / lightCount;
         effects->lightColor = averageLightColor *= 1.0f / lightCount;
+    }
+    
+    
+    AliveComponent* alive = GetComponent(worldMode, ID, AliveComponent);
+    if(alive)
+    {
+        r32 hRatio = (r32) alive->physicalHealth / (r32)alive->maxPhysicalHealth;
+        Vec4 lifeColor = V4(hRatio, hRatio, hRatio, 1.0f);
+        effects->params.tint = Hadamart(effects->params.tint, lifeColor);
     }
     
 }

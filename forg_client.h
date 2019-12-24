@@ -66,7 +66,6 @@ struct BaseComponent
     r32 fadeOutTime;
     
     GameProperty properties[Network_Count];
-    
     u16 essences[Count_essence];
 };
 
@@ -90,20 +89,37 @@ internal r32 GetDeepness(Rect3 bounds)
 
 struct PlantComponent
 {
+    Vec4 branchColor;
+    b32 hasBranchVariant;
+    
     ImageReference trunk;
     ImageReference branch;
     
-    
-    b32 hasVariant;
+    b32 hasLeafVariant;
+    Vec4 leafColor;
     ImageReference leaf;
-    ImageReference flower;
-    ImageReference fruit;
-    
     r32 leafDensity;
+    
+    b32 hasFlowerVariant;
+    Vec4 flowerColor;
+    ImageReference flower;
     r32 flowerDensity;
+    
+    b32 hasFruitVariant;
+    Vec4 fruitColor;
+    ImageReference fruit;
     r32 fruitDensity;
     
     r32 windInfluence;
+};
+
+struct RockComponent
+{
+    Vec4 color;
+    ImageReference rock;
+    ImageReference mineral;
+    
+    r32 mineralDensity;
 };
 
 struct GrassComponent
@@ -116,6 +132,7 @@ struct GrassComponent
     Rect3 bounds;
 };
 
+#include "forg_brain.h"
 #include "forg_archetypes.h"
 #include "client_generated.h"
 global_variable ArchetypeLayout archetypeLayouts[Archetype_Count];
@@ -182,6 +199,10 @@ struct GameModeWorld
     r32 stateTime;
     
     u16 season;
+    
+    b32 resetDayTime;
+    r32 dayTimeTime;
+    u16 previousDayTime;
     u16 dayTime;
     
     r32 defaultZoomCoeff;

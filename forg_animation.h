@@ -118,6 +118,8 @@ struct AnimationComponent
     b32 defaultScaleComputed;
     r32 scale;
     r32 speed;
+    
+    Vec3 spawnProjectileOffset;
 };
 
 struct AnimationPiece
@@ -166,8 +168,8 @@ struct AnimationParams
     r32 scale;
     b32 flipOnYAxis;
     ObjectTransform transform;
-    EquipmentMappingComponent* equipment;
-    UsingMappingComponent* equipped;
+    EquipmentComponent* equipment;
+    UsingComponent* equipped;
     r32 modulationPercentage;
     b32 fakeAnimation;
     

@@ -76,6 +76,10 @@ enum MetaType
     MetaType_SoundMappingDefinition,
     MetaType_SoundEffectDefinition,
     MetaType_InventorySlots,
+    MetaType_BrainParams,
+    MetaType_BiomeBand,
+    MetaType_BiomeConfiguration,
+    MetaType_CraftingComponent
 };
 
 enum FieldMetaFlags

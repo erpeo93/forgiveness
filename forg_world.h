@@ -6,6 +6,7 @@
 #define UPDATE_DISTANCE (WORLD_CHUNK_APRON + 1) * CHUNK_SIDE
 #define WORLD_CHUNK_SPAN 16
 #define WORLD_SIDE WORLD_CHUNK_SPAN * CHUNK_SIDE
+#define DAYPHASE_DURATION 30.0f
 
 introspection() struct UniversePos
 {

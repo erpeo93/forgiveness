@@ -210,7 +210,7 @@ struct EntityHotInteraction
     u16 actions[8];
     
     u16 objectIndex;
-    ObjectMapping* mapping;
+    InventorySlot* slot;
     EntityID containerIDServer;
     EntityID entityIDServer;
     EntityID usingIDServer;

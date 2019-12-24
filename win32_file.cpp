@@ -145,6 +145,7 @@ internal PLATFORM_GET_ALL_SUBDIRECTORIES(Win32GetAllSubdirectories)
             {
                 if(findData.cFileName[0] != '.')
                 {
+                    Assert(output->count < ArrayCount(output->names));
                     char* dest = output->names[output->count++];
                     StrCopy(findData.cFileName, StrLen(findData.cFileName), dest);
                 }

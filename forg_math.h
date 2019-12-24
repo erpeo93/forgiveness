@@ -144,6 +144,15 @@ inline r32 Length( Vec3 v )
     return result;
 }
 
+inline Vec3 OneOver(Vec3 v)
+{
+    Vec3 result = {};
+    if(v.x){result.x = 1.0f / v.x;}
+    if(v.y){result.y = 1.0f / v.y;}
+    if(v.z){result.z = 1.0f / v.z;}
+    return result;
+}
+
 inline r32 DegToRad( r32 degrees )
 {
     r32 result = degrees / 180.0f * PI32;

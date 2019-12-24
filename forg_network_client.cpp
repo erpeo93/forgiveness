@@ -218,38 +218,38 @@ internal void AddClientIDMapping(GameModeWorld* worldMode, EntityID serverID, En
     FREELIST_INSERT(mapping, worldMode->mappings[hashIndex]);
 }
 
-internal void StoreObjectMapping(GameModeWorld* worldMode, ObjectMapping* mappings, u32 mappingCount, u16 index, u32 flags_type, EntityID ID, u64 stringHash)
+internal void StoreInventorySlot(GameModeWorld* worldMode, InventorySlot* slots, u32 slotCount, u16 index, u32 flags_type, EntityID ID, u64 stringHash)
 {
-    Assert(index < mappingCount);
+    Assert(index < slotCount);
     
-    ObjectMapping* mapping = mappings + index;
-    mapping->object.flags_type = flags_type;
-    mapping->object.ID = ID;
-    mapping->slotHash = stringHash;
-    mapping->pieceHash = 0;
-    mapping->zoomCoeff = 1.0;
-    mapping->zoomSpeed = 1.0f;
-    mapping->maxZoomCoeff = 1.0f;
+    InventorySlot* slot = slots + index;
+    slot->flags_type = flags_type;
+    slot->ID = ID;
+    slot->slotHash = stringHash;
+    slot->pieceHash = 0;
+    slot->zoomCoeff = 1.0;
+    slot->zoomSpeed = 1.0f;
+    slot->maxZoomCoeff = 1.0f;
     
     if(IsValidID(ID))
     {
         BaseComponent* objectBase = GetComponent(worldMode, ID, BaseComponent);
         EntityDefinition* definition = GetEntityTypeDefinition(worldMode->gameState->assets, objectBase->definitionID);
         
-        mapping->pieceHash = StringHash(definition->client.name.name);
-        mapping->zoomSpeed = definition->client.slotZoomSpeed;
-        mapping->maxZoomCoeff = definition->client.maxSlotZoom;
+        slot->pieceHash = StringHash(definition->client.name.name);
+        slot->zoomSpeed = definition->client.slotZoomSpeed;
+        slot->maxZoomCoeff = definition->client.maxSlotZoom;
     }
 }
 
-internal void RemoveObjectMapping(ObjectMapping* mappings, u32 mappingCount, EntityID ID)
+internal void RemoveInventorySlot(InventorySlot* slots, u32 slotCount, EntityID ID)
 {
-    for(u32 index = 0; index < mappingCount; ++index)
+    for(u32 index = 0; index < slotCount; ++index)
     {
-        ObjectMapping* mapping = mappings + index;
-        if(AreEqual(mapping->object.ID, ID))
+        InventorySlot* slot = slots + index;
+        if(AreEqual(slot->ID, ID))
         {
-            mapping->object.ID = {};
+            slot->ID = {};
         }
     }
 }
@@ -354,8 +354,9 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
             case Type_gameAccess:
             {
                 b32 deleteEntities = false;
-                Unpack("LLl", &worldMode->worldSeed, 
-                       &player->serverID.archetype_archetypeIndex, &deleteEntities);
+                b32 isGhost = false;
+                Unpack("LLll", &worldMode->worldSeed, 
+                       &player->serverID.archetype_archetypeIndex, &deleteEntities, &isGhost);
                 player->clientID = {};
                 
                 if(deleteEntities)
@@ -367,7 +368,10 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     EXECUTE_JOB(worldMode, DeleteEntities, true, 0);
                 }
                 
-                SetState(worldMode, PlayingGame_None);
+                if(!isGhost)
+                {
+                    SetState(worldMode, PlayingGame_None);
+                }
             } break;
             
             case Type_GameOver:
@@ -412,6 +416,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 u16 action = 0;
                 u16 status = 0;
                 u32 flags = 0;
+                EntityID spawnerID = {};
 				
 				u16 receivedFlags;
 				Unpack("H", &receivedFlags);
@@ -459,6 +464,13 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 					Unpack("L", &flags);
 				}
                 
+				if(receivedFlags & (u16) EntityBasics_Spawner)
+				{
+                    EntityID spawnerIDServer;
+					Unpack("L", &spawnerIDServer);
+                    spawnerID = GetClientIDMapping(worldMode, spawnerIDServer);
+				}
+                
                 b32 justCreated = false;
 				if(receivedFlags & EntityBasics_Definition)
 				{
@@ -500,7 +512,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 					if(receivedFlags & EntityBasics_Position)
                     {
                         b32 coldSetPosition = false;
-						if(justCreated)
+						if(justCreated || (base->flags & EntityFlag_notInWorld) || (base->flags & EntityFlag_ghost))
 						{
                             coldSetPosition = true;
                         }
@@ -519,21 +531,38 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                                 r32 lerp = Clamp01MapToRange(minDistance, distance, maxDistance);
                                 Vec3 maxSpeed = Normalize(deltaClientServer);
                                 base->velocity = Lerp(base->velocity, lerp, maxSpeed);
-                                
-                                Assert(LengthSq(base->velocity) < Square(1000.0f));
                             }
 						}
                         
                         if(coldSetPosition)
                         {
+                            if(IsValidID(spawnerID))
+                            {
+                                BaseComponent* spawner = GetComponent(worldMode, spawnerID, BaseComponent);
+                                
+                                Vec3 projectileOffset = {};
+                                AnimationComponent* animation = GetComponent(worldMode, spawnerID, AnimationComponent);
+                                if(animation)
+                                {
+                                    projectileOffset = animation->spawnProjectileOffset;
+                                }
+                                UniversePos spawnedP = Offset(spawner->universeP, projectileOffset);
+                                base->universeP = spawnedP;
+                            }
+                            else
+                            {
+                                base->universeP = P;
+                            }
+                            
                             if(!(base->flags & EntityFlag_notInWorld))
                             {
                                 base->totalLifeTime = 0;
                             }
-                            base->universeP = P;
+                            
                             if(AreEqual(currentClientID, player->clientID))
                             {
                                 player->universeP = P;
+                                worldMode->resetDayTime = true;
                             }
                         }
                     }
@@ -559,8 +588,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     
                     base->timeSinceLastUpdate = 0;
                     //base->deletedTime = 0;
-                    
-                    
                     
 #if 0                    
                     if(???)
@@ -620,9 +647,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
                 r32 attackDistance = 0;
                 r32 attackContinueCoeff = 0;
+                r32 lightRadious = 0;
                 
                 UnpackFlags(MiscFlag_AttackDistance, "d", &attackDistance);
                 UnpackFlags(MiscFlag_AttackContinueCoeff, "d", &attackContinueCoeff);
+                UnpackFlags(MiscFlag_LightRadious, "d", &lightRadious);
                 
                 MiscComponent* misc = GetComponent(worldMode, currentClientID, MiscComponent);
                 if(misc)
@@ -635,6 +664,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     if(receivedFlags & MiscFlag_AttackContinueCoeff)
                     {
                         misc->attackContinueCoeff = attackContinueCoeff;
+                    }
+                    
+                    if(receivedFlags & MiscFlag_LightRadious)
+                    {
+                        misc->lightRadious = lightRadious;
                     }
                 }
                 
@@ -687,11 +721,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 					{
 						case Mapping_Equipment:
 						{
-                            EquipmentMappingComponent* equipment = GetComponent(worldMode, currentClientID, EquipmentMappingComponent);
+                            EquipmentComponent* equipment = GetComponent(worldMode, currentClientID, EquipmentComponent);
                             
                             if(equipment)
                             {
-                                StoreObjectMapping(worldMode, equipment->mappings, ArrayCount(equipment->mappings), index, flags_type, ID, StringHash(MetaTable_equipmentSlot[index]));
+                                StoreInventorySlot(worldMode, equipment->slots, ArrayCount(equipment->slots), index, flags_type, ID, StringHash(MetaTable_equipmentSlot[index]));
                                 
                             }
                             else
@@ -701,10 +735,10 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 						} break;
                         
 						case Mapping_Using:
-						{               UsingMappingComponent* equipped = GetComponent(worldMode, currentClientID, UsingMappingComponent);
+						{               UsingComponent* equipped = GetComponent(worldMode, currentClientID, UsingComponent);
                             if(equipped)
                             {
-                                StoreObjectMapping(worldMode, equipped->mappings, ArrayCount(equipped->mappings), index, flags_type, ID, StringHash(MetaTable_usingSlot[index]));
+                                StoreInventorySlot(worldMode, equipped->slots, ArrayCount(equipped->slots), index, flags_type, ID, StringHash(MetaTable_usingSlot[index]));
                             }
                             else
                             {
@@ -715,11 +749,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         
 						case Mapping_ContainerStored:
 						{
-                            ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
+                            ContainerComponent* container = GetComponent(worldMode, currentClientID, ContainerComponent);
                             
                             if(container)
                             {
-                                StoreObjectMapping(worldMode, container->storedMappings, ArrayCount(container->storedMappings), index, flags_type, ID, 0);
+                                StoreInventorySlot(worldMode, container->storedObjects, ArrayCount(container->storedObjects), index, flags_type, ID, 0);
                             }
                             else
                             {
@@ -729,11 +763,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         
 						case Mapping_ContainerUsing:
 						{
-                            ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
+                            ContainerComponent* container = GetComponent(worldMode, currentClientID, ContainerComponent);
                             
                             if(container)
                             {
-                                StoreObjectMapping(worldMode, container->usingMappings, ArrayCount(container->usingMappings), index, flags_type, ID, 0);
+                                StoreInventorySlot(worldMode, container->usingObjects, ArrayCount(container->usingObjects), index, flags_type, ID, 0);
                             }
                             else
                             {
@@ -756,7 +790,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         
 						case Mapping_OpenedBy:
 						{
-                            ContainerMappingComponent* container = GetComponent(worldMode, currentClientID, ContainerMappingComponent);
+                            ContainerComponent* container = GetComponent(worldMode, currentClientID, ContainerComponent);
                             
                             if(container)
                             {
@@ -798,14 +832,17 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 
 			} break;
             
-            case Type_Season:
-            {
-                Unpack("H", &worldMode->season);
-            } break;
-            
             case Type_DayTime:
             {
+                worldMode->previousDayTime = worldMode->dayTime;
                 Unpack("H", &worldMode->dayTime);
+                worldMode->dayTimeTime = 0;
+                
+                if(worldMode->resetDayTime)
+                {
+                    worldMode->previousDayTime = worldMode->dayTime;
+                    worldMode->resetDayTime = false;
+                }
             } break;
             
 #if 0            

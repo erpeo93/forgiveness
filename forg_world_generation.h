@@ -62,6 +62,22 @@ introspection() struct ZSlice
     NoiseParams darknessNoise;
 };
 
+introspection() struct BiomeBand
+{
+    r32 referenceHeight;
+    GameProperty tile MetaDefault("{Property_tileType, tile_invalid}") MetaFixed(property);
+};
+
+introspection() struct BiomeConfiguration
+{
+    ArrayCounter biomeBandCount MetaCounter(biomeBands);
+    BiomeBand* biomeBands;
+    
+    GameProperty underSeaLevelFluid;
+    ArrayCounter underwaterSoundCount MetaCounter(underwaterSounds);
+    SoundMappingDefinition* underwaterSounds;
+};
+
 introspection() struct world_generator
 {
     NoiseParams landscapeNoise;
@@ -81,6 +97,10 @@ introspection() struct world_generator
     
     ArrayCounter zSlicesCount MetaCounter(zSlices);
     ZSlice* zSlices;
+    
+    ArrayCounter biomeConfigurationCount MetaCounter(biomeConfigurations);
+    BiomeConfiguration* biomeConfigurations;
+    
 };
 
 inline NoiseParams NoisePar(r32 frequency, u32 octaves, r32 min, r32 max,r32 persistance = 0.5f)
@@ -112,6 +132,10 @@ introspection() struct SpawnerEntity
     GameProperty repulsionTile MetaDefault("{Property_tileType, tile_invalid}") MetaFixed(property);
     GameProperty repulsionFluid MetaDefault("{Property_fluid, fluid_invalid}") MetaFixed(property);
     u32 repulsionRadious;
+    
+    GameProperty requiredTile MetaDefault("{Property_tileType, tile_invalid}") MetaFixed(property);
+    GameProperty requiredFluid MetaDefault("{Property_fluid, fluid_invalid}") MetaFixed(property);
+    u32 requiredRadious;
 };
 
 introspection() struct SpawnerOption

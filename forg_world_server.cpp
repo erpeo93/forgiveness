@@ -38,21 +38,15 @@ internal void AddEntity(ServerState* server, UniversePos P, u32 seed, EntityRef 
     AddEntity_(server, P, definitionID, seed, params);
 }
 
-internal EntityRef GetEntityType(ServerState* server, EntityID ID)
-{
-    EntityRef result = {};
-    if(IsValidID(ID))
-    {
-        DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-        result = def->definitionID;
-    }
-    
-    return result;
-}
-
 internal void SpawnPlayer(ServerState* server, UniversePos P, AddEntityParams params)
 {
     EntityRef type = EntityReference(server->assets, "default", "human");
+    AddEntity(server, P, &server->entropy, type, params);
+}
+
+internal void SpawnZombie(ServerState* server, UniversePos P, AddEntityParams params)
+{
+    EntityRef type = EntityReference(server->assets, "default", "wolf");
     AddEntity(server, P, &server->entropy, type, params);
 }
 
@@ -72,6 +66,10 @@ internal void MakeTangible(ServerState* server, EntityID ID)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     ClearEntityFlags(def, EntityFlag_notInWorld);
+    
+    r32 maxDropDistance = 0.3f;
+    def->P.chunkOffset.xy += maxDropDistance * RandomBilV2(&server->entropy);
+    def->P = NormalizePosition(def->P);
     AddChangedFlags(def, &def->basicPropertiesChanged, EntityBasics_Position);
 }
 
@@ -334,57 +332,6 @@ internal b32 RemoveFromContainer(ServerState* server, ContainerComponent* contai
     return result;
 }
 
-
-internal b32 ContainerHasType(ServerState* server, ContainerComponent* container, EntityRef type, EntityID* outputID)
-{
-    b32 result = false;
-    if(container)
-    {
-        for(u32 objectIndex = 0; objectIndex < ArrayCount(container->storedObjects); ++objectIndex)
-        {
-            InventorySlot* slot = container->storedObjects + objectIndex;
-            if(slot->flags_type == InventorySlot_Invalid)
-            {
-                break;
-            }
-            
-            EntityID slotID = GetBoundedID(slot);
-            EntityRef slotType = GetEntityType(server, slotID);
-            if(AreEqual(slotType, type) && !(slot->flags_type & InventorySlot_Locked))
-            {
-                result = true;
-                *outputID = slotID;
-                break;
-            }
-        }
-        
-        if(!result)
-        {
-            for(u32 objectIndex = 0; objectIndex < ArrayCount(container->usingObjects); ++objectIndex)
-            {
-                InventorySlot* slot = container->usingObjects + objectIndex;
-                if(slot->flags_type == InventorySlot_Invalid)
-                {
-                    break;
-                }
-                
-                
-                EntityID slotID = GetBoundedID(slot);
-                EntityRef slotType = GetEntityType(server, slotID);
-                if(AreEqual(slotType, type) && !(slot->flags_type & InventorySlot_Locked))
-                {
-                    result = true;
-                    *outputID = slotID;
-                    break;
-                }
-            }
-            
-        }
-    }
-    
-    return result;
-}
-
 internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetID)
 {
     b32 result = false;
@@ -452,76 +399,6 @@ internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetI
     
     return result;
 }
-
-internal b32 EntityHasType(ServerState* server, EntityID ID, EntityRef type, EntityID* outputID)
-{
-    b32 result = false;
-    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-    if(equipment)
-    {
-        for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->slots); ++slotIndex)
-        {
-            InventorySlot* slot = equipment->slots + slotIndex;
-            EntityID slotID = GetBoundedID(slot);
-            EntityRef slotType = GetEntityType(server, slotID);
-            if(AreEqual(slotType, type))
-            {
-                result = true;
-                *outputID = slotID;
-                break;
-            }
-            else
-            {
-                if(ContainerHasType(server, GetComponent(server, GetBoundedID(slot), ContainerComponent), type, outputID))
-                {
-                    result= true;
-                    break;
-                }
-            }
-        }
-    }
-    
-    if(!result)
-    {
-        UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-        if(equipped)
-        {
-            
-            EntityRef draggingType = GetEntityType(server, equipped->draggingID.ID);
-            if(AreEqual(draggingType, type))
-            {
-                result = true;
-                *outputID = equipped->draggingID.ID;
-            }
-            else
-            {
-                for(u32 usingIndex = 0; usingIndex < ArrayCount(equipped->slots); ++usingIndex)
-                {
-                    InventorySlot* slot = equipped->slots + usingIndex;
-                    EntityID slotID = GetBoundedID(slot);
-                    EntityRef slotType = GetEntityType(server, slotID);
-                    if(AreEqual(slotType, type))
-                    {
-                        result = true;
-                        *outputID = slotID;
-                        break;
-                    }
-                    else
-                    {
-                        if(ContainerHasType(server, GetComponent(server, GetBoundedID(slot), ContainerComponent), type, outputID))
-                        {
-                            result= true;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    return result;
-}
-
 
 internal b32 RemoveAccordingToCommand(ServerState* server, EntityID ID, GameCommand* command)
 {
@@ -755,12 +632,25 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                         u16* essences = def->essences;
                         SkillDefComponent* active = GetComponent(server, skillID, SkillDefComponent);
                         
-                        u16 level = active->level;
-                        // TODO(Leonardo): 
-                        //SumGemEssencesBasedOnLevel?();
-                        
-                        UniversePos targetP = Offset(def->P, parameters->targetOffset);
-                        DispatchEntityEffects(server, targetP, cast, skillID, elapsedTime, essences);
+                        if(active->cooldown == 0)
+                        {
+                            u16 level = active->level;
+                            // TODO(Leonardo): 
+                            //SumGemEssencesBasedOnLevel?();
+                            
+                            UniversePos targetP = Offset(def->P, parameters->targetOffset);
+                            DispatchEntityEffects(server, targetP, cast, skillID, elapsedTime, essences);
+                        }
+                        else
+                        {
+                            if(action->time >= active->cooldown)
+                            {
+                                resetAction = true;
+                                UniversePos targetP = Offset(def->P, parameters->targetOffset);
+                                DispatchEntityEffects(server, targetP, cast, skillID, action->time, essences);
+                                SignalCompletedCommand(server, ID, command);
+                            }
+                        }
                     }
                 }
                 else
@@ -975,8 +865,9 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                     
                     
                     EntityRef components[8];
+                    b32 deleteComponent[8];
                     EntityID componentIDs[8];
-                    u16 componentCount = GetCraftingComponents(server->assets, type, craftSeed, components, ArrayCount(components));
+                    u16 componentCount = GetCraftingComponents(server->assets, type, craftSeed, components, deleteComponent, ArrayCount(components));
                     
                     b32 hasAllComponents = true;
                     for(u16 componentIndex = 0; componentIndex < componentCount; ++componentIndex)
@@ -1010,7 +901,6 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                         if(RemoveAccordingToCommand(server, ID, command))
                         {
                             DeleteEntity(server, command->targetID);
-                            
                             AddEntityParams params = DefaultAddEntityParams();
                             
                             
@@ -1029,16 +919,18 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                             }
                             
                             AddEntity(server, def->P, craftSeed, type, params);
-                            
                             for(u16 componentIndex = 0; componentIndex < componentCount; ++componentIndex)
                             {
-                                if(RemoveFromEntity(server, ID, componentIDs[componentIndex]))
+                                if(deleteComponent[componentIndex])
                                 {
-                                    DeleteEntity(server, componentIDs[componentIndex]);
-                                }
-                                else
-                                {
-                                    InvalidCodePath;
+                                    if(RemoveFromEntity(server, ID, componentIDs[componentIndex]))
+                                    {
+                                        DeleteEntity(server, componentIDs[componentIndex]);
+                                    }
+                                    else
+                                    {
+                                        InvalidCodePath;
+                                    }
                                 }
                             }
                         }
@@ -1104,6 +996,18 @@ STANDARD_ECS_JOB_SERVER(HandleOpenedContainers)
             SetBoundedID(&container->openedBy, {});
         }
     }
+}
+
+internal r32 GetLightRadiousSq(ServerState* server, EntityID ID)
+{
+    r32 result = 0;
+    
+    if(HasComponent(ID, MiscComponent))
+    {
+        MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+        result = Square(GetR32(misc->lightRadious));
+    }
+    return result;
 }
 
 STANDARD_ECS_JOB_SERVER(FillPlayerSpacePartition)
@@ -1217,12 +1121,17 @@ internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, P
     acceleration.xy += physic->drag * velocity.xy;
     Vec3 deltaP = 0.5f * acceleration * Square(dt) + velocity * dt;
     
+#if FORGIVENESS_INTERNAL
+    deltaP.x = Clamp(-g_maxDelta, deltaP.x, g_maxDelta);
+    deltaP.y = Clamp(-g_maxDelta, deltaP.y, g_maxDelta);
+    deltaP.z = Clamp(-g_maxDelta, deltaP.z, g_maxDelta);
+#else
     Assert(Abs(deltaP.x) <= g_maxDelta);
     Assert(Abs(deltaP.y) <= g_maxDelta);
     Assert(Abs(deltaP.z) <= g_maxDelta);
+#endif
     
     physic->speed += acceleration * dt;
-    
     r32 tRemaining = 1.0f;
     for( u32 iteration = 0; (iteration < 2) && tRemaining > 0; iteration++)
     {
@@ -1340,7 +1249,6 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     HandleEntityMovement(server, def, physic, ID, elapsedTime);
     
-    
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
     if(equipped)
     {
@@ -1410,46 +1318,97 @@ STANDARD_ECS_JOB_SERVER(DeleteAllEntities)
     FreeArchetype(server, ID);
 }
 
-internal void UpdateWorldBasics(ServerState* server, r32 elapsedTime)
+STANDARD_ECS_JOB_SERVER(DamageEntityFearingLight)
 {
-    
-	server->seasonTime += elapsedTime;
-    if(server->seasonTime >= 5.0f)
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    if(EntityHasFlags(def, EntityFlag_fearsLight))
     {
-        server->seasonTime = 0;
-        if(++server->season == Count_Season)
+        ZLayer* layer = server->layers + def->P.chunkZ;
+        if(layer->dayTimePhase == DayTime_Day)
         {
-            server->season = 0;
-        }
-        
-        for(CompIterator iter = FirstComponent(server, PlayerComponent); 
-            IsValid(iter); iter = Next(iter))
-        {
-            PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
-            if(player->connectionSlot && IsValidID(player->ID))
-            {
-                QueueSeason(player, server->season);
-            }
+            u32 damage = 1;
+            DamageEntityPhysically(server, ID, damage);
         }
     }
-    
-    
-    server->dayTimeTime += elapsedTime;
-    if(server->dayTimeTime >= 5.0f)
+}
+
+STANDARD_ECS_JOB_SERVER(DealLightDamage)
+{
+    r32 lightRadiousSq = GetLightRadiousSq(server, ID);
+    if(lightRadiousSq > 0)
     {
-        server->dayTimeTime = 0;
-        if(++server->dayTime == Count_DayTime)
+        DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+        SpatialPartitionQuery query = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
+        
+        for(EntityID testID = GetCurrent(&query); IsValid(&query); testID = Advance(&query))
         {
-            server->dayTime = 0;
+            DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
+            if(EntityHasFlags(testDef, EntityFlag_fearsLight))
+            {
+                Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
+                if(LengthSq(toTarget) <= 0.8f * lightRadiousSq)
+                {
+                    DamageEntityPhysically(server, testID, 1);
+                }
+            }
         }
         
-        for(CompIterator iter = FirstComponent(server, PlayerComponent); 
-            IsValid(iter); iter = Next(iter))
+    }
+}
+
+internal void UpdateWorldBasics(ServerState* server, r32 elapsedTime)
+{
+    for(i16 chunkZ = 0; chunkZ < server->maxDeepness; ++chunkZ)
+    {
+        ZLayer* layer = server->layers + chunkZ;
+        layer->dayTimeTime += elapsedTime;
+        if(layer->dayTimeTime >= DAYPHASE_DURATION)
         {
-            PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
-            if(player->connectionSlot && IsValidID(player->ID))
+            layer->dayTimeTime = 0;
+            if(++layer->dayTimePhase == Count_DayTime)
             {
-                QueueDayTime(player, server->dayTime);
+                layer->dayTimePhase = 0;
+            }
+            
+            for(CompIterator iter = FirstComponent(server, PlayerComponent); 
+                IsValid(iter); iter = Next(iter))
+            {
+                PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
+                if(player->connectionSlot && IsValidID(player->ID))
+                {
+                    DefaultComponent* def = GetComponent(server, player->ID, DefaultComponent);
+                    if(def->P.chunkZ == chunkZ)
+                    {
+                        QueueDayTime(player, layer->dayTimePhase);
+                    }
+                }
+            }
+        }
+        
+        if(layer->dayTimePhase == DayTime_Night)
+        {
+            for(CompIterator iter = FirstComponent(server, PlayerComponent); 
+                IsValid(iter); iter = Next(iter))
+            {
+                PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
+                if(player->connectionSlot && IsValidID(player->ID))
+                {
+                    DefaultComponent* playerDefault = GetComponent(server, player->ID, DefaultComponent);
+                    PhysicComponent* playerPhysic = GetComponent(server, player->ID, PhysicComponent);
+                    
+                    if(playerDefault->P.chunkZ == chunkZ)
+                    {
+                        player->timeSinceLastZombieSpawned += elapsedTime;
+                        r32 targetZombieTime = 1.0f;
+                        u32 stepCount = 30;
+                        if(player->timeSinceLastZombieSpawned >= targetZombieTime)
+                        {
+                            UniversePos P = FindWalkablePStartingFrom(server, playerDefault->P, stepCount);
+                            SpawnZombie(server, P, DefaultAddEntityParams());
+                            player->timeSinceLastZombieSpawned = 0;
+                        }
+                    }
+                }
             }
         }
     }

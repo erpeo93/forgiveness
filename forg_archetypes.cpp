@@ -63,10 +63,16 @@ INIT_COMPONENT_FUNCTION(InitDefaultComponent)
     def->seed = s->seed;
     def->definitionID = common->definitionID;
     def->status = InitU16(basicPropertiesChanged, EntityBasics_Status, 0);
+    def->spawnerID = {};
     
     if(s->canGoIntoWater)
     {
         AddEntityFlags(def, EntityFlag_canGoIntoWater);
+    }
+    
+    if(s->fearsLight)
+    {
+        AddEntityFlags(def, EntityFlag_fearsLight);
     }
     
     b32 addedSomething = false;
@@ -224,6 +230,7 @@ INIT_COMPONENT_FUNCTION(InitBrainComponent)
     
     *brain = {};
     
+    brain->state = BrainState_Wandering;
     brain->type = PropertyToU16(brainType, s->brainType);
     brain->ID = {};
 }
@@ -260,7 +267,8 @@ INIT_COMPONENT_FUNCTION(InitMiscComponent)
 {
     MiscComponent* misc = (MiscComponent*) componentPtr;
     misc->attackDistance = InitR32(miscPropertiesChanged, MiscFlag_AttackDistance, 1.0f);
-    misc->attackContinueCoeff = InitR32(miscPropertiesChanged, MiscFlag_AttackContinueCoeff, 4.0f);
+    misc->attackContinueCoeff = InitR32(miscPropertiesChanged, MiscFlag_AttackContinueCoeff, 2.0f);
+    misc->lightRadious = InitR32(miscPropertiesChanged, MiscFlag_LightRadious, s->lightRadious);
 }
 
 #else
@@ -287,6 +295,11 @@ INIT_COMPONENT_FUNCTION(InitBaseComponent)
     for(u32 propertyIndex = 0; propertyIndex < ArrayCount(base->properties); ++propertyIndex)
     {
         base->properties[propertyIndex] = {};
+    }
+    
+    for(u32 essenceIndex = 0; essenceIndex < Count_essence; ++essenceIndex)
+    {
+        base->essences[essenceIndex] = common->essences[essenceIndex];
     }
 }
 
@@ -330,11 +343,21 @@ INIT_COMPONENT_FUNCTION(InitAnimationComponent)
     animation->scale = 0;
     animation->speed = 1.0f;
     animation->defaultScaleComputed = false;
+    animation->spawnProjectileOffset = c->spawnProjectileOffset;
 }
 
 INIT_COMPONENT_FUNCTION(InitRockComponent)
 {
+    GameModeWorld* worldMode = (GameModeWorld*) state;
+    Assets* assets = worldMode->gameState->assets;
+    RockComponent* dest = (RockComponent*) componentPtr;
     
+    RandomSequence seq = Seed(c->seed);
+    InitImageReference(assets, &dest, &c, rock);
+    InitImageReference(assets, &dest, &c, mineral);
+    dest->color = RandomizeColor(c->rockColor, c->rockColorV, &seq);
+    
+    dest->mineralDensity = 1.0f;
 }
 
 INIT_COMPONENT_FUNCTION(InitGrassComponent)
@@ -355,13 +378,25 @@ INIT_COMPONENT_FUNCTION(InitPlantComponent)
     GameModeWorld* worldMode = (GameModeWorld*) state;
     Assets* assets = worldMode->gameState->assets;
     PlantComponent* dest = (PlantComponent*) componentPtr;
+    
+    RandomSequence seq = Seed(c->seed);
     InitImageReference(assets, &dest, &c, trunk);
+    dest->hasBranchVariant = c->hasBranchVariant;
+    dest->branchColor = RandomizeColor(c->branchColor, c->branchColorV, &seq);
     InitImageReference(assets, &dest, &c, branch);
     
-    dest->hasVariant = c->hasVariant;
+    dest->hasLeafVariant = c->hasLeafVariant;
+    dest->leafColor = RandomizeColor(c->leafColor, c->leafColorV, &seq);
     InitImageReference(assets, &dest, &c, leaf);
+    
+    dest->hasFlowerVariant = c->hasFlowerVariant;
+    dest->flowerColor = RandomizeColor(c->flowerColor, c->flowerColorV, &seq);
     InitImageReference(assets, &dest, &c, flower);
+    
+    dest->hasFruitVariant = c->hasFruitVariant;
+    dest->fruitColor = RandomizeColor(c->fruitColor, c->fruitColorV, &seq);
     InitImageReference(assets, &dest, &c, fruit);
+    
     dest->windInfluence = c->windInfluence;
     dest->leafDensity = 1.0f;
     dest->flowerDensity = 1.0f;
@@ -533,12 +568,12 @@ INIT_COMPONENT_FUNCTION(InitLayoutComponent)
     InitLayout(assets, dest->equippedPieces, &dest->equippedPieceCount, ArrayCount(dest->equippedPieces), c->equippedLayoutPieces, c->equippedPieceCount, essences);
 }
 
-INIT_COMPONENT_FUNCTION(InitEquipmentMappingComponent)
+INIT_COMPONENT_FUNCTION(InitEquipmentComponent)
 {
     
 }
 
-INIT_COMPONENT_FUNCTION(InitUsingMappingComponent)
+INIT_COMPONENT_FUNCTION(InitUsingComponent)
 {
     
 }
@@ -548,9 +583,9 @@ INIT_COMPONENT_FUNCTION(InitAnimationMappingComponent)
     
 }
 
-INIT_COMPONENT_FUNCTION(InitContainerMappingComponent)
+INIT_COMPONENT_FUNCTION(InitContainerComponent)
 {
-    ContainerMappingComponent* dest = (ContainerMappingComponent*) componentPtr;
+    ContainerComponent* dest = (ContainerComponent*) componentPtr;
     dest->zoomCoeff = c->lootingZoomCoeff;
     dest->displayInStandardMode = c->displayInStandardMode;
     dest->desiredOpenedDim = c->desiredOpenedDim;
@@ -612,6 +647,7 @@ INIT_COMPONENT_FUNCTION(InitMiscComponent)
     MiscComponent* misc = (MiscComponent*) componentPtr;
     misc->attackDistance = 0;
     misc->attackContinueCoeff = 0;
+    misc->lightRadious = 0;
 }
 
 INIT_COMPONENT_FUNCTION(InitSkillComponent)
@@ -623,6 +659,7 @@ INIT_COMPONENT_FUNCTION(InitSkillDefComponent)
     SkillDefComponent* skill = (SkillDefComponent*) componentPtr;
     skill->targetSkill = common->targetSkill;
     skill->level = 0;
+    skill->cooldown = common->cooldown;
 }
 
 INIT_COMPONENT_FUNCTION(InitRecipeEssenceComponent)

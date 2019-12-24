@@ -483,12 +483,12 @@ inline void ApplyAssAlterations(PieceAss* ass, AssAlteration* assAlt, Bone* pare
 #endif
 
 
-internal b32 IsValidUsingMapping(GameUIContext* UI, ObjectMapping* mapping, u16 slotIndex)
+internal b32 IsValidUsingSlot(GameUIContext* UI, InventorySlot* slot, u16 slotIndex)
 {
-    b32 result = IsValidID(mapping->object.ID);
+    b32 result = IsValidID(slot->ID);
     if(result)
     {
-        if(AreEqual(mapping->object.ID, UI->draggingIDServer))
+        if(AreEqual(slot->ID, UI->draggingIDServer))
         {
             result = false;
             if(UI->testingDraggingOnEquipment)
@@ -511,12 +511,12 @@ internal b32 IsValidUsingMapping(GameUIContext* UI, ObjectMapping* mapping, u16 
     return result;
 }
 
-internal b32 IsValidEquipmentMapping(GameUIContext* UI, ObjectMapping* mapping, u16 slotIndex)
+internal b32 IsValidEquipmentSlot(GameUIContext* UI, InventorySlot* slot, u16 slotIndex)
 {
-    b32 result = IsValidID(mapping->object.ID);
+    b32 result = IsValidID(slot->ID);
     if(result)
     {
-        if(AreEqual(mapping->object.ID, UI->draggingIDServer))
+        if(AreEqual(slot->ID, UI->draggingIDServer))
         {
             result = false;
             if(UI->testingDraggingOnEquipment)
@@ -539,19 +539,19 @@ internal b32 IsValidEquipmentMapping(GameUIContext* UI, ObjectMapping* mapping, 
     return result;
 }
 
-internal b32 IsValidInventoryMapping(GameUIContext* UI, ObjectMapping* mapping)
+internal b32 IsValidInventorySlot(GameUIContext* UI, InventorySlot* slot)
 {
-    b32 result = IsValidID(mapping->object.ID);
-    if(result && !UI->testingDraggingOnEquipment && AreEqual(mapping->object.ID, UI->draggingIDServer))
+    b32 result = IsValidID(slot->ID);
+    if(result && !UI->testingDraggingOnEquipment && AreEqual(slot->ID, UI->draggingIDServer))
     {
         result = false;
     }
     return result;
 }
 
-internal b32 IsValidMapping(GameUIContext* UI, ObjectMapping* mapping, u16 slotIndex, b32 equipmentMappings)
+internal b32 IsValidInventorySlot(GameUIContext* UI, InventorySlot* slot, u16 slotIndex, b32 equipmentSlot)
 {
-    b32 result = equipmentMappings ? IsValidEquipmentMapping(UI, mapping, slotIndex) : IsValidUsingMapping(UI, mapping, slotIndex);
+    b32 result = equipmentSlot ? IsValidEquipmentSlot(UI, slot, slotIndex) : IsValidUsingSlot(UI, slot, slotIndex);
     return result;
 }
 
@@ -559,24 +559,28 @@ internal EntityAnimationParams GetEntityAnimationParams(GameModeWorld* worldMode
 internal Rect2 RenderLayout(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, struct LayoutContainer* container, r32 elapsedTime);
 internal Rect2 RenderLayoutSpecificPiece(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container, r32 elapsedTime, u64 pieceHash);
 
-internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, u64 hash, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights, b32 equipmentMappings, r32 elapsedTime, u64 multipartHash = 0)
+internal b32 RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, u64 hash, ObjectTransform transform, InventorySlot* slots, u32 slotCount, b32* alreadyRendered, Lights lights, b32 equipmentSlots, r32 elapsedTime, u64 multipartHash = 0)
 {
+    b32 result = false;
+    
     b32 multipart = (multipartHash > 0);
     Assert(hash);
-    for(u16 mappingIndex = 0; mappingIndex < mappingCount; ++mappingIndex)
+    for(u16 slotIndex = 0; slotIndex < slotCount; ++slotIndex)
     {
-        if(!alreadyRendered[mappingIndex] || multipart)
+        if(!alreadyRendered || !alreadyRendered[slotIndex] || multipart)
         {
-            ObjectMapping* mapping = mappings + mappingIndex;
-            if(hash == mapping->slotHash || hash == mapping->pieceHash)
+            InventorySlot* slot = slots + slotIndex;
+            if(hash == slot->slotHash || hash == slot->pieceHash)
             {
+                result = true;
+                
                 Vec3 pieceP = P + GetCameraOffset(group, transform.cameraOffset);
                 r32 ignored;
-                mapping->distanceFromMouseSq = LengthSq(ProjectOnScreen(group, pieceP, &ignored) - worldMode->relativeMouseP);
+                slot->distanceFromMouseSq = LengthSq(ProjectOnScreen(group, pieceP, &ignored) - worldMode->relativeMouseP);
                 
-                if(IsValidMapping(&worldMode->gameUI, mapping, mappingIndex, equipmentMappings))
+                if(IsValidInventorySlot(&worldMode->gameUI, slot, slotIndex, equipmentSlots))
                 {
-                    EntityID equipmentID = mapping->object.ID;
+                    EntityID equipmentID = slot->ID;
                     BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);
                     InteractionComponent* equipmentInteraction = GetComponent(worldMode, equipmentID, InteractionComponent);
                     LayoutComponent* equipmentLayout = GetComponent(worldMode, equipmentID, LayoutComponent);
@@ -601,7 +605,7 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                         container.drawMode = LayoutContainerDraw_Equipped;
                         //container.container = GetComponent(worldMode, equipmentID, ContainerMappingComponent);
                         
-                        if(!alreadyRendered[mappingIndex])
+                        if(alreadyRendered && !alreadyRendered[slotIndex])
                         {
                             equipmentBase->projectedOnScreen = InvertedInfinityRect2();
                         }
@@ -617,16 +621,21 @@ internal void RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group
                     }
                 }
                 
-                alreadyRendered[mappingIndex] = true;
+                if(alreadyRendered)
+                {
+                    alreadyRendered[slotIndex] = true;
+                }
                 
                 break;
             }
         }
     }
+    
+    return result;
 }
 
 internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
-                                   PAKBitmap* bitmapInfo, BitmapId BID, BitmapDim dim, ObjectTransform transform, ObjectMapping* mappings, u32 mappingCount, b32* alreadyRendered, Lights lights, b32 equipmentMappings, r32 elapsedTime)
+                                   PAKBitmap* bitmapInfo, BitmapId BID, BitmapDim dim, ObjectTransform transform, InventorySlot* slots, u32 slotCount, b32* alreadyRendered, Lights lights, b32 equipmentSlots, r32 elapsedTime)
 {
     for(u32 attachmentPointIndex = 0; attachmentPointIndex < bitmapInfo->attachmentPointCount; ++attachmentPointIndex)
     {
@@ -653,7 +662,7 @@ internal void RenderObjectMappings(GameModeWorld* worldMode, RenderGroup* group,
                     Assert(multipartHash);
                 }
                 
-                RenderAttachmentPoint(worldMode, group, P, baseHash, attachmentTransform, mappings, mappingCount, alreadyRendered, lights, equipmentMappings, elapsedTime, multipartHash);
+                RenderAttachmentPoint(worldMode, group, P, baseHash, attachmentTransform, slots, slotCount, alreadyRendered, lights, equipmentSlots, elapsedTime, multipartHash);
             }
             else
             {
@@ -707,6 +716,7 @@ internal void TriggerAnimationSoundEvents(GameModeWorld* worldMode, Assets* asse
     }
 }
 
+internal EntityID GetClientIDMapping(GameModeWorld* worldMode, EntityID serverID);
 internal Rect2 RenderAnimationAndTriggerSounds_(GameModeWorld* worldMode, RenderGroup* group, PAKSkeleton* skeletonInfo, AssetID animationID, AnimationComponent* component, AnimationParams* params, b32 render = true)
 {
     TIMED_FUNCTION();
@@ -716,12 +726,12 @@ internal Rect2 RenderAnimationAndTriggerSounds_(GameModeWorld* worldMode, Render
     b32* usingRendered = 0;
     if(params->equipped)
     {
-        usingRendered = PushArray(temp.pool, b32, ArrayCount(params->equipped->mappings));
+        usingRendered = PushArray(temp.pool, b32, ArrayCount(params->equipped->slots));
     }
     b32* equipmentRendered = 0;
     if(params->equipment)
     {
-        equipmentRendered = PushArray(temp.pool, b32, ArrayCount(params->equipment->mappings));
+        equipmentRendered = PushArray(temp.pool, b32, ArrayCount(params->equipment->slots));
     }
     
     Rect2 result = InvertedInfinityRect2();
@@ -775,7 +785,22 @@ internal Rect2 RenderAnimationAndTriggerSounds_(GameModeWorld* worldMode, Render
                     }
                     Vec3 P = params->P + offset;
                     
-                    RenderAttachmentPoint(worldMode, group, P, piece->nameHash, equippedTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights, false, params->elapsedTime);
+                    if(!RenderAttachmentPoint(worldMode, group, P, piece->nameHash, equippedTransform, params->equipped->slots, ArrayCount(params->equipped->slots), usingRendered, lights, false, params->elapsedTime))
+                    {
+                        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(params->equipment->slots); ++equipmentIndex)
+                        {
+                            EntityID serverID = params->equipment->slots[equipmentIndex].ID;
+                            ContainerComponent* subContainer = GetComponent(worldMode, GetClientIDMapping(worldMode, serverID), ContainerComponent);
+                            if(subContainer)
+                            {
+                                if(RenderAttachmentPoint(worldMode, group, P, piece->nameHash, equippedTransform, subContainer->usingObjects, ArrayCount(subContainer->usingObjects), 0, lights, false, params->elapsedTime))
+                                {
+                                    break;
+                                }
+                            }
+                        }
+                        
+                    }
                 }
             }
         }
@@ -857,13 +882,13 @@ internal Rect2 RenderAnimationAndTriggerSounds_(GameModeWorld* worldMode, Render
                             if(params->equipment)
                             {
                                 RenderObjectMappings(worldMode, group,
-                                                     bitmapInfo, BID, dim, equipmentTransform, params->equipment->mappings, ArrayCount(params->equipment->mappings), equipmentRendered, lights, true, params->elapsedTime);
+                                                     bitmapInfo, BID, dim, equipmentTransform, params->equipment->slots, ArrayCount(params->equipment->slots), equipmentRendered, lights, true, params->elapsedTime);
                             }
                             
                             if(params->equipped)
                             {
                                 RenderObjectMappings(worldMode, group,
-                                                     bitmapInfo, BID, dim, equipmentTransform, params->equipped->mappings, ArrayCount(params->equipped->mappings), usingRendered, lights, false, params->elapsedTime);
+                                                     bitmapInfo, BID, dim, equipmentTransform, params->equipped->slots, ArrayCount(params->equipped->slots), usingRendered, lights, false, params->elapsedTime);
                             }
                         }
                         

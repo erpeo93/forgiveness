@@ -163,10 +163,10 @@ internal void QueueLoginFileTransferBegin(PlayerComponent* player, u32 fileCount
     QueueOrderedPacket(player);
 }
 
-internal void QueueGameAccessConfirm(PlayerComponent* player, u32 worldSeed, EntityID ID, b32 deleteEntities)
+internal void QueueGameAccessConfirm(PlayerComponent* player, u32 worldSeed, EntityID ID, b32 deleteEntities, b32 isGhost)
 {
     StartPacket(player, gameAccess);
-    Pack("LLl", worldSeed, ID.archetype_archetypeIndex, deleteEntities);
+    Pack("LLll", worldSeed, ID.archetype_archetypeIndex, deleteEntities, isGhost);
     QueueOrderedPacket(player);
 }
 
@@ -251,6 +251,11 @@ internal u16 PrepareBasicsUpdate(ServerState* server, EntityID ID, b32 completeU
         def->basicPropertiesChanged |= EntityBasics_Definition; 
         def->basicPropertiesChanged |= EntityBasics_Position;
         
+        if(IsValidID(def->spawnerID))
+        {
+            def->basicPropertiesChanged |= EntityBasics_Spawner;
+        }
+        
         if(!staticUpdate)
         {
             def->basicPropertiesChanged |= EntityBasics_Action; 
@@ -283,7 +288,6 @@ internal u16 PrepareBasicsUpdate(ServerState* server, EntityID ID, b32 completeU
             unsigned char* essenceCount = buff;
             Pack("H", 0);
             
-            
             u16 essenceC = 0;
             for(u16 essenceIndex = 0; essenceIndex < ArrayCount(def->essences); ++essenceIndex)
             {
@@ -302,7 +306,7 @@ internal u16 PrepareBasicsUpdate(ServerState* server, EntityID ID, b32 completeU
         PackIfFlag(EntityBasics_Action, "H", action);
         PackU16(def, def->status);
         PackU32(def, def->flags);
-        
+        PackIfFlag(EntityBasics_Spawner, "L", def->spawnerID);
         result = ForgEndPacket_(buff_, buff);
         
         def->basicPropertiesChanged = 0;
@@ -368,6 +372,7 @@ internal u16 PrepareMiscUpdate(ServerState* server, EntityID ID, b32 completeUpd
             
             PackR32(def, misc->attackDistance);
             PackR32(def, misc->attackContinueCoeff);
+            PackR32(def, misc->lightRadious);
             
             result = ForgEndPacket_(buff_, buff);
             
@@ -668,13 +673,6 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, b32 staticUpdat
 internal void SendStaticUpdate(ServerState* server, EntityID ID)
 {
     SendEntityUpdate(server, ID, true, true);
-}
-
-internal void QueueSeason(PlayerComponent* player, u16 season)
-{
-    StartPacket(player, Season);
-    Pack("H", season);
-    QueueOrderedPacket(player);
 }
 
 internal void QueueDayTime(PlayerComponent* player, u16 dayTime)

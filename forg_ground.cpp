@@ -104,7 +104,7 @@ internal void UpdateGround(GameModeWorld* worldMode, RenderGroup* group, Univers
                                 Assert(splatChunk);
                                 Vec3 chunkCenterOffset = chunkSide * V3((r32) deltaX, (r32) deltaY, 0);
                                 
-                                RandomSequence seq = GetChunkSeed(splatChunk->worldX, splatChunk->worldY, worldSeed);
+                                RandomSequence seq = GetChunkSeed(splatChunk->worldX, splatChunk->worldY, originChunkZ, worldSeed);
                                 for(u8 Y = 0; Y < CHUNK_DIM; ++Y)
                                 {
                                     for(u8 X = 0; X < CHUNK_DIM; ++X)

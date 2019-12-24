@@ -269,13 +269,9 @@ introspection() struct tile_definition
 {
     GameAssetType asset MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
     GameProperty property;
-    GameProperty underSeaLevelFluid;
     
     ArrayCounter soundCount MetaCounter(sounds);
     SoundMappingDefinition* sounds;
-    
-    ArrayCounter underwaterSoundCount MetaCounter(underwaterSounds);
-    SoundMappingDefinition* underwaterSounds;
 };
 
 introspection() struct TileMapping
