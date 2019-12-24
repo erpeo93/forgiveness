@@ -621,7 +621,6 @@ inline r32 RandomRangeFloat( RandomSequence* sequence, r32 min, r32 max )
 
 inline i32 RandomRangeInt( RandomSequence* sequence, i32 minValue, i32 maxValue )
 {
-    maxValue += 1;
     Assert( maxValue >= minValue );
     i32 result = 0;
     i32 nextValue = ( i32 ) GetNextUInt32( sequence );

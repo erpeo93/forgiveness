@@ -82,6 +82,16 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             }
         } break;
         
+        case lightRadious:
+        {
+            MiscComponent* misc = GetComponent(server, targetID, MiscComponent);
+            DefaultComponent* targetDef = GetComponent(server, targetID, DefaultComponent);
+            if(misc)
+            {
+                SetR32(targetDef, &misc->lightRadious, Max(GetR32(misc->lightRadious), 3.0f));
+            }
+        } break;
+        
         case deleteTarget:
         {
             DeleteEntity(server, targetID);
@@ -115,7 +125,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
     }
 }
 
-internal void DispatchEntityEffects(ServerState* server, UniversePos P, u16 action, EntityID ID, r32 elapsedTime, u16* essences)
+internal void DispatchEntityEffects(ServerState* server, UniversePos P, u16 action, EntityID parentID, EntityID ID, r32 elapsedTime, u16* essences)
 {
     EffectComponent* effects = GetComponent(server, ID, EffectComponent);
     
@@ -130,9 +140,9 @@ internal void DispatchEntityEffects(ServerState* server, UniversePos P, u16 acti
                 if(effects->timers[effectIndex] >= effect->timer)
                 {
                     effects->timers[effectIndex] = 0;
-                    DispatchGameEffect(server, ID, P, effect, {}, essences);
+                    DispatchGameEffect(server, ID, P, effect, parentID, essences);
                     
-                    if(effect->timer == 0.0f)
+                    if(effect->timer < 0)
                     {
                         effect->effectType.value = invalid_game_effect;
                     }
@@ -142,14 +152,23 @@ internal void DispatchEntityEffects(ServerState* server, UniversePos P, u16 acti
     }
 }
 
+
+internal void ResetComputedProperties(ServerState* server, EntityID ID)
+{
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+    SetR32(def, &misc->lightRadious, 0);
+}
+
 STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
 {
+    ResetComputedProperties(server, ID);
+    
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     u16* essences = def->essences;
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
     
     u16 action = none;
-    
     if(equipment)
     {
         for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->slots); ++equipmentIndex)
@@ -157,7 +176,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
             EntityID equipID = GetBoundedID(equipment->slots + equipmentIndex);
             if(IsValidID(equipID))
             {
-                DispatchEntityEffects(server, def->P, action, equipID, elapsedTime, essences);
+                DispatchEntityEffects(server, def->P, action, ID, equipID, elapsedTime, essences);
                 
                 ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
                 for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
@@ -165,7 +184,7 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
                     EntityID usingID = GetBoundedID(container->usingObjects + usingIndex);
                     if(IsValidID(usingID))
                     {
-                        DispatchEntityEffects(server, def->P, action, usingID, elapsedTime, essences);
+                        DispatchEntityEffects(server, def->P, action, ID, usingID, elapsedTime, essences);
                     }
                 }
             }
@@ -177,12 +196,20 @@ STANDARD_ECS_JOB_SERVER(DispatchEquipmentEffects)
     {
         for(u16 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->slots); ++equipmentIndex)
         {
-            if(!SkillSlot(equipmentIndex))
+            EntityID usingID = GetBoundedID(equipped->slots + equipmentIndex);
+            if(IsValidID(usingID))
             {
-                EntityID usingID = GetBoundedID(equipped->slots + equipmentIndex);
-                if(IsValidID(usingID))
+                if(SkillSlot(equipmentIndex))
                 {
-                    DispatchEntityEffects(server, def->P, action, usingID, elapsedTime, essences);
+                    SkillDefComponent* skillDef = GetComponent(server, usingID, SkillDefComponent);
+                    if(skillDef->passive)
+                    {
+                        DispatchEntityEffects(server, def->P, action, ID, usingID, elapsedTime, essences);
+                    }
+                }
+                else
+                {
+                    DispatchEntityEffects(server, def->P, action, ID, usingID, elapsedTime, essences);
                 }
             }
         }

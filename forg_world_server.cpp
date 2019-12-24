@@ -42,6 +42,15 @@ internal void SpawnPlayer(ServerState* server, UniversePos P, AddEntityParams pa
 {
     EntityRef type = EntityReference(server->assets, "default", "human");
     AddEntity(server, P, &server->entropy, type, params);
+    
+    type = EntityReference(server->assets, "default", "passive_rune");
+    AddEntityParams runeParams = DefaultAddEntityParams();
+    runeParams.essences[fire] = 1;
+    UniversePos runeP = Offset(P, V3(RandomBilV2(&server->entropy) * 0.5f * VOXEL_SIZE, 0));
+    
+    
+    AddEntity(server, runeP, &server->entropy, type, runeParams);
+    
 }
 
 internal void SpawnZombie(ServerState* server, UniversePos P, AddEntityParams params)
@@ -632,24 +641,14 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                         u16* essences = def->essences;
                         SkillDefComponent* active = GetComponent(server, skillID, SkillDefComponent);
                         
-                        if(active->cooldown == 0)
+                        if(!active->passive)
                         {
                             u16 level = active->level;
                             // TODO(Leonardo): 
                             //SumGemEssencesBasedOnLevel?();
                             
                             UniversePos targetP = Offset(def->P, parameters->targetOffset);
-                            DispatchEntityEffects(server, targetP, cast, skillID, elapsedTime, essences);
-                        }
-                        else
-                        {
-                            if(action->time >= active->cooldown)
-                            {
-                                resetAction = true;
-                                UniversePos targetP = Offset(def->P, parameters->targetOffset);
-                                DispatchEntityEffects(server, targetP, cast, skillID, action->time, essences);
-                                SignalCompletedCommand(server, ID, command);
-                            }
+                            DispatchEntityEffects(server, targetP, cast, ID, skillID, elapsedTime, essences);
                         }
                     }
                 }
@@ -849,8 +848,25 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         {
             if(RemoveAccordingToCommand(server, ID, command))
             {
-                AbsorbEssences(server, ID, command->targetID);
+                AbsorbEssences(server, ID, targetID);
                 DeleteEntity(server, targetID);
+            }
+            else
+            {
+                r32 targetTime;
+                if(ActionIsPossibleAtDistance(interaction, absorb, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
+                {
+                    if(action->time >= targetTime)
+                    {
+                        AbsorbEssences(server, ID, targetID);
+                        DeleteEntity(server, targetID);
+                        resetAction = true;
+                    }
+                }
+                else
+                {
+                    resetAction = true;
+                }
             }
         } break;
         
@@ -884,7 +900,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                     }
                     
                     b32 hasAllEssences = true;
-                    u16 essenceCount = 1;
+                    u16 essenceCount = GetCraftingEssenceCount(server->assets, type, craftSeed);
                     for(u16 essenceIndex = 0; essenceIndex < essenceCount; ++essenceIndex)
                     {
                         u16 selected = action->selectedCrafingEssences[essenceIndex];

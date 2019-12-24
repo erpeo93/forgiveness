@@ -170,7 +170,6 @@ Archetype() struct NullArchetype
 
 introspection() struct UseLayout
 {
-    GameProperty slotType MetaDefault("{Property_inventorySlotType, InventorySlot_Invalid}") MetaFixed(property);
     ArrayCounter slotCount MetaCounter("slots");
     Enumerator* slots MetaEnumerator("usingSlot");
 };
@@ -205,11 +204,11 @@ introspection() struct CommonEntityInitParams
     u16* essences MetaUneditable();
     
     b32 craftable;
+    u16 essenceCountRef;
+    u16 essenceCountV;
     
     ArrayCounter componentCount MetaCounter(components);
     CraftingComponent* components;
-    
-    u16 essenceCount MetaDefault("1");
     
     GameProperty boundType MetaDefault("{Property_boundType, bound_invalid}") MetaFixed(property);
     Vec3 boundOffset;
@@ -240,7 +239,7 @@ introspection() struct CommonEntityInitParams
     Enumerator inventorySlotType MetaEnumerator("inventorySlotType");
     
     b32 targetSkill;
-    r32 cooldown;
+    b32 passive;
 };
 
 introspection() struct InventorySlots

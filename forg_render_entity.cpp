@@ -793,16 +793,25 @@ internal void DrawObjectSlot(GameModeWorld* worldMode, RenderGroup* group, Inven
     }
 }
 
-internal void DrawRecipe(GameModeWorld* worldMode, RenderGroup* group, u32 recipeSeed, ObjectTransform transform, Vec3 P, BitmapDim spaceDim, Rect2 rect, Lights lights, RecipeEssenceComponent* essences)
+internal void DrawRecipeContent(GameModeWorld* worldMode, RenderGroup* group, u32 recipeSeed, ObjectTransform transform, Vec3 P, BitmapDim spaceDim, Rect2 rect, Lights lights, RecipeEssenceComponent* essences)
 {
+    EntityRef type = GetCraftingType(group->assets, recipeSeed);
+    Vec2 dim = GetDim(rect);
+    Vec2 half = 0.5f * dim;
+    
     transform.modulationPercentage = 0;
     u16 recipeEssences[Count_essence] = {};
     if(essences)
     {
         Vec2 startingSlotP = rect.min;
-        Rect2 essenceRect = RectMinDim(startingSlotP, 0.5f * GetDim(rect));
+        Rect2 essenceTotalRect = RectMinDim(startingSlotP, V2(dim.x, 0.5f * half.y));
         
-        for(u32 slotIndex = 0; slotIndex < ArrayCount(essences->essences); ++slotIndex)
+        
+        u16 essenceCount = GetCraftingEssenceCount(group->assets, type, recipeSeed);
+        r32 essenceWidth = dim.x / essenceCount;
+        
+        Rect2 essenceRect = RectMinDim(startingSlotP, V2(essenceWidth, 0.5f * half.y));
+        for(u32 slotIndex = 0; slotIndex < essenceCount; ++slotIndex)
         {
             essences->projectedOnScreen[slotIndex] = essenceRect;
             u16 essence = essences->essences[slotIndex];
@@ -819,58 +828,66 @@ internal void DrawRecipe(GameModeWorld* worldMode, RenderGroup* group, u32 recip
             
             OverdrawEssence(worldMode, group, transform, essence, essenceRect, color);
             ++recipeEssences[essence];
+            
+            essenceRect = Offset(essenceRect, V2(essenceWidth, 0));
         }
     }
     
-    EntityRef type = GetCraftingType(group->assets, recipeSeed);
     u32 craftSeed = recipeSeed;
+    
+    Vec2 startingCompP = rect.min + 0.25f * V2(0, dim.y);
+    Rect2 componentTotalRect = RectMinDim(startingCompP, V2(dim.x, 0.5f * half.y));
     
     EntityRef components[8];
     b32 deleteAfterCrafting[8];
     u16 componentCount = GetCraftingComponents(group->assets, type, craftSeed, components, deleteAfterCrafting, ArrayCount(components));
-    
-    Vec2 startingCompP = rect.min + 0.5f * V2(GetDim(rect).x, 0);
-    Rect2 componentRect = RectMinDim(startingCompP, 0.5f * GetDim(rect));
-    for(u16 componentIndex = 0; componentIndex < componentCount; ++componentIndex)
+    if(componentCount > 0)
     {
-        EntityID ID;
-        if(EntityHasType(worldMode, worldMode->player.clientID, components[componentIndex], &ID))
+        r32 componentWidth = dim.x / componentCount;
+        Rect2 componentRect = RectMinDim(startingCompP, V2(componentWidth, 0.5f * half.y));
+        
+        for(u16 componentIndex = 0; componentIndex < componentCount; ++componentIndex)
         {
-            transform.tint = V4(1, 1, 1, 1);
-            RenderObjectInRect(worldMode, group, ID, transform, P, spaceDim.P, componentRect, lights, 0);
-        }
-        else
-        {
-            transform.tint.a *= 0.4f;
-            
-            u32 componentSeed = 0;
-            LayoutComponent layout = {};
-            EntityDefinition* definition = GetEntityTypeDefinition(group->assets, components[componentIndex]);
-            
-            CommonEntityInitParams common = definition->common;
-            common.definitionID = type;
-            common.essences = 0;
-            ClientEntityInitParams entityParams = definition->client;
-            entityParams.seed = componentSeed;
-            
-            InitLayoutComponent(worldMode, &layout, {}, &common, 0, &entityParams);
-            LayoutContainer componentContainer = {};
-            
-            if(transform.upright)
+            EntityID ID;
+            if(EntityHasType(worldMode, worldMode->player.clientID, components[componentIndex], &ID))
             {
-                RenderLayoutInRectCameraAligned(worldMode, group, P, spaceDim.P, componentRect, transform, &layout, componentSeed, lights, &componentContainer, 0);
+                transform.tint = V4(1, 1, 1, 1);
+                RenderObjectInRect(worldMode, group, ID, transform, P, spaceDim.P, componentRect, lights, 0);
             }
             else
             {
-                RenderLayoutInRect(worldMode, group, componentRect, transform, &layout, componentSeed, lights, &componentContainer, 0, 0);
+                transform.tint.a *= 0.4f;
+                
+                u32 componentSeed = 0;
+                LayoutComponent layout = {};
+                EntityDefinition* definition = GetEntityTypeDefinition(group->assets, components[componentIndex]);
+                
+                CommonEntityInitParams common = definition->common;
+                common.definitionID = type;
+                common.essences = 0;
+                ClientEntityInitParams entityParams = definition->client;
+                entityParams.seed = componentSeed;
+                
+                InitLayoutComponent(worldMode, &layout, {}, &common, 0, &entityParams);
+                LayoutContainer componentContainer = {};
+                
+                if(transform.upright)
+                {
+                    RenderLayoutInRectCameraAligned(worldMode, group, P, spaceDim.P, componentRect, transform, &layout, componentSeed, lights, &componentContainer, 0);
+                }
+                else
+                {
+                    RenderLayoutInRect(worldMode, group, componentRect, transform, &layout, componentSeed, lights, &componentContainer, 0, 0);
+                }
             }
+            
+            componentRect = Offset(componentRect, V2(componentWidth, 0));
         }
+        
     }
     
-    
-    Vec2 recipeDim = 0.5f * GetDim(rect);
-    Vec2 recipeMin = V2(rect.min.x, rect.min.y + recipeDim.y);
-    Rect2 recipeRect = RectMinDim(recipeMin, recipeDim);
+    Vec2 recipeMin = V2(rect.min.x, rect.min.y + half.y);
+    Rect2 recipeRect = RectMinDim(recipeMin, half);
     
     LayoutComponent layout = {};
     EntityDefinition* definition = GetEntityTypeDefinition(group->assets, type);
@@ -1044,7 +1061,7 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                     {
                         ObjectTransform recipeTransform = transform;
                         Rect2 recipeRect = result;
-                        DrawRecipe(worldMode, group, seed, recipeTransform, P, dim, recipeRect, lights, container->recipeEssences);
+                        DrawRecipeContent(worldMode, group, seed, recipeTransform, P, dim, recipeRect, lights, container->recipeEssences);
                         result = InvertedInfinityRect2();
                     }
                 }

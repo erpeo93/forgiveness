@@ -1425,72 +1425,83 @@ internal StructOperationResult StructOperation(EditorLayout* layout, String stru
                     }
                     else
                     {
+                        b32 skip = false;
                         Token fieldName = Stringize(t);
                         FieldDefinition* field = FindMetaField(definition, fieldName);
                         if(field)
                         {
-                            Assert(field->type != MetaType_ArrayCounter);
-                            
-                            if(RequireToken(tokenizer, Token_EqualSign))
+                            if(field->type != MetaType_ArrayCounter)
                             {
-                                void* fieldPtr = (void*) ((u8*) dataPtr + field->offset);
-                                u32 additionalSize = sizeof(MetaArrayHeader);
-                                if(field->flags & MetaFlag_Pointer)
+                                if(RequireToken(tokenizer, Token_EqualSign))
                                 {
-                                    result.size += additionalSize;
-                                }
-                                
-                                if(operation == FieldOperation_Parse && field->flags & MetaFlag_Pointer)
-                                {
-                                    Tokenizer fake = {};
-                                    fake.at = tokenizer->at;
-                                    
-                                    u16 elementCount;
-                                    FieldOperation(layout, field, FieldOperation_GetSize, fieldPtr, &fake, output, reserved, &elementCount, assetID);
-                                    
-                                    ArrayCounter* counterPtr = GetMetaPtrElementCountForArray(definition, field, dataPtr);
-                                    Assert(counterPtr);
-                                    *counterPtr = elementCount;
-                                    
-                                    Assert(sizeof(u64) == sizeof(void*));
-                                    if(elementCount)
+                                    void* fieldPtr = (void*) ((u8*) dataPtr + field->offset);
+                                    u32 additionalSize = sizeof(MetaArrayHeader);
+                                    if(field->flags & MetaFlag_Pointer)
                                     {
-                                        void* headerPtr = ReserveSpace(reserved, elementCount * field->size + additionalSize);
-                                        void* arrayPtr = InitMetaArray(headerPtr, elementCount);
+                                        result.size += additionalSize;
+                                    }
+                                    
+                                    if(operation == FieldOperation_Parse && field->flags & MetaFlag_Pointer)
+                                    {
+                                        Tokenizer fake = {};
+                                        fake.at = tokenizer->at;
                                         
-                                        *(u64*) fieldPtr = (u64) arrayPtr;
-                                        fieldPtr = arrayPtr;
+                                        u16 elementCount;
+                                        FieldOperation(layout, field, FieldOperation_GetSize, fieldPtr, &fake, output, reserved, &elementCount, assetID);
+                                        
+                                        ArrayCounter* counterPtr = GetMetaPtrElementCountForArray(definition, field, dataPtr);
+                                        Assert(counterPtr);
+                                        *counterPtr = elementCount;
+                                        
+                                        Assert(sizeof(u64) == sizeof(void*));
+                                        if(elementCount)
+                                        {
+                                            void* headerPtr = ReserveSpace(reserved, elementCount * field->size + additionalSize);
+                                            void* arrayPtr = InitMetaArray(headerPtr, elementCount);
+                                            
+                                            *(u64*) fieldPtr = (u64) arrayPtr;
+                                            fieldPtr = arrayPtr;
+                                        }
+                                        else
+                                        {
+                                            *(u64*) fieldPtr = 0;
+                                        }
                                     }
-                                    else
-                                    {
-                                        *(u64*) fieldPtr = 0;
-                                    }
+                                    
+                                    u16 ignored = 1;
+                                    result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, &ignored, assetID);
                                 }
-                                
-                                u16 ignored = 1;
-                                result.size += FieldOperation(layout, field, operation, fieldPtr, tokenizer, output, reserved, &ignored, assetID);
+                                else
+                                {
+                                    InvalidCodePath;
+                                }
                             }
                             else
                             {
-                                InvalidCodePath;
+                                skip = true;
                             }
                         }
                         else
                         {
+                            skip = true;
+                        }
+                        
+                        if(skip)
+                        {
                             u32 currentDepth = 0;
                             while(true)
                             {
-                                Token skip = GetToken(tokenizer);
-                                if(skip.type == Token_OpenBraces)
+                                Token skipT = GetToken(tokenizer);
+                                if(skipT.type == Token_OpenBraces)
                                 {
                                     ++currentDepth;
                                 }
-                                else if(skip.type == Token_CloseBraces)
+                                else if(skipT.type == Token_CloseBraces)
                                 {
                                     Assert(currentDepth > 0);
                                     --currentDepth;
                                 }
-                                if(skip.type == Token_SemiColon)
+                                if(skipT.type == Token_SemiColon)
                                 {
                                     if(currentDepth == 0)
                                     {

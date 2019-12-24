@@ -142,7 +142,7 @@ struct ContainerComponent
 #endif
 };
 
-#define MAX_RECIPE_ESSENCES 1
+#define MAX_RECIPE_ESSENCES 4
 struct RecipeEssenceComponent
 {
     Rect2 projectedOnScreen[MAX_RECIPE_ESSENCES];

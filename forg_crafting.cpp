@@ -45,6 +45,18 @@ internal u16 GetCraftingComponents(Assets* assets, EntityRef type, u32 seed, Ent
     return result;
 }
 
+internal u16 GetCraftingEssenceCount(Assets* assets, EntityRef type, u32 seed)
+{
+    EntityDefinition* definition = GetEntityTypeDefinition(assets, type);
+    RandomSequence seq = Seed(seed);
+    
+    i16 delta = (i16) RandomRangeInt(&seq, -definition->common.essenceCountV, definition->common.essenceCountV);
+    i16 temp = Max(0, definition->common.essenceCountRef + delta);
+    u16 result = (u16) temp;
+    
+    return result;
+}
+
 internal u16 GetRandomEssence(RandomSequence* seq)
 {
     u16 result = SafeTruncateToU16(RandomChoice(seq, Count_essence));

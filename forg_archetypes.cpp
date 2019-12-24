@@ -122,8 +122,8 @@ internal void AddRandomEffects(EffectComponent* effects, EffectBinding* bindings
         u16 essenceQuantity = essences[essenceIndex];
         if(essenceQuantity > 0)
         {
-            Assert(essenceQuantity == 1);
-            GameProperty property = GameProp(essence, essences[essenceIndex]);
+            //Assert(essenceQuantity == 1);
+            GameProperty property = GameProp(essence, essenceIndex);
             for(ArrayCounter bindingIndex = 0; bindingIndex < bindingCount; ++bindingIndex)
             {
                 EffectBinding* binding = bindings + bindingIndex;
@@ -215,13 +215,6 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
 
 INIT_COMPONENT_FUNCTION(InitSkillComponent)
 {
-}
-
-INIT_COMPONENT_FUNCTION(InitSkillDefComponent)
-{
-    SkillDefComponent* skill = (SkillDefComponent*) componentPtr;
-    skill->targetSkill = common->targetSkill;
-    skill->level = 0;
 }
 
 INIT_COMPONENT_FUNCTION(InitBrainComponent)
@@ -540,7 +533,6 @@ internal void InitLayout(Assets* assets, LayoutPiece* destPieces, u32* destPiece
                 u16 essenceQuantity = essences[essenceIndex];
                 if(essenceQuantity > 0)
                 {
-                    Assert(essenceQuantity == 1);
                     GameProperty property = GameProp(essence, essenceIndex);
                     AddGameProperty_(&destPiece->image.properties, property, GameProperty_Optional);
                 }
@@ -654,13 +646,6 @@ INIT_COMPONENT_FUNCTION(InitSkillComponent)
 {
 }
 
-INIT_COMPONENT_FUNCTION(InitSkillDefComponent)
-{
-    SkillDefComponent* skill = (SkillDefComponent*) componentPtr;
-    skill->targetSkill = common->targetSkill;
-    skill->level = 0;
-    skill->cooldown = common->cooldown;
-}
 
 INIT_COMPONENT_FUNCTION(InitRecipeEssenceComponent)
 {
@@ -673,6 +658,15 @@ INIT_COMPONENT_FUNCTION(InitRecipeEssenceComponent)
 }
 
 #endif
+
+INIT_COMPONENT_FUNCTION(InitSkillDefComponent)
+{
+    SkillDefComponent* skill = (SkillDefComponent*) componentPtr;
+    skill->targetSkill = common->targetSkill;
+    skill->passive = common->passive;
+    skill->level = 0;
+}
+
 INIT_COMPONENT_FUNCTION(InitInteractionComponent)
 {
     InteractionComponent* dest = (InteractionComponent*) componentPtr;
