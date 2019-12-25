@@ -98,17 +98,14 @@ struct PlantComponent
     b32 hasLeafVariant;
     Vec4 leafColor;
     ImageReference leaf;
-    r32 leafDensity;
     
     b32 hasFlowerVariant;
     Vec4 flowerColor;
     ImageReference flower;
-    r32 flowerDensity;
     
     b32 hasFruitVariant;
     Vec4 fruitColor;
     ImageReference fruit;
-    r32 fruitDensity;
     
     r32 windInfluence;
 };

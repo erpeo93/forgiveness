@@ -51,6 +51,8 @@ struct LayoutPiece
     u64 nameHash;
     r32 height;
     
+    Vec4 color;
+    
     u16 inventorySlotType;
     ImageReference image;
 };

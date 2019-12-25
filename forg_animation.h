@@ -97,6 +97,8 @@ struct AnimationEffectComponent
     
     u32 effectCount;
     AnimationEffect effects[MAX_ACTIVE_EFFECTS];
+    
+    r32 outlineWidth;
 };
 
 struct AnimationComponent
@@ -114,6 +116,8 @@ struct AnimationComponent
     GameProperties skeletonProperties;
     
     b32 flipOnYAxis;
+    r32 cameraZOffsetWhenOnFocus;
+    r32 scaleCoeffWhenOnFocus;
     
     b32 defaultScaleComputed;
     r32 scale;
@@ -165,7 +169,8 @@ struct AnimationParams
     Vec4 tint;
     r32 dissolveCoeff;
     Lights lights;
-    r32 scale;
+    r32 skeletonScale;
+    r32 bitmapScale;
     b32 flipOnYAxis;
     ObjectTransform transform;
     EquipmentComponent* equipment;

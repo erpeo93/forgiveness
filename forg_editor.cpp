@@ -1973,25 +1973,27 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                 Rect2 pivotRect = RectCenterDim(pivotP, layout->fontScale * V2(rectDim, rectDim));
                 PushRect(layout->group, FlatTransform(V4(1, 0, 0, 1)), pivotRect);
                 
-                
-                LoadBitmap(assets, ID, true);
-                Bitmap* bitmap = GetBitmap(assets, ID).bitmap;
-                if(bitmap)
+                if(!get.derived)
                 {
-                    for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
+                    LoadBitmap(assets, ID, true);
+                    Bitmap* bitmap = GetBitmap(assets, ID).bitmap;
+                    if(bitmap)
                     {
-                        PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
-                        AUID pointID = auID(point);
-                        AUIDData* pointData = GetAUIDData(layout->context, pointID);
-                        
-                        if(pointData->active)
+                        for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
                         {
-                            Vec2 attachmentP = point->alignment;
-                            Vec2 pointP = P.xy + Hadamart(attachmentP, dim.size);
-                            Rect2 pointRect = RectCenterDim(pointP, layout->fontScale * V2(rectDim, rectDim));
-                            RandomSequence seq = Seed(attachmentPointIndex);
-                            Vec4 color = V4(RandomUniV3(&seq), 1.0f);
-                            PushRect(layout->group, FlatTransform(color), pointRect);
+                            PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
+                            AUID pointID = auID(point);
+                            AUIDData* pointData = GetAUIDData(layout->context, pointID);
+                            
+                            if(pointData->active)
+                            {
+                                Vec2 attachmentP = point->alignment;
+                                Vec2 pointP = P.xy + Hadamart(attachmentP, dim.size);
+                                Rect2 pointRect = RectCenterDim(pointP, layout->fontScale * V2(rectDim, rectDim));
+                                RandomSequence seq = Seed(attachmentPointIndex);
+                                Vec4 color = V4(RandomUniV3(&seq), 1.0f);
+                                PushRect(layout->group, FlatTransform(color), pointRect);
+                            }
                         }
                     }
                 }
@@ -2056,7 +2058,8 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                     {
                         AnimationParams params = {};
                         params.P = P;
-                        params.scale = minPixelHeight;
+                        params.skeletonScale = minPixelHeight;
+                        params.bitmapScale = minPixelHeight;
                         params.transform = FlatTransform();
                         params.tint = V4(1, 1, 1, 1);
                         params.ID = {};
@@ -2064,7 +2067,8 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                         Rect2 animationDim = GetAnimationDim(worldMode, layout->group, ID, &component, &params);
                         
                         r32 coeff = height / GetDim(animationDim).y;
-                        params.scale *= coeff;
+                        params.skeletonScale *= coeff;
+                        params.bitmapScale *= coeff;
                         
                         Rect2 animationDimCorrect = GetAnimationDim(worldMode, layout->group, ID, &component, &params);
                         
@@ -2367,6 +2371,9 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
                     Edit_Vec3(&layout, "ambient light color", &worldMode->ambientLightColor, 0, {});
                     Edit_Vec3(&layout, "wind direction", &worldMode->windDirection, 0, {});
                     Edit_r32(&layout, "wind strength", &worldMode->windStrength, 0, {});
+                    
+                    
+                    NextRaw(&layout);
                     Edit_Vec3(&layout, "spawn offset", &layout.context->spawnOffset, 0, {});
                 } break;
             }

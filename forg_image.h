@@ -3,8 +3,8 @@
 #define STBIR_DEFAULT_FILTER_DOWNSAMPLE STBIR_FILTER_CATMULLROM
 #include "stb_resize_image.h"
 
-#define MAX_IMAGE_DIM 512
-global_variable r32 oneOverMaxImageDim = 1.0f / (r32) MAX_IMAGE_DIM;
+#define MAX_TEXTURE_DIM 512
+global_variable r32 oneOverMaxImageDim = 1.0f / (r32) MAX_TEXTURE_DIM;
 
 struct ImageU32
 {
@@ -48,8 +48,8 @@ inline r32 OneOverDownsampleFactor(u32 width, u32 height)
     // TODO(Leonardo): if we now need to optimize this, just pass in one over width and one over height
     r32 oneOverWidth = 1.0f / (r32) width;
     r32 oneOverHeight = 1.0f / (r32) height;
-    r32 oneOverXDownsampleFactor = (r32) MAX_IMAGE_DIM * oneOverWidth;
-    r32 oneOverYDownsampleFactor = (r32) MAX_IMAGE_DIM * oneOverHeight;
+    r32 oneOverXDownsampleFactor = (r32) MAX_TEXTURE_DIM * oneOverWidth;
+    r32 oneOverYDownsampleFactor = (r32) MAX_TEXTURE_DIM * oneOverHeight;
     r32 oneOverDownsampleFactor = Min(oneOverXDownsampleFactor, oneOverYDownsampleFactor);
     r32 result = Min(oneOverDownsampleFactor, 1.0f);
 #endif
@@ -61,7 +61,7 @@ inline void Advance(MIPIterator* iterator)
 {
     iterator->image.pixels += (iterator->image.width * iterator->image.height);
     
-    if(iterator->image.width > MAX_IMAGE_DIM || iterator->image.height > MAX_IMAGE_DIM)
+    if(iterator->image.width > MAX_TEXTURE_DIM || iterator->image.height > MAX_TEXTURE_DIM)
     {
         r32 oneOverDownsampleFactor = OneOverDownsampleFactor(iterator->image.width, iterator->image.height);
         iterator->image.width = RoundReal32ToU32(iterator->image.width * oneOverDownsampleFactor);

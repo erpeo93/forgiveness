@@ -267,6 +267,7 @@ internal void UpdateAmbientParameters(GameModeWorld* worldMode, r32 elapsedTime)
     r32 lerp = Clamp01MapToRange(0.0f, worldMode->dayTimeTime, fullColorTime);
     
     worldMode->ambientLightColor = Lerp(oldColor, lerp, color);
+    worldMode->ambientLightColor = V3(1, 1, 1);
 }
 
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
@@ -380,15 +381,16 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
         
         EXECUTE_RENDERING_JOB(worldMode, group, RenderMultipartEntity, ArchetypeHas(BaseComponent) && ArchetypeHas(MultipartAnimationComponent), input->timeToAdvance);
         
-        EXECUTE_RENDERING_JOB(worldMode, group, UpdateAndRenderBolt,ArchetypeHas(BaseComponent) && ArchetypeHas(BoltComponent), input->timeToAdvance);
-        
         if(worldMode->editorUI.renderEntityBounds)
         {
             EXECUTE_RENDERING_JOB(worldMode, group, RenderBound, ArchetypeHas(BaseComponent), input->timeToAdvance);
         }
         END_BLOCK();
         
+        
         BEGIN_BLOCK("weather and particles");
+        
+#if 0        
         for(u16 weatherIndex = 0; weatherIndex < Weather_count; ++weatherIndex)
         {
             GameProperties weatherProperties = {};
@@ -407,6 +409,7 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
                 }
             }
         }
+#endif
         
         worldMode->particleCache->deltaParticleP = deltaP;
         UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);

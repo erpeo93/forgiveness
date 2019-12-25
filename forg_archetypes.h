@@ -30,6 +30,7 @@ Archetype() struct RockArchetype
 #ifdef FORG_SERVER
     DefaultComponent default;
     PhysicComponent physic;
+    EffectComponent effect;
     InteractionComponent interaction;
 #else
     BaseComponent base;
@@ -44,13 +45,15 @@ Archetype() struct PlantArchetype
 #ifdef FORG_SERVER
     DefaultComponent default;
     PhysicComponent physic;
-    PlayerComponent* player;
+    EffectComponent effect;
     InteractionComponent interaction;
+    MiscComponent misc;
 #else
     BaseComponent base;
     PlantComponent plant;
     InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
+    MiscComponent misc;
 #endif
 };
 
@@ -240,6 +243,9 @@ introspection() struct CommonEntityInitParams
     
     b32 targetSkill;
     b32 passive;
+    
+    r32 flowerDensity MetaDefault("1.0f");
+    r32 fruitDensity MetaDefault("1.0f");
 };
 
 introspection() struct InventorySlots
@@ -269,9 +275,11 @@ introspection() struct ServerEntityInitParams
     ArrayCounter usingSlotCounter MetaCounter(usingSlots);
     InventorySlots* usingSlots;
     
-    
     ArrayCounter collisionEffectsCount MetaCounter(collisionEffects);
     GameEffect* collisionEffects;
+    
+    ArrayCounter defaultEffectsCount MetaCounter(defaultEffects);
+    GameEffect* defaultEffects;
     
     Enumerator brainType MetaEnumerator("brainType");
     BrainParams brainParams;
@@ -300,6 +308,7 @@ introspection() struct LayoutPieceProperties
 {
     AssetLabel name;
     r32 height MetaDefault("1.0f");
+    Color color MetaDefault("V4(1, 1, 1, 1)");
     ImageProperties properties;
     Enumerator inventorySlotType MetaEnumerator("inventorySlotType");
 };
@@ -411,6 +420,9 @@ introspection() struct ClientEntityInitParams
     SoundEffectDefinition* soundEffects;
     
     Vec3 spawnProjectileOffset;
+    r32 cameraZOffsetWhenOnFocus MetaDefault("-0.05f");
+    r32 scaleCoeffWhenOnFocus MetaDefault("1.0f");
+    r32 outlineWidth MetaDefault("1.0f");
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

@@ -274,7 +274,7 @@ internal void OpenGLAllocateTexture(RenderTexture texture, void* data)
         IsValid(&mip);
         Advance(&mip))
     {
-        if(mip.image.width <= MAX_IMAGE_DIM && mip.image.height <= MAX_IMAGE_DIM)
+        if(mip.image.width <= MAX_TEXTURE_DIM && mip.image.height <= MAX_TEXTURE_DIM)
         {
             glTexSubImage3D(GL_TEXTURE_2D_ARRAY, mip.level, 0, 0, textureHandle, mip.image.width, mip.image.height, 1, GL_BGRA_EXT, GL_UNSIGNED_BYTE, mip.image.pixels);
         }
@@ -499,9 +499,11 @@ internal void OpenGLCompileZBiasProgram(ZBiasProgram* result)
     FormatString(defines, sizeof(defines),  
                  "#version 130\n"
                  "#define shaderSimTexLoadSRGB %d\n"
-                 "#define shaderSimTexWriteSRGB %d\n",
+                 "#define shaderSimTexWriteSRGB %d\n"
+                 "#define TEXTURE_DIM %d\n",
                  opengl.shaderSimTexLoadSRGB,
-                 opengl.shaderSimTexWriteSRGB);
+                 opengl.shaderSimTexWriteSRGB,
+                 MAX_TEXTURE_DIM);
     
     char* vertexCode = R"FOO(
         //vertex code
@@ -575,7 +577,7 @@ fragUVNormalized.y = 1.0f;
                                             fragLightStartingIndex = lightStartingIndex;
                                             fragLightEndingIndex = lightEndingIndex;
                                            fragTextureIndex = textureIndex;
-                                           modulationWithFocusColor = float(modulationPercentage) / 0xff;
+                                           modulationWithFocusColor = float(modulationPercentage);
                                             lightInfluencePercentage = float(lightInfluence) / 0xff;
                                             lightYInfluencePercentage = float(lightYInfluence) / 0xff;
                                             fragDissolvePercentage = float(dissolvePercentage) / 0xff;
@@ -659,8 +661,35 @@ r32 cosAngle = dot(toLight, worldNorm);
 modulationLightColor = clamp(modulationLightColor, 0, 1);
 resultColor.rgb *= modulationLightColor;
 
+if(modulationWithFocusColor > 0)
+{
+r32 outline_width = modulationWithFocusColor / TEXTURE_DIM;
+ r32 a;
+  r32 maxa = resultColor.a;
+  r32 mina = resultColor.a;
+  
+a = texture(textureSampler, arrayUV + V3(0.0, -outline_width, 0.0)).a;
+ maxa = max(a, maxa);
+ mina = min(a, mina);
+ 
+ a = texture(textureSampler, arrayUV + V3(0.0, outline_width, 0.0)).a;
+ maxa = max(a, maxa);
+ mina = min(a, mina);
+ 
+ a = texture(textureSampler, arrayUV + V3(-outline_width, 0.0, 0.0)).a;
+ maxa = max(a, maxa);
+ mina = min(a, mina);
+ 
+ a = texture(textureSampler, arrayUV + V3(outline_width, 0.0, 0.0)).a;
+ maxa = max(a, maxa);
+ mina = min(a, mina);
+ 
+ r32 lerpOutline = (maxa - mina);
+ Vec3 outlineColor = V3(1, 1, 1);
+ resultColor.rgb = Lerp(resultColor.rgb, lerpOutline, outlineColor);
+}
+
 resultColor.rgb = Clamp01(resultColor.rgb);
-resultColor.rgb = Lerp(resultColor.rgb, modulationWithFocusColor, V3(0.4f, 0.4f, 0.4f));
 #if shaderSimTexWriteSRGB
      resultColor.rgb = sqrt(resultColor.rgb);
      #endif
@@ -824,7 +853,7 @@ internal void OpenGLInit(OpenGLInfo info, b32 frameBufferSupportSRGB)
     glGenTextures(1, &opengl.textureArray);
     glBindTexture(GL_TEXTURE_2D_ARRAY, opengl.textureArray);
     
-    for(MIPIterator mip = BeginMIPs(MAX_IMAGE_DIM, MAX_IMAGE_DIM, 0);
+    for(MIPIterator mip = BeginMIPs(MAX_TEXTURE_DIM, MAX_TEXTURE_DIM, 0);
         IsValid(&mip);
         Advance(&mip))
     {
@@ -885,7 +914,7 @@ internal void OpenGLPrepareForRenderSettings(GameRenderSettings* settings)
     OpenGLCompileZBiasProgram(&opengl.zBias);
     OpenGLCompileFinalStretch(&opengl.finalStretch);
     
-    opengl.textureGenFrameBuffer = OpenGLCreateFramebuffer(OpenGLFramebuffer_hasColor, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
+    opengl.textureGenFrameBuffer = OpenGLCreateFramebuffer(OpenGLFramebuffer_hasColor, MAX_TEXTURE_DIM, MAX_TEXTURE_DIM);
     
     u32 flags = (OpenGLFramebuffer_hasColor | OpenGLFramebuffer_hasDepth);
     opengl.frameBuffer = OpenGLCreateFramebuffer(flags, renderWidth, renderHeight);
@@ -1002,7 +1031,7 @@ internal void DrawRenderBuffer(RenderBuffer* buffer, u32 flags, u32 renderWidth,
         
         if(setup->renderTargetIndex > 0)
         {
-            OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
+            OpenGLBindFramebuffer(&opengl.textureGenFrameBuffer, MAX_TEXTURE_DIM, MAX_TEXTURE_DIM);
             glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, opengl.textureArray, 0, setup->renderTargetIndex);
         }
         

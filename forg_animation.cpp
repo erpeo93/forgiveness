@@ -272,7 +272,7 @@ internal void CalculateFinalBoneAngleAndOffset(Bone* frameBones, i32 countBones,
     
     r32 totalAngleRad = DegToRad(bone->finalAngle);
     bone->mainAxis = V2(Cos(totalAngleRad), Sin(totalAngleRad)); 
-    Vec2 parentOffset = bone->parentOffset * params->scale;
+    Vec2 parentOffset = bone->parentOffset * params->skeletonScale;
     bone->finalOriginOffset = baseOffset + (parentOffset.x * XAxis + parentOffset.y * YAxis);
 }
 
@@ -430,7 +430,7 @@ internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKSkeleton* s
         Vec2 boneXAxis = parentBone->mainAxis;
         Vec2 boneYAxis = Perp(boneXAxis);
         
-        Vec2 boneOffset = ass->boneOffset * params->scale;
+        Vec2 boneOffset = ass->boneOffset * params->skeletonScale;
         
         Vec2 offsetFromBone = boneOffset.x * boneXAxis + boneOffset.y * boneYAxis;
         dest->originOffset = V3(parentBone->finalOriginOffset + offsetFromBone, zOffset + ass->additionalZOffset + parentBone->finalZBias);
@@ -593,12 +593,6 @@ internal b32 RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group,
                         
                         EntityAnimationParams params = GetEntityAnimationParams(worldMode, equipmentID);
                         finalTransform.modulationPercentage = params.modulationPercentage;
-                        
-#if 0                        
-                        if(equipmentInteraction && equipmentInteraction->isOnFocus)
-                        {
-                        }
-#endif
                         
                         finalTransform.tint = params.tint;
                         LayoutContainer container = {};
@@ -825,7 +819,7 @@ internal Rect2 RenderAnimationAndTriggerSounds_(GameModeWorld* worldMode, Render
                         transform.cameraOffset = piece->originOffset;
                         transform.dissolvePercentages = params->dissolveCoeff * V4(1, 1, 1, 1);
                         transform.tint = Hadamart(piece->color, params->tint);
-                        r32 height = piece->height * params->scale;
+                        r32 height = piece->height * params->bitmapScale;
                         
                         AssetID renderID = BID;
                         b32 replacementFound = false;
@@ -850,7 +844,7 @@ internal Rect2 RenderAnimationAndTriggerSounds_(GameModeWorld* worldMode, Render
                                         PAKBitmap* substitutionImage = GetBitmapInfo(group->assets, renderID);
                                         
                                         r32 nativeHeight = rep->inheritHeight ? piece->height : rep->height;
-                                        height = nativeHeight * rep->scale * params->scale;
+                                        height = nativeHeight * rep->scale * params->bitmapScale;
                                         
                                         repTransform.cameraOffset.xy += rep->offset.x * piece->mainAxis;
                                         repTransform.cameraOffset.xy += rep->offset.y * Perp(piece->mainAxis);

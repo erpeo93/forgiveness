@@ -2134,62 +2134,60 @@ inline void* GetDataDefinition_(Assets* assets, AssetType type, AssetID ID, b32 
     return result;
 }
 
-inline PAKAsset* GetPakAsset(Assets* assets, AssetID ID)
-{
-    PAKAsset* result = 0;
-    GetGameAssetResult get = GetGameAsset(assets, ID);
-    result = get.info;
-    
-    return result;
-}
-
 #ifndef ONLY_DATA_FILES
 inline PAKBitmap* GetBitmapInfo(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
     
-    PAKAsset* asset = GetPakAsset(assets, ID);
-    PAKBitmap* result = &asset->bitmap;
+    PAKBitmap* result = 0;
+    GetGameAssetResult get = GetGameAsset(assets, ID);
+    if(ID.type == AssetType_Image && get.derived)
+    {
+        AssetID parentID = ID;
+        parentID.index = get.info->coloration.bitmapIndex;
+        GetGameAssetResult parentGet = GetGameAsset(assets, parentID);
+        result = &parentGet.info->bitmap;
+    }
+    else
+    {
+        result = &get.info->bitmap;
+    }
+    
     return result;
 }
 
 inline PAKFont* GetFontInfo(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
-    PAKAsset* asset = GetPakAsset(assets, ID);
-    PAKFont* result = &asset->font;
+    PAKFont* result = &GetGameAsset(assets, ID).info->font;
     return result;
 }
 
 inline PAKSound* GetSoundInfo(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
-    PAKAsset* asset = GetPakAsset(assets, ID);
-    PAKSound* result = &asset->sound;
+    PAKSound* result = &GetGameAsset(assets, ID).info->sound;
     return result;
 }
 
 inline PAKSkeleton* GetSkeletonInfo(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
-    PAKAsset* asset = GetPakAsset(assets, ID);
-    PAKSkeleton* result = &asset->skeleton;
+    PAKSkeleton* result = &GetGameAsset(assets, ID).info->skeleton;
     return result;
 }
 
 inline PAKAnimation* GetAnimationInfo(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
-    PAKAsset* asset = GetPakAsset(assets, ID);
-    PAKAnimation* result = &asset->animation;
+    PAKAnimation* result = &GetGameAsset(assets, ID).info->animation;
     return result;
 }
 
 inline PAKModel* GetModelInfo(Assets* assets, AssetID ID)
 {
     Assert(IsValid(ID));
-    PAKAsset* asset = GetPakAsset(assets, ID);
-    PAKModel* result = &asset->model;
+    PAKModel* result = &GetGameAsset(assets, ID).info->model;
     return result;
 }
 

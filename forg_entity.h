@@ -13,6 +13,8 @@ struct MiscComponent
     R32 attackDistance;
     R32 attackContinueCoeff;
     R32 lightRadious;
+    R32 flowerDensity;
+    R32 fruitDensity;
 };
 
 enum EntityFlags

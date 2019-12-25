@@ -89,7 +89,7 @@ inline void PushVertex(TexturedVertex* vert, u32 vertexIndex, Vec3 P, Vec2 UV, u
     vert->color = C;
     vert->lightStartingIndex = lights.startingIndex;
     vert->lightEndingIndex = lights.endingIndex;
-    vert->modulationPercentage = (u8) (modulationPercentage * (r32) 0xff);
+    vert->modulationPercentage = (u8) modulationPercentage;
     vert->lightInfluence = (u8) ((1.0f - lightInfluence) * (r32) 0xff);
     vert->lightYInfluence = (u8) ((1.0f - lightYInfluence) * (r32) 0xff);
     vert->windInfluence = (u8) (windInfluence * (r32) 0xff);
@@ -974,8 +974,8 @@ inline void SetCameraBasics(RenderGroup* renderGroup, u32 flags, r32 focalLength
     transform->P = cameraP;
     transform->screenCameraOffset = screenCameraOffset;
     
-    u32 width = renderTargetIndex > 0 ? MAX_IMAGE_DIM : renderGroup->commands->settings.width;
-    u32 height = renderTargetIndex > 0 ? MAX_IMAGE_DIM : renderGroup->commands->settings.height;
+    u32 width = renderTargetIndex > 0 ? MAX_TEXTURE_DIM : renderGroup->commands->settings.width;
+    u32 height = renderTargetIndex > 0 ? MAX_TEXTURE_DIM : renderGroup->commands->settings.height;
     
     r32 aspectRatio = SafeRatio1((r32) width, (r32) height);
     m4x4_inv proj;

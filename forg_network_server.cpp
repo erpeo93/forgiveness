@@ -373,6 +373,8 @@ internal u16 PrepareMiscUpdate(ServerState* server, EntityID ID, b32 completeUpd
             PackR32(def, misc->attackDistance);
             PackR32(def, misc->attackContinueCoeff);
             PackR32(def, misc->lightRadious);
+            PackR32(def, misc->flowerDensity);
+            PackR32(def, misc->fruitDensity);
             
             result = ForgEndPacket_(buff_, buff);
             

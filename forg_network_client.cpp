@@ -648,10 +648,14 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 r32 attackDistance = 0;
                 r32 attackContinueCoeff = 0;
                 r32 lightRadious = 0;
+                r32 flowerDensity = 0;
+                r32 fruitDensity = 0;
                 
                 UnpackFlags(MiscFlag_AttackDistance, "d", &attackDistance);
                 UnpackFlags(MiscFlag_AttackContinueCoeff, "d", &attackContinueCoeff);
                 UnpackFlags(MiscFlag_LightRadious, "d", &lightRadious);
+                UnpackFlags(MiscFlag_FlowerDensity, "d", &flowerDensity);
+                UnpackFlags(MiscFlag_FruitDensity, "d", &fruitDensity);
                 
                 MiscComponent* misc = GetComponent(worldMode, currentClientID, MiscComponent);
                 if(misc)
@@ -669,6 +673,16 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     if(receivedFlags & MiscFlag_LightRadious)
                     {
                         misc->lightRadious = lightRadious;
+                    }
+                    
+                    if(receivedFlags & MiscFlag_FlowerDensity)
+                    {
+                        misc->flowerDensity = flowerDensity;
+                    }
+                    
+                    if(receivedFlags & MiscFlag_FruitDensity)
+                    {
+                        misc->fruitDensity = fruitDensity;
                     }
                 }
                 

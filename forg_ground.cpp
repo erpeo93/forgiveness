@@ -87,7 +87,7 @@ internal void UpdateGround(GameModeWorld* worldMode, RenderGroup* group, Univers
                     {
                         textureIndex = AcquireSpecialTextureHandle(group->assets);
                     }
-                    chunk->texture.textureHandle = TextureHandle(textureIndex, MAX_IMAGE_DIM, MAX_IMAGE_DIM);
+                    chunk->texture.textureHandle = TextureHandle(textureIndex, MAX_TEXTURE_DIM, MAX_TEXTURE_DIM);
                     Assert(IsValidSpecial(&chunk->texture));
                     SetOrthographicTransform(group, chunkSide, chunkSide, textureIndex);  
                     

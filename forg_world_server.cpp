@@ -48,8 +48,7 @@ internal void SpawnPlayer(ServerState* server, UniversePos P, AddEntityParams pa
     runeParams.essences[fire] = 1;
     UniversePos runeP = Offset(P, V3(RandomBilV2(&server->entropy) * 0.5f * VOXEL_SIZE, 0));
     
-    
-    AddEntity(server, runeP, &server->entropy, type, runeParams);
+    //AddEntity(server, runeP, &server->entropy, type, runeParams);
     
 }
 
@@ -654,6 +653,26 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                 }
                 else
                 {
+                    resetAction = true;
+                }
+            }
+            else
+            {
+                resetAction = true;
+            }
+        } break;
+        
+        case mine:
+        case chop:
+        case harvest:
+        {
+            r32 targetTime;
+            if(ActionIsPossibleAtDistance(interaction, newAction, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
+            {
+                if(action->time >= targetTime)
+                {
+                    DispatchEntityEffects(server, targetDef->P, newAction, ID, targetID, elapsedTime, targetDef->essences);
+                    SignalCompletedCommand(server, ID, command);
                     resetAction = true;
                 }
             }

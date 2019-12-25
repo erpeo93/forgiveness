@@ -237,6 +237,8 @@ enum MiscFlags
     MiscFlag_AttackDistance = (1 << 0),
     MiscFlag_AttackContinueCoeff = (1 << 1),
     MiscFlag_LightRadious = (1 << 2),
+    MiscFlag_FlowerDensity = (1 << 3),
+    MiscFlag_FruitDensity = (1 << 4),
 };
 
 struct LoginResponse

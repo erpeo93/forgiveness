@@ -96,14 +96,15 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.angle = 0;
         params.P = P;
         params.lights = GetLights(worldMode, P);
-        params.scale = 1;
+        params.skeletonScale = 1;
+        params.bitmapScale = 1;
         params.transform = BillboardTransform();
         params.flipOnYAxis = animation->flipOnYAxis;
         params.equipment = GetComponent(worldMode, ID, EquipmentComponent);
         params.equipped = GetComponent(worldMode, ID, UsingComponent);
         params.tint = animationParams.tint;
         params.dissolveCoeff = animationParams.dissolveCoeff;
-        params.modulationPercentage = animationParams.modulationPercentage; 
+        params.modulationPercentage = 0; 
         params.replacementCount = definition->client.replacementCount;
         params.replacements = definition->client.animationReplacements;
         params.ID = ID;
@@ -132,8 +133,19 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
             
         }
         
-        params.scale = animation->scale;
+        params.skeletonScale = animation->scale;
+        params.bitmapScale = animation->scale;
         RenderAnimationAndTriggerSounds(worldMode, group, animation, &params);
+        
+        
+        if(animationParams.modulationPercentage > 0)
+        {
+            params.bitmapScale *= animation->scaleCoeffWhenOnFocus;
+            params.P += animation->cameraZOffsetWhenOnFocus * group->gameCamera.Z;
+            params.modulationPercentage = animationParams.modulationPercentage;
+            params.elapsedTime = 0;
+            RenderAnimationAndTriggerSounds(worldMode, group, animation, &params);
+        }
     }
 }
 
@@ -260,7 +272,6 @@ RENDERING_ECS_JOB_CLIENT(RenderRock)
                         AddGameProperty(&rock->mineral.properties, essence, essence);
                         BitmapId mineralID = GetImageFromReference(group->assets, &rock->mineral, &seq);
                         
-                        
                         if(IsValid(mineralID))
                         {
                             ColoredBitmap b = GetBitmap(group->assets, mineralID);
@@ -328,6 +339,11 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
     elapsedTime *= params.speed;
     
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    MiscComponent* misc = GetComponent(worldMode, ID, MiscComponent);
+    
+    r32 leafDensity = 1.0f;
+    r32 flowerDensity = misc->flowerDensity;
+    r32 fruitDensity = misc->fruitDensity;
     
     Vec3 cameraZ = group->gameCamera.Z;
     r32 zOffset = 0.001f;
@@ -499,19 +515,19 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
                                     {
                                         LFF = leafIDs[variantIndex];
                                         C = leafC;
-                                        dissolveCoeff = GetDissolveCoeff(plant->leafDensity, leafRunningIndex++);
+                                        dissolveCoeff = GetDissolveCoeff(leafDensity, leafRunningIndex++);
                                     }
                                     else if(baseHash == flowerHash)
                                     {
                                         LFF = flowerIDs[variantIndex];
                                         C = flowerC;
-                                        dissolveCoeff = GetDissolveCoeff(plant->flowerDensity, flowerRunningIndex++);
+                                        dissolveCoeff = GetDissolveCoeff(flowerDensity, flowerRunningIndex++);
                                     }
                                     else if(baseHash == fruitHash)
                                     {
                                         LFF = fruitIDs[variantIndex];
                                         C = fruitC;
-                                        dissolveCoeff = GetDissolveCoeff(plant->fruitDensity, fruitRunningIndex++);
+                                        dissolveCoeff = GetDissolveCoeff(fruitDensity, fruitRunningIndex++);
                                     }
                                     
                                     dissolveCoeff = Max(dissolveCoeff, params.dissolveCoeff);
@@ -989,7 +1005,9 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
         {
             if(IsValid(BID))
             {
-                BitmapDim dim = GetBitmapDim(group, transform, BID, P, piece->height);
+                ObjectTransform pieceTransform = transform;
+                pieceTransform.tint = Hadamart(pieceTransform.tint, piece->color);
+                BitmapDim dim = GetBitmapDim(group, pieceTransform, BID, P, piece->height);
                 if(transform.upright)
                 {
                     result = ProjectOnScreen(group, dim);
@@ -999,7 +1017,7 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                     result = RectMinDim(dim.P.xy, dim.size);
                 }
                 
-                PushBitmap(group, transform, BID, P, piece->height, lights);
+                PushBitmap(group, pieceTransform, BID, P, piece->height, lights);
                 if(container->container)
                 {
                     ContainerComponent* c = container->container;
@@ -1374,7 +1392,7 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
     
     if(interaction && interaction->isOnFocus)
     {
-        effects->params.modulationPercentage = 1.0f;
+        effects->params.modulationPercentage = effects->outlineWidth;
     }
     
     if(tintCount > 0)
@@ -1395,7 +1413,6 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
         }
     }
     effects->params.tint = Hadamart(effects->params.tint, V4(fadeInOutColor, 1));
-    
     
     if(slowDownCount > 0)
     {
@@ -1447,6 +1464,8 @@ inline b32 ValidVector(Vec3 original, Vec3 pick)
     return result;
 }
 
+
+#if 0
 RENDERING_ECS_JOB_CLIENT(UpdateAndRenderBolt)
 {
     BoltComponent* bolt = GetComponent(worldMode, ID, BoltComponent);
@@ -1556,3 +1575,4 @@ RENDERING_ECS_JOB_CLIENT(UpdateAndRenderBolt)
         EndTemporaryMemory(subdivisionsMemory);
     }
 }
+#endif

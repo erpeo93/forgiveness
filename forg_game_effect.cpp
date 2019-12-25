@@ -34,7 +34,7 @@ internal void DamageEntityMentally(ServerState* server, EntityID ID, u32 damage)
 }
 
 internal void DeleteEntity(ServerState* server, EntityID ID, DeleteEntityReasonType reason = DeleteEntity_None);
-internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos targetP, GameEffect* effect, EntityID targetID, u16* essences)
+internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos targetP, GameEffect* effect, EntityID otherID, u16* essences)
 {
     switch(effect->effectType.value)
     {
@@ -47,7 +47,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
         {
             AddEntityParams params = SpawnEntityParams(ID);
             
-            DefaultComponent* targetDef = GetComponent(server, targetID, DefaultComponent);
+            DefaultComponent* targetDef = GetComponent(server, otherID, DefaultComponent);
             DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
             Vec3 toTarget = SubtractOnSameZChunk(targetDef->P, def->P);
             params.acceleration = toTarget;
@@ -70,7 +70,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
         
         case moveOnZSlice:
         {
-            EntityID destID = targetID;
+            EntityID destID = otherID;
             DefaultComponent* def = GetComponent(server, destID, DefaultComponent);
             if((def->P.chunkZ + 1) == (i32) server->maxDeepness)
             {
@@ -84,8 +84,8 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
         
         case lightRadious:
         {
-            MiscComponent* misc = GetComponent(server, targetID, MiscComponent);
-            DefaultComponent* targetDef = GetComponent(server, targetID, DefaultComponent);
+            MiscComponent* misc = GetComponent(server, otherID, MiscComponent);
+            DefaultComponent* targetDef = GetComponent(server, otherID, DefaultComponent);
             if(misc)
             {
                 SetR32(targetDef, &misc->lightRadious, Max(GetR32(misc->lightRadious), 3.0f));
@@ -94,7 +94,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
         
         case deleteTarget:
         {
-            DeleteEntity(server, targetID);
+            DeleteEntity(server, otherID);
         } break;
         
         case deleteSelf:
@@ -105,21 +105,55 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
         case damagePhysically:
         {
             u32 damage = 1;
-            DamageEntityPhysically(server, targetID, damage);
+            DamageEntityPhysically(server, otherID, damage);
         } break;
         
         case damageMentally:
         {
             u32 damage = 1;
-            DamageEntityMentally(server, targetID, damage);
+            DamageEntityMentally(server, otherID, damage);
         } break;
         
         case addSkillPoint:
         {
-            if(HasComponent(targetID, PlayerComponent))
+            if(HasComponent(otherID, PlayerComponent))
             {
-                PlayerComponent* player = GetComponent(server, targetID, PlayerComponent);
+                PlayerComponent* player = GetComponent(server, otherID, PlayerComponent);
                 ++player->skillPoints;
+            }
+        } break;
+        
+        case dropFlowers:
+        {
+            MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+            DefaultComponent* targetDef = GetComponent(server, ID, DefaultComponent);
+            if(misc)
+            {
+                r32 flowerDensity = GetR32(misc->flowerDensity);
+                if(flowerDensity > 0)
+                {
+                    Vec3 offset = Hadamart(RandomBilV3(&server->entropy), V3(0.5f, 0.5f, 0));
+                    UniversePos P = Offset(targetP, offset);
+                    AddEntity(server, P, &server->entropy, effect->spawnType, DefaultAddEntityParams());
+                    SetR32(targetDef, &misc->flowerDensity, 0);
+                }
+            }
+        } break;
+        
+        case dropFruits:
+        {
+            MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+            DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+            if(misc)
+            {
+                r32 fruitDensity = GetR32(misc->fruitDensity);
+                if(fruitDensity > 0)
+                {
+                    Vec3 offset = Hadamart(RandomBilV3(&server->entropy), V3(0.5f, 0.5f, 0));
+                    UniversePos P = Offset(targetP, offset);
+                    AddEntity(server, P, &server->entropy, effect->spawnType, DefaultAddEntityParams());
+                    SetR32(def, &misc->fruitDensity, 0);
+                }
             }
         } break;
     }

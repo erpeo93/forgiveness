@@ -611,6 +611,27 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
 {
     Assert(IsValid(newEntity->definitionID));
     EntityDefinition* definition = GetData(server->assets, EntityDefinition, newEntity->definitionID);
+    
+    b32 essencesPresent = false;
+    for(u16 essenceIndex = 0; essenceIndex < ArrayCount(newEntity->params.essences); ++essenceIndex)
+    {
+        if(newEntity->params.essences[essenceIndex] > 0)
+        {
+            essencesPresent = true;
+            break;
+        }
+    }
+    
+    if(!essencesPresent)
+    {
+        for(u32 essenceIndex = 0; essenceIndex < definition->server.defaultEssenceCount; ++essenceIndex)
+        {
+            u16 essence = GetRandomEssence(&server->entropy);
+            ++newEntity->params.essences[essence];
+        }
+    }
+    
+    
     EntityID ID = {};
     ServerEntityInitParams params = definition->server;
     params.P = newEntity->P;

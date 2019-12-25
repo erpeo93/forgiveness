@@ -75,24 +75,9 @@ INIT_COMPONENT_FUNCTION(InitDefaultComponent)
         AddEntityFlags(def, EntityFlag_fearsLight);
     }
     
-    b32 addedSomething = false;
     for(u16 essenceIndex = 0; essenceIndex < Count_essence; ++essenceIndex)
     {
-        if(common->essences[essenceIndex] > 0)
-        {
-            addedSomething = true;
-        }
         def->essences[essenceIndex] = common->essences[essenceIndex];
-    }
-    
-    if(!addedSomething)
-    {
-        RandomSequence seq = Seed(def->seed);
-        for(u32 essenceIndex = 0; essenceIndex < s->defaultEssenceCount; ++essenceIndex)
-        {
-            u16 essence = GetRandomEssence(&seq);
-            ++def->essences[essence];
-        }
     }
 }
 
@@ -141,11 +126,20 @@ internal void AddRandomEffects(EffectComponent* effects, EffectBinding* bindings
     }
 }
 
+
 INIT_COMPONENT_FUNCTION(InitEffectComponent)
 {
     ServerState* server = (ServerState*) state;
     EffectComponent* effect = (EffectComponent*) componentPtr;
     
+    for(ArrayCounter effectIndex = 0; effectIndex < s->defaultEffectsCount; ++effectIndex)
+    {
+        if(effect->effectCount < ArrayCount(effect->effects))
+        {
+            GameEffect* dest = effect->effects + effect->effectCount++;
+            *dest = s->defaultEffects[effectIndex];
+        }
+    }
     u16* essences = common->essences;
     AddRandomEffects(effect, s->bindings, s->bindingCount, essences);
 }
@@ -262,6 +256,8 @@ INIT_COMPONENT_FUNCTION(InitMiscComponent)
     misc->attackDistance = InitR32(miscPropertiesChanged, MiscFlag_AttackDistance, 1.0f);
     misc->attackContinueCoeff = InitR32(miscPropertiesChanged, MiscFlag_AttackContinueCoeff, 2.0f);
     misc->lightRadious = InitR32(miscPropertiesChanged, MiscFlag_LightRadious, s->lightRadious);
+    misc->flowerDensity = InitR32(miscPropertiesChanged, MiscFlag_FlowerDensity, common->flowerDensity);
+    misc->fruitDensity = InitR32(miscPropertiesChanged, MiscFlag_FruitDensity, common->fruitDensity);
 }
 
 #else
@@ -333,6 +329,8 @@ INIT_COMPONENT_FUNCTION(InitAnimationComponent)
     animation->skeletonHash =c->skeleton.subtypeHash;
     animation->skeletonProperties = {};
     animation->flipOnYAxis = 0;
+    animation->cameraZOffsetWhenOnFocus = c->cameraZOffsetWhenOnFocus;
+    animation->scaleCoeffWhenOnFocus = c->scaleCoeffWhenOnFocus;
     animation->scale = 0;
     animation->speed = 1.0f;
     animation->defaultScaleComputed = false;
@@ -391,9 +389,6 @@ INIT_COMPONENT_FUNCTION(InitPlantComponent)
     InitImageReference(assets, &dest, &c, fruit);
     
     dest->windInfluence = c->windInfluence;
-    dest->leafDensity = 1.0f;
-    dest->flowerDensity = 1.0f;
-    dest->fruitDensity = 1.0f;
 }
 
 INIT_COMPONENT_FUNCTION(InitStandardImageComponent)
@@ -515,6 +510,7 @@ internal void InitLayout(Assets* assets, LayoutPiece* destPieces, u32* destPiece
             InitImageReference_(assets, &destPiece->image, &piece->properties);
             destPiece->nameHash = StringHash(piece->name.name);
             destPiece->height = piece->height;
+            destPiece->color = piece->color;
             destPiece->inventorySlotType = PropertyToU16(inventorySlotType, piece->inventorySlotType);
             if(destPiece->inventorySlotType == 0xffff)
             {
@@ -601,6 +597,7 @@ INIT_COMPONENT_FUNCTION(InitAnimationEffectComponent)
         FreeAnimationEffect(effect);
     }
     animation->effectCount = 0;
+    animation->outlineWidth = c->outlineWidth;
 }
 
 INIT_COMPONENT_FUNCTION(InitSoundEffectComponent)
@@ -640,6 +637,8 @@ INIT_COMPONENT_FUNCTION(InitMiscComponent)
     misc->attackDistance = 0;
     misc->attackContinueCoeff = 0;
     misc->lightRadious = 0;
+    misc->flowerDensity = common->flowerDensity;
+    misc->fruitDensity = common->fruitDensity;
 }
 
 INIT_COMPONENT_FUNCTION(InitSkillComponent)
