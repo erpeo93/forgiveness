@@ -76,6 +76,8 @@ struct EntityAnimationParams
     Vec4 tint;
     r32 dissolveCoeff;
     r32 speed;
+    r32 scale;
+    Vec3 offset;
 };
 
 inline EntityAnimationParams DefaultAnimationParams()
@@ -83,6 +85,7 @@ inline EntityAnimationParams DefaultAnimationParams()
     EntityAnimationParams result = {};
     result.tint = V4(1, 1, 1, 1);
     result.speed = 1.0f;
+    result.scale = 1.0f;
     
     return result;
 }
@@ -99,6 +102,11 @@ struct AnimationEffectComponent
     AnimationEffect effects[MAX_ACTIVE_EFFECTS];
     
     r32 outlineWidth;
+    
+    r32 speedOnFocus;
+    r32 speedOnNoFocus;
+    Vec3 offsetMaxOnFocus;
+    r32 scaleMaxOnFocus;
 };
 
 struct AnimationComponent
@@ -124,6 +132,8 @@ struct AnimationComponent
     r32 speed;
     
     Vec3 spawnProjectileOffset;
+    
+    Vec4 colorations[4];
 };
 
 struct AnimationPiece
@@ -150,6 +160,8 @@ introspection() struct PieceReplacement
     
     b32 inheritHeight MetaDefault("true");
     r32 height;
+    
+    u16 colorationIndex;
 };
 
 introspection() struct AnimationReplacement

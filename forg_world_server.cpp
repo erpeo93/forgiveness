@@ -38,18 +38,21 @@ internal void AddEntity(ServerState* server, UniversePos P, u32 seed, EntityRef 
     AddEntity_(server, P, definitionID, seed, params);
 }
 
+internal void SpawnPlayerObjects(ServerState* server, UniversePos playerP, u32 playerIndex)
+{
+    EntityRef type = EntityReference(server->assets, "default", "passive_rune");
+    AddEntityParams runeParams = EquipPlayerEntityParams(playerIndex);
+    runeParams.essences[fire] = 1;
+    UniversePos runeP = Offset(playerP, V3(RandomBilV2(&server->entropy) * 0.5f * VOXEL_SIZE, 0));
+    AddEntity(server, runeP, &server->entropy, type, runeParams);
+}
+
 internal void SpawnPlayer(ServerState* server, UniversePos P, AddEntityParams params)
 {
+    SpawnPlayerObjects(server, P, params.playerIndex);
+    
     EntityRef type = EntityReference(server->assets, "default", "human");
     AddEntity(server, P, &server->entropy, type, params);
-    
-    type = EntityReference(server->assets, "default", "passive_rune");
-    AddEntityParams runeParams = DefaultAddEntityParams();
-    runeParams.essences[fire] = 1;
-    UniversePos runeP = Offset(P, V3(RandomBilV2(&server->entropy) * 0.5f * VOXEL_SIZE, 0));
-    
-    //AddEntity(server, runeP, &server->entropy, type, runeParams);
-    
 }
 
 internal void SpawnZombie(ServerState* server, UniversePos P, AddEntityParams params)
@@ -537,6 +540,31 @@ internal void AbsorbEssences(ServerState* server, EntityID ID, EntityID targetID
     }
 }
 
+internal void Pick(ServerState* server, EntityID ID, EntityID targetID)
+{
+    if(!Use(server, ID, targetID))
+    {
+        if(!Equip(server, ID, targetID))
+        {
+            EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+            if(equipment)
+            {
+                for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->slots); ++equipIndex)
+                {
+                    EntityID equipID = GetBoundedID(equipment->slots + equipIndex);
+                    if(IsValidID(equipID) && HasComponent(equipID, ContainerComponent))
+                    {
+                        if(StoreInContainer(server, equipID, targetID))
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* command, CommandParameters* parameters, r32 elapsedTime, b32 updateAction)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
@@ -665,6 +693,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         case mine:
         case chop:
         case harvest:
+        case touch:
         {
             r32 targetTime;
             if(ActionIsPossibleAtDistance(interaction, newAction, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
@@ -694,26 +723,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                         if(!EntityHasFlags(targetDef, EntityFlag_notInWorld) && 
                            targetDef->P.chunkZ == def->P.chunkZ)
                         {
-                            if(!Use(server, ID, targetID))
-                            {
-                                if(!Equip(server, ID, targetID))
-                                {
-                                    if(equipment)
-                                    {
-                                        for(u32 equipIndex = 0; equipIndex < ArrayCount(equipment->slots); ++equipIndex)
-                                        {
-                                            EntityID equipID = GetBoundedID(equipment->slots + equipIndex);
-                                            if(IsValidID(equipID) && HasComponent(equipID, ContainerComponent))
-                                            {
-                                                if(StoreInContainer(server, equipID, targetID))
-                                                {
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            Pick(server, ID, targetID);
                         }
                         resetAction = true;
                         SignalCompletedCommand(server, ID, command);
@@ -1150,7 +1160,7 @@ internal b32 ShouldOverlap(u16 b1, u16 b2)
 internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, PhysicComponent* physic, EntityID ID, r32 elapsedTime)
 {
     UniversePos oldP = def->P;
-    Vec3 acceleration = Normalize(physic->acc) *physic->accelerationCoeff;
+    Vec3 acceleration = V3(Normalize(physic->acc.xy) *physic->accelerationCoeff, 0);
     Vec3 velocity = physic->speed;
     r32 dt = elapsedTime;
     acceleration.xy += physic->drag * velocity.xy;
@@ -1365,6 +1375,19 @@ STANDARD_ECS_JOB_SERVER(DamageEntityFearingLight)
             DamageEntityPhysically(server, ID, damage);
         }
     }
+}
+
+STANDARD_ECS_JOB_SERVER(UpdatePlant)
+{
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    PlantComponent* plant = GetComponent(server, ID, PlantComponent);
+    MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+    
+    r32 newFlowerDensity = Clamp01(GetR32(misc->flowerDensity) + elapsedTime * plant->flowerGrowingSpeed);
+    r32 newFruitDensity = Clamp01(GetR32(misc->fruitDensity) + elapsedTime * plant->fruitGrowingSpeed);
+    
+    SetR32(def, &misc->flowerDensity, newFlowerDensity);
+    SetR32(def, &misc->fruitDensity, newFruitDensity);
 }
 
 STANDARD_ECS_JOB_SERVER(DealLightDamage)

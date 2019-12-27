@@ -143,6 +143,7 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
             params.bitmapScale *= animation->scaleCoeffWhenOnFocus;
             params.P += animation->cameraZOffsetWhenOnFocus * group->gameCamera.Z;
             params.modulationPercentage = animationParams.modulationPercentage;
+            params.flipOnYAxis = animation->flipOnYAxis;
             params.elapsedTime = 0;
             RenderAnimationAndTriggerSounds(worldMode, group, animation, &params);
         }
@@ -194,14 +195,22 @@ RENDERING_ECS_JOB_CLIENT(RenderShadow)
     RenderShadow(worldMode, group, P, shadow, deepness, width);
 }
 
-internal r32 GetDissolveCoeff(r32 density, u32 index)
+internal r32 GetDissolveCoeff(r32 density, r32 dissolveDuration, u32 index)
 {
     RandomSequence seq = Seed(index);
-    r32 startDissolving = RandomUni(&seq);
-    r32 endDissolving = startDissolving - 0.05f;
+    r32 startDissolving = Max(RandomUni(&seq), dissolveDuration);
+    r32 endDissolving = startDissolving - dissolveDuration;
     endDissolving = Max(endDissolving, 0);
     
-    r32 result = 1.0f - Clamp01MapToRange(endDissolving, density, startDissolving);
+    r32 result = 0.0f;
+    if(startDissolving != endDissolving)
+    {
+        result = 1.0f - Clamp01MapToRange(endDissolving, density, startDissolving);
+    }
+    else
+    {
+        result = (density > startDissolving) ? 0.0f : 1.0f;
+    }
     
     return result;
 }
@@ -306,7 +315,7 @@ RENDERING_ECS_JOB_CLIENT(RenderRock)
                                 Vec4 windInfluences = V4(0, 0, 0, 0);
                                 u8 windFrequency = 1;
                                 u8 seed = (u8) mineralPointIndex;
-                                r32 dissolveCoeff = GetDissolveCoeff(rock->mineralDensity, mineralRunningIndex++);
+                                r32 dissolveCoeff = GetDissolveCoeff(rock->mineralDensity, 0.05f, mineralRunningIndex++);
                                 dissolveCoeff = Max(dissolveCoeff, params.dissolveCoeff);
                                 Vec4 dissolvePercentages = dissolveCoeff * V4(1, 1, 1, 1);
                                 r32 alphaThreesold = 0;
@@ -340,10 +349,12 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
     
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     MiscComponent* misc = GetComponent(worldMode, ID, MiscComponent);
+    PlantComponent* plant = GetComponent(worldMode, ID, PlantComponent);
     
     r32 leafDensity = 1.0f;
     r32 flowerDensity = misc->flowerDensity;
     r32 fruitDensity = misc->fruitDensity;
+    r32 dissolveDuration = plant->dissolveDuration;
     
     Vec3 cameraZ = group->gameCamera.Z;
     r32 zOffset = 0.001f;
@@ -353,8 +364,6 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
         r32 height = GetHeight(base->bounds);
         Vec3 P = GetRelativeP(worldMode, base);
         Lights lights = GetLights(worldMode, P);
-        
-        PlantComponent* plant = GetComponent(worldMode, ID, PlantComponent);
         
         u32 branchC = StoreColor(plant->branchColor);
         u32 leafC = StoreColor(plant->leafColor);
@@ -515,19 +524,19 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
                                     {
                                         LFF = leafIDs[variantIndex];
                                         C = leafC;
-                                        dissolveCoeff = GetDissolveCoeff(leafDensity, leafRunningIndex++);
+                                        dissolveCoeff = GetDissolveCoeff(leafDensity, dissolveDuration, leafRunningIndex++);
                                     }
                                     else if(baseHash == flowerHash)
                                     {
                                         LFF = flowerIDs[variantIndex];
                                         C = flowerC;
-                                        dissolveCoeff = GetDissolveCoeff(flowerDensity, flowerRunningIndex++);
+                                        dissolveCoeff = GetDissolveCoeff(flowerDensity, dissolveDuration, flowerRunningIndex++);
                                     }
                                     else if(baseHash == fruitHash)
                                     {
                                         LFF = fruitIDs[variantIndex];
                                         C = fruitC;
-                                        dissolveCoeff = GetDissolveCoeff(fruitDensity, fruitRunningIndex++);
+                                        dissolveCoeff = GetDissolveCoeff(fruitDensity, dissolveDuration, fruitRunningIndex++);
                                     }
                                     
                                     dissolveCoeff = Max(dissolveCoeff, params.dissolveCoeff);
@@ -672,14 +681,19 @@ RENDERING_ECS_JOB_CLIENT(RenderGrass)
                 Lights lights = GetLights(worldMode, P);
                 P -= quad->offset;
                 
-                BaseComponent* playerBase = GetComponent(worldMode, worldMode->player.clientID, BaseComponent);
                 
                 u8 windFrequency = (u8) grass->windFrequencyStandard;
-                if(RectOverlaps(Offset(grass->bounds, P), playerBase->bounds) 
-                   && LengthSq(playerBase->velocity) > 0.1f
-                   )
+                
+                
+                BaseComponent* playerBase = GetComponent(worldMode, worldMode->player.clientID, BaseComponent);
+                if(playerBase)
                 {
-                    windFrequency = (u8) grass->windFrequencyOverlap;
+                    if(RectOverlaps(Offset(grass->bounds, P), playerBase->bounds) 
+                       && LengthSq(playerBase->velocity) > 0.1f
+                       )
+                    {
+                        windFrequency = (u8) grass->windFrequencyOverlap;
+                    }
                 }
                 Vec4 windInfluences = V4(0, 0, grass->windInfluence, grass->windInfluence);
                 windInfluences = V4(0, 0, 0, 0);
@@ -816,94 +830,104 @@ internal void DrawRecipeContent(GameModeWorld* worldMode, RenderGroup* group, u3
     Vec2 half = 0.5f * dim;
     
     transform.modulationPercentage = 0;
+    
+    Vec2 recipeMin = V2(rect.min.x, rect.min.y + half.y);
+    Rect2 recipeRect = RectMinDim(recipeMin, V2(dim.x, half.y));
+    
     u16 recipeEssences[Count_essence] = {};
-    if(essences)
+    if(transform.upright)
     {
-        Vec2 startingSlotP = rect.min;
-        Rect2 essenceTotalRect = RectMinDim(startingSlotP, V2(dim.x, 0.5f * half.y));
-        
-        
-        u16 essenceCount = GetCraftingEssenceCount(group->assets, type, recipeSeed);
-        r32 essenceWidth = dim.x / essenceCount;
-        
-        Rect2 essenceRect = RectMinDim(startingSlotP, V2(essenceWidth, 0.5f * half.y));
-        for(u32 slotIndex = 0; slotIndex < essenceCount; ++slotIndex)
-        {
-            essences->projectedOnScreen[slotIndex] = essenceRect;
-            u16 essence = essences->essences[slotIndex];
-            BaseComponent* playerBase = GetComponent(worldMode, worldMode->player.clientID, BaseComponent);
-            
-            Vec4 color = V4(1, 1, 1, 1);
-            if(essence < Count_essence && playerBase->essences[essence] > 0)
-            {
-            }
-            else
-            {
-                color = V4(1, 1, 1, 0.1f);
-            }
-            
-            OverdrawEssence(worldMode, group, transform, essence, essenceRect, color);
-            ++recipeEssences[essence];
-            
-            essenceRect = Offset(essenceRect, V2(essenceWidth, 0));
-        }
+        recipeMin = rect.min;
+        recipeRect = RectMinDim(recipeMin, dim);
     }
-    
-    u32 craftSeed = recipeSeed;
-    
-    Vec2 startingCompP = rect.min + 0.25f * V2(0, dim.y);
-    Rect2 componentTotalRect = RectMinDim(startingCompP, V2(dim.x, 0.5f * half.y));
-    
-    EntityRef components[8];
-    b32 deleteAfterCrafting[8];
-    u16 componentCount = GetCraftingComponents(group->assets, type, craftSeed, components, deleteAfterCrafting, ArrayCount(components));
-    if(componentCount > 0)
+    else
     {
-        r32 componentWidth = dim.x / componentCount;
-        Rect2 componentRect = RectMinDim(startingCompP, V2(componentWidth, 0.5f * half.y));
-        
-        for(u16 componentIndex = 0; componentIndex < componentCount; ++componentIndex)
+        if(essences)
         {
-            EntityID ID;
-            if(EntityHasType(worldMode, worldMode->player.clientID, components[componentIndex], &ID))
+            Vec2 startingSlotP = rect.min;
+            Rect2 essenceTotalRect = RectMinDim(startingSlotP, V2(dim.x, 0.5f * half.y));
+            
+            u16 essenceCount = GetCraftingEssenceCount(group->assets, type, recipeSeed);
+            r32 essenceWidth = dim.x / essenceCount;
+            
+            Rect2 essenceRect = RectMinDim(startingSlotP, V2(essenceWidth, 0.5f * half.y));
+            for(u32 slotIndex = 0; slotIndex < essenceCount; ++slotIndex)
             {
-                transform.tint = V4(1, 1, 1, 1);
-                RenderObjectInRect(worldMode, group, ID, transform, P, spaceDim.P, componentRect, lights, 0);
-            }
-            else
-            {
-                transform.tint.a *= 0.4f;
+                essences->projectedOnScreen[slotIndex] = essenceRect;
+                u16 essence = essences->essences[slotIndex];
+                BaseComponent* playerBase = GetComponent(worldMode, worldMode->player.clientID, BaseComponent);
                 
-                u32 componentSeed = 0;
-                LayoutComponent layout = {};
-                EntityDefinition* definition = GetEntityTypeDefinition(group->assets, components[componentIndex]);
-                
-                CommonEntityInitParams common = definition->common;
-                common.definitionID = type;
-                common.essences = 0;
-                ClientEntityInitParams entityParams = definition->client;
-                entityParams.seed = componentSeed;
-                
-                InitLayoutComponent(worldMode, &layout, {}, &common, 0, &entityParams);
-                LayoutContainer componentContainer = {};
-                
-                if(transform.upright)
+                Vec4 color = V4(1, 1, 1, 1);
+                if(playerBase)
                 {
-                    RenderLayoutInRectCameraAligned(worldMode, group, P, spaceDim.P, componentRect, transform, &layout, componentSeed, lights, &componentContainer, 0);
+                    
+                }
+                if(essence < Count_essence && playerBase && playerBase->essences[essence] > 0)
+                {
                 }
                 else
                 {
-                    RenderLayoutInRect(worldMode, group, componentRect, transform, &layout, componentSeed, lights, &componentContainer, 0, 0);
+                    color = V4(1, 1, 1, 0.1f);
                 }
+                
+                OverdrawEssence(worldMode, group, transform, essence, essenceRect, color);
+                ++recipeEssences[essence];
+                essenceRect = Offset(essenceRect, V2(essenceWidth, 0));
             }
-            
-            componentRect = Offset(componentRect, V2(componentWidth, 0));
         }
         
+        u32 craftSeed = recipeSeed;
+        
+        Vec2 startingCompP = rect.min + 0.25f * V2(0, dim.y);
+        Rect2 componentTotalRect = RectMinDim(startingCompP, V2(dim.x, 0.5f * half.y));
+        
+        EntityRef components[8];
+        b32 deleteAfterCrafting[8];
+        u16 componentCount = GetCraftingComponents(group->assets, type, craftSeed, components, deleteAfterCrafting, ArrayCount(components));
+        if(componentCount > 0)
+        {
+            r32 componentWidth = dim.x / componentCount;
+            Rect2 componentRect = RectMinDim(startingCompP, V2(componentWidth, 0.5f * half.y));
+            
+            for(u16 componentIndex = 0; componentIndex < componentCount; ++componentIndex)
+            {
+                EntityID ID;
+                if(EntityHasType(worldMode, worldMode->player.clientID, components[componentIndex], &ID))
+                {
+                    transform.tint = V4(1, 1, 1, 1);
+                    RenderObjectInRect(worldMode, group, ID, transform, P, spaceDim.P, componentRect, lights, 0);
+                }
+                else
+                {
+                    transform.tint.a *= 0.4f;
+                    
+                    u32 componentSeed = 0;
+                    LayoutComponent layout = {};
+                    EntityDefinition* definition = GetEntityTypeDefinition(group->assets, components[componentIndex]);
+                    
+                    CommonEntityInitParams common = definition->common;
+                    common.definitionID = type;
+                    common.essences = 0;
+                    ClientEntityInitParams entityParams = definition->client;
+                    entityParams.seed = componentSeed;
+                    
+                    InitLayoutComponent(worldMode, &layout, {}, &common, 0, &entityParams);
+                    LayoutContainer componentContainer = {};
+                    
+                    if(transform.upright)
+                    {
+                        RenderLayoutInRectCameraAligned(worldMode, group, P, spaceDim.P, componentRect, transform, &layout, componentSeed, lights, &componentContainer, 0);
+                    }
+                    else
+                    {
+                        RenderLayoutInRect(worldMode, group, componentRect, transform, &layout, componentSeed, lights, &componentContainer, 0, 0);
+                    }
+                }
+                
+                componentRect = Offset(componentRect, V2(componentWidth, 0));
+            }
+        }
     }
-    
-    Vec2 recipeMin = V2(rect.min.x, rect.min.y + half.y);
-    Rect2 recipeRect = RectMinDim(recipeMin, half);
     
     LayoutComponent layout = {};
     EntityDefinition* definition = GetEntityTypeDefinition(group->assets, type);
@@ -917,6 +941,7 @@ internal void DrawRecipeContent(GameModeWorld* worldMode, RenderGroup* group, u3
     InitLayoutComponent(worldMode, &layout, {}, &common, 0, &entityParams);
     LayoutContainer recipeContainer = {};
     
+    transform.cameraOffset.z += 0.1f;
     if(transform.upright)
     {
         RenderLayoutInRectCameraAligned(worldMode, group, P, spaceDim.P, recipeRect, transform, &layout, recipeSeed, lights, &recipeContainer, 0);
@@ -1092,9 +1117,11 @@ internal Rect2 RenderLayoutRecursive_(GameModeWorld* worldMode, RenderGroup* gro
                     if(attachmentPoint)
                     {
                         Vec3 newP = GetAlignP(dim, attachmentPoint->alignment);
+                        
                         ObjectTransform finalTransform = transform;
                         finalTransform.angle += attachmentPoint->angle;
                         finalTransform.scale = Hadamart(finalTransform.scale, attachmentPoint->scale);
+                        finalTransform.cameraOffset.z += attachmentPoint->zOffset;
                         
                         Rect2 subRect = RenderLayoutRecursive_(worldMode, group, newP, finalTransform, layout, StringHash(attachmentPoint->name), seed, lights, container, elapsedTime);
                         result = Union(result, subRect);
@@ -1112,7 +1139,6 @@ internal Rect2 RenderLayout(GameModeWorld* worldMode, RenderGroup* group, Vec3 P
     Rect2 result = RenderLayoutRecursive_(worldMode, group, P, transform, layout, layout->rootHash, seed, lights, container, elapsedTime);
     return result;
 }
-
 
 internal Rect2 RenderLayoutSpecificPiece(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container, r32 elapsedTime, u64 pieceHash)
 {
@@ -1157,14 +1183,13 @@ internal void RenderLayoutInRectCameraAligned(GameModeWorld* worldMode, RenderGr
     r32 scale = Min(desiredDim.x / dim.x, desiredDim.y / dim.y);
     transform.scale *= scale;
     
-    Rect2 finalLayoutDim = GetLayoutDim(group, P, transform, layout, seed, container);
     
+    Rect2 finalLayoutDim = GetLayoutDim(group, P, transform, layout, seed, container);
     Vec3 drawnCenter = UnprojectAtZ(group, &group->gameCamera, GetCenter(finalLayoutDim), rectP.z);
     Vec3 desiredCenter = UnprojectAtZ(group, &group->gameCamera, GetCenter(cameraRect), rectP.z);
-    
     Vec3 offset = drawnCenter - desiredCenter;
-    transform.cameraOffset.x -= Dot(offset, group->gameCamera.X);
-    transform.cameraOffset.y -= Dot(offset, group->gameCamera.Y);
+    transform.cameraOffset.x -= offset.x;
+    transform.cameraOffset.y -= offset.y;
     
     RenderLayout(worldMode, group, P, transform, layout, seed, lights, container, elapsedTime);
 }
@@ -1180,22 +1205,23 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
         r32 deepness = GetWidth(base->bounds);
         r32 width = GetWidth(base->bounds);
         
-        Vec3 P = GetRelativeP(worldMode, base);
+        Vec3 P = GetRelativeP(worldMode, base) + params.offset;
         Lights lights = GetLights(worldMode, P);
         LayoutComponent* layout = GetComponent(worldMode, ID, LayoutComponent);
         
         ObjectTransform transform = BillboardTransform();
         transform.angle = layout->rootAngle;
-        transform.scale = layout->rootScale;
+        transform.scale = layout->rootScale * params.scale;
         transform.tint = params.tint;
         transform.modulationPercentage = params.modulationPercentage; 
         transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1); 
         
         ContainerComponent* container = GetComponent(worldMode, ID, ContainerComponent);
         LayoutContainer layoutContainer = {};
+        layoutContainer.container = container; 
+        
         if(container && AreEqual(container->openedBy, worldMode->player.serverID))
         {
-            layoutContainer.container = container; 
             layoutContainer.drawMode = LayoutContainerDraw_Open;
         }
         
@@ -1295,8 +1321,13 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
     
     Vec3 P = GetRelativeP(worldMode, base);
     
+    r32 oldScale = effects->params.scale;
+    Vec3 oldOffset = effects->params.offset;
+    
     effects->params = DefaultAnimationParams();
-    effects->lightIntensity = 0;
+    
+    effects->params.scale = oldScale;
+    effects->params.offset = oldOffset;
     
     for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
     {
@@ -1390,9 +1421,35 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
         }
     }
     
+    b32 zoom = false;
     if(interaction && interaction->isOnFocus)
     {
         effects->params.modulationPercentage = effects->outlineWidth;
+        
+        r32 maxDistanceSqZoom = Square(2.0f);
+        r32 distanceSq =LengthSq(SubtractOnSameZChunk(base->universeP, worldMode->player.universeP));
+        if(distanceSq <= maxDistanceSqZoom)
+        {
+            effects->params.scale += effects->speedOnFocus * elapsedTime;
+            effects->params.scale = Min(effects->params.scale, effects->scaleMaxOnFocus);
+            
+            effects->params.offset += effects->speedOnFocus * V3(elapsedTime, elapsedTime, elapsedTime);
+            effects->params.offset.x = Min(effects->params.offset.x, effects->offsetMaxOnFocus.x);
+            effects->params.offset.y = Min(effects->params.offset.y, effects->offsetMaxOnFocus.y);
+            effects->params.offset.z = Min(effects->params.offset.z, effects->offsetMaxOnFocus.z);
+            zoom = true;
+        }
+    }
+    
+    if(!zoom)
+    {
+        effects->params.scale -= effects->speedOnNoFocus * elapsedTime;
+        effects->params.scale = Max(effects->params.scale, 1.0f);
+        
+        effects->params.offset -= effects->speedOnNoFocus * V3(elapsedTime, elapsedTime, elapsedTime);
+        effects->params.offset.x = Max(effects->params.offset.x, 0);
+        effects->params.offset.y = Max(effects->params.offset.y, 0);
+        effects->params.offset.z = Max(effects->params.offset.z, 0);
     }
     
     if(tintCount > 0)

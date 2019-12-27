@@ -34,6 +34,8 @@ internal void DamageEntityMentally(ServerState* server, EntityID ID, u32 damage)
 }
 
 internal void DeleteEntity(ServerState* server, EntityID ID, DeleteEntityReasonType reason = DeleteEntity_None);
+internal EntityRef GetCraftingType(Assets* assets, u32 recipeSeed);
+internal void AddEntity(ServerState* server, UniversePos P, u32 seed, EntityRef type, AddEntityParams params);
 internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos targetP, GameEffect* effect, EntityID otherID, u16* essences)
 {
     switch(effect->effectType.value)
@@ -41,6 +43,24 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
         case spawnEntity:
         {
             AddEntity(server, targetP, &server->entropy, effect->spawnType, DefaultAddEntityParams());
+        } break;
+        
+        case spawnRecipe:
+        {
+            EntityRef target = effect->spawnType;
+            EntityRef recipeType = EntityReference(server->assets, "default", "recipe");
+            
+            while(true)
+            {
+                u32 seed = GetNextUInt32(&server->entropy);
+                EntityRef rolled = GetCraftingType(server->assets, seed);
+                if(AreEqual(rolled, target))
+                {
+                    AddEntity(server, targetP, seed, recipeType, DefaultAddEntityParams());
+                    break;
+                }
+            }
+            
         } break;
         
         case spawnProjectileTowardTarget:
@@ -126,16 +146,19 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
         case dropFlowers:
         {
             MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+            PlantComponent* plant = GetComponent(server, ID, PlantComponent);
             DefaultComponent* targetDef = GetComponent(server, ID, DefaultComponent);
             if(misc)
             {
                 r32 flowerDensity = GetR32(misc->flowerDensity);
-                if(flowerDensity > 0)
+                
+                r32 requiredFlowerDensity = plant ? plant->requiredFlowerDensity : 1.0f;
+                if(flowerDensity >= requiredFlowerDensity)
                 {
                     Vec3 offset = Hadamart(RandomBilV3(&server->entropy), V3(0.5f, 0.5f, 0));
                     UniversePos P = Offset(targetP, offset);
                     AddEntity(server, P, &server->entropy, effect->spawnType, DefaultAddEntityParams());
-                    SetR32(targetDef, &misc->flowerDensity, 0);
+                    SetR32(targetDef, &misc->flowerDensity, flowerDensity - requiredFlowerDensity);
                 }
             }
         } break;
@@ -143,16 +166,18 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
         case dropFruits:
         {
             MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+            PlantComponent* plant = GetComponent(server, ID, PlantComponent);
             DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
             if(misc)
             {
                 r32 fruitDensity = GetR32(misc->fruitDensity);
-                if(fruitDensity > 0)
+                r32 requiredFruitDensity = plant ? plant->requiredFruitDensity : 1.0f;
+                if(fruitDensity >= requiredFruitDensity)
                 {
                     Vec3 offset = Hadamart(RandomBilV3(&server->entropy), V3(0.5f, 0.5f, 0));
                     UniversePos P = Offset(targetP, offset);
                     AddEntity(server, P, &server->entropy, effect->spawnType, DefaultAddEntityParams());
-                    SetR32(def, &misc->fruitDensity, 0);
+                    SetR32(def, &misc->fruitDensity, fruitDensity - requiredFruitDensity);
                 }
             }
         } break;

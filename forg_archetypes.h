@@ -32,11 +32,13 @@ Archetype() struct RockArchetype
     PhysicComponent physic;
     EffectComponent effect;
     InteractionComponent interaction;
+    MiscComponent misc;
 #else
     BaseComponent base;
     RockComponent rock;
     InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
+    MiscComponent misc;
 #endif
 };
 
@@ -47,6 +49,7 @@ Archetype() struct PlantArchetype
     PhysicComponent physic;
     EffectComponent effect;
     InteractionComponent interaction;
+    PlantComponent plant;
     MiscComponent misc;
 #else
     BaseComponent base;
@@ -216,6 +219,7 @@ introspection() struct CommonEntityInitParams
     GameProperty boundType MetaDefault("{Property_boundType, bound_invalid}") MetaFixed(property);
     Vec3 boundOffset;
     Vec3 boundDim MetaDefault("V3(1, 1, 1)");
+    Vec3 boundDimV;
     
     ArrayCounter groundActionCount MetaCounter("groundActions");
     PossibleActionDefinition* groundActions;
@@ -246,6 +250,8 @@ introspection() struct CommonEntityInitParams
     
     r32 flowerDensity MetaDefault("1.0f");
     r32 fruitDensity MetaDefault("1.0f");
+    
+    Vec3 lightColor MetaDefault("V3(1, 1, 1)");
 };
 
 introspection() struct InventorySlots
@@ -281,6 +287,10 @@ introspection() struct ServerEntityInitParams
     ArrayCounter defaultEffectsCount MetaCounter(defaultEffects);
     GameEffect* defaultEffects;
     
+    ArrayCounter probabilityEffectsCount MetaCounter(probabilityEffects);
+    ProbabilityEffect* probabilityEffects;
+    
+    
     Enumerator brainType MetaEnumerator("brainType");
     BrainParams brainParams;
     
@@ -289,6 +299,13 @@ introspection() struct ServerEntityInitParams
     r32 lightRadious;
     
     u32 defaultEssenceCount;
+    
+    
+    r32 flowerGrowingSpeed;
+    r32 requiredFlowerDensity MetaDefault("1.0f");
+    
+    r32 fruitGrowingSpeed;
+    r32 requiredFruitDensity MetaDefault("1.0f");
 };
 
 introspection() struct ImageProperty
@@ -324,13 +341,26 @@ introspection() struct MultipartStaticPiece
     ImageProperties properties;
 };
 
+introspection() struct PossibleSkin
+{
+    GameAssetType skin MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
+};
+
+introspection() struct Coloration
+{
+    ArrayCounter optionCount MetaCounter(options);
+    Color* options;
+};
+
 introspection() struct ClientEntityInitParams
 {
     EntityID ID MetaUneditable();
     u32 seed MetaUneditable();
     
     GameAssetType skeleton MetaDefault("{AssetType_Skeleton, 0}") MetaFixed(type);
-    GameAssetType skin MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
+    
+    ArrayCounter possibleSkinCount MetaCounter(possibleSkins);
+    PossibleSkin* possibleSkins;
     
     ImageProperties entityProperties;
     
@@ -362,6 +392,7 @@ introspection() struct ClientEntityInitParams
     Vec4 rockColorV;
     
     r32 windInfluence MetaDefault("0");
+    r32 dissolveDuration MetaDefault("0");
     u32 windFrequencyStandard MetaDefault("1");
     u32 windFrequencyOverlap MetaDefault("10");
     
@@ -423,6 +454,14 @@ introspection() struct ClientEntityInitParams
     r32 cameraZOffsetWhenOnFocus MetaDefault("-0.05f");
     r32 scaleCoeffWhenOnFocus MetaDefault("1.0f");
     r32 outlineWidth MetaDefault("1.0f");
+    
+    ArrayCounter colorationCount MetaCounter(colorations);
+    Coloration* colorations;
+    
+    r32 speedOnFocus;
+    r32 speedOnNoFocus;
+    Vec3 offsetMaxOnFocus;
+    r32 scaleMaxOnFocus MetaDefault("1.0f");
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

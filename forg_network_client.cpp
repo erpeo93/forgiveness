@@ -504,11 +504,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 BaseComponent* base = GetComponent(worldMode, currentClientID, BaseComponent);
                 if(base)
                 {
-					if(receivedFlags & EntityBasics_Velocity)
-					{
-						base->velocity = speed;
-					}
-                    
 					if(receivedFlags & EntityBasics_Position)
                     {
                         b32 coldSetPosition = false;
@@ -536,6 +531,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         
                         if(coldSetPosition)
                         {
+                            base->velocity = {};
                             if(IsValidID(spawnerID))
                             {
                                 BaseComponent* spawner = GetComponent(worldMode, spawnerID, BaseComponent);
@@ -566,6 +562,11 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                             }
                         }
                     }
+                    
+                    if(receivedFlags & EntityBasics_Velocity)
+					{
+						base->velocity = speed;
+					}
                     
 					if(receivedFlags & EntityBasics_Action)
 					{

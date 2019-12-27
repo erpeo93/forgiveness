@@ -683,3 +683,9 @@ internal Color RandomizeColor(Color in, Color v, RandomSequence* seq)
     Color result = in + Hadamart(RandomBilV4(seq), v);
     return result;
 }
+
+internal Vec3 RandomizeVec3(Vec3 ref, Vec3 v, RandomSequence* seq)
+{
+    Vec3 result = ref + Hadamart(RandomBilV3(seq), v);
+    return result;
+}

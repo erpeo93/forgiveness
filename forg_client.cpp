@@ -125,7 +125,7 @@ STANDARD_ECS_JOB_CLIENT(PushEntityLight)
     {
         BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
         Vec3 P = GetRelativeP(worldMode, base);
-        AddLight(worldMode, P, V3(1, 1, 1), misc->lightRadious);
+        AddLight(worldMode, P, misc->lightColor, misc->lightRadious);
     }
 }
 STANDARD_ECS_JOB_CLIENT(UpdateEntity)
@@ -135,9 +135,9 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntity)
 	base->timeSinceLastUpdate += elapsedTime;
 	base->totalLifeTime += elapsedTime;
     
-    if(base->timeSinceLastUpdate >= 20000.0f * STATIC_UPDATE_TIME)
+    if(base->timeSinceLastUpdate >= 1.5f * STATIC_UPDATE_TIME)
     {
-		MarkForDeletion(worldMode, ID);
+		//MarkForDeletion(worldMode, ID);
     }
     
 	if(base->deletedTime)
@@ -267,7 +267,6 @@ internal void UpdateAmbientParameters(GameModeWorld* worldMode, r32 elapsedTime)
     r32 lerp = Clamp01MapToRange(0.0f, worldMode->dayTimeTime, fullColorTime);
     
     worldMode->ambientLightColor = Lerp(oldColor, lerp, color);
-    worldMode->ambientLightColor = V3(1, 1, 1);
 }
 
 internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)

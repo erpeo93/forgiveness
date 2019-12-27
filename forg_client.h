@@ -108,6 +108,7 @@ struct PlantComponent
     ImageReference fruit;
     
     r32 windInfluence;
+    r32 dissolveDuration;
 };
 
 struct RockComponent

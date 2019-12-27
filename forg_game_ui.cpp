@@ -71,63 +71,66 @@ internal GameCommand ComputeFinalCommand(GameUIContext* UI, GameModeWorld* world
     
     GameCommand result = UI->standardCommand;
     
-    switch(UI->lockedInteractionType)
+    if(player)
     {
-        case LockedInteraction_None:
+        switch(UI->lockedInteractionType)
         {
-        } break;
-        
-        case LockedInteraction_SkillTarget:
-        case LockedInteraction_SkillOffset:
-        {
-            result = UI->lockedCommand;
-        } break;
-        
-        case LockedInteraction_ReachTarget:
-        {
-            GameCommand lockedCommand = UI->lockedCommand;
-            result = lockedCommand;
-            
-            EntityID lockedIDClient = GetClientIDMapping(worldMode, lockedCommand.targetID);
-            
-            InteractionComponent* interaction = GetComponent(worldMode, lockedIDClient, InteractionComponent);
-            
-            BaseComponent* lockedBase = GetComponent(worldMode, lockedIDClient, BaseComponent);
-            
-            Vec3 toTarget = SubtractOnSameZChunk(lockedBase->universeP, player->universeP);
-            u16 action = lockedCommand.action;
-            r32 distanceSq = LengthSq(toTarget);
-            
-            EntityRef usingRef = {};
-            BaseComponent* usingBase = GetComponent(worldMode, GetClientIDMapping(worldMode, lockedCommand.usingID), BaseComponent);
-            if(usingBase)
+            case LockedInteraction_None:
             {
-                usingRef = usingBase->definitionID;
-            }
+            } break;
             
-            u16 currentAction = player->properties[Network_Action].value;
-            r32 targetTime;
-            
-            EntityRef equipped[Count_usingSlot];
-            u32 equippedCount = 0;
-            
-            if(equipped)
+            case LockedInteraction_SkillTarget:
+            case LockedInteraction_SkillOffset:
             {
-                equippedCount = ArrayCount(equippedComponent->slots);
-                for(u32 slotIndex = 0; slotIndex < ArrayCount(equippedComponent->slots); ++slotIndex)
+                result = UI->lockedCommand;
+            } break;
+            
+            case LockedInteraction_ReachTarget:
+            {
+                GameCommand lockedCommand = UI->lockedCommand;
+                result = lockedCommand;
+                
+                EntityID lockedIDClient = GetClientIDMapping(worldMode, lockedCommand.targetID);
+                
+                InteractionComponent* interaction = GetComponent(worldMode, lockedIDClient, InteractionComponent);
+                
+                BaseComponent* lockedBase = GetComponent(worldMode, lockedIDClient, BaseComponent);
+                
+                Vec3 toTarget = SubtractOnSameZChunk(lockedBase->universeP, player->universeP);
+                u16 action = lockedCommand.action;
+                r32 distanceSq = LengthSq(toTarget);
+                
+                EntityRef usingRef = {};
+                BaseComponent* usingBase = GetComponent(worldMode, GetClientIDMapping(worldMode, lockedCommand.usingID), BaseComponent);
+                if(usingBase)
                 {
-                    EntityID slotID = GetBoundedID(equippedComponent->slots + slotIndex);
-                    equipped[slotIndex] = GetEntityType(worldMode, slotID);
+                    usingRef = usingBase->definitionID;
                 }
-            }
-            
-            if(!ActionIsPossibleAtDistance(interaction, action, currentAction, distanceSq, &targetTime, misc, equipped, equippedCount, usingRef))
-            {
-                GameCommand command = {};
-                command.action = move;
-                result = command;
-            }
-        } break;
+                
+                u16 currentAction = player->properties[Network_Action].value;
+                r32 targetTime;
+                
+                EntityRef equipped[Count_usingSlot];
+                u32 equippedCount = 0;
+                
+                if(equippedComponent)
+                {
+                    equippedCount = ArrayCount(equippedComponent->slots);
+                    for(u32 slotIndex = 0; slotIndex < ArrayCount(equippedComponent->slots); ++slotIndex)
+                    {
+                        EntityID slotID = GetBoundedID(equippedComponent->slots + slotIndex);
+                        equipped[slotIndex] = GetEntityType(worldMode, slotID);
+                    }
+                }
+                
+                if(!ActionIsPossibleAtDistance(interaction, action, currentAction, distanceSq, &targetTime, misc, equipped, equippedCount, usingRef))
+                {
+                    GameCommand command = {};
+                    command.action = move;
+                    result = command;
+                }
+            } break;
+        }
     }
     
     return result;
@@ -156,7 +159,7 @@ internal b32 RequiresUnlockedSlot(u16 action)
     return result;
 }
 
-internal EntityHotInteraction* AddPossibleInteraction_(GameModeWorld* worldMode, GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityID, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
+internal EntityHotInteraction* AddPossibleInteraction_(GameModeWorld* worldMode, GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityIDServer, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
 {
     EntityHotInteraction* result = 0;
     
@@ -215,7 +218,7 @@ internal EntityHotInteraction* AddPossibleInteraction_(GameModeWorld* worldMode,
         dest->containerIDServer = containerID;
         dest->objectIndex = objectIndex;
         dest->slot = slot;
-        dest->entityIDServer = entityID;
+        dest->entityIDServer = entityIDServer;
         dest->optionIndex = optionIndex;
         
         result = dest;
@@ -225,9 +228,9 @@ internal EntityHotInteraction* AddPossibleInteraction_(GameModeWorld* worldMode,
 }
 
 
-internal EntityHotInteraction* AddPossibleInteraction(GameModeWorld* worldMode, GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityID, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
+internal EntityHotInteraction* AddPossibleInteraction(GameModeWorld* worldMode, GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityIDServer, EntityID containerIDServer = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
 {
-    EntityHotInteraction* result = AddPossibleInteraction_(worldMode, UI, type, list, entityID, containerID, objectIndex, slot, optionIndex);
+    EntityHotInteraction* result = AddPossibleInteraction_(worldMode, UI, type, list, entityIDServer, containerIDServer, objectIndex, slot, optionIndex);
     UI->anyValidInteraction = true;
     return result;
 }
@@ -671,15 +674,16 @@ INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
         {
             if(PointInRect(base->projectedOnScreen, worldMode->relativeMouseP))
             {
+                EntityID serverID = base->serverID;
                 if(IsValidID(UI->draggingIDServer))
                 {
                     PossibleActionList* list = interaction->actions + InteractionList_Dragging;
-                    EntityHotInteraction* addedInteraction = AddPossibleInteraction(worldMode, UI, Interaction_Ground, interaction->actions + InteractionList_Dragging, ID);
+                    EntityHotInteraction* addedInteraction = AddPossibleInteraction(worldMode, UI, Interaction_Ground, interaction->actions + InteractionList_Dragging, serverID);
                     addedInteraction->usingIDServer = UI->draggingIDServer;
                 }
                 else
                 {
-                    AddPossibleInteraction(worldMode, UI, Interaction_Ground, interaction->actions + InteractionList_Ground, ID);
+                    AddPossibleInteraction(worldMode, UI, Interaction_Ground, interaction->actions + InteractionList_Ground, serverID);
                 }
             }
         }
@@ -688,8 +692,12 @@ INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
 
 internal b32 MouseInsidePlayerRectProjectedOnScreen(GameModeWorld* worldMode)
 {
+    b32 result = false;
     BaseComponent* playerBase = GetComponent(worldMode, worldMode->player.clientID, BaseComponent);
-    b32 result = (PointInRect(playerBase->projectedOnScreen, worldMode->relativeMouseP));
+    if(playerBase)
+    {
+        result = (PointInRect(playerBase->projectedOnScreen, worldMode->relativeMouseP));
+    }
     return result;
 }
 
@@ -1144,7 +1152,7 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                                         EntityRef equipped[Count_usingSlot];
                                         u32 equippedCount = 0;
                                         
-                                        if(equipped)
+                                        if(equippedComponent)
                                         {
                                             equippedCount = ArrayCount(equippedComponent->slots);
                                             for(u32 slotIndex = 0; slotIndex < ArrayCount(equippedComponent->slots); ++slotIndex)

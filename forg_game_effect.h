@@ -13,6 +13,20 @@ introspection() struct EffectBinding
     GameEffect effect;
 };
 
+introspection() struct ProbabilityEffectOption
+{
+    r32 weight;
+    GameEffect effect;
+};
+
+introspection() struct ProbabilityEffect
+{
+    r32 probability;
+    
+    ArrayCounter optionCount MetaCounter(options);
+    ProbabilityEffectOption* options;
+};
+
 struct EffectComponent
 {
     u32 effectCount;

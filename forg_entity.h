@@ -15,6 +15,8 @@ struct MiscComponent
     R32 lightRadious;
     R32 flowerDensity;
     R32 fruitDensity;
+    
+    Vec3 lightColor;
 };
 
 enum EntityFlags

@@ -607,6 +607,7 @@ internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos 
 }
 
 
+internal void Pick(ServerState* server, EntityID ID, EntityID targetID);
 internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
 {
     Assert(IsValid(newEntity->definitionID));
@@ -674,6 +675,16 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
         
         ZLayer* layer = server->layers + newEntity->P.chunkZ;
         QueueDayTime(player, layer->dayTimePhase);
+    }
+    
+    if(newEntity->params.equipPlayerIndex > 0)
+    {
+        PlayerComponent* player = (PlayerComponent*) Get_(&server->PlayerComponent_, newEntity->params.equipPlayerIndex);
+        
+        if(IsValidID(player->ID))
+        {
+            Pick(server, player->ID, ID);
+        }
     }
     
     if(newEntity->params.ghost)
@@ -807,8 +818,66 @@ internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
                     } break;
                 }
             }
+            
+            SetComponent(server, ID, PlayerComponent, 0);
         }
 		
+        if(HasComponent(ID, EquipmentComponent))
+        {
+            EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+            for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->slots); ++slotIndex)
+            {
+                EntityID slotID = GetBoundedID(equipment->slots + slotIndex);
+                if(IsValidID(slotID))
+                {
+                    FreeArchetype(server, slotID);
+                }
+            }
+        }
+        
+        if(HasComponent(ID, UsingComponent))
+        {
+            UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+            
+            EntityID draggingID = GetBoundedID(equipped->draggingID);
+            if(IsValidID(draggingID))
+            {
+                FreeArchetype(server, draggingID);
+            }
+            
+            for(u32 slotIndex = 0; slotIndex < ArrayCount(equipped->slots); ++slotIndex)
+            {
+                EntityID slotID = GetBoundedID(equipped->slots + slotIndex);
+                if(IsValidID(slotID))
+                {
+                    FreeArchetype(server, slotID);
+                }
+            }
+        }
+        
+        if(HasComponent(ID, ContainerComponent))
+        {
+            ContainerComponent* container = GetComponent(server, ID, ContainerComponent);
+            for(u32 storedIndex = 0; storedIndex < ArrayCount(container->storedObjects); ++storedIndex)
+            {
+                EntityID storedID = GetBoundedID(container->storedObjects + storedIndex);
+                if(IsValidID(storedID))
+                {
+                    FreeArchetype(server, storedID);
+                }
+            }
+            
+            for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
+            {
+                EntityID usingID = GetBoundedID(container->usingObjects + usingIndex);
+                if(IsValidID(usingID))
+                {
+                    FreeArchetype(server, usingID);
+                }
+            }
+        }
+        
+        
         FreeArchetype(server, ID);
 	}
     

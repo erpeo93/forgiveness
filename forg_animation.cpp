@@ -441,7 +441,7 @@ internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKSkeleton* s
         dest->color = ass->color;
         dest->mainAxis = boneXAxis;
         
-        zOffset += 0.01f;
+        zOffset += 0.001f;
     }
     
     return result;
@@ -850,6 +850,10 @@ internal Rect2 RenderAnimationAndTriggerSounds_(GameModeWorld* worldMode, Render
                                         repTransform.cameraOffset.xy += rep->offset.y * Perp(piece->mainAxis);
                                         repTransform.cameraOffset.z += rep->offset.z;
                                         
+                                        if(rep->colorationIndex < ArrayCount(component->colorations))
+                                        {
+                                            repTransform.tint = Hadamart(repTransform.tint, component->colorations[rep->colorationIndex]);
+                                        }
                                         Vec2 pivot = rep->inheritPivot ? piece->pivot : rep->pivot;
                                         BitmapDim dim = PushBitmapWithPivot(group, repTransform, renderID, P, pivot, height, lights);
                                         //result = Union(result, RectMinDim(dim.P.xy, dim.size));

@@ -1,7 +1,9 @@
-internal Rect3 StandardBounds(Vec3 dim, Vec3 offset)
+internal Rect3 StandardBounds(RandomSequence* seq, Vec3 dim, Vec3 offset, Vec3 dimV)
 {
     offset = {};
-    Rect3 result = Offset(RectCenterDim(V3(0, 0, 0), dim), offset + V3(0, 0, 0.5f * dim.z));
+    
+    Vec3 actualDim = RandomizeVec3(dim, dimV, seq);
+    Rect3 result = Offset(RectCenterDim(V3(0, 0, 0), actualDim), offset + V3(0, 0, 0.5f * actualDim.z));
     return result;
 }
 
@@ -84,9 +86,9 @@ INIT_COMPONENT_FUNCTION(InitDefaultComponent)
 INIT_COMPONENT_FUNCTION(InitPhysicComponent)
 {
     PhysicComponent* physic = (PhysicComponent*) componentPtr;
-    
+    RandomSequence seq = Seed(s->seed);
     physic->boundType = common->boundType.value;
-    physic->bounds = StandardBounds(common->boundDim, common->boundOffset);
+    physic->bounds = StandardBounds(&seq, common->boundDim, common->boundOffset, common->boundDimV);
     physic->acc = s->startingAcceleration;
     physic->speed = s->startingSpeed;
     physic->accelerationCoeff = s->accelerationCoeff;
@@ -126,6 +128,39 @@ internal void AddRandomEffects(EffectComponent* effects, EffectBinding* bindings
     }
 }
 
+internal GameEffect* RollProbabilityEffect(RandomSequence* seq, ProbabilityEffect* effect)
+{
+    GameEffect* result = 0;
+    
+    r32 roll = RandomUni(seq);
+    if(roll <= effect->probability)
+    {
+        r32 totalWeight = 0;
+        
+        for(ArrayCounter optionIndex = 0; optionIndex < effect->optionCount; ++optionIndex)
+        {
+            ProbabilityEffectOption* option = effect->options + optionIndex;
+            totalWeight += option->weight;
+        }
+        r32 choice = RandomUni(seq) * totalWeight;
+        
+        r32 runningWeight = 0;
+        for(ArrayCounter optionIndex = 0; optionIndex < effect->optionCount; ++optionIndex)
+        {
+            ProbabilityEffectOption* option = effect->options + optionIndex;
+            r32 oldWeight = runningWeight;
+            r32 newWeight = oldWeight + option->weight;
+            if(choice > oldWeight && choice <= newWeight)
+            {
+                result = &option->effect;
+                break;
+            }
+            
+            runningWeight += option->weight;
+        }
+    }
+    return result;
+}
 
 INIT_COMPONENT_FUNCTION(InitEffectComponent)
 {
@@ -140,6 +175,22 @@ INIT_COMPONENT_FUNCTION(InitEffectComponent)
             *dest = s->defaultEffects[effectIndex];
         }
     }
+    
+    
+    RandomSequence seq = Seed(s->seed);
+    for(ArrayCounter effectIndex = 0; effectIndex < s->probabilityEffectsCount; ++effectIndex)
+    {
+        GameEffect* rolled = RollProbabilityEffect(&seq, s->probabilityEffects + effectIndex);
+        if(rolled)
+        {
+            if(effect->effectCount < ArrayCount(effect->effects))
+            {
+                GameEffect* dest = effect->effects + effect->effectCount++;
+                *dest = *rolled;
+            }
+        }
+    }
+    
     u16* essences = common->essences;
     AddRandomEffects(effect, s->bindings, s->bindingCount, essences);
 }
@@ -260,16 +311,28 @@ INIT_COMPONENT_FUNCTION(InitMiscComponent)
     misc->fruitDensity = InitR32(miscPropertiesChanged, MiscFlag_FruitDensity, common->fruitDensity);
 }
 
+INIT_COMPONENT_FUNCTION(InitPlantComponent)
+{
+    PlantComponent* dest = (PlantComponent*) componentPtr;
+    dest->flowerGrowingSpeed = s->flowerGrowingSpeed;
+    dest->requiredFlowerDensity = s->requiredFlowerDensity;
+    
+    dest->fruitGrowingSpeed = s->fruitGrowingSpeed;
+    dest->requiredFruitDensity = s->requiredFruitDensity;
+    
+}
+
 #else
 INIT_COMPONENT_FUNCTION(InitBaseComponent)
 {
     BaseComponent* base = (BaseComponent*) componentPtr;
+    RandomSequence seq = Seed(c->seed);
     base->definitionID = common->definitionID;
     base->seed = c->seed;
     base->universeP = {};
     base->velocity = {};
     base->flags = 0;
-    base->bounds = StandardBounds(common->boundDim, common->boundOffset);
+    base->bounds = StandardBounds(&seq, common->boundDim, common->boundOffset, common->boundDimV);
     base->worldBounds = {};
     base->projectedOnScreen = {};
     base->serverID = c->ID;
@@ -324,17 +387,44 @@ INIT_COMPONENT_FUNCTION(InitAnimationComponent)
     animation->time = 0;
     animation->oldTime = 0;
     animation->backward = false;
-    animation->skinHash =c->skin.subtypeHash;
+    
+    RandomSequence seq = Seed(c->seed);
+    if(c->possibleSkinCount > 0)
+    {
+        u16 skinIndex = SafeTruncateToU16(RandomChoice(&seq, c->possibleSkinCount));
+        PossibleSkin* skin = c->possibleSkins + skinIndex;
+        animation->skinHash =skin->skin.subtypeHash;
+    }
+    else
+    {
+        animation->skinHash = 0;
+    }
     animation->skinProperties = {};
     animation->skeletonHash =c->skeleton.subtypeHash;
     animation->skeletonProperties = {};
     animation->flipOnYAxis = 0;
     animation->cameraZOffsetWhenOnFocus = c->cameraZOffsetWhenOnFocus;
     animation->scaleCoeffWhenOnFocus = c->scaleCoeffWhenOnFocus;
+    animation->defaultScaleComputed = false;
     animation->scale = 0;
     animation->speed = 1.0f;
-    animation->defaultScaleComputed = false;
     animation->spawnProjectileOffset = c->spawnProjectileOffset;
+    
+    
+    for(u16 colorationIndex = 0; colorationIndex < ArrayCount(animation->colorations); ++colorationIndex)
+    {
+        animation->colorations[colorationIndex] = V4(1, 1, 1, 1);
+    }
+    
+    for(ArrayCounter colorationIndex = 0; colorationIndex < c->colorationCount; ++colorationIndex)
+    {
+        Coloration* coloration = c->colorations + colorationIndex;
+        if(coloration->optionCount > 0 && colorationIndex < ArrayCount(animation->colorations))
+        {
+            Vec4 choice = coloration->options[RandomChoice(&seq, coloration->optionCount)];
+            animation->colorations[colorationIndex] = choice;
+        }
+    }
 }
 
 INIT_COMPONENT_FUNCTION(InitRockComponent)
@@ -389,6 +479,7 @@ INIT_COMPONENT_FUNCTION(InitPlantComponent)
     InitImageReference(assets, &dest, &c, fruit);
     
     dest->windInfluence = c->windInfluence;
+    dest->dissolveDuration = c->dissolveDuration;
 }
 
 INIT_COMPONENT_FUNCTION(InitStandardImageComponent)
@@ -416,6 +507,7 @@ INIT_COMPONENT_FUNCTION(InitShadowComponent)
 internal BitmapId GetImageFromReference(Assets* assets, ImageReference* reference, RandomSequence* seq);
 INIT_COMPONENT_FUNCTION(InitMagicQuadComponent)
 {
+    RandomSequence seq = Seed(c->seed);
     GameModeWorld* worldMode = (GameModeWorld*) state;
     Assets* assets = worldMode->gameState->assets;
     
@@ -424,10 +516,9 @@ INIT_COMPONENT_FUNCTION(InitMagicQuadComponent)
     dest->color = 0xffffffff;
     InitImageReference(assets, &dest, &c, entity);
     
-    RandomSequence seq = Seed(c->seed);
     dest->bitmapID = GetImageFromReference(assets, &dest->entity, &seq);
     
-    Rect3 bounds = StandardBounds(common->boundDim, common->boundOffset);
+    Rect3 bounds = StandardBounds(&seq, common->boundDim, common->boundOffset, common->boundDimV);
     r32 height = GetHeight(bounds);
     r32 width = GetWidth(bounds);
     
@@ -598,6 +689,10 @@ INIT_COMPONENT_FUNCTION(InitAnimationEffectComponent)
     }
     animation->effectCount = 0;
     animation->outlineWidth = c->outlineWidth;
+    animation->speedOnFocus = c->speedOnFocus;
+    animation->speedOnNoFocus = c->speedOnNoFocus;
+    animation->offsetMaxOnFocus = c->offsetMaxOnFocus;
+    animation->scaleMaxOnFocus = c->scaleMaxOnFocus;
 }
 
 INIT_COMPONENT_FUNCTION(InitSoundEffectComponent)
@@ -639,6 +734,7 @@ INIT_COMPONENT_FUNCTION(InitMiscComponent)
     misc->lightRadious = 0;
     misc->flowerDensity = common->flowerDensity;
     misc->fruitDensity = common->fruitDensity;
+    misc->lightColor = common->lightColor;
 }
 
 INIT_COMPONENT_FUNCTION(InitSkillComponent)

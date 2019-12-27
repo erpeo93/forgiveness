@@ -79,7 +79,11 @@ enum MetaType
     MetaType_BrainParams,
     MetaType_BiomeBand,
     MetaType_BiomeConfiguration,
-    MetaType_CraftingComponent
+    MetaType_CraftingComponent,
+    MetaType_ProbabilityEffect,
+    MetaType_ProbabilityEffectOption,
+    MetaType_PossibleSkin,
+    MetaType_Coloration,
 };
 
 enum FieldMetaFlags

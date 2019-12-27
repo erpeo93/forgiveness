@@ -593,6 +593,7 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     UpdateWorldBasics(server, elapsedTime);
     BEGIN_BLOCK("update entities");
     EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime);
+    EXECUTE_JOB(server, UpdatePlant, ArchetypeHas(PlantComponent) && ArchetypeHas(MiscComponent), elapsedTime);
     
     EXECUTE_JOB(server, DamageEntityFearingLight, ArchetypeHas(AliveComponent), elapsedTime);
     EXECUTE_JOB(server, DealLightDamage, ArchetypeHas(MiscComponent), elapsedTime);

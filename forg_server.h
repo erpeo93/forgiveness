@@ -361,6 +361,15 @@ struct PlayerComponent
     FileToSend* firstReloadedFileToSend;
 };
 
+struct PlantComponent
+{
+    r32 flowerGrowingSpeed;
+    r32 requiredFlowerDensity;
+    
+    r32 fruitGrowingSpeed;
+    r32 requiredFruitDensity;
+};
+
 #include "forg_archetypes.h"
 #include "client_generated.h"
 global_variable ArchetypeLayout archetypeLayouts[Archetype_Count];
@@ -406,6 +415,7 @@ struct AddEntityParams
     Vec3 acceleration;
     Vec3 speed;
     u32 playerIndex;
+    u32 equipPlayerIndex;
     EntityRef attachedEntityType;
     EntityID targetBrainID;
     b32 spawnFollowingEntity;
@@ -432,6 +442,14 @@ internal AddEntityParams SpawnEntityParams(EntityID spawnerID)
     AddEntityParams params = DefaultAddEntityParams();
     params.spawnerID = spawnerID;
     return params;
+}
+
+internal AddEntityParams EquipPlayerEntityParams(u32 playerIndex)
+{
+    AddEntityParams result = DefaultAddEntityParams();
+    result.equipPlayerIndex = playerIndex;
+    
+    return result;
 }
 
 struct NewEntity
