@@ -710,7 +710,7 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
         BrainComponent* brain = GetComponent(server, newEntity->params.targetBrainID, BrainComponent);
         if(brain)
         {
-            brain->ID = ID;
+            brain->targetID = ID;
         }
     }
     

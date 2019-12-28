@@ -165,7 +165,7 @@ inline r32 RadToDeg( r32 rad )
     return result;
 }
 
-r32 RadiantsBetweenVectors( Vec2 v1, Vec2 v2 )
+r32 RadiantsBetweenVectors(Vec2 v1, Vec2 v2)
 {
 	r32 result = 0;
     
@@ -180,23 +180,23 @@ r32 RadiantsBetweenVectors( Vec2 v1, Vec2 v2 )
     return result;
 }
 
-inline r32 AngleBetweenVectors( Vec2 v1, Vec2 v2 )
+inline r32 AngleBetweenVectors(Vec2 v1, Vec2 v2)
 {
-    r32 result = RadiantsBetweenVectors( v1, v2 );
+    r32 result = RadiantsBetweenVectors(v1, v2);
     result = RadToDeg( result );
     return result;
     
 }
 
-r32 RadiantsBetweenVectors( Vec3 v1, Vec3 v2 )
+r32 RadiantsBetweenVectors(Vec3 v1, Vec3 v2)
 {
-    r32 cosine = Dot( v1, v2 ) / ( Length( v1 ) * Length( v2 ) );
-    r32 result = ArcCos( cosine );
+    r32 cosine = Dot(v1, v2) / (Length(v1) * Length(v2));
+    r32 result = ArcCos(cosine);
     
     return result;
 }
 
-inline r32 AngleBetweenVectors( Vec3 v1, Vec3 v2 )
+inline r32 AngleBetweenVectors(Vec3 v1, Vec3 v2)
 {
     r32 result = RadiantsBetweenVectors(v1, v2);
     result = RadToDeg(result);

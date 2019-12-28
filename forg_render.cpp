@@ -468,7 +468,7 @@ inline BitmapDim PushBitmap_(RenderGroup* renderGroup, ObjectTransform transform
     return result;
 }
 
-inline BitmapDim GetBitmapDim(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, r32 height = 0)
+inline BitmapDim GetBitmapDim(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, r32 height)
 {
     
     BitmapDim result = {};
@@ -486,7 +486,7 @@ inline BitmapDim GetBitmapDim(RenderGroup* renderGroup, ObjectTransform transfor
     return result;
 }
 
-inline BitmapDim PushBitmap(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, r32 height = 0, Lights lights = {0, 0})
+inline BitmapDim PushBitmap(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, r32 height, Lights lights = {0, 0})
 {
     BitmapDim result = {};
     ColoredBitmap bitmap = GetBitmap(renderGroup->assets, ID);
@@ -502,7 +502,7 @@ inline BitmapDim PushBitmap(RenderGroup* renderGroup, ObjectTransform transform,
     return result;
 }
 
-inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, Vec2 pivot, r32 height = 0, Lights lights = {0, 0})
+inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform transform, BitmapId ID, Vec3 P, Vec2 pivot, r32 height, Lights lights = {0, 0})
 {
     BitmapDim result = {};
     ColoredBitmap bitmap = GetBitmap(renderGroup->assets, ID);

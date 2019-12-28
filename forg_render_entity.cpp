@@ -25,7 +25,7 @@ internal EntityAnimationParams GetEntityAnimationParams(GameModeWorld* worldMode
     return result;
 }
 
-internal void RenderShadow(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ShadowComponent* shadowComponent, r32 deepness, r32 width)
+internal void RenderShadow(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ShadowComponent* shadowComponent)
 {
     Lights lights = GetLights(worldMode, P);
     RandomSequence ignored = Seed(1);
@@ -36,16 +36,10 @@ internal void RenderShadow(GameModeWorld* worldMode, RenderGroup* group, Vec3 P,
         if(shadow)
         {
             r32 height = shadowComponent->height;
-            r32 nativeDeepness = height;
-            r32 nativeWidth = height * shadow->widthOverHeight;
-            
-            r32 yScale = deepness / nativeDeepness;
-            r32 xScale = width / nativeWidth;
-            
             ObjectTransform transform = FlatTransform();
-            transform.scale = Hadamart(shadowComponent->scale, V2(xScale, yScale));
+            transform.scale = shadowComponent->scale;
             transform.tint = shadowComponent->color;
-            PushBitmap(group, transform, shadowID, P + shadowComponent->offset, 0, lights);
+            PushBitmap(group, transform, shadowID, P + shadowComponent->offset, height, lights);
         }
         else
         {
@@ -187,12 +181,12 @@ internal BitmapId GetCorrenspondingFrameByFrameImage(Assets* assets, u64 typeHas
 RENDERING_ECS_JOB_CLIENT(RenderShadow)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    ShadowComponent* shadow = GetComponent(worldMode, ID, ShadowComponent);
-    Vec3 P = GetRelativeP(worldMode, base);
-    r32 deepness = GetWidth(base->bounds);
-    r32 width = GetWidth(base->bounds);
-    
-    RenderShadow(worldMode, group, P, shadow, deepness, width);
+    if(ShouldBeRendered(worldMode, base))
+    {
+        ShadowComponent* shadow = GetComponent(worldMode, ID, ShadowComponent);
+        Vec3 P = GetRelativeP(worldMode, base);
+        RenderShadow(worldMode, group, P, shadow);
+    }
 }
 
 internal r32 GetDissolveCoeff(r32 density, r32 dissolveDuration, u32 index)

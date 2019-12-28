@@ -1443,7 +1443,8 @@ internal void UpdateWorldBasics(ServerState* server, r32 elapsedTime)
             }
         }
         
-        if(layer->dayTimePhase == DayTime_Night)
+        
+        if(false && layer->dayTimePhase == DayTime_Night)
         {
             for(CompIterator iter = FirstComponent(server, PlayerComponent); 
                 IsValid(iter); iter = Next(iter))

@@ -265,12 +265,14 @@ INIT_COMPONENT_FUNCTION(InitSkillComponent)
 INIT_COMPONENT_FUNCTION(InitBrainComponent)
 {
     BrainComponent* brain = (BrainComponent*) componentPtr;
+    ServerState* server = (ServerState*) state;
     
     *brain = {};
     
     brain->state = BrainState_Wandering;
     brain->type = PropertyToU16(brainType, s->brainType);
-    brain->ID = {};
+    brain->targetID = {};
+    brain->wanderDirection = V3(RandomBilV2(&server->entropy), 0);
 }
 
 INIT_COMPONENT_FUNCTION(InitTempEntityComponent)
@@ -358,6 +360,7 @@ INIT_COMPONENT_FUNCTION(InitBaseComponent)
 internal void InitShadow(ShadowComponent* shadow, ClientEntityInitParams* params)
 {
     shadow->offset = params->shadowOffset;
+    shadow->height = params->shadowHeight;
     shadow->scale = params->shadowScale;
     shadow->color = params->shadowColor;
 }

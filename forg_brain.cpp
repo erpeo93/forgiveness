@@ -6,47 +6,36 @@ internal BrainParams* GetBrainParams(ServerState* server, EntityID ID)
     return result;
 }
 
-internal void Idle(ServerState* server, EntityID ID)
+internal void SetBrainCommand(BrainComponent* brain, u16 action, EntityID targetID, Vec3 acceleration)
 {
-    BrainComponent* brain = GetComponent(server, ID, BrainComponent);
-    
-    brain->currentCommand = {};
-    brain->currentCommand.action = idle;
-    brain->commandParameters.acceleration = V3(0, 0, 0);
-}
-
-internal void ResetMovementDirection(ServerState* server, EntityID ID)
-{
-    BrainComponent* brain = GetComponent(server, ID, BrainComponent);
-    brain->commandParameters.acceleration = {};
-}
-
-internal void ConsiderMovingDirection(ServerState* server, EntityID ID, Vec3 direction)
-{
-    BrainComponent* brain = GetComponent(server, ID, BrainComponent);
-    brain->currentCommand = {};
-    brain->currentCommand.action = move;
-    
-    Assert(direction.z == 0);
-    r32 epsilon = 0.0001f;
-    if(Abs(Dot(brain->commandParameters.acceleration, direction) + 1) < epsilon)
-    {
-        Idle(server, ID);
-    }
-    else
-    {
-        brain->commandParameters.acceleration += direction;
-    }
-}
-
-internal void Attack(ServerState* server, EntityID ID, EntityID targetID)
-{
-    BrainComponent* brain = GetComponent(server, ID, BrainComponent);
-    
-    brain->currentCommand = {};
-    brain->currentCommand.action = attack;
+    brain->currentCommand.action = action;
     brain->currentCommand.targetID = targetID;
-    brain->commandParameters = {};
+    brain->commandParameters.acceleration = acceleration;
+}
+
+internal void ResetDirection(BrainDirection* direction, u16 action)
+{
+    direction->action = action;
+    direction->coeff = 1.0f;
+    direction->sum = 0.0f;
+}
+
+internal void ResetDirections(ServerState* server, EntityID ID)
+{
+    BrainComponent* brain = GetComponent(server, ID, BrainComponent);
+    ResetDirection(&brain->idleDirection, idle);
+    for(u32 dirIndex = 0; dirIndex < ArrayCount(brain->directions); ++dirIndex)
+    {
+        ResetDirection(brain->directions + dirIndex, 0);
+    }
+}
+
+internal void DoAction(ServerState* server, EntityID ID, u16 action)
+{
+    BrainComponent* brain = GetComponent(server, ID, BrainComponent);
+    brain->idleDirection.action = action;
+    brain->idleDirection.sum = R32_MAX;
+    brain->idleDirection.coeff = 1.0f;
 }
 
 internal b32 ShouldPerceive(DefaultComponent* d1, EntityID i1, DefaultComponent* d2, EntityID i2)
@@ -56,7 +45,123 @@ internal b32 ShouldPerceive(DefaultComponent* d1, EntityID i1, DefaultComponent*
     
 }
 
-internal void ComputeFinalAcceleration(ServerState* server, EntityID ID)
+#define EVALUATOR(name) internal void name(ServerState* server, EntityID ID, r32 elapsedTime)
+#define Evaluate(name) name(server, ID, elapsedTime)
+
+internal u16 GetDirectionIndex(Vec3 direction)
+{
+    r32 angle = RadToDeg(AArm2(direction.xy));
+    u16 index = (u16) (angle / DIRECTION_ANGLE);
+    return index;
+}
+
+internal BrainDirection* GetDirection(BrainComponent* brain, u16 dirIndex)
+{
+    Assert(dirIndex < ArrayCount(brain->directions));
+    BrainDirection* result = brain->directions + dirIndex;
+    return result;
+}
+
+internal BrainDirection* GetDirection(BrainComponent* brain, Vec3 direction)
+{
+    u16 index = GetDirectionIndex(direction);
+    BrainDirection* result = GetDirection(brain, index);
+    return result;
+}
+
+internal BrainDirection* GetRightDirection(BrainComponent* brain, Vec3 direction)
+{
+    u16 index = GetDirectionIndex(direction);
+    if(++index == ArrayCount(brain->directions))
+    {
+        index = 0;
+    }
+    
+    BrainDirection* result = GetDirection(brain, index);
+    return result;
+}
+
+internal BrainDirection* GetLeftDirection(BrainComponent* brain, Vec3 direction)
+{
+    u16 index = GetDirectionIndex(direction);
+    if(--index >= ArrayCount(brain->directions))
+    {
+        index = ArrayCount(brain->directions) - 1;
+    }
+    
+    BrainDirection* result = GetDirection(brain, index);
+    return result;
+}
+
+internal Vec3 GetDirection(u16 dirIndex)
+{
+    Assert(dirIndex < DIRECTION_COUNT);
+    r32 angle = dirIndex * DIRECTION_ANGLE;
+    Vec3 result = V3(Arm2(DegToRad(angle)), 0);
+    return result;
+}
+
+
+internal void ModulateDirection(BrainComponent* brain, Vec3 direction, r32 coeff, r32 adiacentCoeff)
+{
+    BrainDirection* dir = GetDirection(brain, direction);
+    dir->coeff *= coeff;
+    
+    if(adiacentCoeff > 0)
+    {
+        BrainDirection* left = GetLeftDirection(brain, direction);
+        left->coeff *= (coeff * adiacentCoeff);
+        
+        BrainDirection* right = GetRightDirection(brain, direction);
+        right->coeff *= (coeff * adiacentCoeff);
+    }
+}
+
+internal void ZeroDirection(BrainComponent* brain, Vec3 direction, b32 adiacentDirections)
+{
+    r32 adiacentCoeff = adiacentDirections ? 1.0f : 0.0f;
+    ModulateDirection(brain, direction, 0, adiacentCoeff);
+}
+
+internal void SumScore(BrainComponent* brain, Vec3 direction, r32 score, r32 adiacentDirectionCoeff)
+{
+    BrainDirection* dir = GetDirection(brain, direction);
+    dir->sum += score;
+    
+    dir = GetRightDirection(brain, direction);
+    dir->sum += score * adiacentDirectionCoeff;
+    
+    dir = GetLeftDirection(brain, direction);
+    dir->sum += score * adiacentDirectionCoeff;
+}
+
+internal void ScoreDirection(ServerState* server, EntityID ID, EntityID targetID, r32 score, r32 adiacentDirectionCoeff)
+{
+    BrainComponent* brain = GetComponent(server, ID, BrainComponent);
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    DefaultComponent* targetDef = GetComponent(server, targetID, DefaultComponent);
+    Vec3 toTarget = SubtractOnSameZChunk(targetDef->P, def->P);
+    SumScore(brain, toTarget, score, adiacentDirectionCoeff);
+}
+
+internal void ComputeFinalDirection(BrainComponent* brain)
+{
+    SetBrainCommand(brain, brain->idleDirection.action, brain->targetID, V3(0, 0, 0));
+    
+    r32 highestScore = brain->idleDirection.sum * brain->idleDirection.coeff;
+    for(u16 dirIndex = 0; dirIndex < ArrayCount(brain->directions); ++dirIndex)
+    {
+        BrainDirection* direction = brain->directions + dirIndex;
+        r32 score = direction->coeff * direction->sum;
+        if(score > highestScore)
+        {
+            highestScore = score;
+            SetBrainCommand(brain, move, {}, GetDirection(dirIndex));
+        }
+    }
+}
+
+EVALUATOR(CollisionAvoidance)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
@@ -94,33 +199,17 @@ internal void ComputeFinalAcceleration(ServerState* server, EntityID ID)
                         {
                             if(distanceSq <= minDistanceSq)
                             {
-                                avoidID = testID;
-                                minDistanceSq = distanceSq;
-                                avoidV = avoid;
+                                ZeroDirection(brain, distance, false);
                             }
                         }
                     }
                 }
             }
         }
-        
-        if(IsValidID(avoidID))
-        {
-            ResetMovementDirection(server, ID);
-            DefaultComponent* avoidDef = GetComponent(server, avoidID, DefaultComponent);
-            Vec3 toAvoid = SubtractOnSameZChunk(avoidDef->P, def->P);
-            Vec3 avoidanceForce = V3(Perp(toAvoid.xy), toAvoid.z);
-            if(Dot(avoidanceForce, physic->acc) < 0)
-            {
-                avoidanceForce = -avoidanceForce;
-            }
-            
-            ConsiderMovingDirection(server, ID, avoidanceForce);
-        }
     }
 }
 
-internal void Wander(ServerState* server, EntityID ID, r32 elapsedTime)
+EVALUATOR(Wander)
 {
     BrainComponent* brain = GetComponent(server, ID, BrainComponent);
     BrainParams* params = GetBrainParams(server, ID);
@@ -128,22 +217,22 @@ internal void Wander(ServerState* server, EntityID ID, r32 elapsedTime)
     brain->time += elapsedTime;
     if(brain->time >= 0)
     {
-        ConsiderMovingDirection(server, ID, brain->wanderDirection);
+        r32 score = 1.0f;
+        r32 adiacentDirectionCoeff = 0.5f;
+        SumScore(brain, brain->wanderDirection, score, adiacentDirectionCoeff);
+        
         if(brain->time >= params->wanderTargetTime)
         {
             brain->time = -params->idleTimeWhenWandering;
             brain->wanderDirection = V3(RandomBil(&server->entropy), RandomBil(&server->entropy), 0);
         }
     }
-    else
-    {
-        Idle(server, ID);
-    }
 }
 
-internal void MaintainDistance(ServerState* server, EntityID ID)
+EVALUATOR(MaintainDistance)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    BrainComponent* brain = GetComponent(server, ID, BrainComponent);
     BrainParams* params = GetBrainParams(server, ID);
     
     SpatialPartitionQuery perceiveQuery = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
@@ -155,38 +244,60 @@ internal void MaintainDistance(ServerState* server, EntityID ID)
         if(ShouldPerceive(def, ID, testDef, testID))
         {
             Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
-            if(EntityHasFlags(def, EntityFlag_fearsLight))
-            {
-                if(LengthSq(toTarget) <= Square(LIGHT_RADIOUS_PERCENTAGE_MAINTAIN_DISTANCE * GetLightRadiousSq(server, testID)))
-                {
-                    ConsiderMovingDirection(server, ID, -Normalize(toTarget));
-                }
-            }
-            else if(AreEqual(testDef->definitionID, params->maintainDistanceType))
+            if(AreEqual(testDef->definitionID, params->maintainDistanceType))
             {
                 if(LengthSq(toTarget) <= Square(params->maintainDistanceRadious))
                 {
-                    ConsiderMovingDirection(server, ID, -Normalize(toTarget));
+                    ModulateDirection(brain, -toTarget, params->maintainDistanceModulationCoeff, params->maintainDistanceModulationAdiacentCoeff);
+                }
+            }
+            else if(EntityHasFlags(def, EntityFlag_fearsLight))
+            {
+                r32 lightRadiousSq = GetLightRadiousSq(server, testID);
+                if(lightRadiousSq > 0)
+                {
+                    r32 realRadiousSq = lightRadiousSq + Square(params->safetyLightRadious);
+                    if(LengthSq(toTarget) <= realRadiousSq)
+                    {
+                        ZeroDirection(brain, toTarget, true);
+                    }
                 }
             }
         }
     }
 }
 
-internal void MoveToward(ServerState* server, EntityID ID, EntityID targetID)
+EVALUATOR(Flee)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    DefaultComponent* targetDef = GetComponent(server, targetID, DefaultComponent);
-    Vec3 toTarget = SubtractOnSameZChunk(targetDef->P, def->P);
-    ConsiderMovingDirection(server, ID, Normalize(toTarget));
+    BrainComponent* brain = GetComponent(server, ID, BrainComponent);
+    BrainParams* params = GetBrainParams(server, ID);
+    SpatialPartitionQuery perceiveQuery = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
+    
+    for(EntityID testID = GetCurrent(&perceiveQuery); IsValid(&perceiveQuery); testID = Advance(&perceiveQuery))
+    {
+        DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
+        PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
+        if(ShouldPerceive(def, ID, testDef, testID))
+        {
+            Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
+            
+            if(EntityHasFlags(def, EntityFlag_fearsLight) && LengthSq(toTarget) <= GetLightRadiousSq(server, testID))
+            {
+                ZeroDirection(brain, toTarget, true);
+                SumScore(brain, -toTarget, 1.0f, 0.5f);
+            }
+            else if(AreEqual(testDef->definitionID, params->scaryType))
+            {
+                if(LengthSq(toTarget) <= Square(params->safeDistanceRadious))
+                {
+                    ZeroDirection(brain, toTarget, true);
+                    SumScore(brain, -toTarget, 1.0f, 0.5f);
+                }
+            }
+        }
+    }
 }
-
-internal void MoveInDirection(ServerState* server, EntityID ID, Vec3 direction)
-{
-    ConsiderMovingDirection(server, ID, direction);
-}
-
-
 
 internal b32 SearchForHostileEnemies(ServerState* server, EntityID brainID, EntityID* ID)
 {
@@ -244,42 +355,6 @@ internal b32 SearchForScaryEntities(ServerState* server, EntityID brainID)
                 {
                     result = true;
                     break;
-                }
-            }
-        }
-    }
-    
-    return result;
-}
-
-internal b32 Flee(ServerState* server, EntityID brainID, Vec3* scaryDirection)
-{
-    b32 result = false;
-    
-    *scaryDirection = {};
-    DefaultComponent* def = GetComponent(server, brainID, DefaultComponent);
-    BrainParams* params = GetBrainParams(server, brainID);
-    SpatialPartitionQuery perceiveQuery = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
-    
-    for(EntityID testID = GetCurrent(&perceiveQuery); IsValid(&perceiveQuery); testID = Advance(&perceiveQuery))
-    {
-        DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
-        PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
-        if(ShouldPerceive(def, brainID, testDef, testID))
-        {
-            Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
-            
-            if(EntityHasFlags(def, EntityFlag_fearsLight) && LengthSq(toTarget) <= GetLightRadiousSq(server, testID))
-            {
-                result = true;
-                *scaryDirection += OneOver(toTarget);
-            }
-            else if(AreEqual(testDef->definitionID, params->scaryType))
-            {
-                if(LengthSq(toTarget) <= Square(params->safeDistanceRadious))
-                {
-                    result = true;
-                    *scaryDirection += OneOver(toTarget);
                 }
             }
         }
@@ -352,7 +427,6 @@ internal b32 ActionIsPossibleAtCurrentDistance(ServerState* server, u16 action, 
 }
 
 #define ChangeState(brain, s) brain->state = BrainState_##s;
-
 STANDARD_ECS_JOB_SERVER(UpdateBrain)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
@@ -387,7 +461,7 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                 r32 distanceSq = LengthSq(SubtractOnSameZChunk(playerDef->P, def->P));
                 if(distanceSq < maxDistanceSq)
                 {
-                    if(!IsValidID(brain->ID))
+                    if(!IsValidID(brain->targetID))
                     {
                         AddEntityParams params = DefaultAddEntityParams();
                         params.targetBrainID = ID;
@@ -398,19 +472,19 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
 				}
                 else
                 {
-                    if(IsValidID(brain->ID))
+                    if(IsValidID(brain->targetID))
                     {
-                        DeleteEntity(server, brain->ID);
-                        brain->ID = {};
+                        DeleteEntity(server, brain->targetID);
+                        brain->targetID = {};
                     }
                 }
             }
             else
             {
-                if(IsValidID(brain->ID))
+                if(IsValidID(brain->targetID))
                 {
-                    DeleteEntity(server, brain->ID);
-                    brain->ID = {};
+                    DeleteEntity(server, brain->targetID);
+                    brain->targetID = {};
                 }
             }
         } break;
@@ -419,20 +493,20 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
         {
             if(server->updateBrains)
             {
-                ResetMovementDirection(server, ID);
+                ResetDirections(server, ID);
                 switch(brain->state)
                 {
                     case BrainState_Wandering:
                     {
-                        Wander(server, ID, elapsedTime);
-                        MaintainDistance(server, ID);
-                        ComputeFinalAcceleration(server, ID);
+                        Evaluate(Wander);
+                        Evaluate(MaintainDistance);
+                        Evaluate(CollisionAvoidance);
                         
                         EntityID hostileID;
                         if(SearchForHostileEnemies(server, ID, &hostileID))
                         {
                             ChangeState(brain, Chasing);
-                            brain->ID = hostileID;
+                            brain->targetID = hostileID;
                         }
                         
                         if(SearchForScaryEntities(server, ID))
@@ -443,13 +517,8 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                     
                     case BrainState_Fleeing:
                     {
-                        Vec3 scaryDirection;
-                        if(Flee(server, ID, &scaryDirection))
-                        {
-                            MoveInDirection(server, ID, -scaryDirection);
-                            ComputeFinalAcceleration(server, ID);
-                        }
-                        else
+                        Evaluate(Flee);
+                        if(!SearchForScaryEntities(server, ID))
                         {
                             ChangeState(brain, Wandering);
                         }
@@ -457,13 +526,13 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                     
                     case BrainState_Chasing:
                     {
-                        MoveToward(server, ID, brain->ID);
-                        MaintainDistance(server, ID);
-                        ComputeFinalAcceleration(server, ID);
+                        ScoreDirection(server, ID, brain->targetID, 1.0f, 0.99f);
+                        Evaluate(MaintainDistance);
+                        Evaluate(CollisionAvoidance);
                         
-                        if(ActionIsPossible(server, attack, ID, brain->ID))
+                        if(ActionIsPossible(server, attack, ID, brain->targetID))
                         {
-                            if(ActionIsPossibleAtCurrentDistance(server, attack, ID, brain->ID))
+                            if(ActionIsPossibleAtCurrentDistance(server, attack, ID, brain->targetID))
                             {
                                 ChangeState(brain, Attacking);
                             }
@@ -481,13 +550,13 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                     
                     case BrainState_Attacking:
                     {
-                        if(ActionIsPossibleAtCurrentDistance(server, attack, ID, brain->ID))
+                        if(ActionIsPossibleAtCurrentDistance(server, attack, ID, brain->targetID))
                         {
-                            Attack(server, ID, brain->ID);
+                            DoAction(server, ID, attack);
                         }
                         else
                         {
-                            if(ActionIsPossible(server, attack, ID, brain->ID))
+                            if(ActionIsPossible(server, attack, ID, brain->targetID))
                             {
                                 ChangeState(brain, Chasing);
                             }
@@ -504,6 +573,8 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                     } break;
                 }
             }
+            
+            ComputeFinalDirection(brain);
         } break;
     }
 }

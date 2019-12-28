@@ -595,12 +595,12 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime);
     EXECUTE_JOB(server, UpdatePlant, ArchetypeHas(PlantComponent) && ArchetypeHas(MiscComponent), elapsedTime);
     
-    EXECUTE_JOB(server, DamageEntityFearingLight, ArchetypeHas(AliveComponent), elapsedTime);
-    EXECUTE_JOB(server, DealLightDamage, ArchetypeHas(MiscComponent), elapsedTime);
+    //EXECUTE_JOB(server, DamageEntityFearingLight, ArchetypeHas(AliveComponent), elapsedTime);
+    //EXECUTE_JOB(server, DealLightDamage, ArchetypeHas(MiscComponent), elapsedTime);
     
     
     server->updateBrains = false;
-    r32 targetBrainTimer = 0.05f;
+    r32 targetBrainTimer = 0.1f;
     server->brainTimer += elapsedTime;
     if(server->brainTimer >= targetBrainTimer)
     {

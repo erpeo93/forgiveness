@@ -22,6 +22,7 @@ Archetype() struct AnimalArchetype
     SoundEffectComponent soundEffects;
     AliveComponent alive;
     MiscComponent misc;
+    ShadowComponent shadow;
 #endif
 };
 
@@ -39,6 +40,7 @@ Archetype() struct RockArchetype
     InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
     MiscComponent misc;
+    ShadowComponent shadow;
 #endif
 };
 
@@ -57,6 +59,7 @@ Archetype() struct PlantArchetype
     InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
     MiscComponent misc;
+    ShadowComponent shadow;
 #endif
 };
 
@@ -88,6 +91,7 @@ Archetype() struct RuneArchetype
     AnimationEffectComponent animationEffects;
     ContainerComponent container;
     SkillDefComponent skill;
+    ShadowComponent shadow;
 #endif
 };
 
@@ -122,6 +126,7 @@ Archetype() struct ObjectArchetype
     AnimationEffectComponent animationEffects;
     RecipeEssenceComponent recipeEssences;
     MiscComponent misc;
+    ShadowComponent shadow;
 #endif
 };
 
@@ -135,6 +140,7 @@ Archetype() struct PortalArchetype
     BaseComponent base;
     FrameByFrameAnimationComponent animation;
     AnimationEffectComponent animationEffects;
+    ShadowComponent shadow;
 #endif
 };
 
@@ -419,8 +425,9 @@ introspection() struct ClientEntityInitParams
     LayoutPieceProperties* equippedLayoutPieces;
     
     Vec3 shadowOffset;
+    r32 shadowHeight MetaDefault("0.5f");
     Vec2 shadowScale MetaDefault("V2(1, 1)");
-    Vec4 shadowColor MetaDefault("V4(1, 1, 1, 0.5f)");
+    Vec4 shadowColor MetaDefault("V4(0, 0, 0, 0.5f)");
     
     r32 lootingZoomCoeff MetaDefault("3.0f");
     b32 displayInStandardMode;
