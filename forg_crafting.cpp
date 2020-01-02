@@ -1,8 +1,8 @@
-internal EntityRef GetCraftingType(Assets* assets, u32 recipeSeed)
+internal EntityType GetCraftingType(Assets* assets, u32 recipeSeed)
 {
     RandomSequence seq = Seed(recipeSeed);
     
-    EntityRef result = {};
+    EntityType result = {};
     while(true)
     {
         AssetID definitionID = QueryDataFiles(assets, EntityDefinition, "default", &seq, 0);
@@ -10,7 +10,7 @@ internal EntityRef GetCraftingType(Assets* assets, u32 recipeSeed)
         EntityDefinition* defintion = GetData(assets, EntityDefinition, definitionID);
         if(defintion->common.craftable)
         {
-            result = EntityReference(definitionID);
+            result = GetEntityType(definitionID);
             break;
         }
     }
@@ -19,7 +19,7 @@ internal EntityRef GetCraftingType(Assets* assets, u32 recipeSeed)
 }
 
 // TODO(Leonardo): consider rarity!
-internal u16 GetCraftingComponents(Assets* assets, EntityRef type, u32 seed, EntityRef* components, b32* deleteComponents, u16 maxComponentCount)
+internal u16 GetCraftingComponents(Assets* assets, EntityType type, u32 seed, EntityType* components, b32* deleteComponents, u16 maxComponentCount)
 {
     EntityDefinition* definition = GetEntityTypeDefinition(assets, type);
     Assert(definition->common.craftable);
@@ -28,15 +28,15 @@ internal u16 GetCraftingComponents(Assets* assets, EntityRef type, u32 seed, Ent
     if(definition->common.componentCount > 0)
     {
         RandomSequence seq = Seed(seed);
-        for(u16 componentIndex = 0; componentIndex < result; ++componentIndex)
+        for(u16 componentIndex = 0; componentIndex < definition->common.componentCount; ++componentIndex)
         {
             CraftingComponent* component = definition->common.components + componentIndex;
             if(component->optionCount > 0)
             {
                 Assert(result < maxComponentCount);
-                u16 index = ++result;
+                u16 index = result++;
                 u32 choice = RandomChoice(&seq, component->optionCount);
-                components[index] = component->options[choice];
+                components[index] = GetEntityType(assets, component->options[choice]);
                 deleteComponents[index] = component->deleteAfterCrafting;
             }
         }
@@ -45,7 +45,7 @@ internal u16 GetCraftingComponents(Assets* assets, EntityRef type, u32 seed, Ent
     return result;
 }
 
-internal u16 GetCraftingEssenceCount(Assets* assets, EntityRef type, u32 seed)
+internal u16 GetCraftingEssenceCount(Assets* assets, EntityType type, u32 seed)
 {
     EntityDefinition* definition = GetEntityTypeDefinition(assets, type);
     RandomSequence seq = Seed(seed);
@@ -65,7 +65,7 @@ internal u16 GetRandomEssence(RandomSequence* seq)
 
 #if 0
 // TODO(Leonardo): consider rarity!
-internal void GetEssences(Assets* assets, EntityRef type, u32 seed, u16* essences)
+internal void GetEssences(Assets* assets, EntityType type, u32 seed, u16* essences)
 {
     for(u16 essenceIndex = 0; essenceIndex < Count_essence; ++essenceIndex)
     {

@@ -4,7 +4,8 @@ introspection() struct EntityID
     u32 archetype_archetypeIndex; // NOTE(Leonardo): 8 bit archetype, 24 bits index
 };
 
-#define INIT_COMPONENT_FUNCTION(name) void name(void* state, void* componentPtr, EntityID ID, struct CommonEntityInitParams* common, struct ServerEntityInitParams* s, struct ClientEntityInitParams* c)
+#define INIT_COMPONENT_FUNCTION(name) void name(void* state, Assets* assets, void* componentPtr, EntityID ID, struct CommonEntityInitParams* common, struct ServerEntityInitParams* s, struct ClientEntityInitParams* c)
+struct Assets;
 typedef INIT_COMPONENT_FUNCTION(init_component_function);
 
 struct ArchetypeComponent
@@ -28,7 +29,7 @@ struct ArchetypeLayout
             ArchetypeComponent hasRockComponent;
             ArchetypeComponent hasPlantComponent;
             ArchetypeComponent hasGrassComponent;
-            ArchetypeComponent hasPhysicComponent;
+            ArchetypeComponent hasMovementComponent;
             ArchetypeComponent hasPlayerComponent;
             ArchetypeComponent hasShadowComponent;
             ArchetypeComponent hasStandardImageComponent;
@@ -53,8 +54,10 @@ struct ArchetypeLayout
             ArchetypeComponent hasActionComponent;
             ArchetypeComponent hasStaticComponent;
             ArchetypeComponent hasSoundEffectComponent;
-            ArchetypeComponent hasAliveComponent;
-            ArchetypeComponent hasMiscComponent;
+            ArchetypeComponent hasHealthComponent;
+            ArchetypeComponent hasCombatComponent;
+            ArchetypeComponent hasLightComponent;
+            ArchetypeComponent hasVegetationComponent;
             ArchetypeComponent hasSegmentImageComponent;
             ArchetypeComponent hasSkillDefComponent;
             ArchetypeComponent hasRecipeEssenceComponent;
@@ -198,6 +201,16 @@ for(u16 archetypeIndex = 0; archetypeIndex < Archetype_Count; ++archetypeIndex)\
         {\
             if(!DeletedArchetype(state, iter.ID)) job(state, iter.ID, elapsedTime);\
         }\
+    }\
+}
+
+#define EXECUTE_JOB_TIMED(state, job, query, timer, elapsedTime, targetTime)\
+{\
+    timer += elapsedTime;\
+    if(timer >= targetTime)\
+    {\
+        EXECUTE_JOB(state, job, query, timer);\
+        timer = 0;\
     }\
 }
 

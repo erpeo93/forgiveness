@@ -450,9 +450,9 @@ internal u32 GetAssetSubtype(Assets* assets, u16 type, char* subtype);
 internal char* GetAssetSubtypeName(Assets* assets, u16 type, u32 subtype);
 internal char* GetAssetSubtypeName(Assets* assets, u16 type, u64 subtypeHash);
 
-internal EntityRef Parse_EntityRef(Tokenizer* tokenizer, EntityRef defaultVal)
+internal EntityName Parse_EntityName(Tokenizer* tokenizer, EntityName defaultVal)
 {
-    EntityRef result = defaultVal;
+    EntityName result = defaultVal;
     
     Token t = GetToken(tokenizer);
     if(t.type == Token_String)
@@ -472,23 +472,21 @@ internal EntityRef Parse_EntityRef(Tokenizer* tokenizer, EntityRef defaultVal)
         
         result.subtypeHashIndex = GetAssetSubtype(meta_assets, AssetType_EntityDefinition, kind);
         Assert(result.subtypeHashIndex);
-        result.index = GetAssetIndex(meta_assets, AssetType_EntityDefinition, result.subtypeHashIndex, index);
+        
+        Assert(index.textLength < sizeof(result.name));
+        FormatString(result.name, sizeof(result.name), "%.*s", index.textLength, index.text);
     }
     
     return result;
 }
 
-internal void Dump_EntityRef(Stream* output, FieldDefinition* field, EntityRef value, b32 isInArray)
+internal void Dump_EntityName(Stream* output, FieldDefinition* field, EntityName value, b32 isInArray)
 {
-    if(value.subtypeHashIndex || value.index)
+    if(value.subtypeHashIndex || value.name[0])
     {
         char* subtypeName = GetAssetSubtypeName(meta_assets, AssetType_EntityDefinition, value.subtypeHashIndex);
         
-        AssetID ID;
-        ID.type = AssetType_EntityDefinition;
-        ID.subtypeHashIndex = value.subtypeHashIndex;
-        ID.index = value.index;
-        char* indexName = GetAssetIndexName(meta_assets, ID);
+        char* indexName = value.name;
         
         if(isInArray)
         {
@@ -790,7 +788,7 @@ internal b32 Edit_Vec3(EditorLayout* layout, char* name, Vec3* v, b32 isInArray,
 internal b32 Edit_Vec4(EditorLayout* layout, char* name, Vec4 * v, b32 isInArray, AssetID assetID, b32 clamp01 = false);
 internal b32 Edit_Hash64(EditorLayout* layout, char* name, Hash64* h, char* optionsName, b32 isInArray, AssetID assetID);
 internal b32 Edit_Enumerator(EditorLayout* layout, char* name, Enumerator* enumerator, StringArray options, b32 isInArray, AssetID assetID);
-internal b32 Edit_EntityRef(EditorLayout* layout, char* name, EntityRef* ref, b32 isInArray, AssetID assetID);
+internal b32 Edit_EntityName(EditorLayout* layout, char* name, EntityName* val, b32 isInArray, AssetID assetID);
 internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* property, b32 isInArray, AssetID assetID);
 internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType* type, b32 typeEditable, b32 isInArray, AssetID assetID);
 internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray, AssetID assetID);
@@ -853,7 +851,7 @@ STANDARD_OPERATION_FUNCTION(Vec2);
 STANDARD_OPERATION_FUNCTION(Vec3);
 STANDARD_OPERATION_FUNCTION(Vec4);
 STANDARD_OPERATION_FUNCTION(AssetLabel);
-STANDARD_OPERATION_FUNCTION(EntityRef);
+STANDARD_OPERATION_FUNCTION(EntityName);
 
 internal StructOperationResult EnumeratorOperation(EditorLayout* layout, FieldDefinition* field, FieldOperationType operation, void* ptr, Tokenizer* source, Stream* output, b32 isInArray, AssetID assetID)
 {
@@ -1026,7 +1024,7 @@ internal u32 FieldOperation(EditorLayout* layout, FieldDefinition* field, FieldO
             DUMB_OPERATION(GameProperty);
             DUMB_OPERATION(GameAssetType);
             DUMB_OPERATION(AssetLabel);
-            DUMB_OPERATION(EntityRef);
+            DUMB_OPERATION(EntityName);
             
             default:
             {
@@ -1192,7 +1190,7 @@ internal void CopyDefaultValue(FieldDefinition* field, void* ptr)
             DUMB_COPY_DEF(GameProperty);
             DUMB_COPY_DEF(GameAssetType);
             DUMB_COPY_DEF(AssetLabel);
-            DUMB_COPY_DEF(EntityRef);
+            DUMB_COPY_DEF(EntityName);
             
             default:
             {

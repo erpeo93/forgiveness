@@ -14,12 +14,12 @@
 #include "forg_simd.h"
 #include "forg_file_formats.h"
 
+#include "forg_config.h"
 
 struct U16
 {
     u16 value;
-    i16 flagOffset;
-    u16 flag;
+    b32 dirty;
 };
 
 inline b32 operator == (U16 v1, U16 v2)
@@ -55,8 +55,7 @@ inline b32 operator == (u16 v1, U16 v2)
 struct U32
 {
     u32 value;
-    i16 flagOffset;
-    u16 flag;
+    b32 dirty;
 };
 
 inline b32 operator == (U32 v1, U32 v2)
@@ -72,8 +71,7 @@ inline b32 operator == (U32 v1, U32 v2)
 struct R32
 {
     r32 value;
-    i16 flagOffset;
-    u16 flag;
+    b32 dirty;
 };
 
 inline r32 GetR32(R32 value)
@@ -166,17 +164,15 @@ struct FileToSend
 struct DefaultComponent
 {
     b32 updateSent;
-    u16 basicPropertiesChanged;
-    u16 healthPropertiesChanged;
-    u16 miscPropertiesChanged;
-    
-    EntityRef definitionID;
+    u16 networkFlags;
+    EntityType type;
     u32 seed;
     UniversePos P;
     U32 flags;
-    U16 status;
     EntityID spawnerID;
     u16 essences[Count_essence];
+    u16 boundType;
+	Rect3 bounds;
 };
 
 struct StaticComponent
@@ -185,27 +181,12 @@ struct StaticComponent
     SpatialPartitionEntityBlock* block;
 };
 
-inline void AddChangedFlags(DefaultComponent* def, u16* flags, u16 flag)
-{
-    def->updateSent = false;
-    *flags = *flags | flag;
-}
-
-inline void AddChangedFlags(DefaultComponent* def, u16 flagOffset, u16 flag)
-{
-    Assert(flagOffset);
-    Assert(OffsetOf(DefaultComponent, updateSent) == 0);
-    u16* flags = (u16*) ((u8*) def + flagOffset);
-    AddChangedFlags(def, flags, flag);
-}
-
-
-inline void SetU16(DefaultComponent* def, U16* value, u16 newValue)
+inline void SetU16(U16* value, u16 newValue)
 {
     if(value->value != newValue)
     {
         value->value = newValue;
-        AddChangedFlags(def, value->flagOffset, value->flag);
+        value->dirty = true;
     }
 }
 
@@ -215,24 +196,12 @@ inline u16 GetU16(U16 value)
     return result;
 }
 
-#define InitU16(flags, flag, value) InitU16_((i16) OffsetOf(DefaultComponent, flags), flag, value) 
-inline U16 InitU16_(i16 flagOffset, u16 flag, u16 value)
-{
-    U16 result = {};
-    result.value = value;
-    result.flagOffset = flagOffset;
-    result.flag = flag;
-    
-    return result;
-}
-
-
-inline void SetU32(DefaultComponent* def, U32* value, u32 newValue)
+inline void SetU32(U32* value, u32 newValue)
 {
     if(value->value != newValue)
     {
         value->value = newValue;
-        AddChangedFlags(def, value->flagOffset, value->flag);
+        value->dirty = true;
     }
 }
 
@@ -242,45 +211,22 @@ inline u32 GetU32(U32 value)
     return result;
 }
 
-#define InitU32(flags, flag, value) InitU32_((i16) OffsetOf(DefaultComponent, flags), flag, value) 
-inline U32 InitU32_(i16 flagOffset, u16 flag, u32 value)
-{
-    U32 result = {};
-    result.value = value;
-    result.flagOffset = flagOffset;
-    result.flag = flag;
-    
-    return result;
-}
 
 
-
-
-inline void SetR32(DefaultComponent* def, R32* value, r32 newValue)
+inline void SetR32(R32* value, r32 newValue)
 {
     if(value->value != newValue)
     {
         value->value = newValue;
-        AddChangedFlags(def, value->flagOffset, value->flag);
+        value->dirty = true;
     }
-}
-
-#define InitR32(flags, flag, value) InitR32_((i16) OffsetOf(DefaultComponent, flags), flag, value) 
-inline R32 InitR32_(i16 flagOffset, u16 flag, r32 value)
-{
-    R32 result = {};
-    result.value = value;
-    result.flagOffset = flagOffset;
-    result.flag = flag;
-    
-    return result;
 }
 
 inline void AddEntityFlags(DefaultComponent* def, u32 flags)
 {
     u32 currentFlags = GetU32(def->flags);
     u32 newFlags = AddFlags(currentFlags, flags);
-    SetU32(def, &def->flags, newFlags);
+    SetU32(&def->flags, newFlags);
 }
 
 inline b32 EntityHasFlags(DefaultComponent* def, u32 test)
@@ -294,25 +240,15 @@ inline void ClearEntityFlags(DefaultComponent* def, u32 flags)
 {
     u32 currentFlags = GetU32(def->flags);
     u32 newFlags = ClearFlags(currentFlags, flags);
-    SetU32(def, &def->flags, newFlags);
+    SetU32(&def->flags, newFlags);
 }
 
-
-struct PhysicComponent
+struct MovementComponent
 {
-    u16 boundType;
-	Rect3 bounds;
     Vec3 speed;
     Vec3 acc;
     r32 accelerationCoeff;
     r32 drag;
-};
-
-struct ActionComponent
-{
-    u16 selectedCrafingEssences[MAX_RECIPE_ESSENCES];
-    U16 action;
-    r32 time;
 };
 
 struct TempEntityComponent
@@ -340,7 +276,7 @@ struct PlayerComponent
     b32 justEnteredWorld;
     
     u32 skillPoints;
-    r32 timeSinceLastZombieSpawned;
+    r32 sacrificeTimer;
     
     b32 connectionClosed;
     u16 connectionSlot;
@@ -359,15 +295,6 @@ struct PlayerComponent
     u32 runningFileIndex;
     FileToSend* firstLoginFileToSend;
     FileToSend* firstReloadedFileToSend;
-};
-
-struct PlantComponent
-{
-    r32 flowerGrowingSpeed;
-    r32 requiredFlowerDensity;
-    
-    r32 fruitGrowingSpeed;
-    r32 requiredFruitDensity;
 };
 
 #include "forg_archetypes.h"
@@ -416,7 +343,7 @@ struct AddEntityParams
     Vec3 speed;
     u32 playerIndex;
     u32 equipPlayerIndex;
-    EntityRef attachedEntityType;
+    EntityType attachedEntityType;
     EntityID targetBrainID;
     b32 spawnFollowingEntity;
     b32 lock;
@@ -486,6 +413,8 @@ struct DeletedEntity
 struct ZLayer
 {
     r32 dayTimeTime;
+    b32 hasNight;
+    r32 nightSpeed;
     u16 dayTimePhase;
 };
 
@@ -537,7 +466,8 @@ struct ServerState
     DeletedEntity* firstDeletedEntity;
     
     r32 staticUpdateTimer;
-    r32 equipmentEffectTimer;
+    r32 defaultEffectTimer;
+    r32 vegetationUpdateTimer;
     r32 brainTimer;
     b32 updateBrains;
     

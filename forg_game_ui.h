@@ -25,8 +25,8 @@ struct PossibleAction
     u16 action;
     PossibleActionDistance distance;
     r32 time;
-    EntityRef requiredUsingType;
-    EntityRef requiredEquippedType;
+    EntityType requiredUsingType;
+    EntityType requiredEquippedType;
 };
 
 struct PossibleActionList
@@ -83,9 +83,9 @@ struct InteractionComponent
     u16 inventorySlotType;
 };
 
-inline b32 IsValid(EntityRef ref);
-inline b32 AreEqual(EntityRef r1, EntityRef r2);
-internal PossibleAction* ActionIsPossible(InteractionComponent* interaction, u16 action, EntityRef* equipped, u32 equippedCount, EntityRef usingType = {})
+inline b32 IsValid(EntityType type);
+inline b32 AreEqual(EntityType r1, EntityType r2);
+internal PossibleAction* ActionIsPossible(InteractionComponent* interaction, u16 action, EntityType* equipped, u32 equippedCount, EntityType usingType = {})
 {
     PossibleAction* result = 0;
     if(interaction)
@@ -141,7 +141,7 @@ internal PossibleAction* ActionIsPossible(InteractionComponent* interaction, u16
     return result;
 }
 
-inline r32 GetMaxDistanceSq(PossibleAction* action, b32 continuing, MiscComponent* misc)
+inline r32 GetMaxDistanceSq(PossibleAction* action, b32 continuing, CombatComponent* combat)
 {
     r32 result = 0;
     
@@ -162,22 +162,22 @@ inline r32 GetMaxDistanceSq(PossibleAction* action, b32 continuing, MiscComponen
         
         case ActionDistance_Special:
         {
-            if(misc)
+            switch(distance->propertyIndex)
             {
-                switch(distance->propertyIndex)
+                case Special_AttackDistance:
                 {
-                    case Special_AttackDistance:
+                    if(combat)
                     {
                         if(continuing)
                         {
-                            result = misc->attackDistance * misc->attackContinueCoeff;
+                            result = combat->attackDistance * combat->attackContinueCoeff;
                         }
                         else
                         {
-                            result = GetR32(misc->attackDistance);
+                            result = GetR32(combat->attackDistance);
                         }
-                    } break;
-                }
+                    }
+                } break;
             }
         } break;
     }
@@ -186,14 +186,14 @@ inline r32 GetMaxDistanceSq(PossibleAction* action, b32 continuing, MiscComponen
     return result;
 }
 
-internal b32 ActionIsPossibleAtDistance(InteractionComponent* interaction, u16 action, u16 oldAction, r32 distanceSq, r32* targetTime,MiscComponent* misc, EntityRef* equipped, u32 equippedCount, EntityRef usingType = {})
+internal b32 ActionIsPossibleAtDistance(InteractionComponent* interaction, u16 action, u16 oldAction, r32 distanceSq, r32* targetTime,CombatComponent* combat, EntityType* equipped, u32 equippedCount, EntityType usingType = {})
 {
     b32 result = false;
     PossibleAction* possible = ActionIsPossible(interaction, action, equipped, equippedCount, usingType);
     if(possible)
     {
         b32 continuing = (action == oldAction);
-        r32 maxDistanceSq = GetMaxDistanceSq(possible, continuing, misc);
+        r32 maxDistanceSq = GetMaxDistanceSq(possible, continuing, combat);
         if(distanceSq <= maxDistanceSq)
         {
             result = true;

@@ -104,9 +104,7 @@ inline u8* ForgReserveSpace(PlayerComponent* player, GuaranteedDelivery delivery
 
 #define QueueStandardPacket(player, ...) Queue(player, buff_, buff, GuaranteedDelivery_None, 0, __VA_ARGS__)
 #define QueueGuaranteedPacket(player, ...) Queue(player, buff_, buff, GuaranteedDelivery_Guaranteed,0, __VA_ARGS__)
-
 #define QueueFilePacket(player, ...) Queue(player, buff_, buff, GuaranteedDelivery_Guaranteed, ForgNetworkFlag_FileChunk, __VA_ARGS__)
-
 #define QueueOrderedPacket(player, ...) Queue(player, buff_, buff, GuaranteedDelivery_Ordered, ForgNetworkFlag_Ordered, __VA_ARGS__)
 
 inline void Queue(PlayerComponent* player, unsigned char* buff_, unsigned char* buff, GuaranteedDelivery deliveryType, u8 flags, EntityID ID = {})
@@ -222,163 +220,228 @@ internal void QueueDeletedID(PlayerComponent* player, EntityID ID)
 
 internal void QueueEssenceUpdate(PlayerComponent* player, u16 essence, u16 quantity)
 {
-    StartPacket(player, Essence);
+    StartPacket(player, EssenceDelta);
     Pack("HH", essence, quantity);
     QueueOrderedPacket(player);
 }
 
-#define PackIfFlag(flags, string, ...) if(sendingFlags & SafeTruncateToU16(flags)){Pack(string, ##__VA_ARGS__);}
+#define PackIfFlag(flags, flag, string, ...) if(flags & SafeTruncateToU16(flag)){Pack(string, ##__VA_ARGS__);}
 
-#define PackU16(def, V) \
-{u16* flags = (u16*) ((u8*) def + V.flagOffset); if(*flags & V.flag){Pack("H", V.value);}}
+#define PackR32(V, flags, flag) if(V.dirty || (flags & flag)){flags |= flag; V.dirty = false;Pack("d", V.value);}
 
-#define PackU32(def, V) \
-{u16* flags = (u16*) ((u8*) def + V.flagOffset); if(*flags & V.flag){Pack("L", V.value);}}
+#define PackU16(V, flags, flag) if(V.dirty || (flags & flag)){flags |= flag; V.dirty = false;Pack("H", V.value);}
 
-#define PackR32(def, V) \
-{u16* flags = (u16*) ((u8*) def + V.flagOffset); if(*flags & V.flag){Pack("d", V.value);}}
+#define PackU32(V, flags, flag) if(V.dirty || (flags & flag)){flags |= flag; V.dirty = false;Pack("L", V.value);}
+
 
 internal u16 PrepareBasicsUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
 {
     u16 result = 0;
     
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    ActionComponent* act = GetComponent(server, ID, ActionComponent);
+    MovementComponent* movement = GetComponent(server, ID, MovementComponent);
     
+    u16 flags = def->networkFlags;
+    def->networkFlags = 0;
     if(completeUpdate)
     {
-        def->basicPropertiesChanged |= EntityBasics_Definition; 
-        def->basicPropertiesChanged |= EntityBasics_Position;
+        flags |= BasicFlags_Definition; 
+        flags |= BasicFlags_Position;
         
         if(IsValidID(def->spawnerID))
         {
-            def->basicPropertiesChanged |= EntityBasics_Spawner;
-        }
-        
-        if(!staticUpdate)
-        {
-            def->basicPropertiesChanged |= EntityBasics_Action; 
-            def->basicPropertiesChanged |= EntityBasics_Status; 
+            flags |= BasicFlags_Spawner;
         }
     }
     
-    if(def->basicPropertiesChanged != 0)
+    unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
+    unsigned char* flagDest = buff;
+    
+    
+    Vec3 speed = movement ? movement->speed : V3(0, 0, 0);
+    if(Abs(speed.x) < 0.01f)
     {
-        unsigned char* buff = ForgPackHeader(buff_, Type_entityBasics);
-        Vec3 speed = physic ? physic->speed : V3(0, 0, 0);
+        speed.x = 0;
+    }
+    
+    if(Abs(speed.y) < 0.01f)
+    {
+        speed.y = 0;
+    }
+    
+    Pack("H", 0);
+    PackIfFlag(flags, BasicFlags_Definition,"LLL", def->type.subtypeHashIndex, def->type.index, def->seed);
+    
+    if(flags & BasicFlags_Definition)
+    {
+        unsigned char* essenceCount = buff;
+        Pack("H", 0);
         
-        if(Abs(speed.x) < 0.01f)
+        u16 essenceC = 0;
+        for(u16 essenceIndex = 0; essenceIndex < ArrayCount(def->essences); ++essenceIndex)
         {
-            speed.x = 0;
-        }
-        
-        if(Abs(speed.y) < 0.01f)
-        {
-            speed.y = 0;
-        }
-        
-        u16 action = act ? GetU16(act->action) : 0;
-        u16 sendingFlags = def->basicPropertiesChanged;
-        Pack("H", sendingFlags);
-        PackIfFlag(EntityBasics_Definition,"LLL", def->definitionID.subtypeHashIndex, def->definitionID.index, def->seed);
-        
-        if(def->basicPropertiesChanged & EntityBasics_Definition)
-        {
-            unsigned char* essenceCount = buff;
-            Pack("H", 0);
-            
-            u16 essenceC = 0;
-            for(u16 essenceIndex = 0; essenceIndex < ArrayCount(def->essences); ++essenceIndex)
+            if(def->essences[essenceIndex])
             {
-                if(def->essences[essenceIndex])
-                {
-                    ++essenceC;
-                    Pack("HH", essenceIndex, def->essences[essenceIndex]);
-                }
+                ++essenceC;
+                Pack("HH", essenceIndex, def->essences[essenceIndex]);
             }
-            
-            pack(essenceCount, "H", essenceC);
         }
         
-        PackIfFlag(EntityBasics_Position, "hhhV", def->P.chunkX, def->P.chunkY, def->P.chunkZ, def->P.chunkOffset);
-        PackIfFlag(EntityBasics_Velocity, "V", speed);
-        PackIfFlag(EntityBasics_Action, "H", action);
-        PackU16(def, def->status);
-        PackU32(def, def->flags);
-        PackIfFlag(EntityBasics_Spawner, "L", def->spawnerID);
+        pack(essenceCount, "H", essenceC);
+    }
+    
+    PackIfFlag(flags, BasicFlags_Position, "hhhV", def->P.chunkX, def->P.chunkY, def->P.chunkZ, def->P.chunkOffset);
+    PackIfFlag(flags, BasicFlags_Velocity, "V", speed);
+    PackU32(def->flags, flags, BasicFlags_Flags);
+    PackIfFlag(flags, BasicFlags_Spawner, "L", def->spawnerID);
+    
+    if(flags)
+    {
         result = ForgEndPacket_(buff_, buff);
-        
-        def->basicPropertiesChanged = 0;
+        pack(flagDest, "H", flags);
     }
     
     return result;
 }
 
+internal u16 PrepareActionUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
+{
+    u16 result = 0;
+    
+    ActionComponent* action = GetComponent(server, ID, ActionComponent);
+    if(action)
+    {
+        u16 flags = 0;
+        if(completeUpdate)
+        {
+            flags = 0xffff;
+        }
+        
+        unsigned char* buff = ForgPackHeader(buff_, Type_Action);
+        unsigned char* flagDest = buff;
+        Pack("H", 0);
+        
+        PackU16(action->action, flags, ActionFlags_Action);
+        if(flags)
+        {
+            result = ForgEndPacket_(buff_, buff);
+            pack(flagDest, "H", flags);
+        }
+    }
+    return result;
+}
 
 internal u16 PrepareHealthUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
 {
     u16 result = 0;
-    
-    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    AliveComponent* alive = GetComponent(server, ID, AliveComponent);
-    if(alive)
+    HealthComponent* health = GetComponent(server, ID, HealthComponent);
+    if(health)
     {
+        u16 flags = 0;
         if(completeUpdate)
         {
-            def->healthPropertiesChanged = 0xffff;
+            flags = 0xffff;
         }
         
-        if(def->healthPropertiesChanged != 0)
+        unsigned char* buff = ForgPackHeader(buff_, Type_Health);
+        unsigned char* flagDest = buff;
+        Pack("H", 0);
+        
+        PackR32(health->physicalHealth, flags, HealthFlag_Physical);
+        PackR32(health->maxPhysicalHealth, flags, HealthFlag_MaxPhysical);
+        PackR32(health->mentalHealth, flags, HealthFlag_Mental);
+        PackR32(health->maxMentalHealth, flags, HealthFlag_MaxMental);
+        
+        if(flags)
         {
-            unsigned char* buff = ForgPackHeader(buff_, Type_Health);
-            
-            u16 sendingFlags = def->healthPropertiesChanged;
-            Pack("H", sendingFlags);
-            
-            PackU32(def, alive->physicalHealth);
-            PackU32(def, alive->maxPhysicalHealth);
-            PackU32(def, alive->mentalHealth);
-            PackU32(def, alive->maxMentalHealth);
-            
             result = ForgEndPacket_(buff_, buff);
-            
-            def->healthPropertiesChanged = 0;
+            pack(flagDest, "H", flags);
         }
     }
     
     return result;
 }
 
-internal u16 PrepareMiscUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
+internal u16 PrepareCombatUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
 {
     u16 result = 0;
-    
-    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    MiscComponent* misc = GetComponent(server, ID, MiscComponent);
-    if(misc)
+    CombatComponent* combat = GetComponent(server, ID, CombatComponent);
+    if(combat)
     {
+        u16 flags = 0;
         if(completeUpdate)
         {
-            def->miscPropertiesChanged = 0xffff;
+            flags = 0xffff;
         }
         
-        if(def->miscPropertiesChanged != 0)
+        unsigned char* buff = ForgPackHeader(buff_, Type_Combat);
+        unsigned char* flagDest = buff;
+        Pack("H", 0);
+        
+        PackR32(combat->attackDistance, flags, CombatFlag_AttackDistance);
+        PackR32(combat->attackContinueCoeff, flags, CombatFlag_AttackContinueCoeff);
+        
+        if(flags)
         {
-            unsigned char* buff = ForgPackHeader(buff_, Type_Misc);
-            
-            u16 sendingFlags = def->miscPropertiesChanged;
-            Pack("H", sendingFlags);
-            
-            PackR32(def, misc->attackDistance);
-            PackR32(def, misc->attackContinueCoeff);
-            PackR32(def, misc->lightRadious);
-            PackR32(def, misc->flowerDensity);
-            PackR32(def, misc->fruitDensity);
-            
             result = ForgEndPacket_(buff_, buff);
-            
-            def->miscPropertiesChanged = 0;
+            pack(flagDest, "H", flags);
+        }
+    }
+    
+    return result;
+}
+
+internal u16 PrepareLightUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
+{
+    u16 result = 0;
+    LightComponent* light = GetComponent(server, ID, LightComponent);
+    if(light)
+    {
+        u16 flags = 0;
+        if(completeUpdate)
+        {
+            flags = 0xffff;
+        }
+        
+        unsigned char* buff = ForgPackHeader(buff_, Type_Light);
+        unsigned char* flagDest = buff;
+        Pack("H", 0);
+        
+        PackR32(light->lightRadious, flags, LightFlag_LightRadious);
+        
+        if(flags)
+        {
+            result = ForgEndPacket_(buff_, buff);
+            pack(flagDest, "H", flags);
+        }
+    }
+    
+    return result;
+}
+
+internal u16 PrepareVegetationUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
+{
+    u16 result = 0;
+    VegetationComponent* vegetation = GetComponent(server, ID, VegetationComponent);
+    if(vegetation)
+    {
+        u16 flags = 0;
+        if(completeUpdate)
+        {
+            flags = 0xffff;
+        }
+        
+        unsigned char* buff = ForgPackHeader(buff_, Type_Vegetation);
+        unsigned char* flagDest = buff;
+        Pack("H", 0);
+        
+        PackR32(vegetation->flowerDensity, flags, VegetationFlag_FlowerDensity);
+        PackR32(vegetation->fruitDensity, flags, VegetationFlag_FruitDensity);
+        
+        if(flags)
+        {
+            result = ForgEndPacket_(buff_, buff);
+            pack(flagDest, "H", flags);
         }
     }
     
@@ -570,6 +633,42 @@ internal void QueueDebugEvent(PlayerComponent* player, DebugEvent* event)
 }
 #endif
 
+internal void QueueUpdateToNearbyPlayers(ServerState* server, UniversePos P, EntityID ID, unsigned char* buffer, u16 size, b32 orderedAndGuaranteed)
+{
+    if(size > 0)
+    {
+        SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, P);
+        for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
+        {
+            PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
+            //if(physic->P.chunkZ == playerPhysic->P.chunkZ)
+            u8* writeHere;
+            if(orderedAndGuaranteed)
+            {
+                QueueEntityHeaderReliably(player, ID);
+                writeHere = ForgReserveSpace(player, GuaranteedDelivery_Ordered, ForgNetworkFlag_Ordered, size, ID);
+            }
+            else
+            {
+                QueueEntityHeader(player, ID);
+                writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, size, ID);
+            }
+            if(writeHere)
+            {
+                Copy(size, writeHere, buffer);
+            }
+            else
+            {
+                InvalidCodePath;
+            }
+        }
+    }
+}
+
+#define QueueStandardUpdateWork(name) u16 name##size = Prepare##name##Update(server, ID, completeUpdate, staticUpdate, buffer); QueueUpdateToNearbyPlayers(server, def->P, ID, buffer, name##size, false); 
+
+#define QueueOrderedUpdateWork(name) u16 name##size = Prepare##name##Update(server, ID, completeUpdate, staticUpdate, buffer); QueueUpdateToNearbyPlayers(server, def->P, ID, buffer, name##size, true); 
+
 internal void SendEntityUpdate(ServerState* server, EntityID ID, b32 staticUpdate, b32 completeUpdate)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
@@ -591,83 +690,15 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, b32 staticUpdat
         {
             def->updateSent = true;
             
+            unsigned char buffer[KiloBytes(2)];
             
-            unsigned char basicsBuffer_[KiloBytes(2)];
-            u16 basicsSize = PrepareBasicsUpdate(server, ID, completeUpdate, staticUpdate, basicsBuffer_);
-            
-            unsigned char healthBuffer_[KiloBytes(2)];
-            u16 healthSize = PrepareHealthUpdate(server, ID, completeUpdate, staticUpdate, healthBuffer_);
-            
-            unsigned char miscBuffer_[KiloBytes(2)];
-            u16 miscSize = PrepareMiscUpdate(server, ID, completeUpdate, staticUpdate, miscBuffer_);
-            
-            unsigned char mappingsBuffer_[KiloBytes(2)];
-            u16 mappingsSize = PrepareMappingsUpdate(server, ID, completeUpdate, staticUpdate, mappingsBuffer_);
-            
-            if(basicsSize > 0 || mappingsSize > 0 || healthSize > 0 || miscSize > 0)
-            {
-                SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
-                for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
-                {
-                    PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
-                    //if(physic->P.chunkZ == playerPhysic->P.chunkZ)
-                    if(basicsSize > 0)
-                    {
-                        QueueEntityHeader(player, ID);
-                        u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, basicsSize, ID);
-                        if(writeHere)
-                        {
-                            Copy(basicsSize, writeHere, basicsBuffer_);
-                        }
-                        else
-                        {
-                            InvalidCodePath;
-                        }
-                    }
-                    
-                    if(healthSize > 0)
-                    {
-                        QueueEntityHeader(player, ID);
-                        u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, healthSize, ID);
-                        if(writeHere)
-                        {
-                            Copy(healthSize, writeHere, healthBuffer_);
-                        }
-                        else
-                        {
-                            InvalidCodePath;
-                        }
-                    }
-                    
-                    if(miscSize > 0)
-                    {
-                        QueueEntityHeader(player, ID);
-                        u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_None, 0, miscSize, ID);
-                        if(writeHere)
-                        {
-                            Copy(miscSize, writeHere, miscBuffer_);
-                        }
-                        else
-                        {
-                            InvalidCodePath;
-                        }
-                    }
-                    
-                    if(mappingsSize > 0)
-                    {
-                        QueueEntityHeaderReliably(player, ID);
-                        u8* writeHere = ForgReserveSpace(player, GuaranteedDelivery_Ordered, ForgNetworkFlag_Ordered, mappingsSize, ID);
-                        if(writeHere)
-                        {
-                            Copy(mappingsSize, writeHere, mappingsBuffer_);
-                        }
-                        else
-                        {
-                            InvalidCodePath;
-                        }
-                    }
-                }
-            }
+            QueueStandardUpdateWork(Basics);
+            QueueStandardUpdateWork(Action);
+            QueueStandardUpdateWork(Health);
+            QueueStandardUpdateWork(Combat);
+            QueueStandardUpdateWork(Light);
+            QueueStandardUpdateWork(Vegetation);
+            QueueOrderedUpdateWork(Mappings);
         }
     }
 }

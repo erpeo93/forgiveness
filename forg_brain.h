@@ -46,7 +46,7 @@ introspection() struct BrainParams
     r32 idleTimeWhenWandering;
     r32 wanderTargetTime MetaDefault("2.0f");
     r32 safetyLightRadious MetaDefault("1.0f");
-    EntityRef hostileType;
-    EntityRef maintainDistanceType;
-    EntityRef scaryType;
+    EntityName hostileType;
+    EntityName maintainDistanceType;
+    EntityName scaryType;
 };

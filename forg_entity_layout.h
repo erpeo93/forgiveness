@@ -7,9 +7,11 @@ struct BoundedEntityID
 
 inline void SetBoundedID(BoundedEntityID* bounded, EntityID ID)
 {
-    //bounded->dirty = (!AreEqual(ID, bounded->ID));
-    bounded->dirty = true;
-    bounded->ID = ID;
+    if(!AreEqual(ID, bounded->ID))
+    {
+        bounded->dirty = true;
+        bounded->ID = ID;
+    }
 }
 
 inline EntityID GetBoundedID(BoundedEntityID bounded)
@@ -136,6 +138,7 @@ struct ContainerComponent
     
 #ifndef FORG_SERVER
     r32 zoomCoeff;
+    r32 zoomSpeed;
     b32 displayInStandardMode;
     Vec2 desiredOpenedDim;
     Vec2 desiredUsingDim;

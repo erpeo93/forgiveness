@@ -33,7 +33,7 @@ inline AUID auID(void* p1, void* p2, void* p3)
     return result;
 }
 
-#define MAX_UNDOREDO_SIZE 32
+#define MAX_UNDOREDO_SIZE 64
 struct AUIDData
 {
     AUID ID;
@@ -136,6 +136,7 @@ enum EditorTabs
     EditorTab_Assets,
     EditorTab_Misc,
     EditorTab_Debug,
+    EditorTab_EntityRendering,
     
     EditorTab_Count,
 };
@@ -163,6 +164,19 @@ struct EditorUIContext
     b32 renderChunkBounds;
     b32 showEditor;
     EditorTabs activeTab;
+    
+    
+    // NOTE(Leonardo): render entity mode
+    EntityName name;
+    u32 seed;
+    u16 essences[Count_essence];
+    u16 action;
+    r32 health;
+    
+    // NOTE(Leonardo): render particle mode
+    GameProperties properties;
+    AssetLabel effectName;
+    
     
     char keyboardBuffer[32];
     

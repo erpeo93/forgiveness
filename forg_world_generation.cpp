@@ -394,8 +394,8 @@ internal UniversePos BuildPFromSpawnerGrid(r32 cellDim, u32 cellX, u32 cellY, i1
 {
     UniversePos result = {};
     result.chunkZ = chunkZ;
-    result.chunkOffset.x = cellDim * cellX;
-    result.chunkOffset.y = cellDim * cellY;
+    result.chunkOffset.x = cellDim * cellX + 0.5f * cellDim;
+    result.chunkOffset.y = cellDim * cellY + 0.5f * cellDim;
     
     result = NormalizePosition(result);
     return result;
@@ -433,176 +433,172 @@ internal void AddToPoission(PoissonP** positions, MemoryPool* pool, UniversePos 
     *positions = newP;
 }
 
-internal b32 SatisfiesClusterRequirements(ServerState* server, UniversePos P)
+internal b32 SatisfiesClusterRequirements(ServerState* server, UniversePos referenceP, UniversePos P, r32 cellDim)
 {
-    b32 result = (PositionInsideWorld(&P));
+    Assert(referenceP.chunkZ == P.chunkZ);
+    Vec3 delta = SubtractOnSameZChunk(referenceP, P);
+    b32 result = (PositionInsideWorld(&P) && (Abs(delta.x) <= cellDim) && (Abs(delta.y) <= cellDim));
     return result;
 }
 
-
-internal b32 SatisfiesEntityRequirements(ServerState* server, UniversePos P, SpawnerEntity* spawner)
+internal b32 SatisfiesTileRadiousRequirement(ServerState* server, UniversePos P, GameProperty requiredTile, GameProperty requiredFluid, u32 requiredRadious, b32 default)
 {
-    b32 result = false;
-    if(PositionInsideWorld(&P))
+    b32 result = default;
+    if(requiredTile.value != tile_invalid || requiredFluid.value != fluid_invalid)
     {
-        result = true;
-        
-        if(spawner->requiredTile.value != tile_invalid || spawner->requiredFluid.value != fluid_invalid)
+        result = false;
+        i32 radious = (i32) requiredRadious;
+        for(i32 Y = -radious; Y <= radious; ++Y)
         {
-            result = false;
-            i32 radious = (i32) spawner->requiredRadious;
-            for(i32 Y = -radious; Y <= radious; ++Y)
+            for(i32 X = -radious; X <= radious; ++X)
             {
-                for(i32 X = -radious; X <= radious; ++X)
+                Vec3 offset = V3(V2i(X, Y), 0);
+                UniversePos tileP = Offset(P, offset);
+                if(PositionInsideWorld(&tileP))
                 {
-                    Vec3 offset = VOXEL_SIZE * V3(V2i(X, Y), 0);
-                    UniversePos tileP = Offset(P, offset);
-                    if(PositionInsideWorld(&tileP))
+                    WorldTile* tile = GetTile(server, tileP);
+                    if(AreEqual(tile->property, requiredTile) || AreEqual(tile->underSeaLevelFluid, requiredFluid))
                     {
-                        WorldTile* tile = GetTile(server, tileP);
-                        if(AreEqual(tile->property, spawner->requiredTile) || AreEqual(tile->underSeaLevelFluid, spawner->requiredFluid))
-                        {
-                            result = true;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        
-        if(result)
-        {
-            i32 radious = (i32) spawner->repulsionRadious;
-            for(i32 Y = -radious; Y <= radious; ++Y)
-            {
-                for(i32 X = -radious; X <= radious; ++X)
-                {
-                    Vec3 offset = VOXEL_SIZE * V3(V2i(X, Y), 0);
-                    UniversePos tileP = Offset(P, offset);
-                    if(PositionInsideWorld(&tileP))
-                    {
-                        WorldTile* tile = GetTile(server, tileP);
-                        if(AreEqual(tile->property, spawner->repulsionTile) || AreEqual(tile->underSeaLevelFluid, spawner->repulsionFluid))
-                        {
-                            result = false;
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        result = false;
+                        result = true;
                         break;
                     }
                 }
             }
+        }
+    }
+    
+    return result;
+}
+
+internal b32 SatisfiesEntityRequirements(ServerState* server, UniversePos referenceP, UniversePos P, SpawnerEntity* spawner, r32 cellDim)
+{
+    b32 result = false;
+    
+    Assert(referenceP.chunkZ == P.chunkZ);
+    Vec3 delta = SubtractOnSameZChunk(referenceP, P);
+    if(PositionInsideWorld(&P) && (Abs(delta.x) <= cellDim) && (Abs(delta.y) <= cellDim))
+    {
+        
+        result = SatisfiesTileRadiousRequirement(server, P, spawner->requiredTile, spawner->requiredFluid, spawner->requiredRadious, true);
+        if(result)
+        {
+            result = !SatisfiesTileRadiousRequirement(server, P, spawner->repulsionTile, spawner->repulsionFluid, spawner->repulsionRadious, false);
             
+            if(result && spawner->occupiesTile)
+            {
+                WorldTile* tile = GetTile(server, P);
+                if(tile->occupiedWorldGeneration)
+                {
+                    result = false;
+                }
+            }
         }
     }
     return result;
 }
 
-internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, EntityRef type, AddEntityParams params);
-internal void SpawnPlayerGhost(ServerState* server, UniversePos P, AddEntityParams params);
-internal void TriggerSpawner(ServerState* server, Spawner* spawner, UniversePos referenceP, RandomSequence* seq)
+internal void MarkTileAsOccupied(ServerState* server, UniversePos P)
 {
-    if(spawner->optionCount)
+    WorldTile* tile = GetTile(server, P);
+    tile->occupiedWorldGeneration = true;
+}
+
+internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, EntityType type, AddEntityParams params);
+internal void SpawnPlayerGhost(ServerState* server, UniversePos P, AddEntityParams params);
+internal void TriggerSpawnerInCell(ServerState* server, PoissonP* entities, PoissonP* clusters, MemoryPool* poissonPool, Spawner* spawner, UniversePos referenceP, RandomSequence* seq, r32 cellDim)
+{
+    i32 clusterCount = spawner->clusterCount + RoundReal32ToI32(spawner->clusterCountV * RandomBil(seq));
+    
+    for(i32 clusterIndex = 0; clusterIndex < clusterCount; ++clusterIndex)
     {
-        r32 totalWeight = 0;
-        for(u32 optionIndex = 0; optionIndex < spawner->optionCount; ++optionIndex)
+        Vec3 maxClusterOffset = spawner->clusterOffsetCellDimCoeff * V3(cellDim, cellDim, 0);
+        u32 tries = 0;
+        while(tries++ < 100)
         {
-            totalWeight += spawner->options[optionIndex].weight;
-        }
-        r32 weight = totalWeight * RandomUni(seq);
-        
-        
-        SpawnerOption* option = 0;
-        
-        r32 runningWeight = 0;
-        for(u32 optionIndex = 0; optionIndex < spawner->optionCount; ++optionIndex)
-        {
-            SpawnerOption* test = spawner->options + optionIndex;
-            runningWeight += test->weight;
-            if(weight <= runningWeight)
-            {
-                option = test;
-                break;
-            }
-        }
-        
-        PoissonP* entities = 0;
-        PoissonP* clusters = 0;
-        
-        MemoryPool tempPool = {};
-        for(u32 entityIndex = 0; entityIndex < option->entityCount; ++entityIndex)
-        {
-            SpawnerEntity* spawn = option->entities + entityIndex;
-            i32 clusterCount = spawn->clusterCount + RoundReal32ToI32(spawn->clusterCountV * RandomBil(seq));
+            UniversePos clusterP = referenceP;
+            Vec3 clusterOffset = Hadamart(maxClusterOffset, RandomBilV3(seq));
+            clusterP = Offset(clusterP, clusterOffset);
             
-            for(i32 clusterIndex = 0; clusterIndex < clusterCount; ++clusterIndex)
+            if(SatisfiesClusterRequirements(server, referenceP, clusterP, cellDim))
             {
-                UniversePos P = referenceP;
-                Vec3 maxClusterOffset = V3(VOXEL_SIZE * spawn->maxClusterOffset, 0);
-                
-                b32 valid = false;
-                u32 tries = 0;
-                while(!valid && tries++ < 100)
+                if(Valid(clusters, clusterP, spawner->minClusterDistance))
                 {
-                    P = referenceP;
-                    P.chunkOffset += Hadamart(maxClusterOffset, RandomBilV3(seq));
-                    P = NormalizePosition(P);
-                    if(SatisfiesClusterRequirements(server, P))
+                    AddToPoission(&clusters, poissonPool, clusterP);
+                    
+                    u32 clusterTries = 0;
+                    while(clusterTries++ < 100)
                     {
-                        if(Valid(clusters, P, spawn->minClusterDistance))
+                        r32 totalWeight = 0;
+                        for(u32 optionIndex = 0; optionIndex < spawner->optionCount; ++optionIndex)
                         {
-                            valid = true;
-                            AddToPoission(&clusters, &tempPool, P);
+                            totalWeight += spawner->options[optionIndex].weight;
                         }
-                    }
-                }
-                
-                if(valid)
-                {
-                    UniversePos clusterP = P;
-                    i32 count = spawn->count + RoundReal32ToI32(spawn->countV * RandomBil(seq));
-                    for(i32 index = 0; index < count; ++index)
-                    {
-                        Vec3 maxOffset = V3(VOXEL_SIZE * spawn->maxOffset, 0);
+                        r32 weight = totalWeight * RandomUni(seq);
                         
-                        valid = false;
-                        tries = 0;
-                        while(!valid && tries++ < 100)
+                        
+                        SpawnerOption* option = 0;
+                        r32 runningWeight = 0;
+                        for(u32 optionIndex = 0; optionIndex < spawner->optionCount; ++optionIndex)
                         {
-                            P = clusterP;
-                            P.chunkOffset += Hadamart(maxOffset, RandomBilV3(seq));
-                            P = NormalizePosition(P);
-                            
-                            if(SatisfiesEntityRequirements(server, P, spawn))
+                            SpawnerOption* test = spawner->options + optionIndex;
+                            runningWeight += test->weight;
+                            if(weight <= runningWeight)
                             {
-                                if(Valid(entities, P, spawn->minEntityDistance))
+                                option = test;
+                                break;
+                            }
+                        }
+                        
+                        if(SatisfiesTileRadiousRequirement(server, clusterP, option->requiredTile, option->requiredFluid, option->requiredRadious, true) &&
+                           !SatisfiesTileRadiousRequirement(server, clusterP, option->repulsionTile, option->repulsionFluid, option->repulsionRadious, false))
+                        {
+                            for(u32 entityIndex = 0; entityIndex < option->entityCount; ++entityIndex)
+                            {
+                                SpawnerEntity* spawn = option->entities + entityIndex;
+                                
+                                i32 count = spawn->count + RoundReal32ToI32(spawn->countV * RandomBil(seq));
+                                for(i32 index = 0; index < count; ++index)
                                 {
-                                    AddToPoission(&entities, &tempPool, P);
-                                    valid = true;
+                                    Vec3 maxOffset = spawn->entityOffsetCellDimCoeff * V3(cellDim, cellDim, 0);
+                                    u32 entityTries = 0;
+                                    while(entityTries++ < 100)
+                                    {
+                                        UniversePos entityP = clusterP;
+                                        Vec3 entityOffset = Hadamart(maxOffset, RandomBilV3(seq));
+                                        entityP = Offset(entityP, entityOffset);
+                                        
+                                        if(SatisfiesEntityRequirements(server, referenceP, entityP, spawn, cellDim))
+                                        {
+                                            if(Valid(entities, entityP, spawn->minEntityDistance))
+                                            {
+                                                AddToPoission(&entities, poissonPool, entityP);
+                                                if(spawn->occupiesTile)
+                                                {
+                                                    MarkTileAsOccupied(server, entityP);
+                                                }
+                                                
+                                                AddEntityParams params = DefaultAddEntityParams();
+                                                if(spawn->attachedBrainEntity)
+                                                {
+                                                    params.spawnFollowingEntity = true;
+                                                    params.attachedEntityType = GetEntityType(server->assets, spawn->attachedBrainType);
+                                                }
+                                                
+                                                AddEntity(server, entityP, seq, GetEntityType(server->assets, spawn->type), params);
+                                                
+                                                break;
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        }
-                        
-                        if(valid)
-                        {
-                            AddEntityParams params = DefaultAddEntityParams();
-                            if(spawn->attachedBrainEntity)
-                            {
-                                params.spawnFollowingEntity = true;
-                                params.attachedEntityType = spawn->attachedBrainType;
-                            }
-                            
-                            AddEntity(server, P, seq, spawn->type, params);
+                            break;
                         }
                     }
+                    break;
                 }
             }
         }
-        
-        Clear(&tempPool);
     }
 }
 
@@ -638,7 +634,7 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
     params.P = newEntity->P;
     params.startingAcceleration = newEntity->params.acceleration;
     params.startingSpeed = newEntity->params.speed;
-    definition->common.definitionID = EntityReference(newEntity->definitionID);
+    definition->common.type = GetEntityType(newEntity->definitionID);
     params.seed = newEntity->seed;
     definition->common.essences = newEntity->params.essences;
     
@@ -652,7 +648,7 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
         PlayerComponent* player = (PlayerComponent*) Get_(&server->PlayerComponent_, newEntity->params.playerIndex);
         player->justEnteredWorld = true;
         player->skillPoints = 0;
-        player->timeSinceLastZombieSpawned = 0;
+        player->sacrificeTimer = SACRIFICE_TIME;
         player->ID = ID;
         SetComponent(server, ID, PlayerComponent, player);
         
@@ -718,11 +714,10 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
     {
 		DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
         def->spawnerID = newEntity->params.spawnerID;
-        def->basicPropertiesChanged |= EntityBasics_Spawner;
     }
     
-    EntityRef portal = EntityReference(server->assets, "default", "portal");
-    if(AreEqual(EntityReference(newEntity->definitionID), portal))
+    EntityType portal = GetEntityType(server->assets, "default", "portal");
+    if(AreEqual(GetEntityType(newEntity->definitionID), portal))
     {
         server->portalPositions[newEntity->P.chunkZ] = newEntity->P;
     }
@@ -743,14 +738,21 @@ internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
             if(spawner->time >= spawner->targetTime)
             {
                 spawner->time = 0;
-                r32 cellDim = VOXEL_SIZE * spawner->cellDim;
+                r32 cellDim = Min(WORLD_SIDE, spawner->cellDim);
                 u32 cellCount = TruncateReal32ToU32(WORLD_SIDE / cellDim);
                 
                 u32 cellX = RandomChoice(&server->entropy, cellCount);
                 u32 cellY = RandomChoice(&server->entropy, cellCount);
                 i16 Z = 0;
                 UniversePos P = BuildPFromSpawnerGrid(cellDim, cellX, cellY, Z);
-                TriggerSpawner(server, spawner, P, &server->entropy);
+                
+                PoissonP* entities = 0;
+                PoissonP* clusters = 0;
+                MemoryPool poissonPool = {};
+                
+                TriggerSpawnerInCell(server, entities, clusters, &poissonPool, spawner, P, &server->entropy, cellDim);
+                
+                Clear(&poissonPool);
             }
         }
     }
@@ -784,7 +786,6 @@ internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
         }
         else
         {
-            Assert(HasComponent(ID, PhysicComponent));
         }
         
         if(HasComponent(ID, PlayerComponent))
@@ -902,8 +903,21 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
         for(i16 chunkZ = 0; chunkZ < server->maxDeepness; ++chunkZ)
         {
             ZLayer* layer = server->layers + chunkZ;
-            layer->dayTimePhase = SafeTruncateToU16(RandomChoice(&generatorSeq, Count_DayTime));
-            layer->dayTimeTime = RandomUni(&generatorSeq) * DAYPHASE_DURATION;
+            
+            if(chunkZ == 0)
+            {
+                layer->dayTimeTime = 0;
+                layer->hasNight = false;
+                layer->nightSpeed = 0;
+                layer->dayTimePhase = DayTime_Day;
+            }
+            else
+            {
+                layer->dayTimeTime = RandomUni(&generatorSeq) * DAYPHASE_DURATION;
+                layer->hasNight = true;
+                layer->nightSpeed = 1.0f / chunkZ;
+                layer->dayTimePhase = SafeTruncateToU16(RandomChoice(&generatorSeq, Count_DayTime));
+            }
         }
         
         server->chunks = PushArray(&server->chunkPool, WorldChunk, generator->maxDeepness * WORLD_CHUNK_SPAN * WORLD_CHUNK_SPAN);
@@ -937,10 +951,15 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
         {
             AssetID sID = spawners[spawnerIndex];
             Spawner* spawner = GetData(server->assets, Spawner, sID);
-            r32 cellDim = VOXEL_SIZE * spawner->cellDim;
+            r32 cellDim = spawner->cellDim;
+            cellDim = Min(cellDim, WORLD_SIDE);
             u32 cellCount = TruncateReal32ToU32(WORLD_SIDE / cellDim);
             for(i16 chunkZ = 0; chunkZ < (i16) server->maxDeepness; ++chunkZ)
             {
+                PoissonP* entities = 0;
+                PoissonP* clusters = 0;
+                MemoryPool poissonPool = {};
+                
                 for(u32 Y = 0; Y < cellCount; ++Y)
                 {
                     for(u32 X = 0; X < cellCount; ++X)
@@ -948,10 +967,12 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
                         if(RandomUni(&seq) <= spawner->percentageOfStartingCells)
                         {
                             UniversePos P = BuildPFromSpawnerGrid(cellDim, X, Y, chunkZ);
-                            TriggerSpawner(server, spawner, P, &seq);
+                            TriggerSpawnerInCell(server, entities, clusters, &poissonPool, spawner, P, &seq, cellDim);
                         }
                     }
                 }
+                
+                Clear(&poissonPool);
             }
         }
         Clear(&tempPool);
@@ -991,7 +1012,12 @@ internal UniversePos FindPlayerStartingP(ServerState* server, u16 chunkZ)
 {
     Assert(chunkZ < ArrayCount(server->portalPositions));
     UniversePos P = server->portalPositions[chunkZ];
-    UniversePos result = FindWalkablePStartingFrom(server, P, 4);
+#if FORGIVENESS_INTERNAL
+    u32 stepCount = 4;
+#else
+    u32 stepCount = STEP_FROM_PORTAL;
+#endif
+    UniversePos result = FindWalkablePStartingFrom(server, P, stepCount);
     return result;
 }
 #endif

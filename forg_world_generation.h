@@ -116,18 +116,15 @@ inline NoiseParams NoisePar(r32 frequency, u32 octaves, r32 min, r32 max,r32 per
 
 introspection() struct SpawnerEntity
 {
-    EntityRef type;
-    Vec2 maxClusterOffset;
-    Vec2 maxOffset;
-    r32 minClusterDistance MetaDefault("1");
-    r32 minEntityDistance MetaDefault("1");
-    i32 clusterCount MetaDefault("1");
-    i32 clusterCountV MetaDefault("0");
+    EntityName type;
+    b32 occupiesTile;
+    r32 entityOffsetCellDimCoeff MetaDefault("0.5f");
+    r32 minEntityDistance MetaDefault("VOXEL_SIZE");
     i32 count MetaDefault("1");
     i32 countV;
     
     b32 attachedBrainEntity;
-    EntityRef attachedBrainType;
+    EntityName attachedBrainType;
     
     GameProperty repulsionTile MetaDefault("{Property_tileType, tile_invalid}") MetaFixed(property);
     GameProperty repulsionFluid MetaDefault("{Property_fluid, fluid_invalid}") MetaFixed(property);
@@ -141,6 +138,14 @@ introspection() struct SpawnerEntity
 introspection() struct SpawnerOption
 {
     r32 weight MetaDefault("1.0f");
+    
+    GameProperty repulsionTile MetaDefault("{Property_tileType, tile_invalid}") MetaFixed(property);
+    GameProperty repulsionFluid MetaDefault("{Property_fluid, fluid_invalid}") MetaFixed(property);
+    u32 repulsionRadious;
+    
+    GameProperty requiredTile MetaDefault("{Property_tileType, tile_invalid}") MetaFixed(property);
+    GameProperty requiredFluid MetaDefault("{Property_fluid, fluid_invalid}") MetaFixed(property);
+    u32 requiredRadious;
     ArrayCounter entityCount MetaCounter(entities);
     SpawnerEntity* entities;
 };
@@ -149,8 +154,13 @@ introspection() struct Spawner
 {
     r32 time MetaUneditable();
     r32 targetTime;
-    r32 cellDim MetaDefault("1.0f");
+    r32 cellDim MetaDefault("R32_MAX");
     r32 percentageOfStartingCells MetaDefault("1.0f");
+    
+    r32 clusterOffsetCellDimCoeff MetaDefault("0.5f");
+    r32 minClusterDistance MetaDefault("0.5f * R32_MAX");
+    i32 clusterCount MetaDefault("1");
+    i32 clusterCountV MetaDefault("0");
     
     ArrayCounter optionCount MetaCounter(options);
     SpawnerOption* options;

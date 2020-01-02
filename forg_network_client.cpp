@@ -234,7 +234,7 @@ internal void StoreInventorySlot(GameModeWorld* worldMode, InventorySlot* slots,
     if(IsValidID(ID))
     {
         BaseComponent* objectBase = GetComponent(worldMode, ID, BaseComponent);
-        EntityDefinition* definition = GetEntityTypeDefinition(worldMode->gameState->assets, objectBase->definitionID);
+        EntityDefinition* definition = GetEntityTypeDefinition(worldMode->gameState->assets, objectBase->type);
         
         slot->pieceHash = StringHash(definition->client.name.name);
         slot->zoomSpeed = definition->client.slotZoomSpeed;
@@ -414,14 +414,13 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 				UniversePos P = {};
 				Vec3 speed = {};
                 u16 action = 0;
-                u16 status = 0;
                 u32 flags = 0;
                 EntityID spawnerID = {};
 				
 				u16 receivedFlags;
 				Unpack("H", &receivedFlags);
                 
-				if(receivedFlags & (u16) EntityBasics_Definition)
+				if(receivedFlags & (u16) BasicFlags_Definition)
 				{
 					Unpack("LLL", &definitionID.subtypeHashIndex, &definitionID.index, &seed);
                     
@@ -438,33 +437,22 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     }
 				}
                 
-				if(receivedFlags & (u16) EntityBasics_Position)
+				if(receivedFlags & (u16) BasicFlags_Position)
 				{
 					Unpack("hhhV", &P.chunkX, &P.chunkY, &P.chunkZ, &P.chunkOffset);
 				}
                 
-				if(receivedFlags & (u16) EntityBasics_Velocity)
+				if(receivedFlags & (u16) BasicFlags_Velocity)
 				{
 					Unpack("V", &speed);
-                    Assert(LengthSq(speed) < Square(1000.0f));
 				}
                 
-				if(receivedFlags & (u16) EntityBasics_Action)
-				{
-					Unpack("H", &action);
-				}
-                
-				if(receivedFlags & (u16) EntityBasics_Status)
-				{
-					Unpack("H", &status);
-				}
-                
-				if(receivedFlags & (u16) EntityBasics_Flags)
+				if(receivedFlags & (u16) BasicFlags_Flags)
 				{
 					Unpack("L", &flags);
 				}
                 
-				if(receivedFlags & (u16) EntityBasics_Spawner)
+				if(receivedFlags & (u16) BasicFlags_Spawner)
 				{
                     EntityID spawnerIDServer;
 					Unpack("L", &spawnerIDServer);
@@ -472,7 +460,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 				}
                 
                 b32 justCreated = false;
-				if(receivedFlags & EntityBasics_Definition)
+				if(receivedFlags & BasicFlags_Definition)
 				{
 					if(!IsValidID(currentClientID) && !IsSet(flags, EntityFlag_deleted))
 					{
@@ -487,7 +475,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 							params.ID = currentServerID;
 							params.seed = seed;
                             
-							definition->common.definitionID = EntityReference(definitionID);
+							definition->common.type = GetEntityType(definitionID);
                             definition->common.essences = essences;
 							InitEntity(worldMode, currentClientID, &definition->common, 0, &params);
 							AddClientIDMapping(worldMode, currentServerID, currentClientID);
@@ -504,7 +492,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 BaseComponent* base = GetComponent(worldMode, currentClientID, BaseComponent);
                 if(base)
                 {
-					if(receivedFlags & EntityBasics_Position)
+					if(receivedFlags & BasicFlags_Position)
                     {
                         b32 coldSetPosition = false;
 						if(justCreated || (base->flags & EntityFlag_notInWorld) || (base->flags & EntityFlag_ghost))
@@ -563,22 +551,12 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         }
                     }
                     
-                    if(receivedFlags & EntityBasics_Velocity)
+                    if(receivedFlags & BasicFlags_Velocity)
 					{
 						base->velocity = speed;
 					}
                     
-					if(receivedFlags & EntityBasics_Action)
-					{
-						base->properties[Network_Action] = GameProp(action, action);
-					}
-                    
-					if(receivedFlags & EntityBasics_Status)
-					{
-						base->properties[Network_Status] = GameProp(status, status);
-					}
-                    
-					if(receivedFlags & EntityBasics_Flags)
+					if(receivedFlags & BasicFlags_Flags)
 					{
 						base->flags = flags;
 						if(IsSet(base->flags, EntityFlag_deleted))
@@ -600,96 +578,90 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 }
             } break;
             
+            case Type_Action:
+            {
+                u16 receivedFlags;
+				Unpack("H", &receivedFlags);
+                
+                ActionComponent* action = GetComponent(worldMode, currentClientID, ActionComponent);
+                ActionComponent action_;
+                if(!action)
+                {
+                    action = &action_;
+                }
+                
+                UnpackFlags(ActionFlags_Action, "H", &action->action);
+            } break;
+            
             case Type_Health:
             {
                 u16 receivedFlags;
 				Unpack("H", &receivedFlags);
                 
-                u32 physicalHealth = 0;
-                u32 maxPhysicalHealth = 0;
-                u32 mentalHealth = 0;
-                u32 maxMentalHealth = 0;
                 
-                UnpackFlags(HealthFlag_Physical, "L", &physicalHealth);
-                UnpackFlags(HealthFlag_MaxPhysical, "L", &maxPhysicalHealth);
-                UnpackFlags(HealthFlag_Mental, "L", &mentalHealth);
-                UnpackFlags(HealthFlag_MaxMental, "L", &maxMentalHealth);
-                
-                AliveComponent* alive = GetComponent(worldMode, currentClientID, AliveComponent);
-                if(alive)
+                HealthComponent* health = GetComponent(worldMode, currentClientID, HealthComponent);
+                HealthComponent health_;
+                if(!health)
                 {
-                    if(receivedFlags & HealthFlag_Physical)
-                    {
-                        alive->physicalHealth = physicalHealth;
-                    }
-                    
-                    if(receivedFlags & HealthFlag_MaxPhysical)
-                    {
-                        alive->maxPhysicalHealth = maxPhysicalHealth;
-                    }
-                    
-                    if(receivedFlags & HealthFlag_Mental)
-                    {
-                        alive->mentalHealth = mentalHealth;
-                    }
-                    
-                    if(receivedFlags & HealthFlag_MaxMental)
-                    {
-                        alive->maxMentalHealth = maxMentalHealth;
-                    }
+                    health = &health_;
                 }
+                
+                UnpackFlags(HealthFlag_Physical, "d", &health->physicalHealth);
+                UnpackFlags(HealthFlag_MaxPhysical, "d", &health->maxPhysicalHealth);
+                UnpackFlags(HealthFlag_Mental, "d", &health->mentalHealth);
+                UnpackFlags(HealthFlag_MaxMental, "d", &health->maxMentalHealth);
                 
             } break;
             
-            case Type_Misc:
+            case Type_Combat:
             {
                 u16 receivedFlags;
 				Unpack("H", &receivedFlags);
                 
-                r32 attackDistance = 0;
-                r32 attackContinueCoeff = 0;
-                r32 lightRadious = 0;
-                r32 flowerDensity = 0;
-                r32 fruitDensity = 0;
-                
-                UnpackFlags(MiscFlag_AttackDistance, "d", &attackDistance);
-                UnpackFlags(MiscFlag_AttackContinueCoeff, "d", &attackContinueCoeff);
-                UnpackFlags(MiscFlag_LightRadious, "d", &lightRadious);
-                UnpackFlags(MiscFlag_FlowerDensity, "d", &flowerDensity);
-                UnpackFlags(MiscFlag_FruitDensity, "d", &fruitDensity);
-                
-                MiscComponent* misc = GetComponent(worldMode, currentClientID, MiscComponent);
-                if(misc)
+                CombatComponent* combat = GetComponent(worldMode, currentClientID, CombatComponent);
+                CombatComponent combat_;
+                if(!combat)
                 {
-                    if(receivedFlags & MiscFlag_AttackDistance)
-                    {
-                        misc->attackDistance = attackDistance;
-                    }
-                    
-                    if(receivedFlags & MiscFlag_AttackContinueCoeff)
-                    {
-                        misc->attackContinueCoeff = attackContinueCoeff;
-                    }
-                    
-                    if(receivedFlags & MiscFlag_LightRadious)
-                    {
-                        misc->lightRadious = lightRadious;
-                    }
-                    
-                    if(receivedFlags & MiscFlag_FlowerDensity)
-                    {
-                        misc->flowerDensity = flowerDensity;
-                    }
-                    
-                    if(receivedFlags & MiscFlag_FruitDensity)
-                    {
-                        misc->fruitDensity = fruitDensity;
-                    }
+                    combat = &combat_;
                 }
+                UnpackFlags(CombatFlag_AttackDistance, "d", &combat->attackDistance);
+                UnpackFlags(CombatFlag_AttackContinueCoeff, "d", &combat->attackContinueCoeff);
+            }break;
+            
+            case Type_Light:
+            {
+                u16 receivedFlags;
+				Unpack("H", &receivedFlags);
                 
+                LightComponent* light = GetComponent(worldMode, currentClientID, LightComponent);
+                LightComponent light_;
+                if(!light)
+                {
+                    light = &light_;
+                }
+                UnpackFlags(LightFlag_LightRadious, "d", &light->lightRadious);
             } break;
             
-            case Type_Essence:
+            case Type_Vegetation:
+            {
+                u16 receivedFlags;
+				Unpack("H", &receivedFlags);
+                VegetationComponent* vegetation = GetComponent(worldMode, currentClientID, VegetationComponent);
+                
+                VegetationComponent vegetation_;
+                if(!vegetation)
+                {
+                    vegetation = &vegetation_;
+                }
+                UnpackFlags(VegetationFlag_FlowerDensity, "d", &vegetation->flowerDensity);
+                UnpackFlags(VegetationFlag_FruitDensity, "d", &vegetation->fruitDensity);
+            } break;
+            
+            
+            
+            
+            
+            case Type_EssenceDelta:
             {
                 u16 essence;
                 u16 quantity;
@@ -712,11 +684,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 EntityID ID;
                 Unpack("L", &ID);
                 EntityID clientID = GetClientIDMapping(worldMode, ID);
-                BaseComponent* base = GetComponent(worldMode, clientID, BaseComponent);
-                if(base)
-                {
-                    MarkForDeletion(worldMode, clientID);
-                }
+                MarkForDeletion(worldMode, clientID);
                 
                 MusicTrigger(worldMode, "forest", 1);
             } break;

@@ -286,10 +286,16 @@ introspection() struct ground_generator
     TileMapping* tiles;
 };
 
-introspection() struct EntityRef
+struct EntityName
 {
     u32 subtypeHashIndex;
-    u16 index;
+    char name[32];
+};
+
+introspection() struct EntityType
+{
+    u32 subtypeHashIndex;
+    u32 index;
 };
 
 introspection() struct TileAnimationEffect

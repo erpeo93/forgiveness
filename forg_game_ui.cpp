@@ -66,7 +66,7 @@ internal void HandleMouseInteraction(GameUIContext* UI, GameModeWorld* worldMode
 internal GameCommand ComputeFinalCommand(GameUIContext* UI, GameModeWorld* worldMode, ClientPlayer* myPlayer)
 {
     BaseComponent* player = GetComponent(worldMode, myPlayer->clientID, BaseComponent);
-    MiscComponent* misc = GetComponent(worldMode, myPlayer->clientID, MiscComponent);
+    CombatComponent* combat = GetComponent(worldMode, myPlayer->clientID, CombatComponent);
     UsingComponent* equippedComponent = GetComponent(worldMode, myPlayer->clientID, UsingComponent);
     
     GameCommand result = UI->standardCommand;
@@ -100,17 +100,23 @@ internal GameCommand ComputeFinalCommand(GameUIContext* UI, GameModeWorld* world
                 u16 action = lockedCommand.action;
                 r32 distanceSq = LengthSq(toTarget);
                 
-                EntityRef usingRef = {};
+                EntityType usingType = {};
                 BaseComponent* usingBase = GetComponent(worldMode, GetClientIDMapping(worldMode, lockedCommand.usingID), BaseComponent);
                 if(usingBase)
                 {
-                    usingRef = usingBase->definitionID;
+                    usingType = usingBase->type;
                 }
                 
-                u16 currentAction = player->properties[Network_Action].value;
+                u16 currentAction = 0;
+                ActionComponent* actionComp = GetComponent(worldMode, myPlayer->clientID, ActionComponent);
+                if(actionComp)
+                {
+                    currentAction = actionComp->action;
+                }
+                
                 r32 targetTime;
                 
-                EntityRef equipped[Count_usingSlot];
+                EntityType equipped[Count_usingSlot];
                 u32 equippedCount = 0;
                 
                 if(equippedComponent)
@@ -123,7 +129,7 @@ internal GameCommand ComputeFinalCommand(GameUIContext* UI, GameModeWorld* world
                     }
                 }
                 
-                if(!ActionIsPossibleAtDistance(interaction, action, currentAction, distanceSq, &targetTime, misc, equipped, equippedCount, usingRef))
+                if(!ActionIsPossibleAtDistance(interaction, action, currentAction, distanceSq, &targetTime, combat, equipped, equippedCount,usingType))
                 {
                     GameCommand command = {};
                     command.action = move;
@@ -202,7 +208,7 @@ internal EntityHotInteraction* AddPossibleInteraction_(GameModeWorld* worldMode,
                         BaseComponent* draggingBase = GetComponent(worldMode, draggingIDClient, BaseComponent);
                         valid = false;
                         if(draggingBase && 
-                           AreEqual(action->requiredUsingType, draggingBase->definitionID))
+                           AreEqual(action->requiredUsingType, draggingBase->type))
                         {
                             valid = true;
                         }
@@ -397,26 +403,30 @@ internal void HandleOverlayObjectsInteraction(GameUIContext* UI, GameModeWorld* 
 internal void OverdrawLayout(GameModeWorld* worldMode, RenderGroup* group, EntityID ID, Rect2 rect, LayoutContainerDrawMode drawMode,  r32 elapsedTime, r32 zBias = 0.0f)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    EntityAnimationParams params = GetEntityAnimationParams(worldMode, ID);
     LayoutComponent* layout = GetComponent(worldMode, ID, LayoutComponent);
-    LayoutContainer container = {};
-    container.container = GetComponent(worldMode, ID, ContainerComponent);
-    container.recipeEssences = GetComponent(worldMode, ID, RecipeEssenceComponent);
-    container.drawMode = drawMode;
     
-    ObjectTransform transform = FlatTransform();
-    transform.angle = layout->rootAngle;
-    transform.scale = layout->rootScale;
-    transform.cameraOffset.z += zBias;
-    transform.modulationPercentage = params.modulationPercentage; 
-    RenderLayoutInRect(worldMode, group, rect, transform, layout, base->seed, {}, &container, elapsedTime);
+    if(base && layout)
+    {
+        EntityAnimationParams params = GetEntityAnimationParams(worldMode, ID);
+        LayoutContainer container = {};
+        container.container = GetComponent(worldMode, ID, ContainerComponent);
+        container.recipeEssences = GetComponent(worldMode, ID, RecipeEssenceComponent);
+        container.drawMode = drawMode;
+        
+        ObjectTransform transform = FlatTransform();
+        transform.angle = layout->rootAngle;
+        transform.scale = layout->rootScale;
+        transform.cameraOffset.z += zBias;
+        transform.modulationPercentage = params.modulationPercentage; 
+        RenderLayoutInRect(worldMode, group, rect, transform, layout, base->seed, {}, &container, elapsedTime);
+    }
 }
 
 internal void OverdrawEssence(GameModeWorld* worldMode, RenderGroup* group, ObjectTransform transform, u16 essence, Rect2 rect, Vec4 color)
 {
     LayoutComponent layout = {};
     
-    EntityRef type = EntityReference(group->assets, "default", "essence");
+    EntityType type = GetEntityType(group->assets, "default", "essence");
     EntityDefinition* definition = GetEntityTypeDefinition(group->assets, type);
     
     u32 essenceSeed = 0;
@@ -424,12 +434,12 @@ internal void OverdrawEssence(GameModeWorld* worldMode, RenderGroup* group, Obje
     essences[essence] = 1;
     
     CommonEntityInitParams common = definition->common;
-    common.definitionID = type;
+    common.type = type;
     common.essences = essences;
     ClientEntityInitParams entityParams = definition->client;
     entityParams.seed = essenceSeed;
     
-    InitLayoutComponent(worldMode, &layout, {}, &common, 0, &entityParams);
+    InitLayoutComponent(worldMode, group->assets, &layout, {}, &common, 0, &entityParams);
     LayoutContainer recipeContainer = {};
     
     transform.tint = color;
@@ -438,11 +448,16 @@ internal void OverdrawEssence(GameModeWorld* worldMode, RenderGroup* group, Obje
 
 internal void OverdrawVisibleStuff(GameUIContext* UI, GameModeWorld* worldMode, RenderGroup* group, r32 elapsedTime)
 {
-    Vec2 minP = -0.5f * group->screenDim + V2(30, 10);
-    Vec2 dim = V2(100, 100);
+    r32 offsetFromBottom = 10.0f;
+    r32 offsetFromSide = 30.0f;
+    Vec2 minP = -0.5f * group->screenDim + V2(offsetFromSide, offsetFromBottom);
+    Vec2 dim = V2(65, 65);
     r32 margin = 20.0f;
     
-    ObjectTransform overdrawTransform = FlatTransform(V4(0, 0, 0, 0.5f));
+    r32 defaultAlpha = 0.1f;
+    r32 hotAlpha = 0.7f;
+    r32 outlineWidth = 2.0f;
+    
     UsingComponent* usingSlots = GetComponent(worldMode, worldMode->player.clientID, UsingComponent);
     
     if(usingSlots)
@@ -456,24 +471,23 @@ internal void OverdrawVisibleStuff(GameUIContext* UI, GameModeWorld* worldMode, 
             slot->projOnScreen = rect;
             
             b32 hot = PointInRect(rect, worldMode->relativeMouseP);
-            if(hot)
-            {
-                PushRectOutline(group, overdrawTransform, rect, 2.0f);
-            }
+            r32 alpha = hot ? hotAlpha : defaultAlpha;
+            ObjectTransform slotTransform = FlatTransform(V4(0, 0, 0, alpha));
+            
+            PushRectOutline(group, slotTransform, rect, outlineWidth);
             
             if(HasComponent(ID, SkillDefComponent))
             {
                 u32 skillIndex = slotIndex;
                 if(skillIndex == UI->selectedSkillIndex)
                 {
-                    PushRectOutline(group, FlatTransform(V4(1, 0, 0, 1)), rect, 2.0f);
+                    PushRectOutline(group, FlatTransform(V4(1, 0, 0, 1)), rect, outlineWidth);
                 }
             }
             
             
             if(IsValidUsingSlot(UI, slot, slotIndex))
             {
-                BaseComponent* usingBase = GetComponent(worldMode, ID, BaseComponent);
                 OverdrawLayout(worldMode, group, ID, rect, LayoutContainerDraw_Using, elapsedTime);
             }
             
@@ -507,10 +521,8 @@ internal void OverdrawVisibleStuff(GameUIContext* UI, GameModeWorld* worldMode, 
                     Rect2 rect = RectMinDim(equipmentP, equipmentDim);
                     
                     b32 hot = PointInRect(rect, worldMode->relativeMouseP);
-                    if(hot)
-                    {
-                        PushRectOutline(group, overdrawTransform, rect, 2.0f);
-                    }
+                    r32 alpha = hot ? hotAlpha : defaultAlpha;
+                    ObjectTransform slotTransform = FlatTransform(V4(0, 0, 0, alpha));
                     
                     UI->equipmentOnScreen[slotIndex] = rect;
                     OverdrawLayout(worldMode, group, slotID, rect, LayoutContainerDraw_Using, elapsedTime);
@@ -522,17 +534,20 @@ internal void OverdrawVisibleStuff(GameUIContext* UI, GameModeWorld* worldMode, 
     
     
     BaseComponent* base = GetComponent(worldMode, worldMode->player.clientID, BaseComponent);
-    Vec2 startingP = V2(0, 400);
-    Vec2 essenceDim = V2(50, 50);
+    Vec2 essenceDim = dim;
+    Vec2 startingP = V2(0.5f * group->screenDim.x, -0.5f * group->screenDim.y) + V2(-offsetFromSide, offsetFromBottom) - V2(dim.x, 0);
+    
     if(base)
     {
         for(u16 essenceIndex = 0; essenceIndex < ArrayCount(base->essences); ++essenceIndex)
         {
             u16 quantity = base->essences[essenceIndex];
             
-            Rect2 essenceRect = RectCenterDim(startingP, essenceDim);
-            PushRectOutline(group, FlatTransform(V4(0, 0, 0, 1)), essenceRect, 2.0f);
+            Rect2 essenceRect = RectMinDim(startingP, essenceDim);
+            b32 hot = PointInRect(essenceRect, worldMode->relativeMouseP);
             
+            r32 alpha = hot ? hotAlpha : defaultAlpha;
+            PushRectOutline(group, FlatTransform(V4(0, 0, 0, alpha)), essenceRect, outlineWidth);
             if(quantity)
             {
                 OverdrawEssence(worldMode, group, FlatTransform(), essenceIndex, essenceRect, V4(1, 1, 1, 1));
@@ -547,7 +562,7 @@ internal void OverdrawVisibleStuff(GameUIContext* UI, GameModeWorld* worldMode, 
                 
             }
             
-            startingP.x += 1.2f * essenceDim.x;
+            startingP.x -= essenceDim.x + margin;
         }
     }
 }
@@ -925,7 +940,7 @@ internal void FakeEquip(GameUIContext* UI, GameModeWorld* worldMode, EntityID ID
     }
 }
 
-internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, ClientPlayer* myPlayer, PlatformInput* input)
+internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* group, ClientPlayer* myPlayer, PlatformInput* input)
 {
     GameUIContext* UI = &worldMode->gameUI;
     
@@ -950,8 +965,18 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                 HandleMouseInteraction(UI, worldMode, myPlayer, input);
                 
                 EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent) && ArchetypeHas(InteractionComponent), input->timeToAdvance);
+                r32 defaultZoom = worldMode->defaultZoomCoeff;
                 
-                MoveCameraTowards(worldMode, player, 0.5f, cameraOffset, V2(0, 0), worldMode->defaultZoomCoeff);
+                if(worldMode->dayTime == DayTime_Night)
+                {
+                    LightComponent* light = GetComponent(worldMode, myPlayer->clientID, LightComponent);
+                    if(light)
+                    {
+                        r32 lightLerp = Clamp01MapToRange(0, light->lightRadious, 5.0f);
+                        defaultZoom = Lerp(1.8f * worldMode->equipmentZoomCoeff, lightLerp, worldMode->defaultZoomCoeff);
+                    }
+                }
+                MoveCameraTowards(worldMode, player, worldMode->defaultZoomSpeed, cameraOffset, defaultZoom);
                 
                 
                 b32 standardInteractionAllowed = true;
@@ -1047,7 +1072,7 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                             }
                             
                             AddContainerObjectsInteractions(UI, worldMode, container->storedObjects, ArrayCount(container->storedObjects), UI->lootingIDServer, Interaction_Container);
-                            MoveCameraTowards(worldMode, lootingBase, 5.0f, V2(0, 0), V2(0, 0), container->zoomCoeff);
+                            MoveCameraTowards(worldMode, lootingBase, container->zoomSpeed, V2(0, 0), container->zoomCoeff);
                         }
                         HandleOverlayObjectsInteraction(UI, worldMode);
                     }
@@ -1055,7 +1080,7 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                     {
                         HandleEquipmentInteraction(UI, worldMode, myPlayer->clientID);
                         HandleContainerInteraction(UI, worldMode);
-                        MoveCameraTowards(worldMode, player, 2.0f, V2(0, 0), V2(0, 0), 2.0f);
+                        MoveCameraTowards(worldMode, player, worldMode->equipmentZoomSpeed, V2(0, 0), worldMode->equipmentZoomCoeff);
                         HandleOverlayObjectsInteraction(UI, worldMode);
                     }
                     else
@@ -1147,9 +1172,9 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                                         BaseComponent* hotBase = GetComponent(worldMode, hotIDClient, BaseComponent);
                                         r32 distanceSq = LengthSq(SubtractOnSameZChunk(hotBase->universeP, player->universeP));
                                         
-                                        MiscComponent* misc = GetComponent(worldMode, myPlayer->clientID, MiscComponent);
+                                        CombatComponent* combat = GetComponent(worldMode, myPlayer->clientID, CombatComponent);
                                         
-                                        EntityRef equipped[Count_usingSlot];
+                                        EntityType equipped[Count_usingSlot];
                                         u32 equippedCount = 0;
                                         
                                         if(equippedComponent)
@@ -1164,7 +1189,7 @@ internal void HandleUIInteraction(GameModeWorld* worldMode, RenderGroup* group, 
                                         
                                         
                                         r32 targetTime;
-                                        if(ActionIsPossibleAtDistance(interaction, drag, 0, distanceSq, &targetTime, misc, equipped, equippedCount))
+                                        if(ActionIsPossibleAtDistance(interaction, drag, 0, distanceSq, &targetTime, combat, equipped, equippedCount))
                                         {
                                             GameCommand command = {};
                                             command.action = drag;

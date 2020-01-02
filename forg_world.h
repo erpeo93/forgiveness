@@ -1,12 +1,7 @@
 #pragma once
-#define WORLD_CHUNK_APRON 1
-#define VOXEL_SIZE 2.0f
-#define CHUNK_DIM 8
 #define CHUNK_SIDE CHUNK_DIM * VOXEL_SIZE
 #define UPDATE_DISTANCE (WORLD_CHUNK_APRON + 1) * CHUNK_SIDE
-#define WORLD_CHUNK_SPAN 16
 #define WORLD_SIDE WORLD_CHUNK_SPAN * CHUNK_SIDE
-#define DAYPHASE_DURATION 30.0f
 
 introspection() struct UniversePos
 {
@@ -32,10 +27,13 @@ struct WorldTile
     u32 soundCount;
     SoundMapping sounds[MAX_TILE_SOUNDS];
     GameAssetType asset;
+#else
+    b32 occupiedWorldGeneration;
 #endif
     
     GameProperty property;
     GameProperty underSeaLevelFluid;
+    
 };
 
 struct TempLight

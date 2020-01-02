@@ -11,10 +11,10 @@ inline Vec3 GetRelativeP(GameModeWorld* worldMode, BaseComponent* base)
     return result;
 }
 
-inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, r32 cameraSpeed, Vec2 cameraWorldOffset = V2(0, 0), Vec2 cameraEntityOffset = V2(0, 0), r32 zoomCoeff = 1.0f)
+inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, r32 cameraSpeed, Vec2 cameraWorldOffset, r32 zoomCoeff)
 {
     cameraWorldOffset += GetRelativeP(worldMode, base).xy;
-    worldMode->destCameraEntityOffset = cameraEntityOffset;
+    worldMode->destCameraEntityOffset = 0.5f * V2(GetDim(base->bounds).x, GetDim(base->bounds).z);
     
     
     worldMode->destCameraWorldOffset = V3(cameraWorldOffset, worldMode->defaultCameraZ / zoomCoeff);
@@ -32,7 +32,7 @@ internal void ResetGameCamera(GameModeWorld* worldMode, RenderGroup* group)
     magicLateralVector = GetColumn(cameraO, 0);
     magicUpVector = GetColumn(cameraO, 1);
     
-    Vec3 cameraOffsetFinal = cameraO * V3(worldMode->cameraEntityOffset, worldMode->cameraWorldOffset.z + cameraDolly) + V3(finalXYOffset, 0);
+    Vec3 cameraOffsetFinal = cameraO * V3(0, 0, worldMode->cameraWorldOffset.z + cameraDolly) + V3(finalXYOffset, 0);
     
     SetCameraBasics(group, 0, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal, worldMode->cameraEntityOffset);
     

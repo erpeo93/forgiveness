@@ -72,7 +72,7 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     if(ShouldBeRendered(worldMode, base))
     {
-        EntityDefinition* definition = GetData(group->assets, EntityDefinition, EntityRefToAssetID(base->definitionID));
+        EntityDefinition* definition = GetData(group->assets, EntityDefinition, EntityTypeToAssetID(base->type));
         
         r32 height = GetHeight(base->bounds);
         
@@ -103,7 +103,13 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         params.replacements = definition->client.animationReplacements;
         params.ID = ID;
         
-        GameProperty action =  SearchForProperty(base->properties, ArrayCount(base->properties), Property_action);
+        GameProperty action = {};
+        ActionComponent* actionComp = GetComponent(worldMode, ID, ActionComponent);
+        if(actionComp)
+        {
+            action = GameProp(action, actionComp->action);
+        }
+        
         if(FinishedSingleCycleAnimation(animation))
         {
             params.fakeAnimation = true;
@@ -342,12 +348,12 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
     elapsedTime *= params.speed;
     
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    MiscComponent* misc = GetComponent(worldMode, ID, MiscComponent);
+    VegetationComponent* vegetation = GetComponent(worldMode, ID, VegetationComponent);
     PlantComponent* plant = GetComponent(worldMode, ID, PlantComponent);
     
     r32 leafDensity = 1.0f;
-    r32 flowerDensity = misc->flowerDensity;
-    r32 fruitDensity = misc->fruitDensity;
+    r32 flowerDensity = vegetation->flowerDensity;
+    r32 fruitDensity = vegetation->fruitDensity;
     r32 dissolveDuration = plant->dissolveDuration;
     
     Vec3 cameraZ = group->gameCamera.Z;
@@ -506,6 +512,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
                                     u64 baseHash = StringHash(leaf->name);
                                     u16 variantIndex = 0;
                                     u32 C = 0;
+                                    windInfluences = {};
                                     
                                     u32 pound = FindFirstInString(leaf->name, '#');
                                     if(pound != 0xffffffff)
@@ -519,18 +526,21 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
                                         LFF = leafIDs[variantIndex];
                                         C = leafC;
                                         dissolveCoeff = GetDissolveCoeff(leafDensity, dissolveDuration, leafRunningIndex++);
+                                        windInfluences = V4(0, 0, plant->leafWindInfluence, plant->leafWindInfluence);
                                     }
                                     else if(baseHash == flowerHash)
                                     {
                                         LFF = flowerIDs[variantIndex];
                                         C = flowerC;
                                         dissolveCoeff = GetDissolveCoeff(flowerDensity, dissolveDuration, flowerRunningIndex++);
+                                        windInfluences = V4(0, 0, plant->flowerWindInfluence, plant->flowerWindInfluence);
                                     }
                                     else if(baseHash == fruitHash)
                                     {
                                         LFF = fruitIDs[variantIndex];
                                         C = fruitC;
                                         dissolveCoeff = GetDissolveCoeff(fruitDensity, dissolveDuration, fruitRunningIndex++);
+                                        windInfluences = V4(0, 0, plant->fruitWindInfluence, plant->fruitWindInfluence);
                                     }
                                     
                                     dissolveCoeff = Max(dissolveCoeff, params.dissolveCoeff);
@@ -560,7 +570,6 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
                                             leafP += zOffset * cameraZ;
                                             zOffset += 0.001f;
                                             
-                                            windInfluences = V4(0, 0, plant->windInfluence, plant->windInfluence);
                                             windFrequency = 1;
                                             seed = (u8) leafPointIndex;
                                             dissolvePercentages = dissolveCoeff * V4(1, 1, 1, 1);
@@ -602,6 +611,10 @@ internal void RenderStaticAnimation(GameModeWorld* worldMode, RenderGroup* group
         transform.modulationPercentage = params.modulationPercentage; 
         transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1); 
         transform.tint = params.tint;
+        if(image->emittors)
+        {
+            transform.lightInfluence = 1.0f;
+        }
         PushBitmap(group, transform, BID, P, height, lights);
     }
 }
@@ -679,6 +692,7 @@ RENDERING_ECS_JOB_CLIENT(RenderGrass)
                 u8 windFrequency = (u8) grass->windFrequencyStandard;
                 
                 
+#if 0                
                 BaseComponent* playerBase = GetComponent(worldMode, worldMode->player.clientID, BaseComponent);
                 if(playerBase)
                 {
@@ -689,8 +703,9 @@ RENDERING_ECS_JOB_CLIENT(RenderGrass)
                         windFrequency = (u8) grass->windFrequencyOverlap;
                     }
                 }
+#endif
+                
                 Vec4 windInfluences = V4(0, 0, grass->windInfluence, grass->windInfluence);
-                windInfluences = V4(0, 0, 0, 0);
                 Vec4 dissolvePercentages = V4(0, 0, 0, 0);
                 r32 alphaThreesold = quad->alphaThreesold;
                 b32 flat = false;
@@ -733,6 +748,10 @@ internal void RenderFrameByFrameAnimation(GameModeWorld* worldMode, RenderGroup*
         transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1);
         transform.tint = params.tint;
         
+        if(animation->emittors)
+        {
+            transform.lightInfluence = 1.0f;
+        }
         if(animation->overridesPivot)
         {
             PushBitmapWithPivot(group, transform, BID, P, animation->pivot, height, lights);
@@ -819,7 +838,7 @@ internal void DrawObjectSlot(GameModeWorld* worldMode, RenderGroup* group, Inven
 
 internal void DrawRecipeContent(GameModeWorld* worldMode, RenderGroup* group, u32 recipeSeed, ObjectTransform transform, Vec3 P, BitmapDim spaceDim, Rect2 rect, Lights lights, RecipeEssenceComponent* essences)
 {
-    EntityRef type = GetCraftingType(group->assets, recipeSeed);
+    EntityType type = GetCraftingType(group->assets, recipeSeed);
     Vec2 dim = GetDim(rect);
     Vec2 half = 0.5f * dim;
     
@@ -875,7 +894,7 @@ internal void DrawRecipeContent(GameModeWorld* worldMode, RenderGroup* group, u3
         Vec2 startingCompP = rect.min + 0.25f * V2(0, dim.y);
         Rect2 componentTotalRect = RectMinDim(startingCompP, V2(dim.x, 0.5f * half.y));
         
-        EntityRef components[8];
+        EntityType components[8];
         b32 deleteAfterCrafting[8];
         u16 componentCount = GetCraftingComponents(group->assets, type, craftSeed, components, deleteAfterCrafting, ArrayCount(components));
         if(componentCount > 0)
@@ -900,12 +919,12 @@ internal void DrawRecipeContent(GameModeWorld* worldMode, RenderGroup* group, u3
                     EntityDefinition* definition = GetEntityTypeDefinition(group->assets, components[componentIndex]);
                     
                     CommonEntityInitParams common = definition->common;
-                    common.definitionID = type;
+                    common.type = type;
                     common.essences = 0;
                     ClientEntityInitParams entityParams = definition->client;
                     entityParams.seed = componentSeed;
                     
-                    InitLayoutComponent(worldMode, &layout, {}, &common, 0, &entityParams);
+                    InitLayoutComponent(worldMode, group->assets, &layout, {}, &common, 0, &entityParams);
                     LayoutContainer componentContainer = {};
                     
                     if(transform.upright)
@@ -927,12 +946,12 @@ internal void DrawRecipeContent(GameModeWorld* worldMode, RenderGroup* group, u3
     EntityDefinition* definition = GetEntityTypeDefinition(group->assets, type);
     
     CommonEntityInitParams common = definition->common;
-    common.definitionID = type;
+    common.type = type;
     common.essences = recipeEssences;
     ClientEntityInitParams entityParams = definition->client;
     entityParams.seed = recipeSeed;
     
-    InitLayoutComponent(worldMode, &layout, {}, &common, 0, &entityParams);
+    InitLayoutComponent(worldMode, group->assets, &layout, {}, &common, 0, &entityParams);
     LayoutContainer recipeContainer = {};
     
     transform.cameraOffset.z += 0.1f;
@@ -1337,13 +1356,14 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
         }
     }
     
-    EntityDefinition* definition = GetData(worldMode->gameState->assets, EntityDefinition, EntityRefToAssetID(base->definitionID));
+    EntityDefinition* definition = GetData(worldMode->gameState->assets, EntityDefinition, EntityTypeToAssetID(base->type));
     if(definition)
     {
+        
+#if 0        
         for(u32 effectIndex = 0; effectIndex < definition->client.animationEffectsCount; ++effectIndex)
         {
             AnimationEffectDefinition* effect = definition->client.animationEffects + effectIndex;
-            
             b32 matches = false;
             for(u32 testIndex = 0; testIndex < effect->propertyCount; ++testIndex)
             {
@@ -1370,6 +1390,8 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
                 AddAnimationEffectIfNotPresent(worldMode, P, effects, effect, SafeTruncateToU16(effectIndex));
             }
         }
+#endif
+        
     }
     
     
@@ -1489,10 +1511,10 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
     }
     
     
-    AliveComponent* alive = GetComponent(worldMode, ID, AliveComponent);
-    if(alive)
+    HealthComponent* health = GetComponent(worldMode, ID, HealthComponent);
+    if(health)
     {
-        r32 hRatio = (r32) alive->physicalHealth / (r32)alive->maxPhysicalHealth;
+        r32 hRatio = (r32) health->physicalHealth / (r32)health->maxPhysicalHealth;
         Vec4 lifeColor = V4(hRatio, hRatio, hRatio, 1.0f);
         effects->params.tint = Hadamart(effects->params.tint, lifeColor);
     }
@@ -1515,6 +1537,50 @@ inline b32 ValidVector(Vec3 original, Vec3 pick)
     return result;
 }
 
+RENDERING_ECS_JOB_CLIENT(RenderEntity)
+{
+    if(HasComponent(ID, ShadowComponent))
+    {
+        RenderShadow(worldMode, group, ID, elapsedTime);
+    }
+    
+    if(HasComponent(ID, GrassComponent) && HasComponent(ID, MagicQuadComponent))
+    {
+        RenderGrass(worldMode, group, ID, elapsedTime);
+    }
+    else if(HasComponent(ID, StandardImageComponent))
+    {
+        RenderSpriteEntities(worldMode, group, ID, elapsedTime);
+    }
+    else if(HasComponent(ID, SegmentImageComponent))
+    {
+        RenderSegmentEntities(worldMode, group, ID, elapsedTime);
+    }
+    else if(HasComponent(ID, AnimationComponent))
+    {
+        RenderCharacterAnimation(worldMode, group, ID, elapsedTime);
+    }
+    else if(HasComponent(ID, FrameByFrameAnimationComponent))
+    {
+        RenderFrameByFrameEntities(worldMode, group, ID, elapsedTime);
+    }
+    else if(HasComponent(ID, PlantComponent))
+    {
+        RenderPlant(worldMode, group, ID, elapsedTime);
+    }
+    else if(HasComponent(ID, RockComponent))
+    {
+        RenderRock(worldMode, group, ID, elapsedTime);
+    }
+    else if(HasComponent(ID, LayoutComponent))
+    {
+        RenderLayoutEntities(worldMode, group, ID, elapsedTime);
+    }
+    else if(HasComponent(ID, MultipartAnimationComponent))
+    {
+        RenderMultipartEntity(worldMode, group, ID, elapsedTime);
+    }
+}
 
 #if 0
 RENDERING_ECS_JOB_CLIENT(UpdateAndRenderBolt)

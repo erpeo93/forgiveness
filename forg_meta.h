@@ -22,8 +22,7 @@ enum MetaType
     MetaType_GameProperty,
     MetaType_GameAssetType,
     MetaType_AssetLabel,
-    MetaType_EntityRef,
-    MetaType_EntityKind,
+    MetaType_EntityName,
     MetaType_EntityType,
     
     
@@ -115,7 +114,7 @@ union DefaultFieldValue
     GameProperty def_GameProperty;
     GameAssetType def_GameAssetType;
     AssetLabel def_AssetLabel;
-    EntityRef def_EntityRef;
+    EntityName def_EntityName;
 };
 
 struct FieldDefinition

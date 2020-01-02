@@ -2283,51 +2283,81 @@ internal AssetID QueryAnimations(Assets* assets, u64 skeletonHash, RandomSequenc
 #endif
 
 
-inline b32 AreEqual(EntityRef r1, EntityRef r2)
+inline b32 AreEqual(EntityName n1, EntityName n2)
 {
-    b32 result = (r1.subtypeHashIndex == r2.subtypeHashIndex &&
-                  r1.index == r2.index);
+    b32 result = (n1.subtypeHashIndex == n2.subtypeHashIndex &&
+                  StrEqual(n1.name, n2.name));
     return result;
 }
 
-internal AssetID EntityRefToAssetID(EntityRef ref)
+inline b32 AreEqual(EntityType n1, EntityType n2)
+{
+    b32 result = (n1.subtypeHashIndex == n2.subtypeHashIndex &&
+                  n1.index == n2.index);
+    return result;
+}
+
+internal AssetID EntityNameToAssetID(Assets* assets, EntityName name)
 {
     AssetID result = {};
     result.type = AssetType_EntityDefinition;
-    result.subtypeHashIndex = ref.subtypeHashIndex;
-    result.index = ref.index;
+    result.subtypeHashIndex = name.subtypeHashIndex;
+    result.index = GetAssetIndex(assets, AssetType_EntityDefinition, result.subtypeHashIndex, Tokenize(name.name));
+    return result;
+}
+
+internal AssetID EntityTypeToAssetID(EntityType type)
+{
+    AssetID result = {};
+    result.type = AssetType_EntityDefinition;
+    result.subtypeHashIndex = type.subtypeHashIndex;
+    result.index = SafeTruncateToU16(type.index);
     
     return result;
 }
 
-inline b32 IsValid(EntityRef ref)
+inline b32 IsValid(EntityName name)
 {
-    b32 result = (ref.subtypeHashIndex != 0 && ref.subtypeHashIndex != 0xffffffff);
+    b32 result = (name.subtypeHashIndex != 0 && name.subtypeHashIndex != 0xffffffff);
     return result;
 }
 
-inline EntityRef EntityReference(AssetID definitionID)
+inline b32 IsValid(EntityType type)
 {
-    EntityRef result;
+    b32 result = (type.subtypeHashIndex != 0 && type.subtypeHashIndex != 0xffffffff);
+    return result;
+}
+
+inline EntityType GetEntityType(AssetID definitionID)
+{
+    EntityType result;
     result.subtypeHashIndex = definitionID.subtypeHashIndex;
     result.index = definitionID.index;
     return result;
 }
 
-internal EntityDefinition* GetEntityTypeDefinition(Assets* assets, EntityRef type)
+internal EntityDefinition* GetEntityTypeDefinition(Assets* assets, EntityType type)
 {
-    AssetID definitionID = EntityRefToAssetID(type);
+    AssetID definitionID = EntityTypeToAssetID(type);
     EntityDefinition* definition = GetData(assets, EntityDefinition, definitionID);
     Assert(definition);
     return definition;
 }
 
-internal EntityRef EntityReference(Assets* assets, char* kind, char* type)
+internal EntityType GetEntityType(Assets* assets, char* kind, char* type)
 {
     char type_[128];
     FormatString(type_, sizeof(type_), "%s.dat", type);
-    EntityRef result;
+    EntityType result;
     result.subtypeHashIndex = GetAssetSubtype(assets, AssetType_EntityDefinition, kind);
     result.index = GetAssetIndex(assets, AssetType_EntityDefinition, result.subtypeHashIndex, Tokenize(type_));
+    return result;
+}
+
+inline EntityType GetEntityType(Assets* assets, EntityName name)
+{
+    EntityType result;
+    result.subtypeHashIndex = name.subtypeHashIndex;
+    result.index = GetAssetIndex(assets, AssetType_EntityDefinition, result.subtypeHashIndex, Tokenize(name.name));
     return result;
 }

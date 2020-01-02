@@ -3,64 +3,53 @@ Archetype() struct AnimalArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    PhysicComponent physic;
-    ActionComponent action;
+    MovementComponent movement;
     PlayerComponent* player;
-    EquipmentComponent equipment;
-    UsingComponent equipped;
-    InteractionComponent interaction;
     BrainComponent brain;
-    AliveComponent alive;
-    MiscComponent misc;
+    EffectComponent effects;
 #else
     BaseComponent base;
     AnimationComponent animation;
-    EquipmentComponent equipment;
-    UsingComponent equipped;
-    InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
     SoundEffectComponent soundEffects;
-    AliveComponent alive;
-    MiscComponent misc;
     ShadowComponent shadow;
 #endif
+    UsingComponent equipped;
+    EquipmentComponent equipment;
+    InteractionComponent interaction;
+    HealthComponent alive;
+    CombatComponent combat;
+    LightComponent light;
+    ActionComponent action;
 };
 
 Archetype() struct RockArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    PhysicComponent physic;
     EffectComponent effect;
-    InteractionComponent interaction;
-    MiscComponent misc;
 #else
     BaseComponent base;
     RockComponent rock;
-    InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
-    MiscComponent misc;
     ShadowComponent shadow;
 #endif
+    InteractionComponent interaction;
 };
 
 Archetype() struct PlantArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    PhysicComponent physic;
     EffectComponent effect;
-    InteractionComponent interaction;
-    PlantComponent plant;
-    MiscComponent misc;
 #else
     BaseComponent base;
     PlantComponent plant;
-    InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
-    MiscComponent misc;
     ShadowComponent shadow;
 #endif
+    InteractionComponent interaction;
+    VegetationComponent vegetation;
 };
 
 Archetype() struct GrassArchetype
@@ -79,62 +68,53 @@ Archetype() struct RuneArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    PhysicComponent physic;
-    SkillDefComponent skill;
     EffectComponent effect;
-    ContainerComponent container;
-    InteractionComponent interaction;
 #else
     BaseComponent base;
     LayoutComponent layout;
-    InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
-    ContainerComponent container;
-    SkillDefComponent skill;
     ShadowComponent shadow;
 #endif
+    ContainerComponent container;
+    InteractionComponent interaction;
+    SkillDefComponent skill;
 };
 
 Archetype() struct EssenceArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    PhysicComponent physic;
-    InteractionComponent interaction;
+    EffectComponent effect;
 #else
     BaseComponent base;
     LayoutComponent layout;
-    InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
 #endif
+    InteractionComponent interaction;
+    LightComponent light;
 };
 
 Archetype() struct ObjectArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    PhysicComponent physic;
     EffectComponent effect;
-    ContainerComponent container;
-    InteractionComponent interaction;
-    MiscComponent misc;
 #else
     BaseComponent base;
     LayoutComponent layout;
-    ContainerComponent container;
-    InteractionComponent interaction;
     AnimationEffectComponent animationEffects;
     RecipeEssenceComponent recipeEssences;
-    MiscComponent misc;
     ShadowComponent shadow;
 #endif
+    ContainerComponent container;
+    InteractionComponent interaction;
+    LightComponent light;
 };
 
 Archetype() struct PortalArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    PhysicComponent physic;
     CollisionEffectsComponent collision;
 #else
     BaseComponent base;
@@ -148,7 +128,7 @@ Archetype() struct ProjectileArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    PhysicComponent physic;
+    MovementComponent movement;
     TempEntityComponent temp;
     CollisionEffectsComponent collision;
 #else
@@ -158,11 +138,21 @@ Archetype() struct ProjectileArchetype
 #endif
 };
 
+Archetype() struct LightArchetype
+{
+#ifdef FORG_SERVER
+    DefaultComponent default;
+#else
+    BaseComponent base;
+    StandardImageComponent image;
+#endif
+    LightComponent light;
+};
+
 Archetype() struct PlaceholderArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    PhysicComponent physic;
     PlayerComponent* player;
 #else
     BaseComponent base;
@@ -199,20 +189,20 @@ introspection() struct PossibleActionDefinition
     r32 continueDistanceCoeff MetaDefault("1.0f");
     GameProperty special MetaDefault("{Property_specialPropertyType, Special_Invalid}") MetaFixed(property);
     r32 time;
-    EntityRef requiredUsingType;
-    EntityRef requiredEquippedType;
+    EntityName requiredUsingType;
+    EntityName requiredEquippedType;
 };
 
 introspection() struct CraftingComponent
 {
     ArrayCounter optionCount MetaCounter(options);
-    EntityRef* options;
+    EntityName* options;
     b32 deleteAfterCrafting MetaDefault("true");
 };
 
 introspection() struct CommonEntityInitParams
 {
-    EntityRef definitionID MetaUneditable();
+    EntityType type MetaUneditable();
     u16* essences MetaUneditable();
     
     b32 craftable;
@@ -312,6 +302,9 @@ introspection() struct ServerEntityInitParams
     
     r32 fruitGrowingSpeed;
     r32 requiredFruitDensity MetaDefault("1.0f");
+    
+    r32 maxPhysicalHealth MetaDefault("100.0f");
+    r32 maxMentalHealth MetaDefault("100.0f");
 };
 
 introspection() struct ImageProperty
@@ -323,6 +316,7 @@ introspection() struct ImageProperty
 introspection() struct ImageProperties
 {
     GameAssetType imageType MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
+    b32 emittors;
     ArrayCounter propertyCount MetaCounter(properties);
     ImageProperty* properties;
 };
@@ -339,6 +333,7 @@ introspection() struct LayoutPieceProperties
 introspection() struct MultipartFrameByFramePiece
 {
     r32 speed MetaDefault("1.0f");
+    b32 emittors;
     GameAssetType image MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
 };
 
@@ -398,6 +393,9 @@ introspection() struct ClientEntityInitParams
     Vec4 rockColorV;
     
     r32 windInfluence MetaDefault("0");
+    r32 leafWindInfluence MetaDefault("0");
+    r32 flowerWindInfluence MetaDefault("0");
+    r32 fruitWindInfluence MetaDefault("0");
     r32 dissolveDuration MetaDefault("0");
     u32 windFrequencyStandard MetaDefault("1");
     u32 windFrequencyOverlap MetaDefault("10");
@@ -430,6 +428,7 @@ introspection() struct ClientEntityInitParams
     Vec4 shadowColor MetaDefault("V4(0, 0, 0, 0.5f)");
     
     r32 lootingZoomCoeff MetaDefault("3.0f");
+    r32 lootingZoomSpeed MetaDefault("3.0f");
     b32 displayInStandardMode;
     Vec2 desiredOpenedDim MetaDefault("V2(400, 400)");
     Vec2 desiredUsingDim MetaDefault("V2(200, 200)");
@@ -438,6 +437,7 @@ introspection() struct ClientEntityInitParams
     AnimationEffectDefinition* animationEffects;
     
     r32 frameByFrameSpeed MetaDefault("1.0f");
+    b32 frameByFrameEmittors;
     GameAssetType frameByFrameImageType MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
     b32 frameByFrameOverridesPivot;
     Vec2 frameByFramePivot;

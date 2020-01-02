@@ -576,28 +576,23 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     
     BEGIN_BLOCK("spatial partitions");
     InitSpatialPartition(server->frameByFramePool, &server->playerPartition);
-    EXECUTE_JOB(server, FillPlayerSpacePartition, ArchetypeHas(PlayerComponent) && ArchetypeHas(PhysicComponent), elapsedTime);
+    EXECUTE_JOB(server, FillPlayerSpacePartition, ArchetypeHas(PlayerComponent), elapsedTime);
     InitSpatialPartition(server->frameByFramePool, &server->standardPartition);
-    EXECUTE_JOB(server, FillCollisionSpatialPartition, ArchetypeHas(PhysicComponent), elapsedTime);
+    EXECUTE_JOB(server, FillCollisionSpatialPartition, true, elapsedTime);
     END_BLOCK();
     
-    BEGIN_BLOCK("equipment effects");
-    server->equipmentEffectTimer += elapsedTime;
-	if(server->equipmentEffectTimer >= 0.5f)
-	{
-        EXECUTE_JOB(server, DispatchEquipmentEffects, (ArchetypeHas(EquipmentComponent) || ArchetypeHas(UsingComponent)), server->equipmentEffectTimer);
-        server->equipmentEffectTimer = 0;
-    }
+    BEGIN_BLOCK("entity effects");
+    EXECUTE_JOB_TIMED(server, DispatchEntityDefaultEffects, true, server->defaultEffectTimer, elapsedTime, 0.5f);
     END_BLOCK();
     
     UpdateWorldBasics(server, elapsedTime);
     BEGIN_BLOCK("update entities");
-    EXECUTE_JOB(server, UpdateEntity, ArchetypeHas(PhysicComponent), elapsedTime);
-    EXECUTE_JOB(server, UpdatePlant, ArchetypeHas(PlantComponent) && ArchetypeHas(MiscComponent), elapsedTime);
+    EXECUTE_JOB(server, MoveEntity, ArchetypeHas(MovementComponent), elapsedTime);
+    EXECUTE_JOB(server, UpdateEntity, true, elapsedTime);
+    EXECUTE_JOB_TIMED(server, UpdatePlant, ArchetypeHas(VegetationComponent), server->vegetationUpdateTimer, elapsedTime, 1.0f);
     
     //EXECUTE_JOB(server, DamageEntityFearingLight, ArchetypeHas(AliveComponent), elapsedTime);
     //EXECUTE_JOB(server, DealLightDamage, ArchetypeHas(MiscComponent), elapsedTime);
-    
     
     server->updateBrains = false;
     r32 targetBrainTimer = 0.1f;
@@ -631,9 +626,8 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         if(player->connectionSlot && IsValidID(player->ID))
         {
             DefaultComponent* playerDefault = GetComponent(server, player->ID, DefaultComponent);
-            PhysicComponent* playerPhysic = GetComponent(server, player->ID, PhysicComponent);
             
-            Rect3 updateBounds = AddRadius(playerPhysic->bounds, UPDATE_DISTANCE * V3(1, 1, 1));
+            Rect3 updateBounds = AddRadius(playerDefault->bounds, UPDATE_DISTANCE * V3(1, 1, 1));
             SpatialPartitionQuery updateQuery = QuerySpatialPartition(&server->standardPartition, playerDefault->P, updateBounds);
             
             b32 sendStaticUpdate = staticUpdate;
@@ -647,8 +641,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             for(EntityID ID = GetCurrent(&updateQuery); IsValid(&updateQuery); ID = Advance(&updateQuery))
             {
                 SendEntityUpdate(server, ID, false, completeUpdate);
-                
-                
                 if(HasComponent(ID, UsingComponent))
                 {
                     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);

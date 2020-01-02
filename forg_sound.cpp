@@ -407,6 +407,8 @@ internal void AddSoundEffectIfNotPresent(SoundEffectComponent* sounds, SoundEffe
 
 internal void AddSoundIfMatches(SoundEffectComponent* mappings, BaseComponent* base, SoundEffectDefinition* sound, u32 index, b32 defaultMatches)
 {
+    
+#if 0    
     b32 matches = defaultMatches;
     for(u32 testIndex = 0; testIndex < sound->propertyCount; ++testIndex)
     {
@@ -432,6 +434,8 @@ internal void AddSoundIfMatches(SoundEffectComponent* mappings, BaseComponent* b
     {
         AddSoundEffectIfNotPresent(mappings, sound, index);
     }
+#endif
+    
 }
 
 internal void SoundEventTrigger(GameModeWorld* worldMode, EntityID ID, GameProperty trigger)
@@ -441,7 +445,7 @@ internal void SoundEventTrigger(GameModeWorld* worldMode, EntityID ID, GamePrope
         BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
         SoundEffectComponent* mappings = GetComponent(worldMode, ID, SoundEffectComponent);
         
-        EntityDefinition* definition = GetData(worldMode->gameState->assets, EntityDefinition, EntityRefToAssetID(base->definitionID));
+        EntityDefinition* definition = GetData(worldMode->gameState->assets, EntityDefinition, EntityTypeToAssetID(base->type));
         if(definition)
         {
             for(ArrayCounter soundIndex = 0; soundIndex < definition->client.soundEffectsCount; ++soundIndex)
@@ -461,7 +465,7 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntitySoundEffects)
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     SoundEffectComponent* mappings = GetComponent(worldMode, ID, SoundEffectComponent);
     
-    EntityDefinition* definition = GetData(worldMode->gameState->assets, EntityDefinition, EntityRefToAssetID(base->definitionID));
+    EntityDefinition* definition = GetData(worldMode->gameState->assets, EntityDefinition, EntityTypeToAssetID(base->type));
     if(definition)
     {
         for(ArrayCounter soundIndex = 0; soundIndex < definition->client.soundEffectsCount; ++soundIndex)

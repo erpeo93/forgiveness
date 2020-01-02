@@ -3,7 +3,7 @@
 #define LOGIN_PORT 1313
 #define MTU KiloBytes(1) + 32
 #define CHUNK_SIZE KiloBytes(1)
-#define STATIC_UPDATE_TIME 2.0f
+#define STATIC_UPDATE_TIME 4.0f
 
 #pragma pack(push, 1)
 enum ForgNetworkFlags
@@ -166,13 +166,16 @@ enum Packet_Type
     
     Type_entityHeader,
     Type_entityBasics,
-    Type_Health,
-    Type_Misc,
-    Type_Mappings,
-	Type_Essence,
     
+    Type_Action,
+    Type_Health,
+    Type_Combat,
+    Type_Vegetation,
+    Type_Light,
+    
+    Type_Mappings,
+    Type_EssenceDelta,
     Type_deletedEntity,
-	
     Type_DayTime,
     
     
@@ -208,23 +211,24 @@ enum NetworkMappingType
 enum NetworkProperties
 {
     Network_Action,
-    Network_Status,
-    
     Network_Count
 };
 
-enum EntityBasicsFlags
+enum BasicNetworkFlags
 {
-	EntityBasics_Definition = (1 << 0),
-	EntityBasics_Position = (1 << 1),
-	EntityBasics_Velocity = (1 << 2),
-	EntityBasics_Action = (1 << 3),
-	EntityBasics_Status = (1 << 4),
-	EntityBasics_Flags = (1 << 5),
-	EntityBasics_Spawner = (1 << 6),
+	BasicFlags_Definition = (1 << 0),
+	BasicFlags_Position = (1 << 1),
+	BasicFlags_Velocity = (1 << 2),
+	BasicFlags_Flags = (1 << 3),
+	BasicFlags_Spawner = (1 << 4),
 };
 
-enum HealthFlags
+enum ActionNetworkFlags
+{
+    ActionFlags_Action = (1 << 0),
+};
+
+enum HealthNetworkFlags
 {
     HealthFlag_Physical = (1 << 0),
     HealthFlag_MaxPhysical = (1 << 1),
@@ -232,13 +236,21 @@ enum HealthFlags
     HealthFlag_MaxMental = (1 << 3),
 };
 
-enum MiscFlags
+enum CombatNetworkFlags
 {
-    MiscFlag_AttackDistance = (1 << 0),
-    MiscFlag_AttackContinueCoeff = (1 << 1),
-    MiscFlag_LightRadious = (1 << 2),
-    MiscFlag_FlowerDensity = (1 << 3),
-    MiscFlag_FruitDensity = (1 << 4),
+    CombatFlag_AttackDistance = (1 << 0),
+    CombatFlag_AttackContinueCoeff = (1 << 1),
+};
+
+enum LightNetworkFlags
+{
+    LightFlag_LightRadious = (1 << 0),
+};
+
+enum VegetationNetworkFlags
+{
+    VegetationFlag_FlowerDensity = (1 << 0),
+    VegetationFlag_FruitDensity = (1 << 1),
 };
 
 struct LoginResponse

@@ -629,7 +629,7 @@ texSample.rgb *= texSample.rgb;
      Vec4 noiseSample = texture(noise, fragUVNormalized);
      if(noiseSample.r > fragDissolvePercentage)
      {
-     Vec3 modulationLightColor = ambientLightColor;
+     Vec3 modulationLightColor = Lerp(V3(1, 1, 1), lightInfluencePercentage, ambientLightColor);
      for(int index = fragLightStartingIndex; index < fragLightEndingIndex; ++index)
 {
 Vec4 lightData0 = texelFetch(lightSource0, index, 0);

@@ -112,20 +112,26 @@ internal void DeleteEntityClient(GameModeWorld* worldMode, EntityID clientID, En
 internal void MarkForDeletion(GameModeWorld* worldMode, EntityID clientID)
 {
     BaseComponent* base = GetComponent(worldMode, clientID, BaseComponent);
-    if(base->deletedTime == 0)
+    if(base && base->deletedTime == 0)
     {
+        ActionComponent* action = GetComponent(worldMode, clientID, ActionComponent);
+        if(action)
+        {
+            action->action = idle;
+        }
+        base->velocity = {};
         base->deletedTime = base->totalLifeTime;
     }
 }
 
 STANDARD_ECS_JOB_CLIENT(PushEntityLight)
 {
-    MiscComponent* misc = GetComponent(worldMode, ID, MiscComponent);
-    if(misc->lightRadious)
+    LightComponent* light = GetComponent(worldMode, ID, LightComponent);
+    if(light->lightRadious)
     {
         BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
         Vec3 P = GetRelativeP(worldMode, base);
-        AddLight(worldMode, P, misc->lightColor, misc->lightRadious);
+        AddLight(worldMode, P, light->lightColor, light->lightRadious);
     }
 }
 STANDARD_ECS_JOB_CLIENT(UpdateEntity)
@@ -135,9 +141,9 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntity)
 	base->timeSinceLastUpdate += elapsedTime;
 	base->totalLifeTime += elapsedTime;
     
-    if(base->timeSinceLastUpdate >= 1.5f * STATIC_UPDATE_TIME)
+    if(base->timeSinceLastUpdate >= 2.0f * STATIC_UPDATE_TIME)
     {
-		//MarkForDeletion(worldMode, ID);
+		MarkForDeletion(worldMode, ID);
     }
     
 	if(base->deletedTime)
@@ -229,6 +235,10 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     }
     
     result->defaultZoomCoeff = 1.2f;
+    result->defaultZoomSpeed = 2.0f;
+    result->equipmentZoomCoeff = 2.0f;
+    result->equipmentZoomSpeed = 2.0f;
+    
     result->ambientLightColor = V3(1, 1, 1);
     result->windDirection = V3(1, 0, 0);
     result->windStrength = 1.0f;
@@ -269,23 +279,15 @@ internal void UpdateAmbientParameters(GameModeWorld* worldMode, r32 elapsedTime)
     worldMode->ambientLightColor = Lerp(oldColor, lerp, color);
 }
 
-internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
+internal void UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode, RenderGroup* group, PlatformInput* input)
 {
-    b32 result = false;
-    
-    ClientPlayer* myPlayer = &worldMode->player;
-    ReceiveNetworkPackets(gameState, worldMode);
-    
     worldMode->originalTimeToAdvance = input->timeToAdvance;
-    if(Pressed(&input->pauseButton))
-    {
-        worldMode->gamePaused = !worldMode->gamePaused;
-        SendOrderedMessage(PauseToggle);
-    }
     if(worldMode->gamePaused)
     {
         input->timeToAdvance = 0;
     }
+    ClientPlayer* myPlayer = &worldMode->player;
+    ReceiveNetworkPackets(gameState, worldMode);
     
     worldMode->windTime += input->timeToAdvance * worldMode->windStrength;
     worldMode->stateTime += input->timeToAdvance;
@@ -333,15 +335,12 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     Vec3 deltaP = -SubtractOnSameZChunk(myPlayer->universeP, myPlayer->oldUniverseP);
     worldMode->editorUI.playerP = myPlayer->universeP;
     group->assets = gameState->assets;
-    
     Clear(group, V4(0.0f, 0.0f, 0.0f, 1.0f));
     
     END_BLOCK();
     
     UpdateGameCamera(worldMode, input);
     ResetGameCamera(worldMode, group);
-    
-    
     UpdateAmbientParameters(worldMode, input->timeToAdvance);
     
     BEGIN_BLOCK("setup rendering");
@@ -349,76 +348,215 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     Vec3 unprojectedWorldMouseP = UnprojectAtZ(group, &group->gameCamera, screenMouseP, 0);
     worldMode->groundMouseP = ProjectOnGround(unprojectedWorldMouseP, group->gameCamera.P);
     
-    HandleUIInteraction(worldMode, group, myPlayer, input);
+    if(!worldMode->gamePaused)
+    {
+        HandleGameUIInteraction(worldMode, group, myPlayer, input);
+    }
     PushGameRenderSettings(group, worldMode->ambientLightColor, worldMode->windTime, worldMode->windDirection, 1.0f);
-    EXECUTE_JOB(worldMode, PushEntityLight, ArchetypeHas(MiscComponent), input->timeToAdvance);
+    EXECUTE_JOB(worldMode, PushEntityLight, ArchetypeHas(LightComponent), input->timeToAdvance);
     FinalizeLightGrid(worldMode, group);
     END_BLOCK();
     
-    BEGIN_BLOCK("rendering");
-    if(renderWorld)
+#if FORGIVENESS_INTERNAL
+    if(input->altDown && Pressed(&input->confirmButton))
     {
-        RenderGroundAndPlaySounds(worldMode, group, myPlayer->universeP, input->timeToAdvance);
-        
-        EXECUTE_RENDERING_JOB(worldMode, group, RenderShadow, ArchetypeHas(BaseComponent) && ArchetypeHas(ShadowComponent), input->timeToAdvance);
-        
-        EXECUTE_RENDERING_JOB(worldMode, group, RenderGrass, ArchetypeHas(GrassComponent) && ArchetypeHas(BaseComponent) && ArchetypeHas(MagicQuadComponent), input->timeToAdvance);
-        
-        EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(StandardImageComponent), input->timeToAdvance);
-        
-        EXECUTE_RENDERING_JOB(worldMode, group, RenderSegmentEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(SegmentImageComponent), input->timeToAdvance);
-        
-        EXECUTE_RENDERING_JOB(worldMode, group, RenderCharacterAnimation, ArchetypeHas(BaseComponent) && ArchetypeHas(AnimationComponent), input->timeToAdvance);
-        
-        EXECUTE_RENDERING_JOB(worldMode, group, RenderFrameByFrameEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(FrameByFrameAnimationComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
-        
-        EXECUTE_RENDERING_JOB(worldMode, group, RenderPlant, ArchetypeHas(BaseComponent) && ArchetypeHas(PlantComponent), input->timeToAdvance);
-        
-        EXECUTE_RENDERING_JOB(worldMode, group, RenderRock, ArchetypeHas(BaseComponent) && ArchetypeHas(RockComponent), input->timeToAdvance);
-        
-        EXECUTE_RENDERING_JOB(worldMode, group, RenderLayoutEntities, ArchetypeHas(BaseComponent) && ArchetypeHas(LayoutComponent), input->timeToAdvance);
-        
-        EXECUTE_RENDERING_JOB(worldMode, group, RenderMultipartEntity, ArchetypeHas(BaseComponent) && ArchetypeHas(MultipartAnimationComponent), input->timeToAdvance);
-        
-        if(worldMode->editorUI.renderEntityBounds)
+        if(!worldMode->gamePaused)
         {
-            EXECUTE_RENDERING_JOB(worldMode, group, RenderBound, ArchetypeHas(BaseComponent), input->timeToAdvance);
+            worldMode->gamePaused = true;
+            SendOrderedMessage(PauseToggle);
         }
-        END_BLOCK();
         
-        
-        BEGIN_BLOCK("weather and particles");
-        
-#if 0        
-        for(u16 weatherIndex = 0; weatherIndex < Weather_count; ++weatherIndex)
+        if(worldMode->testEffect)
         {
-            GameProperties weatherProperties = {};
-            if(!worldMode->weatherEffects[weatherIndex])
+            FreeParticleEffect(worldMode->testEffect);
+            worldMode->testEffect = 0;
+        }
+        
+        if(++worldMode->renderMode >= RenderMode_Count)
+        {
+            worldMode->renderMode = 0;
+        }
+    }
+#endif
+    
+    switch(worldMode->renderMode)
+    {
+        case RenderMode_World:
+        {
+            if(Pressed(&input->pauseButton))
             {
-                AddGameProperty(&weatherProperties, weather, weatherIndex);
-                AssetID effectID = QueryDataFiles(group->assets, ParticleEffect, "weather", 0, &weatherProperties);
-                if(IsValid(effectID))
+                worldMode->gamePaused = !worldMode->gamePaused;
+                SendOrderedMessage(PauseToggle);
+            }
+            
+            BEGIN_BLOCK("rendering");
+            if(renderWorld)
+            {
+                RenderGroundAndPlaySounds(worldMode, group, myPlayer->universeP, input->timeToAdvance);
+                
+#if 0
+                EXECUTE_RENDERING_JOB(worldMode, group, RenderShadow, ArchetypeHas(ShadowComponent), input->timeToAdvance);
+                
+                EXECUTE_RENDERING_JOB(worldMode, group, RenderGrass, ArchetypeHas(GrassComponent) && ArchetypeHas(MagicQuadComponent), input->timeToAdvance);
+                
+                EXECUTE_RENDERING_JOB(worldMode, group, RenderSpriteEntities, ArchetypeHas(StandardImageComponent), input->timeToAdvance);
+                
+                EXECUTE_RENDERING_JOB(worldMode, group, RenderSegmentEntities, ArchetypeHas(SegmentImageComponent), input->timeToAdvance);
+                
+                EXECUTE_RENDERING_JOB(worldMode, group, RenderCharacterAnimation, ArchetypeHas(AnimationComponent), input->timeToAdvance);
+                
+                EXECUTE_RENDERING_JOB(worldMode, group, RenderFrameByFrameEntities, ArchetypeHas(FrameByFrameAnimationComponent) && !ArchetypeHas(PlantComponent), input->timeToAdvance);
+                
+                EXECUTE_RENDERING_JOB(worldMode, group, RenderPlant, ArchetypeHas(PlantComponent), input->timeToAdvance);
+                
+                EXECUTE_RENDERING_JOB(worldMode, group, RenderRock, ArchetypeHas(RockComponent), input->timeToAdvance);
+                
+                EXECUTE_RENDERING_JOB(worldMode, group, RenderLayoutEntities, ArchetypeHas(LayoutComponent), input->timeToAdvance);
+                
+                EXECUTE_RENDERING_JOB(worldMode, group, RenderMultipartEntity, ArchetypeHas(MultipartAnimationComponent), input->timeToAdvance);
+#else
+                EXECUTE_RENDERING_JOB(worldMode, group, RenderEntity, true, input->timeToAdvance);
+#endif
+                if(worldMode->editorUI.renderEntityBounds)
                 {
-                    ParticleEffect* particles = GetData(group->assets, ParticleEffect, effectID);
-                    
-                    Vec3 startingP = V3(0, 0, 0);
-                    Vec3 UpVector = V3(0, 0, 1);
-                    
-                    worldMode->weatherEffects[weatherIndex] = GetNewParticleEffect(worldMode->particleCache, particles, startingP, UpVector);
+                    EXECUTE_RENDERING_JOB(worldMode, group, RenderBound, true, input->timeToAdvance);
+                }
+                END_BLOCK();
+                
+                
+                BEGIN_BLOCK("weather and particles");
+                
+#if 0        
+                for(u16 weatherIndex = 0; weatherIndex < Weather_count; ++weatherIndex)
+                {
+                    GameProperties weatherProperties = {};
+                    if(!worldMode->weatherEffects[weatherIndex])
+                    {
+                        AddGameProperty(&weatherProperties, weather, weatherIndex);
+                        AssetID effectID = QueryDataFiles(group->assets, ParticleEffect, "weather", 0, &weatherProperties);
+                        if(IsValid(effectID))
+                        {
+                            ParticleEffect* particles = GetData(group->assets, ParticleEffect, effectID);
+                            
+                            Vec3 startingP = V3(0, 0, 0);
+                            Vec3 UpVector = V3(0, 0, 1);
+                            
+                            worldMode->weatherEffects[weatherIndex] = GetNewParticleEffect(worldMode->particleCache, particles, startingP, UpVector);
+                        }
+                    }
+                }
+#endif
+                
+                worldMode->particleCache->deltaParticleP = deltaP;
+                UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
+                END_BLOCK();
+            }
+        } break;
+        
+        case RenderMode_Entity:
+        case RenderMode_Particle:
+        case RenderMode_ParticleEntity:
+        {
+            EditorUIContext* context = &worldMode->editorUI;
+            
+            if(worldMode->renderMode == RenderMode_Entity ||
+               worldMode->renderMode == RenderMode_ParticleEntity)
+            {
+                UniversePos oldP = worldMode->player.universeP;
+                worldMode->player.universeP = {};
+                EntityType test = GetEntityType(group->assets, context->name);
+                u32 seed = context->seed;
+                u16* essences = context->essences;
+                u16 action = context->action;
+                r32 health = context->health;
+                
+                PushGameRenderSettings(group, V3(1, 1, 1), 0, {}, 0);
+                PushRect(group, FlatTransform(V4(0.9f, 0.9f, 0.9f, 1)), V3(0, 0, 0), V2(200, 200));
+                
+                if(IsValid(test))
+                {
+                    EntityDefinition* definition = GetEntityTypeDefinition(group->assets, test);
+                    if(definition)
+                    {
+                        EntityID ID = {};
+                        u8 archetype = SafeTruncateToU8(ConvertEnumerator(EntityArchetype, definition->archetype));
+                        AcquireArchetype(worldMode, archetype, (&ID));
+                        ClientEntityInitParams params = definition->client;
+                        params.ID = ID;
+                        params.seed = seed;
+                        
+                        definition->common.type = test;
+                        definition->common.essences = essences;
+                        InitEntity(worldMode, ID, &definition->common, 0, &params);
+                        
+                        ActionComponent* actionComp = GetComponent(worldMode, ID, ActionComponent);
+                        if(actionComp)
+                        {
+                            actionComp->action = action;
+                        }
+                        
+                        HealthComponent* healthComp = GetComponent(worldMode, ID, HealthComponent);
+                        if(healthComp)
+                        {
+                            healthComp->physicalHealth = health;
+                            healthComp->maxPhysicalHealth = health;
+                            
+                            healthComp->mentalHealth = health;
+                            healthComp->maxMentalHealth = health;
+                        }
+                        
+                        RenderEntity(worldMode, group, ID, input->timeToAdvance);
+                        
+                        
+                        if(true)
+                        {
+                            RenderBound(worldMode, group, ID, input->timeToAdvance);
+                        }
+                        FreeArchetype(worldMode, ID);
+                    }
+                }
+                
+                worldMode->player.universeP = oldP;
+            }
+            
+            if(worldMode->renderMode == RenderMode_Particle ||
+               worldMode->renderMode == RenderMode_ParticleEntity)
+            {
+                PushGameRenderSettings(group, V3(1, 1, 1), 0, {}, 0);
+                PushRect(group, FlatTransform(V4(0.9f, 0.9f, 0.9f, 1)), V3(0, 0, 0), V2(200, 200));
+                PushRect(group, FlatTransform(V4(0, 1, 0, 1)), V3(0, 0, 0), V2(0.05f, 0.05f));
+                
+                
+                if(!worldMode->testEffect)
+                {
+                    AssetID effectID = QueryDataFiles(group->assets, ParticleEffect, context->effectName.name, 0, &context->properties);
+                    if(IsValid(effectID))
+                    {
+                        ParticleEffect* particles = GetData(group->assets, ParticleEffect, effectID);
+                        
+                        Vec3 startingP = V3(0, 0, 0);
+                        Vec3 UpVector = V3(0, 0, 1);
+                        
+                        worldMode->testEffect = GetNewParticleEffect(worldMode->particleCache, particles, startingP, UpVector);
+                    }
+                }
+                
+                if(worldMode->testEffect)
+                {
+                    UpdateAndRenderEffect(worldMode, worldMode->particleCache, worldMode->testEffect, worldMode->originalTimeToAdvance, {}, group);
                 }
             }
-        }
-#endif
-        
-        worldMode->particleCache->deltaParticleP = deltaP;
-        UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
-        END_BLOCK();
+        } break;
     }
     
     BEGIN_BLOCK("editor and UI overlay");
     SetOrthographicTransformScreenDim(group);
     //FixedOrderedRendering(group);
-    RenderUIOverlay(worldMode, group, input->timeToAdvance);
+    
+    if(!worldMode->gamePaused)
+    {
+        RenderUIOverlay(worldMode, group, input->timeToAdvance);
+    }
     //EXECUTE_RENDERING_JOB(worldMode, group, RenderEntityHUD, ArchetypeHas(AliveComponent), input->timeToAdvance);
     if(worldMode->editingEnabled)
     {
@@ -436,9 +574,6 @@ internal b32 UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode,
     
     SendCommand(myPlayer->currentCommandIndex, command);
     SendCommandParameters(worldMode->gameUI.commandParameters);
-    
-    
-    return result;
 }
 
 

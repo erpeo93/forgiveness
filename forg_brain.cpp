@@ -1,7 +1,7 @@
 internal BrainParams* GetBrainParams(ServerState* server, EntityID ID)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    EntityDefinition* entityDef = GetEntityTypeDefinition(server->assets, def->definitionID);
+    EntityDefinition* entityDef = GetEntityTypeDefinition(server->assets, def->type);
     BrainParams* result = &entityDef->server.brainParams;
     return result;
 }
@@ -164,10 +164,10 @@ internal void ComputeFinalDirection(BrainComponent* brain)
 EVALUATOR(CollisionAvoidance)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    MovementComponent* movement = GetComponent(server, ID, MovementComponent);
     BrainComponent* brain = GetComponent(server, ID, BrainComponent);
     
-    if(physic)
+    if(movement)
     {
         r32 minDistanceSq = R32_MAX;
         EntityID avoidID = {};
@@ -175,7 +175,7 @@ EVALUATOR(CollisionAvoidance)
         
         r32 seeAhead = 3.0f;
         u32 segmentCount = 8;
-        Vec3 normalizedSpeed = Normalize(physic->speed);
+        Vec3 normalizedSpeed = Normalize(movement->speed);
         r32 increment = 1.0f / segmentCount;
         
         for(u32 avoidIndex = 0; avoidIndex < segmentCount && !IsValidID(avoidID); ++avoidIndex)
@@ -186,15 +186,14 @@ EVALUATOR(CollisionAvoidance)
             for(EntityID testID = GetCurrent(&avoidQuery); IsValid(&avoidQuery); testID = Advance(&avoidQuery))
             {
                 DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
-                PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
                 if(ShouldPerceive(def, ID, testDef, testID))
                 {
-                    if(ShouldCollide(physic->boundType, testPhysic->boundType))
+                    if(ShouldCollide(def->boundType, testDef->boundType))
                     {
                         Vec3 distance = SubtractOnSameZChunk(testDef->P, ahead);
                         r32 distanceSq = LengthSq(distance);
-                        r32 testRadiousSq =(Square(Max(GetDim(testPhysic->bounds).x, GetDim(testPhysic->bounds).y)) + 
-                                            Square(Max(GetDim(physic->bounds).x, GetDim(physic->bounds).y)));
+                        r32 testRadiousSq =(Square(Max(GetDim(testDef->bounds).x, GetDim(testDef->bounds).y)) + 
+                                            Square(Max(GetDim(def->bounds).x, GetDim(def->bounds).y)));
                         if(distanceSq < testRadiousSq)
                         {
                             if(distanceSq <= minDistanceSq)
@@ -237,30 +236,47 @@ EVALUATOR(MaintainDistance)
     
     SpatialPartitionQuery perceiveQuery = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
     
+    EntityType type = GetEntityType(server->assets, params->maintainDistanceType);
+    
     for(EntityID testID = GetCurrent(&perceiveQuery); IsValid(&perceiveQuery); testID = Advance(&perceiveQuery))
     {
         DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
-        PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
         if(ShouldPerceive(def, ID, testDef, testID))
         {
             Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
-            if(AreEqual(testDef->definitionID, params->maintainDistanceType))
+            if(AreEqual(testDef->type, type))
             {
                 if(LengthSq(toTarget) <= Square(params->maintainDistanceRadious))
                 {
                     ModulateDirection(brain, -toTarget, params->maintainDistanceModulationCoeff, params->maintainDistanceModulationAdiacentCoeff);
                 }
             }
-            else if(EntityHasFlags(def, EntityFlag_fearsLight))
+        }
+    }
+}
+
+
+EVALUATOR(MaintainDistanceFromLight)
+{
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    BrainComponent* brain = GetComponent(server, ID, BrainComponent);
+    BrainParams* params = GetBrainParams(server, ID);
+    
+    SpatialPartitionQuery perceiveQuery = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
+    
+    for(EntityID testID = GetCurrent(&perceiveQuery); IsValid(&perceiveQuery); testID = Advance(&perceiveQuery))
+    {
+        DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
+        if(ShouldPerceive(def, ID, testDef, testID))
+        {
+            Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
+            r32 lightRadiousSq = GetLightRadiousSq(server, testID);
+            if(lightRadiousSq > 0)
             {
-                r32 lightRadiousSq = GetLightRadiousSq(server, testID);
-                if(lightRadiousSq > 0)
+                r32 realRadiousSq = lightRadiousSq + Square(params->safetyLightRadious);
+                if(LengthSq(toTarget) <= realRadiousSq)
                 {
-                    r32 realRadiousSq = lightRadiousSq + Square(params->safetyLightRadious);
-                    if(LengthSq(toTarget) <= realRadiousSq)
-                    {
-                        ZeroDirection(brain, toTarget, true);
-                    }
+                    ZeroDirection(brain, toTarget, true);
                 }
             }
         }
@@ -274,20 +290,14 @@ EVALUATOR(Flee)
     BrainParams* params = GetBrainParams(server, ID);
     SpatialPartitionQuery perceiveQuery = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
     
+    EntityType type = GetEntityType(server->assets, params->scaryType);
     for(EntityID testID = GetCurrent(&perceiveQuery); IsValid(&perceiveQuery); testID = Advance(&perceiveQuery))
     {
         DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
-        PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
         if(ShouldPerceive(def, ID, testDef, testID))
         {
             Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
-            
-            if(EntityHasFlags(def, EntityFlag_fearsLight) && LengthSq(toTarget) <= GetLightRadiousSq(server, testID))
-            {
-                ZeroDirection(brain, toTarget, true);
-                SumScore(brain, -toTarget, 1.0f, 0.5f);
-            }
-            else if(AreEqual(testDef->definitionID, params->scaryType))
+            if(AreEqual(testDef->type, type))
             {
                 if(LengthSq(toTarget) <= Square(params->safeDistanceRadious))
                 {
@@ -299,21 +309,42 @@ EVALUATOR(Flee)
     }
 }
 
-internal b32 SearchForHostileEnemies(ServerState* server, EntityID brainID, EntityID* ID)
+EVALUATOR(FleeFromLight)
 {
-    b32 result = false;
-    DefaultComponent* def = GetComponent(server, brainID, DefaultComponent);
-    PhysicComponent* physic = GetComponent(server, brainID, PhysicComponent);
-    BrainParams* params = GetBrainParams(server, brainID);
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    BrainComponent* brain = GetComponent(server, ID, BrainComponent);
+    BrainParams* params = GetBrainParams(server, ID);
     SpatialPartitionQuery perceiveQuery = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
     
     for(EntityID testID = GetCurrent(&perceiveQuery); IsValid(&perceiveQuery); testID = Advance(&perceiveQuery))
     {
         DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
-        PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
+        if(ShouldPerceive(def, ID, testDef, testID))
+        {
+            Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
+            if(LengthSq(toTarget) <= GetLightRadiousSq(server, testID))
+            {
+                ZeroDirection(brain, toTarget, true);
+                SumScore(brain, -toTarget, 1.0f, 0.5f);
+            }
+        }
+    }
+}
+
+internal b32 SearchForHostileEnemies(ServerState* server, EntityID brainID, EntityID* ID)
+{
+    b32 result = false;
+    DefaultComponent* def = GetComponent(server, brainID, DefaultComponent);
+    BrainParams* params = GetBrainParams(server, brainID);
+    SpatialPartitionQuery perceiveQuery = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
+    
+    EntityType type = GetEntityType(server->assets, params->hostileType);
+    for(EntityID testID = GetCurrent(&perceiveQuery); IsValid(&perceiveQuery); testID = Advance(&perceiveQuery))
+    {
+        DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
         if(ShouldPerceive(def, brainID, testDef, testID))
         {
-            if(AreEqual(testDef->definitionID, params->hostileType))
+            if(AreEqual(testDef->type, type))
             {
                 Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
                 if(LengthSq(toTarget) <= Square(params->hostileDistanceRadious))
@@ -337,25 +368,45 @@ internal b32 SearchForScaryEntities(ServerState* server, EntityID brainID)
     BrainParams* params = GetBrainParams(server, brainID);
     SpatialPartitionQuery perceiveQuery = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
     
+    EntityType type = GetEntityType(server->assets, params->scaryType);
     for(EntityID testID = GetCurrent(&perceiveQuery); IsValid(&perceiveQuery); testID = Advance(&perceiveQuery))
     {
         DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
-        PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
         if(ShouldPerceive(def, brainID, testDef, testID))
         {
             Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
-            if(EntityHasFlags(def, EntityFlag_fearsLight) && LengthSq(toTarget) <= GetLightRadiousSq(server, testID))
-            {
-                result = true;
-                break;
-            }
-            else if(AreEqual(testDef->definitionID, params->scaryType))
+            if(AreEqual(testDef->type, type))
             {
                 if(LengthSq(toTarget) <= Square(params->scaryDistanceRadious))
                 {
                     result = true;
                     break;
                 }
+            }
+        }
+    }
+    
+    return result;
+}
+
+internal b32 SearchForScaryLights(ServerState* server, EntityID brainID)
+{
+    b32 result = false;
+    
+    DefaultComponent* def = GetComponent(server, brainID, DefaultComponent);
+    BrainParams* params = GetBrainParams(server, brainID);
+    SpatialPartitionQuery perceiveQuery = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
+    
+    for(EntityID testID = GetCurrent(&perceiveQuery); IsValid(&perceiveQuery); testID = Advance(&perceiveQuery))
+    {
+        DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
+        if(ShouldPerceive(def, brainID, testDef, testID))
+        {
+            Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
+            if(LengthSq(toTarget) <= GetLightRadiousSq(server, testID))
+            {
+                result = true;
+                break;
             }
         }
     }
@@ -370,7 +421,7 @@ internal b32 ActionIsPossible(ServerState* server, u16 action, EntityID ID, Enti
     InteractionComponent* targetInteraction = GetComponent(server, targetID, InteractionComponent);
     UsingComponent* equippedComponent = GetComponent(server, ID, UsingComponent);
     
-    EntityRef equipped[Count_usingSlot];
+    EntityType equipped[Count_usingSlot];
     u32 equippedCount = 0;
     if(equippedComponent)
     {
@@ -396,7 +447,7 @@ internal b32 ActionIsPossibleAtCurrentDistance(ServerState* server, u16 action, 
     
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     BrainComponent* brain = GetComponent(server, ID, BrainComponent);
-    MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+    CombatComponent* combat = GetComponent(server, ID, CombatComponent);
     UsingComponent* equippedComponent = GetComponent(server, ID, UsingComponent);
     
     DefaultComponent* targetDef = GetComponent(server, targetID, DefaultComponent);
@@ -406,7 +457,7 @@ internal b32 ActionIsPossibleAtCurrentDistance(ServerState* server, u16 action, 
     r32 distanceSq = LengthSq(toTarget);
     r32 targetTime;
     
-    EntityRef equipped[Count_usingSlot];
+    EntityType equipped[Count_usingSlot];
     u32 equippedCount = 0;
     if(equippedComponent)
     {
@@ -419,7 +470,7 @@ internal b32 ActionIsPossibleAtCurrentDistance(ServerState* server, u16 action, 
     }
     
     u16 oldAction = brain->currentCommand.action;
-    if(ActionIsPossibleAtDistance(targetInteraction, action, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
+    if(ActionIsPossibleAtDistance(targetInteraction, action, oldAction, distanceSq, &targetTime, combat, equipped, equippedCount))
     {
         result = true;
     }
@@ -465,7 +516,7 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                     {
                         AddEntityParams params = DefaultAddEntityParams();
                         params.targetBrainID = ID;
-                        EntityRef type = EntityReference(server->assets, "default", "wolf");
+                        EntityType type = GetEntityType(server->assets, "default", "wolf");
                         AddEntityFlags(def, EntityFlag_locked);
                         AddEntity(server, def->P, &server->entropy, type, params);
                     }
@@ -500,6 +551,12 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                     {
                         Evaluate(Wander);
                         Evaluate(MaintainDistance);
+                        
+                        if(EntityHasFlags(def, EntityFlag_fearsLight))
+                        {
+                            Evaluate(MaintainDistanceFromLight);
+                        }
+                        
                         Evaluate(CollisionAvoidance);
                         
                         EntityID hostileID;
@@ -509,7 +566,7 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                             brain->targetID = hostileID;
                         }
                         
-                        if(SearchForScaryEntities(server, ID))
+                        if(SearchForScaryEntities(server, ID) || SearchForScaryLights(server, ID))
                         {
                             ChangeState(brain, Fleeing);
                         }
@@ -518,7 +575,11 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                     case BrainState_Fleeing:
                     {
                         Evaluate(Flee);
-                        if(!SearchForScaryEntities(server, ID))
+                        if(EntityHasFlags(def, EntityFlag_fearsLight))
+                        {
+                            Evaluate(FleeFromLight);
+                        }
+                        if(!SearchForScaryEntities(server, ID) && !SearchForScaryLights(server, ID))
                         {
                             ChangeState(brain, Wandering);
                         }
@@ -528,6 +589,12 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                     {
                         ScoreDirection(server, ID, brain->targetID, 1.0f, 0.99f);
                         Evaluate(MaintainDistance);
+                        
+                        if(EntityHasFlags(def, EntityFlag_fearsLight))
+                        {
+                            Evaluate(MaintainDistanceFromLight);
+                        }
+                        
                         Evaluate(CollisionAvoidance);
                         
                         if(ActionIsPossible(server, attack, ID, brain->targetID))
@@ -542,7 +609,7 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                             ChangeState(brain, Wandering);
                         }
                         
-                        if(SearchForScaryEntities(server, ID))
+                        if(SearchForScaryEntities(server, ID) || SearchForScaryLights(server, ID))
                         {
                             ChangeState(brain, Fleeing);
                         }
@@ -566,7 +633,7 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
                             }
                         }
                         
-                        if(SearchForScaryEntities(server, ID))
+                        if(SearchForScaryEntities(server, ID) || SearchForScaryLights(server, ID))
                         {
                             ChangeState(brain, Fleeing);
                         }

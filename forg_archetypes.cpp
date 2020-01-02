@@ -9,7 +9,7 @@ internal Rect3 StandardBounds(RandomSequence* seq, Vec3 dim, Vec3 offset, Vec3 d
 
 #define PropertyToU16(property, enum) ExistMetaPropertyValue(Property_##property, Tokenize((enum).value))
 internal u16 ExistMetaPropertyValue(u16 propertyType, Token value);;
-internal void AddPossibleActions(PossibleActionList* list, PossibleActionDefinition* actions, u32 actionCount)
+internal void AddPossibleActions(Assets* assets, PossibleActionList* list, PossibleActionDefinition* actions, u32 actionCount)
 {
     list->actionCount = 0;
     for(u32 actionIndex = 0; actionIndex < actionCount; ++actionIndex)
@@ -37,8 +37,8 @@ internal void AddPossibleActions(PossibleActionList* list, PossibleActionDefinit
                 }
                 
                 dest->time = source->time;
-                dest->requiredUsingType = source->requiredUsingType;
-                dest->requiredEquippedType = source->requiredEquippedType;
+                dest->requiredUsingType = GetEntityType(assets, source->requiredUsingType);
+                dest->requiredEquippedType = GetEntityType(assets, source->requiredEquippedType);
             }
         }
     }
@@ -48,25 +48,19 @@ internal void AddPossibleActions(PossibleActionList* list, PossibleActionDefinit
 internal u16 GetRandomEssence(RandomSequence* seq);
 INIT_COMPONENT_FUNCTION(InitDefaultComponent)
 {
+    RandomSequence seq = Seed(s->seed);
+    
     ServerState* server = (ServerState*) state;
     DefaultComponent* def = (DefaultComponent*) componentPtr;
     def->updateSent = false;
-    
-    def->basicPropertiesChanged = 0;
-    def->basicPropertiesChanged |= EntityBasics_Definition; 
-    def->basicPropertiesChanged |= EntityBasics_Position;
-    
-    def->healthPropertiesChanged = 0xffff;
-    
-    def->miscPropertiesChanged = 0xffff;
-    
+    def->networkFlags = 0xffff;
     def->P = s->P;
-    def->flags = InitU32(basicPropertiesChanged, EntityBasics_Flags, 0);
+    SetU32(&def->flags, 0);
     def->seed = s->seed;
-    def->definitionID = common->definitionID;
-    def->status = InitU16(basicPropertiesChanged, EntityBasics_Status, 0);
+    def->type = common->type;
     def->spawnerID = {};
-    
+    def->boundType = common->boundType.value;
+    def->bounds = StandardBounds(&seq, common->boundDim, common->boundOffset, common->boundDimV);
     if(s->canGoIntoWater)
     {
         AddEntityFlags(def, EntityFlag_canGoIntoWater);
@@ -83,26 +77,35 @@ INIT_COMPONENT_FUNCTION(InitDefaultComponent)
     }
 }
 
-INIT_COMPONENT_FUNCTION(InitPhysicComponent)
+INIT_COMPONENT_FUNCTION(InitMovementComponent)
 {
-    PhysicComponent* physic = (PhysicComponent*) componentPtr;
-    RandomSequence seq = Seed(s->seed);
-    physic->boundType = common->boundType.value;
-    physic->bounds = StandardBounds(&seq, common->boundDim, common->boundOffset, common->boundDimV);
-    physic->acc = s->startingAcceleration;
-    physic->speed = s->startingSpeed;
-    physic->accelerationCoeff = s->accelerationCoeff;
-    physic->drag = s->drag;
+    MovementComponent* movement = (MovementComponent*) componentPtr;
+    movement->acc = s->startingAcceleration;
+    movement->speed = s->startingSpeed;
+    movement->accelerationCoeff = s->accelerationCoeff;
+    movement->drag = s->drag;
 }
 
 INIT_COMPONENT_FUNCTION(InitActionComponent)
 {
     ActionComponent* action = (ActionComponent*) componentPtr;
-    action->action = InitU16(basicPropertiesChanged, EntityBasics_Action, 0);
+    SetU16(&action->action, idle);
     action->time = 0;
 }
 
-internal void AddRandomEffects(EffectComponent* effects, EffectBinding* bindings, ArrayCounter bindingCount, u16* essences)
+internal GameEffectInstance InstanceEffect(Assets* assets, GameEffect* effect)
+{
+    GameEffectInstance result = {};
+    result.timer = effect->timer;
+    result.targetEffect = effect->targetEffect;
+    result.action = effect->action.value;
+    result.type = effect->effectType.value;
+    result.spawnType = GetEntityType(assets, effect->spawnType);
+    result.power = effect->power;
+    return result;
+}
+
+internal void AddRandomEffects(Assets* assets, EffectComponent* effects, EffectBinding* bindings, ArrayCounter bindingCount, u16* essences)
 {
     for(u16 essenceIndex = 0; essenceIndex < Count_essence; ++essenceIndex)
     {
@@ -118,8 +121,8 @@ internal void AddRandomEffects(EffectComponent* effects, EffectBinding* bindings
                 {
                     if(effects->effectCount < ArrayCount(effects->effects))
                     {
-                        GameEffect* dest = effects->effects + effects->effectCount++;
-                        *dest = binding->effect;
+                        GameEffectInstance* dest = effects->effects + effects->effectCount++;
+                        *dest = InstanceEffect(assets, &binding->effect);
                     }
                     break;
                 }
@@ -166,13 +169,14 @@ INIT_COMPONENT_FUNCTION(InitEffectComponent)
 {
     ServerState* server = (ServerState*) state;
     EffectComponent* effect = (EffectComponent*) componentPtr;
+    effect->effectCount = 0;
     
     for(ArrayCounter effectIndex = 0; effectIndex < s->defaultEffectsCount; ++effectIndex)
     {
         if(effect->effectCount < ArrayCount(effect->effects))
         {
-            GameEffect* dest = effect->effects + effect->effectCount++;
-            *dest = s->defaultEffects[effectIndex];
+            GameEffectInstance* dest = effect->effects + effect->effectCount++;
+            *dest = InstanceEffect(assets, s->defaultEffects + effectIndex);
         }
     }
     
@@ -185,25 +189,26 @@ INIT_COMPONENT_FUNCTION(InitEffectComponent)
         {
             if(effect->effectCount < ArrayCount(effect->effects))
             {
-                GameEffect* dest = effect->effects + effect->effectCount++;
-                *dest = *rolled;
+                GameEffectInstance* dest = effect->effects + effect->effectCount++;
+                *dest = InstanceEffect(assets, rolled);
             }
         }
     }
     
     u16* essences = common->essences;
-    AddRandomEffects(effect, s->bindings, s->bindingCount, essences);
+    AddRandomEffects(assets, effect, s->bindings, s->bindingCount, essences);
 }
 
 INIT_COMPONENT_FUNCTION(InitCollisionEffectsComponent)
 {
     CollisionEffectsComponent* collision = (CollisionEffectsComponent*) componentPtr;
+    collision->effectCount = 0;
     for(u32 effectIndex = 0; effectIndex < s->collisionEffectsCount; ++effectIndex)
     {
         if(collision->effectCount < ArrayCount(collision->effects))
         {
-            GameEffect* dest = collision->effects + collision->effectCount++;
-            *dest = s->collisionEffects[effectIndex];
+            GameEffectInstance* dest = collision->effects + collision->effectCount++;
+            *dest = InstanceEffect(assets, s->collisionEffects + effectIndex);
         }
     }
 }
@@ -290,38 +295,48 @@ INIT_COMPONENT_FUNCTION(InitStaticComponent)
     staticComp->block = addResult.block;
 }
 
-INIT_COMPONENT_FUNCTION(InitAliveComponent)
+INIT_COMPONENT_FUNCTION(InitHealthComponent)
 {
-    AliveComponent* alive = (AliveComponent*) componentPtr;
+    HealthComponent* health = (HealthComponent*) componentPtr;
     
-    u32 maxPhysical = 100;
-    u32 maxMental = 100;
-    alive->maxPhysicalHealth = InitU32(healthPropertiesChanged, HealthFlag_MaxPhysical, maxPhysical);
-    alive->physicalHealth = InitU32(healthPropertiesChanged, HealthFlag_Physical, maxPhysical);
+    r32 maxPhysical = s->maxPhysicalHealth;
+    r32 maxMental = s->maxMentalHealth;
+    SetR32Default(health, maxPhysicalHealth, maxPhysical);
+    SetR32(&health->physicalHealth, maxPhysical);
     
-    alive->maxMentalHealth = InitU32(healthPropertiesChanged, HealthFlag_MaxMental, maxMental);
-    alive->mentalHealth = InitU32(healthPropertiesChanged, HealthFlag_Mental, maxMental);
+    SetR32Default(health, maxMentalHealth, maxMental);
+    SetR32(&health->mentalHealth, maxMental);
 }
 
-INIT_COMPONENT_FUNCTION(InitMiscComponent)
+INIT_COMPONENT_FUNCTION(InitCombatComponent)
 {
-    MiscComponent* misc = (MiscComponent*) componentPtr;
-    misc->attackDistance = InitR32(miscPropertiesChanged, MiscFlag_AttackDistance, 1.0f);
-    misc->attackContinueCoeff = InitR32(miscPropertiesChanged, MiscFlag_AttackContinueCoeff, 2.0f);
-    misc->lightRadious = InitR32(miscPropertiesChanged, MiscFlag_LightRadious, s->lightRadious);
-    misc->flowerDensity = InitR32(miscPropertiesChanged, MiscFlag_FlowerDensity, common->flowerDensity);
-    misc->fruitDensity = InitR32(miscPropertiesChanged, MiscFlag_FruitDensity, common->fruitDensity);
+    CombatComponent* combat = (CombatComponent*) componentPtr;
+    
+    r32 defaultAttackDistance = 1.0f;
+    r32 defaultAttackContinueCoeff = 2.0f;
+    
+    SetR32Default(combat, attackDistance, defaultAttackDistance);
+    SetR32Default(combat, attackContinueCoeff, defaultAttackContinueCoeff);
 }
 
-INIT_COMPONENT_FUNCTION(InitPlantComponent)
+INIT_COMPONENT_FUNCTION(InitLightComponent)
 {
-    PlantComponent* dest = (PlantComponent*) componentPtr;
-    dest->flowerGrowingSpeed = s->flowerGrowingSpeed;
+    LightComponent* light = (LightComponent*) componentPtr;
+    SetR32Default(light, lightRadious, s->lightRadious);
+}
+
+INIT_COMPONENT_FUNCTION(InitVegetationComponent)
+{
+    VegetationComponent* dest = (VegetationComponent*) componentPtr;
+    
+    SetR32Default(dest, flowerGrowingSpeed, s->flowerGrowingSpeed);
+    SetR32Default(dest, fruitGrowingSpeed, s->fruitGrowingSpeed);
+    
     dest->requiredFlowerDensity = s->requiredFlowerDensity;
-    
-    dest->fruitGrowingSpeed = s->fruitGrowingSpeed;
     dest->requiredFruitDensity = s->requiredFruitDensity;
     
+    SetR32(&dest->flowerDensity, common->flowerDensity);
+    SetR32(&dest->fruitDensity, common->fruitDensity);
 }
 
 #else
@@ -329,7 +344,7 @@ INIT_COMPONENT_FUNCTION(InitBaseComponent)
 {
     BaseComponent* base = (BaseComponent*) componentPtr;
     RandomSequence seq = Seed(c->seed);
-    base->definitionID = common->definitionID;
+    base->type = common->type;
     base->seed = c->seed;
     base->universeP = {};
     base->velocity = {};
@@ -345,11 +360,6 @@ INIT_COMPONENT_FUNCTION(InitBaseComponent)
     
     base->fadeInTime = c->fadeInTime;
     base->fadeOutTime = c->fadeOutTime;
-    
-    for(u32 propertyIndex = 0; propertyIndex < ArrayCount(base->properties); ++propertyIndex)
-    {
-        base->properties[propertyIndex] = {};
-    }
     
     for(u32 essenceIndex = 0; essenceIndex < Count_essence; ++essenceIndex)
     {
@@ -368,7 +378,7 @@ internal void InitShadow(ShadowComponent* shadow, ClientEntityInitParams* params
 internal void InitImageReference_(Assets* assets, ImageReference* dest,ImageProperties* sourceProperties)
 {
     dest->typeHash = sourceProperties->imageType.subtypeHash;
-    
+    dest->emittors = sourceProperties->emittors;
     dest->properties = {};
     for(u16 propertyIndex = 0; propertyIndex < sourceProperties->propertyCount; ++propertyIndex)
     {
@@ -432,8 +442,6 @@ INIT_COMPONENT_FUNCTION(InitAnimationComponent)
 
 INIT_COMPONENT_FUNCTION(InitRockComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
-    Assets* assets = worldMode->gameState->assets;
     RockComponent* dest = (RockComponent*) componentPtr;
     
     RandomSequence seq = Seed(c->seed);
@@ -446,7 +454,6 @@ INIT_COMPONENT_FUNCTION(InitRockComponent)
 
 INIT_COMPONENT_FUNCTION(InitGrassComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
     GrassComponent* dest = (GrassComponent*) componentPtr;
     dest->windInfluence = c->windInfluence;
     dest->windFrequencyStandard = (u8) c->windFrequencyStandard;
@@ -459,8 +466,6 @@ INIT_COMPONENT_FUNCTION(InitGrassComponent)
 
 INIT_COMPONENT_FUNCTION(InitPlantComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
-    Assets* assets = worldMode->gameState->assets;
     PlantComponent* dest = (PlantComponent*) componentPtr;
     
     RandomSequence seq = Seed(c->seed);
@@ -481,22 +486,20 @@ INIT_COMPONENT_FUNCTION(InitPlantComponent)
     dest->fruitColor = RandomizeColor(c->fruitColor, c->fruitColorV, &seq);
     InitImageReference(assets, &dest, &c, fruit);
     
-    dest->windInfluence = c->windInfluence;
+    dest->leafWindInfluence = c->leafWindInfluence;
+    dest->flowerWindInfluence = c->flowerWindInfluence;
+    dest->fruitWindInfluence = c->fruitWindInfluence;
     dest->dissolveDuration = c->dissolveDuration;
 }
 
 INIT_COMPONENT_FUNCTION(InitStandardImageComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
-    Assets* assets = worldMode->gameState->assets;
     StandardImageComponent* dest = (StandardImageComponent*) componentPtr;
     InitImageReference(assets, &dest, &c, entity);
 }
 
 INIT_COMPONENT_FUNCTION(InitSegmentImageComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
-    Assets* assets = worldMode->gameState->assets;
     StandardImageComponent* dest = (StandardImageComponent*) componentPtr;
     InitImageReference(assets, &dest, &c, entity);
 }
@@ -511,8 +514,6 @@ internal BitmapId GetImageFromReference(Assets* assets, ImageReference* referenc
 INIT_COMPONENT_FUNCTION(InitMagicQuadComponent)
 {
     RandomSequence seq = Seed(c->seed);
-    GameModeWorld* worldMode = (GameModeWorld*) state;
-    Assets* assets = worldMode->gameState->assets;
     
     MagicQuadComponent* dest = (MagicQuadComponent*) componentPtr;
     
@@ -542,29 +543,25 @@ INIT_COMPONENT_FUNCTION(InitMagicQuadComponent)
     dest->up *= 0.5f;
 }
 
-internal void InitFrameByFrameComponent_(FrameByFrameAnimationComponent* dest, r32 speed, u64 subtypeHash, b32 overridesPivot, Vec2 pivot)
+internal void InitFrameByFrameComponent_(FrameByFrameAnimationComponent* dest, r32 speed, u64 subtypeHash, b32 emittors, b32 overridesPivot, Vec2 pivot)
 {
     dest->runningTime = 0;
     dest->speed = speed;
     dest->typeHash = subtypeHash;
     dest->overridesPivot = overridesPivot;
+    dest->emittors = emittors;
     dest->pivot = pivot;
 }
 
 INIT_COMPONENT_FUNCTION(InitFrameByFrameAnimationComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
-    Assets* assets = worldMode->gameState->assets;
     FrameByFrameAnimationComponent* dest = (FrameByFrameAnimationComponent*) componentPtr;
     
-    InitFrameByFrameComponent_(dest, c->frameByFrameSpeed, c->frameByFrameImageType.subtypeHash, c->frameByFrameOverridesPivot, c->frameByFramePivot);
+    InitFrameByFrameComponent_(dest, c->frameByFrameSpeed, c->frameByFrameImageType.subtypeHash, c->frameByFrameEmittors, c->frameByFrameOverridesPivot, c->frameByFramePivot);
 }
 
 INIT_COMPONENT_FUNCTION(InitMultipartAnimationComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
-    Assets* assets = worldMode->gameState->assets;
-    
     MultipartAnimationComponent* dest = (MultipartAnimationComponent*) componentPtr;
     dest->staticCount = 0;
     dest->frameByFrameCount = 0;
@@ -587,7 +584,7 @@ INIT_COMPONENT_FUNCTION(InitMultipartAnimationComponent)
             FrameByFrameAnimationComponent* destFrame = dest->frameByFrameParts + dest->frameByFrameCount++;
             
             MultipartFrameByFramePiece* source = c->multipartFrameByFramePieces + frameByFrameIndex;
-            InitFrameByFrameComponent_(destFrame, source->speed, source->image.subtypeHash, 0, {});
+            InitFrameByFrameComponent_(destFrame, source->speed, source->image.subtypeHash, source->emittors, 0, {});
         }
     }
 }
@@ -633,9 +630,6 @@ internal void InitLayout(Assets* assets, LayoutPiece* destPieces, u32* destPiece
 
 INIT_COMPONENT_FUNCTION(InitLayoutComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
-    Assets* assets = worldMode->gameState->assets;
-    
     LayoutComponent* dest = (LayoutComponent*) componentPtr;
     dest->rootHash = StringHash(c->layoutRootName.name);
     dest->rootScale = V2(1, 1);
@@ -669,6 +663,7 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
 {
     ContainerComponent* dest = (ContainerComponent*) componentPtr;
     dest->zoomCoeff = c->lootingZoomCoeff;
+    dest->zoomSpeed = c->lootingZoomSpeed;
     dest->displayInStandardMode = c->displayInStandardMode;
     dest->desiredOpenedDim = c->desiredOpenedDim;
     dest->desiredUsingDim = c->desiredUsingDim;
@@ -705,45 +700,43 @@ INIT_COMPONENT_FUNCTION(InitSoundEffectComponent)
 }
 
 
-
-INIT_COMPONENT_FUNCTION(InitBoltComponent)
+INIT_COMPONENT_FUNCTION(InitActionComponent)
 {
-    GameModeWorld* worldMode = (GameModeWorld*) state;
+    ActionComponent* action = (ActionComponent*) componentPtr;
+    action->action = idle;
+}
+
+INIT_COMPONENT_FUNCTION(InitHealthComponent)
+{
+    HealthComponent* health = (HealthComponent*) componentPtr;
     
-    BoltComponent* bolt = (BoltComponent*) componentPtr;
-    bolt->ttl = R32_MAX;
-    bolt->seed = GetNextUInt32(&worldMode->entropy);
-    bolt->timeSinceLastAnimationTick = R32_MAX;
-    bolt->animationSeq = Seed(bolt->seed);
-    bolt->highOffset = V3(0, 0, 4);
-}
-
-INIT_COMPONENT_FUNCTION(InitAliveComponent)
-{
-    AliveComponent* alive = (AliveComponent*) componentPtr;
+    health->physicalHealth = 0;
+    health->maxPhysicalHealth = 0;
     
-    alive->physicalHealth = 0;
-    alive->maxPhysicalHealth = 0;
-    
-    alive->mentalHealth = 0;
-    alive->maxMentalHealth = 0;
+    health->mentalHealth = 0;
+    health->maxMentalHealth = 0;
 }
 
-INIT_COMPONENT_FUNCTION(InitMiscComponent)
+INIT_COMPONENT_FUNCTION(InitCombatComponent)
 {
-    MiscComponent* misc = (MiscComponent*) componentPtr;
-    misc->attackDistance = 0;
-    misc->attackContinueCoeff = 0;
-    misc->lightRadious = 0;
-    misc->flowerDensity = common->flowerDensity;
-    misc->fruitDensity = common->fruitDensity;
-    misc->lightColor = common->lightColor;
+    CombatComponent* combat = (CombatComponent*) componentPtr;
+    combat->attackDistance = 0;
+    combat->attackContinueCoeff = 0;
 }
 
-INIT_COMPONENT_FUNCTION(InitSkillComponent)
+INIT_COMPONENT_FUNCTION(InitLightComponent)
 {
+    LightComponent* light = (LightComponent*) componentPtr;
+    light->lightRadious = 0;
+    light->lightColor = common->lightColor;
 }
 
+INIT_COMPONENT_FUNCTION(InitVegetationComponent)
+{
+    VegetationComponent* vegetation = (VegetationComponent*) componentPtr;
+    vegetation->flowerDensity = common->flowerDensity;
+    vegetation->fruitDensity = common->fruitDensity;
+}
 
 INIT_COMPONENT_FUNCTION(InitRecipeEssenceComponent)
 {
@@ -768,11 +761,11 @@ INIT_COMPONENT_FUNCTION(InitSkillDefComponent)
 INIT_COMPONENT_FUNCTION(InitInteractionComponent)
 {
     InteractionComponent* dest = (InteractionComponent*) componentPtr;
-    AddPossibleActions(dest->actions + InteractionList_Ground, common->groundActions, common->groundActionCount);
-    AddPossibleActions(dest->actions + InteractionList_Equipment, common->equipmentActions, common->equipmentActionCount);
-    AddPossibleActions(dest->actions + InteractionList_Container, common->containerActions, common->containerActionCount);
-    AddPossibleActions(dest->actions + InteractionList_Equipped, common->equippedActions, common->equippedActionCount);
-    AddPossibleActions(dest->actions + InteractionList_Dragging, common->draggingActions, common->draggingActionCount);
+    AddPossibleActions(assets, dest->actions + InteractionList_Ground, common->groundActions, common->groundActionCount);
+    AddPossibleActions(assets, dest->actions + InteractionList_Equipment, common->equipmentActions, common->equipmentActionCount);
+    AddPossibleActions(assets, dest->actions + InteractionList_Container, common->containerActions, common->containerActionCount);
+    AddPossibleActions(assets, dest->actions + InteractionList_Equipped, common->equippedActions, common->equippedActionCount);
+    AddPossibleActions(assets, dest->actions + InteractionList_Dragging, common->draggingActions, common->draggingActionCount);
     
     for(u32 usingOption = 0; usingOption < common->usingConfigurationCount; ++usingOption)
     {
@@ -836,7 +829,7 @@ internal void InitEntity(ServerState* server, EntityID ID,
         if(component->exists)
         {
             void* componentPtr = AdvanceVoidPtrBytes(GetPtr(server, ID), component->offset);
-            component->init(server, componentPtr, ID, common, s, c);
+            component->init(server, server->assets, componentPtr, ID, common, s, c);
         }
     }
 }
@@ -853,7 +846,7 @@ internal void InitEntity(GameModeWorld* worldMode, EntityID ID,
         if(component->exists)
         {
             void* componentPtr = AdvanceVoidPtrBytes(GetPtr(worldMode, ID), component->offset);
-            component->init(worldMode, componentPtr, ID, common, s, c);
+            component->init(worldMode, worldMode->gameState->assets, componentPtr, ID, common, s, c);
         }
     }
 }

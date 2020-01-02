@@ -3,6 +3,7 @@ struct ImageReference
 {
     u64 typeHash;
     GameProperties properties;
+    b32 emittors;
 };
 
 struct StandardImageComponent
@@ -33,6 +34,7 @@ struct FrameByFrameAnimationComponent
     r32 speed;
     u64 typeHash;
     
+    b32 emittors;
     b32 overridesPivot;
     Vec2 pivot;
 };

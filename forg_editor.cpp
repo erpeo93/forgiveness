@@ -591,18 +591,14 @@ internal b32 EditString(EditorLayout* layout, char* name, char* string, StringAr
     return result;
 }
 
-
-internal b32 Edit_StringFreely(EditorLayout* layout, char* name, char* value, u32 valueSize, AUID ID, b32 isInArray, AssetID assetID)
+internal b32 Edit_StringFreely(EditorLayout* layout, char* name, char* value, u32 valueSize, AUID ID, b32 isInArray, AssetID assetID, Vec4 color = DefaultEditorStringColor())
 {
-    
     EditorUIContext* context = layout->context;
     
     b32 result = false;
     Assert(!isInArray);
     
     AUIDData* data = GetAUIDData(context, ID);
-    Vec4 color = DefaultEditorStringColor();
-    
     if(!value[0])
     {
         FormatString(value, valueSize, "null");
@@ -671,7 +667,7 @@ internal b32 Edit_StringFreely(EditorLayout* layout, char* name, char* value, u3
     b32 result = Edit_StringFreely(layout, name, value, valueSize, ID, isInArray, assetID); 
     return result;
 }
-internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray, AssetID assetID)
+internal b32 Edit_AssetLabel(EditorLayout* layout, char* name, AssetLabel* label, b32 isInArray = false, AssetID assetID = {})
 {
     b32 result = Edit_StringFreely(layout, name, label->name, sizeof(label->name), isInArray, assetID);
     if(result)
@@ -1333,7 +1329,7 @@ internal b32 Edit_GameAssetType(EditorLayout* layout, char* name, GameAssetType*
     return result;
 }
 
-internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* property, b32 isInArray, AssetID assetID)
+internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* property, b32 isInArray = false, AssetID assetID = {})
 {
     b32 result = false;
     
@@ -1393,7 +1389,7 @@ internal b32 Edit_GameProperty(EditorLayout* layout, char* name, GameProperty* p
     return result;
 }
 
-internal b32 Edit_EntityRef(EditorLayout* layout, char* name, EntityRef* ref, b32 isInArray, AssetID assetID)
+internal b32 Edit_EntityName(EditorLayout* layout, char* name, EntityName* ref, b32 isInArray, AssetID assetID)
 {
     b32 result = false;
     
@@ -1421,22 +1417,22 @@ internal b32 Edit_EntityRef(EditorLayout* layout, char* name, EntityRef* ref, b3
         u32 newSubtype = GetAssetSubtype(assets, AssetType_EntityDefinition, Tokenize(output));
         if(newSubtype != ref->subtypeHashIndex)
         {
-            EntityRef oldStruct = *ref;
+            EntityName oldStruct = *ref;
             ref->subtypeHashIndex = newSubtype;
-            ref->index = 0;
-            AddUndoRedoCopyStruct(EntityRef, layout->context, &oldStruct, ref, ref, assetID);
+            ref->name[0] = 0;
+            AddUndoRedoCopyStruct(EntityName, layout->context, &oldStruct, ref, ref, assetID);
         }
     }
     
     AssetID ID;
     ID.type = AssetType_EntityDefinition;
     ID.subtypeHashIndex = ref->subtypeHashIndex;
-    ID.index = ref->index;
+    ID.index = GetAssetIndex(layout->context->assets, AssetType_EntityDefinition, ref->subtypeHashIndex, Tokenize(ref->name));
     
     char* indexString = GetAssetIndexName(layout->context->assets, ID);
     if(!indexString)
     {
-        ref->index = 0;
+        ref->name[0] = 0;
         ID.index = 0;
         indexString = GetAssetIndexName(layout->context->assets, ID);
     }
@@ -1447,13 +1443,14 @@ internal b32 Edit_EntityRef(EditorLayout* layout, char* name, EntityRef* ref, b3
     }
     
     StringArray indexOptions = BuildAssetIndexNames(layout->context->assets, &tempPool, AssetType_EntityDefinition, ref->subtypeHashIndex);
-    if(EditString(layout, "value", indexString, auID(&ref->index), indexOptions, output, sizeof(output), assetID))
+    if(EditString(layout, "value", indexString, auID(ref->name), indexOptions, output, sizeof(output), assetID))
     {
         u16 newIndex = GetAssetIndex(layout->context->assets, AssetType_EntityDefinition, ref->subtypeHashIndex, Tokenize(output));
-        u16 oldIndex = ref->index;
-        ref->index = newIndex;
         
-        AddUndoRedoCopyStruct(u16, layout->context, &oldIndex, &ref->index, &newIndex, assetID);
+        EntityName oldName = *ref;
+        FormatString(ref->name, sizeof(ref->name), "%s", output);
+        
+        AddUndoRedoCopyStruct(EntityName, layout->context, &oldName, ref, ref, assetID);
     }
     
     Clear(&tempPool);
@@ -1654,6 +1651,7 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
         WritebackAssetToFileSystem(assets, ID, WRITEBACK_PATH, false);
     }
     
+    b32 showAdditionalData = false;
     if(showAssetInfo)
     {
         switch(ID.type)
@@ -1682,6 +1680,7 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                         AUID attachAUID = auID(info, "attachmentPoints");
                         if(EditorCollapsible(layout, "attachment points", attachAUID))
                         {
+                            showAdditionalData = true;
                             b32 addDisabled = true;
                             for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
                             {
@@ -1707,6 +1706,7 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                                         FormatString(point->name, sizeof(point->name), "default");
                                         point->alignment = V2(0.5f, 0.5f);
                                         point->scale = V2(1, 1);
+                                        WritebackAssetToFileSystem(assets, ID, WRITEBACK_PATH, true);
                                         break;
                                     }
                                 }
@@ -1719,14 +1719,14 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                                 if(point->name[0] && !StrEqual(point->name, "null"))
                                 {
                                     NextRaw(layout);
-                                    Edit_StringFreely(layout, "name", point->name, sizeof(point->name), auID(point->name, "name"), false, ID);
+                                    
+                                    RandomSequence seq = Seed(attachmentPointIndex);
+                                    Vec4 color = V4(RandomUniV3(&seq), 1.0f);
+                                    Edit_StringFreely(layout, "name", point->name, sizeof(point->name), auID(point->name, "name"), false, ID, color);
                                     Edit_Vec2(layout, "alignment", &point->alignment, false, ID, true);
                                     Edit_Vec2(layout, "scale", &point->scale, false, ID, false);
                                     Edit_r32(layout, "angle", &point->angle, false, ID, false);
                                     Edit_r32(layout, "zOffset", &point->zOffset, false, ID, false);
-                                    
-                                    AUID pointID = auID(point);
-                                    EditorCheckbox(layout, "show", pointID);
                                     
                                     AUID deleteID = auID(point, "delete");
                                     if(EditorButton(layout, V2(0.25f, -0.1f), "delete", deleteID, false))
@@ -1788,7 +1788,6 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                         }
                     }
                     Pop(layout);
-                    
                 }
             } break;
             
@@ -1961,7 +1960,7 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                 data->height = Max(data->height, minPixelHeight);
                 
                 r32 height = data->height;
-                r32 backgroundScale = 1.1f;
+                r32 backgroundScale = 1.0f;
                 
                 Vec3 P = V3(layout->currentP.x, layout->currentP.y - height, -1);
                 BitmapDim dim = PushBitmapWithPivot(layout->group, FlatTransform(), ID, P, V2(0, 0), height);
@@ -1979,20 +1978,23 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                     Bitmap* bitmap = GetBitmap(assets, ID).bitmap;
                     if(bitmap)
                     {
-                        for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
+                        if(showAdditionalData)
                         {
-                            PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
-                            AUID pointID = auID(point);
-                            AUIDData* pointData = GetAUIDData(layout->context, pointID);
-                            
-                            if(pointData->active)
+                            for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
                             {
-                                Vec2 attachmentP = point->alignment;
-                                Vec2 pointP = P.xy + Hadamart(attachmentP, dim.size);
-                                Rect2 pointRect = RectCenterDim(pointP, layout->fontScale * V2(rectDim, rectDim));
-                                RandomSequence seq = Seed(attachmentPointIndex);
-                                Vec4 color = V4(RandomUniV3(&seq), 1.0f);
-                                PushRect(layout->group, FlatTransform(color), pointRect);
+                                PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
+                                AUID pointID = auID(point);
+                                AUIDData* pointData = GetAUIDData(layout->context, pointID);
+                                
+                                if(point->name[0] && !StrEqual(point->name, "null"))
+                                {
+                                    Vec2 attachmentP = point->alignment;
+                                    Vec2 pointP = P.xy + Hadamart(attachmentP, dim.size);
+                                    Rect2 pointRect = RectCenterDim(pointP, layout->fontScale * V2(rectDim, rectDim));
+                                    RandomSequence seq = Seed(attachmentPointIndex);
+                                    Vec4 color = V4(RandomUniV3(&seq), 1.0f);
+                                    PushRect(layout->group, FlatTransform(color), pointRect);
+                                }
                             }
                         }
                     }
@@ -2000,6 +2002,53 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                 
                 Rect2 rect = Scale(RectMinDim(P.xy, dim.size), backgroundScale);
                 PushRectOutline(layout->group, FlatTransform(V4(0, 0, 0, 1)), rect, 2.0f);
+                
+                if(!get.derived)
+                {
+                    Bitmap* bitmap = GetBitmap(assets, ID).bitmap;
+                    if(bitmap && PointInRect(rect, layout->mouseP))
+                    {
+                        Vec2 scale = V2(1, 1);
+                        b32 add = false;
+                        if(Pressed(&layout->context->input->mouseRight))
+                        {
+                            add = true;
+                        }
+                        else if(Pressed(&layout->context->input->mouseLeft))
+                        {
+                            add = true;
+                            scale.x = -scale.x;
+                        }
+                        
+                        if(add)
+                        {
+                            char* lastValid = "default";
+                            Vec2 lastScale = V2(1, 1);
+                            
+                            for(u32 attachmentPointIndex = 0; attachmentPointIndex < info->bitmap.attachmentPointCount; ++attachmentPointIndex)
+                            {
+                                PAKAttachmentPoint* point = bitmap->attachmentPoints + attachmentPointIndex;
+                                if(!point->name[0] || StrEqual(point->name, "null"))
+                                {
+                                    FormatString(point->name, sizeof(point->name), lastValid);
+                                    point->alignment.x = Clamp01MapToRange(rect.min.x, layout->mouseP.x, rect.max.x);
+                                    point->alignment.y = Clamp01MapToRange(rect.min.y, layout->mouseP.y, rect.max.y);
+                                    point->scale = lastScale;
+                                    point->scale.x *= Abs(lastScale.x);
+                                    point->scale.y *= Abs(lastScale.y);
+                                    break;
+                                }
+                                else
+                                {
+                                    lastValid = point->name;
+                                    lastScale = point->scale;
+                                }
+                            }
+                            
+                            WritebackAssetToFileSystem(assets, ID, WRITEBACK_PATH, true);
+                        }
+                    }
+                }
                 
                 Vec2 resizableP = V2(rect.max.x, rect.min.y);
                 EditorResize(layout, resizableP, auID(info, "resize"), &data->height);
@@ -2267,6 +2316,11 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
                 {
                     ShowLabel(&layout, "Debug");
                 } break;
+                
+                case EditorTab_EntityRendering:
+                {
+                    ShowLabel(&layout, "Entity Rendering");
+                } break;
             }
             
             auid = auID(context, "right");
@@ -2375,6 +2429,23 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
                     
                     NextRaw(&layout);
                     Edit_Vec3(&layout, "spawn offset", &layout.context->spawnOffset, 0, {});
+                } break;
+                
+                case EditorTab_EntityRendering:
+                {
+                    Edit_EntityName(&layout, "entity name", &context->name, 0, {});
+                    Edit_u32(&layout, "entity seed", &context->seed, 0, {});
+                    Edit_u16(&layout, "entity action", &context->action, 0, {});
+                    Edit_r32(&layout, "entity health", &context->health, 0, {});
+                    
+                    NextRaw(&layout);
+                    
+                    Edit_AssetLabel(&layout, "effect name", &context->effectName);
+                    for(u32 propertyIndex = 0; propertyIndex < ArrayCount(context->properties.properties); ++propertyIndex)
+                    {
+                        Edit_GameProperty(&layout, "property", context->properties.properties + propertyIndex);
+                        NextRaw(&layout);
+                    }
                 } break;
             }
             

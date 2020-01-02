@@ -2605,10 +2605,11 @@ internal void BuildAssets(TimestampHash* hash, char* sourcePath, char* destPath)
     SavePakVersion(sourcePath);
 }
 
-internal b32 HotReload(u16 type)
+internal b32 AutomaticReload(u16 type)
 {
     b32 result = true;
-    if(type == AssetType_EntityDefinition)
+    if(type == AssetType_Image ||
+       type == AssetType_Sound)
     {
         result = false;
     }
@@ -2695,26 +2696,14 @@ internal void WatchReloadFileChanges(TimestampHash* hash, char* sourcePath, char
             
             SavedTypeSubtypeCountHash* countHash = GetCorrenspodingFileCountHash(hash, typeStr, subtypeStr);
             
-            b32 numberOfFilesChanged = false;
-            b32 numberOfStandardFilesChanged = false;
-            
-            if(currentFileCount != countHash->fileCount || currentMarkupFileCount != countHash->markupCount)
-            {
-                numberOfFilesChanged = true;
-            }
-            
-            if(currentFileCount != countHash->fileCount)
-            {
-                numberOfStandardFilesChanged = true;
-            }
-            
-            
+            b32 numberOfFilesChanged =(currentFileCount != countHash->fileCount || currentMarkupFileCount != countHash->markupCount);
             
             if(updatedStandardFiles || updatedTestFiles || numberOfFilesChanged)
             {
-                if(HotReload(type) || (!numberOfStandardFilesChanged))
+                if(AutomaticReload(type) || !updatedTestFiles)
                 {
                     char* path = (updatedStandardFiles || numberOfFilesChanged) ? destSendPath : destPath;
+                    
                     WritePak(hash, sourcePath, subdirName, subsubDirName, path, false);
                 }
             }

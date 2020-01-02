@@ -17,53 +17,45 @@ internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq,
     AddEntity_(server, P, definitionID, seed, params);
 }
 
-internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, EntityRef type, AddEntityParams params = DefaultAddEntityParams())
+internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq, EntityType type, AddEntityParams params = DefaultAddEntityParams())
 {
-    AssetID definitionID;
-    definitionID.type = AssetType_EntityDefinition;
-    definitionID.subtypeHashIndex = type.subtypeHashIndex;
-    definitionID.index = type.index;
-    
+    AssetID definitionID = EntityTypeToAssetID(type);
     u32 seed = GetNextUInt32(seq);
     AddEntity_(server, P, definitionID, seed, params);
 }
 
-internal void AddEntity(ServerState* server, UniversePos P, u32 seed, EntityRef type, AddEntityParams params = DefaultAddEntityParams())
+internal void AddEntity(ServerState* server, UniversePos P, u32 seed, EntityType type, AddEntityParams params = DefaultAddEntityParams())
 {
-    AssetID definitionID;
-    definitionID.type = AssetType_EntityDefinition;
-    definitionID.subtypeHashIndex = type.subtypeHashIndex;
-    definitionID.index = type.index;
-    
+    AssetID definitionID = EntityTypeToAssetID(type);
     AddEntity_(server, P, definitionID, seed, params);
 }
 
 internal void SpawnPlayerObjects(ServerState* server, UniversePos playerP, u32 playerIndex)
 {
-    EntityRef type = EntityReference(server->assets, "default", "passive_rune");
+    EntityType type = GetEntityType(server->assets, "default", "passive_rune");
     AddEntityParams runeParams = EquipPlayerEntityParams(playerIndex);
-    runeParams.essences[fire] = 1;
+    runeParams.essences[light] = 1;
     UniversePos runeP = Offset(playerP, V3(RandomBilV2(&server->entropy) * 0.5f * VOXEL_SIZE, 0));
     AddEntity(server, runeP, &server->entropy, type, runeParams);
 }
 
 internal void SpawnPlayer(ServerState* server, UniversePos P, AddEntityParams params)
 {
-    SpawnPlayerObjects(server, P, params.playerIndex);
+    //SpawnPlayerObjects(server, P, params.playerIndex);
     
-    EntityRef type = EntityReference(server->assets, "default", "human");
+    EntityType type = GetEntityType(server->assets, "default", "human");
     AddEntity(server, P, &server->entropy, type, params);
 }
 
-internal void SpawnZombie(ServerState* server, UniversePos P, AddEntityParams params)
+internal void SpawnCollector(ServerState* server, UniversePos P, AddEntityParams params)
 {
-    EntityRef type = EntityReference(server->assets, "default", "wolf");
+    EntityType type = GetEntityType(server->assets, "default", "wolf");
     AddEntity(server, P, &server->entropy, type, params);
 }
 
 internal void SpawnPlayerGhost(ServerState* server, UniversePos P, AddEntityParams params)
 {
-    EntityRef type = EntityReference(server->assets, "default", "placeholder");
+    EntityType type = GetEntityType(server->assets, "default", "placeholder");
     AddEntity(server, P, &server->entropy, type, params);
 }
 
@@ -81,7 +73,7 @@ internal void MakeTangible(ServerState* server, EntityID ID)
     r32 maxDropDistance = 0.3f;
     def->P.chunkOffset.xy += maxDropDistance * RandomBilV2(&server->entropy);
     def->P = NormalizePosition(def->P);
-    AddChangedFlags(def, &def->basicPropertiesChanged, EntityBasics_Position);
+    def->networkFlags |= BasicFlags_Position;
 }
 
 internal void DeleteEntity(ServerState* server, EntityID ID, DeleteEntityReasonType type)
@@ -414,19 +406,22 @@ internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetI
 internal b32 RemoveAccordingToCommand(ServerState* server, EntityID ID, GameCommand* command)
 {
     b32 removed = false;
-    if(AreEqual(command->containerID, ID))
+    if(IsValidID(command->containerID))
     {
-        if(RemoveFromEntity(server, ID, command->targetID))
+        if(AreEqual(command->containerID, ID))
         {
-            removed = true;
+            if(RemoveFromEntity(server, ID, command->targetID))
+            {
+                removed = true;
+            }
         }
-    }
-    else
-    {
-        ContainerComponent* sourceContainer = GetComponent(server, command->containerID, ContainerComponent);
-        if(RemoveFromContainer(server, sourceContainer, command->targetID))
+        else
         {
-            removed = true;
+            ContainerComponent* sourceContainer = GetComponent(server, command->containerID, ContainerComponent);
+            if(RemoveFromContainer(server, sourceContainer, command->targetID))
+            {
+                removed = true;
+            }
         }
     }
     
@@ -527,19 +522,6 @@ internal void EssenceDelta(ServerState* server, EntityID ID, u16 essence, i16 de
     }
 }
 
-internal void AbsorbEssences(ServerState* server, EntityID ID, EntityID targetID)
-{
-    DefaultComponent* source = GetComponent(server, targetID, DefaultComponent);
-    for(u16 essenceIndex = 0; essenceIndex < ArrayCount(source->essences); ++essenceIndex)
-    {
-        u16 toAdd = source->essences[essenceIndex];
-        if(toAdd)
-        {
-            EssenceDelta(server, ID, essenceIndex, (i16) toAdd);
-        }
-    }
-}
-
 internal void Pick(ServerState* server, EntityID ID, EntityID targetID)
 {
     if(!Use(server, ID, targetID))
@@ -568,13 +550,13 @@ internal void Pick(ServerState* server, EntityID ID, EntityID targetID)
 internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* command, CommandParameters* parameters, r32 elapsedTime, b32 updateAction)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
+    MovementComponent* movement = GetComponent(server, ID, MovementComponent);
     ActionComponent* action = GetComponent(server, ID, ActionComponent);
-    MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+    CombatComponent* combat = GetComponent(server, ID, CombatComponent);
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
     UsingComponent* equippedComponent = GetComponent(server, ID, UsingComponent);
     
-    EntityRef equipped[Count_usingSlot];
+    EntityType equipped[Count_usingSlot];
     u32 equippedCount = 0;
     
     if(equippedComponent)
@@ -611,10 +593,10 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         else
         {
             action->time = 0;
-            SetU16(def, &action->action, newAction);
-            if(physic)
+            SetU16(&action->action, newAction);
+            if(movement)
             {
-                physic->acc = V3(0, 0, 0);
+                movement->acc = V3(0, 0, 0);
             }
         }
         
@@ -633,26 +615,9 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         
         case move:
         {
-            if(physic)
+            if(movement)
             {
-                physic->acc = parameters->acceleration;
-            }
-        } break;
-        
-        case attack:
-        {
-            r32 targetTime;
-            if(ActionIsPossibleAtDistance(interaction, attack, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
-            {
-                if(action->time >= targetTime)
-                {
-                    DamageEntityPhysically(server, targetID, 1);
-                    resetActionTime = true;
-                }
-            }
-            else
-            {
-                //resetAction = true;
+                movement->acc = parameters->acceleration;
             }
         } break;
         
@@ -675,7 +640,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                             //SumGemEssencesBasedOnLevel?();
                             
                             UniversePos targetP = Offset(def->P, parameters->targetOffset);
-                            DispatchEntityEffects(server, targetP, cast, ID, skillID, elapsedTime, essences);
+                            DispatchActionEffects(server, targetP, cast, ID, skillID, elapsedTime, essences, false);
                         }
                     }
                 }
@@ -690,24 +655,42 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             }
         } break;
         
+        case attack:
         case mine:
         case chop:
         case harvest:
         case touch:
+        case drink:
+        case absorb:
+        case sacrifice:
         {
             r32 targetTime;
-            if(ActionIsPossibleAtDistance(interaction, newAction, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
+            if(ActionIsPossibleAtDistance(interaction, newAction, oldAction, distanceSq, &targetTime, combat, equipped, equippedCount))
             {
-                if(action->time >= targetTime)
+                if(RemoveAccordingToCommand(server, ID, command))
                 {
-                    DispatchEntityEffects(server, targetDef->P, newAction, ID, targetID, elapsedTime, targetDef->essences);
+                    DispatchActionEffects(server, targetDef->P, newAction, ID, targetID, elapsedTime, targetDef->essences, false);
+                    DispatchActionEffects(server, targetDef->P, newAction, targetID, ID, elapsedTime, targetDef->essences, true);
                     SignalCompletedCommand(server, ID, command);
                     resetAction = true;
                 }
-            }
-            else
-            {
-                resetAction = true;
+                else
+                {
+                    if(action->time >= targetTime)
+                    {
+                        DispatchActionEffects(server, targetDef->P, newAction, ID, targetID, elapsedTime, targetDef->essences, false);
+                        DispatchActionEffects(server, targetDef->P, newAction, targetID, ID, elapsedTime, targetDef->essences, true);
+                        if(newAction == attack)
+                        {
+                            resetActionTime = true;
+                        }
+                        else
+                        {
+                            SignalCompletedCommand(server, ID, command);
+                            resetAction = true;
+                        }
+                    }
+                }
             }
         } break;
         
@@ -716,7 +699,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             if(IsValidID(targetID))
             {
                 r32 targetTime;
-                if(ActionIsPossibleAtDistance(interaction, pick, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
+                if(ActionIsPossibleAtDistance(interaction, pick, oldAction, distanceSq, &targetTime, combat, equipped, equippedCount))
                 {
                     if(action->time >= targetTime)
                     {
@@ -741,7 +724,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             if(equipped)
             {
                 r32 targetTime;
-                if(ActionIsPossibleAtDistance(interaction, drag, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
+                if(ActionIsPossibleAtDistance(interaction, drag, oldAction, distanceSq, &targetTime, combat, equipped, equippedCount))
                 {
                     if(action->time >= targetTime)
                     {
@@ -768,7 +751,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             {
                 DefaultComponent* usingDef = GetComponent(server, command->usingID, DefaultComponent);
                 r32 targetTime;
-                if(ActionIsPossibleAtDistance(interaction, setOnFire, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount, usingDef->definitionID))
+                if(ActionIsPossibleAtDistance(interaction, setOnFire, oldAction, distanceSq, &targetTime, combat, equipped, equippedCount, usingDef->type))
                 {
                     if(action->time >= targetTime)
                     {
@@ -787,7 +770,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         case open:
         {
             r32 targetTime;
-            if(ActionIsPossibleAtDistance(interaction, open, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
+            if(ActionIsPossibleAtDistance(interaction, open, oldAction, distanceSq, &targetTime, combat, equipped, equippedCount))
             {
                 if(action->time >= targetTime)
                 {
@@ -873,43 +856,17 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             }
         } break;
         
-        case absorb:
-        {
-            if(RemoveAccordingToCommand(server, ID, command))
-            {
-                AbsorbEssences(server, ID, targetID);
-                DeleteEntity(server, targetID);
-            }
-            else
-            {
-                r32 targetTime;
-                if(ActionIsPossibleAtDistance(interaction, absorb, oldAction, distanceSq, &targetTime, misc, equipped, equippedCount))
-                {
-                    if(action->time >= targetTime)
-                    {
-                        AbsorbEssences(server, ID, targetID);
-                        DeleteEntity(server, targetID);
-                        resetAction = true;
-                    }
-                }
-                else
-                {
-                    resetAction = true;
-                }
-            }
-        } break;
-        
         case craft:
         {
             if(targetDef)
             {
-                if(AreEqual(targetDef->definitionID, EntityReference(server->assets, "default", "recipe")))
+                if(AreEqual(targetDef->type, GetEntityType(server->assets, "default", "recipe")))
                 {
-                    EntityRef type = GetCraftingType(server->assets, targetDef->seed);
+                    EntityType type = GetCraftingType(server->assets, targetDef->seed);
                     u32 craftSeed = targetDef->seed;
                     
                     
-                    EntityRef components[8];
+                    EntityType components[8];
                     b32 deleteComponent[8];
                     EntityID componentIDs[8];
                     u16 componentCount = GetCraftingComponents(server->assets, type, craftSeed, components, deleteComponent, ArrayCount(components));
@@ -1014,7 +971,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
     if(resetAction)
     {
         action->time = 0;
-        SetU16(def, &action->action, idle);
+        SetU16(&action->action, idle);
     }
     
     if(resetActionTime)
@@ -1035,8 +992,8 @@ STANDARD_ECS_JOB_SERVER(HandleOpenedContainers)
         r32 distanceSq = LengthSq(SubtractOnSameZChunk(opened->P, opener->P));
         r32 targetTime;
         
-        MiscComponent* misc = 0;
-        if(!ActionIsPossibleAtDistance(interaction, open, open, distanceSq, &targetTime, misc, 0, 0))
+        CombatComponent* combat = 0;
+        if(!ActionIsPossibleAtDistance(interaction, open, open, distanceSq, &targetTime, combat, 0, 0))
         {
             SetBoundedID(&container->openedBy, {});
         }
@@ -1047,10 +1004,10 @@ internal r32 GetLightRadiousSq(ServerState* server, EntityID ID)
 {
     r32 result = 0;
     
-    if(HasComponent(ID, MiscComponent))
+    if(HasComponent(ID, LightComponent))
     {
-        MiscComponent* misc = GetComponent(server, ID, MiscComponent);
-        result = Square(GetR32(misc->lightRadious));
+        LightComponent* light = GetComponent(server, ID, LightComponent);
+        result = Square(GetR32(light->lightRadious));
     }
     return result;
 }
@@ -1061,8 +1018,7 @@ STANDARD_ECS_JOB_SERVER(FillPlayerSpacePartition)
     PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
     if(player)
     {
-        PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-        Rect3 bounds = AddRadius(physic->bounds, UPDATE_DISTANCE * V3(1, 1, 1));
+        Rect3 bounds = AddRadius(def->bounds, UPDATE_DISTANCE * V3(1, 1, 1));
         AddToSpatialPartition(server->frameByFramePool, &server->playerPartition, def->P, bounds, ID);
     }
 }
@@ -1071,11 +1027,10 @@ global_variable r32 g_maxDelta = 1.0f;
 STANDARD_ECS_JOB_SERVER(FillCollisionSpatialPartition)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
     
     if(!EntityHasFlags(def, EntityFlag_notInWorld))
     {
-        Rect3 bounds = AddRadius(physic->bounds, V3(g_maxDelta, g_maxDelta, g_maxDelta));
+        Rect3 bounds = AddRadius(def->bounds, V3(g_maxDelta, g_maxDelta, g_maxDelta));
         AddToSpatialPartition(server->frameByFramePool, &server->standardPartition, def->P, bounds, ID);
     }
 }
@@ -1157,13 +1112,13 @@ internal b32 ShouldOverlap(u16 b1, u16 b2)
     return result;
 }
 
-internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, PhysicComponent* physic, EntityID ID, r32 elapsedTime)
+internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, MovementComponent* movement, EntityID ID, r32 elapsedTime)
 {
     UniversePos oldP = def->P;
-    Vec3 acceleration = V3(Normalize(physic->acc.xy) *physic->accelerationCoeff, 0);
-    Vec3 velocity = physic->speed;
+    Vec3 acceleration = V3(Normalize(movement->acc.xy) *movement->accelerationCoeff, 0);
+    Vec3 velocity = movement->speed;
     r32 dt = elapsedTime;
-    acceleration.xy += physic->drag * velocity.xy;
+    acceleration.xy += movement->drag * velocity.xy;
     Vec3 deltaP = 0.5f * acceleration * Square(dt) + velocity * dt;
     
 #if FORGIVENESS_INTERNAL
@@ -1176,14 +1131,14 @@ internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, P
     Assert(Abs(deltaP.z) <= g_maxDelta);
 #endif
     
-    physic->speed += acceleration * dt;
+    movement->speed += acceleration * dt;
     r32 tRemaining = 1.0f;
     for( u32 iteration = 0; (iteration < 2) && tRemaining > 0; iteration++)
     {
         Vec3 wallNormalMin = {};
         r32 tStop = tRemaining;
         
-        Rect3 bounds = AddRadius(physic->bounds, deltaP);
+        Rect3 bounds = AddRadius(def->bounds, deltaP);
         SpatialPartitionQuery collisionQuery = QuerySpatialPartition(&server->standardPartition, def->P, bounds);
         
         EntityID collisionTriggerID = {};
@@ -1192,16 +1147,15 @@ internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, P
         for(EntityID testID = GetCurrent(&collisionQuery); IsValid(&collisionQuery); testID = Advance(&collisionQuery))
         {
             DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
-            PhysicComponent* testPhysic = GetComponent(server, testID, PhysicComponent);
             if(testDef->P.chunkZ == def->P.chunkZ)
             {
                 Vec3 testP = SubtractOnSameZChunk(testDef->P, def->P);
                 
-                b32 shouldCollide = ShouldCollide(physic->boundType, testPhysic->boundType);
-                b32 shouldOverlap = ShouldOverlap(physic->boundType, testPhysic->boundType);
+                b32 shouldCollide = ShouldCollide(def->boundType, testDef->boundType);
+                b32 shouldOverlap = ShouldOverlap(def->boundType, testDef->boundType);
                 
                 r32 oldT = tStop;
-                if(HandleVolumeCollision(physic->bounds, deltaP, testP, testPhysic->bounds, &tStop, &wallNormalMin, shouldCollide))
+                if(HandleVolumeCollision(def->bounds, deltaP, testP, testDef->bounds, &tStop, &wallNormalMin, shouldCollide))
                 {
                     if(shouldOverlap)
                     {
@@ -1227,7 +1181,7 @@ internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, P
         Vec3 wallNormal = wallNormalMin;
         def->P.chunkOffset += tStop * deltaP;
         
-        physic->speed -= Dot(physic->speed, wallNormal) * wallNormal;
+        movement->speed -= Dot(movement->speed, wallNormal) * wallNormal;
         deltaP -= Dot(deltaP, wallNormal) * wallNormal;
         tRemaining -= tStop;
     }
@@ -1235,9 +1189,9 @@ internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, P
     def->P = NormalizePosition(def->P);
     if(!PositionInsideWorld(&def->P))
     {
-        physic->speed = {};
+        movement->speed = {};
         def->P = oldP;
-        AddChangedFlags(def, &def->basicPropertiesChanged, EntityBasics_Position);
+        def->networkFlags |= BasicFlags_Position;
     }
     
     if(!EntityHasFlags(def, EntityFlag_canGoIntoWater))
@@ -1245,21 +1199,20 @@ internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, P
         WorldTile* tile = GetTile(server, def->P);
         if(IsValid(tile->underSeaLevelFluid))
         {
-            physic->speed = {};
+            movement->speed = {};
             def->P = oldP;
-            AddChangedFlags(def, &def->basicPropertiesChanged, EntityBasics_Position);
+            def->networkFlags |= BasicFlags_Position;
         }
     }
     
-    def->updateSent = false;
     if(LengthSq(SubtractOnSameZChunk(def->P, oldP)) > 0)
     {
-        AddChangedFlags(def, &def->basicPropertiesChanged, EntityBasics_Position);
+        def->networkFlags |= BasicFlags_Position;
     }
     
-    if(physic->speed != velocity)
+    if(movement->speed != velocity)
     {
-        AddChangedFlags(def, &def->basicPropertiesChanged, EntityBasics_Velocity);
+        def->networkFlags |= BasicFlags_Velocity;
     }
 }
 
@@ -1288,13 +1241,18 @@ internal void UpdateObjectPositions(ServerState* server, UniversePos P, Inventor
     }
 }
 
+STANDARD_ECS_JOB_SERVER(MoveEntity)
+{
+    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+    MovementComponent* movement = GetComponent(server, ID, MovementComponent);
+    HandleEntityMovement(server, def, movement, ID, elapsedTime);
+}
+
 STANDARD_ECS_JOB_SERVER(UpdateEntity)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    PhysicComponent* physic = GetComponent(server, ID, PhysicComponent);
-    HandleEntityMovement(server, def, physic, ID, elapsedTime);
-    
     UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+    def->updateSent = false;
     if(equipped)
     {
         if(IsValidID(equipped->draggingID))
@@ -1338,10 +1296,10 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
         }
     }
     
-    AliveComponent* alive = GetComponent(server, ID, AliveComponent);
-    if(alive)
+    HealthComponent* health = GetComponent(server, ID, HealthComponent);
+    if(health)
     {
-        if(GetU32(alive->physicalHealth) <= 0 || GetU32(alive->mentalHealth) <= 0)
+        if(GetR32(health->physicalHealth) <= 0 || GetR32(health->mentalHealth) <= 0)
         {
             DeleteEntity(server, ID);
         }
@@ -1371,7 +1329,7 @@ STANDARD_ECS_JOB_SERVER(DamageEntityFearingLight)
         ZLayer* layer = server->layers + def->P.chunkZ;
         if(layer->dayTimePhase == DayTime_Day)
         {
-            u32 damage = 1;
+            r32 damage = 1 * elapsedTime;
             DamageEntityPhysically(server, ID, damage);
         }
     }
@@ -1379,15 +1337,13 @@ STANDARD_ECS_JOB_SERVER(DamageEntityFearingLight)
 
 STANDARD_ECS_JOB_SERVER(UpdatePlant)
 {
-    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    PlantComponent* plant = GetComponent(server, ID, PlantComponent);
-    MiscComponent* misc = GetComponent(server, ID, MiscComponent);
+    VegetationComponent* plant = GetComponent(server, ID, VegetationComponent);
     
-    r32 newFlowerDensity = Clamp01(GetR32(misc->flowerDensity) + elapsedTime * plant->flowerGrowingSpeed);
-    r32 newFruitDensity = Clamp01(GetR32(misc->fruitDensity) + elapsedTime * plant->fruitGrowingSpeed);
+    r32 newFlowerDensity = Clamp01(GetR32(plant->flowerDensity) + elapsedTime * GetR32(plant->flowerGrowingSpeed));
+    r32 newFruitDensity = Clamp01(GetR32(plant->fruitDensity) + elapsedTime * GetR32(plant->fruitGrowingSpeed));
     
-    SetR32(def, &misc->flowerDensity, newFlowerDensity);
-    SetR32(def, &misc->fruitDensity, newFruitDensity);
+    SetR32(&plant->flowerDensity, newFlowerDensity);
+    SetR32(&plant->fruitDensity, newFruitDensity);
 }
 
 STANDARD_ECS_JOB_SERVER(DealLightDamage)
@@ -1419,53 +1375,58 @@ internal void UpdateWorldBasics(ServerState* server, r32 elapsedTime)
     for(i16 chunkZ = 0; chunkZ < server->maxDeepness; ++chunkZ)
     {
         ZLayer* layer = server->layers + chunkZ;
-        layer->dayTimeTime += elapsedTime;
-        if(layer->dayTimeTime >= DAYPHASE_DURATION)
+        
+        if(layer->hasNight)
         {
-            layer->dayTimeTime = 0;
-            if(++layer->dayTimePhase == Count_DayTime)
+            r32 speed = 1.0f;
+            if(layer->dayTimePhase == DayTime_Night)
             {
-                layer->dayTimePhase = 0;
+                speed = layer->nightSpeed;
             }
             
-            for(CompIterator iter = FirstComponent(server, PlayerComponent); 
-                IsValid(iter); iter = Next(iter))
+            layer->dayTimeTime += speed * elapsedTime;
+            if(layer->dayTimeTime >= DAYPHASE_DURATION)
             {
-                PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
-                if(player->connectionSlot && IsValidID(player->ID))
+                layer->dayTimeTime = 0;
+                if(++layer->dayTimePhase == Count_DayTime)
                 {
-                    DefaultComponent* def = GetComponent(server, player->ID, DefaultComponent);
-                    if(def->P.chunkZ == chunkZ)
+                    layer->dayTimePhase = 0;
+                }
+                
+                for(CompIterator iter = FirstComponent(server, PlayerComponent); 
+                    IsValid(iter); iter = Next(iter))
+                {
+                    PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
+                    if(player->connectionSlot && IsValidID(player->ID))
                     {
-                        QueueDayTime(player, layer->dayTimePhase);
+                        DefaultComponent* def = GetComponent(server, player->ID, DefaultComponent);
+                        if(def->P.chunkZ == chunkZ)
+                        {
+                            QueueDayTime(player, layer->dayTimePhase);
+                        }
                     }
                 }
             }
         }
         
         
-        if(false && layer->dayTimePhase == DayTime_Night)
+        for(CompIterator iter = FirstComponent(server, PlayerComponent); 
+            IsValid(iter); iter = Next(iter))
         {
-            for(CompIterator iter = FirstComponent(server, PlayerComponent); 
-                IsValid(iter); iter = Next(iter))
+            PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
+            if(player->connectionSlot && IsValidID(player->ID))
             {
-                PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
-                if(player->connectionSlot && IsValidID(player->ID))
+                DefaultComponent* playerDefault = GetComponent(server, player->ID, DefaultComponent);
+                
+                if(playerDefault->P.chunkZ == chunkZ)
                 {
-                    DefaultComponent* playerDefault = GetComponent(server, player->ID, DefaultComponent);
-                    PhysicComponent* playerPhysic = GetComponent(server, player->ID, PhysicComponent);
-                    
-                    if(playerDefault->P.chunkZ == chunkZ)
+                    player->sacrificeTimer -= elapsedTime;;
+                    u32 stepCount = 30;
+                    if(player->sacrificeTimer <= 0)
                     {
-                        player->timeSinceLastZombieSpawned += elapsedTime;
-                        r32 targetZombieTime = 1.0f;
-                        u32 stepCount = 30;
-                        if(player->timeSinceLastZombieSpawned >= targetZombieTime)
-                        {
-                            UniversePos P = FindWalkablePStartingFrom(server, playerDefault->P, stepCount);
-                            SpawnZombie(server, P, DefaultAddEntityParams());
-                            player->timeSinceLastZombieSpawned = 0;
-                        }
+                        UniversePos P = FindWalkablePStartingFrom(server, playerDefault->P, stepCount);
+                        SpawnCollector(server, P, DefaultAddEntityParams());
+                        player->sacrificeTimer += SACRIFICE_TIME;
                     }
                 }
             }

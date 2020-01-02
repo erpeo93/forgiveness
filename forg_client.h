@@ -30,6 +30,7 @@ typedef r32 R32;
 #include "forg_render.h"
 #include "forg_animation.h"
 #include "forg_sound.h"
+#include "forg_config.h"
 #include "forg_world.h"
 #include "forg_editor.h"
 #include "forg_network.h"
@@ -48,7 +49,7 @@ typedef r32 R32;
 
 struct BaseComponent
 {
-    EntityRef definitionID;
+    EntityType type;
     u32 seed;
     UniversePos universeP;
     Vec3 velocity;
@@ -65,7 +66,6 @@ struct BaseComponent
     r32 fadeInTime;
     r32 fadeOutTime;
     
-    GameProperty properties[Network_Count];
     u16 essences[Count_essence];
 };
 
@@ -107,7 +107,9 @@ struct PlantComponent
     Vec4 fruitColor;
     ImageReference fruit;
     
-    r32 windInfluence;
+    r32 leafWindInfluence;
+    r32 flowerWindInfluence;
+    r32 fruitWindInfluence;
     r32 dissolveDuration;
 };
 
@@ -191,9 +193,23 @@ enum PlayingGameState
     PlayingGame_Won,
 };
 
+enum RenderMode
+{
+    RenderMode_World,
+    RenderMode_Entity,
+    RenderMode_Particle,
+    RenderMode_ParticleEntity,
+    
+    RenderMode_Count
+};
+
 struct GameModeWorld
 {
     PlayingGameState state;
+    u32 renderMode;
+    
+    ParticleEffectInstance* testEffect;
+    
     r32 stateTime;
     
     u16 season;
@@ -204,6 +220,11 @@ struct GameModeWorld
     u16 dayTime;
     
     r32 defaultZoomCoeff;
+    r32 defaultZoomSpeed;
+    
+    r32 equipmentZoomCoeff;
+    r32 equipmentZoomSpeed;
+    
     Vec3 ambientLightColor;
     Vec3 windDirection;
     r32 windStrength;

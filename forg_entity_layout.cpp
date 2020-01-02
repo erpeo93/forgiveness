@@ -1,32 +1,32 @@
 #if FORG_SERVER
 #define GetContainerEntityType(state, ID) GetEntityType((ServerState*) state, ID)
-internal EntityRef GetEntityType(ServerState* server, EntityID ID)
+internal EntityType GetEntityType(ServerState* server, EntityID ID)
 {
-    EntityRef result = {};
+    EntityType result = {};
     if(IsValidID(ID))
     {
         DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-        result = def->definitionID;
+        result = def->type;
     }
     
     return result;
 }
 #else
 #define GetContainerEntityType(state, ID) GetEntityType((GameModeWorld*) state, ID)
-internal EntityRef GetEntityType(GameModeWorld* worldMode, EntityID serverID)
+internal EntityType GetEntityType(GameModeWorld* worldMode, EntityID serverID)
 {
-    EntityRef result = {};
+    EntityType result = {};
     if(IsValidID(serverID))
     {
         EntityID clientID = GetClientIDMapping(worldMode, serverID);
         BaseComponent* def = GetComponent(worldMode, clientID, BaseComponent);
-        result = def->definitionID;
+        result = def->type;
     }
     
     return result;
 }
 #endif
-internal b32 ContainerHasType(void* state, ContainerComponent* container, EntityRef type, EntityID* outputID)
+internal b32 ContainerHasType(void* state, ContainerComponent* container, EntityType type, EntityID* outputID)
 {
     b32 result = false;
     if(container)
@@ -40,7 +40,7 @@ internal b32 ContainerHasType(void* state, ContainerComponent* container, Entity
             }
             
             EntityID slotID = GetBoundedID(slot);
-            EntityRef slotType = GetContainerEntityType(state, slotID);
+            EntityType slotType = GetContainerEntityType(state, slotID);
             if(AreEqual(slotType, type) && !(slot->flags_type & InventorySlot_Locked))
             {
                 result = true;
@@ -61,7 +61,7 @@ internal b32 ContainerHasType(void* state, ContainerComponent* container, Entity
                 
                 
                 EntityID slotID = GetBoundedID(slot);
-                EntityRef slotType = GetContainerEntityType(state, slotID);
+                EntityType slotType = GetContainerEntityType(state, slotID);
                 if(AreEqual(slotType, type) && !(slot->flags_type & InventorySlot_Locked))
                 {
                     result = true;
@@ -77,7 +77,7 @@ internal b32 ContainerHasType(void* state, ContainerComponent* container, Entity
 }
 
 #if FORG_SERVER
-internal b32 EntityHasType(ServerState* server, EntityID ID, EntityRef type, EntityID* outputID)
+internal b32 EntityHasType(ServerState* server, EntityID ID, EntityType type, EntityID* outputID)
 {
     b32 result = false;
     EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
@@ -87,7 +87,7 @@ internal b32 EntityHasType(ServerState* server, EntityID ID, EntityRef type, Ent
         {
             InventorySlot* slot = equipment->slots + slotIndex;
             EntityID slotID = GetBoundedID(slot);
-            EntityRef slotType = GetEntityType(server, slotID);
+            EntityType slotType = GetEntityType(server, slotID);
             if(AreEqual(slotType, type))
             {
                 result = true;
@@ -110,7 +110,7 @@ internal b32 EntityHasType(ServerState* server, EntityID ID, EntityRef type, Ent
         UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
         if(equipped)
         {
-            EntityRef draggingType = GetEntityType(server, equipped->draggingID.ID);
+            EntityType draggingType = GetEntityType(server, equipped->draggingID.ID);
             if(AreEqual(draggingType, type))
             {
                 result = true;
@@ -122,7 +122,7 @@ internal b32 EntityHasType(ServerState* server, EntityID ID, EntityRef type, Ent
                 {
                     InventorySlot* slot = equipped->slots + usingIndex;
                     EntityID slotID = GetBoundedID(slot);
-                    EntityRef slotType = GetEntityType(server, slotID);
+                    EntityType slotType = GetEntityType(server, slotID);
                     if(AreEqual(slotType, type))
                     {
                         result = true;
@@ -145,7 +145,7 @@ internal b32 EntityHasType(ServerState* server, EntityID ID, EntityRef type, Ent
     return result;
 }
 #else
-internal b32 EntityHasType(GameModeWorld* worldMode, EntityID ID, EntityRef type, EntityID* outputID)
+internal b32 EntityHasType(GameModeWorld* worldMode, EntityID ID, EntityType type, EntityID* outputID)
 {
     b32 result = false;
     EquipmentComponent* equipment = GetComponent(worldMode, ID, EquipmentComponent);
@@ -155,7 +155,7 @@ internal b32 EntityHasType(GameModeWorld* worldMode, EntityID ID, EntityRef type
         {
             InventorySlot* slot = equipment->slots + slotIndex;
             EntityID slotID = GetClientIDMapping(worldMode, GetBoundedID(slot));
-            EntityRef slotType = GetEntityType(worldMode, slotID);
+            EntityType slotType = GetEntityType(worldMode, slotID);
             if(AreEqual(slotType, type))
             {
                 result = true;
@@ -178,7 +178,7 @@ internal b32 EntityHasType(GameModeWorld* worldMode, EntityID ID, EntityRef type
         UsingComponent* equipped = GetComponent(worldMode, ID, UsingComponent);
         if(equipped)
         {
-            EntityRef draggingType = GetEntityType(worldMode, equipped->draggingID.ID);
+            EntityType draggingType = GetEntityType(worldMode, equipped->draggingID.ID);
             if(AreEqual(draggingType, type))
             {
                 result = true;
@@ -190,7 +190,7 @@ internal b32 EntityHasType(GameModeWorld* worldMode, EntityID ID, EntityRef type
                 {
                     InventorySlot* slot = equipped->slots + usingIndex;
                     EntityID slotID = GetClientIDMapping(worldMode, GetBoundedID(slot));
-                    EntityRef slotType = GetEntityType(worldMode, slotID);
+                    EntityType slotType = GetEntityType(worldMode, slotID);
                     if(AreEqual(slotType, type))
                     {
                         result = true;
