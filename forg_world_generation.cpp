@@ -716,6 +716,13 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
         def->spawnerID = newEntity->params.spawnerID;
     }
     
+    if(HasComponent(ID, BrainComponent))
+    {
+        BrainComponent* brain = GetComponent(server, ID, BrainComponent);
+        brain->homeP = newEntity->P;
+        brain->reachableMap = GetComponent(server, ID, ReachableMapComponent);
+    }
+    
     EntityType portal = GetEntityType(server->assets, "default", "portal");
     if(AreEqual(GetEntityType(newEntity->definitionID), portal))
     {

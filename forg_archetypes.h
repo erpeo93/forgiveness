@@ -6,6 +6,7 @@ Archetype() struct AnimalArchetype
     MovementComponent movement;
     PlayerComponent* player;
     BrainComponent brain;
+    ReachableMapComponent reachableMap;
     EffectComponent effects;
 #else
     BaseComponent base;

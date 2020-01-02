@@ -66,11 +66,6 @@ INIT_COMPONENT_FUNCTION(InitDefaultComponent)
         AddEntityFlags(def, EntityFlag_canGoIntoWater);
     }
     
-    if(s->fearsLight)
-    {
-        AddEntityFlags(def, EntityFlag_fearsLight);
-    }
-    
     for(u16 essenceIndex = 0; essenceIndex < Count_essence; ++essenceIndex)
     {
         def->essences[essenceIndex] = common->essences[essenceIndex];
@@ -278,6 +273,10 @@ INIT_COMPONENT_FUNCTION(InitBrainComponent)
     brain->type = PropertyToU16(brainType, s->brainType);
     brain->targetID = {};
     brain->wanderDirection = V3(RandomBilV2(&server->entropy), 0);
+}
+
+INIT_COMPONENT_FUNCTION(InitReachableMapComponent)
+{
 }
 
 INIT_COMPONENT_FUNCTION(InitTempEntityComponent)

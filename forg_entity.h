@@ -75,5 +75,4 @@ enum EntityFlags
     EntityFlag_locked = (1 << 3),
     EntityFlag_canGoIntoWater = (1 << 4),
     EntityFlag_ghost = (1 << 5),
-    EntityFlag_fearsLight = (1 << 6),
 };

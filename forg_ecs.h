@@ -61,6 +61,7 @@ struct ArchetypeLayout
             ArchetypeComponent hasSegmentImageComponent;
             ArchetypeComponent hasSkillDefComponent;
             ArchetypeComponent hasRecipeEssenceComponent;
+            ArchetypeComponent hasReachableMapComponent;
         };
     };
 };

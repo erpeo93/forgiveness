@@ -591,9 +591,6 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     EXECUTE_JOB(server, UpdateEntity, true, elapsedTime);
     EXECUTE_JOB_TIMED(server, UpdatePlant, ArchetypeHas(VegetationComponent), server->vegetationUpdateTimer, elapsedTime, 1.0f);
     
-    //EXECUTE_JOB(server, DamageEntityFearingLight, ArchetypeHas(AliveComponent), elapsedTime);
-    //EXECUTE_JOB(server, DealLightDamage, ArchetypeHas(MiscComponent), elapsedTime);
-    
     server->updateBrains = false;
     r32 targetBrainTimer = 0.1f;
     server->brainTimer += elapsedTime;

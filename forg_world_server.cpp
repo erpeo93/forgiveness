@@ -1321,20 +1321,6 @@ STANDARD_ECS_JOB_SERVER(DeleteAllEntities)
     FreeArchetype(server, ID);
 }
 
-STANDARD_ECS_JOB_SERVER(DamageEntityFearingLight)
-{
-    DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    if(EntityHasFlags(def, EntityFlag_fearsLight))
-    {
-        ZLayer* layer = server->layers + def->P.chunkZ;
-        if(layer->dayTimePhase == DayTime_Day)
-        {
-            r32 damage = 1 * elapsedTime;
-            DamageEntityPhysically(server, ID, damage);
-        }
-    }
-}
-
 STANDARD_ECS_JOB_SERVER(UpdatePlant)
 {
     VegetationComponent* plant = GetComponent(server, ID, VegetationComponent);
@@ -1344,30 +1330,6 @@ STANDARD_ECS_JOB_SERVER(UpdatePlant)
     
     SetR32(&plant->flowerDensity, newFlowerDensity);
     SetR32(&plant->fruitDensity, newFruitDensity);
-}
-
-STANDARD_ECS_JOB_SERVER(DealLightDamage)
-{
-    r32 lightRadiousSq = GetLightRadiousSq(server, ID);
-    if(lightRadiousSq > 0)
-    {
-        DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-        SpatialPartitionQuery query = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
-        
-        for(EntityID testID = GetCurrent(&query); IsValid(&query); testID = Advance(&query))
-        {
-            DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
-            if(EntityHasFlags(testDef, EntityFlag_fearsLight))
-            {
-                Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
-                if(LengthSq(toTarget) <= 0.8f * lightRadiousSq)
-                {
-                    DamageEntityPhysically(server, testID, 1);
-                }
-            }
-        }
-        
-    }
 }
 
 internal void UpdateWorldBasics(ServerState* server, r32 elapsedTime)
@@ -1410,6 +1372,7 @@ internal void UpdateWorldBasics(ServerState* server, r32 elapsedTime)
         }
         
         
+#if 0        
         for(CompIterator iter = FirstComponent(server, PlayerComponent); 
             IsValid(iter); iter = Next(iter))
         {
@@ -1431,5 +1394,7 @@ internal void UpdateWorldBasics(ServerState* server, r32 elapsedTime)
                 }
             }
         }
+#endif
+        
     }
 }

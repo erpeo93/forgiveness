@@ -17,6 +17,36 @@ struct BrainDirection
 
 #define DIRECTION_COUNT 8
 #define DIRECTION_ANGLE (360.0f / (r32) DIRECTION_COUNT)
+
+
+#define REACHABLE_GRID_DIM 32
+struct ReachableCell
+{
+    b32 reachable;
+    //b32 anglesOccluded[4];
+    u16 shortestDirection;
+};
+
+struct ReachableQueueElement
+{
+    Vec3 offset;
+    ReachableCell* cell;
+    ReachableQueueElement* next;
+};
+
+struct ReachableQueue
+{
+    ReachableQueueElement* first;
+    ReachableQueueElement* last;
+    
+    MemoryPool* pool;
+};
+
+struct ReachableMapComponent
+{
+    ReachableCell cells[REACHABLE_GRID_DIM][REACHABLE_GRID_DIM];
+};
+
 struct BrainComponent
 {
     u16 type;
@@ -33,6 +63,9 @@ struct BrainComponent
     EntityID targetID;
     BrainDirection idleDirection;
     BrainDirection directions[DIRECTION_COUNT];
+    
+    UniversePos homeP;
+    ReachableMapComponent* reachableMap;
 };
 
 introspection() struct BrainParams
@@ -49,4 +82,11 @@ introspection() struct BrainParams
     EntityName hostileType;
     EntityName maintainDistanceType;
     EntityName scaryType;
+    
+    r32 minHomeDistance;
+    r32 maxHomeDistance;
+    
+    r32 reachableCellDim MetaDefault("0.5f");
+    
+    b32 fearsLight;
 };

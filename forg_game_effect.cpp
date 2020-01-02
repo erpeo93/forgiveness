@@ -91,7 +91,10 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
                 if(HasComponent(destID, PlayerComponent))
                 {
                     PlayerComponent* player = GetComponent(server, destID, PlayerComponent);
-                    player->justEnteredWorld = true;
+                    if(player)
+                    {
+                        player->justEnteredWorld = true;
+                    }
                 }
             }
         } break;
