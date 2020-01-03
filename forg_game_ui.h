@@ -281,4 +281,5 @@ struct GameUIContext
     
     CommandParameters commandParameters;
     
+    PlatformInput* input;
 };

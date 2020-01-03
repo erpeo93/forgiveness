@@ -84,6 +84,7 @@ INIT_COMPONENT_FUNCTION(InitMovementComponent)
 INIT_COMPONENT_FUNCTION(InitActionComponent)
 {
     ActionComponent* action = (ActionComponent*) componentPtr;
+    SetR32Default(action, speed, s->defaultActionSpeed);
     SetU16(&action->action, idle);
     action->time = 0;
 }
@@ -91,7 +92,8 @@ INIT_COMPONENT_FUNCTION(InitActionComponent)
 internal GameEffectInstance InstanceEffect(Assets* assets, GameEffect* effect)
 {
     GameEffectInstance result = {};
-    result.timer = effect->timer;
+    result.targetTime = effect->timer;
+    result.deleteTime = effect->deleteTime;
     result.targetEffect = effect->targetEffect;
     result.action = effect->action.value;
     result.type = effect->effectType.value;
@@ -100,7 +102,7 @@ internal GameEffectInstance InstanceEffect(Assets* assets, GameEffect* effect)
     return result;
 }
 
-internal void AddRandomEffects(Assets* assets, EffectComponent* effects, EffectBinding* bindings, ArrayCounter bindingCount, u16* essences)
+internal void AddRandomEffects(Assets* assets, ActiveEffectComponent* effects, EffectBinding* bindings, ArrayCounter bindingCount, u16* essences)
 {
     for(u16 essenceIndex = 0; essenceIndex < Count_essence; ++essenceIndex)
     {
@@ -116,8 +118,10 @@ internal void AddRandomEffects(Assets* assets, EffectComponent* effects, EffectB
                 {
                     if(effects->effectCount < ArrayCount(effects->effects))
                     {
-                        GameEffectInstance* dest = effects->effects + effects->effectCount++;
-                        *dest = InstanceEffect(assets, &binding->effect);
+                        ActiveEffect* dest = effects->effects + effects->effectCount++;
+                        dest->effect = InstanceEffect(assets, &binding->effect);
+                        dest->time = 0;
+                        dest->totalTime = 0;
                     }
                     break;
                 }
@@ -160,18 +164,20 @@ internal GameEffect* RollProbabilityEffect(RandomSequence* seq, ProbabilityEffec
     return result;
 }
 
-INIT_COMPONENT_FUNCTION(InitEffectComponent)
+INIT_COMPONENT_FUNCTION(InitActiveEffectComponent)
 {
     ServerState* server = (ServerState*) state;
-    EffectComponent* effect = (EffectComponent*) componentPtr;
+    ActiveEffectComponent* effect = (ActiveEffectComponent*) componentPtr;
     effect->effectCount = 0;
     
     for(ArrayCounter effectIndex = 0; effectIndex < s->defaultEffectsCount; ++effectIndex)
     {
         if(effect->effectCount < ArrayCount(effect->effects))
         {
-            GameEffectInstance* dest = effect->effects + effect->effectCount++;
-            *dest = InstanceEffect(assets, s->defaultEffects + effectIndex);
+            ActiveEffect* dest = effect->effects + effect->effectCount++;
+            dest->effect = InstanceEffect(assets, s->defaultEffects + effectIndex);
+            dest->time = 0;
+            dest->totalTime = 0;
         }
     }
     
@@ -184,8 +190,10 @@ INIT_COMPONENT_FUNCTION(InitEffectComponent)
         {
             if(effect->effectCount < ArrayCount(effect->effects))
             {
-                GameEffectInstance* dest = effect->effects + effect->effectCount++;
-                *dest = InstanceEffect(assets, rolled);
+                ActiveEffect* dest = effect->effects + effect->effectCount++;
+                dest->effect = InstanceEffect(assets, rolled);
+                dest->time = 0;
+                dest->totalTime = 0;
             }
         }
     }
@@ -305,17 +313,25 @@ INIT_COMPONENT_FUNCTION(InitHealthComponent)
     
     SetR32Default(health, maxMentalHealth, maxMental);
     SetR32(&health->mentalHealth, maxMental);
+    
+    SetR32Default(health, physicalRegenerationPerSecond, s->physicalRegenerationPerSecond);
+    SetR32Default(health, mentalRegenerationPerSecond, s->mentalRegenerationPerSecond);
+    
+    SetR32Default(health, fireDamagePerSecond, s->fireDamagePerSecond);
+    SetR32Default(health, poisonDamagePerSecond, s->poisonDamagePerSecond);
 }
 
 INIT_COMPONENT_FUNCTION(InitCombatComponent)
 {
     CombatComponent* combat = (CombatComponent*) componentPtr;
     
-    r32 defaultAttackDistance = 1.0f;
-    r32 defaultAttackContinueCoeff = 2.0f;
+    r32 defaultAttackDistance = s->defaultAttackDistance;
+    r32 defaultAttackContinueCoeff = s->defaultAttackContinueCoeff;
     
     SetR32Default(combat, attackDistance, defaultAttackDistance);
     SetR32Default(combat, attackContinueCoeff, defaultAttackContinueCoeff);
+    
+    combat->movementSpeedWhileAttacking = s->movementSpeedWhileAttacking;
 }
 
 INIT_COMPONENT_FUNCTION(InitLightComponent)
@@ -355,6 +371,7 @@ INIT_COMPONENT_FUNCTION(InitBaseComponent)
     base->draggingID = {};
     base->timeSinceLastUpdate = 0;
     base->totalLifeTime = 0;
+    base->lifeTimeSpeed = 1.0f;
     base->deletedTime = 0;
     
     base->fadeInTime = c->fadeInTime;
@@ -703,6 +720,7 @@ INIT_COMPONENT_FUNCTION(InitActionComponent)
 {
     ActionComponent* action = (ActionComponent*) componentPtr;
     action->action = idle;
+    action->speed = 1.0f;
 }
 
 INIT_COMPONENT_FUNCTION(InitHealthComponent)
@@ -754,7 +772,7 @@ INIT_COMPONENT_FUNCTION(InitSkillDefComponent)
     SkillDefComponent* skill = (SkillDefComponent*) componentPtr;
     skill->targetSkill = common->targetSkill;
     skill->passive = common->passive;
-    skill->level = 0;
+    skill->requiredMentalHealthSafety = common->requiredMentalHealthSafety;
 }
 
 INIT_COMPONENT_FUNCTION(InitInteractionComponent)

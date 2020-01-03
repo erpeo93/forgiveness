@@ -248,6 +248,7 @@ struct MovementComponent
     Vec3 speed;
     Vec3 acc;
     r32 accelerationCoeff;
+    r32 actionAccelerationCoeff;
     r32 drag;
 };
 
@@ -274,9 +275,6 @@ struct PlayerComponent
 {
     EntityID ID;
     b32 justEnteredWorld;
-    
-    u32 skillPoints;
-    r32 sacrificeTimer;
     
     b32 connectionClosed;
     u16 connectionSlot;

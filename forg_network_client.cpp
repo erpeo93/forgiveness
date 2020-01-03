@@ -404,7 +404,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 currentClientID = GetClientIDMapping(worldMode, currentServerID);
             } break;
             
-            
             case Type_entityBasics:
             {
 				AssetID definitionID;
@@ -495,7 +494,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 					if(receivedFlags & BasicFlags_Position)
                     {
                         b32 coldSetPosition = false;
-						if(justCreated || (base->flags & EntityFlag_notInWorld) || (base->flags & EntityFlag_ghost))
+						if(justCreated || (base->flags & EntityFlag_notInWorld) || (base->flags & EntityFlag_ghost || flags & EntityFlag_teleported))
 						{
                             coldSetPosition = true;
                         }
@@ -561,8 +560,19 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 						base->flags = flags;
 						if(IsSet(base->flags, EntityFlag_deleted))
 						{
-							MarkForDeletion(worldMode, currentClientID);
+                            InvalidCodePath;
 						}
+                        
+                        if(IsSet(base->flags, EntityFlag_teleported))
+						{
+                            base->totalLifeTime = 0;
+                            base->lifeTimeSpeed = 2.0f;
+                            
+                            if(player->universeP.chunkZ == player->oldUniverseP.chunkZ)
+                            {
+                                worldMode->cameraWorldOffset -= SubtractOnSameZChunk(player->universeP, player->oldUniverseP);
+                            }
+                        }
 					}
                     
                     base->timeSinceLastUpdate = 0;
@@ -591,6 +601,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 }
                 
                 UnpackFlags(ActionFlags_Action, "H", &action->action);
+                UnpackFlags(ActionFlags_Speed, "d", &action->speed);
             } break;
             
             case Type_Health:
@@ -610,6 +621,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 UnpackFlags(HealthFlag_MaxPhysical, "d", &health->maxPhysicalHealth);
                 UnpackFlags(HealthFlag_Mental, "d", &health->mentalHealth);
                 UnpackFlags(HealthFlag_MaxMental, "d", &health->maxMentalHealth);
+                UnpackFlags(HealthFlag_OnFirePercentage, "d", &health->onFirePercentage);
+                UnpackFlags(HealthFlag_PoisonPercentage, "d", &health->poisonPercentage);
                 
             } break;
             

@@ -7,7 +7,7 @@ Archetype() struct AnimalArchetype
     PlayerComponent* player;
     BrainComponent brain;
     ReachableMapComponent reachableMap;
-    EffectComponent effects;
+    ActiveEffectComponent effects;
 #else
     BaseComponent base;
     AnimationComponent animation;
@@ -28,7 +28,7 @@ Archetype() struct RockArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    EffectComponent effect;
+    ActiveEffectComponent effect;
 #else
     BaseComponent base;
     RockComponent rock;
@@ -42,7 +42,7 @@ Archetype() struct PlantArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    EffectComponent effect;
+    ActiveEffectComponent effect;
 #else
     BaseComponent base;
     PlantComponent plant;
@@ -69,7 +69,7 @@ Archetype() struct RuneArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    EffectComponent effect;
+    ActiveEffectComponent effect;
 #else
     BaseComponent base;
     LayoutComponent layout;
@@ -85,7 +85,7 @@ Archetype() struct EssenceArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    EffectComponent effect;
+    ActiveEffectComponent effect;
 #else
     BaseComponent base;
     LayoutComponent layout;
@@ -99,7 +99,7 @@ Archetype() struct ObjectArchetype
 {
 #ifdef FORG_SERVER
     DefaultComponent default;
-    EffectComponent effect;
+    ActiveEffectComponent effect;
 #else
     BaseComponent base;
     LayoutComponent layout;
@@ -244,6 +244,7 @@ introspection() struct CommonEntityInitParams
     
     b32 targetSkill;
     b32 passive;
+    r32 requiredMentalHealthSafety;
     
     r32 flowerDensity MetaDefault("1.0f");
     r32 fruitDensity MetaDefault("1.0f");
@@ -306,6 +307,18 @@ introspection() struct ServerEntityInitParams
     
     r32 maxPhysicalHealth MetaDefault("100.0f");
     r32 maxMentalHealth MetaDefault("100.0f");
+    
+    r32 physicalRegenerationPerSecond;
+    r32 mentalRegenerationPerSecond;
+    r32 fireDamagePerSecond;
+    r32 poisonDamagePerSecond;
+    
+    
+    r32 defaultAttackDistance MetaDefault("1.0f");
+    r32 defaultAttackContinueCoeff MetaDefault("2.0f");
+    r32 movementSpeedWhileAttacking;
+    
+    r32 defaultActionSpeed MetaDefault("1.0f");
 };
 
 introspection() struct ImageProperty

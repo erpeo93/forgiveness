@@ -322,6 +322,7 @@ internal u16 PrepareActionUpdate(ServerState* server, EntityID ID, b32 completeU
         Pack("H", 0);
         
         PackU16(action->action, flags, ActionFlags_Action);
+        PackR32(action->speed, flags, ActionFlags_Speed);
         if(flags)
         {
             result = ForgEndPacket_(buff_, buff);
@@ -351,6 +352,8 @@ internal u16 PrepareHealthUpdate(ServerState* server, EntityID ID, b32 completeU
         PackR32(health->maxPhysicalHealth, flags, HealthFlag_MaxPhysical);
         PackR32(health->mentalHealth, flags, HealthFlag_Mental);
         PackR32(health->maxMentalHealth, flags, HealthFlag_MaxMental);
+        PackR32(health->onFirePercentage, flags, HealthFlag_OnFirePercentage);
+        PackR32(health->poisonPercentage, flags, HealthFlag_PoisonPercentage);
         
         if(flags)
         {

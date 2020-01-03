@@ -226,6 +226,7 @@ enum BasicNetworkFlags
 enum ActionNetworkFlags
 {
     ActionFlags_Action = (1 << 0),
+    ActionFlags_Speed = (1 << 1),
 };
 
 enum HealthNetworkFlags
@@ -234,6 +235,8 @@ enum HealthNetworkFlags
     HealthFlag_MaxPhysical = (1 << 1),
     HealthFlag_Mental = (1 << 2),
     HealthFlag_MaxMental = (1 << 3),
+    HealthFlag_OnFirePercentage = (1 << 4),
+    HealthFlag_PoisonPercentage = (1 << 5),
 };
 
 enum CombatNetworkFlags

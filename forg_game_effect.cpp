@@ -21,6 +21,31 @@ internal void DamageEntityMentally(ServerState* server, EntityID ID, r32 damage)
     }
 }
 
+internal void AddTempEffect(ServerState* server, EntityID ID, u16 effect, r32 power, r32 time)
+{
+    ActiveEffectComponent* effects = GetComponent(server, ID, ActiveEffectComponent);
+    if(effects->effectCount < ArrayCount(effects->effects))
+    {
+        ActiveEffect* dest = effects->effects + effects->effectCount++;
+        dest->time = 0;
+        dest->totalTime = 0;
+        
+        dest->effect = {};
+        dest->effect.deleteTime = time;
+        dest->effect.type = effect;
+        dest->effect.power = power;
+    }
+    else
+    {
+        InvalidCodePath;
+    }
+}
+
+internal void AddPermanentEffect(ServerState* server, EntityID ID, u16 effect, r32 power)
+{
+    AddTempEffect(server, ID, effect, power, 0);
+}
+
 internal void EssenceDelta(ServerState* server, EntityID ID, u16 essence, i16 delta);
 internal void DeleteEntity(ServerState* server, EntityID ID, DeleteEntityReasonType reason = DeleteEntity_None);
 internal EntityType GetCraftingType(Assets* assets, u32 recipeSeed);
@@ -99,6 +124,31 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             }
         } break;
         
+        case teleportOther:
+        {
+            EntityID destID = otherID;
+            DefaultComponent* def = GetComponent(server, destID, DefaultComponent);
+            UniversePos oldP = def->P;
+            
+            Vec3 offset = {};
+            
+            BrainComponent* brain = GetComponent(server, destID, BrainComponent);
+            if(brain)
+            {
+                offset = Normalize(brain->commandParameters.targetOffset) * effect->power;
+            }
+            def->P = Offset(def->P, offset);
+            if(PositionInsideWorld(&def->P))
+            {
+                def->networkFlags |= BasicFlags_Position;
+                AddEntityFlags(def, EntityFlag_teleported);
+            }
+            else
+            {
+                def->P = oldP;
+            }
+        } break;
+        
         case lightRadious:
         {
             LightComponent* light = GetComponent(server, otherID, LightComponent);
@@ -128,15 +178,6 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
         {
             r32 damage = effect->power;
             DamageEntityMentally(server, otherID, damage);
-        } break;
-        
-        case addSkillPoint:
-        {
-            if(HasComponent(otherID, PlayerComponent))
-            {
-                PlayerComponent* player = GetComponent(server, otherID, PlayerComponent);
-                ++player->skillPoints;
-            }
         } break;
         
         case dropFlowers:
@@ -194,7 +235,9 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
                 {
                     EssenceDelta(server, otherID, essence, -1);
                     PlayerComponent* player = GetComponent(server, otherID, PlayerComponent);
-                    player->sacrificeTimer += SACRIFICE_TIME;
+                    
+                    
+                    //player->sacrificeTimer += SACRIFICE_TIME;
                 }
             }
         } break;
@@ -218,51 +261,133 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
                 if(toAdd)
                 {
                     EssenceDelta(server, otherID, essenceIndex, (i16) toAdd);
+                    source->essences[essenceIndex] = 0;
                 }
+            }
+        } break;
+        
+        case alterProperty_GrowingSpeed:
+        {
+            VegetationComponent* vegetation = GetComponent(server, ID, VegetationComponent);
+            if(vegetation)
+            {
+                SetR32(&vegetation->flowerGrowingSpeed, GetR32(vegetation->flowerGrowingSpeed) * effect->power);
+                SetR32(&vegetation->fruitGrowingSpeed, GetR32(vegetation->fruitGrowingSpeed) * effect->power);
+            }
+        } break;
+        
+        case increaseGrowingSpeed:
+        {
+            r32 power = effect->power;
+            r32 time = effect->power;
+            
+            if(HasComponent(otherID, VegetationComponent))
+            {
+                AddTempEffect(server, otherID, alterProperty_GrowingSpeed, power, time);
+            }
+        } break;
+        
+        case increaseGrowingSpeedArea:
+        {
+            r32 power = effect->power;
+            r32 time = effect->power;
+            
+            DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+            SpatialPartitionQuery effectQuery = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
+            
+            for(EntityID effectID = GetCurrent(&effectQuery); IsValid(&effectQuery); effectID = Advance(&effectQuery))
+            {
+                if(HasComponent(effectID, VegetationComponent))
+                {
+                    AddTempEffect(server, effectID, alterProperty_GrowingSpeed, power, time);
+                }
+            }
+        } break;
+        
+        case alterActionVelocity:
+        {
+            ActionComponent* action = GetComponent(server, otherID, ActionComponent);
+            if(action)
+            {
+                SetR32(&action->speed, GetR32(action->speed) * effect->power);
+            }
+        } break;
+        
+        case fire:
+        {
+            HealthComponent* health = GetComponent(server, otherID, HealthComponent);
+            if(health)
+            {
+                r32 newFirePercentage = GetR32(health->onFirePercentage) + effect->power;
+                SetR32(&health->onFirePercentage, newFirePercentage);
+            }
+        } break;
+        
+        case poison:
+        {
+            HealthComponent* health = GetComponent(server, otherID, HealthComponent);
+            if(health)
+            {
+                r32 newPoisonPercentage = GetR32(health->poisonPercentage) + effect->power;
+                SetR32(&health->poisonPercentage, newPoisonPercentage);
             }
         } break;
     }
 }
 
-internal void DispatchEntityEffects(ServerState* server, UniversePos P, u16 action, EntityID parentID, EntityID ID, r32 elapsedTime, u16* essences, b32 targetEffect)
+internal void DispatchEntityEffects(ServerState* server, UniversePos P, u16 commandIndex, u16 action, EntityID parentID, EntityID ID, r32 elapsedTime, u16* essences, b32 targetEffect)
 {
-    EffectComponent* effects = GetComponent(server, ID, EffectComponent);
+    ActiveEffectComponent* effects = GetComponent(server, ID, ActiveEffectComponent);
     if(effects)
     {
         for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
         {
-            GameEffectInstance* effect = effects->effects + effectIndex;
-            if(effect->action == action && effect->targetEffect == targetEffect)
+            ActiveEffect* effect = effects->effects + effectIndex;
+            GameEffectInstance* instance = &effect->effect;
+            
+            if(instance->action == action && instance->targetEffect == targetEffect)
             {
-                effects->timers[effectIndex] += elapsedTime;
-                if(effects->timers[effectIndex] >= effect->timer)
+                if(instance->commandIndex != commandIndex)
                 {
-                    effects->timers[effectIndex] = 0;
-                    DispatchGameEffect(server, ID, P, effect, parentID, essences);
+                    instance->commandIndex = commandIndex;
+                    effect->time = 0;
+                    effect->totalTime = 0;
+                }
+                
+                effect->time += elapsedTime;
+                effect->totalTime += elapsedTime;
+                
+                if(effect->time >= instance->targetTime)
+                {
+                    DispatchGameEffect(server, ID, P, instance, parentID, essences);
                     
-                    if(effect->timer < 0)
+                    if(instance->targetTime < 0 || (instance->deleteTime > 0 && effect->totalTime >= instance->deleteTime))
                     {
-                        effect->type = invalid_game_effect;
+                        *effect = effects->effects[--effects->effectCount];
                     }
+                    
+                    effect->time = 0;
                 }
             }
         }
     }
 }
 
-internal void DispatchActionEffects(ServerState* server, UniversePos P, u16 action, EntityID ID, EntityID targetID, r32 elapsedTime, u16* essences, b32 targetEffect)
+internal void DispatchActionEffects(ServerState* server, UniversePos P, u16 commandIndex, u16 action, EntityID ID, EntityID targetID, r32 elapsedTime, u16* essences, b32 targetEffect)
 {
-    DispatchEntityEffects(server, P, action, targetID, ID, elapsedTime, essences, targetEffect);
+    DispatchEntityEffects(server, P, commandIndex, action, targetID, ID, elapsedTime, essences, targetEffect);
 }
 
 
 internal void DispatchEquipmentEffects(ServerState* server, UniversePos P, u16 action, EntityID parentID, EntityID equipmentID, r32 elapsedTime, u16* essences)
 {
-    DispatchEntityEffects(server, P, action, parentID, equipmentID, elapsedTime, essences, false);
+    DispatchEntityEffects(server, P, 0, action, parentID, equipmentID, elapsedTime, essences, false);
 }
 
 
 #define RESET(comp, property) SetR32(&comp->property, comp->default_##property);
+#define RESET_ZERO(comp, property) SetR32(&comp->property, 0);
+
 internal void ResetComputedProperties(ServerState* server, EntityID ID)
 {
     HealthComponent* health = GetComponent(server, ID, HealthComponent);
@@ -270,6 +395,22 @@ internal void ResetComputedProperties(ServerState* server, EntityID ID)
     {
         RESET(health, maxPhysicalHealth);
         RESET(health, maxMentalHealth);
+        
+        RESET_ZERO(health, onFirePercentage);
+        RESET_ZERO(health, poisonPercentage);
+    }
+    
+    VegetationComponent* vegetation = GetComponent(server, ID, VegetationComponent);
+    if(vegetation)
+    {
+        RESET(vegetation, flowerGrowingSpeed);
+        RESET(vegetation, fruitGrowingSpeed);
+    }
+    
+    ActionComponent* action = GetComponent(server, ID, ActionComponent);
+    if(action)
+    {
+        RESET(action, speed);
     }
 }
 
@@ -278,52 +419,54 @@ STANDARD_ECS_JOB_SERVER(DispatchEntityDefaultEffects)
     ResetComputedProperties(server, ID);
     
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-    
-    u16* essences = def->essences;
-    EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
-    
-    u16 action = none;
-    if(equipment)
+    if(!EntityHasFlags(def, EntityFlag_notInWorld))
     {
-        for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->slots); ++equipmentIndex)
+        
+        u16* essences = def->essences;
+        DispatchEntityEffects(server, def->P, 0, none, {}, ID, elapsedTime, essences, false);
+        EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
+        if(equipment)
         {
-            EntityID equipID = GetBoundedID(equipment->slots + equipmentIndex);
-            if(IsValidID(equipID))
+            for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->slots); ++equipmentIndex)
             {
-                DispatchEquipmentEffects(server, def->P, action, ID, equipID, elapsedTime, essences);
-                
-                ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
-                for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
+                EntityID equipID = GetBoundedID(equipment->slots + equipmentIndex);
+                if(IsValidID(equipID))
                 {
-                    EntityID usingID = GetBoundedID(container->usingObjects + usingIndex);
-                    if(IsValidID(usingID))
+                    DispatchEquipmentEffects(server, def->P, none, ID, equipID, elapsedTime, essences);
+                    
+                    ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
+                    for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
                     {
-                        DispatchEquipmentEffects(server, def->P, action, ID, usingID, elapsedTime, essences);
+                        EntityID usingID = GetBoundedID(container->usingObjects + usingIndex);
+                        if(IsValidID(usingID))
+                        {
+                            DispatchEquipmentEffects(server, def->P, none, ID, usingID, elapsedTime, essences);
+                        }
                     }
                 }
             }
         }
-    }
-    
-    UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
-    if(equipped)
-    {
-        for(u16 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->slots); ++equipmentIndex)
+        
+        UsingComponent* equipped = GetComponent(server, ID, UsingComponent);
+        if(equipped)
         {
-            EntityID usingID = GetBoundedID(equipped->slots + equipmentIndex);
-            if(IsValidID(usingID))
+            for(u16 equipmentIndex = 0; equipmentIndex < ArrayCount(equipped->slots); ++equipmentIndex)
             {
-                if(SkillSlot(equipmentIndex))
+                EntityID usingID = GetBoundedID(equipped->slots + equipmentIndex);
+                if(IsValidID(usingID))
                 {
-                    SkillDefComponent* skillDef = GetComponent(server, usingID, SkillDefComponent);
-                    if(skillDef->passive)
+                    if(SkillSlot(equipmentIndex))
                     {
-                        DispatchEquipmentEffects(server, def->P, action, ID, usingID, elapsedTime, essences);
+                        SkillDefComponent* skillDef = GetComponent(server, usingID, SkillDefComponent);
+                        if(skillDef->passive)
+                        {
+                            DispatchEquipmentEffects(server, def->P, none, ID, usingID, elapsedTime, essences);
+                        }
                     }
-                }
-                else
-                {
-                    DispatchEquipmentEffects(server, def->P, action, ID, usingID, elapsedTime, essences);
+                    else
+                    {
+                        DispatchEquipmentEffects(server, def->P, none, ID, usingID, elapsedTime, essences);
+                    }
                 }
             }
         }

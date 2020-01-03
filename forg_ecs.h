@@ -34,7 +34,7 @@ struct ArchetypeLayout
             ArchetypeComponent hasShadowComponent;
             ArchetypeComponent hasStandardImageComponent;
             ArchetypeComponent hasLayoutComponent;
-            ArchetypeComponent hasEffectComponent;
+            ArchetypeComponent hasActiveEffectComponent;
             ArchetypeComponent hasEquipmentComponent;
             ArchetypeComponent hasUsingComponent;
             ArchetypeComponent hasContainerComponent;

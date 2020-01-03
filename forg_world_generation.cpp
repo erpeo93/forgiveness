@@ -628,7 +628,6 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
         }
     }
     
-    
     EntityID ID = {};
     ServerEntityInitParams params = definition->server;
     params.P = newEntity->P;
@@ -647,8 +646,6 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
         Assert(HasComponent(ID, PlayerComponent));
         PlayerComponent* player = (PlayerComponent*) Get_(&server->PlayerComponent_, newEntity->params.playerIndex);
         player->justEnteredWorld = true;
-        player->skillPoints = 0;
-        player->sacrificeTimer = SACRIFICE_TIME;
         player->ID = ID;
         SetComponent(server, ID, PlayerComponent, player);
         
@@ -664,7 +661,6 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
                 brain->type = Brain_Player;
                 ResetQueue(player->queues + GuaranteedDelivery_None);
             }
-            
         }
         
         QueueGameAccessConfirm(player, server->worldSeed, ID, false, newEntity->params.ghost);
@@ -758,7 +754,6 @@ internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
                 MemoryPool poissonPool = {};
                 
                 TriggerSpawnerInCell(server, entities, clusters, &poissonPool, spawner, P, &server->entropy, cellDim);
-                
                 Clear(&poissonPool);
             }
         }
@@ -835,10 +830,12 @@ internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
             EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
             for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->slots); ++slotIndex)
             {
-                EntityID slotID = GetBoundedID(equipment->slots + slotIndex);
+                InventorySlot* slot = equipment->slots + slotIndex;
+                EntityID slotID = GetBoundedID(slot);
                 if(IsValidID(slotID))
                 {
                     FreeArchetype(server, slotID);
+                    SetBoundedID(slot, {});
                 }
             }
         }
@@ -855,10 +852,12 @@ internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
             
             for(u32 slotIndex = 0; slotIndex < ArrayCount(equipped->slots); ++slotIndex)
             {
-                EntityID slotID = GetBoundedID(equipped->slots + slotIndex);
+                InventorySlot* slot = equipped->slots + slotIndex;
+                EntityID slotID = GetBoundedID(slot);
                 if(IsValidID(slotID))
                 {
                     FreeArchetype(server, slotID);
+                    SetBoundedID(slot, {});
                 }
             }
         }
@@ -868,19 +867,23 @@ internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
             ContainerComponent* container = GetComponent(server, ID, ContainerComponent);
             for(u32 storedIndex = 0; storedIndex < ArrayCount(container->storedObjects); ++storedIndex)
             {
-                EntityID storedID = GetBoundedID(container->storedObjects + storedIndex);
+                InventorySlot* slot = container->storedObjects + storedIndex;
+                EntityID storedID = GetBoundedID(slot);
                 if(IsValidID(storedID))
                 {
                     FreeArchetype(server, storedID);
+                    SetBoundedID(slot, {});
                 }
             }
             
             for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
             {
-                EntityID usingID = GetBoundedID(container->usingObjects + usingIndex);
+                InventorySlot* slot = container->usingObjects + usingIndex;
+                EntityID usingID = GetBoundedID(slot);
                 if(IsValidID(usingID))
                 {
                     FreeArchetype(server, usingID);
+                    SetBoundedID(slot, {});
                 }
             }
         }

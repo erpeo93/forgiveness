@@ -1492,7 +1492,11 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
         effects->params.speed = averageSlowDown / slowDownCount;
     }
     
-    
+    ActionComponent* action = GetComponent(worldMode, ID, ActionComponent);
+    if(action)
+    {
+        effects->params.speed *= action->speed;
+    }
     
     if(base->deletedTime)
     {
@@ -1514,9 +1518,25 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
     HealthComponent* health = GetComponent(worldMode, ID, HealthComponent);
     if(health)
     {
+        r32 mRatio = (r32) health->mentalHealth / (r32)health->maxMentalHealth;
         r32 hRatio = (r32) health->physicalHealth / (r32)health->maxPhysicalHealth;
+        
         Vec4 lifeColor = V4(hRatio, hRatio, hRatio, 1.0f);
         effects->params.tint = Hadamart(effects->params.tint, lifeColor);
+        
+        effects->params.dissolveCoeff = Max(effects->params.dissolveCoeff, Lerp(0.0f, 1.0f - mRatio, MAX_DISSOLVE_ENERGY)); 
+        
+        
+        r32 fireRatio = Clamp01(health->onFirePercentage);
+        Vec4 fireColor = Lerp(V4(1, 1, 1, 1), fireRatio, V4(1, 0, 0, 1));
+        
+        r32 poisonRatio = Clamp01(health->poisonPercentage);
+        Vec4 poisonColor = Lerp(V4(1, 1, 1, 1), poisonRatio, V4(0, 1, 0, 1));
+        
+        
+        effects->params.tint = Hadamart(effects->params.tint, fireColor);
+        effects->params.tint = Hadamart(effects->params.tint, poisonColor);
+        
     }
     
 }

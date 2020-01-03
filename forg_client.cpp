@@ -139,9 +139,9 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntity)
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     
 	base->timeSinceLastUpdate += elapsedTime;
-	base->totalLifeTime += elapsedTime;
+	base->totalLifeTime += elapsedTime * base->lifeTimeSpeed;
     
-    if(base->timeSinceLastUpdate >= 2.0f * STATIC_UPDATE_TIME)
+    if(base->timeSinceLastUpdate >= 2.0f * STATIC_UPDATE_TIME && !(base->flags & EntityFlag_notInWorld))
     {
 		MarkForDeletion(worldMode, ID);
     }
@@ -219,6 +219,8 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->worldTileView = false;
     result->defaultCameraZ = 34.0f;
     result->cameraWorldOffset = V3(0.0f, 0.0f, result->defaultCameraZ);
+    
+    result->gameUI.input = input;
     
     result->editorUI.input = input;
     result->editorUI.pool = &gameState->assetsPool;

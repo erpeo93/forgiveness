@@ -4,7 +4,6 @@ inline Vec3 GetRelativeP(GameModeWorld* worldMode, UniversePos P)
     return result;
 }
 
-
 inline Vec3 GetRelativeP(GameModeWorld* worldMode, BaseComponent* base)
 {
     Vec3 result = GetRelativeP(worldMode, base->universeP);
@@ -15,8 +14,6 @@ inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, r32
 {
     cameraWorldOffset += GetRelativeP(worldMode, base).xy;
     worldMode->destCameraEntityOffset = 0.5f * V2(GetDim(base->bounds).x, GetDim(base->bounds).z);
-    
-    
     worldMode->destCameraWorldOffset = V3(cameraWorldOffset, worldMode->defaultCameraZ / zoomCoeff);
     worldMode->destCameraWorldOffset += worldMode->editorCameraOffset;
     worldMode->cameraSpeed = cameraSpeed;
@@ -43,7 +40,6 @@ internal void ResetGameCamera(GameModeWorld* worldMode, RenderGroup* group)
         SetCameraBasics(group, Camera_Debug, 3.5f, GetColumn(cameraO, 0), GetColumn(cameraO, 1), GetColumn(cameraO, 2), cameraOffsetFinal, worldMode->cameraEntityOffset);
     }
 }
-
 
 internal void UpdateGameCamera(GameModeWorld* worldMode, PlatformInput* input)
 {

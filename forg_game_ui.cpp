@@ -158,13 +158,6 @@ internal b32 LeftMouseAction(u16 action)
     
     return result;
 }
-
-internal b32 RequiresUnlockedSlot(u16 action)
-{
-    b32 result = (action == level_up);
-    return result;
-}
-
 internal EntityHotInteraction* AddPossibleInteraction_(GameModeWorld* worldMode, GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityIDServer, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
 {
     EntityHotInteraction* result = 0;
@@ -195,10 +188,12 @@ internal EntityHotInteraction* AddPossibleInteraction_(GameModeWorld* worldMode,
                     
                     b32 valid = true;
                     
+#if 0                    
                     if(RequiresUnlockedSlot(action->action) && (slot->flags_type & InventorySlot_Locked))
                     {
                         valid = false;
                     }
+#endif
                     
                     
                     if(type == Interaction_Ground && IsValidID(UI->draggingIDServer))
@@ -702,6 +697,11 @@ INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
                 }
             }
         }
+        
+        if(UI->input->shiftDown)
+        {
+            interaction->isOnFocus = true;
+        }
     }
 }
 
@@ -975,6 +975,11 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                         r32 lightLerp = Clamp01MapToRange(0, light->lightRadious, 5.0f);
                         defaultZoom = Lerp(1.8f * worldMode->equipmentZoomCoeff, lightLerp, worldMode->defaultZoomCoeff);
                     }
+                }
+                
+                if(player->flags & EntityFlag_teleported)
+                {
+                    int a = 5;
                 }
                 MoveCameraTowards(worldMode, player, worldMode->defaultZoomSpeed, cameraOffset, defaultZoom);
                 

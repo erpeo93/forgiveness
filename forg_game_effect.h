@@ -1,18 +1,22 @@
 #pragma once
 introspection() struct GameEffectInstance
 {
-    r32 timer;
+    u16 commandIndex;
+    r32 deleteTime;
+    r32 targetTime;
     b32 targetEffect;
     u16 action;
     u16 type;
     EntityType spawnType;
     r32 power;
+    r32 radious;
 };
 
 
 introspection() struct GameEffect
 {
     r32 timer;
+    r32 deleteTime;
     b32 targetEffect;
     GameProperty action MetaDefault("{Property_action, none}") MetaFixed(property);
     GameProperty effectType MetaDefault("{Property_gameEffect}") MetaFixed(property);
@@ -41,12 +45,17 @@ introspection() struct ProbabilityEffect
     ProbabilityEffectOption* options;
 };
 
-struct EffectComponent
+struct ActiveEffect
+{
+    GameEffectInstance effect;
+    r32 time;
+    r32 totalTime;
+};
+
+struct ActiveEffectComponent
 {
     u32 effectCount;
-    
-    GameEffectInstance effects[8];
-    r32 timers[8];
+    ActiveEffect effects[8];
 };
 
 struct CollisionEffectsComponent

@@ -69,7 +69,7 @@ inline UniversePos Offset(UniversePos pos, Vec3 offset)
 inline b32 ChunkValid(i32 chunkX, i32 chunkY, i32 chunkZ)
 {
     b32 result = true;
-    if(chunkX < -WORLD_CHUNK_APRON || chunkY < -WORLD_CHUNK_APRON || chunkX >= (WORLD_CHUNK_SPAN + WORLD_CHUNK_APRON) || chunkY > (WORLD_CHUNK_SPAN + WORLD_CHUNK_APRON))
+    if(chunkX < -WORLD_CHUNK_APRON || chunkY < -WORLD_CHUNK_APRON || chunkX >= (WORLD_CHUNK_SPAN + WORLD_CHUNK_APRON) || chunkY >= (WORLD_CHUNK_SPAN + WORLD_CHUNK_APRON))
     {
         result = false;
     }

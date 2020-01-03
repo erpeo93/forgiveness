@@ -780,7 +780,7 @@ internal b32 Edit_u32(EditorLayout* layout, char* name, u32* number, b32 isInArr
 internal b32 Edit_i32(EditorLayout* layout, char* name, i32* number, b32 isInArray, AssetID assetID);
 internal b32 Edit_u16(EditorLayout* layout, char* name, u16* number, b32 isInArray, AssetID assetID);
 internal b32 Edit_i16(EditorLayout* layout, char* name, i16* number, b32 isInArray, AssetID assetID);
-internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray, AssetID assetID, b32 clamp01 = false, b32 editable = true);
+internal b32 Edit_r32(EditorLayout* layout, char* name, r32* number, b32 isInArray = false, AssetID assetID = {}, b32 clamp01 = false, b32 editable = true);
 internal b32 Edit_b32(EditorLayout* layout, char* name, b32* flag, b32 isInArray, AssetID assetID);
 internal b32 Edit_Color(EditorLayout* layout, char* name, Color* color, b32 isInArray, AssetID assetID);
 internal b32 Edit_Vec2(EditorLayout* layout, char* name, Vec2* v, b32 isInArray, AssetID assetID, b32 clamp01 = false);

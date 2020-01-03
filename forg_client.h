@@ -61,6 +61,7 @@ struct BaseComponent
     EntityID draggingID;
     r32 timeSinceLastUpdate;
 	r32 totalLifeTime;
+    r32 lifeTimeSpeed;
     r32 deletedTime;
     
     r32 fadeInTime;

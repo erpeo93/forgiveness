@@ -24,10 +24,12 @@
 struct ActionComponent
 {
     GameplayU16(action);
+    GameplayR32WithDefault(speed);
     
 #if FORG_SERVER
     u16 selectedCrafingEssences[MAX_RECIPE_ESSENCES];
     r32 time;
+    u16 commandIndex;
 #endif
 };
 
@@ -38,12 +40,24 @@ struct HealthComponent
     
     GameplayR32(mentalHealth);
     GameplayR32WithDefault(maxMentalHealth);
+    
+    GameplayR32(onFirePercentage);
+    GameplayR32(poisonPercentage);
+    
+#if FORG_SERVER
+    GameplayR32WithDefault(physicalRegenerationPerSecond);
+    GameplayR32WithDefault(mentalRegenerationPerSecond);
+    GameplayR32WithDefault(fireDamagePerSecond);
+    GameplayR32WithDefault(poisonDamagePerSecond);
+#endif
 };
 
 struct CombatComponent
 {
     GameplayR32WithDefault(attackDistance);
     GameplayR32WithDefault(attackContinueCoeff);
+    
+    r32 movementSpeedWhileAttacking;
 };
 
 struct VegetationComponent
@@ -75,4 +89,5 @@ enum EntityFlags
     EntityFlag_locked = (1 << 3),
     EntityFlag_canGoIntoWater = (1 << 4),
     EntityFlag_ghost = (1 << 5),
+    EntityFlag_teleported = (1 << 6),
 };
