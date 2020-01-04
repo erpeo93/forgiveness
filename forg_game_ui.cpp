@@ -673,7 +673,7 @@ INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
     interaction->isOnFocus = false;
     
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    base->worldBounds = GetEntityBound(worldMode, base);
+    base->worldBounds = GetEntityBound(worldMode, ID);
     
     if(ShouldBeRendered(worldMode, base))
     {
@@ -977,11 +977,7 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                     }
                 }
                 
-                if(player->flags & EntityFlag_teleported)
-                {
-                    int a = 5;
-                }
-                MoveCameraTowards(worldMode, player, worldMode->defaultZoomSpeed, cameraOffset, defaultZoom);
+                MoveCameraTowards(worldMode, myPlayer->clientID, worldMode->defaultZoomSpeed, cameraOffset, defaultZoom);
                 
                 
                 b32 standardInteractionAllowed = true;
@@ -1077,7 +1073,7 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                             }
                             
                             AddContainerObjectsInteractions(UI, worldMode, container->storedObjects, ArrayCount(container->storedObjects), UI->lootingIDServer, Interaction_Container);
-                            MoveCameraTowards(worldMode, lootingBase, container->zoomSpeed, V2(0, 0), container->zoomCoeff);
+                            MoveCameraTowards(worldMode, lootingID, container->zoomSpeed, V2(0, 0), container->zoomCoeff);
                         }
                         HandleOverlayObjectsInteraction(UI, worldMode);
                     }
@@ -1085,7 +1081,7 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                     {
                         HandleEquipmentInteraction(UI, worldMode, myPlayer->clientID);
                         HandleContainerInteraction(UI, worldMode);
-                        MoveCameraTowards(worldMode, player, worldMode->equipmentZoomSpeed, V2(0, 0), worldMode->equipmentZoomCoeff);
+                        MoveCameraTowards(worldMode, myPlayer->clientID, worldMode->equipmentZoomSpeed, V2(0, 0), worldMode->equipmentZoomCoeff);
                         HandleOverlayObjectsInteraction(UI, worldMode);
                     }
                     else

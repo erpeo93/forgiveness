@@ -76,7 +76,7 @@ RENDERING_ECS_JOB_CLIENT(RenderCharacterAnimation)
         
         r32 height = GetHeight(base->bounds);
         
-        Vec3 P = GetRelativeP(worldMode, base);
+        Vec3 P = GetRelativeP(worldMode, ID);
         AnimationComponent* animation = GetComponent(worldMode, ID, AnimationComponent);
         
         if(Abs(base->velocity.x) > 0.1f)
@@ -190,7 +190,8 @@ RENDERING_ECS_JOB_CLIENT(RenderShadow)
     if(ShouldBeRendered(worldMode, base))
     {
         ShadowComponent* shadow = GetComponent(worldMode, ID, ShadowComponent);
-        Vec3 P = GetRelativeP(worldMode, base);
+        Vec3 P = GetRelativeP(worldMode, ID);
+        P.z = 0.0f;
         RenderShadow(worldMode, group, P, shadow);
     }
 }
@@ -229,7 +230,7 @@ RENDERING_ECS_JOB_CLIENT(RenderRock)
     if(ShouldBeRendered(worldMode, base))
     {
         r32 height = GetHeight(base->bounds);
-        Vec3 P = GetRelativeP(worldMode, base);
+        Vec3 P = GetRelativeP(worldMode, ID);
         Lights lights = GetLights(worldMode, P);
         
         RockComponent* rock = GetComponent(worldMode, ID, RockComponent);
@@ -362,7 +363,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
     if(ShouldBeRendered(worldMode, base))
     {
         r32 height = GetHeight(base->bounds);
-        Vec3 P = GetRelativeP(worldMode, base);
+        Vec3 P = GetRelativeP(worldMode, ID);
         Lights lights = GetLights(worldMode, P);
         
         u32 branchC = StoreColor(plant->branchColor);
@@ -600,7 +601,7 @@ RENDERING_ECS_JOB_CLIENT(RenderPlant)
 internal void RenderStaticAnimation(GameModeWorld* worldMode, RenderGroup* group, EntityAnimationParams params, BaseComponent* base, ImageReference* image, r32 elapsedTime)
 {
     r32 height = GetHeight(base->bounds);
-    Vec3 P = GetRelativeP(worldMode, base);
+    Vec3 P = GetRelativeP(worldMode, base, params);
     Lights lights = GetLights(worldMode, P);
     
     RandomSequence seq = Seed(base->seed);
@@ -624,7 +625,7 @@ internal void RenderSegmentImage(GameModeWorld* worldMode, RenderGroup* group, E
     r32 height = GetHeight(base->bounds);
     r32 width = GetWidth(base->bounds);
     
-    Vec3 P = GetRelativeP(worldMode, base);
+    Vec3 P = GetRelativeP(worldMode, base, params);
     Lights lights = GetLights(worldMode, P);
     
     RandomSequence seq = Seed(base->seed);
@@ -684,7 +685,7 @@ RENDERING_ECS_JOB_CLIENT(RenderGrass)
             if(bitmap)
             {
                 RandomSequence seq = Seed(base->seed);
-				Vec3 P = GetRelativeP(worldMode, base->universeP);
+				Vec3 P = GetRelativeP(worldMode, ID);
                 Lights lights = GetLights(worldMode, P);
                 P -= quad->offset;
                 
@@ -728,7 +729,7 @@ internal void RenderFrameByFrameAnimation(GameModeWorld* worldMode, RenderGroup*
     elapsedTime *= params.speed;
     r32 height = GetHeight(base->bounds);
     
-    Vec3 P = GetRelativeP(worldMode, base);
+    Vec3 P = GetRelativeP(worldMode, base, params);
     Lights lights = GetLights(worldMode, P);
     
     r32 stepTime = elapsedTime * animation->speed;
@@ -1218,13 +1219,13 @@ RENDERING_ECS_JOB_CLIENT(RenderLayoutEntities)
         r32 deepness = GetWidth(base->bounds);
         r32 width = GetWidth(base->bounds);
         
-        Vec3 P = GetRelativeP(worldMode, base) + params.offset;
+        Vec3 P = GetRelativeP(worldMode, ID);
         Lights lights = GetLights(worldMode, P);
         LayoutComponent* layout = GetComponent(worldMode, ID, LayoutComponent);
         
         ObjectTransform transform = BillboardTransform();
         transform.angle = layout->rootAngle;
-        transform.scale = layout->rootScale * params.scale;
+        transform.scale = layout->rootScale * params.scaleAccumulated * params.scaleComputed;
         transform.tint = params.tint;
         transform.modulationPercentage = params.modulationPercentage; 
         transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1); 
@@ -1269,7 +1270,7 @@ internal void AddAnimationEffectIfNotPresent(GameModeWorld* worldMode, Vec3 P, A
         dest->ID = ID;
         
         dest->type = SafeTruncateToU16(ConvertEnumerator(AnimationEffectType, effect->type));
-        dest->time = effect->time;
+        dest->time = 0;
         switch(dest->type)
         {
             case AnimationEffect_Tint:
@@ -1306,9 +1307,9 @@ internal void AddAnimationEffectIfNotPresent(GameModeWorld* worldMode, Vec3 P, A
                 }
             } break;
             
-            case AnimationEffect_SlowDown:
+            case AnimationEffect_SineOffset:
             {
-                dest->slowDownCoeff = effect->slowDownCoeff;
+                dest->maxOffset = effect->sineMaxOffset;
             } break;
         }
     }
@@ -1332,66 +1333,24 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
     AnimationEffectComponent* effects = GetComponent(worldMode, ID, AnimationEffectComponent);
     InteractionComponent* interaction = GetComponent(worldMode, ID, InteractionComponent);
     
-    Vec3 P = GetRelativeP(worldMode, base);
+    Vec3 P = GetRelativeP(worldMode, ID);
     
-    r32 oldScale = effects->params.scale;
-    Vec3 oldOffset = effects->params.offset;
+    r32 oldScale = effects->params.scaleAccumulated;
+    Vec3 oldOffset = effects->params.offsetAccumulated;
     
     effects->params = DefaultAnimationParams();
     
-    effects->params.scale = oldScale;
-    effects->params.offset = oldOffset;
-    
-    for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
-    {
-        AnimationEffect* effect = effects->effects + effectIndex;
-        if(effect->time >= 0)
-        {
-            effect->time -= elapsedTime;
-            if(effect->time <= 0)
-            {
-                FreeAnimationEffect(effect);
-                *effect = effects->effects[--effects->effectCount];
-            }
-        }
-    }
+    effects->params.scaleAccumulated = oldScale;
+    effects->params.offsetAccumulated = oldOffset;
     
     EntityDefinition* definition = GetData(worldMode->gameState->assets, EntityDefinition, EntityTypeToAssetID(base->type));
     if(definition)
     {
-        
-#if 0        
         for(u32 effectIndex = 0; effectIndex < definition->client.animationEffectsCount; ++effectIndex)
         {
             AnimationEffectDefinition* effect = definition->client.animationEffects + effectIndex;
-            b32 matches = false;
-            for(u32 testIndex = 0; testIndex < effect->propertyCount; ++testIndex)
-            {
-                matches = false;
-                GameProperty* testProperty = effect->properties + testIndex;
-                for(u32 propertyIndex = 0; propertyIndex < ArrayCount(base->properties); ++propertyIndex)
-                {
-                    GameProperty* entityProperty = base->properties + propertyIndex;
-                    if(AreEqual(*entityProperty, *testProperty))
-                    {
-                        matches = true;
-                        break;
-                    }
-                }
-                
-                if(!matches)
-                {
-                    break;
-                }
-            }
-            
-            if(matches)
-            {
-                AddAnimationEffectIfNotPresent(worldMode, P, effects, effect, SafeTruncateToU16(effectIndex));
-            }
+            AddAnimationEffectIfNotPresent(worldMode, P, effects, effect, SafeTruncateToU16(effectIndex));
         }
-#endif
-        
     }
     
     
@@ -1402,12 +1361,10 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
     Vec3 averageLightColor = {};
     u32 lightCount = 0;
     
-    u32 slowDownCount = 0;
-    r32 averageSlowDown = 0;
-    
     for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
     {
         AnimationEffect* effect = effects->effects + effectIndex;
+        effect->time += elapsedTime;
         switch(effect->type)
         {
             case AnimationEffect_Tint:
@@ -1428,11 +1385,11 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
                 
             } break;
             
-            case AnimationEffect_SlowDown:
+            case AnimationEffect_SineOffset:
             {
-                ++slowDownCount;
-                averageSlowDown += effect->slowDownCoeff;
+                effects->params.offsetComputed = Clamp01MapToRange(-1, Sin(effect->time), 1) * effect->maxOffset;
             } break;
+            
             InvalidDefaultCase;
         }
     }
@@ -1446,26 +1403,26 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
         r32 distanceSq =LengthSq(SubtractOnSameZChunk(base->universeP, worldMode->player.universeP));
         if(distanceSq <= maxDistanceSqZoom)
         {
-            effects->params.scale += effects->speedOnFocus * elapsedTime;
-            effects->params.scale = Min(effects->params.scale, effects->scaleMaxOnFocus);
+            effects->params.scaleAccumulated += effects->speedOnFocus * elapsedTime;
+            effects->params.scaleAccumulated = Min(effects->params.scaleAccumulated, effects->scaleMaxOnFocus);
             
-            effects->params.offset += effects->speedOnFocus * V3(elapsedTime, elapsedTime, elapsedTime);
-            effects->params.offset.x = Min(effects->params.offset.x, effects->offsetMaxOnFocus.x);
-            effects->params.offset.y = Min(effects->params.offset.y, effects->offsetMaxOnFocus.y);
-            effects->params.offset.z = Min(effects->params.offset.z, effects->offsetMaxOnFocus.z);
+            effects->params.offsetAccumulated += effects->speedOnFocus * V3(elapsedTime, elapsedTime, elapsedTime);
+            effects->params.offsetAccumulated.x = Min(effects->params.offsetAccumulated.x, effects->offsetMaxOnFocus.x);
+            effects->params.offsetAccumulated.y = Min(effects->params.offsetAccumulated.y, effects->offsetMaxOnFocus.y);
+            effects->params.offsetAccumulated.z = Min(effects->params.offsetAccumulated.z, effects->offsetMaxOnFocus.z);
             zoom = true;
         }
     }
     
     if(!zoom)
     {
-        effects->params.scale -= effects->speedOnNoFocus * elapsedTime;
-        effects->params.scale = Max(effects->params.scale, 1.0f);
+        effects->params.scaleAccumulated -= effects->speedOnNoFocus * elapsedTime;
+        effects->params.scaleAccumulated = Max(effects->params.scaleAccumulated, 1.0f);
         
-        effects->params.offset -= effects->speedOnNoFocus * V3(elapsedTime, elapsedTime, elapsedTime);
-        effects->params.offset.x = Max(effects->params.offset.x, 0);
-        effects->params.offset.y = Max(effects->params.offset.y, 0);
-        effects->params.offset.z = Max(effects->params.offset.z, 0);
+        effects->params.offsetAccumulated -= effects->speedOnNoFocus * V3(elapsedTime, elapsedTime, elapsedTime);
+        effects->params.offsetAccumulated.x = Max(effects->params.offsetAccumulated.x, 0);
+        effects->params.offsetAccumulated.y = Max(effects->params.offsetAccumulated.y, 0);
+        effects->params.offsetAccumulated.z = Max(effects->params.offsetAccumulated.z, 0);
     }
     
     if(tintCount > 0)
@@ -1486,11 +1443,6 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
         }
     }
     effects->params.tint = Hadamart(effects->params.tint, V4(fadeInOutColor, 1));
-    
-    if(slowDownCount > 0)
-    {
-        effects->params.speed = averageSlowDown / slowDownCount;
-    }
     
     ActionComponent* action = GetComponent(worldMode, ID, ActionComponent);
     if(action)

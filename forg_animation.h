@@ -25,49 +25,41 @@ printTable(noPrefix) enum AnimationEffectType
     AnimationEffect_Tint,
     AnimationEffect_Light,
     AnimationEffect_Particles,
-    AnimationEffect_SlowDown,
+    AnimationEffect_SineOffset,
 };
 
 struct AnimationEffect
 {
     u16 ID;
     u16 type;
-    
     r32 time;
+    
     union
     {
         Vec4 tint;
-        
         struct
         {
             r32 lightIntensity;
             Vec3 lightColor;
         };
         
-        struct ParticleEffectInstance* particles;
+        Vec3 maxOffset;
         
-        r32 slowDownCoeff;
+        struct ParticleEffectInstance* particles;
     };
 };
 
 introspection() struct AnimationEffectDefinition
 {
-    ArrayCounter propertyCount MetaCounter(properties);
-    GameProperty* properties;
-    
     Enumerator type MetaEnumerator("AnimationEffectType");
-    r32 time;
-    
     Vec4 tint MetaDefault("V4(1, 1, 1, 1)");
-    
     r32 lightIntensity MetaDefault("1.0f");
     Vec3 lightColor MetaDefault("V3(1, 1, 1)");
+    Vec3 sineMaxOffset MetaDefault("V3(0, 0, 0)");
     
     ArrayCounter particlePropertyCount MetaCounter(particleProperties);
     GameProperty* particleProperties;
     Vec3 particleEndOffset;
-    
-    r32 slowDownCoeff;
 };
 
 struct EntityAnimationParams
@@ -76,8 +68,10 @@ struct EntityAnimationParams
     Vec4 tint;
     r32 dissolveCoeff;
     r32 speed;
-    r32 scale;
-    Vec3 offset;
+    r32 scaleComputed;
+    r32 scaleAccumulated;
+    Vec3 offsetComputed;
+    Vec3 offsetAccumulated;
 };
 
 inline EntityAnimationParams DefaultAnimationParams()
@@ -85,7 +79,8 @@ inline EntityAnimationParams DefaultAnimationParams()
     EntityAnimationParams result = {};
     result.tint = V4(1, 1, 1, 1);
     result.speed = 1.0f;
-    result.scale = 1.0f;
+    result.scaleComputed = 1.0f;
+    result.scaleAccumulated = 1.0f;
     
     return result;
 }

@@ -5,6 +5,7 @@ internal void InitSpatialPartition(MemoryPool* pool, SpatialPartition* partition
 	partition->cellDim = CHUNK_DIM;
     
 	partition->chunks = PushArray(pool, SpatialPartitionChunk, partition->width * partition->height);
+    partition->currentQueryIndex = 0;
 }
 
 internal SpatialPartitionChunk* GetPartitionChunk(SpatialPartition* partition, i32 X, i32 Y)
@@ -16,6 +17,55 @@ internal SpatialPartitionChunk* GetPartitionChunk(SpatialPartition* partition, i
     return result;
 }
 
+struct AddToPartitionBlockResult
+{
+    SpatialPartitionID* ID;
+    SpatialPartitionEntityBlock* block;
+};
+
+internal AddToPartitionBlockResult AddToPartitionBlock(MemoryPool* pool, SpatialPartitionChunk* chunk, EntityID ID, SpatialPartitionID* actual)
+{
+    AddToPartitionBlockResult result = {};
+    
+    ++chunk->totalCount;
+    SpatialPartitionEntityBlock* block = 0;
+    for(SpatialPartitionEntityBlock* freeBlock = chunk->entities; freeBlock; freeBlock = freeBlock->next)
+    {
+        if(freeBlock->count < ArrayCount(freeBlock->IDs))
+        {
+            block = freeBlock;
+            break;
+        }
+    }
+    
+    if(!block)
+    {
+        block = PushStruct(pool, SpatialPartitionEntityBlock, NoClear());
+        block->count = 0;
+        block->next = chunk->entities;
+        chunk->entities = block;
+    }
+    
+    result.block = block;
+    
+    SpatialPartitionID* dest = block->IDs + block->count++;
+    
+    if(actual)
+    {
+        dest->fake = true;
+        dest->actual = actual;
+    }
+    else
+    {
+        dest->fake = false;
+        dest->ID = ID;
+        dest->lastVisitedQueryIndex = 0;
+    }
+    
+    
+    return result;
+}
+
 struct AddToPartitionResult
 {
     SpatialPartitionEntityBlock* block;
@@ -24,11 +74,8 @@ struct AddToPartitionResult
 internal AddToPartitionResult AddToSpatialPartition(MemoryPool* pool, SpatialPartition* partition, UniversePos P, Rect3 bounds, EntityID ID)
 {
     AddToPartitionResult result = {};
-    
     Assert(IsValidID(ID));
-    
 	P.chunkOffset += GetCenter(bounds);
-    
     UniversePos min = P;
     min.chunkOffset -= 0.5f * GetDim(bounds);
     min = NormalizePosition(min);
@@ -43,33 +90,19 @@ internal AddToPartitionResult AddToSpatialPartition(MemoryPool* pool, SpatialPar
     max.chunkX = Min(WORLD_CHUNK_SPAN - 1, max.chunkX);
     max.chunkY = Min(WORLD_CHUNK_SPAN - 1, max.chunkY);
     
+    SpatialPartitionChunk* actualChunk = GetPartitionChunk(partition, P.chunkX, P.chunkY);
+    AddToPartitionBlockResult actual = AddToPartitionBlock(pool, actualChunk, ID, 0);
+    result.block = actual.block;
+    
 	for(i32 chunkY = min.chunkY; chunkY <= max.chunkY; ++chunkY)
 	{
 		for(i32 chunkX = min.chunkX; chunkX <= max.chunkX; ++chunkX)
 		{
 			SpatialPartitionChunk* chunk = GetPartitionChunk(partition, chunkX, chunkY);
-            ++chunk->totalCount;
-            
-            SpatialPartitionEntityBlock* block = 0;
-            for(SpatialPartitionEntityBlock* freeBlock = chunk->entities; freeBlock; freeBlock = freeBlock->next)
+            if(chunk != actualChunk)
             {
-                if(freeBlock->count < ArrayCount(freeBlock->IDs))
-                {
-                    block = freeBlock;
-                    break;
-                }
+                AddToPartitionBlock(pool, chunk, ID, actual.ID);
             }
-            
-            if(!block)
-            {
-                block = PushStruct(pool, SpatialPartitionEntityBlock, NoClear());
-                block->count = 0;
-                block->next = chunk->entities;
-                chunk->entities = block;
-            }
-            
-            result.block = block;
-            block->IDs[block->count++] = ID;
 		}
 	}
     
@@ -84,7 +117,7 @@ internal void RemoveFromSpatialPartition(SpatialPartition* partition, SpatialPar
     b32 found = false;
     for(u32 entityIndex = 0; entityIndex < block->count; ++entityIndex)
     {
-        if(AreEqual(block->IDs[entityIndex], ID))
+        if(AreEqual(block->IDs[entityIndex].ID, ID))
         {
             block->IDs[entityIndex] = block->IDs[--block->count];
             found = true;
@@ -111,6 +144,7 @@ internal SpatialPartitionQuery QuerySpatialPartition(SpatialPartition* partition
     max = NormalizePosition(max);
     
     result.partition = partition;
+    ++partition->currentQueryIndex;
     
 	result.minX = Max(0, min.chunkX);
 	result.minY = Max(0, min.chunkY);
@@ -158,39 +192,57 @@ internal void AdvanceInternal(SpatialPartitionQuery* query)
     }
 }
 
+internal b32 AlreadyVisited(SpatialPartition* partition, SpatialPartitionID* ID)
+{
+    SpatialPartitionID* toCheck = ID->fake ? ID->actual : ID;
+    Assert(!toCheck->fake);
+    b32 result = (toCheck->lastVisitedQueryIndex == partition->currentQueryIndex);
+    toCheck->lastVisitedQueryIndex = partition->currentQueryIndex;
+    
+    return result;
+}
+
+internal EntityID GetID(SpatialPartitionID* ID)
+{
+    EntityID result = (ID->fake) ? ID->actual->ID : ID->ID;
+    return result;
+}
+
 internal EntityID GetCurrent(SpatialPartitionQuery* query)
 {
 	EntityID result = {};
     
-    SpatialPartitionChunk* chunk = 0;
-    while(!chunk && IsValid(query))
+    while(IsValid(query))
     {
-        SpatialPartitionChunk* test = GetPartitionChunk(query->partition, query->currentX, query->currentY);
-        Assert(test);
-        if(test->totalCount)
+        SpatialPartitionChunk* chunk = GetPartitionChunk(query->partition, query->currentX, query->currentY);
+        if(chunk->totalCount)
         {
-            chunk = test;
+            u32 runningIndex = 0;
+            SpatialPartitionEntityBlock* block = chunk->entities;
+            while(true)
+            {
+                if(query->currentIndex >= runningIndex && query->currentIndex < (runningIndex + block->count))
+                {
+                    u32 index = query->currentIndex - runningIndex;
+                    
+                    SpatialPartitionID* partitionID = block->IDs + index;
+                    if(!AlreadyVisited(query->partition, partitionID))
+                    {
+                        result = GetID(partitionID);
+                        break;
+                    }
+                }
+                runningIndex += block->count;
+                block = block->next;
+            }
+        }
+        
+        if(IsValidID(result))
+        {
             break;
         }
+        
         AdvanceInternal(query);
-    }
-    
-    if(chunk)
-    {
-        Assert(chunk->totalCount);
-        u32 runningIndex = 0;
-        SpatialPartitionEntityBlock* block = chunk->entities;
-        while(true)
-        {
-            if(query->currentIndex >= runningIndex && query->currentIndex < (runningIndex + block->count))
-            {
-                u32 index = query->currentIndex - runningIndex;
-                result = block->IDs[index];
-                break;
-            }
-            runningIndex += block->count;
-            block = block->next;
-        }
     }
     
     return result;

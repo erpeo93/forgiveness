@@ -17,10 +17,26 @@ struct Wall
     Vec3 normal;
 };
 
+struct SpatialPartitionID
+{
+    b32 fake;
+    
+    union
+    {
+        struct
+        {
+            EntityID ID;
+            u16 lastVisitedQueryIndex;
+        };
+        SpatialPartitionID* actual;
+    };
+};
+
 struct SpatialPartitionEntityBlock
 {
     u32 count;
-	EntityID IDs[64];
+	SpatialPartitionID IDs[64];
+    
 	SpatialPartitionEntityBlock* next;
 };
 
@@ -36,6 +52,7 @@ struct SpatialPartition
     i32 height;
     r32 cellDim;
 	SpatialPartitionChunk* chunks;
+    u16 currentQueryIndex;
 };
 
 struct SpatialPartitionQuery

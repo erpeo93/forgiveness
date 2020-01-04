@@ -4,15 +4,25 @@ inline Vec3 GetRelativeP(GameModeWorld* worldMode, UniversePos P)
     return result;
 }
 
-inline Vec3 GetRelativeP(GameModeWorld* worldMode, BaseComponent* base)
+inline Vec3 GetRelativeP(GameModeWorld* worldMode, BaseComponent* base, EntityAnimationParams params)
 {
-    Vec3 result = GetRelativeP(worldMode, base->universeP);
+    Vec3 result = GetRelativeP(worldMode, base->universeP) + params.offsetAccumulated + params.offsetComputed;
     return result;
 }
 
-inline void MoveCameraTowards(GameModeWorld* worldMode, BaseComponent* base, r32 cameraSpeed, Vec2 cameraWorldOffset, r32 zoomCoeff)
+inline Vec3 GetRelativeP(GameModeWorld* worldMode, EntityID ID)
 {
-    cameraWorldOffset += GetRelativeP(worldMode, base).xy;
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    EntityAnimationParams params = GetEntityAnimationParams(worldMode, ID);
+    
+    Vec3 result = GetRelativeP(worldMode, base, params);
+    return result;
+}
+
+inline void MoveCameraTowards(GameModeWorld* worldMode, EntityID ID, r32 cameraSpeed, Vec2 cameraWorldOffset, r32 zoomCoeff)
+{
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    cameraWorldOffset += GetRelativeP(worldMode, ID).xy;
     worldMode->destCameraEntityOffset = 0.5f * V2(GetDim(base->bounds).x, GetDim(base->bounds).z);
     worldMode->destCameraWorldOffset = V3(cameraWorldOffset, worldMode->defaultCameraZ / zoomCoeff);
     worldMode->destCameraWorldOffset += worldMode->editorCameraOffset;

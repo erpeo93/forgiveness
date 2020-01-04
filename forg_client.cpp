@@ -23,9 +23,10 @@ global_variable ClientNetworkInterface* clientNetwork;
 #include "forg_meta.cpp"
 #include "forg_sort.cpp"
 
-internal Rect3 GetEntityBound(GameModeWorld* worldMode, BaseComponent* base)
+internal Rect3 GetEntityBound(GameModeWorld* worldMode, EntityID ID)
 {
-    Rect3 result = Offset(base->bounds, GetRelativeP(worldMode, base));
+    BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+    Rect3 result = Offset(base->bounds, GetRelativeP(worldMode, ID));
     return result;
 }
 
@@ -40,10 +41,10 @@ RENDERING_ECS_JOB_CLIENT(RenderBound)
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
     if(ShouldBeRendered(worldMode, base))
     {
-        Rect3 entityBound = GetEntityBound(worldMode, base);
+        Rect3 entityBound = GetEntityBound(worldMode, ID);
         PushDebugCubeOutline(group, entityBound, V3(1, 0, 0), 0.02f);
         
-        Vec3 entityOrigin = GetRelativeP(worldMode, base);
+        Vec3 entityOrigin = GetRelativeP(worldMode, ID);
         PushRect(group, FlatTransform(V4(0, 1, 0, 1)), entityOrigin, V2(0.05f, 0.05f));
     }
 }
@@ -130,7 +131,7 @@ STANDARD_ECS_JOB_CLIENT(PushEntityLight)
     if(light->lightRadious)
     {
         BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-        Vec3 P = GetRelativeP(worldMode, base);
+        Vec3 P = GetRelativeP(worldMode, ID);
         AddLight(worldMode, P, light->lightColor, light->lightRadious);
     }
 }

@@ -90,6 +90,7 @@ Archetype() struct EssenceArchetype
     BaseComponent base;
     LayoutComponent layout;
     AnimationEffectComponent animationEffects;
+    ShadowComponent shadow;
 #endif
     InteractionComponent interaction;
     LightComponent light;

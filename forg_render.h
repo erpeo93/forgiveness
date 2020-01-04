@@ -94,7 +94,7 @@ struct RenderGroup
 };
 
 
-inline ObjectTransform RenderTransform()
+inline ObjectTransform RenderTransform_()
 {
     ObjectTransform result = {};
     result.scale = V2(1, 1);
@@ -105,14 +105,14 @@ inline ObjectTransform RenderTransform()
 
 inline ObjectTransform FlatTransform(Vec4 color = V4(1, 1, 1, 1))
 {
-    ObjectTransform result = RenderTransform();
+    ObjectTransform result = RenderTransform_();
     result.tint = color;
     return result;
 }
 
 inline ObjectTransform BillboardTransform()
 {
-    ObjectTransform result = RenderTransform();
+    ObjectTransform result = RenderTransform_();
     result.upright = true;
     return result;
 }
