@@ -184,7 +184,7 @@ inline void PushQuad(RenderGroup* group, RenderTexture texture, Lights lights,
              P3, UV3, RGBAPack8x4(C3 * 255.0f), modulationPercentage, lightInfluence, lightYInfluence, windInfluences, windFrequency, dissolvePercentages, alphaThreesold);
 }
 
-inline void PushTextureSegment(RenderGroup* group, RenderTexture texture, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, r32 alphaThreesold, Lights lights = {0, 0})
+inline void PushTextureSegment(RenderGroup* group, RenderTexture texture, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, r32 alphaThreesold, Lights lights = {0, 0}, Vec4 dissolvePercentages = {})
 {
     Vec3 line = toP - fromP;
     Vec3 perp = Cross(group->gameCamera.Z, line);
@@ -200,15 +200,15 @@ inline void PushTextureSegment(RenderGroup* group, RenderTexture texture, Vec4 c
     b32 tranparent = (alphaThreesold == 0.0f || color.a != 1.0f);
     r32 sortKey = ComputeSortKey(group, fromP, true);
     TexturedVertex* vert = ReserveQuad(group, tranparent, sortKey);
-    PushQuad(group, texture, lights, vert, P0, V2(0, 0), c, P1, V2(1, 0), c, P2, V2(1, 1), c, P3, V2(0, 1), c, 0, 0, 0, {}, 0, {}, 0);
+    PushQuad(group, texture, lights, vert, P0, V2(0, 0), c, P1, V2(1, 0), c, P2, V2(1, 1), c, P3, V2(0, 1), c, 0, 0, 0, {}, 0, dissolvePercentages, alphaThreesold);
 }
 
-internal void PushTextureSegment(RenderGroup* group, BitmapId ID, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, Lights lights)
+internal void PushTextureSegment(RenderGroup* group, BitmapId ID, Vec4 color, Vec3 fromP, Vec3 toP, r32 tickness, Lights lights, Vec4 dissolvePercentages = {})
 {
     Bitmap* bitmap = GetBitmap(group->assets, ID).bitmap;
     if(bitmap)
     {
-        PushTextureSegment(group, bitmap->textureHandle, color, fromP, toP, tickness, bitmap->alphaThreesold, lights);
+        PushTextureSegment(group, bitmap->textureHandle, color, fromP, toP, tickness, bitmap->alphaThreesold, lights, dissolvePercentages);
     }
     else
     {

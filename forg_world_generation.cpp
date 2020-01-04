@@ -507,95 +507,98 @@ internal void AddEntity(ServerState* server, UniversePos P, RandomSequence* seq,
 internal void SpawnPlayerGhost(ServerState* server, UniversePos P, AddEntityParams params);
 internal void TriggerSpawnerInCell(ServerState* server, PoissonP* entities, PoissonP* clusters, MemoryPool* poissonPool, Spawner* spawner, UniversePos referenceP, RandomSequence* seq, r32 cellDim)
 {
-    i32 clusterCount = spawner->clusterCount + RoundReal32ToI32(spawner->clusterCountV * RandomBil(seq));
-    
-    for(i32 clusterIndex = 0; clusterIndex < clusterCount; ++clusterIndex)
+    if(spawner->optionCount)
     {
-        Vec3 maxClusterOffset = spawner->clusterOffsetCellDimCoeff * V3(cellDim, cellDim, 0);
-        u32 tries = 0;
-        while(tries++ < 100)
+        i32 clusterCount = spawner->clusterCount + RoundReal32ToI32(spawner->clusterCountV * RandomBil(seq));
+        
+        for(i32 clusterIndex = 0; clusterIndex < clusterCount; ++clusterIndex)
         {
-            UniversePos clusterP = referenceP;
-            Vec3 clusterOffset = Hadamart(maxClusterOffset, RandomBilV3(seq));
-            clusterP = Offset(clusterP, clusterOffset);
-            
-            if(SatisfiesClusterRequirements(server, referenceP, clusterP, cellDim))
+            Vec3 maxClusterOffset = spawner->clusterOffsetCellDimCoeff * V3(cellDim, cellDim, 0);
+            u32 tries = 0;
+            while(tries++ < 100)
             {
-                if(Valid(clusters, clusterP, spawner->minClusterDistance))
+                UniversePos clusterP = referenceP;
+                Vec3 clusterOffset = Hadamart(maxClusterOffset, RandomBilV3(seq));
+                clusterP = Offset(clusterP, clusterOffset);
+                
+                if(SatisfiesClusterRequirements(server, referenceP, clusterP, cellDim))
                 {
-                    AddToPoission(&clusters, poissonPool, clusterP);
-                    
-                    u32 clusterTries = 0;
-                    while(clusterTries++ < 100)
+                    if(Valid(clusters, clusterP, spawner->minClusterDistance))
                     {
-                        r32 totalWeight = 0;
-                        for(u32 optionIndex = 0; optionIndex < spawner->optionCount; ++optionIndex)
-                        {
-                            totalWeight += spawner->options[optionIndex].weight;
-                        }
-                        r32 weight = totalWeight * RandomUni(seq);
+                        AddToPoission(&clusters, poissonPool, clusterP);
                         
-                        
-                        SpawnerOption* option = 0;
-                        r32 runningWeight = 0;
-                        for(u32 optionIndex = 0; optionIndex < spawner->optionCount; ++optionIndex)
+                        u32 clusterTries = 0;
+                        while(clusterTries++ < 100)
                         {
-                            SpawnerOption* test = spawner->options + optionIndex;
-                            runningWeight += test->weight;
-                            if(weight <= runningWeight)
+                            r32 totalWeight = 0;
+                            for(u32 optionIndex = 0; optionIndex < spawner->optionCount; ++optionIndex)
                             {
-                                option = test;
-                                break;
+                                totalWeight += spawner->options[optionIndex].weight;
                             }
-                        }
-                        
-                        if(SatisfiesTileRadiousRequirement(server, clusterP, option->requiredTile, option->requiredFluid, option->requiredRadious, true) &&
-                           !SatisfiesTileRadiousRequirement(server, clusterP, option->repulsionTile, option->repulsionFluid, option->repulsionRadious, false))
-                        {
-                            for(u32 entityIndex = 0; entityIndex < option->entityCount; ++entityIndex)
+                            r32 weight = totalWeight * RandomUni(seq);
+                            
+                            
+                            SpawnerOption* option = 0;
+                            r32 runningWeight = 0;
+                            for(u32 optionIndex = 0; optionIndex < spawner->optionCount; ++optionIndex)
                             {
-                                SpawnerEntity* spawn = option->entities + entityIndex;
-                                
-                                i32 count = spawn->count + RoundReal32ToI32(spawn->countV * RandomBil(seq));
-                                for(i32 index = 0; index < count; ++index)
+                                SpawnerOption* test = spawner->options + optionIndex;
+                                runningWeight += test->weight;
+                                if(weight <= runningWeight)
                                 {
-                                    Vec3 maxOffset = spawn->entityOffsetCellDimCoeff * V3(cellDim, cellDim, 0);
-                                    u32 entityTries = 0;
-                                    while(entityTries++ < 100)
+                                    option = test;
+                                    break;
+                                }
+                            }
+                            
+                            if(SatisfiesTileRadiousRequirement(server, clusterP, option->requiredTile, option->requiredFluid, option->requiredRadious, true) &&
+                               !SatisfiesTileRadiousRequirement(server, clusterP, option->repulsionTile, option->repulsionFluid, option->repulsionRadious, false))
+                            {
+                                for(u32 entityIndex = 0; entityIndex < option->entityCount; ++entityIndex)
+                                {
+                                    SpawnerEntity* spawn = option->entities + entityIndex;
+                                    
+                                    i32 count = spawn->count + RoundReal32ToI32(spawn->countV * RandomBil(seq));
+                                    for(i32 index = 0; index < count; ++index)
                                     {
-                                        UniversePos entityP = clusterP;
-                                        Vec3 entityOffset = Hadamart(maxOffset, RandomBilV3(seq));
-                                        entityP = Offset(entityP, entityOffset);
-                                        
-                                        if(SatisfiesEntityRequirements(server, referenceP, entityP, spawn, cellDim))
+                                        Vec3 maxOffset = spawn->entityOffsetCellDimCoeff * V3(cellDim, cellDim, 0);
+                                        u32 entityTries = 0;
+                                        while(entityTries++ < 100)
                                         {
-                                            if(Valid(entities, entityP, spawn->minEntityDistance))
+                                            UniversePos entityP = clusterP;
+                                            Vec3 entityOffset = Hadamart(maxOffset, RandomBilV3(seq));
+                                            entityP = Offset(entityP, entityOffset);
+                                            
+                                            if(SatisfiesEntityRequirements(server, referenceP, entityP, spawn, cellDim))
                                             {
-                                                AddToPoission(&entities, poissonPool, entityP);
-                                                if(spawn->occupiesTile)
+                                                if(Valid(entities, entityP, spawn->minEntityDistance))
                                                 {
-                                                    MarkTileAsOccupied(server, entityP);
+                                                    AddToPoission(&entities, poissonPool, entityP);
+                                                    if(spawn->occupiesTile)
+                                                    {
+                                                        MarkTileAsOccupied(server, entityP);
+                                                    }
+                                                    
+                                                    AddEntityParams params = DefaultAddEntityParams();
+                                                    if(spawn->attachedBrainEntity)
+                                                    {
+                                                        params.spawnFollowingEntity = true;
+                                                        params.attachedEntityType = GetEntityType(server->assets, spawn->attachedBrainType);
+                                                    }
+                                                    
+                                                    AddEntity(server, entityP, seq, GetEntityType(server->assets, spawn->type), params);
+                                                    
+                                                    break;
                                                 }
-                                                
-                                                AddEntityParams params = DefaultAddEntityParams();
-                                                if(spawn->attachedBrainEntity)
-                                                {
-                                                    params.spawnFollowingEntity = true;
-                                                    params.attachedEntityType = GetEntityType(server->assets, spawn->attachedBrainType);
-                                                }
-                                                
-                                                AddEntity(server, entityP, seq, GetEntityType(server->assets, spawn->type), params);
-                                                
-                                                break;
                                             }
                                         }
                                     }
                                 }
+                                break;
                             }
-                            break;
                         }
+                        break;
                     }
-                    break;
                 }
             }
         }
@@ -718,6 +721,13 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
         brain->homeP = newEntity->P;
         brain->reachableMap = GetComponent(server, ID, ReachableMapComponent);
     }
+    
+    if(HasComponent(ID, TempEntityComponent) && newEntity->params.timeToLive > 0)
+    {
+        TempEntityComponent* temp = GetComponent(server, ID, TempEntityComponent);
+        temp->targetTime = newEntity->params.timeToLive;
+    }
+    
     
     EntityType portal = GetEntityType(server->assets, "default", "portal");
     if(AreEqual(GetEntityType(newEntity->definitionID), portal))

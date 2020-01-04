@@ -28,7 +28,7 @@ cl %commoncompilerflags% -Fmforg_client.map ..\code\forg_client.cpp -LD /link %c
 del lock.tmp
 
 
-cl %commoncompilerflags% -I "..\..\openssl\include" -Fmwin32_client.map ..\code\win32_client.cpp /link "C:\work\external\openssl\libssl.lib" "C:\work\external\openssl\libcrypto.lib" %commonlinkerflags% User32.lib Gdi32.lib Winmm.lib opengl32.lib Ws2_32.lib Shell32.lib Dbghelp.lib
+cl %commoncompilerflags% -I "..\..\openssl\include" -Fmwin32_client.map ..\code\win32_client.cpp /link %commonlinkerflags% User32.lib Gdi32.lib Winmm.lib opengl32.lib Ws2_32.lib Shell32.lib Dbghelp.lib
 
 popd
 

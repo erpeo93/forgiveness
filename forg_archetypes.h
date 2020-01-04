@@ -150,6 +150,19 @@ Archetype() struct LightArchetype
     LightComponent light;
 };
 
+Archetype() struct PatchArchetype
+{
+#ifdef FORG_SERVER
+    DefaultComponent default;
+    TempEntityComponent temp;
+    OverlappingEffectsComponent overlap;
+#else
+    BaseComponent base;
+    StandardImageComponent image;
+    AnimationEffectComponent animationEffects;
+#endif
+};
+
 Archetype() struct PlaceholderArchetype
 {
 #ifdef FORG_SERVER
@@ -282,6 +295,9 @@ introspection() struct ServerEntityInitParams
     ArrayCounter collisionEffectsCount MetaCounter(collisionEffects);
     GameEffect* collisionEffects;
     
+    ArrayCounter overlappingEffectsCount MetaCounter(overlappingEffects);
+    GameEffect* overlappingEffects;
+    
     ArrayCounter defaultEffectsCount MetaCounter(defaultEffects);
     GameEffect* defaultEffects;
     
@@ -313,12 +329,12 @@ introspection() struct ServerEntityInitParams
     r32 fireDamagePerSecond;
     r32 poisonDamagePerSecond;
     
-    
     r32 defaultAttackDistance MetaDefault("1.0f");
     r32 defaultAttackContinueCoeff MetaDefault("2.0f");
     r32 movementSpeedWhileAttacking;
     
     r32 defaultActionSpeed MetaDefault("1.0f");
+    r32 targetTimeToLive MetaDefault("1.0f");
 };
 
 introspection() struct ImageProperty
@@ -331,6 +347,7 @@ introspection() struct ImageProperties
 {
     GameAssetType imageType MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
     b32 emittors;
+    b32 flat;
     ArrayCounter propertyCount MetaCounter(properties);
     ImageProperty* properties;
 };

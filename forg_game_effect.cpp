@@ -5,8 +5,7 @@ internal void DamageEntityPhysically(ServerState* server, EntityID ID, r32 damag
     
     if(health)
     {
-        r32 newHealth = GetR32(health->physicalHealth) - damage;
-        SetR32(&health->physicalHealth, newHealth);
+        health->physicalHealth -= damage;
     }
 }
 
@@ -16,8 +15,7 @@ internal void DamageEntityMentally(ServerState* server, EntityID ID, r32 damage)
     
     if(health)
     {
-        r32 newHealth = GetR32(health->mentalHealth) - damage;
-        SetR32(&health->mentalHealth, newHealth);
+        health->mentalHealth -= damage;
     }
 }
 
@@ -50,7 +48,7 @@ internal void EssenceDelta(ServerState* server, EntityID ID, u16 essence, i16 de
 internal void DeleteEntity(ServerState* server, EntityID ID, DeleteEntityReasonType reason = DeleteEntity_None);
 internal EntityType GetCraftingType(Assets* assets, u32 recipeSeed);
 internal void AddEntity(ServerState* server, UniversePos P, u32 seed, EntityType type, AddEntityParams params);
-internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos targetP, GameEffectInstance* effect, EntityID otherID, u16* essences)
+internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos targetP, GameEffectInstance* effect, EntityID otherID, u16* essences, r32 elapsedTime)
 {
     switch(effect->type)
     {
@@ -82,7 +80,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             AddEntityParams params = SpawnEntityParams(ID);
             
             DefaultComponent* targetDef = GetComponent(server, otherID, DefaultComponent);
-            DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+            DefaultComponent* def = GetComponent(server, otherID, DefaultComponent);
             Vec3 toTarget = SubtractOnSameZChunk(targetDef->P, def->P);
             params.acceleration = toTarget;
             params.speed = 1.0f * Normalize(toTarget);
@@ -91,14 +89,19 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
         
         case spawnProjectileTowardDirection:
         {
-            AddEntityParams params = SpawnEntityParams(ID);
+            Vec3 offset = V3(1, 0, 0);
+            BrainComponent* brain = GetComponent(server, otherID, BrainComponent);
+            if(brain)
+            {
+                offset = brain->commandParameters.targetOffset;
+            }
             
-            DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
-            Vec3 toTarget = SubtractOnSameZChunk(targetP, def->P);
-            params.acceleration = toTarget;
-            params.speed = 1.0f * Normalize(toTarget);
+            AddEntityParams params = SpawnEntityParams(otherID);
+            params.acceleration = offset;
+            params.speed = 1.0f * Normalize(offset);
+            params.timeToLive = 10.0f;
             
-            UniversePos spawnP = def->P;
+            UniversePos spawnP = Offset(targetP, V3(0, 0, 1.0f));
             AddEntity(server, spawnP, &server->entropy, effect->spawnType, params);
         } break;
         
@@ -131,7 +134,6 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             UniversePos oldP = def->P;
             
             Vec3 offset = {};
-            
             BrainComponent* brain = GetComponent(server, destID, BrainComponent);
             if(brain)
             {
@@ -193,7 +195,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
                     Vec3 offset = Hadamart(RandomBilV3(&server->entropy), V3(0.5f, 0.5f, 0));
                     UniversePos P = Offset(targetP, offset);
                     AddEntity(server, P, &server->entropy, effect->spawnType, DefaultAddEntityParams());
-                    SetR32(&vegetation->flowerDensity, flowerDensity - requiredFlowerDensity);
+                    vegetation->flowerDensity -= requiredFlowerDensity;
                 }
             }
         } break;
@@ -210,7 +212,8 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
                     Vec3 offset = Hadamart(RandomBilV3(&server->entropy), V3(0.5f, 0.5f, 0));
                     UniversePos P = Offset(targetP, offset);
                     AddEntity(server, P, &server->entropy, effect->spawnType, DefaultAddEntityParams());
-                    SetR32(&vegetation->fruitDensity, fruitDensity - requiredFruitDensity);
+                    
+                    vegetation->fruitDensity -= requiredFruitDensity;
                 }
             }
         } break;
@@ -247,8 +250,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             HealthComponent* health = GetComponent(server, otherID, HealthComponent);
             if(health)
             {
-                r32 newHealth = GetR32(health->physicalHealth) + effect->power;
-                SetR32(&health->physicalHealth, Min(newHealth, GetR32(health->maxPhysicalHealth)));
+                health->physicalHealth += effect->power;
             }
         } break;
         
@@ -271,8 +273,8 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             VegetationComponent* vegetation = GetComponent(server, ID, VegetationComponent);
             if(vegetation)
             {
-                SetR32(&vegetation->flowerGrowingSpeed, GetR32(vegetation->flowerGrowingSpeed) * effect->power);
-                SetR32(&vegetation->fruitGrowingSpeed, GetR32(vegetation->fruitGrowingSpeed) * effect->power);
+                vegetation->flowerGrowingSpeed *= effect->power;
+                vegetation->fruitGrowingSpeed *= effect->power;
             }
         } break;
         
@@ -309,7 +311,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             ActionComponent* action = GetComponent(server, otherID, ActionComponent);
             if(action)
             {
-                SetR32(&action->speed, GetR32(action->speed) * effect->power);
+                action->speed *= effect->power;
             }
         } break;
         
@@ -318,8 +320,16 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             HealthComponent* health = GetComponent(server, otherID, HealthComponent);
             if(health)
             {
-                r32 newFirePercentage = GetR32(health->onFirePercentage) + effect->power;
-                SetR32(&health->onFirePercentage, newFirePercentage);
+                health->onFirePercentage += effect->power;
+            }
+        } break;
+        
+        case firePerSecond:
+        {
+            HealthComponent* health = GetComponent(server, otherID, HealthComponent);
+            if(health)
+            {
+                health->onFirePercentage += effect->power * elapsedTime;
             }
         } break;
         
@@ -328,8 +338,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             HealthComponent* health = GetComponent(server, otherID, HealthComponent);
             if(health)
             {
-                r32 newPoisonPercentage = GetR32(health->poisonPercentage) + effect->power;
-                SetR32(&health->poisonPercentage, newPoisonPercentage);
+                health->poisonPercentage += effect->power;
             }
         } break;
     }
@@ -359,7 +368,7 @@ internal void DispatchEntityEffects(ServerState* server, UniversePos P, u16 comm
                 
                 if(effect->time >= instance->targetTime)
                 {
-                    DispatchGameEffect(server, ID, P, instance, parentID, essences);
+                    DispatchGameEffect(server, ID, P, instance, parentID, essences, elapsedTime);
                     
                     if(instance->targetTime < 0 || (instance->deleteTime > 0 && effect->totalTime >= instance->deleteTime))
                     {
@@ -395,9 +404,6 @@ internal void ResetComputedProperties(ServerState* server, EntityID ID)
     {
         RESET(health, maxPhysicalHealth);
         RESET(health, maxMentalHealth);
-        
-        RESET_ZERO(health, onFirePercentage);
-        RESET_ZERO(health, poisonPercentage);
     }
     
     VegetationComponent* vegetation = GetComponent(server, ID, VegetationComponent);
@@ -475,6 +481,8 @@ STANDARD_ECS_JOB_SERVER(DispatchEntityDefaultEffects)
 
 internal void DispatchCollisitonEffects(ServerState* server, UniversePos P, EntityID actor, EntityID trigger)
 {
+    r32 elapsedTime = 0;
+    
     CollisionEffectsComponent* effects = GetComponent(server, trigger, CollisionEffectsComponent);
     DefaultComponent* def = GetComponent(server, trigger, DefaultComponent);
     
@@ -484,12 +492,12 @@ internal void DispatchCollisitonEffects(ServerState* server, UniversePos P, Enti
         for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
         {
             GameEffectInstance* effect = effects->effects + effectIndex;
-            DispatchGameEffect(server, trigger, P, effect, actor, essences);
+            DispatchGameEffect(server, trigger, P, effect, actor, essences, elapsedTime);
         }
     }
 }
 
-internal void DispatchOverlappingEffects(ServerState* server, UniversePos P, EntityID actor, EntityID overlap)
+internal void DispatchOverlappingEffects(ServerState* server, UniversePos P, EntityID actor, EntityID overlap, r32 elapsedTime)
 {
     OverlappingEffectsComponent* effects = GetComponent(server, overlap, OverlappingEffectsComponent);
     DefaultComponent* def = GetComponent(server, overlap, DefaultComponent);
@@ -500,7 +508,7 @@ internal void DispatchOverlappingEffects(ServerState* server, UniversePos P, Ent
         for(u32 effectIndex = 0; effectIndex < effects->effectCount; ++effectIndex)
         {
             GameEffectInstance* effect = effects->effects + effectIndex;
-            DispatchGameEffect(server, overlap, P, effect, actor, essences);
+            DispatchGameEffect(server, overlap, P, effect, actor, essences, elapsedTime);
         }
     }
 }

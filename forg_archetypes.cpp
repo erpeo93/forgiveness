@@ -78,6 +78,7 @@ INIT_COMPONENT_FUNCTION(InitMovementComponent)
     movement->acc = s->startingAcceleration;
     movement->speed = s->startingSpeed;
     movement->accelerationCoeff = s->accelerationCoeff;
+    movement->actionAccelerationCoeff = 1.0f;
     movement->drag = s->drag;
 }
 
@@ -216,6 +217,20 @@ INIT_COMPONENT_FUNCTION(InitCollisionEffectsComponent)
     }
 }
 
+INIT_COMPONENT_FUNCTION(InitOverlappingEffectsComponent)
+{
+    OverlappingEffectsComponent* overlap = (OverlappingEffectsComponent*) componentPtr;
+    overlap->effectCount = 0;
+    for(u32 effectIndex = 0; effectIndex < s->overlappingEffectsCount; ++effectIndex)
+    {
+        if(overlap->effectCount < ArrayCount(overlap->effects))
+        {
+            GameEffectInstance* dest = overlap->effects + overlap->effectCount++;
+            *dest = InstanceEffect(assets, s->overlappingEffects + effectIndex);
+        }
+    }
+}
+
 INIT_COMPONENT_FUNCTION(InitPlayerComponent)
 {
 }
@@ -291,7 +306,7 @@ INIT_COMPONENT_FUNCTION(InitTempEntityComponent)
 {
     TempEntityComponent* temp = (TempEntityComponent*) componentPtr;
     temp->time = 0.0f;
-    temp->targetTime = 1.0f;
+    temp->targetTime = s->targetTimeToLive;
 }
 
 INIT_COMPONENT_FUNCTION(InitStaticComponent)
@@ -395,6 +410,7 @@ internal void InitImageReference_(Assets* assets, ImageReference* dest,ImageProp
 {
     dest->typeHash = sourceProperties->imageType.subtypeHash;
     dest->emittors = sourceProperties->emittors;
+    dest->flat = sourceProperties->flat;
     dest->properties = {};
     for(u16 propertyIndex = 0; propertyIndex < sourceProperties->propertyCount; ++propertyIndex)
     {

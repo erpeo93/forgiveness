@@ -72,6 +72,10 @@ struct R32
 {
     r32 value;
     b32 dirty;
+    
+    inline R32& operator += (r32);
+    inline R32& operator *= (r32);
+    inline R32& operator -= (r32);
 };
 
 inline r32 GetR32(R32 value)
@@ -105,7 +109,7 @@ inline r32 operator *(R32 v1, R32 v2)
 }
 
 #define Property(name) enum name
-#include "../properties/test.properties"
+#include "test.properties"
 #include "forg_ecs.h"
 #include "forg_entity_layout.h"
 #include "forg_entity.h"
@@ -220,6 +224,24 @@ inline void SetR32(R32* value, r32 newValue)
         value->value = newValue;
         value->dirty = true;
     }
+}
+
+inline R32& R32::operator += (r32 c)
+{
+    SetR32(this, this->value + c);
+    return *this;
+}
+
+inline R32& R32::operator *= (r32 c)
+{
+    SetR32(this, this->value * c);
+    return *this;
+}
+
+inline R32& R32::operator -= (r32 c)
+{
+    SetR32(this, this->value - c);
+    return *this;
 }
 
 inline void AddEntityFlags(DefaultComponent* def, u32 flags)
@@ -347,6 +369,7 @@ struct AddEntityParams
     b32 lock;
     b32 ghost;
     EntityID spawnerID;
+    r32 timeToLive;
 };
 
 internal AddEntityParams DefaultAddEntityParams()

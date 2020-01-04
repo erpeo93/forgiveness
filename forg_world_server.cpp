@@ -620,14 +620,11 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
     
     SetMoveAcceleration(movement, parameters->acceleration);
     r32 speed = GetR32(action->speed);
-    
-    
     if(speed > 0)
     {
         if(updateAction)
         {
             SetMoveCoeff(movement, action, 0.0f);
-            
             if(newAction == action->action)
             {
                 action->time += speed * elapsedTime;
@@ -650,6 +647,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             case none:
             case idle:
             {
+                
             } break;
             
             case move:
@@ -681,7 +679,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                                 
                                 if(enoughMentalHealth)
                                 {
-                                    UniversePos targetP = Offset(def->P, parameters->targetOffset);
+                                    UniversePos targetP = def->P;
                                     DispatchEntityEffects(server, targetP, commandIndex, cast, ID, skillID, elapsedTime, essences, false);
                                 }
                                 else
@@ -1031,6 +1029,10 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             action->time = 0;
         }
     }
+    else
+    {
+        SetMoveCoeff(movement, action, 0.0f);
+    }
 }
 
 STANDARD_ECS_JOB_SERVER(HandleOpenedContainers)
@@ -1147,6 +1149,7 @@ internal b32 ShouldOverlap(u16 b1, u16 b2)
         
         case bound_creature:
         {
+            result = (b2 == bound_groundPatch);
         } break;
         
         case bound_environment:
@@ -1187,7 +1190,9 @@ internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, M
     
     movement->speed += acceleration * dt;
     r32 tRemaining = 1.0f;
-    for( u32 iteration = 0; (iteration < 2) && tRemaining > 0; iteration++)
+    
+    u32 iterationCount = 2;
+    for( u32 iteration = 0; (iteration < iterationCount) && tRemaining > 0; iteration++)
     {
         Vec3 wallNormalMin = {};
         r32 tStop = tRemaining;
@@ -1213,7 +1218,8 @@ internal void HandleEntityMovement(ServerState* server, DefaultComponent* def, M
                 {
                     if(shouldOverlap)
                     {
-                        DispatchOverlappingEffects(server, testDef->P, ID, testID);
+                        DispatchOverlappingEffects(server, testDef->P, ID, testID, elapsedTime);
+                        DispatchOverlappingEffects(server, testDef->P, testID, ID, elapsedTime);
                     }
                 }
                 
@@ -1355,11 +1361,24 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
     HealthComponent* health = GetComponent(server, ID, HealthComponent);
     if(health)
     {
+        if(GetR32(health->onFirePercentage) > 0)
+        {
+            r32 fireRecoverSpeed = -0.01f;
+            health->onFirePercentage += (fireRecoverSpeed * elapsedTime);
+        }
+        
+        if(GetR32(health->poisonPercentage) > 0)
+        {
+            r32 poisonRecoverSpeed = -0.01f;
+            health->poisonPercentage += (poisonRecoverSpeed * elapsedTime);
+        }
+        
         r32 physicalRegenerationSpeed = GetR32(health->physicalRegenerationPerSecond);
         r32 mentalRegenerationSpeed = GetR32(health->mentalRegenerationPerSecond);
         
-        r32 fireDamageSpeed = GetR32(health->fireDamagePerSecond) * GetR32(health->onFirePercentage);
-        r32 poisonDamageSpeed = GetR32(health->poisonDamagePerSecond) * GetR32(health->poisonPercentage);
+        
+        r32 fireDamageSpeed = health->fireDamagePerSecond * health->onFirePercentage; 
+        r32 poisonDamageSpeed = health->poisonDamagePerSecond * health->poisonPercentage; 
         
         r32 deltaPhysical = (physicalRegenerationSpeed + fireDamageSpeed + poisonDamageSpeed) * elapsedTime;
         r32 deltaMental = (mentalRegenerationSpeed + fireDamageSpeed + poisonDamageSpeed) * elapsedTime;
@@ -1367,11 +1386,6 @@ STANDARD_ECS_JOB_SERVER(UpdateEntity)
         r32 newPhysical = Min(GetR32(health->maxPhysicalHealth), GetR32(health->physicalHealth) + deltaPhysical);
         
         r32 newMental = Min(GetR32(health->maxMentalHealth), GetR32(health->mentalHealth) + deltaMental);
-        
-        
-        
-        
-        
         
         
         SetR32(&health->physicalHealth, newPhysical);

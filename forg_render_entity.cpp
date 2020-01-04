@@ -607,7 +607,7 @@ internal void RenderStaticAnimation(GameModeWorld* worldMode, RenderGroup* group
     BitmapId BID = GetImageFromReference(group->assets, image, &seq);
     if(IsValid(BID))
     {
-        ObjectTransform transform = BillboardTransform();
+        ObjectTransform transform = image->flat ? FlatTransform() : BillboardTransform();
         transform.modulationPercentage = params.modulationPercentage; 
         transform.dissolvePercentages = params.dissolveCoeff * V4(1, 1, 1, 1); 
         transform.tint = params.tint;
@@ -636,10 +636,10 @@ internal void RenderSegmentImage(GameModeWorld* worldMode, RenderGroup* group, E
         
         Vec3 speed = Normalize(base->velocity);
         
-        Vec3 fromP = P + speed * width;
-        Vec3 toP = P - speed * width;
+        Vec3 fromP = P - speed * width;
+        Vec3 toP = P + speed * width;
         
-        PushTextureSegment(group, BID, params.tint, fromP, toP, height, lights);
+        PushTextureSegment(group, BID, params.tint, fromP, toP, height, lights, dissolvePercentages);
     }
 }
 

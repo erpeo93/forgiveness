@@ -519,7 +519,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                         if(coldSetPosition)
                         {
                             base->velocity = {};
-                            if(IsValidID(spawnerID))
+                            if(false && IsValidID(spawnerID))
                             {
                                 BaseComponent* spawner = GetComponent(worldMode, spawnerID, BaseComponent);
                                 

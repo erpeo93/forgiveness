@@ -673,7 +673,7 @@ int main(int argc, char** argv)
     char* fileNames[] =
     {
         "forg_platform.h",
-        "../properties/test.properties",
+        "test.properties",
         "forg_math.h",
         "forg_game_effect.h",
         "forg_world_generation.cpp",

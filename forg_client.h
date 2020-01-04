@@ -14,7 +14,7 @@
 #include "forg_file_formats.h"
 #include "forg_asset.h"
 #define Property(name) enum name
-#include "../properties/test.properties"
+#include "test.properties"
 #include "forg_noise.h"
 #include "forg_world_generation.h"
 #include "forg_game_effect.h"

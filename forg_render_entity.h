@@ -4,6 +4,7 @@ struct ImageReference
     u64 typeHash;
     GameProperties properties;
     b32 emittors;
+    b32 flat;
 };
 
 struct StandardImageComponent
