@@ -1465,7 +1465,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
             winSoundBuffer.bytesPerSample = sizeof( i16 ) * 2;
             winSoundBuffer.totalBufferSize = winSoundBuffer.samplesPerSecond * winSoundBuffer.bytesPerSample;
             winSoundBuffer.runningSampleIndex = 0;
-            winSoundBuffer.delaySamples = (i32) (0.6f * (winSoundBuffer.samplesPerSecond / targetSecPerFrame * 1000.0f));
+            winSoundBuffer.delaySamples = (i32) (0.4f * (winSoundBuffer.samplesPerSecond / targetSecPerFrame * 1000.0f));
             
             u32 maxOverrun = 8 * 2 * sizeof( i16 );
             soundSamples = ( i16*) VirtualAlloc(0, winSoundBuffer.totalBufferSize + maxOverrun,

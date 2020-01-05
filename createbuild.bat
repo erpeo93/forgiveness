@@ -1,3 +1,5 @@
+@echo off
+
 set buildpath=..\..\build
 
 set hh=%time:~-11,2%
@@ -6,8 +8,12 @@ set hh=%hh:~1%
 
 
 set buildname=%date:~10,4%-%date:~4,2%-%date:~7,2%-%hh%-%time:~3,2%-%time:~6,2%
-if NOT "%~1"=="" set buildname=%~1
+if "%~1"=="" (
+echo Enter a valid version name!
+exit /B 1
+)
 
+set buildname=%~1
 set mydir=BUILD_%buildname%
 set mypdbdir=PDBS_%buildname%
 
@@ -18,7 +24,7 @@ exit /B 1
 )
 
 call buildcommon.bat
-set commoncompilerflags= -O2 -DFORGIVENESS_STREAMING=0 -DFORGIVENESS_SLOW=1 -DFORGIVENESS_INTERNAL=0 %commoncompilerflags%
+set commoncompilerflags= -O2 -DFORGIVENESS_STREAMING=0 -DFORGIVENESS_SLOW=1 -DFORGIVENESS_INTERNAL=1 %commoncompilerflags%
 call buildclient.bat
 call buildserver.bat
 

@@ -606,7 +606,7 @@ internal void TriggerSpawnerInCell(ServerState* server, PoissonP* entities, Pois
 }
 
 
-internal void Pick(ServerState* server, EntityID ID, EntityID targetID);
+internal b32 Pick(ServerState* server, EntityID ID, EntityID targetID);
 internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
 {
     Assert(IsValid(newEntity->definitionID));

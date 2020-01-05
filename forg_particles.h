@@ -26,15 +26,34 @@ introspection() struct ParticleUpdater
     AssetID bitmapID MetaUneditable();
     RenderTexture* texture MetaUneditable();
     Vec2 textureInvUV MetaUneditable();
+    Vec3 finalAcceleration MetaUneditable();
     
+    ArrayCounter propertyCount MetaCounter(properties);
+    GameProperty* properties;
     GameAssetType asset MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
     
-    b32 sineUpdater;
-    r32 totalRadiants;
-    u32 sineSubdivisions MetaDefault("1");
+    b32 updateColorOverLifetime MetaDefault("true");
+    b32 modulateColorWithVelocity;
+    
+    Vec4 colorIdle MetaDefault("V4(1, 1, 1, 1)");
+    Vec4 colorFullSpeed MetaDefault("V4(1, 1, 1, 1)");
+    
+    b32 updateScaleOverTime MetaDefault("true");
+    b32 modulateScaleWithVelocity;
+    
+    r32 scaleXIdle MetaDefault("1.0f");
+    r32 scaleXFullspeed MetaDefault("1.0f");
+    
+    r32 scaleYIdle MetaDefault("1.0f");
+    r32 scaleYFullspeed MetaDefault("1.0f");
+    
+    b32 updateAngleOvertime MetaDefault("true");
+    b32 modulateAngleWithVelocity;
+    
+    r32 angleIdle;
+    r32 angleFullspeed;
     
     Vec3 ddP;
-    Vec3 finalAcceleration;
     Vec4 ddC;
     
     r32 dScaleX;
@@ -42,16 +61,51 @@ introspection() struct ParticleUpdater
     r32 dAngle;
 };
 
+printTable() enum ParticleEmissionType
+{
+    Emission_RateOverTime,
+    Emission_BurstOverTime,
+    Emission_Fixed,
+};
+
+printTable() enum ParticleBoundType
+{
+    Bound_None,
+    Bound_Sphere,
+    Bound_Rect,
+};
+
 introspection() struct ParticleEmitter
 {
+    r32 accumulatedTime MetaUneditable();
+    r32 targetAccumulatedTime MetaUneditable();
+    
+    u16 emissionType MetaUneditable();
+    u16 boundType MetaUneditable();
+    
+    Enumerator emission MetaEnumerator("ParticleEmissionType");
+    Enumerator bound MetaEnumerator("ParticleBoundType");
+    
+    r32 radious;
+    Vec3 rectDim;
+    
+    b32 modulateWithVelocity;
+    b32 outline;
+    
+    r32 particleCount;
+    r32 particleCountV;
+    
     r32 particlesPerSec MetaDefault("1.0f");
+    r32 targetAccumulatedTimeRef MetaDefault("1.0f");
+    r32 targetAccumulatedTimeV;
     
     r32 lifeTime MetaDefault("1.0f");
     r32 lifeTimeV;
     
     Vec3 startPV;
     
-    r32 lerpWithUpVector;
+    r32 followOrientation;
+    Vec3 defaultOrientation MetaDefault("V3(0, 0, 1)");
     Vec3 dP MetaDefault("V3(0, 0, 1)");
     Vec3 dPV;
     
@@ -78,7 +132,6 @@ introspection() struct ParticlePhase
 };
 
 #define MAX_PHASE_COUNT 8
-#define MAX_SOUND_COUNT 4
 struct ParticleEffectInstance
 {
     b32 active;
@@ -87,18 +140,20 @@ struct ParticleEffectInstance
     u32 particle4xCount;
     Particle_4x* firstParticle;
     
-    
     ParticleEmitter emitter;
-    r32 dAngleSineUpdaters;
     u32 phaseCount;
     ParticlePhase phases[MAX_PHASE_COUNT];
     
-    u32 soundCount;
-    SoundMapping sounds[MAX_SOUND_COUNT];
+    b32 influencedByWind;
+    Vec4 windInfluences;
+    u8 windFrequency;
     
     Vec3 P;
-    Vec3 UpVector;
-    r32 updaterAngle;
+    Vec3 speed;
+    r32 boundsScale;
+    r32 maxSpeedMagnitudo;
+    
+    ParticleEffectInstance* subEffect;
     
     union
     {
@@ -109,7 +164,7 @@ struct ParticleEffectInstance
 
 struct ParticleCache
 {
-    RandomSequence particleEntropy;
+    RandomSequence entropy;
     ParticleEffectInstance* firstActiveEffect;
     Vec3 deltaParticleP;
     
@@ -121,11 +176,17 @@ struct ParticleCache
 
 introspection() struct ParticleEffect
 {
+    b32 influencedByWind;
+    Vec4 windInfluences MetaDefault("V4(0.05f, 0.05f, 0.05f, 0.05f)");
+    u16 windFrequency MetaDefault("1");
+    
+    r32 maxSpeedMagnitudo;
     ParticleEmitter emitter;
-    r32 dAngleSineUpdaters;
     ArrayCounter phaseCount MetaCounter(phases);
     ParticlePhase* phases;
     
-    ArrayCounter soundCount MetaCounter(sounds);
-    SoundMappingDefinition* sounds;
+    r32 subEffectSpeedMagnitudo;
+    ParticleEmitter subEmitter;
+    ArrayCounter subPhaseCount MetaCounter(subPhases);
+    ParticlePhase* subPhases;
 };

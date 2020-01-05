@@ -52,8 +52,6 @@ internal PlayingSound* PlaySound(SoundState* soundState, Assets* assets, SoundId
     newSound->ID = ID;
     
     
-    
-    
     newSound->delay = delay;
     newSound->dSample = frequency;
     

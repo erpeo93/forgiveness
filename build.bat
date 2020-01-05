@@ -6,6 +6,6 @@ DEL *.pdb > NUl 2> NUL
 popd
 
 call buildcommon.bat
-set commoncompilerflags= -Od -DFORGIVENESS_STREAMING=0 -DFORGIVENESS_SLOW=1 -DFORGIVENESS_INTERNAL=1 %commoncompilerflags%
+set commoncompilerflags= -O2 -DFORGIVENESS_STREAMING=0 -DFORGIVENESS_SLOW=1 -DFORGIVENESS_INTERNAL=0 %commoncompilerflags%
 call buildclient.bat
 call buildserver.bat

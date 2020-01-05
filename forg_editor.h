@@ -172,10 +172,14 @@ struct EditorUIContext
     u16 essences[Count_essence];
     u16 action;
     r32 health;
+    Vec3 entityOffset;
     
     // NOTE(Leonardo): render particle mode
     GameProperties properties;
     AssetLabel effectName;
+    Vec3 particleOffset;
+    Vec3 particleSpeed;
+    r32 particleScale;
     
     
     char keyboardBuffer[32];

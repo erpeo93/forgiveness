@@ -717,3 +717,22 @@ internal void QueueDayTime(PlayerComponent* player, u16 dayTime)
     Pack("H", dayTime);
     QueueOrderedPacket(player);
 }
+
+internal void QueueEventTrigger(PlayerComponent* player, EntityID ID, EntityID targetID, u16 eventIndex)
+{
+    StartPacket(player, EventTrigger);
+    Pack("LLH", ID, targetID, eventIndex);
+    QueueOrderedPacket(player);
+}
+
+internal void QueueEventTrigger(ServerState* server, EntityID ID, EntityID targetID, u16 eventIndex)
+{
+    DefaultComponent* def = GetComponent(server, targetID, DefaultComponent);
+    
+    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
+    for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
+    {
+        PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
+        QueueEventTrigger(player, ID, targetID, eventIndex);
+    }
+}

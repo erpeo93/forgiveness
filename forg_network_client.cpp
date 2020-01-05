@@ -393,7 +393,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 if(AreEqual(command, UI->lockedCommand))
                 {
                     UI->lockedInteractionType = LockedInteraction_Completed;
-                    UI->keyboardInteractionDisabled = true;
                 }
             } break;
             
@@ -841,6 +840,16 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 }
             } break;
             
+            case Type_EventTrigger:
+            {
+                EntityID ID;
+                EntityID targetID;
+                u16 eventIndex;
+                Unpack("LLH", &ID, &targetID, &eventIndex);
+                SoundTrig trigger = {};
+                trigger.subtypeHash = StringHash("crack");
+                SoundTrigger(worldMode, &trigger);
+            } break;
 #if 0            
             case Type_Weather:
             {

@@ -1,15 +1,109 @@
+internal r32 GetSpeedNorm(ParticleEffectInstance* effect)
+{
+    r32 result = Clamp01(LengthSq(effect->speed) / Square(effect->maxSpeedMagnitudo));
+    return result;
+}
+
+
 #define MMSetRandomize(seq, value, magnitude) _mm_set_ps(value + RandomBil(seq) * magnitude, value + RandomBil(seq) * magnitude, value + RandomBil(seq) * magnitude, value + RandomBil(seq) * magnitude);
 #define MMSetRandomUni(seq) _mm_set_ps(RandomUni(seq), RandomUni(seq), RandomUni(seq), RandomUni(seq))
 
 internal void SpawnParticles(ParticleCache* cache, ParticleEffectInstance* effect, r32 dt)
 {
-    RandomSequence* entropy = &cache->particleEntropy;
-    Vec3 atP = effect->P - cache->deltaParticleP;
+    RandomSequence* entropy = &cache->entropy;
+    Vec3 baseP = effect->P - cache->deltaParticleP;
     
     ParticleEmitter* emitter = &effect->emitter;
     
+    Vec3 atP = baseP;
+    r32 particleCount = 0;
     
-    r32 particleCount = emitter->particlesPerSec * dt + effect->spawnParticlesLeftOff;
+    Vec3 orientation = emitter->defaultOrientation;
+    if(LengthSq(effect->speed) > 0)
+    {
+        orientation = effect->speed;
+    }
+    
+    r32 speedNorm = GetSpeedNorm(effect);
+    switch(emitter->emissionType)
+    {
+        case Emission_RateOverTime:
+        {
+            r32 speed = emitter->particlesPerSec;
+            if(emitter->modulateWithVelocity)
+            {
+                speed *= speedNorm;
+            }
+            
+            particleCount = speed * dt;
+        } break;
+        
+        case Emission_BurstOverTime:
+        {
+            r32 speed = 1.0f;
+            if(emitter->modulateWithVelocity)
+            {
+                speed *= speedNorm;
+            }
+            
+            emitter->accumulatedTime += speed * dt;
+            if(emitter->accumulatedTime >= emitter->targetAccumulatedTime)
+            {
+                particleCount = emitter->particleCount + RandomBil(entropy) * emitter->particleCountV;
+                emitter->accumulatedTime = 0;
+                emitter->targetAccumulatedTime = emitter->targetAccumulatedTimeRef + RandomBil(entropy) * emitter->targetAccumulatedTimeV;
+            }
+        } break;
+        
+        case Emission_Fixed:
+        {
+            r32 speed = 1.0f;
+            if(emitter->modulateWithVelocity)
+            {
+                speed *= speedNorm;
+            }
+            
+            particleCount = (speed * (emitter->particleCount + RandomBil(entropy) * emitter->particleCountV));
+        } break;
+    }
+    
+    switch(emitter->boundType)
+    {
+        case Bound_None:
+        {
+            
+        } break;
+        
+        case Bound_Sphere:
+        {
+            if(emitter->outline)
+            {
+                atP = baseP + Normalize(RandomBilV3(entropy)) * emitter->radious * effect->boundsScale;
+            }
+            else
+            {
+                atP = baseP + Normalize(RandomBilV3(entropy)) * RandomUni(entropy) * emitter->radious * effect->boundsScale;
+            }
+        } break;
+        
+        case Bound_Rect:
+        {
+            if(emitter->outline)
+            {
+                r32 x = (RandomChoice(entropy, 2) == 0) ? 1.0f : -1.0f;
+                r32 y = (RandomChoice(entropy, 2) == 0) ? 1.0f : -1.0f;
+                r32 z = (RandomChoice(entropy, 2) == 0) ? 1.0f : -1.0f;
+                atP = baseP + Hadamart(V3(x, y, z), emitter->rectDim * effect->boundsScale);
+            }
+            else
+            {
+                atP = baseP + Hadamart(RandomBilV3(entropy), RandomUni(entropy) * emitter->rectDim * effect->boundsScale);
+            }
+        } break;
+    }
+    
+    
+    particleCount += effect->spawnParticlesLeftOff;
     u32 particle4xCount = (u32) (particleCount / 4.0f);
     effect->spawnParticlesLeftOff = particleCount - (r32) (particle4xCount * 4);
     effect->particle4xCount += particle4xCount;
@@ -28,7 +122,15 @@ internal void SpawnParticles(ParticleCache* cache, ParticleEffectInstance* effec
         A->P.y = MMSetRandomize(entropy, atP.y, emitter->startPV.y);
         A->P.z = MMSetRandomize(entropy, atP.z, emitter->startPV.z);
         
-        Vec3 dP = Lerp(emitter->dP, emitter->lerpWithUpVector, effect->UpVector);
+        Vec3 dP;
+        if(emitter->followOrientation < 0)
+        {
+            dP = Lerp(-orientation, emitter->followOrientation, emitter->dP);
+        }
+        else
+        {
+            dP = Lerp(emitter->dP, emitter->followOrientation, orientation);
+        }
         
         A->dP.x = MMSetRandomize(entropy, dP.x, emitter->dPV.x);
         A->dP.y = MMSetRandomize(entropy, dP.y, emitter->dPV.y);
@@ -60,7 +162,7 @@ inline Vec3 GetPhaseEndP(ParticleEffectInstance* effect, Vec3 startP, u32 phaseI
     ParticleUpdater* updater = &effect->phases[phaseIndex].updater;
 	if(phaseIndex == effect->phaseCount - 1)
     {
-        result = effect->P + effect->UpVector;
+        result = effect->P + V3(0, 0, 1);
     }
     else
     {
@@ -109,80 +211,83 @@ inline ParticlePhase* GetPhase(ParticleEffectInstance* effect, r32 ttl, u32* pha
 }
 
 inline Lights GetLights(GameModeWorld* worldMode, Vec3 P);
-inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectInstance* effect,ParticlePhase* phase, ParticleUpdater* updater, u32 phaseIndex, r32 normPhaseTime, Particle_4x* A, RenderGroup* group, V3_4x frameDisplacement, r32 dt)
+inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectInstance* effect,ParticleUpdater* updater, u32 phaseIndex, r32 normPhaseTime, Particle_4x* A, RenderGroup* group, V3_4x frameDisplacement, r32 dt)
 {
-    __m128 dt4x = MMSetExpr(dt);
-    
     V3_4x finalParticleP = {};
+    V3_4x ddP = ToV3_4x(updater->finalAcceleration);
     
-    if(updater->sineUpdater)
+    A->P += frameDisplacement;
+    A->P += ((0.5f * Square(dt) * ddP) + (dt * A->dP));
+    A->dP += dt * ddP;
+    finalParticleP = A->P;
+    
+    r32 speedNorm = GetSpeedNorm(effect);
+    if(updater->updateColorOverLifetime)
     {
-        Vec3 startP = GetPhaseStartP(effect, phaseIndex);
-        Vec3 destP = GetPhaseEndP(effect, startP, phaseIndex);
-        
-        Vec3 deltaP = destP - startP;
-        V3_4x dP = ToV3_4x(deltaP);
-        
-        Vec2 horizontalPlane = deltaP.xy;
-        r32 zRotation = RadiantsBetweenVectors(V2(1, 0), horizontalPlane);
-        Vec2 verticalPlane = V2(deltaP.x, deltaP.z);
-        r32 yRotation = RadiantsBetweenVectors(V2(1, 0), verticalPlane);
-        m4x4 matrix = ZRotation(zRotation) * YRotation(yRotation);
-        Vec3 upVector = GetColumn(matrix, 2);
-        upVector.z = Abs(upVector.z);
-        
-        r32 particleAngle = 0;
-        if(updater->sineSubdivisions > 1)
+        r32 colorDT = dt;
+        if(updater->modulateColorWithVelocity)
         {
-            r32 subdivisionAngle = TAU32 / (r32) updater->sineSubdivisions;
-            u32 subIndex = RoundReal32ToU32(M(A->randomUni4x, 0) * (updater->sineSubdivisions - 1));
-            particleAngle = subIndex * subdivisionAngle;
+            colorDT *= speedNorm;
         }
-        r32 angle = particleAngle + effect->updaterAngle;
-        
-        upVector = RotateVectorAroundAxis(upVector, deltaP, angle);
-        V3_4x upVector4x = ToV3_4x(upVector);
-        
-        r32 normRadiants = normPhaseTime * M(updater->totalRadiants, 0);
-        r32 radiantsSine = Sin(normRadiants);
-        
-        A->P += frameDisplacement;
-        finalParticleP = A->P + normPhaseTime * dP + radiantsSine * upVector4x;
-        
+        __m128 dt4x = MMSetExpr(colorDT);
         V4_4x ddC = ToV4_4x(updater->ddC);
+        A->C += ((0.5f * Square(colorDT) * ddC) + (colorDT * A->dC));
+        A->dC += colorDT * ddC;
+        A->C = Clamp01(A->C);
+    }
+    else
+    {
+        Vec4 color = Lerp(updater->colorIdle, speedNorm, updater->colorFullSpeed);
+        
+        A->C.r = MMSetExpr(color.r);
+        A->C.g = MMSetExpr(color.g);
+        A->C.b = MMSetExpr(color.b);
+        A->C.a = MMSetExpr(color.a);
+    }
+    
+    if(updater->updateScaleOverTime)
+    {
+        r32 scaleDT = dt;
+        if(updater->modulateScaleWithVelocity)
+        {
+            scaleDT *= speedNorm;
+        }
+        __m128 dt4x = MMSetExpr(scaleDT);
         __m128 dScaleX = MMSetExpr(updater->dScaleX);
         __m128 dScaleY = MMSetExpr(updater->dScaleY);
-        __m128 dAngle = MMSetExpr(updater->dAngle);
-        
-        A->C += ((0.5f * Square(dt) * ddC) + (dt * A->dC));
-        A->dC += dt * ddC;
-        A->C = Clamp01(A->C);
         
         A->scaleX4x += dt4x * dScaleX;
         A->scaleY4x += dt4x * dScaleY;
+    }
+    else
+    {
+        r32 scaleX = Lerp(updater->scaleXIdle, speedNorm, updater->scaleXFullspeed);
+        r32 scaleY = Lerp(updater->scaleYIdle, speedNorm, updater->scaleYFullspeed);
+        
+        A->scaleX4x = MMSetExpr(scaleX);
+        A->scaleY4x = MMSetExpr(scaleY);
+    }
+    
+    if(updater->updateAngleOvertime)
+    {
+        r32 angleDT = dt;
+        if(updater->modulateAngleWithVelocity)
+        {
+            angleDT *= speedNorm;
+        }
+        __m128 dt4x = MMSetExpr(angleDT);
+        __m128 dAngle = MMSetExpr(updater->dAngle);
         A->angle4x += dt4x * dAngle;
     }
     else
     {
-        V4_4x ddC = ToV4_4x(updater->ddC);
-        V3_4x ddP = ToV3_4x(updater->finalAcceleration);
-        __m128 dScaleX = MMSetExpr(updater->dScaleX);
-        __m128 dScaleY = MMSetExpr(updater->dScaleY);
-        __m128 dAngle = MMSetExpr(updater->dAngle);
-        
-        A->P += frameDisplacement;
-        A->P += ((0.5f * Square(dt) * ddP) + (dt * A->dP));
-        A->dP += dt * ddP;
-        finalParticleP = A->P;
-        
-        A->C += ((0.5f * Square(dt) * ddC) + (dt * A->dC));
-        A->dC += dt * ddC;
-        A->C = Clamp01(A->C);
-        
-        A->scaleX4x += dt4x * dScaleX;
-        A->scaleY4x += dt4x * dScaleY;
-        A->angle4x += dt4x * dAngle;
+        r32 angle = Lerp(updater->angleIdle, speedNorm, updater->angleFullspeed);
+        A->angle4x = MMSetExpr(angle); 
     }
+    
+    
+    
+    
     
     Vec3 lightP = 
     { 
@@ -194,6 +299,14 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectIn
     if(updater->texture && IsValid(updater->texture))
     {
         Lights lights = GetLights(worldMode, lightP);
+        Vec4 windInfluences = effect->windInfluences;
+        u8 windFrequency = effect->windFrequency;
+        u8 seed = 0;
+        Vec4 dissolvePercentages = V4(0, 0, 0, 0);
+        r32 alphaThreesold = 0;
+        b32 flat = false;
+        Vec2 invUV = updater->textureInvUV;
+        
         for(u32 subIndex = 0; subIndex < 4; ++subIndex)
         {
             Vec3 P = 
@@ -210,6 +323,7 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectIn
                 M(A->C.b, subIndex),
                 M(A->C.a, subIndex)
             };
+            u32 C = RGBAPack8x4(color * 255.0f);
             
             r32 angle = M(A->angle4x, subIndex);
             r32 scaleX = M(A->scaleX4x, subIndex);
@@ -222,33 +336,39 @@ inline void UpdateAndRenderParticle4x(GameModeWorld* worldMode, ParticleEffectIn
             Vec3 lateral = 0.5f * scaleX * (XAxis.x * magicLateralVector + XAxis.y * magicUpVector);
             Vec3 up = 0.5f * scaleY * (YAxis.x * magicLateralVector + YAxis.y * magicUpVector);
             
-            u32 C = RGBAPack8x4(color * 255.0f);
-            
-            Vec4 windInfluences = V4(0.05f, 0.05f, 0.05f, 0.05f);
-            u8 windFrequency = 1;
-            u8 seed = 0;
-            Vec4 dissolvePercentages = V4(0, 0, 0, 0);
-            r32 alphaThreesold = 0;
-            b32 flat = false;
-            Vec2 invUV = updater->textureInvUV;
             PushMagicQuad(group, P, flat, lateral, up, invUV, C, *updater->texture, lights, 0, 0, 1, windInfluences, windFrequency, dissolvePercentages, alphaThreesold, seed);
         }
     }
 }
 
+internal void SetEffectParameters(ParticleEffectInstance* effect, Vec3 P, Vec3 speed, r32 scale)
+{
+    effect->P = P;
+    effect->speed = speed;
+    effect->boundsScale = scale;
+}
+
 internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cache, ParticleEffectInstance* effect, r32 dt, Vec3 frameDisplacementInit, RenderGroup* group)
 {
-    for(u32 soundIndex = 0; soundIndex < effect->soundCount; ++soundIndex)
-    {
-        UpdateSoundMapping(worldMode, effect->sounds + soundIndex, dt);
-    }
-    
-    
     for(u32 phaseIndex = 0; phaseIndex < effect->phaseCount; ++phaseIndex)
     {
         ParticlePhase* phase = effect->phases + phaseIndex;
         ParticleUpdater* updater = &phase->updater;
-        updater->finalAcceleration = updater->ddP + worldMode->windStrength * worldMode->windDirection;
+        u32 subtype = GetAssetSubtype(group->assets, AssetType_Image, updater->asset.subtypeHash);
+        
+        GameProperties properties = {};
+        for(u32 propertyIndex = 0; propertyIndex < updater->propertyCount; ++propertyIndex)
+        {
+            AddGamePropertyRaw(&properties, updater->properties[propertyIndex]);
+        }
+        
+        updater->bitmapID = QueryBitmaps(group->assets, subtype, 0, &properties);
+        updater->finalAcceleration = updater->ddP;
+        if(effect->influencedByWind)
+        {
+            updater->finalAcceleration += worldMode->windStrength * worldMode->windDirection;
+        }
+        
         if(IsValid(updater->bitmapID))
         {
             updater->texture = 0;
@@ -266,7 +386,6 @@ internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cac
         }
     }
     
-	effect->updaterAngle += effect->dAngleSineUpdaters * dt;
     if(effect->active)
     {
         SpawnParticles(cache, effect, dt);
@@ -281,6 +400,29 @@ internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cac
         
         if(M(particle->ttl4x, 0) <= 0.0f)
         {
+            if(effect->subEffect)
+            {
+                for(u32 pIndex = 0; pIndex < 4; ++pIndex)
+                {
+                    Vec3 P = 
+                    { 
+                        M(particle->P.x, pIndex),
+                        M(particle->P.y, pIndex),
+                        M(particle->P.z, pIndex)
+                    };
+                    
+                    Vec3 speed = 
+                    { 
+                        M(particle->dP.x, pIndex),
+                        M(particle->dP.y, pIndex),
+                        M(particle->dP.z, pIndex)
+                    };
+                    
+                    SetEffectParameters(effect->subEffect, P, speed, 1.0f);
+                    SpawnParticles(cache, effect->subEffect, 0);
+                }
+            }
+            
             Assert(effect->particle4xCount > 0);
             --effect->particle4xCount;
             
@@ -296,19 +438,11 @@ internal void UpdateAndRenderEffect(GameModeWorld* worldMode, ParticleCache* cac
             if(phase)
             {
                 ParticleUpdater* updater = &phase->updater;
-                u32 subtype = GetAssetSubtype(group->assets, AssetType_Image, updater->asset.subtypeHash);
-                updater->bitmapID = QueryBitmaps(group->assets, subtype, 0, 0);
-                
-                UpdateAndRenderParticle4x(worldMode, effect, phase, updater, phaseIndex,normPhaseTime, particle, group, frameDisplacement, dt);
+                UpdateAndRenderParticle4x(worldMode, effect, updater, phaseIndex,normPhaseTime, particle, group, frameDisplacement, dt);
             }
             particlePtr = &particle->next;
         }
     }
-}
-
-internal void SetPosition(ParticleEffectInstance* effect, Vec3 P)
-{
-    effect->P = P;
 }
 
 
@@ -316,20 +450,38 @@ inline void FreeParticleEffect(ParticleEffectInstance* effect)
 {
     Assert(effect->active);
     effect->active = false;
+    
+    if(effect->subEffect)
+    {
+        effect->subEffect->active = false;
+    }
 }
 
-inline ParticleEffectInstance* GetNewParticleEffect(ParticleCache* cache, ParticleEffect* definition, Vec3 startP, Vec3 UpVector)
+inline ParticleEffectInstance* GetNewParticleEffect(ParticleCache* cache, ParticleEffect* definition)
 {
     ParticleEffectInstance* result;
     FREELIST_ALLOC(result, cache->firstFreeEffect, PushStruct(cache->pool, ParticleEffectInstance));
     
     result->active = true;
-    SetPosition(result, startP);
-    result->UpVector = UpVector;
+    result->subEffect = 0;
     result->spawnParticlesLeftOff = 0;
     
     result->emitter = definition->emitter;
-    result->dAngleSineUpdaters = definition->dAngleSineUpdaters;
+    
+    result->emitter.emissionType = SafeTruncateToU16(ConvertEnumerator(ParticleEmissionType, definition->emitter.emission));
+    result->emitter.boundType = SafeTruncateToU16(ConvertEnumerator(ParticleBoundType, definition->emitter.bound));
+    
+    
+    result->P = {};
+    result->speed = {};
+    result->boundsScale = 0;
+    result->maxSpeedMagnitudo = definition->maxSpeedMagnitudo;
+    
+    
+    result->influencedByWind = definition->influencedByWind;
+    result->windInfluences = definition->windInfluences;
+    result->windFrequency = (u8) definition->windFrequency;
+    
     result->phaseCount = 0;
     for(u32 phaseIndex = 0; phaseIndex < definition->phaseCount; ++phaseIndex)
     {
@@ -340,18 +492,20 @@ inline ParticleEffectInstance* GetNewParticleEffect(ParticleCache* cache, Partic
         }
     }
     
-    for(u32 soundIndex = 0; soundIndex < definition->soundCount; ++soundIndex)
-    {
-        if(result->soundCount < ArrayCount(result->sounds))
-        {
-            result->sounds[result->soundCount++] = InitSoundMapping(definition->sounds + soundIndex, &cache->particleEntropy);
-        }
-    }
-    
     Assert(result->particle4xCount == 0);
     Assert(!result->firstParticle);
-    
     FREELIST_INSERT(result, cache->firstActiveEffect);
+    
+    if(definition->subPhaseCount > 0)
+    {
+        ParticleEffect subDefinition = {};
+        subDefinition.maxSpeedMagnitudo = definition->subEffectSpeedMagnitudo;
+        subDefinition.emitter = definition->subEmitter;
+        subDefinition.phaseCount = definition->subPhaseCount;
+        subDefinition.phases = definition->subPhases;
+        
+        result->subEffect = GetNewParticleEffect(cache, &subDefinition);
+    }
     
     return result;
 }
@@ -377,7 +531,7 @@ internal void UpdateAndRenderParticleEffects(GameModeWorld* worldMode, ParticleC
 
 internal void InitParticleCache(ParticleCache* particleCache, Assets* assets, MemoryPool* pool)
 {
-    particleCache->particleEntropy = Seed(1234);
+    particleCache->entropy = Seed(1234);
     particleCache->deltaParticleP = {};
     particleCache->pool = pool;
 }

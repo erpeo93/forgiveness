@@ -1255,7 +1255,7 @@ internal void AddAnimationEffectIfNotPresent(GameModeWorld* worldMode, Vec3 P, A
             {
                 case AnimationEffect_Particles:
                 {
-                    SetPosition(test->particles, P);
+                    SetEffectParameters(test->particles, P, {}, 1.0f);
                 } break;
             }
             
@@ -1300,10 +1300,7 @@ internal void AddAnimationEffectIfNotPresent(GameModeWorld* worldMode, Vec3 P, A
                 {
                     ParticleEffect* particles = GetData(assets, ParticleEffect, effectID);
                     
-                    Vec3 startingP = P;
-                    Vec3 UpVector = effect->particleEndOffset;
-                    
-                    dest->particles = GetNewParticleEffect(worldMode->particleCache, particles, startingP, UpVector);
+                    dest->particles = GetNewParticleEffect(worldMode->particleCache, particles);
                 }
             } break;
             

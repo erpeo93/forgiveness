@@ -3,13 +3,8 @@ internal Vec2 HandleKeyboardInteraction(GameUIContext* UI, ClientPlayer* player,
     GameCommand* command = &UI->standardCommand;
     CommandParameters* parameters = &UI->commandParameters;
     
-    command->action = idle;
-    parameters->acceleration = {};
-    command->targetID = {};
-    
     Vec2 cameraOffset = {};
     
-    r32 cameraOffsetMagnitudo = 0.6f;
     if(IsDown(&input->moveLeft))
     {
         parameters->acceleration.x = -1.0f;
@@ -81,6 +76,7 @@ internal GameCommand ComputeFinalCommand(GameUIContext* UI, GameModeWorld* world
             
             case LockedInteraction_SkillTarget:
             case LockedInteraction_SkillOffset:
+            case LockedInteraction_FollowMouse:
             {
                 result = UI->lockedCommand;
             } break;
@@ -957,11 +953,14 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                 
                 AddPossibleInteraction_(worldMode, &worldMode->gameUI, Interaction_Ground, 0, {});
                 
-                Vec2 cameraOffset = {};
-                if(!UI->keyboardInteractionDisabled)
-                {
-                    cameraOffset = HandleKeyboardInteraction(UI, myPlayer, input);
-                }
+                GameCommand* resetCommand = &UI->standardCommand;
+                CommandParameters* resetParameters = &UI->commandParameters;
+                
+                resetCommand->action = idle;
+                resetParameters->acceleration = {};
+                resetCommand->targetID = {};
+                
+                Vec2 cameraOffset = HandleKeyboardInteraction(UI, myPlayer, input);
                 HandleMouseInteraction(UI, worldMode, myPlayer, input);
                 
                 EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent) && ArchetypeHas(InteractionComponent), input->timeToAdvance);
@@ -976,11 +975,6 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                         defaultZoom = Lerp(1.8f * worldMode->equipmentZoomCoeff, lightLerp, worldMode->defaultZoomCoeff);
                     }
                 }
-                
-                MoveCameraTowards(worldMode, myPlayer->clientID, worldMode->defaultZoomSpeed, cameraOffset, defaultZoom);
-                
-                
-                b32 standardInteractionAllowed = true;
                 
                 GameCommand lockedCommand = UI->lockedCommand;
                 EntityID lockedIDClient = GetClientIDMapping(worldMode, lockedCommand.targetID);
@@ -1020,17 +1014,34 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                         if(targetBase)
                         {
                             Vec3 toTarget = SubtractOnSameZChunk(targetBase->universeP, player->universeP);
-                            parameters->acceleration += Normalize(toTarget);
+                            parameters->acceleration = Normalize(toTarget);
                             
                             InteractionComponent* lockedInteraction = GetComponent(worldMode, lockedIDClient, InteractionComponent);
-                            lockedInteraction->isOnFocus = true;
                             
-                            if(Released(&input->mouseLeft))
+                            if(Pressed(&input->mouseLeft))
                             {
                                 UI->lockedInteractionType = LockedInteraction_None;
                             }
+                            else
+                            {
+                                lockedInteraction->isOnFocus = true;
+                            }
                         }
                         else
+                        {
+                            UI->lockedInteractionType = LockedInteraction_None;
+                        }
+                    } break;
+                    
+                    case LockedInteraction_FollowMouse:
+                    {
+                        CommandParameters* parameters = &UI->commandParameters;
+                        
+                        Vec3 direction = Normalize(worldMode->groundMouseP);
+                        parameters->acceleration = direction;
+                        cameraOffset = cameraOffsetMagnitudo * direction.xy;
+                        
+                        if(Released(&input->mouseLeft))
                         {
                             UI->lockedInteractionType = LockedInteraction_None;
                         }
@@ -1040,19 +1051,20 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                     {
                         CommandParameters* parameters = &UI->commandParameters;
                         parameters->acceleration = {};
-                        standardInteractionAllowed = true;
                         
                         if(Released(&input->mouseLeft) || Released(&input->mouseRight))
                         {
                             UI->lockedInteractionType = LockedInteraction_None;
-                            UI->keyboardInteractionDisabled = false;
                         }
                     } break;
                 }
                 
                 
-                if(standardInteractionAllowed)
+                
+                if(true)
                 {
+                    MoveCameraTowards(worldMode, myPlayer->clientID, worldMode->defaultZoomSpeed, cameraOffset, defaultZoom);
+                    
                     if(UI->lootingMode)
                     {
                         HandleEquipmentInteraction(UI, worldMode, myPlayer->clientID);
@@ -1081,7 +1093,7 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                     {
                         HandleEquipmentInteraction(UI, worldMode, myPlayer->clientID);
                         HandleContainerInteraction(UI, worldMode);
-                        MoveCameraTowards(worldMode, myPlayer->clientID, worldMode->equipmentZoomSpeed, V2(0, 0), worldMode->equipmentZoomCoeff);
+                        MoveCameraTowards(worldMode, myPlayer->clientID, worldMode->equipmentZoomSpeed, cameraOffset, worldMode->equipmentZoomCoeff);
                         HandleOverlayObjectsInteraction(UI, worldMode);
                     }
                     else
@@ -1549,10 +1561,20 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                                     AddObjectRemovedPrediction(worldMode, UI, command.containerID, command.targetID);
                                 }
                             }
+                            else
+                            {
+                                if(Pressed(&input->mouseLeft))
+                                {
+                                    GameCommand command = {};
+                                    command.action = move;
+                                    
+                                    UI->lockedInteractionType = LockedInteraction_FollowMouse;
+                                    UI->lockedCommand = command;
+                                }
+                            }
                         }
                     }
                 }
-                
                 
                 if(UI->predictionValid)
                 {

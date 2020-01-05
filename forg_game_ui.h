@@ -232,6 +232,7 @@ enum LockedInteractionType
     LockedInteraction_SkillTarget,
     LockedInteraction_SkillOffset,
     LockedInteraction_ReachTarget,
+    LockedInteraction_FollowMouse,
     LockedInteraction_Completed,
 };
 
@@ -276,8 +277,6 @@ struct GameUIContext
     
     LockedInteractionType lockedInteractionType;
     GameCommand lockedCommand;
-    b32 keyboardInteractionDisabled;
-    
     
     CommandParameters commandParameters;
     

@@ -522,12 +522,15 @@ internal void EssenceDelta(ServerState* server, EntityID ID, u16 essence, i16 de
     }
 }
 
-internal void Pick(ServerState* server, EntityID ID, EntityID targetID)
+internal b32 Pick(ServerState* server, EntityID ID, EntityID targetID)
 {
+    b32 result = true;
+    
     if(!Use(server, ID, targetID))
     {
         if(!Equip(server, ID, targetID))
         {
+            result = false;
             EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
             if(equipment)
             {
@@ -538,6 +541,7 @@ internal void Pick(ServerState* server, EntityID ID, EntityID targetID)
                     {
                         if(StoreInContainer(server, equipID, targetID))
                         {
+                            result = true;
                             break;
                         }
                     }
@@ -545,6 +549,8 @@ internal void Pick(ServerState* server, EntityID ID, EntityID targetID)
             }
         }
     }
+    
+    return result;
 }
 
 internal r32 MovementSpeedWhileDoing(ServerState* server, EntityID ID, u16 action)
@@ -753,7 +759,14 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                             if(!EntityHasFlags(targetDef, EntityFlag_notInWorld) && 
                                targetDef->P.chunkZ == def->P.chunkZ)
                             {
-                                Pick(server, ID, targetID);
+                                if(Pick(server, ID, targetID))
+                                {
+                                    QueueEventTrigger(server, ID, targetID, Trigger_PickedObject);
+                                }
+                                else
+                                {
+                                    QueueEventTrigger(server, ID, targetID, Trigger_CantPickObject);
+                                }
                             }
                             resetAction = true;
                             SignalCompletedCommand(server, ID, command);

@@ -1,4 +1,3 @@
-
 #include "forg_client.h"
 global_variable ClientNetworkInterface* clientNetwork; 
 
@@ -276,7 +275,6 @@ internal void UpdateAmbientParameters(GameModeWorld* worldMode, r32 elapsedTime)
     Vec3 color = GetAmbientColor(worldMode->dayTime);
     
     r32 fullColorTime = 2.0f;
-    
     r32 lerp = Clamp01MapToRange(0.0f, worldMode->dayTimeTime, fullColorTime);
     
     worldMode->ambientLightColor = Lerp(oldColor, lerp, color);
@@ -361,23 +359,26 @@ internal void UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode
     END_BLOCK();
     
 #if FORGIVENESS_INTERNAL
-    if(input->altDown && Pressed(&input->confirmButton))
+    if(Pressed(&input->confirmButton))
     {
-        if(!worldMode->gamePaused)
+        if(input->altDown)
         {
-            worldMode->gamePaused = true;
-            SendOrderedMessage(PauseToggle);
+            if(!worldMode->gamePaused)
+            {
+                worldMode->gamePaused = true;
+                SendOrderedMessage(PauseToggle);
+            }
+            
+            if(++worldMode->renderMode >= RenderMode_Count)
+            {
+                worldMode->renderMode = 0;
+            }
         }
         
         if(worldMode->testEffect)
         {
             FreeParticleEffect(worldMode->testEffect);
             worldMode->testEffect = 0;
-        }
-        
-        if(++worldMode->renderMode >= RenderMode_Count)
-        {
-            worldMode->renderMode = 0;
         }
     }
 #endif
@@ -427,28 +428,7 @@ internal void UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode
                 END_BLOCK();
                 
                 
-                BEGIN_BLOCK("weather and particles");
-                
-#if 0        
-                for(u16 weatherIndex = 0; weatherIndex < Weather_count; ++weatherIndex)
-                {
-                    GameProperties weatherProperties = {};
-                    if(!worldMode->weatherEffects[weatherIndex])
-                    {
-                        AddGameProperty(&weatherProperties, weather, weatherIndex);
-                        AssetID effectID = QueryDataFiles(group->assets, ParticleEffect, "weather", 0, &weatherProperties);
-                        if(IsValid(effectID))
-                        {
-                            ParticleEffect* particles = GetData(group->assets, ParticleEffect, effectID);
-                            
-                            Vec3 startingP = V3(0, 0, 0);
-                            Vec3 UpVector = V3(0, 0, 1);
-                            
-                            worldMode->weatherEffects[weatherIndex] = GetNewParticleEffect(worldMode->particleCache, particles, startingP, UpVector);
-                        }
-                    }
-                }
-#endif
+                BEGIN_BLOCK("particles");
                 
                 worldMode->particleCache->deltaParticleP = deltaP;
                 UpdateAndRenderParticleEffects(worldMode, worldMode->particleCache, input->timeToAdvance, group);
@@ -491,6 +471,12 @@ internal void UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode
                         definition->common.type = test;
                         definition->common.essences = essences;
                         InitEntity(worldMode, ID, &definition->common, 0, &params);
+                        
+                        BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
+                        if(base)
+                        {
+                            base->universeP = Offset(base->universeP, context->entityOffset);
+                        }
                         
                         ActionComponent* actionComp = GetComponent(worldMode, ID, ActionComponent);
                         if(actionComp)
@@ -537,15 +523,13 @@ internal void UpdateAndRenderGame(GameState* gameState, GameModeWorld* worldMode
                     {
                         ParticleEffect* particles = GetData(group->assets, ParticleEffect, effectID);
                         
-                        Vec3 startingP = V3(0, 0, 0);
-                        Vec3 UpVector = V3(0, 0, 1);
-                        
-                        worldMode->testEffect = GetNewParticleEffect(worldMode->particleCache, particles, startingP, UpVector);
+                        worldMode->testEffect = GetNewParticleEffect(worldMode->particleCache, particles);
                     }
                 }
                 
                 if(worldMode->testEffect)
                 {
+                    SetEffectParameters(worldMode->testEffect, context->particleOffset, context->particleSpeed, context->particleScale);
                     UpdateAndRenderEffect(worldMode, worldMode->particleCache, worldMode->testEffect, worldMode->originalTimeToAdvance, {}, group);
                 }
             }

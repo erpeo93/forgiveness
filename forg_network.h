@@ -178,6 +178,7 @@ enum Packet_Type
     Type_deletedEntity,
     Type_DayTime,
     
+    Type_EventTrigger,
     
     Type_FileHeader,
     Type_FileChunk,

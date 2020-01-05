@@ -2437,7 +2437,7 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
                     Edit_u32(&layout, "entity seed", &context->seed, 0, {});
                     Edit_u16(&layout, "entity action", &context->action, 0, {});
                     Edit_r32(&layout, "entity health", &context->health, 0, {});
-                    
+                    Edit_Vec3(&layout, "entity offset", &context->entityOffset);
                     NextRaw(&layout);
                     
                     Edit_AssetLabel(&layout, "effect name", &context->effectName);
@@ -2446,6 +2446,9 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
                         Edit_GameProperty(&layout, "property", context->properties.properties + propertyIndex);
                         NextRaw(&layout);
                     }
+                    Edit_Vec3(&layout, "particle offset", &context->particleOffset);
+                    Edit_Vec3(&layout, "particle speed", &context->particleSpeed);
+                    Edit_r32(&layout, "particle scale", &context->particleScale);
                 } break;
             }
             
