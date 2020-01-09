@@ -33,6 +33,7 @@ struct AnimationEffect
     u16 ID;
     u16 type;
     r32 time;
+    r32 targetTime;
     
     union
     {
@@ -51,6 +52,11 @@ struct AnimationEffect
 
 introspection() struct AnimationEffectDefinition
 {
+    b32 playerEffect;
+    b32 refreshWhenAlreadyPresent MetaDefault("true");
+    GameProperty triggerType;
+    
+    r32 targetTime MetaDefault("1.0f");
     Enumerator type MetaEnumerator("AnimationEffectType");
     Vec4 tint MetaDefault("V4(1, 1, 1, 1)");
     r32 lightIntensity MetaDefault("1.0f");
@@ -81,7 +87,6 @@ inline EntityAnimationParams DefaultAnimationParams()
     result.speed = 1.0f;
     result.scaleComputed = 1.0f;
     result.scaleAccumulated = 1.0f;
-    
     return result;
 }
 
@@ -102,6 +107,9 @@ struct AnimationEffectComponent
     r32 speedOnNoFocus;
     Vec3 offsetMaxOnFocus;
     r32 scaleMaxOnFocus;
+    
+    r32 occludeDissolveTime;
+    r32 occludeDissolvePercentage;
 };
 
 struct AnimationComponent

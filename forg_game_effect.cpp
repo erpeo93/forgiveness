@@ -57,6 +57,11 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             AddEntity(server, targetP, &server->entropy, effect->spawnType, DefaultAddEntityParams());
         } break;
         
+        case spawnEntityPick:
+        {
+            AddEntity(server, targetP, &server->entropy, effect->spawnType, EquipEntityParams(otherID));
+        } break;
+        
         case spawnRecipe:
         {
             EntityType target = effect->spawnType;
@@ -218,6 +223,24 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             }
         } break;
         
+        case dropBranches:
+        {
+            VegetationComponent* vegetation = GetComponent(server, ID, VegetationComponent);
+            if(vegetation)
+            {
+                r32 branchDensity = vegetation->branchDensity;
+                
+                r32 requiredBranchDensity = vegetation->requiredBranchDensity;
+                if(branchDensity >= requiredBranchDensity)
+                {
+                    Vec3 offset = Hadamart(RandomBilV3(&server->entropy), V3(0.5f, 0.5f, 0));
+                    UniversePos P = Offset(targetP, offset);
+                    AddEntity(server, P, &server->entropy, effect->spawnType, DefaultAddEntityParams());
+                    vegetation->branchDensity -= requiredBranchDensity;
+                }
+            }
+        } break;
+        
         case sacrificeRandomEssence:
         {
             DefaultComponent* def = GetComponent(server, otherID, DefaultComponent);
@@ -251,6 +274,15 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
             if(health)
             {
                 health->physicalHealth += effect->power;
+            }
+        } break;
+        
+        case restoreMentalHealth:
+        {
+            HealthComponent* health = GetComponent(server, otherID, HealthComponent);
+            if(health)
+            {
+                health->mentalHealth += effect->power;
             }
         } break;
         
@@ -344,7 +376,7 @@ internal void DispatchGameEffect(ServerState* server, EntityID ID, UniversePos t
     }
 }
 
-internal void DispatchEntityEffects(ServerState* server, UniversePos P, u16 commandIndex, u16 action, EntityID parentID, EntityID ID, r32 elapsedTime, u16* essences, b32 targetEffect)
+internal void DispatchEntityEffects(ServerState* server, UniversePos P, u16 commandIndex, u16 action, EntityID parentID, EntityID ID, r32 elapsedTime, u16* essences, b32 targetEffect, EntityType usingType = {})
 {
     ActiveEffectComponent* effects = GetComponent(server, ID, ActiveEffectComponent);
     if(effects)
@@ -356,35 +388,44 @@ internal void DispatchEntityEffects(ServerState* server, UniversePos P, u16 comm
             
             if(instance->action == action && instance->targetEffect == targetEffect)
             {
-                if(instance->commandIndex != commandIndex)
+                b32 valid = true;
+                if(IsValid(instance->requiredUsingType))
                 {
-                    instance->commandIndex = commandIndex;
-                    effect->time = 0;
-                    effect->totalTime = 0;
+                    valid = AreEqual(instance->requiredUsingType, usingType);
                 }
                 
-                effect->time += elapsedTime;
-                effect->totalTime += elapsedTime;
-                
-                if(effect->time >= instance->targetTime)
+                if(valid)
                 {
-                    DispatchGameEffect(server, ID, P, instance, parentID, essences, elapsedTime);
-                    
-                    if(instance->targetTime < 0 || (instance->deleteTime > 0 && effect->totalTime >= instance->deleteTime))
+                    if(instance->commandIndex != commandIndex)
                     {
-                        *effect = effects->effects[--effects->effectCount];
+                        instance->commandIndex = commandIndex;
+                        effect->time = 0;
+                        effect->totalTime = 0;
                     }
                     
-                    effect->time = 0;
+                    effect->time += elapsedTime;
+                    effect->totalTime += elapsedTime;
+                    
+                    if(effect->time >= instance->targetTime)
+                    {
+                        DispatchGameEffect(server, ID, P, instance, parentID, essences, elapsedTime);
+                        
+                        if(instance->targetTime < 0 || (instance->deleteTime > 0 && effect->totalTime >= instance->deleteTime))
+                        {
+                            *effect = effects->effects[--effects->effectCount];
+                        }
+                        
+                        effect->time = 0;
+                    }
                 }
             }
         }
     }
 }
 
-internal void DispatchActionEffects(ServerState* server, UniversePos P, u16 commandIndex, u16 action, EntityID ID, EntityID targetID, r32 elapsedTime, u16* essences, b32 targetEffect)
+internal void DispatchActionEffects(ServerState* server, UniversePos P, u16 commandIndex, u16 action, EntityID ID, EntityID targetID, r32 elapsedTime, u16* essences, b32 targetEffect, EntityType usingType = {})
 {
-    DispatchEntityEffects(server, P, commandIndex, action, targetID, ID, elapsedTime, essences, targetEffect);
+    DispatchEntityEffects(server, P, commandIndex, action, targetID, ID, elapsedTime, essences, targetEffect, usingType);
 }
 
 
@@ -427,26 +468,38 @@ STANDARD_ECS_JOB_SERVER(DispatchEntityDefaultEffects)
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     if(!EntityHasFlags(def, EntityFlag_notInWorld))
     {
-        
         u16* essences = def->essences;
         DispatchEntityEffects(server, def->P, 0, none, {}, ID, elapsedTime, essences, false);
         EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
         if(equipment)
         {
-            for(u32 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->slots); ++equipmentIndex)
+            
+            for(u16 equipmentIndex = 0; equipmentIndex < ArrayCount(equipment->slots); ++equipmentIndex)
             {
                 EntityID equipID = GetBoundedID(equipment->slots + equipmentIndex);
                 if(IsValidID(equipID))
                 {
-                    DispatchEquipmentEffects(server, def->P, none, ID, equipID, elapsedTime, essences);
-                    
-                    ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
-                    for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
+                    u16 minEquipmentIndex = equipmentIndex;
+                    for(u16 eIndex = 0; eIndex < ArrayCount(equipment->slots); ++eIndex)
                     {
-                        EntityID usingID = GetBoundedID(container->usingObjects + usingIndex);
-                        if(IsValidID(usingID))
+                        EntityID testID = GetBoundedID(equipment->slots + eIndex);
+                        if(AreEqual(testID, equipID))
                         {
-                            DispatchEquipmentEffects(server, def->P, none, ID, usingID, elapsedTime, essences);
+                            minEquipmentIndex = Min(minEquipmentIndex, eIndex);
+                        }
+                    }
+                    
+                    if(minEquipmentIndex == equipmentIndex)
+                    {
+                        DispatchEquipmentEffects(server, def->P, none, ID, equipID, elapsedTime, essences);
+                        ContainerComponent* container = GetComponent(server, equipID, ContainerComponent);
+                        for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
+                        {
+                            EntityID usingID = GetBoundedID(container->usingObjects + usingIndex);
+                            if(IsValidID(usingID))
+                            {
+                                DispatchEquipmentEffects(server, def->P, none, ID, usingID, elapsedTime, essences);
+                            }
                         }
                     }
                 }
@@ -461,17 +514,30 @@ STANDARD_ECS_JOB_SERVER(DispatchEntityDefaultEffects)
                 EntityID usingID = GetBoundedID(equipped->slots + equipmentIndex);
                 if(IsValidID(usingID))
                 {
-                    if(SkillSlot(equipmentIndex))
+                    u16 minEquipmentIndex = equipmentIndex;
+                    for(u16 eIndex = 0; eIndex < ArrayCount(equipped->slots); ++eIndex)
                     {
-                        SkillDefComponent* skillDef = GetComponent(server, usingID, SkillDefComponent);
-                        if(skillDef->passive)
+                        EntityID testID = GetBoundedID(equipped->slots + eIndex);
+                        if(AreEqual(testID, usingID))
+                        {
+                            minEquipmentIndex = Min(minEquipmentIndex, eIndex);
+                        }
+                    }
+                    
+                    if(minEquipmentIndex == equipmentIndex)
+                    {
+                        if(SkillSlot(equipmentIndex))
+                        {
+                            SkillDefComponent* skillDef = GetComponent(server, usingID, SkillDefComponent);
+                            if(skillDef->passive)
+                            {
+                                DispatchEquipmentEffects(server, def->P, none, ID, usingID, elapsedTime, essences);
+                            }
+                        }
+                        else
                         {
                             DispatchEquipmentEffects(server, def->P, none, ID, usingID, elapsedTime, essences);
                         }
-                    }
-                    else
-                    {
-                        DispatchEquipmentEffects(server, def->P, none, ID, usingID, elapsedTime, essences);
                     }
                 }
             }
@@ -516,6 +582,12 @@ internal void DispatchOverlappingEffects(ServerState* server, UniversePos P, Ent
 #endif
 internal b32 CompatibleSlot(InteractionComponent* interaction, InventorySlot* slot)
 {
-    b32 result = (interaction->inventorySlotType == slot->flags_type || slot->flags_type == InventorySlot_Generic);
+    b32 result = false;
+    
+    if(slot->flags_type != InventorySlot_Invalid && interaction->inventorySlotType != InventorySlot_Invalid)
+    {
+        result = (interaction->inventorySlotType == slot->flags_type || slot->flags_type == InventorySlot_Generic);
+    }
+    
     return result;
 }

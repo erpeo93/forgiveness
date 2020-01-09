@@ -1064,6 +1064,40 @@ internal void InitFileAssetHeader(AssetFile* file)
     file->valid = valid;
 }
 
+internal void InitLoadAssetFile(Assets* assets, MemoryPool* pool, PlatformFileGroup* group, PlatformFileInfo* info)
+{
+    Assert(assets->fileCount < assets->maxFileCount);
+    u32 fileIndex = assets->fileCount++;
+    AssetFile* file = assets->files + fileIndex;
+    file->handle = platformAPI.OpenFile(group, info);
+    file->size = SafeTruncateUInt64ToU32(info->size);
+    PAKFileHeader* header = &file->header;
+    InitFileAssetHeader(file);
+    if(file->valid)
+    {
+        u16 assetCount = (header->standardAssetCount + header->derivedAssetCount);
+        AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, header);
+        if(assetSubtypeArray)
+        {
+            assetSubtypeArray->standardAssetCount = header->standardAssetCount;
+            assetSubtypeArray->derivedAssetCount = header->derivedAssetCount;
+            assetSubtypeArray->firstAssetBlock = AcquireAssetBlocks(assets, assetCount);
+            assetSubtypeArray->fileIndex = fileIndex;
+            LoadAssetFile(assets, file, assetSubtypeArray, pool);
+        }
+        else
+        {
+            // TODO(Leonardo): delete the file!
+            file->valid = false;
+        }
+    }
+    else
+    {
+        platformAPI.CloseFile(&file->handle);
+        // TODO(Leonardo): notify user! so that he can download the file again.
+    }
+}
+
 internal AssetFile* CloseAssetFileFor(Assets* assets, u16 closeType, u64 closeSubtypeHash, u32* fileIndex)
 {
     AssetFile* result = 0;
@@ -1226,6 +1260,10 @@ internal b32 WriteAssetMarkupDataToStream(Stream* stream, AssetType type, PAKAss
     {
         RestoreStreamState(stream, beforeName);
     }
+    else
+    {
+        OutputToStream(stream, "* ");
+    }
     
     return writtenName;
 }
@@ -1286,7 +1324,7 @@ internal void DumpSoundTriggerToStream(Stream* stream, PAKAnimationSoundTrigger*
 
 inline ColoredBitmap GetBitmap(Assets* assets, AssetID ID);
 inline Animation* GetAnimation(Assets* assets, AssetID ID);
-internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* basePath, b32 editorMode)
+internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* basePath, b32 editorMode, char* copyName = 0)
 {
     u16 type = ID.type;
     u32 subtype = ID.subtypeHashIndex;
@@ -1381,7 +1419,14 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
                     bufferSize -= written;
                 }
                 
-                TrimToFirstCharacter(filenameNoExtension, bufferSize, filename, '.');
+                if(copyName)
+                {
+                    FormatString(filenameNoExtension_, sizeof(filenameNoExtension_), "%s", copyName);
+                }
+                else
+                {
+                    TrimToFirstCharacter(filenameNoExtension, bufferSize, filename, '.');
+                }
                 
                 while(true)
                 {
@@ -1455,7 +1500,14 @@ internal void WritebackAssetToFileSystem(Assets* assets, AssetID ID, char* baseP
                 bufferSize -= written;
             }
             
-            TrimToFirstCharacter(filenameNoExtension, bufferSize,  asset->paka.sourceName, '.');
+            if(copyName)
+            {
+                FormatString(filenameNoExtension_, sizeof(filenameNoExtension_), "%s", copyName);
+            }
+            else
+            {
+                TrimToFirstCharacter(filenameNoExtension, bufferSize,  asset->paka.sourceName, '.');
+            }
             
             while(true)
             {
@@ -1590,42 +1642,12 @@ internal Assets* InitAssets(PlatformWorkQueue* loadQueue, TaskWithMemory* tasks,
     PlatformFileGroup fileGroup = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, ASSETS_PATH);
     
     assets->maxFileCount = Max(1024, fileGroup.fileCount);
-    assets->fileCount = fileGroup.fileCount;
+    assets->fileCount = 0;
     assets->files = PushArray(pool, AssetFile, assets->maxFileCount);
     
-    u32 fileIndex = 0;
     for(PlatformFileInfo* info = fileGroup.firstFileInfo; info; info = info->next)
     {
-        AssetFile* file = assets->files + fileIndex;
-        file->handle = platformAPI.OpenFile(&fileGroup, info);
-        file->size = SafeTruncateUInt64ToU32(info->size);
-        PAKFileHeader* header = &file->header;
-        InitFileAssetHeader(file);
-        if(file->valid)
-        {
-            u16 assetCount = (header->standardAssetCount + header->derivedAssetCount);
-            AssetSubtypeArray* assetSubtypeArray = GetAssetSubtypeForFile(assets, header);
-            if(assetSubtypeArray)
-            {
-                assetSubtypeArray->standardAssetCount = header->standardAssetCount;
-                assetSubtypeArray->derivedAssetCount = header->derivedAssetCount;
-                assetSubtypeArray->firstAssetBlock = AcquireAssetBlocks(assets, assetCount);
-                assetSubtypeArray->fileIndex = fileIndex;
-                LoadAssetFile(assets, file, assetSubtypeArray, pool);
-            }
-            else
-            {
-                // TODO(Leonardo): delete the file!
-                file->valid = false;
-            }
-        }
-        else
-        {
-            platformAPI.CloseFile(&file->handle);
-            // TODO(Leonardo): notify user! so that he can download the file again.
-        }
-        
-        ++fileIndex;
+        InitLoadAssetFile(assets, pool, &fileGroup, info);
     }
     platformAPI.GetAllFilesEnd(&fileGroup);
     

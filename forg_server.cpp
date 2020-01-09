@@ -191,8 +191,8 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
         {
             GameCommand* command = &player->inventoryCommand;
             Assert(command->action == none);
-            unpack(packetPtr, "HLLHLH", &command->action, &command->targetID, 
-                   &command->containerID, 
+            unpack(packetPtr, "HLLLHLH", &command->action, &command->targetID, 
+                   &command->usingID, &command->containerID, 
                    &command->targetObjectIndex, &command->targetContainerID, &command->optionIndex);
             
         } break;
@@ -202,20 +202,6 @@ internal void DispatchApplicationPacket(ServerState* server, u32 playerIndex, Pl
         {
             CommandParameters* parameters = &player->commandParameters;
             unpack(packetPtr, "VV", &parameters->acceleration, &parameters->targetOffset);
-        } break;
-        
-        case Type_selectRecipeEssence:
-        {
-            u16 index;
-            u16 essence;
-            unpack(packetPtr, "HH", &index, &essence);
-            
-            ActionComponent* action = GetComponent(server, player->ID, ActionComponent);
-            if(action)
-            {
-                action->selectedCrafingEssences[index] = essence;
-            }
-            
         } break;
         
         case Type_FileHeader:
@@ -447,20 +433,13 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
 #if FORGIVENESS_INTERNAL
         PlatformFileGroup pakFiles = platformAPI.GetAllFilesBegin(PlatformFile_AssetPack, ASSETS_PATH);
         
-        server->fileCount = pakFiles.fileCount;
-        server->files = PushArray(&server->gamePool, GameFile, server->fileCount);
+        server->fileCount = 0;
+        server->maxFileCount = pakFiles.fileCount * 2;
+        server->files = PushArray(&server->gamePool, GameFile, server->maxFileCount);
         
-        u32 fileIndex = 0;
         for(PlatformFileInfo* info = pakFiles.firstFileInfo; info; info = info->next)
         {
-            PlatformFileHandle handle = platformAPI.OpenFile(&pakFiles, info);
-            GameFile* file = server->files + fileIndex++;
-            TempMemory fileMemory = BeginTemporaryMemory(&tempPool);
-            u8* uncompressedContent = (u8*) PushSize(&tempPool, info->size);
-            platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
-            ReadCompressFile(server, file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
-            platformAPI.CloseFile(&handle);        
-            EndTemporaryMemory(fileMemory);
+            AddNewServerFile(server, &tempPool, &pakFiles, info);
         }
         platformAPI.GetAllFilesEnd(&pakFiles);
 #endif
@@ -576,8 +555,8 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
     
     BEGIN_BLOCK("spatial partitions");
     InitSpatialPartition(server->frameByFramePool, &server->playerPartition);
-    EXECUTE_JOB(server, FillPlayerSpacePartition, ArchetypeHas(PlayerComponent), elapsedTime);
     InitSpatialPartition(server->frameByFramePool, &server->standardPartition);
+    EXECUTE_JOB(server, FillPlayerSpacePartition, ArchetypeHas(PlayerComponent), elapsedTime);
     EXECUTE_JOB(server, FillCollisionSpatialPartition, true, elapsedTime);
     END_BLOCK();
     
@@ -718,13 +697,13 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
             }
         }
     }
-    Clear(&tempPool);
-    END_BLOCK();
     
     BEGIN_BLOCK("spawn and delete entities");
     SpawnAndDeleteEntities(server, elapsedTime);
     END_BLOCK();
     
+    Clear(&tempPool);
+    END_BLOCK();
 }
 
 

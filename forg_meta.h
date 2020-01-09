@@ -83,6 +83,9 @@ enum MetaType
     MetaType_ProbabilityEffectOption,
     MetaType_PossibleSkin,
     MetaType_Coloration,
+    MetaType_RequiredEssence,
+    MetaType_InfuseEffect,
+    MetaType_SculptureEffectDefinition,
 };
 
 enum FieldMetaFlags

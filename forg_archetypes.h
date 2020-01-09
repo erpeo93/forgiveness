@@ -105,10 +105,26 @@ Archetype() struct ObjectArchetype
     BaseComponent base;
     LayoutComponent layout;
     AnimationEffectComponent animationEffects;
-    RecipeEssenceComponent recipeEssences;
     ShadowComponent shadow;
 #endif
     ContainerComponent container;
+    InteractionComponent interaction;
+    LightComponent light;
+    InfusedEffectsComponent infused;
+};
+
+Archetype() struct StatueArchetype
+{
+#ifdef FORG_SERVER
+    DefaultComponent default;
+    ActiveEffectComponent effect;
+#else
+    BaseComponent base;
+    AnimationEffectComponent animationEffects;
+    ShadowComponent shadow;
+    LayoutComponent layout;
+#endif
+    StatueComponent statue;
     InteractionComponent interaction;
     LightComponent light;
 };
@@ -182,8 +198,28 @@ Archetype() struct PlaceholderArchetype
 
 Archetype() struct NullArchetype
 {
-    
 };
+
+
+
+
+introspection() struct ImageProperty
+{
+    b32 optional;
+    GameProperty property;
+};
+
+introspection() struct ImageProperties
+{
+    GameAssetType imageType MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
+    b32 emittors;
+    b32 flat;
+    r32 zOffset;
+    ArrayCounter propertyCount MetaCounter(properties);
+    ImageProperty* properties;
+};
+
+
 
 introspection() struct UseLayout
 {
@@ -204,7 +240,8 @@ introspection() struct PossibleActionDefinition
     r32 continueDistanceCoeff MetaDefault("1.0f");
     GameProperty special MetaDefault("{Property_specialPropertyType, Special_Invalid}") MetaFixed(property);
     r32 time;
-    EntityName requiredUsingType;
+    b32 validWithAnyDraggingType;
+    EntityName requiredDraggingType;
     EntityName requiredEquippedType;
 };
 
@@ -215,6 +252,22 @@ introspection() struct CraftingComponent
     b32 deleteAfterCrafting MetaDefault("true");
 };
 
+introspection() struct RequiredEssence
+{
+    GameProperty essence MetaDefault("{Property_essence, 0}") MetaFixed(property);
+};
+
+introspection() struct InfuseEffect
+{
+    ImageProperties iconProperties;
+    
+    ArrayCounter effectCount MetaCounter(effects);
+    GameEffect* effects;
+    
+    ArrayCounter requiredEssenceCount MetaCounter(requiredEssences);
+    RequiredEssence* requiredEssences;
+};
+
 introspection() struct CommonEntityInitParams
 {
     EntityType type MetaUneditable();
@@ -223,6 +276,11 @@ introspection() struct CommonEntityInitParams
     b32 craftable;
     u16 essenceCountRef;
     u16 essenceCountV;
+    
+    u16 infuseEffectSlotCount;
+    
+    ArrayCounter infuseEffectCount MetaCounter(infuseEffects);
+    InfuseEffect* infuseEffects;
     
     ArrayCounter componentCount MetaCounter(components);
     CraftingComponent* components;
@@ -244,9 +302,6 @@ introspection() struct CommonEntityInitParams
     ArrayCounter equippedActionCount MetaCounter("equippedActions");
     PossibleActionDefinition* equippedActions;
     
-    ArrayCounter draggingActionCount MetaCounter("draggingActions");
-    PossibleActionDefinition* draggingActions;
-    
     
     ArrayCounter usingConfigurationCount MetaCounter("usingConfigurations");
     UseLayout* usingConfigurations;
@@ -262,6 +317,7 @@ introspection() struct CommonEntityInitParams
     
     r32 flowerDensity MetaDefault("1.0f");
     r32 fruitDensity MetaDefault("1.0f");
+    r32 branchDensity MetaDefault("1.0f");
     
     Vec3 lightColor MetaDefault("V3(1, 1, 1)");
 };
@@ -322,6 +378,9 @@ introspection() struct ServerEntityInitParams
     r32 fruitGrowingSpeed;
     r32 requiredFruitDensity MetaDefault("1.0f");
     
+    r32 branchGrowingSpeed;
+    r32 requiredBranchDensity MetaDefault("1.0f");
+    
     r32 maxPhysicalHealth MetaDefault("100.0f");
     r32 maxMentalHealth MetaDefault("100.0f");
     
@@ -338,25 +397,11 @@ introspection() struct ServerEntityInitParams
     r32 targetTimeToLive MetaDefault("1.0f");
 };
 
-introspection() struct ImageProperty
-{
-    b32 optional;
-    GameProperty property;
-};
-
-introspection() struct ImageProperties
-{
-    GameAssetType imageType MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
-    b32 emittors;
-    b32 flat;
-    ArrayCounter propertyCount MetaCounter(properties);
-    ImageProperty* properties;
-};
-
 introspection() struct LayoutPieceProperties
 {
     AssetLabel name;
     r32 height MetaDefault("1.0f");
+    Vec3 offset;
     Color color MetaDefault("V4(1, 1, 1, 1)");
     ImageProperties properties;
     Enumerator inventorySlotType MetaEnumerator("inventorySlotType");
@@ -383,6 +428,15 @@ introspection() struct Coloration
 {
     ArrayCounter optionCount MetaCounter(options);
     Color* options;
+};
+
+introspection() struct SculptureEffectDefinition
+{
+    AssetLabel name;
+    Vec3 noActiveCameraOffset;
+    Vec3 activeMinCameraOffset;
+    Vec3 activeMaxCameraOffset;
+    r32 speed MetaDefault("1.0f");
 };
 
 introspection() struct ClientEntityInitParams
@@ -424,6 +478,8 @@ introspection() struct ClientEntityInitParams
     Color rockColor MetaDefault("V4(1, 1, 1, 1)");
     Vec4 rockColorV;
     
+    ImageProperties lightProperties;
+    
     r32 windInfluence MetaDefault("0");
     r32 leafWindInfluence MetaDefault("0");
     r32 flowerWindInfluence MetaDefault("0");
@@ -431,6 +487,12 @@ introspection() struct ClientEntityInitParams
     r32 dissolveDuration MetaDefault("0");
     u32 windFrequencyStandard MetaDefault("1");
     u32 windFrequencyOverlap MetaDefault("10");
+    
+    b32 scaleBranchesWithTrunk MetaDefault("true");
+    b32 scaleLeafsWithTrunk MetaDefault("true");
+    r32 leafRandomAngle;
+    r32 flowerRandomAngle;
+    r32 fruitRandomAngle;
     
     u32 instanceCount MetaDefault("1");
     Vec3 instanceMaxOffset;
@@ -454,10 +516,13 @@ introspection() struct ClientEntityInitParams
     ArrayCounter equippedPieceCount MetaCounter(equippedLayoutPieces);
     LayoutPieceProperties* equippedLayoutPieces;
     
-    Vec3 shadowOffset;
+    ArrayCounter containerPieceCount MetaCounter(containerLayoutPieces);
+    LayoutPieceProperties* containerLayoutPieces;
+    
+    Vec3 shadowOffset MetaDefault("V3(0, 0, 0.001f)");
     r32 shadowHeight MetaDefault("0.5f");
     Vec2 shadowScale MetaDefault("V2(1, 1)");
-    Vec4 shadowColor MetaDefault("V4(0, 0, 0, 0.5f)");
+    Vec4 shadowColor MetaDefault("V4(0, 0, 0, 0.3f)");
     
     r32 lootingZoomCoeff MetaDefault("3.0f");
     r32 lootingZoomSpeed MetaDefault("3.0f");
@@ -501,6 +566,14 @@ introspection() struct ClientEntityInitParams
     r32 speedOnNoFocus;
     Vec3 offsetMaxOnFocus;
     r32 scaleMaxOnFocus MetaDefault("1.0f");
+    
+    b32 occludePlayerVisual;
+    r32 occludeBoundsScale MetaDefault("1.0f");
+    r32 occludeDissolveTime MetaDefault("1.0f");
+    r32 occludeDissolvePercentage MetaDefault("0.85f");
+    
+    ArrayCounter sculptureEffectCount MetaCounter(sculptureEffects);
+    SculptureEffectDefinition* sculptureEffects;
 };
 
 #define INIT_ENTITY(name) inline void Init##name(void* state, EntityID ID, CommonEntityInitParams* com, void* par)

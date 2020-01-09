@@ -1,12 +1,4 @@
 #pragma once
-struct ImageReference
-{
-    u64 typeHash;
-    GameProperties properties;
-    b32 emittors;
-    b32 flat;
-};
-
 struct StandardImageComponent
 {
     ImageReference entity;
@@ -55,6 +47,7 @@ struct LayoutPiece
     r32 height;
     
     Vec4 color;
+    Vec3 offset;
     
     u16 inventorySlotType;
     ImageReference image;
@@ -77,6 +70,9 @@ struct LayoutComponent
     
     u32 equippedPieceCount;
     LayoutPiece equippedPieces[8];
+    
+    u32 containerPieceCount;
+    LayoutPiece containerPieces[8];
 };
 
 enum LayoutContainerDrawMode
@@ -84,7 +80,8 @@ enum LayoutContainerDrawMode
     LayoutContainerDraw_Standard,
     LayoutContainerDraw_Open,
     LayoutContainerDraw_Using,
-    LayoutContainerDraw_Equipped
+    LayoutContainerDraw_Equipped,
+    LayoutContainerDraw_Container,
 };
 struct LayoutContainer
 {
@@ -92,5 +89,7 @@ struct LayoutContainer
     b32 storedObjectsDrawn[MAX_CONTAINER_OBJECT];
     b32 usingObjectsDrawn[MAX_USING_OBJECT];
     ContainerComponent* container;
-    RecipeEssenceComponent* recipeEssences;
+    InfusedEffectsComponent* infused;
+    struct EntityDefinition* definition;
+    //RecipeEssenceComponent* recipeEssences;
 };

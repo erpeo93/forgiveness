@@ -141,6 +141,12 @@ enum EditorTabs
     EditorTab_Count,
 };
 
+enum EditorMode
+{
+    EditorMode_None,
+    EditorMode_Confirm,
+};
+
 struct EditorUIContext
 {
     AUID nextHot;
@@ -163,6 +169,9 @@ struct EditorUIContext
     b32 renderEntityBounds;
     b32 renderChunkBounds;
     b32 showEditor;
+    EditorMode mode;
+    AssetID confirmID;
+    char copyName[32];
     EditorTabs activeTab;
     
     

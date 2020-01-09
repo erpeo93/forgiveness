@@ -525,6 +525,42 @@ inline BitmapDim PushBitmapWithPivot(RenderGroup* renderGroup, ObjectTransform t
     return result;
 }
 
+internal void PushBitmapInRect(RenderGroup* group, ObjectTransform transform, BitmapId ID, Vec3 P, Rect2 rect, Lights lights = {})
+{
+    if(IsValid(ID))
+    {
+        
+        Bitmap* bitmap = GetBitmap(group->assets, ID).bitmap;
+        PAKBitmap* bitmapInfo = GetBitmapInfo(group->assets, ID);
+        if(bitmap)
+        {
+            Vec2 rectDim = GetDim(rect);
+            transform.dontRender = true;
+            BitmapDim dim = PushBitmap(group, transform, ID, P, rectDim.y, lights);
+            
+            Rect2 imageDim = RectMinDim(dim.P.xy, dim.size);
+            Vec2 actualDim = GetDim(imageDim);
+            
+            r32 scale = Min(rectDim.x / actualDim.x, rectDim.y / actualDim.y);
+            
+            dim = PushBitmap(group, transform, ID, P, rectDim.y * scale, lights);
+            imageDim = RectMinDim(dim.P.xy, dim.size);
+            actualDim = GetDim(imageDim);
+            
+            Vec2 drawnP = GetCenter(imageDim);
+            Vec3 offset = V3(drawnP - GetCenter(rect), 0);
+            Vec3 finalP = P - offset;
+            
+            transform.dontRender = false;
+            PushBitmap(group, transform, ID, finalP, rectDim.y * scale, lights);
+        }
+        else
+        {
+            LoadBitmap(group->assets, ID);
+        }
+    }
+}
+
 
 #if 0
 inline void PushCube_(RenderGroup* group, Vec3 P, r32 height, r32 width, RenderTexture texture, Vec4 color, Lights lights)

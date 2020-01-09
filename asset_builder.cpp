@@ -2000,6 +2000,10 @@ internal void FillPAKAssetBaseInfo(FILE* out, MemoryPool* tempPool, PAKAsset* as
                         else if(p.type == Token_SemiColon)
                         {
                         }
+                        else if(p.type == Token_Asterisk)
+                        {
+                            break;
+                        }
                         else
                         {
                             Token propertyName = p;
@@ -2731,9 +2735,24 @@ inline void ReadCompressFile(ServerState* server, GameFile* file, u32 uncompress
     file->dataHash = DataHash((char*) uncompressedContent, uncompressedSize);
 }
 
+internal GameFile* AddNewServerFile(ServerState* server, MemoryPool* tempPool, PlatformFileGroup* group, PlatformFileInfo* info)
+{
+    Assert(server->fileCount < server->maxFileCount);
+    GameFile* file = server->files + server->fileCount++;
+    
+    PlatformFileHandle handle = platformAPI.OpenFile(group, info);
+    TempMemory fileMemory = BeginTemporaryMemory(tempPool);
+    u8* uncompressedContent = (u8*) PushSize(tempPool, info->size);
+    platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
+    ReadCompressFile(server, file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
+    EndTemporaryMemory(fileMemory);
+    platformAPI.CloseFile(&handle);
+    
+    return file;
+}
+
 internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, PlatformFileGroup* group, PlatformFileInfo* info, b32 sendToPlayers)
 {
-    b32 deleteFile = false;
     TempMemory fileMemory = BeginTemporaryMemory(pool);
     
     PlatformFileHandle handle = platformAPI.OpenFile(group, info);
@@ -2759,43 +2778,61 @@ internal void ProcessReloadedFile(ServerState* server, MemoryPool* pool, Platfor
     
     char nameNoExtension[128];
     TrimToFirstCharacter(nameNoExtension, sizeof(nameNoExtension), info->name, '.');
-    if(file && (file->counter == 0))
+    
+    b32 deleteFile = true;
+    if(file)
     {
-        deleteFile = true;
-        u8* uncompressedContent = (u8*) PushSize(pool, info->size);
-        platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
-        
-        
-        u32 destFileIndex = 0;
-        AssetFile* destFile = CloseAssetFileFor(server->assets, type, subtypeHash, &destFileIndex);
-        Assert(destFile);
-        ReopenReloadAssetFile(server->assets, destFile, destFileIndex, type, header.subtype, uncompressedContent, SafeTruncateUInt64ToU32(info->size), pool);
-        
-        ReadCompressFile(server, file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
-        
-        if(sendToPlayers)
+        if(file->counter == 0)
         {
-            for(CompIterator iter = FirstComponent(server, PlayerComponent); 
-                IsValid(iter); iter = Next(iter))
+            u8* uncompressedContent = (u8*) PushSize(pool, info->size);
+            platformAPI.ReadFromFile(&handle, 0, info->size, uncompressedContent);
+            
+            
+            u32 destFileIndex = 0;
+            AssetFile* destFile = CloseAssetFileFor(server->assets, type, subtypeHash, &destFileIndex);
+            Assert(destFile);
+            ReopenReloadAssetFile(server->assets, destFile, destFileIndex, type, header.subtype, uncompressedContent, SafeTruncateUInt64ToU32(info->size), pool);
+            
+            ReadCompressFile(server, file, SafeTruncateUInt64ToU32(info->size), uncompressedContent);
+            
+        }
+        else
+        {
+            sendToPlayers = false;
+            deleteFile = false;
+        }
+    }
+    else
+    {
+        file = AddNewServerFile(server, pool, group, info);
+        InitLoadAssetFile(server->assets, &server->gamePool, group, info);
+    }
+    
+    
+    
+    if(sendToPlayers)
+    {
+        for(CompIterator iter = FirstComponent(server, PlayerComponent); 
+            IsValid(iter); iter = Next(iter))
+        {
+            PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
+            if(player->connectionSlot)
             {
-                PlayerComponent* player = GetComponentRaw(server, iter, PlayerComponent);
-                if(player->connectionSlot)
-                {
-                    FileToSend* toSend;
-                    FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
-                    
-                    toSend->acked = false;
-                    toSend->playerIndex = player->runningFileIndex++;
-                    toSend->serverFileIndex = fileIndex;
-                    toSend->sendingOffset = 0;
-                    
-                    ++file->counter;
-                    FREELIST_INSERT(toSend, player->firstReloadedFileToSend);
-                    QueueFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
-                }
+                FileToSend* toSend;
+                FREELIST_ALLOC(toSend, server->firstFreeToSendFile, PushStruct(&server->gamePool, FileToSend));
+                
+                toSend->acked = false;
+                toSend->playerIndex = player->runningFileIndex++;
+                toSend->serverFileIndex = fileIndex;
+                toSend->sendingOffset = 0;
+                
+                ++file->counter;
+                FREELIST_INSERT(toSend, player->firstReloadedFileToSend);
+                QueueFileHeader(player, toSend->playerIndex, file->type, file->subtype, file->uncompressedSize, file->compressedSize);
             }
         }
     }
+    
     
     EndTemporaryMemory(fileMemory);
     

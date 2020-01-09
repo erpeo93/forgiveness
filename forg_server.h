@@ -76,6 +76,13 @@ struct R32
     inline R32& operator += (r32);
     inline R32& operator *= (r32);
     inline R32& operator -= (r32);
+    inline R32& operator = (r32);
+    
+    operator r32() const
+    {
+        r32 result = this->value;
+        return result;
+    }
 };
 
 inline r32 GetR32(R32 value)
@@ -105,6 +112,12 @@ inline b32 operator == (r32 v1, R32 v2)
 inline r32 operator *(R32 v1, R32 v2)
 {
     r32 result = v1.value * v2.value;
+    return result;
+}
+
+inline r32 operator *(r32 v1, R32 v2)
+{
+    r32 result = v1 * v2.value;
     return result;
 }
 
@@ -174,6 +187,7 @@ struct DefaultComponent
     UniversePos P;
     U32 flags;
     EntityID spawnerID;
+    EntityID lootingContainerID;
     u16 essences[Count_essence];
     u16 boundType;
 	Rect3 bounds;
@@ -242,6 +256,18 @@ inline R32& R32::operator -= (r32 c)
 {
     SetR32(this, this->value - c);
     return *this;
+}
+
+inline R32& R32::operator = (r32 c)
+{
+    SetR32(this, c);
+    return *this;
+}
+
+inline r32 Clamp01(R32 v)
+{
+    r32 value = Clamp01(v.value);
+    return value;
 }
 
 inline void AddEntityFlags(DefaultComponent* def, u32 flags)
@@ -363,6 +389,7 @@ struct AddEntityParams
     Vec3 speed;
     u32 playerIndex;
     u32 equipPlayerIndex;
+    EntityID equipEntityID;
     EntityType attachedEntityType;
     EntityID targetBrainID;
     b32 spawnFollowingEntity;
@@ -396,6 +423,14 @@ internal AddEntityParams EquipPlayerEntityParams(u32 playerIndex)
 {
     AddEntityParams result = DefaultAddEntityParams();
     result.equipPlayerIndex = playerIndex;
+    
+    return result;
+}
+
+internal AddEntityParams EquipEntityParams(EntityID ID)
+{
+    AddEntityParams result = DefaultAddEntityParams();
+    result.equipEntityID = ID;
     
     return result;
 }
@@ -471,6 +506,7 @@ struct ServerState
     RandomSequence entropy;
     
     u32 fileCount;
+    u32 maxFileCount;
     GameFile* files;
     
     TimestampHash fileHash;

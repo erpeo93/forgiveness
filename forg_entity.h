@@ -27,7 +27,6 @@ struct ActionComponent
     GameplayR32WithDefault(speed);
     
 #if FORG_SERVER
-    u16 selectedCrafingEssences[MAX_RECIPE_ESSENCES];
     r32 time;
     u16 commandIndex;
 #endif
@@ -64,12 +63,15 @@ struct VegetationComponent
 {
     GameplayR32WithDefault(flowerGrowingSpeed);
     GameplayR32WithDefault(fruitGrowingSpeed);
+    GameplayR32WithDefault(branchGrowingSpeed);
     
     r32 requiredFlowerDensity;
     r32 requiredFruitDensity;
+    r32 requiredBranchDensity;
     
     GameplayR32(flowerDensity);
     GameplayR32(fruitDensity);
+    GameplayR32(branchDensity);
 };
 
 struct LightComponent
@@ -78,6 +80,46 @@ struct LightComponent
     
 #ifndef FORG_SERVER
     Vec3 lightColor;
+#endif
+};
+
+struct InfusedEffect
+{
+    u16 essenceCount;
+    U16 effectIndex;
+    U16 level;
+    
+#ifndef FORG_SERVER
+    Rect2 projectedOnScreenEffect;
+    Rect2 projectedOnScreenEssence;
+#endif
+};
+
+#define MAX_INFUSED_EFFECTS 4
+struct InfusedEffectsComponent
+{
+    InfusedEffect effects[MAX_INFUSED_EFFECTS];
+};
+
+
+struct SculptureEffect
+{
+    u64 pieceHash;
+    Vec3 noActiveCameraOffset;
+    Vec3 activeMinCameraOffset;
+    Vec3 activeMaxCameraOffset;
+    r32 speed;
+    r32 runningTime;
+};
+
+
+struct StatueComponent
+{
+    b32 active;
+    
+#ifndef FORG_SERVER
+    u32 effectCount;
+    SculptureEffect effects[8];
 #endif
 };
 

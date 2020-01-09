@@ -60,8 +60,9 @@ struct ArchetypeLayout
             ArchetypeComponent hasVegetationComponent;
             ArchetypeComponent hasSegmentImageComponent;
             ArchetypeComponent hasSkillDefComponent;
-            ArchetypeComponent hasRecipeEssenceComponent;
             ArchetypeComponent hasReachableMapComponent;
+            ArchetypeComponent hasInfusedEffectsComponent;
+            ArchetypeComponent hasStatueComponent;
         };
     };
 };

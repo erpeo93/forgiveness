@@ -180,10 +180,8 @@ internal EntityHotInteraction* AddPossibleInteraction_(GameModeWorld* worldMode,
             {
                 if(dest->actionCount < ArrayCount(dest->actions))
                 {
-                    PossibleAction* action = list->actions + actionIndex;
-                    
                     b32 valid = true;
-                    
+                    PossibleAction* action = list->actions + actionIndex;
 #if 0                    
                     if(RequiresUnlockedSlot(action->action) && (slot->flags_type & InventorySlot_Locked))
                     {
@@ -191,18 +189,16 @@ internal EntityHotInteraction* AddPossibleInteraction_(GameModeWorld* worldMode,
                     }
 #endif
                     
-                    
-                    if(type == Interaction_Ground && IsValidID(UI->draggingIDServer))
+                    EntityType usingType = {};
+                    if(IsValidID(UI->draggingIDServer))
                     {
-                        EntityID draggingIDClient = GetClientIDMapping(worldMode, UI->draggingIDServer);
-                        
-                        BaseComponent* draggingBase = GetComponent(worldMode, draggingIDClient, BaseComponent);
+                        dest->usingIDServer = UI->draggingIDServer;
+                        usingType = GetEntityType(worldMode, UI->draggingIDServer);
+                    }
+                    
+                    if(!action->validWithAnyDraggingType && !AreEqual(action->requiredDraggingType, usingType))
+                    {
                         valid = false;
-                        if(draggingBase && 
-                           AreEqual(action->requiredUsingType, draggingBase->type))
-                        {
-                            valid = true;
-                        }
                     }
                     
                     if(valid && LeftMouseAction(action->action))
@@ -257,16 +253,26 @@ internal void AddContainerObjectsInteractions(GameUIContext* UI, GameModeWorld* 
                     AddPossibleInteraction(worldMode, UI, interactionType, interaction->actions + interactionType, ID, containerID, slotIndex, slot);
                 }
                 
-                if(HasComponent(ID, RecipeEssenceComponent))
+                if(HasComponent(ID, InfusedEffectsComponent))
                 {
-                    RecipeEssenceComponent* essences = GetComponent(worldMode, ID, RecipeEssenceComponent);
+                    InfusedEffectsComponent* effects = GetComponent(worldMode, ID, InfusedEffectsComponent);
                     
-                    for(u16 essenceIndex = 0; essenceIndex < ArrayCount(essences->essences); ++essenceIndex)
+                    for(u16 effectIndex = 0; effectIndex < ArrayCount(effects->effects); ++effectIndex)
                     {
-                        if(PointInRect(essences->projectedOnScreen[essenceIndex], worldMode->relativeMouseP))
+                        InfusedEffect* effect = effects->effects + effectIndex;
+                        if(effect->essenceCount > 0 && effect->level == 0)
                         {
-                            ResetInteractions(UI);
-                            AddPossibleInteraction(worldMode, UI, Interaction_SelectRecipeEssence, 0, ID, {}, essenceIndex, slot);
+                            if(PointInRect(effect->projectedOnScreenEssence, worldMode->relativeMouseP))
+                            {
+                                ResetInteractions(UI);
+                                AddPossibleInteraction(worldMode, UI, Interaction_SelectInfusedEffect, 0, ID, {}, 0, slot, effectIndex);
+                            }
+                            
+                            if(PointInRect(effect->projectedOnScreenEffect, worldMode->relativeMouseP))
+                            {
+                                ResetInteractions(UI);
+                                AddPossibleInteraction(worldMode, UI, Interaction_Infuse, 0, ID, {}, 0, slot, effectIndex);
+                            }
                         }
                     }
                 }
@@ -401,7 +407,9 @@ internal void OverdrawLayout(GameModeWorld* worldMode, RenderGroup* group, Entit
         EntityAnimationParams params = GetEntityAnimationParams(worldMode, ID);
         LayoutContainer container = {};
         container.container = GetComponent(worldMode, ID, ContainerComponent);
-        container.recipeEssences = GetComponent(worldMode, ID, RecipeEssenceComponent);
+        container.infused = GetComponent(worldMode, ID, InfusedEffectsComponent);
+        container.definition = GetEntityTypeDefinition(group->assets, base->type);
+        //container.recipeEssences = GetComponent(worldMode, ID, RecipeEssenceComponent);
         container.drawMode = drawMode;
         
         ObjectTransform transform = FlatTransform();
@@ -608,19 +616,55 @@ internal void RenderUIOverlay(GameModeWorld* worldMode, RenderGroup* group, r32 
                 OverdrawVisibleStuff(UI, worldMode, group, elapsedTime);
             }
             
-            EntityID draggingID = GetClientIDMapping(worldMode, UI->draggingIDServer);
-            if(IsValidID(draggingID))
+            if(UI->testingDraggingOnEquipment)
             {
-                if(UI->testingDraggingOnEquipment)
+                UI->testingDraggingOnEquipment = false;
+                if(UI->draggingTestUsingOption)
                 {
-                    UI->testingDraggingOnEquipment = false;
+                    UsingEquipOption* option = UI->draggingTestUsingOption;
+                    UsingComponent* equipped = GetComponent(worldMode, worldMode->player.clientID, UsingComponent);
+                    if(equipped)
+                    {
+                        for(u32 slotIndex = 0; slotIndex < ArrayCount(option->slots); ++slotIndex)
+                        {
+                            u16 slot = option->slots[slotIndex];
+                            if(slot == 0xffff)
+                            {
+                                break;
+                            }
+                            equipped->slots[slot].ID = {};
+                        }
+                    }
                     UI->draggingTestUsingOption = 0;
+                }
+                
+                if(UI->draggingTestEquipOption)
+                {
+                    UsingEquipOption* option = UI->draggingTestEquipOption;
+                    EquipmentComponent* equipment = GetComponent(worldMode, worldMode->player.clientID, EquipmentComponent);
+                    if(equipment)
+                    {
+                        for(u32 slotIndex = 0; slotIndex < ArrayCount(option->slots); ++slotIndex)
+                        {
+                            u16 slot = option->slots[slotIndex];
+                            
+                            if(slot == 0xffff)
+                            {
+                                break;
+                            }
+                            equipment->slots[slot].ID = {};
+                        }
+                    }
                     UI->draggingTestEquipOption = 0;
                 }
-                else
+            }
+            else
+            {
+                EntityID draggingID = GetClientIDMapping(worldMode, UI->draggingIDServer);
+                if(IsValidID(draggingID))
                 {
                     Rect2 dragRect = RectCenterDim(worldMode->relativeMouseP, V2(100, 100));
-                    OverdrawLayout(worldMode, group, draggingID, dragRect, LayoutContainerDraw_Standard, 10.0f);
+                    OverdrawLayout(worldMode, group, draggingID, dragRect, LayoutContainerDraw_Standard, elapsedTime, 1.0f);
                 }
             }
             
@@ -673,6 +717,7 @@ INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
     
     if(ShouldBeRendered(worldMode, base))
     {
+        base->flags = ClearFlags(base->flags, EntityFlag_occluding);
         r32 cameraZ;
         base->projectedOnScreen = ProjectOnScreen(group, base->worldBounds, &cameraZ);
         
@@ -680,16 +725,10 @@ INTERACTION_ECS_JOB_CLIENT(HandleEntityInteraction)
         {
             if(PointInRect(base->projectedOnScreen, worldMode->relativeMouseP))
             {
-                EntityID serverID = base->serverID;
-                if(IsValidID(UI->draggingIDServer))
+                PossibleActionList* list = interaction->actions + InteractionList_Ground;
+                if(list->actionCount > 0)
                 {
-                    PossibleActionList* list = interaction->actions + InteractionList_Dragging;
-                    EntityHotInteraction* addedInteraction = AddPossibleInteraction(worldMode, UI, Interaction_Ground, interaction->actions + InteractionList_Dragging, serverID);
-                    addedInteraction->usingIDServer = UI->draggingIDServer;
-                }
-                else
-                {
-                    AddPossibleInteraction(worldMode, UI, Interaction_Ground, interaction->actions + InteractionList_Ground, serverID);
+                    AddPossibleInteraction(worldMode, UI, Interaction_Ground, list, base->serverID);
                 }
             }
         }
@@ -888,6 +927,8 @@ internal UsingEquipOption* CanEquip(GameModeWorld* worldMode, EntityID ID, Entit
 
 internal void FakeUse(GameUIContext* UI, GameModeWorld* worldMode, EntityID ID, EntityID targetIDServer, u16 optionIndex)
 {
+    UI->testingDraggingOnEquipment = true;
+    
     EntityID targetID = GetClientIDMapping(worldMode, targetIDServer);
     
     InteractionComponent* interaction = GetComponent(worldMode, targetID, InteractionComponent);
@@ -895,6 +936,7 @@ internal void FakeUse(GameUIContext* UI, GameModeWorld* worldMode, EntityID ID, 
     UsingEquipOption* option = interaction->usingConfigurations + optionIndex;
     Assert(option);
     UsingComponent* equipped = GetComponent(worldMode, ID, UsingComponent);
+    UI->draggingTestEquipOption = 0;
     UI->draggingTestUsingOption = option;
     
     if(interaction && equipped)
@@ -914,12 +956,15 @@ internal void FakeUse(GameUIContext* UI, GameModeWorld* worldMode, EntityID ID, 
 
 internal void FakeEquip(GameUIContext* UI, GameModeWorld* worldMode, EntityID ID, EntityID targetIDServer, u16 optionIndex)
 {
+    UI->testingDraggingOnEquipment = true;
+    
     EntityID targetID = GetClientIDMapping(worldMode, targetIDServer);
     InteractionComponent* interaction = GetComponent(worldMode, targetID, InteractionComponent);
     Assert(optionIndex < interaction->equipConfigurationCount);
     UsingEquipOption* option = interaction->equipConfigurations + optionIndex;
     Assert(option);
     UI->draggingTestEquipOption = option;
+    UI->draggingTestUsingOption = 0;
     
     EquipmentComponent* equipment = GetComponent(worldMode, ID, EquipmentComponent);
     if(interaction && equipment)
@@ -931,6 +976,7 @@ internal void FakeEquip(GameUIContext* UI, GameModeWorld* worldMode, EntityID ID
             {
                 break;
             }
+            
             StoreInventorySlot(worldMode, equipment->slots, ArrayCount(equipment->slots), slot, 0, targetIDServer, StringHash(MetaTable_equipmentSlot[slot]));
         }
     }
@@ -947,7 +993,6 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
             BaseComponent* player = GetComponent(worldMode, myPlayer->clientID, BaseComponent);
             if(player)
             {
-                player->flags = ClearFlags(player->flags, EntityFlag_occluding);
                 ResetInteractions(UI);
                 UI->tooltip[0] = 0;
                 
@@ -1007,6 +1052,14 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                         }
                     } break;
                     
+                    case LockedInteraction_Protect:
+                    {
+                        if(Released(&input->mouseRight) || Released(&input->mouseLeft))
+                        {
+                            UI->lockedInteractionType = LockedInteraction_None;
+                        }
+                    } break;
+                    
                     case LockedInteraction_ReachTarget:
                     {
                         CommandParameters* parameters = &UI->commandParameters;
@@ -1049,8 +1102,11 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                     
                     case LockedInteraction_Completed:
                     {
+                        
+#if 0                        
                         CommandParameters* parameters = &UI->commandParameters;
                         parameters->acceleration = {};
+#endif
                         
                         if(Released(&input->mouseLeft) || Released(&input->mouseRight))
                         {
@@ -1078,7 +1134,7 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                             Vec3 deltaP = SubtractOnSameZChunk(player->universeP, lootingBase->universeP);
                             if(deltaP.y <= 0)
                             {
-                                if(LengthSq(player->velocity) < 0.1f && Abs(deltaP.x) < 0.5f * GetWidth(lootingBase->bounds))
+                                if(Abs(deltaP.x) < 0.5f * GetWidth(lootingBase->bounds))
                                 {
                                     player->flags = AddFlags(player->flags, EntityFlag_occluding);
                                 }
@@ -1175,206 +1231,158 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                                 UsingComponent* equippedComponent = GetComponent(worldMode, myPlayer->clientID, UsingComponent);
                                 
                                 validInteraction = false;
-                                if(Pressed(&input->mouseRight) && !IsValidID(UI->draggingIDServer))
+                                
+                                if(IsDown(&input->mouseLeft) && IsDown(&input->mouseRight))
                                 {
-                                    b32 draggingInteraction = false;
-                                    if(IsValidID(hotID))
-                                    {
-                                        EntityID hotIDClient = GetClientIDMapping(worldMode, hotID);
-                                        InteractionComponent* interaction = GetComponent(worldMode, hotIDClient, InteractionComponent);
-                                        BaseComponent* hotBase = GetComponent(worldMode, hotIDClient, BaseComponent);
-                                        r32 distanceSq = LengthSq(SubtractOnSameZChunk(hotBase->universeP, player->universeP));
-                                        
-                                        CombatComponent* combat = GetComponent(worldMode, myPlayer->clientID, CombatComponent);
-                                        
-                                        EntityType equipped[Count_usingSlot];
-                                        u32 equippedCount = 0;
-                                        
-                                        if(equippedComponent)
-                                        {
-                                            equippedCount = ArrayCount(equippedComponent->slots);
-                                            for(u32 slotIndex = 0; slotIndex < ArrayCount(equippedComponent->slots); ++slotIndex)
-                                            {
-                                                EntityID slotID = GetBoundedID(equippedComponent->slots + slotIndex);
-                                                equipped[slotIndex] = GetEntityType(worldMode, slotID);
-                                            }
-                                        }
-                                        
-                                        
-                                        r32 targetTime;
-                                        if(ActionIsPossibleAtDistance(interaction, drag, 0, distanceSq, &targetTime, combat, equipped, equippedCount))
-                                        {
-                                            GameCommand command = {};
-                                            command.action = drag;
-                                            command.targetID = hotID;
-                                            SendInventoryCommand(command); 
-                                            draggingInteraction = true;
-                                            validInteraction = true;
-                                            
-                                            UI->draggingIDServer = hotID;
-                                            UI->draggingContainerIDServer = myPlayer->serverID;
-                                        }
-                                    }
-                                    
-                                    if(!draggingInteraction)
-                                    {
-                                        GameCommand command = {};
-                                        command.action = cast;
-                                        command.skillIndex = SafeTruncateToU16(UI->selectedSkillIndex);
-                                        UsingComponent* equipped = GetComponent(worldMode, myPlayer->clientID, UsingComponent);
-                                        
-                                        if(equipped)
-                                        {
-                                            Assert(command.skillIndex < ArrayCount(equipped->slots));
-                                            EntityID ID =  GetBoundedID(equipped->slots + command.skillIndex);
-                                            SkillDefComponent* skill = GetComponent(worldMode, ID, SkillDefComponent);
-                                            if(skill)
-                                            {
-                                                if(skill->targetSkill)
-                                                {
-                                                    if(IsValidID(hotID))
-                                                    {
-                                                        UI->lockedInteractionType = LockedInteraction_SkillTarget;
-                                                        command.targetID = hotID;
-                                                        validInteraction = true;
-                                                    }
-                                                    else
-                                                    {
-                                                        validInteraction = false;
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    UI->lockedInteractionType = LockedInteraction_SkillOffset;
-                                                    validInteraction = true;
-                                                }
-                                            }
-                                            
-                                            if(validInteraction)
-                                            {
-                                                UI->lockedCommand = command;
-                                            }
-                                        }
-                                    }
+                                    GameCommand command = {};
+                                    command.action = protect;
+                                    UI->lockedCommand = command;
                                 }
-                                else if(IsValidID(hotID))
+                                else
                                 {
-                                    if(Pressed(&input->mouseLeft))
+                                    if(Pressed(&input->mouseRight) && !IsValidID(UI->draggingIDServer))
                                     {
-                                        EntityID hotIDClient = GetClientIDMapping(worldMode, hotID);
-                                        if(IsValidID(hotIDClient))
+                                        b32 draggingInteraction = false;
+                                        if(IsValidID(hotID))
                                         {
+                                            EntityID hotIDClient = GetClientIDMapping(worldMode, hotID);
                                             InteractionComponent* interaction = GetComponent(worldMode, hotIDClient, InteractionComponent);
                                             BaseComponent* hotBase = GetComponent(worldMode, hotIDClient, BaseComponent);
                                             r32 distanceSq = LengthSq(SubtractOnSameZChunk(hotBase->universeP, player->universeP));
                                             
-                                            GameCommand command = {};
-                                            command.targetID = hotID;
-                                            command.action = hotAction;
-                                            command.usingID = hotInteraction.usingIDServer;
+                                            CombatComponent* combat = GetComponent(worldMode, myPlayer->clientID, CombatComponent);
                                             
-                                            UI->lockedInteractionType = LockedInteraction_ReachTarget;
-                                            UI->lockedCommand = command;
+                                            EntityType equipped[Count_usingSlot];
+                                            u32 equippedCount = 0;
+                                            
+                                            if(equippedComponent)
+                                            {
+                                                equippedCount = ArrayCount(equippedComponent->slots);
+                                                for(u32 slotIndex = 0; slotIndex < ArrayCount(equippedComponent->slots); ++slotIndex)
+                                                {
+                                                    EntityID slotID = GetBoundedID(equippedComponent->slots + slotIndex);
+                                                    equipped[slotIndex] = GetEntityType(worldMode, slotID);
+                                                }
+                                            }
+                                            
+                                            
+                                            r32 targetTime;
+                                            if(ActionIsPossibleAtDistance(interaction, drag, 0, distanceSq, &targetTime, combat, equipped, equippedCount))
+                                            {
+                                                GameCommand command = {};
+                                                command.action = drag;
+                                                command.targetID = hotID;
+                                                SendInventoryCommand(command); 
+                                                draggingInteraction = true;
+                                                validInteraction = true;
+                                                
+                                                UI->draggingIDServer = hotID;
+                                                UI->draggingContainerIDServer = myPlayer->serverID;
+                                            }
+                                        }
+                                        
+                                        {
+                                            if(!draggingInteraction)
+                                            {
+                                                GameCommand command = {};
+                                                command.action = cast;
+                                                command.skillIndex = SafeTruncateToU16(UI->selectedSkillIndex);
+                                                UsingComponent* equipped = GetComponent(worldMode, myPlayer->clientID, UsingComponent);
+                                                
+                                                if(equipped)
+                                                {
+                                                    Assert(command.skillIndex < ArrayCount(equipped->slots));
+                                                    EntityID ID =  GetBoundedID(equipped->slots + command.skillIndex);
+                                                    SkillDefComponent* skill = GetComponent(worldMode, ID, SkillDefComponent);
+                                                    if(skill)
+                                                    {
+                                                        if(skill->targetSkill)
+                                                        {
+                                                            if(IsValidID(hotID))
+                                                            {
+                                                                UI->lockedInteractionType = LockedInteraction_SkillTarget;
+                                                                command.targetID = hotID;
+                                                                validInteraction = true;
+                                                            }
+                                                            else
+                                                            {
+                                                                validInteraction = false;
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            UI->lockedInteractionType = LockedInteraction_SkillOffset;
+                                                            validInteraction = true;
+                                                        }
+                                                    }
+                                                    
+                                                    if(validInteraction)
+                                                    {
+                                                        UI->lockedCommand = command;
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
-                                    validInteraction = true;
+                                    else if(IsValidID(hotID))
+                                    {
+                                        if(Pressed(&input->mouseLeft))
+                                        {
+                                            EntityID hotIDClient = GetClientIDMapping(worldMode, hotID);
+                                            if(IsValidID(hotIDClient))
+                                            {
+                                                InteractionComponent* interaction = GetComponent(worldMode, hotIDClient, InteractionComponent);
+                                                BaseComponent* hotBase = GetComponent(worldMode, hotIDClient, BaseComponent);
+                                                r32 distanceSq = LengthSq(SubtractOnSameZChunk(hotBase->universeP, player->universeP));
+                                                
+                                                GameCommand command = {};
+                                                command.targetID = hotID;
+                                                command.action = hotAction;
+                                                command.usingID = hotInteraction.usingIDServer;
+                                                
+                                                UI->lockedInteractionType = LockedInteraction_ReachTarget;
+                                                UI->lockedCommand = command;
+                                            }
+                                        }
+                                        validInteraction = true;
+                                    }
                                 }
                             } break;
                             
                             case Interaction_Container:
                             case Interaction_Equipped:
                             {
-                                if(IsValidID(UI->draggingIDServer))
+                                if(IsValidID(hotID))
                                 {
-                                    validInteraction = false;
-                                    if(IsValidID(hotID))
+                                    switch(hotAction)
                                     {
-                                        //switchRequest(hotInteraction.containerID);
-                                    }
-                                    else
-                                    {
-                                        b32 valid = false;
-                                        u16 action;
-                                        u16 optionIndex = 0;
-                                        
-                                        if(hotInteraction.type == Interaction_Container)
+                                        case selectSkill:
                                         {
-                                            SetTooltip(UI, 1, "move");
-                                            validInteraction = true;
-                                            action = storeInventory;
-                                        }
-                                        else
-                                        {
-                                            if(AreEqual(hotInteraction.containerIDServer, myPlayer->serverID))
+                                            showTooltip = false;
+                                            if(Pressed(&input->mouseLeft))
                                             {
-                                                if(ExistValidUseOptionThatContains(worldMode, myPlayer->serverID, UI->draggingIDServer, hotInteraction.objectIndex, &optionIndex))
-                                                {
-                                                    UI->testingDraggingOnEquipment = true;
-                                                    InteractionComponent* draggingInteraction = GetComponent(worldMode, GetClientIDMapping(worldMode, UI->draggingIDServer), InteractionComponent);
-                                                    draggingInteraction->isOnFocus = true;
-                                                    FakeUse(UI, worldMode, myPlayer->clientID, UI->draggingIDServer, optionIndex);
-                                                    SetTooltip(UI, 1, "use");
-                                                    validInteraction = true;
-                                                }
+                                                UI->selectedSkillIndex = hotInteraction.objectIndex;
                                             }
-                                            else
-                                            {
-                                                SetTooltip(UI, 1, "move");
-                                                validInteraction = true;
-                                            }
-                                            
-                                            action = useInventory;
-                                        }
+                                        } break;
                                         
-                                        if(validInteraction)
+                                        default:
                                         {
                                             if(Pressed(&input->mouseLeft))
                                             {
                                                 GameCommand command = {};
-                                                command.action = action;
-                                                command.containerID = UI->draggingContainerIDServer;
-                                                command.targetID = UI->draggingIDServer;
-                                                command.targetContainerID = hotInteraction.containerIDServer;
-                                                command.targetObjectIndex = hotInteraction.objectIndex;
-                                                command.optionIndex = optionIndex;
+                                                command.action = hotAction;
+                                                command.targetID = hotID;
+                                                command.usingID = hotInteraction.usingIDServer;
+                                                command.containerID = hotInteraction.containerIDServer;
                                                 SendInventoryCommand(command); 
-                                                UI->draggingIDServer = {};
-                                                AddObjectRemovedPrediction(worldMode, UI, command.containerID, command.targetID);
                                             }
-                                        }
+                                        } break;
                                     }
-                                }
-                                else
-                                {
-                                    if(IsValidID(hotID))
+                                    
+                                    if(!IsValidID(UI->draggingIDServer))
                                     {
                                         InventorySlot* slot = hotInteraction.slot;
-                                        Assert(slot);
                                         slot->hot = true;
-                                        
-                                        switch(hotAction)
-                                        {
-                                            case selectSkill:
-                                            {
-                                                showTooltip = false;
-                                                if(Pressed(&input->mouseLeft))
-                                                {
-                                                    UI->selectedSkillIndex = hotInteraction.objectIndex;
-                                                }
-                                            } break;
-                                            
-                                            default:
-                                            {
-                                                if(Pressed(&input->mouseLeft))
-                                                {
-                                                    GameCommand command = {};
-                                                    command.targetID = hotID;
-                                                    command.action = hotAction;
-                                                    command.containerID = hotInteraction.containerIDServer;
-                                                    SendInventoryCommand(command); 
-                                                }
-                                            } break;
-                                        }
                                         
                                         if(Pressed(&input->mouseRight))
                                         {
@@ -1393,37 +1401,73 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                                         }
                                     }
                                 }
+                                else
+                                {
+                                    if(IsValidID(UI->draggingIDServer))
+                                    {
+                                        b32 valid = false;
+                                        u16 action;
+                                        u16 optionIndex = 0;
+                                        SetTooltip(UI, 1, "move");
+                                        
+                                        if(hotInteraction.type == Interaction_Container)
+                                        {
+                                            action = storeInventory;
+                                        }
+                                        else
+                                        {
+                                            if(AreEqual(hotInteraction.containerIDServer, myPlayer->serverID))
+                                            {
+                                                if(ExistValidUseOptionThatContains(worldMode, myPlayer->serverID, UI->draggingIDServer, hotInteraction.objectIndex, &optionIndex))
+                                                {
+                                                    InteractionComponent* draggingInteraction = GetComponent(worldMode, GetClientIDMapping(worldMode, UI->draggingIDServer), InteractionComponent);
+                                                    draggingInteraction->isOnFocus = true;
+                                                    FakeUse(UI, worldMode, myPlayer->clientID, UI->draggingIDServer, optionIndex);
+                                                    SetTooltip(UI, 1, "use");
+                                                }
+                                            }
+                                            action = useInventory;
+                                        }
+                                        
+                                        if(Pressed(&input->mouseLeft))
+                                        {
+                                            GameCommand command = {};
+                                            command.action = action;
+                                            command.targetID = UI->draggingIDServer;
+                                            command.containerID = UI->draggingContainerIDServer;
+                                            command.targetContainerID = hotInteraction.containerIDServer;
+                                            command.targetObjectIndex = hotInteraction.objectIndex;
+                                            command.optionIndex = optionIndex;
+                                            SendInventoryCommand(command); 
+                                            AddObjectRemovedPrediction(worldMode, UI, command.containerID, command.targetID);
+                                            UI->draggingIDServer = {};
+                                        }
+                                    }
+                                }
                             } break;
                             
                             case Interaction_Equipment:
                             {
-                                if(IsValidID(UI->draggingIDServer))
+                                if(Pressed(&input->mouseRight))
                                 {
-                                    validInteraction = (hotInteraction.actionCount == 1 && hotInteraction.actions[0] == open);
-                                }
-                                else
-                                {
-                                    if(Pressed(&input->mouseRight))
+                                    if(!IsValidID(UI->draggingIDServer))
                                     {
-                                        if(!IsValidID(UI->draggingIDServer))
+                                        UI->draggingIDServer = hotID;
+                                        UI->draggingContainerIDServer = hotInteraction.containerIDServer;
+                                        
+                                        if(AreEqual(UI->draggingIDServer, UI->openIDLeft))
                                         {
-                                            UI->draggingIDServer = hotID;
-                                            UI->draggingContainerIDServer = hotInteraction.containerIDServer;
-                                            
-                                            if(AreEqual(UI->draggingIDServer, UI->openIDLeft))
-                                            {
-                                                UI->openIDLeft = {};
-                                            }
-                                            
-                                            if(AreEqual(UI->draggingIDServer, UI->openIDRight))
-                                            {
-                                                UI->openIDRight = {};
-                                            }
+                                            UI->openIDLeft = {};
+                                        }
+                                        
+                                        if(AreEqual(UI->draggingIDServer, UI->openIDRight))
+                                        {
+                                            UI->openIDRight = {};
                                         }
                                     }
                                 }
                                 
-                                if(validInteraction && Pressed(&input->mouseLeft))
+                                if(Pressed(&input->mouseLeft))
                                 {
                                     switch(hotAction)
                                     {
@@ -1465,7 +1509,6 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                             
                             case Interaction_Dragging:
                             {
-                                UI->testingDraggingOnEquipment = true;
                                 SetTooltip(UI, 1, "equip");
                                 
                                 
@@ -1492,9 +1535,9 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                                     command.containerID = UI->draggingContainerIDServer;
                                     command.optionIndex = hotInteraction.optionIndex;
                                     SendInventoryCommand(command);
-                                    UI->draggingIDServer = {};
                                     
                                     AddObjectRemovedPrediction(worldMode, UI, command.containerID, command.targetID);
+                                    UI->draggingIDServer = {};
                                 }
                             } break;
                             
@@ -1506,24 +1549,50 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                                 }
                             } break;
                             
-                            case Interaction_SelectRecipeEssence:
+                            case Interaction_SelectInfusedEffect:
                             {
                                 InventorySlot* slot = hotInteraction.slot;
                                 Assert(slot);
                                 slot->hot = true;
                                 
+                                SetTooltip(UI, 1, "Change");
                                 if(Pressed(&input->mouseLeft))
                                 {
                                     EntityID clientID = GetClientIDMapping(worldMode, hotInteraction.entityIDServer);
-                                    RecipeEssenceComponent* essences = GetComponent(worldMode, clientID, RecipeEssenceComponent);
-                                    if(++essences->essences[hotInteraction.optionIndex] >= Count_essence)
+                                    BaseComponent* base = GetComponent(worldMode, clientID, BaseComponent);
+                                    EntityDefinition* definition = GetEntityTypeDefinition(group->assets, base->type);
+                                    
+                                    InfusedEffectsComponent* effects = GetComponent(worldMode, clientID, InfusedEffectsComponent);
+                                    
+                                    InfusedEffect* effect = effects->effects + hotInteraction.optionIndex;
+                                    if(++effect->effectIndex == definition->common.infuseEffectCount)
                                     {
-                                        essences->essences[hotInteraction.optionIndex] = 0;
+                                        effect->effectIndex = 0;
                                     }
-                                    SendRecipeEssenceSlot(hotInteraction.optionIndex, essences->essences[hotInteraction.optionIndex]);
                                 }
+                            } break;
+                            
+                            case Interaction_Infuse:
+                            {
+                                InventorySlot* slot = hotInteraction.slot;
+                                Assert(slot);
+                                slot->hot = true;
                                 
-                                validInteraction = false;
+                                SetTooltip(UI, 1, "Infuse");
+                                if(Pressed(&input->mouseLeft))
+                                {
+                                    EntityID clientID = GetClientIDMapping(worldMode, hotInteraction.entityIDServer);
+                                    InfusedEffectsComponent* effects = GetComponent(worldMode, clientID, InfusedEffectsComponent);
+                                    
+                                    u16 effectIndex = effects->effects[hotInteraction.optionIndex].effectIndex;
+                                    
+                                    GameCommand command = {};
+                                    command.action = infuse;
+                                    command.targetID = hotInteraction.entityIDServer;
+                                    command.optionIndex = effectIndex;
+                                    
+                                    SendInventoryCommand(command);
+                                }
                             } break;
                             
                             InvalidDefaultCase;

@@ -441,7 +441,7 @@ internal AnimationPiece* GetAnimationPieces(MemoryPool* tempPool, PAKSkeleton* s
         dest->color = ass->color;
         dest->mainAxis = boneXAxis;
         
-        zOffset += 0.001f;
+        zOffset += 0.01f;
     }
     
     return result;
@@ -542,7 +542,7 @@ internal b32 IsValidEquipmentSlot(GameUIContext* UI, InventorySlot* slot, u16 sl
 internal b32 IsValidInventorySlot(GameUIContext* UI, InventorySlot* slot)
 {
     b32 result = IsValidID(slot->ID);
-    if(result && !UI->testingDraggingOnEquipment && AreEqual(slot->ID, UI->draggingIDServer))
+    if(AreEqual(slot->ID, UI->draggingIDServer))
     {
         result = false;
     }
@@ -581,36 +581,49 @@ internal b32 RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group,
                 if(IsValidInventorySlot(&worldMode->gameUI, slot, slotIndex, equipmentSlots))
                 {
                     EntityID equipmentID = slot->ID;
-                    BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);
-                    InteractionComponent* equipmentInteraction = GetComponent(worldMode, equipmentID, InteractionComponent);
-                    LayoutComponent* equipmentLayout = GetComponent(worldMode, equipmentID, LayoutComponent);
-                    
-                    if(equipmentBase && equipmentLayout)
+                    u16 smallestSlotIndex = slotIndex;
+                    for(u16 sIndex = 0; sIndex < slotCount; ++sIndex)
                     {
-                        ObjectTransform finalTransform = transform;
-                        finalTransform.angle += equipmentLayout->rootAngle;
-                        finalTransform.scale = Hadamart(finalTransform.scale, equipmentLayout->rootScale);
-                        
-                        EntityAnimationParams params = GetEntityAnimationParams(worldMode, equipmentID);
-                        finalTransform.modulationPercentage = params.modulationPercentage;
-                        
-                        finalTransform.tint = params.tint;
-                        LayoutContainer container = {};
-                        container.drawMode = LayoutContainerDraw_Equipped;
-                        //container.container = GetComponent(worldMode, equipmentID, ContainerMappingComponent);
-                        
-                        if(alreadyRendered && !alreadyRendered[slotIndex])
+                        InventorySlot* testSlot = slots + sIndex;
+                        if(AreEqual(testSlot->ID, equipmentID))
                         {
-                            equipmentBase->projectedOnScreen = InvertedInfinityRect2();
+                            smallestSlotIndex = Min(smallestSlotIndex, sIndex);
                         }
+                    }
+                    
+                    if(smallestSlotIndex == slotIndex)
+                    {
+                        BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);
+                        InteractionComponent* equipmentInteraction = GetComponent(worldMode, equipmentID, InteractionComponent);
+                        LayoutComponent* equipmentLayout = GetComponent(worldMode, equipmentID, LayoutComponent);
                         
-                        if(multipart)
+                        if(equipmentBase && equipmentLayout)
                         {
-                            equipmentBase->projectedOnScreen = Union(equipmentBase->projectedOnScreen, RenderLayoutSpecificPiece(worldMode, group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights, &container, elapsedTime, multipartHash));
-                        }
-                        else
-                        {
-                            equipmentBase->projectedOnScreen = RenderLayout(worldMode, group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights, &container, elapsedTime);
+                            ObjectTransform finalTransform = transform;
+                            finalTransform.angle += equipmentLayout->rootAngle;
+                            finalTransform.scale = Hadamart(finalTransform.scale, equipmentLayout->rootScale);
+                            
+                            EntityAnimationParams params = GetEntityAnimationParams(worldMode, equipmentID);
+                            finalTransform.modulationPercentage = params.modulationPercentage;
+                            
+                            finalTransform.tint = params.tint;
+                            LayoutContainer container = {};
+                            container.drawMode = LayoutContainerDraw_Equipped;
+                            //container.container = GetComponent(worldMode, equipmentID, ContainerMappingComponent);
+                            
+                            if(alreadyRendered && !alreadyRendered[slotIndex])
+                            {
+                                equipmentBase->projectedOnScreen = InvertedInfinityRect2();
+                            }
+                            
+                            if(multipart)
+                            {
+                                equipmentBase->projectedOnScreen = Union(equipmentBase->projectedOnScreen, RenderLayoutSpecificPiece(worldMode, group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights, &container, elapsedTime, multipartHash));
+                            }
+                            else
+                            {
+                                equipmentBase->projectedOnScreen = RenderLayout(worldMode, group, P, finalTransform, equipmentLayout, equipmentBase->seed, lights, &container, elapsedTime);
+                            }
                         }
                     }
                 }

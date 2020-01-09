@@ -32,16 +32,20 @@ internal void AddEntity(ServerState* server, UniversePos P, u32 seed, EntityType
 
 internal void SpawnPlayerObjects(ServerState* server, UniversePos playerP, u32 playerIndex)
 {
-    EntityType type = GetEntityType(server->assets, "default", "passive_rune");
-    AddEntityParams runeParams = EquipPlayerEntityParams(playerIndex);
+    AddEntityParams playerParams = EquipPlayerEntityParams(playerIndex);
+    AddEntity(server, playerP, &server->entropy, GetEntityType(server->assets, "default", "shirt"), playerParams);
+    AddEntity(server, playerP, &server->entropy, GetEntityType(server->assets, "default", "pant"), playerParams);
+    
+#if 0
     runeParams.essences[light] = 1;
     UniversePos runeP = Offset(playerP, V3(RandomBilV2(&server->entropy) * 0.5f * VOXEL_SIZE, 0));
-    AddEntity(server, runeP, &server->entropy, type, runeParams);
+#endif
+    
 }
 
 internal void SpawnPlayer(ServerState* server, UniversePos P, AddEntityParams params)
 {
-    //SpawnPlayerObjects(server, P, params.playerIndex);
+    SpawnPlayerObjects(server, P, params.playerIndex);
     
     EntityType type = GetEntityType(server->assets, "default", "human");
     AddEntity(server, P, &server->entropy, type, params);
@@ -348,7 +352,6 @@ internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetI
             {
                 result = true;
                 SetBoundedID(slot, {});
-                break;
             }
             else
             {
@@ -380,7 +383,6 @@ internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetI
                     {
                         result = true;
                         SetBoundedID(slot, {});
-                        break;
                     }
                     else
                     {
@@ -398,6 +400,20 @@ internal b32 RemoveFromEntity(ServerState* server, EntityID ID, EntityID targetI
     if(result)
     {
         MakeTangible(server, targetID);
+    }
+    
+    return result;
+}
+
+internal b32 RemoveFromEntityOrOpenedContainer(ServerState* server, EntityID ID, EntityID targetID)
+{
+    b32 result = RemoveFromEntity(server, ID, targetID);
+    
+    if(!result)
+    {
+        DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+        ContainerComponent* opened = GetComponent(server, def->lootingContainerID, ContainerComponent);
+        result = RemoveFromContainer(server, opened, targetID);
     }
     
     return result;
@@ -522,15 +538,14 @@ internal void EssenceDelta(ServerState* server, EntityID ID, u16 essence, i16 de
     }
 }
 
-internal b32 Pick(ServerState* server, EntityID ID, EntityID targetID)
+internal void Pick(ServerState* server, EntityID ID, EntityID targetID)
 {
-    b32 result = true;
-    
+    b32 picked = true;
     if(!Use(server, ID, targetID))
     {
         if(!Equip(server, ID, targetID))
         {
-            result = false;
+            picked = false;
             EquipmentComponent* equipment = GetComponent(server, ID, EquipmentComponent);
             if(equipment)
             {
@@ -541,7 +556,7 @@ internal b32 Pick(ServerState* server, EntityID ID, EntityID targetID)
                     {
                         if(StoreInContainer(server, equipID, targetID))
                         {
-                            result = true;
+                            picked = true;
                             break;
                         }
                     }
@@ -550,7 +565,14 @@ internal b32 Pick(ServerState* server, EntityID ID, EntityID targetID)
         }
     }
     
-    return result;
+    if(picked)
+    {
+        QueueEventTrigger(server, ID, targetID, Trigger_PickedObject);
+    }
+    else
+    {
+        QueueEventTrigger(server, ID, targetID, Trigger_CantPickObject);
+    }
 }
 
 internal r32 MovementSpeedWhileDoing(ServerState* server, EntityID ID, u16 action)
@@ -586,6 +608,19 @@ internal void SetMoveCoeff(MovementComponent* movement, ActionComponent* action,
 
 
 
+internal void SignalActionToBrain(ServerState* server, u16 action, EntityID ID, EntityID actorID)
+{
+    if(HasComponent(ID, BrainComponent))
+    {
+        BrainComponent* brain = GetComponent(server, ID, BrainComponent);
+        if(action == attack)
+        {
+            brain->attackerID = actorID;
+        }
+    }
+}
+
+
 internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* command, CommandParameters* parameters, r32 elapsedTime, b32 updateAction)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
@@ -617,7 +652,12 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
     r32 distanceSq = R32_MAX;
     if(targetDef)
     {
-        distanceSq = LengthSq(SubtractOnSameZChunk(targetDef->P, def->P));
+        r32 distance = Length(SubtractOnSameZChunk(targetDef->P, def->P));
+        if(HasComponent(ID, PlayerComponent))
+        {
+            distance -= DISTANCE_TOLERANCE;
+        }
+        distanceSq = Square(distance);
     }
     
     u16 oldAction = GetU16(action->action);
@@ -652,6 +692,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
         {
             case none:
             case idle:
+            case protect:
             {
                 
             } break;
@@ -718,6 +759,9 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                 r32 targetTime;
                 if(ActionIsPossibleAtDistance(interaction, newAction, oldAction, distanceSq, &targetTime, combat, equipped, equippedCount))
                 {
+                    SignalActionToBrain(server, newAction, targetID, ID);
+                    
+                    
                     SetMoveCoeff(movement, action, MovementSpeedWhileDoing(server, ID, newAction));
                     
                     if(RemoveAccordingToCommand(server, ID, command))
@@ -759,14 +803,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                             if(!EntityHasFlags(targetDef, EntityFlag_notInWorld) && 
                                targetDef->P.chunkZ == def->P.chunkZ)
                             {
-                                if(Pick(server, ID, targetID))
-                                {
-                                    QueueEventTrigger(server, ID, targetID, Trigger_PickedObject);
-                                }
-                                else
-                                {
-                                    QueueEventTrigger(server, ID, targetID, Trigger_CantPickObject);
-                                }
+                                Pick(server, ID, targetID);
                             }
                             resetAction = true;
                             SignalCompletedCommand(server, ID, command);
@@ -945,40 +982,12 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                             }
                         }
                         
-                        b32 hasAllEssences = true;
-                        u16 essenceCount = GetCraftingEssenceCount(server->assets, type, craftSeed);
-                        for(u16 essenceIndex = 0; essenceIndex < essenceCount; ++essenceIndex)
-                        {
-                            u16 selected = action->selectedCrafingEssences[essenceIndex];
-                            if(selected >= ArrayCount(def->essences) || def->essences[selected] == 0)
-                            {
-                                hasAllEssences = false;
-                                break;
-                            }
-                        }
-                        
-                        
-                        if(hasAllComponents && hasAllEssences)
+                        if(hasAllComponents)
                         {
                             if(RemoveAccordingToCommand(server, ID, command))
                             {
                                 DeleteEntity(server, command->targetID);
                                 AddEntityParams params = DefaultAddEntityParams();
-                                
-                                
-                                for(u16 essenceIndex = 0; essenceIndex < essenceCount; ++essenceIndex)
-                                {
-                                    u16 selected = action->selectedCrafingEssences[essenceIndex];
-                                    ++params.essences[selected];
-                                    EssenceDelta(server, ID, selected, (i16) -1);
-                                    
-                                    action->selectedCrafingEssences[essenceIndex] = 0;
-                                }
-                                
-                                for(u16 slotIndex = 0; slotIndex < ArrayCount(action->selectedCrafingEssences); ++slotIndex)
-                                {
-                                    action->selectedCrafingEssences[slotIndex] = 0;
-                                }
                                 
                                 AddEntity(server, def->P, craftSeed, type, params);
                                 for(u16 componentIndex = 0; componentIndex < componentCount; ++componentIndex)
@@ -996,6 +1005,130 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            } break;
+            
+            case infuse:
+            {
+                u16 effectIndex = command->optionIndex;
+                
+                EntityDefinition* definition = GetEntityTypeDefinition(server->assets, targetDef->type);
+                
+                if(effectIndex < definition->common.infuseEffectCount)
+                {
+                    InfuseEffect * effect = definition->common.infuseEffects + effectIndex;
+                    
+                    if(effect->requiredEssenceCount > 0)
+                    {
+                        b32 hasAllEssences = true;
+                        for(ArrayCounter essenceIndex = 0; essenceIndex < effect->requiredEssenceCount; ++essenceIndex)
+                        {
+                            RequiredEssence* essence = effect->requiredEssences + essenceIndex;
+                            
+                            if(def->essences[essence->essence.value] == 0)
+                            {
+                                hasAllEssences = false;
+                                break;
+                            }
+                        }
+                        
+                        if(hasAllEssences)
+                        {
+                            InfusedEffectsComponent* infusedEffects = GetComponent(server, targetID, InfusedEffectsComponent);
+                            
+                            if(infusedEffects)
+                            {
+                                b32 canInfuse = false;
+                                u32 infuseIndex = 0;
+                                
+                                for(u32 infusedIndex = 0; infusedIndex < ArrayCount(infusedEffects->effects); ++infusedIndex)
+                                {
+                                    InfusedEffect* test = infusedEffects->effects + infusedIndex;
+                                    if(test->essenceCount > 0)
+                                    {
+                                        if(test->effectIndex.value == effectIndex && GetU16(test->level) > 0)
+                                        {
+                                            canInfuse = true;
+                                            infuseIndex = infusedIndex;
+                                            break;
+                                        }
+                                        else if(GetU16(test->level) == 0)
+                                        {
+                                            canInfuse = true;
+                                            infuseIndex = infusedIndex;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        break;
+                                    }
+                                }
+                                if(canInfuse)
+                                {
+                                    for(ArrayCounter essenceIndex = 0; essenceIndex < effect->requiredEssenceCount; ++essenceIndex)
+                                    {
+                                        RequiredEssence* essence = effect->requiredEssences + essenceIndex;
+                                        
+                                        EssenceDelta(server, ID, essence->essence.value, -1);
+                                    }
+                                    
+                                    InfusedEffect* dest = infusedEffects->effects + infuseIndex;
+                                    
+                                    ActiveEffectComponent* activeEffects = GetComponent(server, targetID, ActiveEffectComponent);
+                                    
+                                    u16 level = GetU16(dest->level);
+                                    if(level++ == 0)
+                                    {
+                                        for(ArrayCounter i = 0; i < effect->effectCount; ++i)
+                                        {
+                                            Assert(activeEffects->effectCount < ArrayCount(activeEffects->effects));
+                                            
+                                            ActiveEffect* destEffect = activeEffects->effects + activeEffects->effectCount++;
+                                            destEffect->time = 0;
+                                            destEffect->totalTime = 0;
+                                            
+                                            destEffect->effect = InstanceEffect(server->assets, effect->effects + i);
+                                            destEffect->effect.infuseIndex = effectIndex + 1;
+                                        }
+                                    }
+                                    
+                                    for(u32 i = 0; i < activeEffects->effectCount; ++i)
+                                    {
+                                        ActiveEffect* destEffect = activeEffects->effects + i;
+                                        if(destEffect->effect.infuseIndex == (effectIndex + 1))
+                                        {
+                                            destEffect->effect.power += 1.0f;
+                                        }
+                                    }
+                                    
+                                    
+                                    SetU16(&dest->effectIndex, effectIndex);
+                                    SetU16(&dest->level, level);
+                                }
+                            }
+                        }
+                    }
+                }
+            } break;
+            
+            case combine:
+            {
+                r32 targetTime;
+                if(ActionIsPossibleAtDistance(interaction, newAction, oldAction, distanceSq, &targetTime, combat, equipped, equippedCount, GetEntityType(server, command->usingID)))
+                {
+                    if(action->time > targetTime)
+                    {
+                        if(RemoveAccordingToCommand(server, ID, command) && RemoveFromEntityOrOpenedContainer(server, ID, command->usingID))
+                        {
+                            DispatchActionEffects(server, targetDef->P, commandIndex, newAction, targetID, ID, elapsedTime, targetDef->essences, true, GetEntityType(server, command->usingID));
+                            
+                            SignalCompletedCommand(server, ID, command);
+                            resetAction = true;
+                            
+                            DeleteEntity(server, targetID);
+                            DeleteEntity(server, command->usingID);
                         }
                     }
                 }
@@ -1061,8 +1194,14 @@ STANDARD_ECS_JOB_SERVER(HandleOpenedContainers)
         r32 targetTime;
         
         CombatComponent* combat = 0;
-        if(!ActionIsPossibleAtDistance(interaction, open, open, distanceSq, &targetTime, combat, 0, 0))
+        if(ActionIsPossibleAtDistance(interaction, open, open, distanceSq, &targetTime, combat, 0, 0))
         {
+            
+            opener->lootingContainerID = ID;
+        }
+        else
+        {
+            opener->lootingContainerID = {};
             SetBoundedID(&container->openedBy, {});
         }
     }
@@ -1431,11 +1570,13 @@ STANDARD_ECS_JOB_SERVER(UpdatePlant)
 {
     VegetationComponent* plant = GetComponent(server, ID, VegetationComponent);
     
-    r32 newFlowerDensity = Clamp01(GetR32(plant->flowerDensity) + elapsedTime * GetR32(plant->flowerGrowingSpeed));
-    r32 newFruitDensity = Clamp01(GetR32(plant->fruitDensity) + elapsedTime * GetR32(plant->fruitGrowingSpeed));
+    plant->flowerDensity += elapsedTime * plant->flowerGrowingSpeed;
+    plant->fruitDensity += elapsedTime * plant->fruitGrowingSpeed;
+    plant->branchDensity += elapsedTime * plant->branchGrowingSpeed;
     
-    SetR32(&plant->flowerDensity, newFlowerDensity);
-    SetR32(&plant->fruitDensity, newFruitDensity);
+    plant->flowerDensity = Clamp01(plant->flowerDensity);
+    plant->fruitDensity = Clamp01(plant->fruitDensity);
+    plant->branchDensity = Clamp01(plant->branchDensity);
 }
 
 internal void UpdateWorldBasics(ServerState* server, r32 elapsedTime)

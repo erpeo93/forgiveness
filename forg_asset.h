@@ -313,6 +313,15 @@ introspection() struct TileAnimationEffect
     GameAssetType asset MetaDefault("{AssetType_Image, 0}") MetaFixed(type);
 };
 
+struct ImageReference
+{
+    u64 typeHash;
+    GameProperties properties;
+    b32 emittors;
+    b32 flat;
+    r32 zOffset;
+};
+
 
 
 

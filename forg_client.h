@@ -21,6 +21,7 @@
 #include "forg_ecs.h"
 #include "forg_entity_layout.h"
 typedef u32 U32;
+typedef u16 U16;
 typedef r32 R32;
 #define GetR32(value) value
 #include "forg_skill.h"
@@ -67,6 +68,10 @@ struct BaseComponent
     r32 fadeInTime;
     r32 fadeOutTime;
     
+    r32 occludingTime;
+    b32 occludePlayerVisual;
+    r32 occludeBoundsScale;
+    
     u16 essences[Count_essence];
 };
 
@@ -112,6 +117,13 @@ struct PlantComponent
     r32 flowerWindInfluence;
     r32 fruitWindInfluence;
     r32 dissolveDuration;
+    
+    b32 scaleBranchesAccordingToTrunk;
+    b32 scaleLeafAccordingToTrunk;
+    
+    r32 leafRandomAngle;
+    r32 flowerRandomAngle;
+    r32 fruitRandomAngle;
 };
 
 struct RockComponent

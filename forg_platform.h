@@ -186,7 +186,6 @@ struct PlatformInput
             
             PlatformButton switchButton;
             PlatformButton inventoryButton;
-            PlatformButton equipmentButton;
             
             PlatformButton mouseLeft;
             PlatformButton mouseRight;
@@ -199,8 +198,9 @@ struct PlatformInput
             PlatformButton undo;
             PlatformButton redo;
             
+            PlatformButton rotateCameraButton;
+            PlatformButton rotateCameraButtonBackward;
             
-            PlatformButton slotButtons[10];
 #if FORGIVENESS_INTERNAL
             PlatformButton debugButton1;
             PlatformButton debugButton2;

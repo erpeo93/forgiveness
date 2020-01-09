@@ -14,6 +14,12 @@ inline void SetBoundedID(BoundedEntityID* bounded, EntityID ID)
     }
 }
 
+inline void ResetBoundedID(BoundedEntityID* bounded)
+{
+    bounded->dirty = true;
+    bounded->ID = {};
+}
+
 inline EntityID GetBoundedID(BoundedEntityID bounded)
 {
     EntityID result = bounded.ID;
@@ -70,6 +76,12 @@ inline EntityID GetBoundedID(InventorySlot* slot)
 inline void SetBoundedID(InventorySlot* slot, EntityID ID)
 {
     SetBoundedID(&slot->ID_, ID);
+}
+
+
+inline void ResetBoundedID(InventorySlot* slot)
+{
+    ResetBoundedID(&slot->ID_);
 }
 
 inline b32 AreEqual(InventorySlot* slot, EntityID ID)

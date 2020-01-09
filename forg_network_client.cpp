@@ -96,7 +96,7 @@ internal void SendCommand(u16 index, GameCommand command)
 internal void SendInventoryCommand(GameCommand command)
 {
     StartPacket(InventoryCommand);
-    Pack("HLLHLH", command.action, command.targetID, command.containerID, command.targetObjectIndex, command.targetContainerID, command.optionIndex);
+    Pack("HLLLHLH", command.action, command.targetID, command.usingID, command.containerID, command.targetObjectIndex, command.targetContainerID, command.optionIndex);
     CloseAndSendOrderedPacket();
 }
 
@@ -105,13 +105,6 @@ internal void SendCommandParameters(CommandParameters parameters)
     StartPacket(CommandParameters);
     Pack("VV", parameters.acceleration, parameters.targetOffset);
     CloseAndSendStandardPacket();
-}
-
-internal void SendSelectRecipeEssence(u16 slot, u16 essence)
-{
-    StartPacket(selectRecipeEssence);
-    Pack("HH", slot, essence);
-    CloseAndSendOrderedPacket();
 }
 
 inline void SendMovePlayerRequest(Vec3 offset)
@@ -156,14 +149,6 @@ internal void SendRecreateWorldRequrest(b32 createEntities, UniversePos P)
     Pack("llllV", createEntities, P.chunkX, P.chunkY, P.chunkZ, P.chunkOffset);
     CloseAndSendGuaranteedPacket();
 }
-
-internal void SendRecipeEssenceSlot(u16 slot, u16 essence)
-{
-    StartPacket(selectRecipeEssence);
-    Pack("HH", slot, essence);
-    CloseAndSendGuaranteedPacket();
-}
-
 
 internal u32 ServerClientIDMappingHashIndex(GameModeWorld* worldMode, EntityID ID)
 {
@@ -272,6 +257,7 @@ internal void InitEntity(GameModeWorld* worldMode, EntityID ID,
                          ServerEntityInitParams* s, 
                          ClientEntityInitParams* c);
 internal void MarkForDeletion(GameModeWorld* worldMode, EntityID clientID);
+internal void AnimationEventTrigger(GameModeWorld* worldMode, EntityID ID, GameProperty trigger);
 internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* worldMode, unsigned char* packetPtr, u16 dataSize)
 {
     ClientPlayer* player = &worldMode->player;
@@ -477,6 +463,8 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                             definition->common.essences = essences;
 							InitEntity(worldMode, currentClientID, &definition->common, 0, &params);
 							AddClientIDMapping(worldMode, currentServerID, currentClientID);
+                            SoundEventTrigger(worldMode, currentClientID, GameProp(EventTriggerType, Trigger_created));
+                            AnimationEventTrigger(worldMode, currentClientID, GameProp(EventTriggerType, Trigger_created));
 						}
 					}
                     
@@ -501,7 +489,7 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
 						{
 							Vec3 deltaClientServer = SubtractOnSameZChunk(P, base->universeP);
                             r32 distance = Length(deltaClientServer);
-                            r32 minDistance = 0.3f;
+                            r32 minDistance = DISTANCE_TOLERANCE;
                             r32 maxDistance = 2.0f;
                             if(distance > maxDistance)
                             {
@@ -576,14 +564,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                     
                     base->timeSinceLastUpdate = 0;
                     //base->deletedTime = 0;
-                    
-#if 0                    
-                    if(???)
-                    {
-                        SoundEventTrigger(worldMode, ID, SoundTrigger_LoosingHealth);
-                    }
-#endif
-                    
                 }
             } break;
             
@@ -667,10 +647,37 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 }
                 UnpackFlags(VegetationFlag_FlowerDensity, "d", &vegetation->flowerDensity);
                 UnpackFlags(VegetationFlag_FruitDensity, "d", &vegetation->fruitDensity);
+                UnpackFlags(VegetationFlag_BranchDensity, "d", &vegetation->branchDensity);
             } break;
             
             
-            
+            case Type_InfusedEffects:
+            {
+                InfusedEffectsComponent* effects = GetComponent(worldMode, currentClientID, InfusedEffectsComponent);
+                
+                InfusedEffectsComponent effects_;
+                if(!effects)
+                {
+                    effects = &effects_;
+                }
+                
+                u16 effectCount;
+                Unpack("H", &effectCount);
+                Assert(effectCount > 0);
+                
+                for(u16 effectIndex = 0; effectIndex < effectCount; ++effectIndex)
+                {
+                    u16 index;
+                    u16 gameplayEffectIndex;
+                    u16 level;
+                    
+                    Unpack("HHH", &index, &gameplayEffectIndex, &level);
+                    
+                    InfusedEffect* dest = effects->effects + index;
+                    dest->effectIndex = gameplayEffectIndex;
+                    dest->level = level;
+                }
+            } break;
             
             
             case Type_EssenceDelta:
@@ -698,7 +705,9 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 EntityID clientID = GetClientIDMapping(worldMode, ID);
                 MarkForDeletion(worldMode, clientID);
                 
-                MusicTrigger(worldMode, "forest", 1);
+                
+                SoundEventTrigger(worldMode, currentClientID, GameProp(EventTriggerType, Trigger_deleted));
+                AnimationEventTrigger(worldMode, currentClientID, GameProp(EventTriggerType, Trigger_deleted));
             } break;
             
 			case Type_Mappings:
@@ -846,9 +855,10 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 EntityID targetID;
                 u16 eventIndex;
                 Unpack("LLH", &ID, &targetID, &eventIndex);
-                SoundTrig trigger = {};
-                trigger.subtypeHash = StringHash("crack");
-                SoundTrigger(worldMode, &trigger);
+                
+                
+                SoundEventTrigger(worldMode, ID, GameProp(EventTriggerType, eventIndex));
+                AnimationEventTrigger(worldMode, ID, GameProp(EventTriggerType, eventIndex));
             } break;
 #if 0            
             case Type_Weather:

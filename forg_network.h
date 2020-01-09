@@ -4,6 +4,7 @@
 #define MTU KiloBytes(1) + 32
 #define CHUNK_SIZE KiloBytes(1)
 #define STATIC_UPDATE_TIME 4.0f
+#define DISTANCE_TOLERANCE 0.15f
 
 #pragma pack(push, 1)
 enum ForgNetworkFlags
@@ -161,7 +162,6 @@ enum Packet_Type
     Type_Command,
     Type_InventoryCommand,
     Type_CommandParameters,
-    Type_selectRecipeEssence,
     Type_CompletedCommand,
     
     Type_entityHeader,
@@ -170,8 +170,9 @@ enum Packet_Type
     Type_Action,
     Type_Health,
     Type_Combat,
-    Type_Vegetation,
     Type_Light,
+    Type_Vegetation,
+    Type_InfusedEffects,
     
     Type_Mappings,
     Type_EssenceDelta,
@@ -255,6 +256,7 @@ enum VegetationNetworkFlags
 {
     VegetationFlag_FlowerDensity = (1 << 0),
     VegetationFlag_FruitDensity = (1 << 1),
+    VegetationFlag_BranchDensity = (1 << 2),
 };
 
 struct LoginResponse

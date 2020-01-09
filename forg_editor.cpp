@@ -1637,6 +1637,13 @@ internal b32 EditorCollapsible(EditorLayout* layout, char* string)
     return result;
 }
 
+internal void EnterConfirmMode(EditorUIContext* context, AssetID ID)
+{
+    context->mode = EditorMode_Confirm;
+    context->confirmID = ID;
+    FormatString(context->copyName, sizeof(context->copyName), "null");
+}
+
 internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout, Assets* assets, AssetID ID)
 {
     GetGameAssetResult get = GetGameAsset(assets, ID);
@@ -1660,6 +1667,12 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
             {
                 if(get.derived)
                 {
+                    AUID copyid = auID(info, "copy");
+                    if(StandardEditorButton(layout, "copy", copyid))
+                    {
+                        EnterConfirmMode(layout->context, ID);
+                    }
+                    
                     Nest(layout);
                     Edit_Color(layout, "color", &info->coloration.color, false, ID);
                     Pop(layout);
@@ -1830,6 +1843,10 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                     Edit_b32(layout, "pingPongLooping", &info->animation.pingPongLooping, false, ID);
                     Edit_b32(layout, "singleCycle", &info->animation.singleCycle, false, ID);
                     Edit_u16(layout, "loopingBaselineMS", &info->animation.loopingBaselineMS, false, ID);
+                    
+                    ShowName(layout, "duration");
+                    ShowStandard(layout, StandardTextColor(), "%d", info->animation.durationMS);
+                    
                     NextRaw(layout);
                     
                     AUID soundAUID = auID(info, "sound triggers");
@@ -1913,6 +1930,14 @@ internal void RenderAndEditAsset(GameModeWorld* worldMode, EditorLayout* layout,
                 {
                     SendSpawnRequest(Offset(layout->context->playerP, layout->context->spawnOffset), ID);
                 }
+                
+                AUID copyid = auID(info, "copy");
+                if(StandardEditorButton(layout, "copy", copyid))
+                {
+                    EnterConfirmMode(layout->context, ID);
+                }
+                
+                
             }
             default:
             {
@@ -2246,230 +2271,278 @@ internal void RenderEditorOverlay(GameModeWorld* worldMode, RenderGroup* group, 
     
     if(context->showEditor)
     {
+        MemoryPool editorPool = {};
         RandomSequence seq = {};
         GameProperties properties = {};
         FontId fontID = QueryFonts(group->assets, "debug", &seq, &properties);
-        if(IsValid(fontID))
+        
+#if 0
+        if(context->input->ctrlDown)
         {
-            MemoryPool editorPool = {};
-            
-            if(Pressed(&context->input->undo))
-            {
-                Undo(context);
-            }
-            
-            if(Pressed(&context->input->redo))
-            {
-                Redo(context);
-            }
-#if 1        
-            if(Pressed(&context->input->actionLeft))
-            {
-                context->offset.x -= 10.0f;
-            }
-            if(Pressed(&context->input->actionRight))
-            {
-                context->offset.x += 10.0f;
-            }
+            //context->fontScale += 0.008f * context->input->mouseWheelOffset;
+        }
+        else
 #endif
-            
+        
+        {
+            r32 speed = 30.0f;
             if(context->input->ctrlDown)
             {
-                context->fontScale += 0.008f * context->input->mouseWheelOffset;
+                speed = 10.0f;
             }
-            else
+            context->offset.y -= speed * context->input->mouseWheelOffset;
+        }
+        
+        
+        if(context->input->shiftDown)
+        {
+            if(Pressed(&context->input->actionUp))
             {
-                context->offset.y -= 10.0f * context->input->mouseWheelOffset;
-            }
-            context->fontScale = Max(context->fontScale, 0.4f);
-            context->nextHot = {};
-            EditorLayout layout = StandardLayout(&editorPool, fontID, group, context, mouseP, worldMode->deltaMouseP);
-            EditorTabs active = context->activeTab;
-            
-            AUID auid = auID(context, "left");
-            if(StandardEditorButton(&layout, "<", auid))
-            {
-                i32 currentTab = (i32) active - 1;
-                if(currentTab < 0)
-                {
-                    context->activeTab = (EditorTabs) (EditorTab_Count - 1);
-                }
-                else
-                {
-                    context->activeTab = (EditorTabs) currentTab;
-                }
+                context->offset.y -= 1000.0f;
             }
             
-            switch(active)
+            if(Pressed(&context->input->actionDown))
             {
-                case EditorTab_Assets:
-                {
-                    ShowLabel(&layout, "Assets");
-                } break;
-                
-                case EditorTab_Misc:
-                {
-                    ShowLabel(&layout, "Misc");
-                } break;
-                
-                case EditorTab_Debug:
-                {
-                    ShowLabel(&layout, "Debug");
-                } break;
-                
-                case EditorTab_EntityRendering:
-                {
-                    ShowLabel(&layout, "Entity Rendering");
-                } break;
+                context->offset.y += 1000.0f;
             }
-            
-            auid = auID(context, "right");
-            if(StandardEditorButton(&layout, ">", auid))
+        }
+        
+        context->offset.y = Max(context->offset.y, 0);
+        
+        context->fontScale = Max(context->fontScale, 0.4f);
+        context->nextHot = {};
+        EditorLayout layout = StandardLayout(&editorPool, fontID, group, context, mouseP, worldMode->deltaMouseP);
+        
+        switch(context->mode)
+        {
+            case EditorMode_None:
             {
-                i32 currentTab = (i32) active + 1;
-                if(currentTab == EditorTab_Count)
+                if(IsValid(fontID))
                 {
-                    context->activeTab = (EditorTabs) 0;
-                }
-                else
-                {
-                    context->activeTab = (EditorTabs) currentTab;
-                }
-            }
-            
-            NextRaw(&layout);
-            NextRaw(&layout);
-            
-            switch(active)
-            {
-                case EditorTab_Assets:
-                {
-                    for(u16 assetType = 1; assetType < AssetType_Count; ++assetType)
+                    if(Pressed(&context->input->undo))
                     {
-                        NextRaw(&layout);
-                        char* assetTypeName = GetAssetTypeName(assetType);
-                        if(EditorCollapsible(&layout, assetTypeName, auID(assetTypeName, "showAssets")))
+                        Undo(context);
+                    }
+                    
+                    if(Pressed(&context->input->redo))
+                    {
+                        Redo(context);
+                    }
+#if 1        
+                    if(Pressed(&context->input->actionLeft))
+                    {
+                        context->offset.x -= 10.0f;
+                    }
+                    if(Pressed(&context->input->actionRight))
+                    {
+                        context->offset.x += 10.0f;
+                    }
+#endif
+                    
+                    EditorTabs active = context->activeTab;
+                    AUID auid = auID(context, "left");
+                    if(StandardEditorButton(&layout, "<", auid))
+                    {
+                        i32 currentTab = (i32) active - 1;
+                        if(currentTab < 0)
                         {
-                            Push(&layout);
-                            for(u32 fileIndex = 0; fileIndex < group->assets->fileCount; ++fileIndex)
+                            context->activeTab = (EditorTabs) (EditorTab_Count - 1);
+                        }
+                        else
+                        {
+                            context->activeTab = (EditorTabs) currentTab;
+                        }
+                    }
+                    
+                    switch(active)
+                    {
+                        case EditorTab_Assets:
+                        {
+                            ShowLabel(&layout, "Assets");
+                        } break;
+                        
+                        case EditorTab_Misc:
+                        {
+                            ShowLabel(&layout, "Misc");
+                        } break;
+                        
+                        case EditorTab_Debug:
+                        {
+                            ShowLabel(&layout, "Debug");
+                        } break;
+                        
+                        case EditorTab_EntityRendering:
+                        {
+                            ShowLabel(&layout, "Entity Rendering");
+                        } break;
+                    }
+                    
+                    auid = auID(context, "right");
+                    if(StandardEditorButton(&layout, ">", auid))
+                    {
+                        i32 currentTab = (i32) active + 1;
+                        if(currentTab == EditorTab_Count)
+                        {
+                            context->activeTab = (EditorTabs) 0;
+                        }
+                        else
+                        {
+                            context->activeTab = (EditorTabs) currentTab;
+                        }
+                    }
+                    
+                    NextRaw(&layout);
+                    NextRaw(&layout);
+                    
+                    switch(active)
+                    {
+                        case EditorTab_Assets:
+                        {
+                            for(u16 assetType = 1; assetType < AssetType_Count; ++assetType)
                             {
-                                AssetFile* file = GetAssetFile(group->assets, fileIndex);
-                                PAKFileHeader* header = GetFileInfo(group->assets, fileIndex);
-                                
-                                if(GetMetaAssetType(header->type) == assetType)
+                                NextRaw(&layout);
+                                char* assetTypeName = GetAssetTypeName(assetType);
+                                if(EditorCollapsible(&layout, assetTypeName, auID(assetTypeName, "showAssets")))
                                 {
-                                    AssetSubtypeArray* assets = GetAssetSubtypeForFile(group->assets, header);
-                                    if(assets)
+                                    Push(&layout);
+                                    for(u32 fileIndex = 0; fileIndex < group->assets->fileCount; ++fileIndex)
                                     {
-                                        NextRaw(&layout);
-                                        RenderEditAssetFile(worldMode, &layout, group->assets, header);
+                                        AssetFile* file = GetAssetFile(group->assets, fileIndex);
+                                        PAKFileHeader* header = GetFileInfo(group->assets, fileIndex);
+                                        
+                                        if(GetMetaAssetType(header->type) == assetType)
+                                        {
+                                            AssetSubtypeArray* assets = GetAssetSubtypeForFile(group->assets, header);
+                                            if(assets)
+                                            {
+                                                NextRaw(&layout);
+                                                RenderEditAssetFile(worldMode, &layout, group->assets, header);
+                                            }
+                                        }
+                                    }
+                                    Pop(&layout);
+                                }
+                            }
+                        } break;
+                        
+                        case EditorTab_Debug:
+                        {
+#if FORGIVENESS_INTERNAL
+                            DEBUGOverlay(&layout); 
+#endif
+                        } break;
+                        
+                        case EditorTab_Misc:
+                        {
+                            AUID miscID = auID(context, "resetGround");
+                            if(StandardEditorButton(&layout, "Regenerate Ground", miscID))
+                            {
+                                for(u32 chunkIndex = 0; chunkIndex < ArrayCount(worldMode->chunks); ++chunkIndex)
+                                {
+                                    for(WorldChunk* chunk = worldMode->chunks[chunkIndex]; chunk; chunk = chunk->next)
+                                    {
+                                        FreeSpecialTexture(group->assets, &chunk->texture);
                                     }
                                 }
                             }
-                            Pop(&layout);
-                        }
-                    }
-                } break;
-                
-                case EditorTab_Debug:
-                {
-#if FORGIVENESS_INTERNAL
-                    DEBUGOverlay(&layout); 
-#endif
-                } break;
-                
-                case EditorTab_Misc:
-                {
-                    AUID miscID = auID(context, "resetGround");
-                    if(StandardEditorButton(&layout, "Regenerate Ground", miscID))
-                    {
-                        for(u32 chunkIndex = 0; chunkIndex < ArrayCount(worldMode->chunks); ++chunkIndex)
-                        {
-                            for(WorldChunk* chunk = worldMode->chunks[chunkIndex]; chunk; chunk = chunk->next)
+                            
+                            AUID recreateEmptyID = auID(context, "recreateEmptyWorld");
+                            if(StandardEditorButton(&layout, "Recreate Empty World", recreateEmptyID))
                             {
-                                FreeSpecialTexture(group->assets, &chunk->texture);
+                                SendRecreateWorldRequrest(false, worldMode->player.universeP);
                             }
-                        }
+                            
+                            AUID recreateID = auID(context, "recreateWorld");
+                            if(StandardEditorButton(&layout, "Recreate standard World", recreateID))
+                            {
+                                SendRecreateWorldRequrest(true, worldMode->player.universeP);
+                            }
+                            
+                            
+                            AUID chunkID = auID(context, "chunkZ");
+                            if(StandardEditorButton(&layout, "Move Z", chunkID))
+                            {
+                                SendMoveChunkZRequest();
+                            }
+                            
+                            NextRaw(&layout);
+                            Edit_b32(&layout, "entity bounds", &layout.context->renderEntityBounds, 0, {});
+                            Edit_b32(&layout, "chunk bounds", &layout.context->renderChunkBounds, 0, {});
+                            NextRaw(&layout);
+                            Edit_Vec3(&layout, "camera offset", &worldMode->editorCameraOffset, 0, {});
+                            NextRaw(&layout);
+                            Edit_b32(&layout, "tile view", &worldMode->worldTileView, 0, {});
+                            NextRaw(&layout);
+                            Edit_b32(&layout, "chunk view", &worldMode->worldChunkView, 0, {});
+                            NextRaw(&layout);
+                            Edit_r32(&layout, "default zoom coeff", &worldMode->defaultZoomCoeff, 0, {});
+                            Edit_Vec3(&layout, "ambient light color", &worldMode->ambientLightColor, 0, {});
+                            Edit_Vec3(&layout, "wind direction", &worldMode->windDirection, 0, {});
+                            Edit_r32(&layout, "wind strength", &worldMode->windStrength, 0, {});
+                            
+                            
+                            NextRaw(&layout);
+                            Edit_Vec3(&layout, "spawn offset", &layout.context->spawnOffset, 0, {});
+                        } break;
+                        
+                        case EditorTab_EntityRendering:
+                        {
+                            Edit_EntityName(&layout, "entity name", &context->name, 0, {});
+                            Edit_u32(&layout, "entity seed", &context->seed, 0, {});
+                            Edit_u16(&layout, "entity action", &context->action, 0, {});
+                            Edit_r32(&layout, "entity health", &context->health, 0, {});
+                            Edit_Vec3(&layout, "entity offset", &context->entityOffset);
+                            NextRaw(&layout);
+                            
+                            Edit_AssetLabel(&layout, "effect name", &context->effectName);
+                            for(u32 propertyIndex = 0; propertyIndex < ArrayCount(context->properties.properties); ++propertyIndex)
+                            {
+                                Edit_GameProperty(&layout, "property", context->properties.properties + propertyIndex);
+                                NextRaw(&layout);
+                            }
+                            Edit_Vec3(&layout, "particle offset", &context->particleOffset);
+                            Edit_Vec3(&layout, "particle speed", &context->particleSpeed);
+                            Edit_r32(&layout, "particle scale", &context->particleScale);
+                        } break;
                     }
                     
-                    AUID recreateEmptyID = auID(context, "recreateEmptyWorld");
-                    if(StandardEditorButton(&layout, "Recreate Empty World", recreateEmptyID))
-                    {
-                        SendRecreateWorldRequrest(false, worldMode->player.universeP);
-                    }
+                    r32 tooltipScale = 0.5f;
+                    Rect2 tooltipDim = GetTextDim(group, fontID, layout.tooltip, V3(0, 0, 0), tooltipScale);
                     
-                    AUID recreateID = auID(context, "recreateWorld");
-                    if(StandardEditorButton(&layout, "Recreate standard World", recreateID))
-                    {
-                        SendRecreateWorldRequrest(true, worldMode->player.universeP);
-                    }
+                    Vec3 tooltipP = V3(layout.mouseP + V2(-0.5f * GetDim(tooltipDim).x, 20), 0);
+                    tooltipP.x = Max(tooltipP.x, -0.5f * group->screenDim.x);
                     
-                    
-                    AUID chunkID = auID(context, "chunkZ");
-                    if(StandardEditorButton(&layout, "Move Z", chunkID))
-                    {
-                        SendMoveChunkZRequest();
-                    }
-                    
-                    NextRaw(&layout);
-                    Edit_b32(&layout, "entity bounds", &layout.context->renderEntityBounds, 0, {});
-                    Edit_b32(&layout, "chunk bounds", &layout.context->renderChunkBounds, 0, {});
-                    NextRaw(&layout);
-                    Edit_Vec3(&layout, "camera offset", &worldMode->editorCameraOffset, 0, {});
-                    NextRaw(&layout);
-                    Edit_b32(&layout, "tile view", &worldMode->worldTileView, 0, {});
-                    NextRaw(&layout);
-                    Edit_b32(&layout, "chunk view", &worldMode->worldChunkView, 0, {});
-                    NextRaw(&layout);
-                    Edit_r32(&layout, "default zoom coeff", &worldMode->defaultZoomCoeff, 0, {});
-                    Edit_Vec3(&layout, "ambient light color", &worldMode->ambientLightColor, 0, {});
-                    Edit_Vec3(&layout, "wind direction", &worldMode->windDirection, 0, {});
-                    Edit_r32(&layout, "wind strength", &worldMode->windStrength, 0, {});
-                    
-                    
-                    NextRaw(&layout);
-                    Edit_Vec3(&layout, "spawn offset", &layout.context->spawnOffset, 0, {});
-                } break;
-                
-                case EditorTab_EntityRendering:
-                {
-                    Edit_EntityName(&layout, "entity name", &context->name, 0, {});
-                    Edit_u32(&layout, "entity seed", &context->seed, 0, {});
-                    Edit_u16(&layout, "entity action", &context->action, 0, {});
-                    Edit_r32(&layout, "entity health", &context->health, 0, {});
-                    Edit_Vec3(&layout, "entity offset", &context->entityOffset);
-                    NextRaw(&layout);
-                    
-                    Edit_AssetLabel(&layout, "effect name", &context->effectName);
-                    for(u32 propertyIndex = 0; propertyIndex < ArrayCount(context->properties.properties); ++propertyIndex)
-                    {
-                        Edit_GameProperty(&layout, "property", context->properties.properties + propertyIndex);
-                        NextRaw(&layout);
-                    }
-                    Edit_Vec3(&layout, "particle offset", &context->particleOffset);
-                    Edit_Vec3(&layout, "particle speed", &context->particleSpeed);
-                    Edit_r32(&layout, "particle scale", &context->particleScale);
-                } break;
-            }
+                    tooltipDim = Offset(tooltipDim, tooltipP.xy);
+                    PushRect(group, FlatTransform(V4(0, 0, 0, 1)), tooltipDim);
+                    PushText(group, fontID, layout.tooltip, tooltipP, tooltipScale);
+                }
+            } break;
             
-            r32 tooltipScale = 0.5f;
-            Rect2 tooltipDim = GetTextDim(group, fontID, layout.tooltip, V3(0, 0, 0), tooltipScale);
-            
-            Vec3 tooltipP = V3(layout.mouseP + V2(-0.5f * GetDim(tooltipDim).x, 20), 0);
-            tooltipP.x = Max(tooltipP.x, -0.5f * group->screenDim.x);
-            
-            tooltipDim = Offset(tooltipDim, tooltipP.xy);
-            PushRect(group, FlatTransform(V4(0, 0, 0, 1)), tooltipDim);
-            PushText(group, fontID, layout.tooltip, tooltipP, tooltipScale);
-            
-            
-            
-            context->hot = context->nextHot;
-            if(Pressed(&context->input->escButton))
+            case EditorMode_Confirm:
             {
-                context->interactive = {};
-            }
-            Clear(&editorPool);
+                Edit_StringFreely(&layout, "new name", context->copyName, sizeof(context->copyName), auID(context->copyName, "new name"), false, {});
+                
+                if(Pressed(&context->input->confirmButton))
+                {
+                    WritebackAssetToFileSystem(group->assets, context->confirmID, WRITEBACK_PATH, false, context->copyName);
+                    context->mode = EditorMode_None;
+                }
+                
+                if(Pressed(&context->input->escButton))
+                {
+                    context->mode = EditorMode_None;
+                }
+            } break;
+            
         }
+        
+        
+        context->hot = context->nextHot;
+        if(Pressed(&context->input->escButton))
+        {
+            context->interactive = {};
+        }
+        
+        Clear(&editorPool);
     }
 }

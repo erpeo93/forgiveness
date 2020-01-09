@@ -61,6 +61,7 @@ struct BrainComponent
     u16 state;
     
     EntityID targetID;
+    EntityID attackerID;
     BrainDirection idleDirection;
     BrainDirection directions[DIRECTION_COUNT];
     
@@ -79,13 +80,20 @@ introspection() struct BrainParams
     r32 idleTimeWhenWandering;
     r32 wanderTargetTime MetaDefault("2.0f");
     r32 safetyLightRadious MetaDefault("1.0f");
-    EntityName hostileType;
-    EntityName maintainDistanceType;
-    EntityName scaryType;
+    
+    ArrayCounter hostileCount MetaCounter(hostileTypes);
+    EntityName* hostileTypes;
+    
+    ArrayCounter maintainDistanceCount MetaCounter(maintainDistanceTypes);
+    EntityName* maintainDistanceTypes;
+    
+    ArrayCounter scaryCount MetaCounter(scaryTypes);
+    EntityName* scaryTypes;
     
     r32 minHomeDistance;
     r32 maxHomeDistance;
     
+    r32 maxDistanceFromHomeChase MetaDefault("10.0f");
     r32 reachableCellDim MetaDefault("0.5f");
     
     b32 fearsLight;

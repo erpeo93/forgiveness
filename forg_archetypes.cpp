@@ -1,7 +1,5 @@
 internal Rect3 StandardBounds(RandomSequence* seq, Vec3 dim, Vec3 offset, Vec3 dimV)
 {
-    offset = {};
-    
     Vec3 actualDim = RandomizeVec3(dim, dimV, seq);
     Rect3 result = Offset(RectCenterDim(V3(0, 0, 0), actualDim), offset + V3(0, 0, 0.5f * actualDim.z));
     return result;
@@ -37,7 +35,8 @@ internal void AddPossibleActions(Assets* assets, PossibleActionList* list, Possi
                 }
                 
                 dest->time = source->time;
-                dest->requiredUsingType = GetEntityType(assets, source->requiredUsingType);
+                dest->validWithAnyDraggingType = source->validWithAnyDraggingType;
+                dest->requiredDraggingType = GetEntityType(assets, source->requiredDraggingType);
                 dest->requiredEquippedType = GetEntityType(assets, source->requiredEquippedType);
             }
         }
@@ -99,6 +98,7 @@ internal GameEffectInstance InstanceEffect(Assets* assets, GameEffect* effect)
     result.action = effect->action.value;
     result.type = effect->effectType.value;
     result.spawnType = GetEntityType(assets, effect->spawnType);
+    result.requiredUsingType = GetEntityType(assets, effect->requiredUsingType);
     result.power = effect->power;
     return result;
 }
@@ -260,7 +260,7 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
             {
                 InventorySlot* slot = dest->storedObjects + runningCount++;
                 slot->flags_type = slots->type.value; 
-                SetBoundedID(slot, {});
+                ResetBoundedID(slot);
             }
         }
     }
@@ -275,7 +275,7 @@ INIT_COMPONENT_FUNCTION(InitContainerComponent)
             {
                 InventorySlot* slot = dest->usingObjects + runningCount++;
                 slot->flags_type = slots->type.value; 
-                SetBoundedID(slot, {});
+                ResetBoundedID(slot);
             }
         }
     }
@@ -361,12 +361,38 @@ INIT_COMPONENT_FUNCTION(InitVegetationComponent)
     
     SetR32Default(dest, flowerGrowingSpeed, s->flowerGrowingSpeed);
     SetR32Default(dest, fruitGrowingSpeed, s->fruitGrowingSpeed);
+    SetR32Default(dest, branchGrowingSpeed, s->branchGrowingSpeed);
     
     dest->requiredFlowerDensity = s->requiredFlowerDensity;
     dest->requiredFruitDensity = s->requiredFruitDensity;
+    dest->requiredBranchDensity = s->requiredBranchDensity;
     
-    SetR32(&dest->flowerDensity, common->flowerDensity);
-    SetR32(&dest->fruitDensity, common->fruitDensity);
+    dest->flowerDensity = common->flowerDensity;
+    dest->flowerDensity = common->fruitDensity;
+    dest->branchDensity = common->branchDensity;
+}
+
+INIT_COMPONENT_FUNCTION(InitStatueComponent)
+{
+    StatueComponent* dest = (StatueComponent*) componentPtr;
+    dest->active = true;
+}
+
+INIT_COMPONENT_FUNCTION(InitInfusedEffectsComponent)
+{
+    InfusedEffectsComponent* dest = (InfusedEffectsComponent*) componentPtr;
+    
+    for(u16 effectIndex = 0; effectIndex < ArrayCount(dest->effects); ++effectIndex)
+    {
+        dest->effects[effectIndex].essenceCount = 0;
+    }
+    
+    Assert(common->infuseEffectCount < ArrayCount(dest->effects));
+    for(u16 effectIndex = 0; effectIndex < common->infuseEffectSlotCount; ++effectIndex)
+    {
+        InfusedEffect* effect = dest->effects + effectIndex;
+        effect->essenceCount = 1;
+    }
 }
 
 #else
@@ -392,6 +418,10 @@ INIT_COMPONENT_FUNCTION(InitBaseComponent)
     base->fadeInTime = c->fadeInTime;
     base->fadeOutTime = c->fadeOutTime;
     
+    base->occludingTime = 0;
+    base->occludePlayerVisual = c->occludePlayerVisual;
+    base->occludeBoundsScale = c->occludeBoundsScale;
+    
     for(u32 essenceIndex = 0; essenceIndex < Count_essence; ++essenceIndex)
     {
         base->essences[essenceIndex] = common->essences[essenceIndex];
@@ -411,6 +441,7 @@ internal void InitImageReference_(Assets* assets, ImageReference* dest,ImageProp
     dest->typeHash = sourceProperties->imageType.subtypeHash;
     dest->emittors = sourceProperties->emittors;
     dest->flat = sourceProperties->flat;
+    dest->zOffset = sourceProperties->zOffset;
     dest->properties = {};
     for(u16 propertyIndex = 0; propertyIndex < sourceProperties->propertyCount; ++propertyIndex)
     {
@@ -484,6 +515,7 @@ INIT_COMPONENT_FUNCTION(InitRockComponent)
     dest->mineralDensity = 1.0f;
 }
 
+
 INIT_COMPONENT_FUNCTION(InitGrassComponent)
 {
     GrassComponent* dest = (GrassComponent*) componentPtr;
@@ -522,6 +554,12 @@ INIT_COMPONENT_FUNCTION(InitPlantComponent)
     dest->flowerWindInfluence = c->flowerWindInfluence;
     dest->fruitWindInfluence = c->fruitWindInfluence;
     dest->dissolveDuration = c->dissolveDuration;
+    
+    dest->scaleBranchesAccordingToTrunk = c->scaleBranchesWithTrunk;
+    dest->scaleLeafAccordingToTrunk = c->scaleLeafsWithTrunk;
+    dest->leafRandomAngle = c->leafRandomAngle;
+    dest->flowerRandomAngle = c->flowerRandomAngle;
+    dest->fruitRandomAngle = c->fruitRandomAngle;
 }
 
 INIT_COMPONENT_FUNCTION(InitStandardImageComponent)
@@ -634,6 +672,7 @@ internal void InitLayout(Assets* assets, LayoutPiece* destPieces, u32* destPiece
             destPiece->nameHash = StringHash(piece->name.name);
             destPiece->height = piece->height;
             destPiece->color = piece->color;
+            destPiece->offset = piece->offset;
             destPiece->inventorySlotType = PropertyToU16(inventorySlotType, piece->inventorySlotType);
             if(destPiece->inventorySlotType == 0xffff)
             {
@@ -674,6 +713,8 @@ INIT_COMPONENT_FUNCTION(InitLayoutComponent)
     InitLayout(assets, dest->usingPieces, &dest->usingPieceCount, ArrayCount(dest->usingPieces), c->usingLayoutPieces, c->usingPieceCount, essences);
     
     InitLayout(assets, dest->equippedPieces, &dest->equippedPieceCount, ArrayCount(dest->equippedPieces), c->equippedLayoutPieces, c->equippedPieceCount, essences);
+    
+    InitLayout(assets, dest->containerPieces, &dest->containerPieceCount, ArrayCount(dest->containerPieces), c->containerLayoutPieces, c->containerPieceCount, essences);
 }
 
 INIT_COMPONENT_FUNCTION(InitEquipmentComponent)
@@ -723,6 +764,9 @@ INIT_COMPONENT_FUNCTION(InitAnimationEffectComponent)
     animation->speedOnNoFocus = c->speedOnNoFocus;
     animation->offsetMaxOnFocus = c->offsetMaxOnFocus;
     animation->scaleMaxOnFocus = c->scaleMaxOnFocus;
+    
+    animation->occludeDissolveTime = c->occludeDissolveTime;
+    animation->occludeDissolvePercentage = c->occludeDissolvePercentage;
 }
 
 INIT_COMPONENT_FUNCTION(InitSoundEffectComponent)
@@ -771,13 +815,45 @@ INIT_COMPONENT_FUNCTION(InitVegetationComponent)
     vegetation->fruitDensity = common->fruitDensity;
 }
 
-INIT_COMPONENT_FUNCTION(InitRecipeEssenceComponent)
+INIT_COMPONENT_FUNCTION(InitStatueComponent)
 {
-    RecipeEssenceComponent* essences = (RecipeEssenceComponent*) componentPtr;
-    for(u32 essenceIndex = 0; essenceIndex < ArrayCount(essences->essences); ++essenceIndex)
+    StatueComponent* dest = (StatueComponent*) componentPtr;
+    dest->active = true;
+    dest->effectCount = 0;
+    
+    for(ArrayCounter effectIndex = 0; effectIndex < c->sculptureEffectCount; ++effectIndex)
     {
-        essences->projectedOnScreen[essenceIndex] = InvertedInfinityRect2();
-        essences->essences[essenceIndex] = 0;
+        SculptureEffectDefinition* source = c->sculptureEffects + effectIndex;
+        if(dest->effectCount < ArrayCount(dest->effects))
+        {
+            SculptureEffect* eff = dest->effects + dest->effectCount++;
+            eff->pieceHash = StringHash(source->name.name);
+            eff->noActiveCameraOffset = source->noActiveCameraOffset;
+            eff->activeMinCameraOffset = source->activeMinCameraOffset;
+            eff->activeMaxCameraOffset = source->activeMaxCameraOffset;
+            eff->speed = source->speed;
+            eff->runningTime = 0;
+        }
+    }
+    
+}
+
+INIT_COMPONENT_FUNCTION(InitInfusedEffectsComponent)
+{
+    InfusedEffectsComponent* dest = (InfusedEffectsComponent*) componentPtr;
+    
+    for(u16 effectIndex = 0; effectIndex < ArrayCount(dest->effects); ++effectIndex)
+    {
+        dest->effects[effectIndex].essenceCount = 0;
+    }
+    
+    Assert(common->infuseEffectCount < ArrayCount(dest->effects));
+    for(u16 effectIndex = 0; effectIndex < common->infuseEffectSlotCount; ++effectIndex)
+    {
+        InfusedEffect* effect = dest->effects + effectIndex;
+        effect->essenceCount = 1;
+        effect->projectedOnScreenEffect = InvertedInfinityRect2();
+        effect->projectedOnScreenEssence = InvertedInfinityRect2();
     }
 }
 
@@ -798,8 +874,8 @@ INIT_COMPONENT_FUNCTION(InitInteractionComponent)
     AddPossibleActions(assets, dest->actions + InteractionList_Equipment, common->equipmentActions, common->equipmentActionCount);
     AddPossibleActions(assets, dest->actions + InteractionList_Container, common->containerActions, common->containerActionCount);
     AddPossibleActions(assets, dest->actions + InteractionList_Equipped, common->equippedActions, common->equippedActionCount);
-    AddPossibleActions(assets, dest->actions + InteractionList_Dragging, common->draggingActions, common->draggingActionCount);
     
+    dest->usingConfigurationCount = 0;
     for(u32 usingOption = 0; usingOption < common->usingConfigurationCount; ++usingOption)
     {
         UseLayout* source = common->usingConfigurations + usingOption;
@@ -823,6 +899,7 @@ INIT_COMPONENT_FUNCTION(InitInteractionComponent)
         }
     }
     
+    dest->equipConfigurationCount = 0;
     for(u32 equipOption = 0; equipOption < common->equipConfigurationCount; ++equipOption)
     {
         EquipLayout* source = common->equipConfigurations + equipOption;
@@ -847,6 +924,10 @@ INIT_COMPONENT_FUNCTION(InitInteractionComponent)
     }
     
     dest->inventorySlotType = PropertyToU16(inventorySlotType, common->inventorySlotType);
+    if(dest->inventorySlotType == 0xffff)
+    {
+        dest->inventorySlotType = InventorySlot_Invalid;
+    }
 }
 
 #ifdef FORG_SERVER

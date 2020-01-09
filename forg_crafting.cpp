@@ -53,6 +53,7 @@ internal u16 GetCraftingEssenceCount(Assets* assets, EntityType type, u32 seed)
     i16 delta = (i16) RandomRangeInt(&seq, -definition->common.essenceCountV, definition->common.essenceCountV);
     i16 temp = Max(0, definition->common.essenceCountRef + delta);
     u16 result = (u16) temp;
+    result = 0;
     
     return result;
 }

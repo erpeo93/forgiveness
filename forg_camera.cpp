@@ -56,6 +56,19 @@ internal void UpdateGameCamera(GameModeWorld* worldMode, PlatformInput* input)
     worldMode->cameraWorldOffset += worldMode->cameraSpeed * input->timeToAdvance * (worldMode->destCameraWorldOffset - worldMode->cameraWorldOffset);
     worldMode->cameraEntityOffset += worldMode->cameraSpeed * input->timeToAdvance * (worldMode->destCameraEntityOffset - worldMode->cameraEntityOffset);
     
+#if 0    
+    if(IsDown(&input->rotateCameraButton))
+    {
+        cameraOrbit += 2.0f * input->timeToAdvance;
+    }
+    
+    if(IsDown(&input->rotateCameraButtonBackward))
+    {
+        cameraOrbit -= 2.0f * input->timeToAdvance;
+    }
+#endif
+    
+    
 #if FORGIVENESS_INTERNAL
     Vec2 dMouseP = worldMode->deltaMouseP;
     if(input->altDown && IsDown(&input->mouseLeft))

@@ -42,7 +42,6 @@ introspection() struct SoundMappingDefinition
     u32 maxRepeatCount;
     
     GameAssetType asset MetaDefault("{AssetType_Sound, 0}") MetaFixed(type);
-    
     ArrayCounter propertyCount MetaCounter(properties);
     GameProperty* properties;
 };
@@ -51,11 +50,12 @@ introspection() struct SoundEffectDefinition
 {
     r32 time;
     
+    b32 musicTrigger;
+    u32 musicPriority;
+    
+    b32 playerTrigger;
     GameProperty triggerType;
     SoundMappingDefinition sound;
-    
-    ArrayCounter propertyCount MetaCounter(properties);
-    GameProperty* properties;
 };
 
 struct SoundEffect

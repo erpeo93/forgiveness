@@ -776,7 +776,12 @@ internal void Win32ProcessKeyboardMessage( HWND window, PlatformInput* input, MS
             
             case 'E':
             {
-                Win32ProcessButton( &input->equipmentButton, isDown );
+                Win32ProcessButton( &input->rotateCameraButton, isDown );
+            } break;
+            
+            case 'Q':
+            {
+                Win32ProcessButton( &input->rotateCameraButtonBackward, isDown );
             } break;
             
             case VK_OEM_3:
@@ -784,6 +789,7 @@ internal void Win32ProcessKeyboardMessage( HWND window, PlatformInput* input, MS
                 Win32ProcessButton(&input->editorButton, isDown);
             } break;
             
+#if 0            
             case '0':
             {
                 Win32ProcessButton(input->slotButtons + 0, isDown);
@@ -839,6 +845,7 @@ internal void Win32ProcessKeyboardMessage( HWND window, PlatformInput* input, MS
             {
                 Win32ProcessButton(input->slotButtons + 9, isDown);
             } break;
+#endif
             
             case 'C':
             {

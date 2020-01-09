@@ -2,12 +2,15 @@
 introspection() struct GameEffectInstance
 {
     u16 commandIndex;
+    u16 infuseIndex;
+    
     r32 deleteTime;
     r32 targetTime;
     b32 targetEffect;
     u16 action;
     u16 type;
     EntityType spawnType;
+    EntityType requiredUsingType;
     r32 power;
     r32 radious;
 };
@@ -22,6 +25,7 @@ introspection() struct GameEffect
     GameProperty effectType MetaDefault("{Property_gameEffect}") MetaFixed(property);
     
     EntityName spawnType;
+    EntityName requiredUsingType;
     r32 power;
 };
 

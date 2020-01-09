@@ -606,7 +606,7 @@ internal void TriggerSpawnerInCell(ServerState* server, PoissonP* entities, Pois
 }
 
 
-internal b32 Pick(ServerState* server, EntityID ID, EntityID targetID);
+internal void Pick(ServerState* server, EntityID ID, EntityID targetID);
 internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
 {
     Assert(IsValid(newEntity->definitionID));
@@ -681,6 +681,12 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
             Pick(server, player->ID, ID);
         }
     }
+    
+    if(IsValidID(newEntity->params.equipEntityID))
+    {
+        Pick(server, newEntity->params.equipEntityID, ID);
+    }
+    
     
     if(newEntity->params.ghost)
     {
@@ -788,7 +794,17 @@ internal void SpawnAndDeleteEntities(ServerState* server, r32 elapsedTime)
     for(DeletedEntity* deleted = server->firstDeletedEntity; deleted; deleted = deleted->next)
 	{
         EntityID ID = deleted->ID;
-		DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+        DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
+        
+        SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
+        for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
+        {
+            PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
+            for(u32 messageIndex = 0; messageIndex < 5; ++messageIndex)
+            {
+                QueueDeletedID(player, ID);
+            }
+        }
         
         if(HasComponent(ID, StaticComponent))
         {

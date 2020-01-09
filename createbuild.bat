@@ -5,9 +5,8 @@ set buildpath=..\..\build
 set hh=%time:~-11,2%
 set /a hh=%hh%+100
 set hh=%hh:~1%
-
-
 set buildname=%date:~10,4%-%date:~4,2%-%date:~7,2%-%hh%-%time:~3,2%-%time:~6,2%
+
 if "%~1"=="" (
 echo Enter a valid version name!
 exit /B 1

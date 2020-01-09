@@ -440,6 +440,7 @@ internal u16 PrepareVegetationUpdate(ServerState* server, EntityID ID, b32 compl
         
         PackR32(vegetation->flowerDensity, flags, VegetationFlag_FlowerDensity);
         PackR32(vegetation->fruitDensity, flags, VegetationFlag_FruitDensity);
+        PackR32(vegetation->branchDensity, flags, VegetationFlag_BranchDensity);
         
         if(flags)
         {
@@ -451,12 +452,49 @@ internal u16 PrepareVegetationUpdate(ServerState* server, EntityID ID, b32 compl
     return result;
 }
 
-internal unsigned char* PrepareContainerUpdate(unsigned char* buff, ContainerComponent* container, u16* count)
+internal u16 PrepareInfusedUpdate(ServerState* server, EntityID ID, b32 completeUpdate, b32 staticUpdate, unsigned char* buff_)
+{
+    u16 result = 0;
+    InfusedEffectsComponent* effects = GetComponent(server, ID, InfusedEffectsComponent);
+    if(effects)
+    {
+        u16 effectCount = 0;
+        b32 packAll = (completeUpdate);
+        
+        unsigned char* buff = ForgPackHeader(buff_, Type_InfusedEffects);
+        unsigned char* effectCountDest = buff;
+        Pack("H", 0);
+        
+        for(u16 effectIndex = 0; effectIndex < ArrayCount(effects->effects); ++effectIndex)
+        {
+            InfusedEffect* effect = effects->effects + effectIndex;
+            if(packAll || effect->effectIndex.dirty || effect->level.dirty)
+            {
+                effect->effectIndex.dirty = false;
+                effect->level.dirty = false;
+                
+                
+                Pack("HHH", effectIndex, effect->effectIndex.value, effect->level.value);
+                ++effectCount;
+            }
+        }
+        
+        if(effectCount > 0)
+        {
+            result = ForgEndPacket_(buff_, buff);
+            pack(effectCountDest, "H", effectCount);
+        }
+    }
+    
+    return result;
+}
+
+internal unsigned char* PrepareContainerUpdate(unsigned char* buff, ContainerComponent* container, u16* count, b32 completeUpdate)
 {
     if(IsDirty(container->openedBy))
     {
         ++(*count);
-        Pack("CHHL", Mapping_OpenedBy, 0, 0, GetBoundedID(container->openedBy).archetype_archetypeIndex);
+        Pack("CHLL", Mapping_OpenedBy, 0, 0, GetBoundedID(container->openedBy).archetype_archetypeIndex);
         ResetDirty(&container->openedBy);
     }
     
@@ -464,22 +502,28 @@ internal unsigned char* PrepareContainerUpdate(unsigned char* buff, ContainerCom
     {
         InventorySlot* slot = container->storedObjects + objectIndex;
         
-        if(IsDirty(slot))
+        if(slot->flags_type > 0)
         {
-            ++(*count);
-            Pack("CHLL", Mapping_ContainerStored, objectIndex, slot->flags_type, GetBoundedID(slot).archetype_archetypeIndex);
-            ResetDirty(slot);
+            if(IsDirty(slot))
+            {
+                ++(*count);
+                Pack("CHLL", Mapping_ContainerStored, objectIndex, slot->flags_type, GetBoundedID(slot).archetype_archetypeIndex);
+                ResetDirty(slot);
+            }
         }
     }
     
     for(u16 objectIndex = 0; objectIndex < ArrayCount(container->usingObjects); ++objectIndex)
     {
         InventorySlot* slot = container->usingObjects + objectIndex;
-        if(IsDirty(slot))
+        if(slot->flags_type > 0)
         {
-            ++(*count);
-            Pack("CHLL", Mapping_ContainerUsing, objectIndex, slot->flags_type, GetBoundedID(slot).archetype_archetypeIndex);
-            ResetDirty(slot);
+            if(IsDirty(slot))
+            {
+                ++(*count);
+                Pack("CHLL", Mapping_ContainerUsing, objectIndex, slot->flags_type, GetBoundedID(slot).archetype_archetypeIndex);
+                ResetDirty(slot);
+            }
         }
     }
     
@@ -534,7 +578,7 @@ internal u16 PrepareMappingsUpdate(ServerState* server, EntityID ID, b32 complet
     
     if(container)
     {
-        buff = PrepareContainerUpdate(buff, container, &count);
+        buff = PrepareContainerUpdate(buff, container, &count, completeUpdate);
     }
     
     if(count > 0)
@@ -677,15 +721,6 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, b32 staticUpdat
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     if(IsSet(GetU32(def->flags), EntityFlag_deleted))
     {
-        SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
-        for(EntityID playerID = GetCurrent(&playerQuery); IsValid(&playerQuery); playerID = Advance(&playerQuery))
-        {
-            PlayerComponent* player = GetComponent(server, playerID, PlayerComponent);
-            for(u32 messageIndex = 0; messageIndex < 5; ++messageIndex)
-            {
-                QueueDeletedID(player, ID);
-            }
-        }
     }
     else
     {
@@ -701,6 +736,7 @@ internal void SendEntityUpdate(ServerState* server, EntityID ID, b32 staticUpdat
             QueueStandardUpdateWork(Combat);
             QueueStandardUpdateWork(Light);
             QueueStandardUpdateWork(Vegetation);
+            QueueStandardUpdateWork(Infused);
             QueueOrderedUpdateWork(Mappings);
         }
     }

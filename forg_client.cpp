@@ -101,12 +101,6 @@ internal void DeleteEntityClient(GameModeWorld* worldMode, EntityID clientID, En
     
     FreeArchetype(worldMode, clientID);
     RemoveClientIDMapping(worldMode, serverID);
-    
-    
-    if(AreEqual(serverID, worldMode->gameUI.draggingIDServer))
-    {
-        worldMode->gameUI.draggingIDServer = {};
-    }
 }
 
 internal void MarkForDeletion(GameModeWorld* worldMode, EntityID clientID)
@@ -121,6 +115,11 @@ internal void MarkForDeletion(GameModeWorld* worldMode, EntityID clientID)
         }
         base->velocity = {};
         base->deletedTime = base->totalLifeTime;
+        
+        if(AreEqual(base->serverID, worldMode->gameUI.draggingIDServer))
+        {
+            worldMode->gameUI.draggingIDServer = {};
+        }
     }
 }
 
@@ -137,9 +136,38 @@ STANDARD_ECS_JOB_CLIENT(PushEntityLight)
 STANDARD_ECS_JOB_CLIENT(UpdateEntity)
 {
     BaseComponent* base = GetComponent(worldMode, ID, BaseComponent);
-    
-	base->timeSinceLastUpdate += elapsedTime;
+    base->timeSinceLastUpdate += elapsedTime;
 	base->totalLifeTime += elapsedTime * base->lifeTimeSpeed;
+    
+    if(base->occludePlayerVisual)
+    {
+        BaseComponent* player = GetComponent(worldMode, worldMode->player.clientID, BaseComponent);
+        
+        Vec3 deltaP = SubtractOnSameZChunk(player->universeP, base->universeP);
+        
+        if(deltaP.y > 0 && RectOverlaps(Scale(base->projectedOnScreen, base->occludeBoundsScale), player->projectedOnScreen))
+        {
+            base->flags = AddFlags(base->flags, EntityFlag_occluding);
+        }
+    }
+    
+    if(base->flags & EntityFlag_occluding)
+    {
+        r32 occludeTime = 1.0f;
+        AnimationEffectComponent* animation = GetComponent(worldMode, ID, AnimationEffectComponent);
+        if(animation)
+        {
+            occludeTime = animation->occludeDissolveTime;
+        }
+        base->occludingTime += elapsedTime;
+        base->occludingTime = Min(base->occludingTime, occludeTime);
+    }
+    else
+    {
+        base->occludingTime -= elapsedTime;
+        base->occludingTime = Max(base->occludingTime, 0);
+    }
+    
     
     if(base->timeSinceLastUpdate >= 2.0f * STATIC_UPDATE_TIME && !(base->flags & EntityFlag_notInWorld))
     {
@@ -165,6 +193,9 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntity)
     }
     
     Assert(PositionInsideWorld(&base->universeP));
+    
+    
+    //ResetProjectedOnScreenStuff();
 }
 
 internal void PlayGame(GameState* gameState, PlatformInput* input)

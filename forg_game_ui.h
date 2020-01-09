@@ -25,7 +25,9 @@ struct PossibleAction
     u16 action;
     PossibleActionDistance distance;
     r32 time;
-    EntityType requiredUsingType;
+    
+    b32 validWithAnyDraggingType;
+    EntityType requiredDraggingType;
     EntityType requiredEquippedType;
 };
 
@@ -43,7 +45,8 @@ enum InteractionType
     Interaction_Equipped,
     Interaction_Dragging,
     Interaction_MoveContainerOnScreen,
-    Interaction_SelectRecipeEssence,
+    Interaction_SelectInfusedEffect,
+    Interaction_Infuse,
     
     Interaction_Count
 };
@@ -54,7 +57,6 @@ enum InteractionListType
     InteractionList_Equipment,
     InteractionList_Container,
     InteractionList_Equipped,
-    InteractionList_Dragging,
     InteractionList_Count,
 };
 
@@ -85,32 +87,20 @@ struct InteractionComponent
 
 inline b32 IsValid(EntityType type);
 inline b32 AreEqual(EntityType r1, EntityType r2);
-internal PossibleAction* ActionIsPossible(InteractionComponent* interaction, u16 action, EntityType* equipped, u32 equippedCount, EntityType usingType = {})
+internal PossibleAction* ActionIsPossible(InteractionComponent* interaction, u16 action, EntityType* equipped, u32 equippedCount, EntityType usingType)
 {
     PossibleAction* result = 0;
     if(interaction)
     {
-        if(IsValid(usingType))
+        for(u32 listIndex = 0; listIndex < InteractionList_Count; ++listIndex)
         {
-            PossibleActionList* list = interaction->actions + InteractionList_Dragging;
-            for(u32 actionIndex = 0; actionIndex < list->actionCount; ++actionIndex)
-            {
-                PossibleAction* possibleAction = list->actions + actionIndex;
-                if(possibleAction->action == action && AreEqual(usingType, possibleAction->requiredUsingType))
-                {
-                    result = possibleAction;
-                    break;
-                }
-            }
-        }
-        else
-        {
-            PossibleActionList* list = interaction->actions + InteractionList_Ground;
+            PossibleActionList* list = interaction->actions + listIndex;
             for(u32 actionIndex = 0; actionIndex < list->actionCount; ++actionIndex)
             {
                 PossibleAction* possibleAction = list->actions + actionIndex;
                 b32 valid = false;
-                if(possibleAction->action == action)
+                if(possibleAction->action == action && 
+                   (possibleAction->validWithAnyDraggingType || AreEqual(usingType, possibleAction->requiredDraggingType)))
                 {
                     if(IsValid(possibleAction->requiredEquippedType))
                     {
@@ -233,6 +223,7 @@ enum LockedInteractionType
     LockedInteraction_SkillOffset,
     LockedInteraction_ReachTarget,
     LockedInteraction_FollowMouse,
+    LockedInteraction_Protect,
     LockedInteraction_Completed,
 };
 
