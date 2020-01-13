@@ -296,6 +296,7 @@ INIT_COMPONENT_FUNCTION(InitBrainComponent)
     brain->type = PropertyToU16(brainType, s->brainType);
     brain->targetID = {};
     brain->wanderDirection = V3(RandomBilV2(&server->entropy), 0);
+    brain->time = RandomUni(&server->entropy) * 10.0f;
 }
 
 INIT_COMPONENT_FUNCTION(InitReachableMapComponent)
@@ -787,11 +788,11 @@ INIT_COMPONENT_FUNCTION(InitHealthComponent)
 {
     HealthComponent* health = (HealthComponent*) componentPtr;
     
-    health->physicalHealth = 0;
-    health->maxPhysicalHealth = 0;
+    health->physicalHealth = 1;
+    health->maxPhysicalHealth = 1;
     
-    health->mentalHealth = 0;
-    health->maxMentalHealth = 0;
+    health->mentalHealth = 1;
+    health->maxMentalHealth = 1;
 }
 
 INIT_COMPONENT_FUNCTION(InitCombatComponent)

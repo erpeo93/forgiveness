@@ -227,7 +227,6 @@ struct GameModeWorld
     
     u16 season;
     
-    b32 resetDayTime;
     r32 dayTimeTime;
     u16 previousDayTime;
     u16 dayTime;

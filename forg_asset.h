@@ -1,6 +1,13 @@
 #pragma once
-
+#if FORGIVENESS_RELEASE
+#if FORG_SERVER
 #define ASSETS_PATH "assets"
+#else
+#define ASSETS_PATH "server/assets"
+#endif
+#else
+#define ASSETS_PATH "assets"
+#endif
 #define RELOAD_PATH "assets/reload"
 #define RELOAD_SEND_PATH "assets/reload_send"
 #define TIMESTAMP_PATH "assets/timestamps"

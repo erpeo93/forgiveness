@@ -565,6 +565,7 @@ internal void Pick(ServerState* server, EntityID ID, EntityID targetID)
         }
     }
     
+#if 0    
     if(picked)
     {
         QueueEventTrigger(server, ID, targetID, Trigger_PickedObject);
@@ -573,6 +574,8 @@ internal void Pick(ServerState* server, EntityID ID, EntityID targetID)
     {
         QueueEventTrigger(server, ID, targetID, Trigger_CantPickObject);
     }
+#endif
+    
 }
 
 internal r32 MovementSpeedWhileDoing(ServerState* server, EntityID ID, u16 action)
@@ -673,6 +676,10 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
             SetMoveCoeff(movement, action, 0.0f);
             if(newAction == action->action)
             {
+                if(newAction == attack && combat)
+                {
+                    speed *= combat->attackSpeed;
+                }
                 action->time += speed * elapsedTime;
             }
             else
@@ -727,7 +734,7 @@ internal void DispatchCommand(ServerState* server, EntityID ID, GameCommand* com
                                 if(enoughMentalHealth)
                                 {
                                     UniversePos targetP = def->P;
-                                    DispatchEntityEffects(server, targetP, commandIndex, cast, ID, skillID, elapsedTime, essences, false);
+                                    DispatchEntityEffects(server, targetP, commandIndex, cast, ID, skillID, targetID, elapsedTime, essences, false);
                                 }
                                 else
                                 {

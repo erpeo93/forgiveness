@@ -605,7 +605,6 @@ internal void TriggerSpawnerInCell(ServerState* server, PoissonP* entities, Pois
     }
 }
 
-
 internal void Pick(ServerState* server, EntityID ID, EntityID targetID);
 internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
 {
@@ -725,7 +724,6 @@ internal void GenerateEntity(ServerState* server, NewEntity* newEntity)
     {
         BrainComponent* brain = GetComponent(server, ID, BrainComponent);
         brain->homeP = newEntity->P;
-        brain->reachableMap = GetComponent(server, ID, ReachableMapComponent);
     }
     
     if(HasComponent(ID, TempEntityComponent) && newEntity->params.timeToLive > 0)
@@ -940,7 +938,7 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
         {
             ZLayer* layer = server->layers + chunkZ;
             
-            if(chunkZ == 0)
+            if(false && chunkZ == 0)
             {
                 layer->dayTimeTime = 0;
                 layer->hasNight = false;
@@ -951,7 +949,7 @@ internal void BuildWorld(ServerState* server, b32 spawnEntities)
             {
                 layer->dayTimeTime = RandomUni(&generatorSeq) * DAYPHASE_DURATION;
                 layer->hasNight = true;
-                layer->nightSpeed = 1.0f / chunkZ;
+                layer->nightSpeed = 1.0f;
                 layer->dayTimePhase = SafeTruncateToU16(RandomChoice(&generatorSeq, Count_DayTime));
             }
         }

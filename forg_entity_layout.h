@@ -106,6 +106,7 @@ struct InventorySlot
 {
     u32 flags_type;
     EntityID ID;
+    EntityID serverID;
     
     r32 distanceFromMouseSq;
     Rect2 projOnScreen;

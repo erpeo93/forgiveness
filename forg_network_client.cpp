@@ -210,6 +210,7 @@ internal void StoreInventorySlot(GameModeWorld* worldMode, InventorySlot* slots,
     InventorySlot* slot = slots + index;
     slot->flags_type = flags_type;
     slot->ID = ID;
+    slot->serverID = {};
     slot->slotHash = stringHash;
     slot->pieceHash = 0;
     slot->zoomCoeff = 1.0;
@@ -224,6 +225,7 @@ internal void StoreInventorySlot(GameModeWorld* worldMode, InventorySlot* slots,
         slot->pieceHash = StringHash(definition->client.name.name);
         slot->zoomSpeed = definition->client.slotZoomSpeed;
         slot->maxZoomCoeff = definition->client.maxSlotZoom;
+        slot->serverID = objectBase->serverID;
     }
 }
 
@@ -532,7 +534,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                             if(AreEqual(currentClientID, player->clientID))
                             {
                                 player->universeP = P;
-                                worldMode->resetDayTime = true;
                             }
                         }
                     }
@@ -703,11 +704,12 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 EntityID ID;
                 Unpack("L", &ID);
                 EntityID clientID = GetClientIDMapping(worldMode, ID);
-                MarkForDeletion(worldMode, clientID);
                 
+                MarkForDeletion(worldMode, clientID);
                 
                 SoundEventTrigger(worldMode, currentClientID, GameProp(EventTriggerType, Trigger_deleted));
                 AnimationEventTrigger(worldMode, currentClientID, GameProp(EventTriggerType, Trigger_deleted));
+                
             } break;
             
 			case Type_Mappings:
@@ -841,12 +843,6 @@ internal void DispatchApplicationPacket(GameState* gameState, GameModeWorld* wor
                 worldMode->previousDayTime = worldMode->dayTime;
                 Unpack("H", &worldMode->dayTime);
                 worldMode->dayTimeTime = 0;
-                
-                if(worldMode->resetDayTime)
-                {
-                    worldMode->previousDayTime = worldMode->dayTime;
-                    worldMode->resetDayTime = false;
-                }
             } break;
             
             case Type_EventTrigger:

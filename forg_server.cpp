@@ -579,7 +579,10 @@ extern "C" SERVER_SIMULATE_WORLDS(SimulateWorlds)
         server->brainTimer = 0;
     }
     
+    BEGIN_BLOCK("update brains");
     EXECUTE_JOB(server, UpdateBrain, ArchetypeHas(BrainComponent), targetBrainTimer);
+    END_BLOCK();
+    
     EXECUTE_JOB(server, ExecuteCommand, ArchetypeHas(BrainComponent) && ArchetypeHas(ActionComponent), elapsedTime);
 	EXECUTE_JOB(server, UpdateTempEntity, ArchetypeHas(TempEntityComponent), elapsedTime);
     EXECUTE_JOB(server, HandleOpenedContainers, ArchetypeHas(ContainerComponent), elapsedTime);

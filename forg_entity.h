@@ -55,8 +55,12 @@ struct CombatComponent
 {
     GameplayR32WithDefault(attackDistance);
     GameplayR32WithDefault(attackContinueCoeff);
-    
     r32 movementSpeedWhileAttacking;
+    
+    GameplayR32(minDamage);
+    GameplayR32(maxDamage);
+    GameplayR32(attackSpeed);
+    GameplayR32(protection);
 };
 
 struct VegetationComponent

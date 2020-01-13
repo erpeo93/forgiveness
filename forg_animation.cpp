@@ -465,24 +465,6 @@ inline r32 ArrangeObjects(u8 gridDimX,u8 gridDimY, Vec3 originalGridDim)
     return result;
 }
 
-
-#if 0
-inline void ApplyAssAlterations(PieceAss* ass, AssAlteration* assAlt, Bone* parentBone, Vec4* proceduralColor)
-{
-    if(assAlt->valid)
-    {
-        ass->boneOffset += GetBoneAxisOffsetfromXY(parentBone, assAlt->boneOffset);
-        ass->scale = Hadamart(ass->scale, assAlt->scale);
-        
-        if(assAlt->specialColoration)
-        {
-            *proceduralColor = assAlt->color;
-        }
-    }
-}
-#endif
-
-
 internal b32 IsValidUsingSlot(GameUIContext* UI, InventorySlot* slot, u16 slotIndex)
 {
     b32 result = IsValidID(slot->ID);
@@ -555,6 +537,12 @@ internal b32 IsValidInventorySlot(GameUIContext* UI, InventorySlot* slot, u16 sl
     return result;
 }
 
+internal b32 TwoHandedSlot(b32 equipmentSlots, u16 slot)
+{
+    b32 result = (!equipmentSlots && (slot == leftHand || slot == rightHand));
+    return result;
+}
+
 internal EntityAnimationParams GetEntityAnimationParams(GameModeWorld* worldMode, EntityID ID);
 internal Rect2 RenderLayout(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, struct LayoutContainer* container, r32 elapsedTime);
 internal Rect2 RenderLayoutSpecificPiece(GameModeWorld* worldMode, RenderGroup* group, Vec3 P, ObjectTransform transform, LayoutComponent* layout, u32 seed, Lights lights, LayoutContainer* container, r32 elapsedTime, u64 pieceHash);
@@ -582,15 +570,19 @@ internal b32 RenderAttachmentPoint(GameModeWorld* worldMode, RenderGroup* group,
                 {
                     EntityID equipmentID = slot->ID;
                     u16 smallestSlotIndex = slotIndex;
-                    for(u16 sIndex = 0; sIndex < slotCount; ++sIndex)
-                    {
-                        InventorySlot* testSlot = slots + sIndex;
-                        if(AreEqual(testSlot->ID, equipmentID))
-                        {
-                            smallestSlotIndex = Min(smallestSlotIndex, sIndex);
-                        }
-                    }
                     
+                    if(TwoHandedSlot(equipmentSlots, slotIndex))
+                    {
+                        for(u16 sIndex = 0; sIndex < slotCount; ++sIndex)
+                        {
+                            InventorySlot* testSlot = slots + sIndex;
+                            if(AreEqual(testSlot->ID, equipmentID))
+                            {
+                                smallestSlotIndex = Min(smallestSlotIndex, sIndex);
+                            }
+                        }
+                        
+                    }
                     if(smallestSlotIndex == slotIndex)
                     {
                         BaseComponent* equipmentBase = GetComponent(worldMode, equipmentID, BaseComponent);

@@ -732,22 +732,24 @@ internal b32 SearchForScaryLights(ServerState* server, EntityID brainID)
     
     DefaultComponent* def = GetComponent(server, brainID, DefaultComponent);
     BrainParams* params = GetBrainParams(server, brainID);
-    SpatialPartitionQuery perceiveQuery = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
-    
-    for(EntityID testID = GetCurrent(&perceiveQuery); IsValid(&perceiveQuery); testID = Advance(&perceiveQuery))
+    if(params->fearsLight)
     {
-        DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
-        if(ShouldPerceive(def, brainID, testDef, testID))
+        SpatialPartitionQuery perceiveQuery = QuerySpatialPartitionAtPoint(&server->standardPartition, def->P);
+        
+        for(EntityID testID = GetCurrent(&perceiveQuery); IsValid(&perceiveQuery); testID = Advance(&perceiveQuery))
         {
-            Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
-            if(LengthSq(toTarget) <= GetLightRadiousSq(server, testID))
+            DefaultComponent* testDef = GetComponent(server, testID, DefaultComponent);
+            if(ShouldPerceive(def, brainID, testDef, testID))
             {
-                result = true;
-                break;
+                Vec3 toTarget = SubtractOnSameZChunk(testDef->P, def->P);
+                if(LengthSq(toTarget) <= GetLightRadiousSq(server, testID))
+                {
+                    result = true;
+                    break;
+                }
             }
         }
     }
-    
     return result;
 }
 
@@ -819,176 +821,143 @@ STANDARD_ECS_JOB_SERVER(UpdateBrain)
 {
     DefaultComponent* def = GetComponent(server, ID, DefaultComponent);
     BrainComponent* brain = GetComponent(server, ID, BrainComponent);
+    brain->reachableMap = GetComponent(server, ID, ReachableMapComponent);
     
-    switch(brain->type)
+    SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
+    EntityID playerID = GetCurrent(&playerQuery);
+    if(IsValidID(playerID))
     {
-        case Brain_invalid:
+        switch(brain->type)
         {
+            case Brain_invalid:
+            {
+                
+            } break;
             
-        } break;
-        
-		case Brain_Player:
-		{
-            PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
-            Assert(player);
-			brain->currentCommand = player->requestCommand;
-            brain->inventoryCommand = player->inventoryCommand;
-            brain->commandParameters = player->commandParameters;
-            player->inventoryCommand = {};
-		} break;	
-        
-		case Brain_Portal:
-		{
-            SpatialPartitionQuery playerQuery = QuerySpatialPartitionAtPoint(&server->playerPartition, def->P);
-            EntityID playerID = GetCurrent(&playerQuery);
-            if(IsValidID(playerID))
+            case Brain_Player:
             {
-                DefaultComponent* playerDef = GetComponent(server, playerID, DefaultComponent);
-                r32 maxDistanceSq = Square(2.0f);
-                
-                r32 distanceSq = LengthSq(SubtractOnSameZChunk(playerDef->P, def->P));
-                if(distanceSq < maxDistanceSq)
-                {
-                    if(!IsValidID(brain->targetID))
-                    {
-                        AddEntityParams params = DefaultAddEntityParams();
-                        params.targetBrainID = ID;
-                        EntityType type = GetEntityType(server->assets, "default", "wolf");
-                        AddEntityFlags(def, EntityFlag_locked);
-                        AddEntity(server, def->P, &server->entropy, type, params);
-                    }
-				}
-                else
-                {
-                    if(IsValidID(brain->targetID))
-                    {
-                        DeleteEntity(server, brain->targetID);
-                        brain->targetID = {};
-                    }
-                }
-            }
-            else
+                PlayerComponent* player = GetComponent(server, ID, PlayerComponent);
+                Assert(player);
+                brain->currentCommand = player->requestCommand;
+                brain->inventoryCommand = player->inventoryCommand;
+                brain->commandParameters = player->commandParameters;
+                player->inventoryCommand = {};
+            } break;	
+            
+            case Brain_stateMachine:
             {
-                if(IsValidID(brain->targetID))
+                if(server->updateBrains)
                 {
-                    DeleteEntity(server, brain->targetID);
-                    brain->targetID = {};
-                }
-            }
-        } break;
-        
-        case Brain_stateMachine:
-        {
-            if(server->updateBrains)
-            {
-                ResetDirections(server, ID);
-                ComputeReachabilityGrid(server, ID);
-                
-                switch(brain->state)
-                {
-                    case BrainState_Wandering:
+                    ResetDirections(server, ID);
+                    ComputeReachabilityGrid(server, ID);
+                    
+                    switch(brain->state)
                     {
-                        Evaluate(Wander);
-                        Evaluate(MaintainDistance);
-                        Evaluate(MaintainDistanceFromLight);
-                        
-                        
-                        EntityID hostileID;
-                        if(SearchForHostileEnemies(server, ID, &hostileID))
+                        case BrainState_Wandering:
                         {
-                            ChangeState(brain, Chasing);
-                            brain->targetID = hostileID;
-                        }
-                        
-                        if(SearchForScaryEntities(server, ID) || SearchForScaryLights(server, ID))
-                        {
-                            ChangeState(brain, Fleeing);
-                        }
-                        else
-                        {
-                            if(IsValidID(brain->attackerID))
+                            Evaluate(Wander);
+                            Evaluate(MaintainDistance);
+                            Evaluate(MaintainDistanceFromLight);
+                            
+                            
+                            EntityID hostileID;
+                            if(SearchForHostileEnemies(server, ID, &hostileID))
                             {
                                 ChangeState(brain, Chasing);
-                                brain->targetID = brain->attackerID;
+                                brain->targetID = hostileID;
                             }
                             
-                        }
-                    } break;
-                    
-                    case BrainState_Fleeing:
-                    {
-                        Evaluate(Flee);
-                        Evaluate(FleeFromLight);
-                        
-                        if(!SearchForScaryEntities(server, ID) && !SearchForScaryLights(server, ID))
-                        {
-                            ChangeState(brain, Wandering);
-                        }
-                    } break;
-                    
-                    case BrainState_Chasing:
-                    {
-                        ScoreTarget(server, ID, brain->targetID, 1.0f);
-                        Evaluate(MaintainDistance);
-                        Evaluate(MaintainDistanceFromLight);
-                        
-                        if(ActionIsPossible(server, attack, ID, brain->targetID))
-                        {
-                            if(ActionIsPossibleAtCurrentDistance(server, attack, ID, brain->targetID))
+                            if(SearchForScaryEntities(server, ID) || SearchForScaryLights(server, ID))
                             {
-                                ChangeState(brain, Attacking);
+                                ChangeState(brain, Fleeing);
                             }
-                        }
-                        else
-                        {
-                            ChangeState(brain, Wandering);
-                        }
+                            else
+                            {
+                                if(IsValidID(brain->attackerID))
+                                {
+                                    ChangeState(brain, Chasing);
+                                    brain->targetID = brain->attackerID;
+                                    brain->attackerID = {};
+                                }
+                                
+                            }
+                        } break;
                         
-                        if(SearchForScaryEntities(server, ID) || SearchForScaryLights(server, ID))
+                        case BrainState_Fleeing:
                         {
-                            ChangeState(brain, Fleeing);
-                        }
-                        
-                        if(def->P.chunkZ == brain->homeP.chunkZ)
-                        {
-                            BrainParams* params = GetBrainParams(server, ID);
-                            Vec3 homeDistance = SubtractOnSameZChunk(def->P, brain->homeP);
-                            if(LengthSq(homeDistance) > Square(params->maxDistanceFromHomeChase))
+                            Evaluate(Flee);
+                            Evaluate(FleeFromLight);
+                            
+                            if(!SearchForScaryEntities(server, ID) && !SearchForScaryLights(server, ID))
                             {
                                 ChangeState(brain, Wandering);
                             }
+                        } break;
+                        
+                        case BrainState_Chasing:
+                        {
+                            ScoreTarget(server, ID, brain->targetID, 1.0f);
+                            Evaluate(MaintainDistance);
+                            Evaluate(MaintainDistanceFromLight);
                             
-                        }
-                    } break;
-                    
-                    case BrainState_Attacking:
-                    {
-                        if(ActionIsPossibleAtCurrentDistance(server, attack, ID, brain->targetID))
-                        {
-                            DoAction(server, ID, attack);
-                        }
-                        else
-                        {
                             if(ActionIsPossible(server, attack, ID, brain->targetID))
                             {
-                                ChangeState(brain, Chasing);
+                                if(ActionIsPossibleAtCurrentDistance(server, attack, ID, brain->targetID))
+                                {
+                                    ChangeState(brain, Attacking);
+                                }
                             }
                             else
                             {
                                 ChangeState(brain, Wandering);
                             }
-                        }
+                            
+                            if(SearchForScaryEntities(server, ID) || SearchForScaryLights(server, ID))
+                            {
+                                ChangeState(brain, Fleeing);
+                            }
+                            
+                            if(def->P.chunkZ == brain->homeP.chunkZ)
+                            {
+                                BrainParams* params = GetBrainParams(server, ID);
+                                Vec3 homeDistance = SubtractOnSameZChunk(def->P, brain->homeP);
+                                if(LengthSq(homeDistance) > Square(params->maxDistanceFromHomeChase))
+                                {
+                                    ChangeState(brain, Wandering);
+                                }
+                                
+                            }
+                        } break;
                         
-                        if(SearchForScaryEntities(server, ID) || SearchForScaryLights(server, ID))
+                        case BrainState_Attacking:
                         {
-                            ChangeState(brain, Fleeing);
-                        }
-                    } break;
+                            if(ActionIsPossibleAtCurrentDistance(server, attack, ID, brain->targetID))
+                            {
+                                DoAction(server, ID, attack);
+                            }
+                            else
+                            {
+                                if(ActionIsPossible(server, attack, ID, brain->targetID))
+                                {
+                                    ChangeState(brain, Chasing);
+                                }
+                                else
+                                {
+                                    ChangeState(brain, Wandering);
+                                }
+                            }
+                            
+                            if(SearchForScaryEntities(server, ID) || SearchForScaryLights(server, ID))
+                            {
+                                ChangeState(brain, Fleeing);
+                            }
+                        } break;
+                    }
                 }
-            }
-            
-            ComputeFinalDirection(brain);
-        } break;
+                
+                ComputeFinalDirection(brain);
+            } break;
+        }
     }
 }
 

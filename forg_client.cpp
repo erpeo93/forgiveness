@@ -99,6 +99,72 @@ internal void DeleteEntityClient(GameModeWorld* worldMode, EntityID clientID, En
         animation->effectCount = 0;
     }
     
+    if(HasComponent(clientID, EquipmentComponent))
+    {
+        EquipmentComponent* equipment = GetComponent(worldMode, clientID, EquipmentComponent);
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(equipment->slots); ++slotIndex)
+        {
+            InventorySlot* slot = equipment->slots + slotIndex;
+            EntityID slotID = GetBoundedID(slot);
+            if(IsValidID(slotID))
+            {
+                FreeArchetype(worldMode, slotID);
+                RemoveClientIDMapping(worldMode, slot->serverID);
+                slot->ID = {};
+            }
+        }
+    }
+    
+    if(HasComponent(clientID, UsingComponent))
+    {
+        UsingComponent* equipped = GetComponent(worldMode, clientID, UsingComponent);
+        EntityID draggingID = GetBoundedID(equipped->draggingID);
+        if(IsValidID(draggingID))
+        {
+            FreeArchetype(worldMode, draggingID);
+        }
+        
+        for(u32 slotIndex = 0; slotIndex < ArrayCount(equipped->slots); ++slotIndex)
+        {
+            InventorySlot* slot = equipped->slots + slotIndex;
+            EntityID slotID = GetBoundedID(slot);
+            if(IsValidID(slotID))
+            {
+                FreeArchetype(worldMode, slotID);
+                RemoveClientIDMapping(worldMode, slot->serverID);
+                slot->ID = {};
+            }
+        }
+    }
+    
+    if(HasComponent(clientID, ContainerComponent))
+    {
+        ContainerComponent* container = GetComponent(worldMode, clientID, ContainerComponent);
+        for(u32 storedIndex = 0; storedIndex < ArrayCount(container->storedObjects); ++storedIndex)
+        {
+            InventorySlot* slot = container->storedObjects + storedIndex;
+            EntityID storedID = GetBoundedID(slot);
+            if(IsValidID(storedID))
+            {
+                FreeArchetype(worldMode, storedID);
+                RemoveClientIDMapping(worldMode, slot->serverID);
+                slot->ID = {};
+            }
+        }
+        
+        for(u32 usingIndex = 0; usingIndex < ArrayCount(container->usingObjects); ++usingIndex)
+        {
+            InventorySlot* slot = container->usingObjects + usingIndex;
+            EntityID usingID = GetBoundedID(slot);
+            if(IsValidID(usingID))
+            {
+                FreeArchetype(worldMode, usingID);
+                RemoveClientIDMapping(worldMode, slot->serverID);
+                slot->ID = {};
+            }
+        }
+    }
+    
     FreeArchetype(worldMode, clientID);
     RemoveClientIDMapping(worldMode, serverID);
 }
@@ -143,11 +209,14 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntity)
     {
         BaseComponent* player = GetComponent(worldMode, worldMode->player.clientID, BaseComponent);
         
-        Vec3 deltaP = SubtractOnSameZChunk(player->universeP, base->universeP);
-        
-        if(deltaP.y > 0 && RectOverlaps(Scale(base->projectedOnScreen, base->occludeBoundsScale), player->projectedOnScreen))
+        if(player)
         {
-            base->flags = AddFlags(base->flags, EntityFlag_occluding);
+            Vec3 deltaP = SubtractOnSameZChunk(player->universeP, base->universeP);
+            
+            if(deltaP.y > 0 && RectOverlaps(Scale(base->projectedOnScreen, base->occludeBoundsScale), player->projectedOnScreen))
+            {
+                base->flags = AddFlags(base->flags, EntityFlag_occluding);
+            }
         }
     }
     
@@ -275,6 +344,8 @@ internal void PlayGame(GameState* gameState, PlatformInput* input)
     result->ambientLightColor = V3(1, 1, 1);
     result->windDirection = V3(1, 0, 0);
     result->windStrength = 1.0f;
+    
+    result->entropy = Seed((u32) time(0));
 }
 
 internal Vec3 GetAmbientColor(u16 dayTime)

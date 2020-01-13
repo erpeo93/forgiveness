@@ -1101,7 +1101,6 @@ internal void DrawInfusedEffects(GameModeWorld* worldMode, RenderGroup* group, O
 internal InventorySlot* FindCompatibleSlot(InventorySlot* slots, u32 slotCount, b32* alreadyDrawn, u32 alreadyDrawnCount, u16 inventorySlotType)
 {
     Assert(slotCount == alreadyDrawnCount);
-    
     InventorySlot* result = 0;
     for(u32 slotIndex = 0; slotIndex < slotCount; ++slotIndex)
     {
@@ -1700,7 +1699,6 @@ STANDARD_ECS_JOB_CLIENT(UpdateEntityEffects)
         effects->params.tint = Hadamart(effects->params.tint, lifeColor);
         
         effects->params.dissolveCoeff = Max(effects->params.dissolveCoeff, Lerp(0.0f, 1.0f - mRatio, MAX_DISSOLVE_ENERGY)); 
-        
         
         r32 fireRatio = Clamp01(health->onFirePercentage);
         Vec4 fireColor = Lerp(V4(1, 1, 1, 1), fireRatio, V4(1, 0, 0, 1));

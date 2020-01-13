@@ -23,7 +23,7 @@ exit /B 1
 )
 
 call buildcommon.bat
-set commoncompilerflags= -O2 -DFORGIVENESS_STREAMING=0 -DFORGIVENESS_SLOW=1 -DFORGIVENESS_INTERNAL=1 %commoncompilerflags%
+set commoncompilerflags= -O2 -DFORGIVENESS_STREAMING=0 -DFORGIVENESS_SLOW=1 -DFORGIVENESS_INTERNAL=0 -DFORGIVENESS_RELEASE=1 %commoncompilerflags%
 call buildclient.bat
 call buildserver.bat
 
@@ -33,8 +33,6 @@ mkdir %mydir%
 cd %mydir%
 
 mkdir errors
-mkdir assets
-
 mkdir server
 mkdir server\assets
 mkdir server\errors
@@ -45,7 +43,6 @@ copy %buildpath%\forg_client.dll .
 copy %buildpath%\win32_client.exe .
 rename win32_client.exe forgiveness.exe
 
-xcopy ..\..\client\assets\*.upak assets /E /Y /I /V
 xcopy ..\..\server\assets\*.upak server\assets /E /Y /I /V
 
 popd

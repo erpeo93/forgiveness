@@ -124,6 +124,12 @@ char* MetaTable_gameEffect[] =
 "fire",
 "firePerSecond",
 "poison",
+"hit",
+"MinDamage",
+"MaxDamage",
+"DamageRange",
+"AttackVelocity",
+"Protection",
 };
 
 char* MetaTable_animationEffect[] = 
@@ -182,7 +188,6 @@ char* MetaTable_inventorySlotType[] =
 char* MetaTable_brainType[] = 
  {
 "Brain_invalid",
-"Brain_Portal",
 "Brain_Player",
 "Brain_stateMachine",
 };

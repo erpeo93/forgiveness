@@ -154,6 +154,13 @@ internal b32 LeftMouseAction(u16 action)
     
     return result;
 }
+
+internal b32 RequiresMouseHold(u16 action)
+{
+    b32 result = (action == attack);
+    return result;
+}
+
 internal EntityHotInteraction* AddPossibleInteraction_(GameModeWorld* worldMode, GameUIContext* UI, InteractionType type, PossibleActionList* list, EntityID entityIDServer, EntityID containerID = {}, u16 objectIndex = 0, InventorySlot* slot = 0, u16 optionIndex = 0)
 {
     EntityHotInteraction* result = 0;
@@ -1011,6 +1018,7 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                 EXECUTE_INTERACTION_JOB(worldMode, group, input, HandleEntityInteraction, ArchetypeHas(BaseComponent) && ArchetypeHas(InteractionComponent), input->timeToAdvance);
                 r32 defaultZoom = worldMode->defaultZoomCoeff;
                 
+#if 0                
                 if(worldMode->dayTime == DayTime_Night)
                 {
                     LightComponent* light = GetComponent(worldMode, myPlayer->clientID, LightComponent);
@@ -1020,6 +1028,7 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                         defaultZoom = Lerp(1.8f * worldMode->equipmentZoomCoeff, lightLerp, worldMode->defaultZoomCoeff);
                     }
                 }
+#endif
                 
                 GameCommand lockedCommand = UI->lockedCommand;
                 EntityID lockedIDClient = GetClientIDMapping(worldMode, lockedCommand.targetID);
@@ -1069,15 +1078,19 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                             Vec3 toTarget = SubtractOnSameZChunk(targetBase->universeP, player->universeP);
                             parameters->acceleration = Normalize(toTarget);
                             
-                            InteractionComponent* lockedInteraction = GetComponent(worldMode, lockedIDClient, InteractionComponent);
-                            
                             if(Pressed(&input->mouseLeft))
                             {
                                 UI->lockedInteractionType = LockedInteraction_None;
                             }
                             else
                             {
+                                InteractionComponent* lockedInteraction = GetComponent(worldMode, lockedIDClient, InteractionComponent);
                                 lockedInteraction->isOnFocus = true;
+                            }
+                            
+                            if(RequiresMouseHold(UI->lockedCommand.action) && Released(&input->mouseLeft))
+                            {
+                                UI->lockedInteractionType = LockedInteraction_None;
                             }
                         }
                         else
@@ -1102,7 +1115,6 @@ internal void HandleGameUIInteraction(GameModeWorld* worldMode, RenderGroup* gro
                     
                     case LockedInteraction_Completed:
                     {
-                        
 #if 0                        
                         CommandParameters* parameters = &UI->commandParameters;
                         parameters->acceleration = {};

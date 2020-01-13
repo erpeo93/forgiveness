@@ -1563,8 +1563,8 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR comman
                     b32 xboxControllerPresent = true;
                     b32 executableNeedsToBeRealoaded = false;
                     
-#ifndef FORGIVENESS_INTERNAL
-                    Win32ToggleFullScreen( window );
+#if FORGIVENESS_RELEASE
+                    Win32ToggleFullScreen(window);
 #endif
                     ShowWindow( window, SW_SHOW );
                     
